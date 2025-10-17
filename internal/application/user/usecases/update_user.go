@@ -1,0 +1,166 @@
+package usecases
+
+import (
+	"context"
+	"fmt"
+
+	"orris/internal/application/user/dto"
+	domainUser "orris/internal/domain/user"
+	vo "orris/internal/domain/user/value_objects"
+	"orris/internal/domain/shared/events"
+	"orris/internal/shared/errors"
+	"orris/internal/shared/logger"
+)
+
+// UpdateUserUseCase handles the business logic for updating a user
+type UpdateUserUseCase struct {
+	userRepo        domainUser.RepositoryWithSpecifications
+	eventDispatcher events.EventDispatcher
+	logger          logger.Interface
+}
+
+// NewUpdateUserUseCase creates a new update user use case
+func NewUpdateUserUseCase(
+	userRepo domainUser.RepositoryWithSpecifications,
+	eventDispatcher events.EventDispatcher,
+	logger logger.Interface,
+) *UpdateUserUseCase {
+	return &UpdateUserUseCase{
+		userRepo:        userRepo,
+		eventDispatcher: eventDispatcher,
+		logger:          logger,
+	}
+}
+
+// Execute executes the update user use case
+func (uc *UpdateUserUseCase) Execute(ctx context.Context, id uint, request dto.UpdateUserRequest) (*dto.UserResponse, error) {
+	// Log the start of the use case
+	uc.logger.Infow("executing update user use case", "id", id)
+	
+	// Retrieve the existing user
+	userEntity, err := uc.userRepo.GetByID(ctx, id)
+	if err != nil {
+		uc.logger.Errorw("failed to get user", "id", id, "error", err)
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+	if userEntity == nil {
+		uc.logger.Warnw("user not found", "id", id)
+		return nil, errors.NewNotFoundError("user not found")
+	}
+	
+	// Update email if provided
+	if request.Email != nil && *request.Email != userEntity.Email().String() {
+		// Check if new email already exists
+		existingUser, err := uc.userRepo.GetByEmail(ctx, *request.Email)
+		if err != nil {
+			uc.logger.Errorw("failed to check email existence", "email", *request.Email, "error", err)
+			return nil, fmt.Errorf("failed to check email: %w", err)
+		}
+		if existingUser != nil && existingUser.ID() != id {
+			return nil, errors.NewConflictError("email already in use", *request.Email)
+		}
+		
+		// Create new email value object
+		emailVO, err := vo.NewEmail(*request.Email)
+		if err != nil {
+			return nil, errors.NewValidationError(fmt.Sprintf("invalid email: %v", err))
+		}
+		
+		// Update email in domain
+		if err := userEntity.UpdateEmail(emailVO); err != nil {
+			uc.logger.Errorw("failed to update email in domain", "error", err)
+			return nil, fmt.Errorf("failed to update email: %w", err)
+		}
+	}
+	
+	// Update name if provided
+	if request.Name != nil && *request.Name != userEntity.Name().String() {
+		// Create new name value object
+		nameVO, err := vo.NewName(*request.Name)
+		if err != nil {
+			return nil, errors.NewValidationError(fmt.Sprintf("invalid name: %v", err))
+		}
+		
+		// Update name in domain
+		if err := userEntity.UpdateName(nameVO); err != nil {
+			uc.logger.Errorw("failed to update name in domain", "error", err)
+			return nil, fmt.Errorf("failed to update name: %w", err)
+		}
+	}
+	
+	// Update status if provided
+	if request.Status != nil {
+		newStatus, err := vo.NewStatus(*request.Status)
+		if err != nil {
+			return nil, errors.NewValidationError(fmt.Sprintf("invalid status: %v", err))
+		}
+		
+		// Apply status transition based on business rules
+		switch *newStatus {
+		case vo.StatusActive:
+			if err := userEntity.Activate(); err != nil {
+				return nil, errors.NewValidationError(fmt.Sprintf("cannot activate user: %v", err))
+			}
+		case vo.StatusInactive:
+			if err := userEntity.Deactivate("User manually deactivated"); err != nil {
+				return nil, errors.NewValidationError(fmt.Sprintf("cannot deactivate user: %v", err))
+			}
+		case vo.StatusSuspended:
+			if err := userEntity.Suspend("User manually suspended"); err != nil {
+				return nil, errors.NewValidationError(fmt.Sprintf("cannot suspend user: %v", err))
+			}
+		case vo.StatusDeleted:
+			if err := userEntity.Delete(); err != nil {
+				return nil, errors.NewValidationError(fmt.Sprintf("cannot delete user: %v", err))
+			}
+		default:
+			return nil, errors.NewValidationError(fmt.Sprintf("unsupported status transition to: %s", newStatus))
+		}
+	}
+	
+	// Persist the updated user
+	if err := uc.userRepo.Update(ctx, userEntity); err != nil {
+		uc.logger.Errorw("failed to persist user updates", "id", id, "error", err)
+		return nil, fmt.Errorf("failed to save user updates: %w", err)
+	}
+	
+	// Map to response DTO
+	response := &dto.UserResponse{
+		ID:        userEntity.ID(),
+		Email:     userEntity.Email().String(),
+		Name:      userEntity.Name().String(),
+		Status:    userEntity.Status().String(),
+		CreatedAt: userEntity.CreatedAt(),
+		UpdatedAt: userEntity.UpdatedAt(),
+	}
+	
+	uc.logger.Infow("user updated successfully", "id", response.ID)
+	return response, nil
+}
+
+// ValidateRequest validates the update user request
+func (uc *UpdateUserUseCase) ValidateRequest(request dto.UpdateUserRequest) error {
+	// At least one field must be provided for update
+	if request.Email == nil && request.Name == nil && request.Status == nil {
+		return errors.NewValidationError("at least one field must be provided for update")
+	}
+	
+	// Validate email if provided
+	if request.Email != nil && *request.Email == "" {
+		return errors.NewValidationError("email cannot be empty")
+	}
+	
+	// Validate name if provided
+	if request.Name != nil && *request.Name == "" {
+		return errors.NewValidationError("name cannot be empty")
+	}
+	
+	// Validate status if provided
+	if request.Status != nil {
+		if _, err := vo.NewStatus(*request.Status); err != nil {
+			return errors.NewValidationError(fmt.Sprintf("invalid status: %v", err))
+		}
+	}
+	
+	return nil
+}

@@ -1,0 +1,675 @@
+basePath: /
+definitions:
+  internal_interfaces_http_handlers.AuthResponse:
+    properties:
+      access_token:
+        type: string
+      expires_in:
+        type: integer
+      refresh_token:
+        type: string
+      user: {}
+    type: object
+  internal_interfaces_http_handlers.ForgotPasswordRequest:
+    properties:
+      email:
+        type: string
+    required:
+    - email
+    type: object
+  internal_interfaces_http_handlers.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  internal_interfaces_http_handlers.RefreshTokenRequest:
+    properties:
+      refresh_token:
+        type: string
+    required:
+    - refresh_token
+    type: object
+  internal_interfaces_http_handlers.RegisterRequest:
+    properties:
+      email:
+        type: string
+      name:
+        maxLength: 100
+        minLength: 2
+        type: string
+      password:
+        minLength: 8
+        type: string
+    required:
+    - email
+    - name
+    - password
+    type: object
+  internal_interfaces_http_handlers.ResetPasswordRequest:
+    properties:
+      password:
+        minLength: 8
+        type: string
+      token:
+        type: string
+    required:
+    - password
+    - token
+    type: object
+  internal_interfaces_http_handlers.VerifyEmailRequest:
+    properties:
+      token:
+        type: string
+    required:
+    - token
+    type: object
+  orris_internal_interfaces_dto.CreateUserRequest:
+    properties:
+      email:
+        type: string
+      name:
+        maxLength: 100
+        minLength: 2
+        type: string
+    required:
+    - email
+    - name
+    type: object
+  orris_internal_interfaces_dto.UpdateUserRequest:
+    properties:
+      email:
+        type: string
+      name:
+        maxLength: 100
+        minLength: 2
+        type: string
+    required:
+    - email
+    - name
+    type: object
+  orris_internal_shared_utils.APIResponse:
+    properties:
+      data: {}
+      error:
+        $ref: '#/definitions/orris_internal_shared_utils.ErrorInfo'
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+  orris_internal_shared_utils.ErrorInfo:
+    properties:
+      details:
+        type: string
+      message:
+        type: string
+      type:
+        type: string
+    type: object
+host: localhost:8081
+info:
+  contact:
+    email: support@orris.io
+    name: API Support
+  description: A modern Go application with RESTful API
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: http://swagger.io/terms/
+  title: Orris API
+  version: "1.0"
+paths:
+  /auth/forgot-password:
+    post:
+      consumes:
+      - application/json
+      description: Request a password reset email
+      parameters:
+      - description: Email address
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers.ForgotPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      summary: Request password reset
+      tags:
+      - auth
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate user with email and password, returns JWT tokens
+      parameters:
+      - description: Login credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/internal_interfaces_http_handlers.AuthResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      summary: Login with email and password
+      tags:
+      - auth
+  /auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: Logout current user and invalidate session
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Logout user
+      tags:
+      - auth
+  /auth/me:
+    get:
+      consumes:
+      - application/json
+      description: Get current authenticated user information
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Get current user
+      tags:
+      - auth
+  /auth/oauth/{provider}:
+    get:
+      consumes:
+      - application/json
+      description: Redirect to OAuth provider (google or github)
+      parameters:
+      - description: OAuth provider (google or github)
+        in: path
+        name: provider
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "307":
+          description: Redirect to OAuth provider
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      summary: Initiate OAuth login
+      tags:
+      - auth
+  /auth/oauth/{provider}/callback:
+    get:
+      consumes:
+      - application/json
+      description: Handle OAuth provider callback and login/register user
+      parameters:
+      - description: OAuth provider (google or github)
+        in: path
+        name: provider
+        required: true
+        type: string
+      - description: Authorization code from OAuth provider
+        in: query
+        name: code
+        required: true
+        type: string
+      - description: State parameter for CSRF protection
+        in: query
+        name: state
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/internal_interfaces_http_handlers.AuthResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      summary: Handle OAuth callback
+      tags:
+      - auth
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Get new access token using refresh token
+      parameters:
+      - description: Refresh token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      summary: Refresh access token
+      tags:
+      - auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Register a new user with email and password
+      parameters:
+      - description: Registration request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      summary: Register a new user
+      tags:
+      - auth
+  /auth/reset-password:
+    post:
+      consumes:
+      - application/json
+      description: Reset password with token from email
+      parameters:
+      - description: Reset password request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers.ResetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      summary: Reset password
+      tags:
+      - auth
+  /auth/verify-email:
+    post:
+      consumes:
+      - application/json
+      description: Verify user email with token from email
+      parameters:
+      - description: Verification token (can also be in body)
+        in: query
+        name: token
+        type: string
+      - description: Verification request
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers.VerifyEmailRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      summary: Verify email address
+      tags:
+      - auth
+  /health:
+    get:
+      consumes:
+      - application/json
+      description: Check if the service is healthy
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Service is healthy
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Health check
+      tags:
+      - health
+  /users:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of users
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      - description: User status filter
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Users list
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid query parameters
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: List users
+      tags:
+      - users
+    post:
+      consumes:
+      - application/json
+      description: Create a new user with the input data
+      parameters:
+      - description: User data
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/orris_internal_interfaces_dto.CreateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: User created successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "409":
+          description: Email already exists
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Create a new user
+      tags:
+      - users
+  /users/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a user by ID
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: User deleted successfully
+        "400":
+          description: Invalid user ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Delete user
+      tags:
+      - users
+    get:
+      consumes:
+      - application/json
+      description: Get details of a user by their ID
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User details
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid user ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Get user by ID
+      tags:
+      - users
+    put:
+      consumes:
+      - application/json
+      description: Update user information by ID
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: User update data
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/orris_internal_interfaces_dto.UpdateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User updated successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Update user
+      tags:
+      - users
+  /users/email/{email}:
+    get:
+      consumes:
+      - application/json
+      description: Get user details by email address
+      parameters:
+      - description: User email address
+        in: path
+        name: email
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User details
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid email
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Get user by email
+      tags:
+      - users
+securityDefinitions:
+  Bearer:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
