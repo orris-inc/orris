@@ -17,7 +17,6 @@ import (
 
 	userApp "orris/internal/application/user"
 	"orris/internal/domain/shared/events"
-	userDomain "orris/internal/domain/user"
 	"orris/internal/infrastructure/config"
 	"orris/internal/infrastructure/database"
 	"orris/internal/infrastructure/migration"
@@ -151,13 +150,8 @@ func handleMigrations(environment string) error {
 			logger.Warn("auto-migration is enabled in production environment - this is not recommended!")
 		}
 
-		logger.Info("running auto-migration")
-		migrationManager := migration.NewManager(environment)
-		if err := migrationManager.Migrate(database.Get(), &userDomain.User{}); err != nil {
-			return fmt.Errorf("auto-migration failed: %w", err)
-		}
-		logger.Info("auto-migration completed successfully")
-		return nil
+		logger.Warn("auto-migration is deprecated, please use 'orris migrate up' instead")
+		return fmt.Errorf("auto-migration is no longer supported, use 'orris migrate up'")
 	}
 
 	logger.Info("checking migration status")

@@ -19,12 +19,110 @@ definitions:
         type: string
       user: {}
     type: object
+  internal_interfaces_http_handlers.CancelSubscriptionRequest:
+    properties:
+      immediate:
+        type: boolean
+      reason:
+        type: string
+    required:
+    - reason
+    type: object
+  internal_interfaces_http_handlers.ChangePlanRequest:
+    properties:
+      change_type:
+        enum:
+        - upgrade
+        - downgrade
+        type: string
+      effective_date:
+        enum:
+        - immediate
+        - period_end
+        type: string
+      new_plan_id:
+        type: integer
+    required:
+    - change_type
+    - effective_date
+    - new_plan_id
+    type: object
+  internal_interfaces_http_handlers.CreatePlanRequest:
+    properties:
+      api_rate_limit:
+        type: integer
+      billing_cycle:
+        type: string
+      currency:
+        type: string
+      custom_endpoint:
+        type: string
+      description:
+        type: string
+      features:
+        items:
+          type: string
+        type: array
+      is_public:
+        type: boolean
+      limits:
+        additionalProperties: true
+        type: object
+      max_projects:
+        type: integer
+      max_users:
+        type: integer
+      name:
+        type: string
+      price:
+        type: integer
+      slug:
+        type: string
+      sort_order:
+        type: integer
+      storage_limit:
+        type: integer
+      trial_days:
+        type: integer
+    required:
+    - billing_cycle
+    - currency
+    - name
+    - price
+    - slug
+    type: object
+  internal_interfaces_http_handlers.CreateSubscriptionRequest:
+    properties:
+      auto_renew:
+        type: boolean
+      payment_info:
+        additionalProperties: true
+        type: object
+      plan_id:
+        type: integer
+      start_date:
+        type: string
+    required:
+    - plan_id
+    type: object
   internal_interfaces_http_handlers.ForgotPasswordRequest:
     properties:
       email:
         type: string
     required:
     - email
+    type: object
+  internal_interfaces_http_handlers.GenerateTokenRequest:
+    properties:
+      expires_at:
+        type: string
+      name:
+        type: string
+      scope:
+        type: string
+    required:
+    - name
+    - scope
     type: object
   internal_interfaces_http_handlers.LoginRequest:
     properties:
@@ -97,6 +195,36 @@ definitions:
         type: string
       status:
         type: string
+    type: object
+  internal_interfaces_http_handlers.UpdatePlanRequest:
+    properties:
+      api_rate_limit:
+        type: integer
+      currency:
+        type: string
+      custom_endpoint:
+        type: string
+      description:
+        type: string
+      features:
+        items:
+          type: string
+        type: array
+      is_public:
+        type: boolean
+      limits:
+        additionalProperties: true
+        type: object
+      max_projects:
+        type: integer
+      max_users:
+        type: integer
+      price:
+        type: integer
+      sort_order:
+        type: integer
+      storage_limit:
+        type: integer
     type: object
   internal_interfaces_http_handlers.VerifyEmailRequest:
     properties:
@@ -565,6 +693,740 @@ paths:
       summary: Health check
       tags:
       - health
+  /subscription-plans:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of subscription plans with optional filters
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      - description: Plan status filter
+        in: query
+        name: status
+        type: string
+      - description: Filter by public/private plans
+        in: query
+        name: is_public
+        type: boolean
+      - description: Filter by billing cycle
+        in: query
+        name: billing_cycle
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Subscription plans list
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid query parameters
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: List subscription plans
+      tags:
+      - subscription-plans
+    post:
+      consumes:
+      - application/json
+      description: Create a new subscription plan with pricing and features
+      parameters:
+      - description: Subscription plan data
+        in: body
+        name: plan
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers.CreatePlanRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Subscription plan created successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "409":
+          description: Plan slug already exists
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Create subscription plan
+      tags:
+      - subscription-plans
+  /subscription-plans/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get details of a specific subscription plan by its ID
+      parameters:
+      - description: Plan ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Subscription plan details
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid plan ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Plan not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Get subscription plan by ID
+      tags:
+      - subscription-plans
+    put:
+      consumes:
+      - application/json
+      description: Update an existing subscription plan's details
+      parameters:
+      - description: Plan ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Plan update data
+        in: body
+        name: plan
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers.UpdatePlanRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Subscription plan updated successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Plan not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Update subscription plan
+      tags:
+      - subscription-plans
+  /subscription-plans/{id}/activate:
+    post:
+      consumes:
+      - application/json
+      description: Activate a subscription plan to make it available for new subscriptions
+      parameters:
+      - description: Plan ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Subscription plan activated successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid plan ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Plan not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Activate subscription plan
+      tags:
+      - subscription-plans
+  /subscription-plans/{id}/deactivate:
+    post:
+      consumes:
+      - application/json
+      description: Deactivate a subscription plan to prevent new subscriptions
+      parameters:
+      - description: Plan ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Subscription plan deactivated successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid plan ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Plan not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Deactivate subscription plan
+      tags:
+      - subscription-plans
+  /subscription-plans/public:
+    get:
+      consumes:
+      - application/json
+      description: Get all publicly available subscription plans for display to potential
+        customers
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Public subscription plans
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      summary: Get public subscription plans
+      tags:
+      - subscription-plans
+  /subscriptions:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of subscriptions for the authenticated user
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      - description: Subscription status filter
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Subscriptions list
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid query parameters
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: List user subscriptions
+      tags:
+      - subscriptions
+    post:
+      consumes:
+      - application/json
+      description: Create a new subscription for the authenticated user with the specified
+        plan
+      parameters:
+      - description: Subscription data
+        in: body
+        name: subscription
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers.CreateSubscriptionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Subscription created successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Plan not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Create a new subscription
+      tags:
+      - subscriptions
+  /subscriptions/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get details of a specific subscription by its ID
+      parameters:
+      - description: Subscription ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Subscription details
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid subscription ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Access denied
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Subscription not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Get subscription by ID
+      tags:
+      - subscriptions
+  /subscriptions/{id}/cancel:
+    post:
+      consumes:
+      - application/json
+      description: Cancel an active subscription immediately or at the end of the
+        billing period
+      parameters:
+      - description: Subscription ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Cancellation details
+        in: body
+        name: cancellation
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers.CancelSubscriptionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Subscription cancelled successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Access denied
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Subscription not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Cancel subscription
+      tags:
+      - subscriptions
+  /subscriptions/{id}/change-plan:
+    post:
+      consumes:
+      - application/json
+      description: Change the plan of an existing subscription (upgrade or downgrade)
+      parameters:
+      - description: Subscription ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Plan change details
+        in: body
+        name: plan
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers.ChangePlanRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Plan changed successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Access denied
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Subscription or plan not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Change subscription plan
+      tags:
+      - subscriptions
+  /subscriptions/{id}/renew:
+    post:
+      consumes:
+      - application/json
+      description: Manually renew a subscription for the next billing period
+      parameters:
+      - description: Subscription ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Subscription renewed successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid subscription ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Access denied
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Subscription not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Renew subscription
+      tags:
+      - subscriptions
+  /subscriptions/{id}/tokens:
+    get:
+      consumes:
+      - application/json
+      description: Get all tokens associated with a subscription
+      parameters:
+      - description: Subscription ID
+        in: path
+        name: subscription_id
+        required: true
+        type: integer
+      - default: false
+        description: Show only active tokens
+        in: query
+        name: active_only
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Subscription tokens list
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid subscription ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Access denied
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Subscription not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: List subscription tokens
+      tags:
+      - subscription-tokens
+    post:
+      consumes:
+      - application/json
+      description: Generate a new API token for a subscription with specified scope
+        and expiration
+      parameters:
+      - description: Subscription ID
+        in: path
+        name: subscription_id
+        required: true
+        type: integer
+      - description: Token generation data
+        in: body
+        name: token
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers.GenerateTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Subscription token generated successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Access denied
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Subscription not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Generate subscription token
+      tags:
+      - subscription-tokens
+  /subscriptions/{id}/tokens/{token_id}:
+    delete:
+      consumes:
+      - application/json
+      description: Revoke an existing subscription token to invalidate it
+      parameters:
+      - description: Subscription ID
+        in: path
+        name: subscription_id
+        required: true
+        type: integer
+      - description: Token ID
+        in: path
+        name: token_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Subscription token revoked successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid token ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Access denied
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Token not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Revoke subscription token
+      tags:
+      - subscription-tokens
+  /subscriptions/{id}/tokens/{token_id}/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Refresh an existing subscription token to extend its validity
+      parameters:
+      - description: Subscription ID
+        in: path
+        name: subscription_id
+        required: true
+        type: integer
+      - description: Token ID
+        in: path
+        name: token_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Subscription token refreshed successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid token ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Access denied
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Token not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Refresh subscription token
+      tags:
+      - subscription-tokens
   /users:
     get:
       consumes:

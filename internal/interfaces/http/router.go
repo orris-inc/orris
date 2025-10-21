@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"orris/internal/application/permission"
+	subscriptionUsecases "orris/internal/application/subscription/usecases"
 	"orris/internal/application/user"
 	"orris/internal/application/user/usecases"
 	"orris/internal/infrastructure/auth"
@@ -18,6 +19,7 @@ import (
 	"orris/internal/infrastructure/email"
 	permissionInfra "orris/internal/infrastructure/permission"
 	"orris/internal/infrastructure/repository"
+	"orris/internal/infrastructure/token"
 	"orris/internal/interfaces/http/handlers"
 	"orris/internal/interfaces/http/middleware"
 	"orris/internal/shared/logger"
@@ -27,13 +29,16 @@ import (
 
 // Router represents the HTTP router configuration
 type Router struct {
-	engine               *gin.Engine
-	userHandler          *handlers.UserHandler
-	authHandler          *handlers.AuthHandler
-	permissionHandler    *handlers.PermissionHandler
-	authMiddleware       *middleware.AuthMiddleware
-	permissionMiddleware *middleware.PermissionMiddleware
-	rateLimiter          *middleware.RateLimiter
+	engine                    *gin.Engine
+	userHandler               *handlers.UserHandler
+	authHandler               *handlers.AuthHandler
+	permissionHandler         *handlers.PermissionHandler
+	subscriptionHandler       *handlers.SubscriptionHandler
+	subscriptionPlanHandler   *handlers.SubscriptionPlanHandler
+	subscriptionTokenHandler  *handlers.SubscriptionTokenHandler
+	authMiddleware            *middleware.AuthMiddleware
+	permissionMiddleware      *middleware.PermissionMiddleware
+	rateLimiter               *middleware.RateLimiter
 }
 
 type jwtServiceAdapter struct {
@@ -157,14 +162,93 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	permissionMiddleware := middleware.NewPermissionMiddleware(permissionService, log)
 	permissionHandler := handlers.NewPermissionHandler(permissionService, log)
 
+	subscriptionRepo := repository.NewSubscriptionRepository(db, nil, log)
+	subscriptionPlanRepo := repository.NewSubscriptionPlanRepository(db, log)
+	subscriptionTokenRepo := repository.NewSubscriptionTokenRepository(db, log)
+
+	tokenGenerator := token.NewTokenGenerator()
+
+	createSubscriptionUC := subscriptionUsecases.NewCreateSubscriptionUseCase(
+		subscriptionRepo, subscriptionPlanRepo, subscriptionTokenRepo, tokenGenerator, log,
+	)
+	activateSubscriptionUC := subscriptionUsecases.NewActivateSubscriptionUseCase(
+		subscriptionRepo, log,
+	)
+	getSubscriptionUC := subscriptionUsecases.NewGetSubscriptionUseCase(
+		subscriptionRepo, subscriptionPlanRepo, log,
+	)
+	listUserSubscriptionsUC := subscriptionUsecases.NewListUserSubscriptionsUseCase(
+		subscriptionRepo, subscriptionPlanRepo, log,
+	)
+	cancelSubscriptionUC := subscriptionUsecases.NewCancelSubscriptionUseCase(
+		subscriptionRepo, subscriptionTokenRepo, log,
+	)
+	renewSubscriptionUC := subscriptionUsecases.NewRenewSubscriptionUseCase(
+		subscriptionRepo, subscriptionPlanRepo, log,
+	)
+	changePlanUC := subscriptionUsecases.NewChangePlanUseCase(
+		subscriptionRepo, subscriptionPlanRepo, log,
+	)
+
+	createPlanUC := subscriptionUsecases.NewCreateSubscriptionPlanUseCase(
+		subscriptionPlanRepo, log,
+	)
+	updatePlanUC := subscriptionUsecases.NewUpdateSubscriptionPlanUseCase(
+		subscriptionPlanRepo, log,
+	)
+	getPlanUC := subscriptionUsecases.NewGetSubscriptionPlanUseCase(
+		subscriptionPlanRepo, log,
+	)
+	listPlansUC := subscriptionUsecases.NewListSubscriptionPlansUseCase(
+		subscriptionPlanRepo, log,
+	)
+	getPublicPlansUC := subscriptionUsecases.NewGetPublicPlansUseCase(
+		subscriptionPlanRepo, log,
+	)
+	activatePlanUC := subscriptionUsecases.NewActivateSubscriptionPlanUseCase(
+		subscriptionPlanRepo, log,
+	)
+	deactivatePlanUC := subscriptionUsecases.NewDeactivateSubscriptionPlanUseCase(
+		subscriptionPlanRepo, log,
+	)
+
+	generateTokenUC := subscriptionUsecases.NewGenerateSubscriptionTokenUseCase(
+		subscriptionRepo, subscriptionTokenRepo, tokenGenerator, log,
+	)
+	listTokensUC := subscriptionUsecases.NewListSubscriptionTokensUseCase(
+		subscriptionTokenRepo, log,
+	)
+	revokeTokenUC := subscriptionUsecases.NewRevokeSubscriptionTokenUseCase(
+		subscriptionTokenRepo, log,
+	)
+	refreshSubscriptionTokenUC := subscriptionUsecases.NewRefreshSubscriptionTokenUseCase(
+		subscriptionTokenRepo, subscriptionRepo, tokenGenerator, log,
+	)
+
+	subscriptionHandler := handlers.NewSubscriptionHandler(
+		createSubscriptionUC, getSubscriptionUC, listUserSubscriptionsUC,
+		cancelSubscriptionUC, renewSubscriptionUC, changePlanUC,
+		activateSubscriptionUC, log,
+	)
+	subscriptionPlanHandler := handlers.NewSubscriptionPlanHandler(
+		createPlanUC, updatePlanUC, getPlanUC, listPlansUC,
+		getPublicPlansUC, activatePlanUC, deactivatePlanUC,
+	)
+	subscriptionTokenHandler := handlers.NewSubscriptionTokenHandler(
+		generateTokenUC, listTokensUC, revokeTokenUC, refreshSubscriptionTokenUC,
+	)
+
 	return &Router{
-		engine:               engine,
-		userHandler:          userHandler,
-		authHandler:          authHandler,
-		permissionHandler:    permissionHandler,
-		authMiddleware:       authMiddleware,
-		permissionMiddleware: permissionMiddleware,
-		rateLimiter:          rateLimiter,
+		engine:                   engine,
+		userHandler:              userHandler,
+		authHandler:              authHandler,
+		permissionHandler:        permissionHandler,
+		subscriptionHandler:      subscriptionHandler,
+		subscriptionPlanHandler:  subscriptionPlanHandler,
+		subscriptionTokenHandler: subscriptionTokenHandler,
+		authMiddleware:           authMiddleware,
+		permissionMiddleware:     permissionMiddleware,
+		rateLimiter:              rateLimiter,
 	}
 }
 
@@ -216,6 +300,38 @@ func (r *Router) SetupRoutes() {
 		users.POST("/:id/roles", r.permissionMiddleware.RequireRole("admin"), r.permissionHandler.AssignRolesToUser)
 		users.GET("/:id/roles", r.permissionMiddleware.RequirePermission("user", "read"), r.permissionHandler.GetUserRoles)
 		users.GET("/:id/permissions", r.permissionMiddleware.RequirePermission("user", "read"), r.permissionHandler.GetUserPermissions)
+	}
+
+	subscriptions := r.engine.Group("/subscriptions")
+	subscriptions.Use(r.authMiddleware.RequireAuth())
+	{
+		subscriptions.POST("", r.subscriptionHandler.CreateSubscription)
+		subscriptions.GET("", r.subscriptionHandler.ListUserSubscriptions)
+		subscriptions.GET("/:id", r.subscriptionHandler.GetSubscription)
+		subscriptions.POST("/:id/cancel", r.subscriptionHandler.CancelSubscription)
+		subscriptions.POST("/:id/renew", r.subscriptionHandler.RenewSubscription)
+		subscriptions.POST("/:id/change-plan", r.subscriptionHandler.ChangePlan)
+
+		subscriptions.POST("/:id/tokens", r.subscriptionTokenHandler.GenerateToken)
+		subscriptions.GET("/:id/tokens", r.subscriptionTokenHandler.ListTokens)
+		subscriptions.DELETE("/:id/tokens/:token_id", r.subscriptionTokenHandler.RevokeToken)
+		subscriptions.POST("/:id/tokens/:token_id/refresh", r.subscriptionTokenHandler.RefreshToken)
+	}
+
+	plans := r.engine.Group("/subscription-plans")
+	{
+		plans.GET("/public", r.subscriptionPlanHandler.GetPublicPlans)
+
+		plansProtected := plans.Group("")
+		plansProtected.Use(r.authMiddleware.RequireAuth())
+		{
+			plansProtected.POST("", r.subscriptionPlanHandler.CreatePlan)
+			plansProtected.PUT("/:id", r.subscriptionPlanHandler.UpdatePlan)
+			plansProtected.GET("/:id", r.subscriptionPlanHandler.GetPlan)
+			plansProtected.GET("", r.subscriptionPlanHandler.ListPlans)
+			plansProtected.POST("/:id/activate", r.subscriptionPlanHandler.ActivatePlan)
+			plansProtected.POST("/:id/deactivate", r.subscriptionPlanHandler.DeactivatePlan)
+		}
 	}
 }
 
