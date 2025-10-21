@@ -1,5 +1,14 @@
 basePath: /
 definitions:
+  internal_interfaces_http_handlers.AssignRoleRequest:
+    properties:
+      role_ids:
+        items:
+          type: integer
+        type: array
+    required:
+    - role_ids
+    type: object
   internal_interfaces_http_handlers.AuthResponse:
     properties:
       access_token:
@@ -26,6 +35,19 @@ definitions:
     required:
     - email
     - password
+    type: object
+  internal_interfaces_http_handlers.PermissionResponse:
+    properties:
+      action:
+        type: string
+      code:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      resource:
+        type: string
     type: object
   internal_interfaces_http_handlers.RefreshTokenRequest:
     properties:
@@ -60,6 +82,21 @@ definitions:
     required:
     - password
     - token
+    type: object
+  internal_interfaces_http_handlers.RoleResponse:
+    properties:
+      description:
+        type: string
+      id:
+        type: integer
+      is_system:
+        type: boolean
+      name:
+        type: string
+      slug:
+        type: string
+      status:
+        type: string
     type: object
   internal_interfaces_http_handlers.VerifyEmailRequest:
     properties:
@@ -111,7 +148,6 @@ definitions:
       type:
         type: string
     type: object
-host: localhost:8081
 info:
   contact:
     email: support@orris.io
@@ -124,6 +160,46 @@ info:
   title: Orris API
   version: "1.0"
 paths:
+  /auth/check-permission:
+    get:
+      consumes:
+      - application/json
+      description: Check if the current user has a specific permission
+      parameters:
+      - description: Resource name (e.g., user, article)
+        in: query
+        name: resource
+        required: true
+        type: string
+      - description: Action name (e.g., create, read, update, delete)
+        in: query
+        name: action
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Check permission
+      tags:
+      - auth
   /auth/forgot-password:
     post:
       consumes:
@@ -298,6 +374,38 @@ paths:
       summary: Handle OAuth callback
       tags:
       - auth
+  /auth/permissions:
+    get:
+      consumes:
+      - application/json
+      description: Get all permissions for the current authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/internal_interfaces_http_handlers.PermissionResponse'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Get my permissions
+      tags:
+      - auth
   /auth/refresh:
     post:
       consumes:
@@ -378,6 +486,38 @@ paths:
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
       summary: Reset password
+      tags:
+      - auth
+  /auth/roles:
+    get:
+      consumes:
+      - application/json
+      description: Get all roles assigned to the current authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/internal_interfaces_http_handlers.RoleResponse'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Get my roles
       tags:
       - auth
   /auth/verify-email:
@@ -627,6 +767,130 @@ paths:
       summary: Update user
       tags:
       - users
+  /users/{id}/permissions:
+    get:
+      consumes:
+      - application/json
+      description: Get all permissions for a specific user (based on their roles)
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/internal_interfaces_http_handlers.PermissionResponse'
+                  type: array
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Get user permissions
+      tags:
+      - permissions
+  /users/{id}/roles:
+    get:
+      consumes:
+      - application/json
+      description: Get all roles assigned to a specific user
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/internal_interfaces_http_handlers.RoleResponse'
+                  type: array
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Get user roles
+      tags:
+      - permissions
+    post:
+      consumes:
+      - application/json
+      description: Assign one or more roles to a user (admin only)
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Role IDs to assign
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers.AssignRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Assign roles to user
+      tags:
+      - permissions
   /users/email/{email}:
     get:
       consumes:

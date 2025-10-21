@@ -20,7 +20,6 @@ import (
 // @license.name MIT
 // @license.url https://opensource.org/licenses/MIT
 
-// @host localhost:8081
 // @BasePath /
 
 // @securityDefinitions.apikey Bearer

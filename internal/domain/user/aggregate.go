@@ -85,6 +85,53 @@ func ReconstructUser(id uint, email *vo.Email, name *vo.Name, status vo.Status, 
 	}, nil
 }
 
+type UserAuthData struct {
+	PasswordHash               *string
+	EmailVerified              bool
+	EmailVerificationToken     *string
+	EmailVerificationExpiresAt *time.Time
+	PasswordResetToken         *string
+	PasswordResetExpiresAt     *time.Time
+	LastPasswordChangeAt       *time.Time
+	FailedLoginAttempts        int
+	LockedUntil                *time.Time
+}
+
+func ReconstructUserWithAuth(id uint, email *vo.Email, name *vo.Name, status vo.Status, createdAt, updatedAt time.Time, version int, authData *UserAuthData) (*User, error) {
+	u, err := ReconstructUser(id, email, name, status, createdAt, updatedAt, version)
+	if err != nil {
+		return nil, err
+	}
+
+	if authData != nil {
+		u.passwordHash = authData.PasswordHash
+		u.emailVerified = authData.EmailVerified
+		u.emailVerificationToken = authData.EmailVerificationToken
+		u.emailVerificationExpiresAt = authData.EmailVerificationExpiresAt
+		u.passwordResetToken = authData.PasswordResetToken
+		u.passwordResetExpiresAt = authData.PasswordResetExpiresAt
+		u.lastPasswordChangeAt = authData.LastPasswordChangeAt
+		u.failedLoginAttempts = authData.FailedLoginAttempts
+		u.lockedUntil = authData.LockedUntil
+	}
+
+	return u, nil
+}
+
+func (u *User) GetAuthData() *UserAuthData {
+	return &UserAuthData{
+		PasswordHash:               u.passwordHash,
+		EmailVerified:              u.emailVerified,
+		EmailVerificationToken:     u.emailVerificationToken,
+		EmailVerificationExpiresAt: u.emailVerificationExpiresAt,
+		PasswordResetToken:         u.passwordResetToken,
+		PasswordResetExpiresAt:     u.passwordResetExpiresAt,
+		LastPasswordChangeAt:       u.lastPasswordChangeAt,
+		FailedLoginAttempts:        u.failedLoginAttempts,
+		LockedUntil:                u.lockedUntil,
+	}
+}
+
 // ID returns the user ID
 func (u *User) ID() uint {
 	return u.id

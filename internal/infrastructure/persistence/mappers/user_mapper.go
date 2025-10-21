@@ -38,25 +38,35 @@ func (m *UserMapperImpl) ToEntity(model *models.UserModel) (*user.User, error) {
 	if model == nil {
 		return nil, nil
 	}
-	
-	// Create value objects
+
 	email, err := vo.NewEmail(model.Email)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create email value object: %w", err)
 	}
-	
+
 	name, err := vo.NewName(model.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create name value object: %w", err)
 	}
-	
+
 	status, err := vo.NewStatus(model.Status)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create status value object: %w", err)
 	}
-	
-	// Reconstruct the user aggregate
-	userEntity, err := user.ReconstructUser(
+
+	authData := &user.UserAuthData{
+		PasswordHash:               model.PasswordHash,
+		EmailVerified:              model.EmailVerified,
+		EmailVerificationToken:     model.EmailVerificationToken,
+		EmailVerificationExpiresAt: model.EmailVerificationExpiresAt,
+		PasswordResetToken:         model.PasswordResetToken,
+		PasswordResetExpiresAt:     model.PasswordResetExpiresAt,
+		LastPasswordChangeAt:       model.LastPasswordChangeAt,
+		FailedLoginAttempts:        model.FailedLoginAttempts,
+		LockedUntil:                model.LockedUntil,
+	}
+
+	userEntity, err := user.ReconstructUserWithAuth(
 		model.ID,
 		email,
 		name,
@@ -64,11 +74,12 @@ func (m *UserMapperImpl) ToEntity(model *models.UserModel) (*user.User, error) {
 		model.CreatedAt,
 		model.UpdatedAt,
 		model.Version,
+		authData,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to reconstruct user entity: %w", err)
 	}
-	
+
 	return userEntity, nil
 }
 
@@ -77,18 +88,28 @@ func (m *UserMapperImpl) ToModel(entity *user.User) (*models.UserModel, error) {
 	if entity == nil {
 		return nil, nil
 	}
-	
+
+	authData := entity.GetAuthData()
+
 	model := &models.UserModel{
-		ID:        entity.ID(),
-		Email:     entity.Email().String(),
-		Name:      entity.Name().String(),
-		Status:    entity.Status().String(),
-		Version:   entity.Version(),
-		CreatedAt: entity.CreatedAt(),
-		UpdatedAt: entity.UpdatedAt(),
+		ID:                         entity.ID(),
+		Email:                      entity.Email().String(),
+		Name:                       entity.Name().String(),
+		Status:                     entity.Status().String(),
+		Version:                    entity.Version(),
+		CreatedAt:                  entity.CreatedAt(),
+		UpdatedAt:                  entity.UpdatedAt(),
+		PasswordHash:               authData.PasswordHash,
+		EmailVerified:              authData.EmailVerified,
+		EmailVerificationToken:     authData.EmailVerificationToken,
+		EmailVerificationExpiresAt: authData.EmailVerificationExpiresAt,
+		PasswordResetToken:         authData.PasswordResetToken,
+		PasswordResetExpiresAt:     authData.PasswordResetExpiresAt,
+		LastPasswordChangeAt:       authData.LastPasswordChangeAt,
+		FailedLoginAttempts:        authData.FailedLoginAttempts,
+		LockedUntil:                authData.LockedUntil,
 	}
-	
-	// Handle soft delete status
+
 	if entity.Status().IsDeleted() {
 		now := entity.UpdatedAt()
 		model.DeletedAt = gorm.DeletedAt{
@@ -96,7 +117,7 @@ func (m *UserMapperImpl) ToModel(entity *user.User) (*models.UserModel, error) {
 			Valid: true,
 		}
 	}
-	
+
 	return model, nil
 }
 

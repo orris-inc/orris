@@ -13,11 +13,15 @@ type OAuthAccount struct {
 	ProviderEmail     string
 	ProviderUsername  string
 	ProviderAvatarURL string
-	RawUserInfo       string
+	RawUserInfo       *string
 	LastLoginAt       *time.Time
 	LoginCount        uint
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
+}
+
+func (OAuthAccount) TableName() string {
+	return "oauth_accounts"
 }
 
 func NewOAuthAccount(userID uint, provider, providerUserID, providerEmail string) (*OAuthAccount, error) {
