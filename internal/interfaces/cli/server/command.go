@@ -13,7 +13,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
-	"go.uber.org/zap"
 
 	userApp "orris/internal/application/user"
 	"orris/internal/domain/shared/events"
@@ -66,9 +65,9 @@ func run(cmd *cobra.Command, args []string) error {
 	defer logger.Sync()
 
 	logger.Info("starting server",
-		zap.String("environment", env),
-		zap.String("version", "1.0.0"),
-		zap.Bool("auto-migrate", autoMigrate))
+		"environment", env,
+		"version", "1.0.0",
+		"auto-migrate", autoMigrate)
 
 	gin.SetMode(cfg.Server.Mode)
 
@@ -77,21 +76,21 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	if err := database.Init(&cfg.Database); err != nil {
-		logger.Fatal("failed to initialize database", zap.Error(err))
+		logger.Fatal("failed to initialize database", "error", err)
 	}
 	defer database.Close()
 
 	if err := handleMigrations(env); err != nil {
-		logger.Fatal("migration handling failed", zap.Error(err))
+		logger.Fatal("migration handling failed", "error", err)
 	}
 
 	eventDispatcher := events.NewInMemoryEventDispatcher(100)
 	if err := eventDispatcher.Start(); err != nil {
-		logger.Fatal("failed to start event dispatcher", zap.Error(err))
+		logger.Fatal("failed to start event dispatcher", "error", err)
 	}
 	defer func() {
 		if err := eventDispatcher.Stop(); err != nil {
-			logger.Error("failed to stop event dispatcher", zap.Error(err))
+			logger.Error("failed to stop event dispatcher", "error", err)
 		}
 	}()
 	logger.Info("event dispatcher started")
@@ -113,11 +112,11 @@ func run(cmd *cobra.Command, args []string) error {
 
 	go func() {
 		logger.Info("server starting",
-			zap.String("address", cfg.Server.GetAddr()),
-			zap.String("mode", cfg.Server.Mode))
+			"address", cfg.Server.GetAddr(),
+			"mode", cfg.Server.Mode)
 
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Fatal("failed to start server", zap.Error(err))
+			logger.Fatal("failed to start server", "error", err)
 		}
 	}()
 
@@ -131,7 +130,7 @@ func run(cmd *cobra.Command, args []string) error {
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		logger.Error("server forced to shutdown", zap.Error(err))
+		logger.Error("server forced to shutdown", "error", err)
 		return err
 	}
 
@@ -158,7 +157,7 @@ func handleMigrations(environment string) error {
 
 	scriptsPath, err := filepath.Abs("./internal/infrastructure/migration/scripts")
 	if err != nil {
-		logger.Warn("failed to get migration scripts path", zap.Error(err))
+		logger.Warn("failed to get migration scripts path", "error", err)
 		return nil
 	}
 
@@ -166,10 +165,10 @@ func handleMigrations(environment string) error {
 	if gooseStrategy, ok := strategy.(*migration.GooseStrategy); ok {
 		version, err := gooseStrategy.GetVersion(database.Get())
 		if err != nil {
-			logger.Warn("failed to check migration status", zap.Error(err))
+			logger.Warn("failed to check migration status", "error", err)
 		} else {
 			logger.Info("current migration version",
-				zap.Int64("version", version))
+				"version", version)
 		}
 	}
 

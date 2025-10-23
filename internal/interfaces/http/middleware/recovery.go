@@ -8,26 +8,22 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"go.uber.org/zap"
 
 	"orris/internal/shared/logger"
 	"orris/internal/shared/utils"
 )
 
-// Recovery returns a Gin middleware that recovers from panics
 func Recovery() gin.HandlerFunc {
 	return gin.CustomRecovery(func(c *gin.Context, recovered interface{}) {
-		// Check if connection is broken
 		if checkBrokenConnection(recovered) {
 			logger.Error("connection broken during request",
-				zap.String("path", c.Request.URL.Path),
-				zap.String("method", c.Request.Method),
-				zap.Any("error", recovered))
+				"path", c.Request.URL.Path,
+				"method", c.Request.Method,
+				"error", recovered)
 			c.Abort()
 			return
 		}
 
-		// Log the panic with stack trace
 		httpRequest, _ := httputil.DumpRequest(c.Request, false)
 		headers := strings.Split(string(httpRequest), "\r\n")
 		for idx, header := range headers {
@@ -38,13 +34,12 @@ func Recovery() gin.HandlerFunc {
 		}
 
 		logger.Error("panic recovered",
-			zap.String("path", c.Request.URL.Path),
-			zap.String("method", c.Request.Method),
-			zap.Strings("headers", headers),
-			zap.Any("error", recovered),
-			zap.String("stack", string(debug.Stack())))
+			"path", c.Request.URL.Path,
+			"method", c.Request.Method,
+			"headers", headers,
+			"error", recovered,
+			"stack", string(debug.Stack()))
 
-		// Return internal server error
 		utils.ErrorResponse(c, 500, "Internal server error occurred")
 	})
 }
@@ -70,22 +65,18 @@ func checkBrokenConnection(err interface{}) bool {
 	return false
 }
 
-// ErrorHandler returns a middleware that handles application errors
 func ErrorHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Next()
 
-		// Handle errors from handlers
 		if len(c.Errors) > 0 {
 			err := c.Errors.Last().Err
 
-			// Log the error
 			logger.Error("handler error occurred",
-				zap.String("path", c.Request.URL.Path),
-				zap.String("method", c.Request.Method),
-				zap.Error(err))
+				"path", c.Request.URL.Path,
+				"method", c.Request.Method,
+				"error", err)
 
-			// Send error response if not already sent
 			if !c.Writer.Written() {
 				utils.ErrorResponseWithError(c, err)
 			}

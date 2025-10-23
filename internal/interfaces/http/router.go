@@ -22,6 +22,7 @@ import (
 	"orris/internal/infrastructure/token"
 	"orris/internal/interfaces/http/handlers"
 	"orris/internal/interfaces/http/middleware"
+	"orris/internal/interfaces/http/routes"
 	"orris/internal/shared/logger"
 
 	_ "orris/docs"
@@ -36,8 +37,13 @@ type Router struct {
 	subscriptionHandler       *handlers.SubscriptionHandler
 	subscriptionPlanHandler   *handlers.SubscriptionPlanHandler
 	subscriptionTokenHandler  *handlers.SubscriptionTokenHandler
+	nodeHandler               *handlers.NodeHandler
+	nodeGroupHandler          *handlers.NodeGroupHandler
+	nodeSubscriptionHandler   *handlers.NodeSubscriptionHandler
+	nodeReportHandler         *handlers.NodeReportHandler
 	authMiddleware            *middleware.AuthMiddleware
 	permissionMiddleware      *middleware.PermissionMiddleware
+	nodeTokenMiddleware       *middleware.NodeTokenMiddleware
 	rateLimiter               *middleware.RateLimiter
 }
 
@@ -238,6 +244,12 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		generateTokenUC, listTokensUC, revokeTokenUC, refreshSubscriptionTokenUC,
 	)
 
+	nodeHandler := handlers.NewNodeHandler(nil, nil, nil, nil, nil)
+	nodeGroupHandler := handlers.NewNodeGroupHandler()
+	nodeSubscriptionHandler := handlers.NewNodeSubscriptionHandler(nil)
+	nodeReportHandler := handlers.NewNodeReportHandler(nil, nil)
+	nodeTokenMiddleware := middleware.NewNodeTokenMiddleware(nil, log)
+
 	return &Router{
 		engine:                   engine,
 		userHandler:              userHandler,
@@ -246,8 +258,13 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		subscriptionHandler:      subscriptionHandler,
 		subscriptionPlanHandler:  subscriptionPlanHandler,
 		subscriptionTokenHandler: subscriptionTokenHandler,
+		nodeHandler:              nodeHandler,
+		nodeGroupHandler:         nodeGroupHandler,
+		nodeSubscriptionHandler:  nodeSubscriptionHandler,
+		nodeReportHandler:        nodeReportHandler,
 		authMiddleware:           authMiddleware,
 		permissionMiddleware:     permissionMiddleware,
+		nodeTokenMiddleware:      nodeTokenMiddleware,
 		rateLimiter:              rateLimiter,
 	}
 }
@@ -333,6 +350,17 @@ func (r *Router) SetupRoutes() {
 			plansProtected.POST("/:id/deactivate", r.subscriptionPlanHandler.DeactivatePlan)
 		}
 	}
+
+	routes.SetupNodeRoutes(r.engine, &routes.NodeRouteConfig{
+		NodeHandler:             r.nodeHandler,
+		NodeGroupHandler:        r.nodeGroupHandler,
+		SubscriptionHandler:     r.nodeSubscriptionHandler,
+		NodeReportHandler:       r.nodeReportHandler,
+		AuthMiddleware:          r.authMiddleware,
+		PermissionMiddleware:    r.permissionMiddleware,
+		NodeTokenMW:             r.nodeTokenMiddleware,
+		RateLimiter:             r.rateLimiter,
+	})
 }
 
 // GetEngine returns the Gin engine

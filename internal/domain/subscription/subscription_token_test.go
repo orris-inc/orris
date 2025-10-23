@@ -294,8 +294,9 @@ func TestSubscriptionToken_Verify(t *testing.T) {
 }
 
 func TestSubscriptionToken_IsExpired(t *testing.T) {
-	past := time.Now().Add(-24 * time.Hour)
-	future := time.Now().Add(24 * time.Hour)
+	now := time.Now()
+	past := now.Add(-24 * time.Hour)
+	future := now.Add(24 * time.Hour)
 
 	tests := []struct {
 		name      string
@@ -321,7 +322,26 @@ func TestSubscriptionToken_IsExpired(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			token, _ := NewSubscriptionToken(1, "Test", "hash123", "tok_", vo.TokenScopeAPI, tt.expiresAt)
+			var token *SubscriptionToken
+			if tt.name == "expired token" {
+				token, _ = ReconstructSubscriptionToken(
+					1,
+					1,
+					"Test",
+					"hash123",
+					"tok_",
+					vo.TokenScopeAPI,
+					tt.expiresAt,
+					nil,
+					nil,
+					0,
+					true,
+					now,
+					nil,
+				)
+			} else {
+				token, _ = NewSubscriptionToken(1, "Test", "hash123", "tok_", vo.TokenScopeAPI, tt.expiresAt)
+			}
 			if got := token.IsExpired(); got != tt.want {
 				t.Errorf("IsExpired() = %v, want %v", got, tt.want)
 			}
@@ -407,8 +427,9 @@ func TestSubscriptionToken_HasScope(t *testing.T) {
 }
 
 func TestSubscriptionToken_IsValid(t *testing.T) {
-	past := time.Now().Add(-24 * time.Hour)
-	future := time.Now().Add(24 * time.Hour)
+	now := time.Now()
+	past := now.Add(-24 * time.Hour)
+	future := now.Add(24 * time.Hour)
 
 	tests := []struct {
 		name      string
@@ -444,7 +465,26 @@ func TestSubscriptionToken_IsValid(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			token, _ := NewSubscriptionToken(1, "Test", "hash123", "tok_", vo.TokenScopeAPI, tt.expiresAt)
+			var token *SubscriptionToken
+			if tt.name == "expired token" {
+				token, _ = ReconstructSubscriptionToken(
+					1,
+					1,
+					"Test",
+					"hash123",
+					"tok_",
+					vo.TokenScopeAPI,
+					tt.expiresAt,
+					nil,
+					nil,
+					0,
+					true,
+					now,
+					nil,
+				)
+			} else {
+				token, _ = NewSubscriptionToken(1, "Test", "hash123", "tok_", vo.TokenScopeAPI, tt.expiresAt)
+			}
 			if tt.revoked {
 				token.Revoke()
 			}

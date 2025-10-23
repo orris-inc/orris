@@ -6,28 +6,26 @@ import (
 	"path/filepath"
 	"time"
 
-	"go.uber.org/zap"
-
 	"orris/internal/shared/logger"
 )
 
 // Generator handles creation of new migration files
 type Generator struct {
 	scriptsPath string
-	logger      *zap.Logger
+	logger      logger.Interface
 }
 
 // NewGenerator creates a new migration generator
 func NewGenerator(scriptsPath string) *Generator {
 	return &Generator{
 		scriptsPath: scriptsPath,
-		logger:      logger.WithComponent("migration.generator"),
+		logger:      logger.NewLogger().With("component", "migration.generator"),
 	}
 }
 
 // CreateMigration creates a new migration file pair (up and down)
 func (g *Generator) CreateMigration(name string) error {
-	g.logger.Info("creating new migration", zap.String("name", name))
+	g.logger.Infow("creating new migration", "name", name)
 
 	// Generate timestamp
 	timestamp := time.Now().Format("20060102150405")
@@ -56,9 +54,9 @@ func (g *Generator) CreateMigration(name string) error {
 		return fmt.Errorf("failed to create down migration file: %w", err)
 	}
 
-	g.logger.Info("migration files created successfully",
-		zap.String("up_file", upFilePath),
-		zap.String("down_file", downFilePath))
+	g.logger.Infow("migration files created successfully",
+		"up_file", upFilePath,
+		"down_file", downFilePath)
 
 	return nil
 }
@@ -108,7 +106,7 @@ func (g *Generator) generateDownMigrationTemplate(name string) string {
 
 // CreateUserTableMigration creates the initial user table migration
 func (g *Generator) CreateUserTableMigration() error {
-	g.logger.Info("creating initial user table migration")
+	g.logger.Infow("creating initial user table migration")
 
 	// Use a fixed timestamp for the initial migration
 	timestamp := "000001"
@@ -137,9 +135,9 @@ func (g *Generator) CreateUserTableMigration() error {
 		return fmt.Errorf("failed to create user table down migration: %w", err)
 	}
 
-	g.logger.Info("user table migration created successfully",
-		zap.String("up_file", upFilePath),
-		zap.String("down_file", downFilePath))
+	g.logger.Infow("user table migration created successfully",
+		"up_file", upFilePath,
+		"down_file", downFilePath)
 
 	return nil
 }

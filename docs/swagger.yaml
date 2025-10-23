@@ -233,6 +233,141 @@ definitions:
     required:
     - token
     type: object
+  internal_interfaces_http_handlers_node.AddNodeToGroupRequest:
+    properties:
+      node_id:
+        type: integer
+    required:
+    - node_id
+    type: object
+  internal_interfaces_http_handlers_node.CreateNodeGroupRequest:
+    properties:
+      description:
+        type: string
+      is_public:
+        type: boolean
+      name:
+        type: string
+      sort_order:
+        type: integer
+    required:
+    - name
+    type: object
+  internal_interfaces_http_handlers_node.CreateNodeRequest:
+    properties:
+      country:
+        type: string
+      description:
+        type: string
+      max_users:
+        type: integer
+      method:
+        type: string
+      name:
+        type: string
+      password:
+        type: string
+      plugin:
+        type: string
+      plugin_opts:
+        additionalProperties:
+          type: string
+        type: object
+      region:
+        type: string
+      server_address:
+        type: string
+      server_port:
+        type: integer
+      sort_order:
+        type: integer
+      tags:
+        items:
+          type: string
+        type: array
+      traffic_limit:
+        type: integer
+    required:
+    - country
+    - method
+    - name
+    - password
+    - server_address
+    - server_port
+    type: object
+  internal_interfaces_http_handlers_node.ReportNodeDataRequest:
+    properties:
+      download:
+        type: integer
+      online_users:
+        type: integer
+      status:
+        type: string
+      system_info:
+        $ref: '#/definitions/internal_interfaces_http_handlers_node.SystemInfo'
+      upload:
+        type: integer
+    required:
+    - download
+    - upload
+    type: object
+  internal_interfaces_http_handlers_node.SystemInfo:
+    properties:
+      disk_usage:
+        type: number
+      load:
+        type: number
+      memory_usage:
+        type: number
+    type: object
+  internal_interfaces_http_handlers_node.UpdateNodeGroupRequest:
+    properties:
+      description:
+        type: string
+      is_public:
+        type: boolean
+      name:
+        type: string
+      sort_order:
+        type: integer
+    type: object
+  internal_interfaces_http_handlers_node.UpdateNodeRequest:
+    properties:
+      country:
+        type: string
+      description:
+        type: string
+      max_users:
+        type: integer
+      method:
+        type: string
+      name:
+        type: string
+      password:
+        type: string
+      plugin:
+        type: string
+      plugin_opts:
+        additionalProperties:
+          type: string
+        type: object
+      region:
+        type: string
+      server_address:
+        type: string
+      server_port:
+        type: integer
+      sort_order:
+        type: integer
+      status:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      traffic_limit:
+        type: integer
+    type: object
   orris_internal_interfaces_dto.CreateUserRequest:
     properties:
       email:
@@ -693,6 +828,733 @@ paths:
       summary: Health check
       tags:
       - health
+  /node-groups:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of node groups
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      - description: Public visibility filter
+        in: query
+        name: is_public
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Node groups list
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid query parameters
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: List node groups
+      tags:
+      - node-groups
+    post:
+      consumes:
+      - application/json
+      description: Create a new node group with the input data
+      parameters:
+      - description: Node group data
+        in: body
+        name: group
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers_node.CreateNodeGroupRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Node group created successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Create a new node group
+      tags:
+      - node-groups
+  /node-groups/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a node group by ID
+      parameters:
+      - description: Node group ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Node group deleted successfully
+        "400":
+          description: Invalid node group ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Node group not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Delete node group
+      tags:
+      - node-groups
+    get:
+      consumes:
+      - application/json
+      description: Get details of a node group by its ID
+      parameters:
+      - description: Node group ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Node group details
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid node group ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Node group not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Get node group by ID
+      tags:
+      - node-groups
+    put:
+      consumes:
+      - application/json
+      description: Update node group information by ID
+      parameters:
+      - description: Node group ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Node group update data
+        in: body
+        name: group
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers_node.UpdateNodeGroupRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Node group updated successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Node group not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Update node group
+      tags:
+      - node-groups
+  /node-groups/{id}/nodes:
+    post:
+      consumes:
+      - application/json
+      description: Add a node to a node group
+      parameters:
+      - description: Node group ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Node to add
+        in: body
+        name: node
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers_node.AddNodeToGroupRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Node added successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Node group not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Add node to group
+      tags:
+      - node-groups
+  /node-groups/{id}/nodes/{nodeId}:
+    delete:
+      consumes:
+      - application/json
+      description: Remove a node from a node group
+      parameters:
+      - description: Node group ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Node ID
+        in: path
+        name: nodeId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Node removed successfully
+        "400":
+          description: Invalid ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Node group not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Remove node from group
+      tags:
+      - node-groups
+  /nodes:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of nodes
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      - description: Node status filter
+        in: query
+        name: status
+        type: string
+      - description: Country filter
+        in: query
+        name: country
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Nodes list
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid query parameters
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: List nodes
+      tags:
+      - nodes
+    post:
+      consumes:
+      - application/json
+      description: Create a new proxy node with the input data
+      parameters:
+      - description: Node data
+        in: body
+        name: node
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers_node.CreateNodeRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Node created successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Create a new node
+      tags:
+      - nodes
+  /nodes/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a node by ID
+      parameters:
+      - description: Node ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Node deleted successfully
+        "400":
+          description: Invalid node ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Node not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Delete node
+      tags:
+      - nodes
+    get:
+      consumes:
+      - application/json
+      description: Get details of a node by its ID
+      parameters:
+      - description: Node ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Node details
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid node ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Node not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Get node by ID
+      tags:
+      - nodes
+    put:
+      consumes:
+      - application/json
+      description: Update node information by ID
+      parameters:
+      - description: Node ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Node update data
+        in: body
+        name: node
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers_node.UpdateNodeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Node updated successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Node not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Update node
+      tags:
+      - nodes
+  /nodes/{id}/token:
+    post:
+      consumes:
+      - application/json
+      description: Generate a new API token for node authentication
+      parameters:
+      - description: Node ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Token generated successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid node ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Node not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Generate new API token for node
+      tags:
+      - nodes
+  /nodes/report:
+    post:
+      consumes:
+      - application/json
+      description: Report node traffic and status data (requires node token)
+      parameters:
+      - description: Node report data
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers_node.ReportNodeDataRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Data reported successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - NodeToken: []
+      summary: Report node data
+      tags:
+      - nodes
+  /sub/{token}:
+    get:
+      consumes:
+      - application/json
+      description: Get base64 encoded subscription by token
+      parameters:
+      - description: Subscription token
+        in: path
+        name: token
+        required: true
+        type: string
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Base64 encoded subscription
+          schema:
+            type: string
+        "400":
+          description: Invalid token
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Subscription not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      summary: Get subscription
+      tags:
+      - subscriptions
+  /sub/{token}/clash:
+    get:
+      consumes:
+      - application/json
+      description: Get Clash format subscription by token
+      parameters:
+      - description: Subscription token
+        in: path
+        name: token
+        required: true
+        type: string
+      produces:
+      - application/yaml
+      responses:
+        "200":
+          description: Clash YAML configuration
+          schema:
+            type: string
+        "400":
+          description: Invalid token
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Subscription not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      summary: Get Clash subscription
+      tags:
+      - subscriptions
+  /sub/{token}/sip008:
+    get:
+      consumes:
+      - application/json
+      description: Get SIP008 format subscription by token (Shadowsocks)
+      parameters:
+      - description: Subscription token
+        in: path
+        name: token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: SIP008 JSON configuration
+          schema:
+            type: string
+        "400":
+          description: Invalid token
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Subscription not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      summary: Get SIP008 subscription
+      tags:
+      - subscriptions
+  /sub/{token}/surge:
+    get:
+      consumes:
+      - application/json
+      description: Get Surge format subscription by token
+      parameters:
+      - description: Subscription token
+        in: path
+        name: token
+        required: true
+        type: string
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Surge configuration
+          schema:
+            type: string
+        "400":
+          description: Invalid token
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Subscription not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      summary: Get Surge subscription
+      tags:
+      - subscriptions
+  /sub/{token}/v2ray:
+    get:
+      consumes:
+      - application/json
+      description: Get V2Ray format subscription by token
+      parameters:
+      - description: Subscription token
+        in: path
+        name: token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: V2Ray JSON configuration
+          schema:
+            type: string
+        "400":
+          description: Invalid token
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Subscription not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      summary: Get V2Ray subscription
+      tags:
+      - subscriptions
   /subscription-plans:
     get:
       consumes:

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"orris/internal/domain/user"
@@ -38,13 +37,13 @@ func (r *UserRepositoryDDD) Create(ctx context.Context, userEntity *user.User) e
 	// Convert domain entity to persistence model
 	model, err := r.mapper.ToModel(userEntity)
 	if err != nil {
-		r.logger.Errorw("failed to map user entity to model", zap.Error(err))
+		r.logger.Errorw("failed to map user entity to model", "error", err)
 		return fmt.Errorf("failed to map user entity: %w", err)
 	}
 
 	// Create in database
 	if err := r.db.WithContext(ctx).Create(model).Error; err != nil {
-		r.logger.Errorw("failed to create user in database", zap.Error(err))
+		r.logger.Errorw("failed to create user in database", "error", err)
 		return fmt.Errorf("failed to create user: %w", err)
 	}
 
@@ -109,7 +108,7 @@ func (r *UserRepositoryDDD) GetByEmail(ctx context.Context, email string) (*user
 	// Convert persistence model to domain entity
 	entity, err := r.mapper.ToEntity(&model)
 	if err != nil {
-		r.logger.Errorw("failed to map user model to entity", "email", email, zap.Error(err))
+		r.logger.Errorw("failed to map user model to entity", "email", email, "error", err)
 		return nil, fmt.Errorf("failed to map user: %w", err)
 	}
 
@@ -121,7 +120,7 @@ func (r *UserRepositoryDDD) Update(ctx context.Context, userEntity *user.User) e
 	// Convert domain entity to persistence model
 	model, err := r.mapper.ToModel(userEntity)
 	if err != nil {
-		r.logger.Errorw("failed to map user entity to model", "id", userEntity.ID(), zap.Error(err))
+		r.logger.Errorw("failed to map user entity to model", "id", userEntity.ID(), "error", err)
 		return fmt.Errorf("failed to map user entity: %w", err)
 	}
 
@@ -190,7 +189,7 @@ func (r *UserRepositoryDDD) Delete(ctx context.Context, id uint) error {
 
 	// Soft delete in database
 	if err := r.db.WithContext(ctx).Delete(&models.UserModel{}, id).Error; err != nil {
-		r.logger.Errorw("failed to delete user", "id", id, zap.Error(err))
+		r.logger.Errorw("failed to delete user", "id", id, "error", err)
 		return fmt.Errorf("failed to delete user: %w", err)
 	}
 
@@ -230,7 +229,7 @@ func (r *UserRepositoryDDD) List(ctx context.Context, filter user.ListFilter) ([
 
 	// Count total records
 	if err := query.Count(&total).Error; err != nil {
-		r.logger.Errorw("failed to count users", zap.Error(err))
+		r.logger.Errorw("failed to count users", "error", err)
 		return nil, 0, fmt.Errorf("failed to count users: %w", err)
 	}
 
@@ -251,14 +250,14 @@ func (r *UserRepositoryDDD) List(ctx context.Context, filter user.ListFilter) ([
 
 	// Execute query
 	if err := query.Find(&models).Error; err != nil {
-		r.logger.Errorw("failed to list users", zap.Error(err))
+		r.logger.Errorw("failed to list users", "error", err)
 		return nil, 0, fmt.Errorf("failed to list users: %w", err)
 	}
 
 	// Convert models to entities
 	entities, err := r.mapper.ToEntities(models)
 	if err != nil {
-		r.logger.Errorw("failed to map user models to entities", zap.Error(err))
+		r.logger.Errorw("failed to map user models to entities", "error", err)
 		return nil, 0, fmt.Errorf("failed to map users: %w", err)
 	}
 
@@ -269,7 +268,7 @@ func (r *UserRepositoryDDD) List(ctx context.Context, filter user.ListFilter) ([
 func (r *UserRepositoryDDD) Exists(ctx context.Context, id uint) (bool, error) {
 	var count int64
 	if err := r.db.WithContext(ctx).Model(&models.UserModel{}).Where("id = ?", id).Count(&count).Error; err != nil {
-		r.logger.Errorw("failed to check user existence", "id", id, zap.Error(err))
+		r.logger.Errorw("failed to check user existence", "id", id, "error", err)
 		return false, fmt.Errorf("failed to check existence: %w", err)
 	}
 	return count > 0, nil
@@ -279,7 +278,7 @@ func (r *UserRepositoryDDD) Exists(ctx context.Context, id uint) (bool, error) {
 func (r *UserRepositoryDDD) ExistsByEmail(ctx context.Context, email string) (bool, error) {
 	var count int64
 	if err := r.db.WithContext(ctx).Model(&models.UserModel{}).Where("email = ?", email).Count(&count).Error; err != nil {
-		r.logger.Errorw("failed to check user existence by email", "email", email, zap.Error(err))
+		r.logger.Errorw("failed to check user existence by email", "email", email, "error", err)
 		return false, fmt.Errorf("failed to check existence: %w", err)
 	}
 	return count > 0, nil
@@ -304,14 +303,14 @@ func (r *UserRepositoryDDD) FindBySpecification(ctx context.Context, spec interf
 	
 	var models []*models.UserModel
 	if err := query.Find(&models).Error; err != nil {
-		r.logger.Errorw("failed to find users by specification", zap.Error(err))
+		r.logger.Errorw("failed to find users by specification", "error", err)
 		return nil, fmt.Errorf("failed to find users: %w", err)
 	}
-	
+
 	// Convert models to entities
 	entities, err := r.mapper.ToEntities(models)
 	if err != nil {
-		r.logger.Errorw("failed to map user models to entities", zap.Error(err))
+		r.logger.Errorw("failed to map user models to entities", "error", err)
 		return nil, fmt.Errorf("failed to map users: %w", err)
 	}
 	

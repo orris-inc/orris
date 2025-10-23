@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"orris/internal/domain/subscription"
@@ -38,12 +37,12 @@ func NewSubscriptionRepository(
 func (r *SubscriptionRepositoryImpl) Create(ctx context.Context, subscriptionEntity *subscription.Subscription) error {
 	model, err := r.mapper.ToModel(subscriptionEntity)
 	if err != nil {
-		r.logger.Errorw("failed to map subscription entity to model", zap.Error(err))
+		r.logger.Errorw("failed to map subscription entity to model", "error", err)
 		return fmt.Errorf("failed to map subscription entity: %w", err)
 	}
 
 	if err := r.db.WithContext(ctx).Create(model).Error; err != nil {
-		r.logger.Errorw("failed to create subscription in database", zap.Error(err))
+		r.logger.Errorw("failed to create subscription in database", "error", err)
 		return fmt.Errorf("failed to create subscription: %w", err)
 	}
 
@@ -130,7 +129,7 @@ func (r *SubscriptionRepositoryImpl) GetActiveByUserID(ctx context.Context, user
 func (r *SubscriptionRepositoryImpl) Update(ctx context.Context, subscriptionEntity *subscription.Subscription) error {
 	model, err := r.mapper.ToModel(subscriptionEntity)
 	if err != nil {
-		r.logger.Errorw("failed to map subscription entity to model", "id", subscriptionEntity.ID(), zap.Error(err))
+		r.logger.Errorw("failed to map subscription entity to model", "id", subscriptionEntity.ID(), "error", err)
 		return fmt.Errorf("failed to map subscription entity: %w", err)
 	}
 
@@ -186,7 +185,7 @@ func (r *SubscriptionRepositoryImpl) Update(ctx context.Context, subscriptionEnt
 
 func (r *SubscriptionRepositoryImpl) Delete(ctx context.Context, id uint) error {
 	if err := r.db.WithContext(ctx).Delete(&models.SubscriptionModel{}, id).Error; err != nil {
-		r.logger.Errorw("failed to delete subscription", "id", id, zap.Error(err))
+		r.logger.Errorw("failed to delete subscription", "id", id, "error", err)
 		return fmt.Errorf("failed to delete subscription: %w", err)
 	}
 
@@ -259,7 +258,7 @@ func (r *SubscriptionRepositoryImpl) List(ctx context.Context, filter subscripti
 	}
 
 	if err := query.Count(&total).Error; err != nil {
-		r.logger.Errorw("failed to count subscriptions", zap.Error(err))
+		r.logger.Errorw("failed to count subscriptions", "error", err)
 		return nil, 0, fmt.Errorf("failed to count subscriptions: %w", err)
 	}
 
@@ -280,13 +279,13 @@ func (r *SubscriptionRepositoryImpl) List(ctx context.Context, filter subscripti
 	}
 
 	if err := query.Find(&models).Error; err != nil {
-		r.logger.Errorw("failed to list subscriptions", zap.Error(err))
+		r.logger.Errorw("failed to list subscriptions", "error", err)
 		return nil, 0, fmt.Errorf("failed to list subscriptions: %w", err)
 	}
 
 	entities, err := r.mapper.ToEntities(models)
 	if err != nil {
-		r.logger.Errorw("failed to map subscription models to entities", zap.Error(err))
+		r.logger.Errorw("failed to map subscription models to entities", "error", err)
 		return nil, 0, fmt.Errorf("failed to map subscriptions: %w", err)
 	}
 
@@ -296,7 +295,7 @@ func (r *SubscriptionRepositoryImpl) List(ctx context.Context, filter subscripti
 func (r *SubscriptionRepositoryImpl) CountByPlanID(ctx context.Context, planID uint) (int64, error) {
 	var count int64
 	if err := r.db.WithContext(ctx).Model(&models.SubscriptionModel{}).Where("plan_id = ?", planID).Count(&count).Error; err != nil {
-		r.logger.Errorw("failed to count subscriptions by plan ID", "plan_id", planID, zap.Error(err))
+		r.logger.Errorw("failed to count subscriptions by plan ID", "plan_id", planID, "error", err)
 		return 0, fmt.Errorf("failed to count subscriptions: %w", err)
 	}
 	return count, nil
@@ -305,7 +304,7 @@ func (r *SubscriptionRepositoryImpl) CountByPlanID(ctx context.Context, planID u
 func (r *SubscriptionRepositoryImpl) CountByStatus(ctx context.Context, status string) (int64, error) {
 	var count int64
 	if err := r.db.WithContext(ctx).Model(&models.SubscriptionModel{}).Where("status = ?", status).Count(&count).Error; err != nil {
-		r.logger.Errorw("failed to count subscriptions by status", "status", status, zap.Error(err))
+		r.logger.Errorw("failed to count subscriptions by status", "status", status, "error", err)
 		return 0, fmt.Errorf("failed to count subscriptions: %w", err)
 	}
 	return count, nil

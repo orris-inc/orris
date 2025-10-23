@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"go.uber.org/zap"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -64,7 +63,7 @@ func Init(cfg *config.DatabaseConfig) error {
 	db = database
 
 	appLogger.Info("database connection established",
-		zap.String("database", cfg.Database))
+		"database", cfg.Database)
 
 	return nil
 }
@@ -123,10 +122,10 @@ func (l *filteredLogger) Printf(format string, args ...interface{}) {
 	
 	// Log other messages
 	if strings.Contains(msg, "[error]") || strings.Contains(msg, "ERROR") {
-		appLogger.Error("database error", zap.String("details", msg))
+		appLogger.Error("database error", "details", msg)
 	} else if strings.Contains(msg, "slow sql") || strings.Contains(msg, "SLOW SQL") {
-		appLogger.Warn("slow query", zap.String("details", msg))
+		appLogger.Warn("slow query", "details", msg)
 	} else {
-		appLogger.Debug("database query", zap.String("details", msg))
+		appLogger.Debug("database query", "details", msg)
 	}
 }

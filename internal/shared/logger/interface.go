@@ -1,18 +1,16 @@
 package logger
 
-import "go.uber.org/zap"
+import "log/slog"
 
-// Interface represents a logger interface for dependency injection
 type Interface interface {
-	Debug(msg string, fields ...zap.Field)
-	Info(msg string, fields ...zap.Field)
-	Warn(msg string, fields ...zap.Field)
-	Error(msg string, fields ...zap.Field)
-	Fatal(msg string, fields ...zap.Field)
-	With(fields ...zap.Field) Interface
+	Debug(msg string, args ...any)
+	Info(msg string, args ...any)
+	Warn(msg string, args ...any)
+	Error(msg string, args ...any)
+	Fatal(msg string, args ...any)
+	With(args ...any) Interface
 	Named(name string) Interface
-	
-	// Sugar logger methods for easier usage
+
 	Debugw(msg string, keysAndValues ...interface{})
 	Infow(msg string, keysAndValues ...interface{})
 	Warnw(msg string, keysAndValues ...interface{})
@@ -20,85 +18,72 @@ type Interface interface {
 	Fatalw(msg string, keysAndValues ...interface{})
 }
 
-// zapLogger implements Interface
-type zapLogger struct {
-	logger *zap.Logger
+type slogLogger struct {
+	logger *slog.Logger
 }
 
-// NewLogger creates a new logger instance
 func NewLogger() Interface {
-	return &zapLogger{
+	return &slogLogger{
 		logger: Get(),
 	}
 }
 
-// NewLoggerWithZap creates a new logger instance with existing zap logger
-func NewLoggerWithZap(zapLog *zap.Logger) Interface {
-	return &zapLogger{
-		logger: zapLog,
+func NewLoggerWithSlog(slogLog *slog.Logger) Interface {
+	return &slogLogger{
+		logger: slogLog,
 	}
 }
 
-// Debug implements Interface
-func (l *zapLogger) Debug(msg string, fields ...zap.Field) {
-	l.logger.Debug(msg, fields...)
+func (l *slogLogger) Debug(msg string, args ...any) {
+	l.logger.Debug(msg, args...)
 }
 
-// Info implements Interface
-func (l *zapLogger) Info(msg string, fields ...zap.Field) {
-	l.logger.Info(msg, fields...)
+func (l *slogLogger) Info(msg string, args ...any) {
+	l.logger.Info(msg, args...)
 }
 
-// Warn implements Interface
-func (l *zapLogger) Warn(msg string, fields ...zap.Field) {
-	l.logger.Warn(msg, fields...)
+func (l *slogLogger) Warn(msg string, args ...any) {
+	l.logger.Warn(msg, args...)
 }
 
-// Error implements Interface
-func (l *zapLogger) Error(msg string, fields ...zap.Field) {
-	l.logger.Error(msg, fields...)
+func (l *slogLogger) Error(msg string, args ...any) {
+	l.logger.Error(msg, args...)
 }
 
-// Fatal implements Interface
-func (l *zapLogger) Fatal(msg string, fields ...zap.Field) {
-	l.logger.Fatal(msg, fields...)
+func (l *slogLogger) Fatal(msg string, args ...any) {
+	l.logger.Error(msg, args...)
+	panic("fatal error")
 }
 
-// With implements Interface
-func (l *zapLogger) With(fields ...zap.Field) Interface {
-	return &zapLogger{
-		logger: l.logger.With(fields...),
+func (l *slogLogger) With(args ...any) Interface {
+	return &slogLogger{
+		logger: l.logger.With(args...),
 	}
 }
 
-// Named implements Interface
-func (l *zapLogger) Named(name string) Interface {
-	return &zapLogger{
-		logger: l.logger.Named(name),
+func (l *slogLogger) Named(name string) Interface {
+	return &slogLogger{
+		logger: l.logger.With("logger", name),
 	}
 }
 
-// Debugw implements Interface (sugar logger)
-func (l *zapLogger) Debugw(msg string, keysAndValues ...interface{}) {
-	l.logger.Sugar().Debugw(msg, keysAndValues...)
+func (l *slogLogger) Debugw(msg string, keysAndValues ...interface{}) {
+	l.logger.Debug(msg, keysAndValues...)
 }
 
-// Infow implements Interface (sugar logger)
-func (l *zapLogger) Infow(msg string, keysAndValues ...interface{}) {
-	l.logger.Sugar().Infow(msg, keysAndValues...)
+func (l *slogLogger) Infow(msg string, keysAndValues ...interface{}) {
+	l.logger.Info(msg, keysAndValues...)
 }
 
-// Warnw implements Interface (sugar logger)
-func (l *zapLogger) Warnw(msg string, keysAndValues ...interface{}) {
-	l.logger.Sugar().Warnw(msg, keysAndValues...)
+func (l *slogLogger) Warnw(msg string, keysAndValues ...interface{}) {
+	l.logger.Warn(msg, keysAndValues...)
 }
 
-// Errorw implements Interface (sugar logger)
-func (l *zapLogger) Errorw(msg string, keysAndValues ...interface{}) {
-	l.logger.Sugar().Errorw(msg, keysAndValues...)
+func (l *slogLogger) Errorw(msg string, keysAndValues ...interface{}) {
+	l.logger.Error(msg, keysAndValues...)
 }
 
-// Fatalw implements Interface (sugar logger)
-func (l *zapLogger) Fatalw(msg string, keysAndValues ...interface{}) {
-	l.logger.Sugar().Fatalw(msg, keysAndValues...)
+func (l *slogLogger) Fatalw(msg string, keysAndValues ...interface{}) {
+	l.logger.Error(msg, keysAndValues...)
+	panic("fatal error")
 }

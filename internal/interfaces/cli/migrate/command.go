@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 
 	"github.com/spf13/cobra"
-	"go.uber.org/zap"
 
 	"orris/internal/infrastructure/config"
 	"orris/internal/infrastructure/database"
@@ -139,12 +138,12 @@ func runUp(cmd *cobra.Command, args []string) error {
 	defer database.Close()
 
 	logger.Info("running up migrations",
-		zap.String("environment", env))
+		"environment", env)
 
 	strategy := migration.NewGooseStrategy(scriptsPath)
 
 	if err := strategy.Migrate(database.Get()); err != nil {
-		logger.Error("migration failed", zap.Error(err))
+		logger.Error("migration failed", "error", err)
 		return fmt.Errorf("migration failed: %w", err)
 	}
 
@@ -161,14 +160,14 @@ func runDown(cmd *cobra.Command, args []string) error {
 	defer database.Close()
 
 	logger.Info("running down migrations",
-		zap.String("environment", env),
-		zap.Int("steps", steps))
+		"environment", env,
+		"steps", steps)
 
 	strategy := migration.NewGooseStrategy(scriptsPath)
 
 	if gooseStrategy, ok := strategy.(*migration.GooseStrategy); ok {
 		if err := gooseStrategy.MigrateDown(database.Get(), steps); err != nil {
-			logger.Error("down migration failed", zap.Error(err))
+			logger.Error("down migration failed", "error", err)
 			return fmt.Errorf("down migration failed: %w", err)
 		}
 	} else {
@@ -188,14 +187,14 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	defer database.Close()
 
 	logger.Info("checking migration status",
-		zap.String("environment", env))
+		"environment", env)
 
 	strategy := migration.NewGooseStrategy(scriptsPath)
 
 	if gooseStrategy, ok := strategy.(*migration.GooseStrategy); ok {
 		version, err := gooseStrategy.GetVersion(database.Get())
 		if err != nil {
-			logger.Error("failed to get migration version", zap.Error(err))
+			logger.Error("failed to get migration version", "error", err)
 			return fmt.Errorf("failed to get migration version: %w", err)
 		}
 
@@ -204,7 +203,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  Current Version: %d\n", version)
 
 		if err := gooseStrategy.Status(database.Get()); err != nil {
-			logger.Error("failed to get detailed status", zap.Error(err))
+			logger.Error("failed to get detailed status", "error", err)
 			return fmt.Errorf("failed to get detailed status: %w", err)
 		}
 
@@ -223,19 +222,19 @@ func runForce(cmd *cobra.Command, args []string) error {
 	defer database.Close()
 
 	logger.Info("forcing migration version",
-		zap.String("environment", env),
-		zap.Int("version", version))
+		"environment", env,
+		"version", version)
 
 	strategy := migration.NewGolangMigrateStrategy(scriptsPath)
 
 	if golangStrategy, ok := strategy.(*migration.GolangMigrateStrategy); ok {
 		if err := golangStrategy.Force(database.Get(), version); err != nil {
-			logger.Error("force migration failed", zap.Error(err))
+			logger.Error("force migration failed", "error", err)
 			return fmt.Errorf("force migration failed: %w", err)
 		}
 
 		fmt.Printf("✅ Migration version forced to %d\n", version)
-		logger.Info("force migration completed successfully", zap.Int("version", version))
+		logger.Info("force migration completed successfully", "version", version)
 		return nil
 	}
 
@@ -250,12 +249,12 @@ func runCreate(cmd *cobra.Command, args []string) error {
 	defer logger.Sync()
 
 	logger.Info("creating new migration",
-		zap.String("name", name))
+		"name", name)
 
 	strategy := migration.NewGooseStrategy(scriptsPath)
 	if gooseStrategy, ok := strategy.(*migration.GooseStrategy); ok {
 		if err := gooseStrategy.Create(name); err != nil {
-			logger.Error("failed to create migration", zap.Error(err))
+			logger.Error("failed to create migration", "error", err)
 			return fmt.Errorf("failed to create migration: %w", err)
 		}
 	} else {
@@ -263,7 +262,7 @@ func runCreate(cmd *cobra.Command, args []string) error {
 	}
 
 	logger.Info("migration created successfully",
-		zap.String("name", name))
+		"name", name)
 	fmt.Printf("✅ Migration '%s' created successfully\n", name)
 
 	return nil
@@ -280,7 +279,7 @@ func runGenerateUser(cmd *cobra.Command, args []string) error {
 
 	generator := migration.NewGenerator(scriptsPath)
 	if err := generator.CreateUserTableMigration(); err != nil {
-		logger.Error("failed to generate user table migration", zap.Error(err))
+		logger.Error("failed to generate user table migration", "error", err)
 		return fmt.Errorf("failed to generate user table migration: %w", err)
 	}
 

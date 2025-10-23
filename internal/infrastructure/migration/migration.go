@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"orris/internal/shared/constants"
@@ -15,7 +14,7 @@ import (
 // Manager handles database migrations with different strategies
 type Manager struct {
 	strategy Strategy
-	logger   *zap.Logger
+	logger   logger.Interface
 }
 
 // NewManager creates a new migration manager
@@ -37,33 +36,32 @@ func NewManager(environment string) *Manager {
 
 	return &Manager{
 		strategy: strategy,
-		logger:   logger.WithComponent("migration.manager"),
+		logger:   logger.NewLogger().With("component", "migration.manager"),
 	}
 }
 
-// NewManagerWithStrategy creates a new migration manager with a specific strategy
 func NewManagerWithStrategy(strategy Strategy) *Manager {
 	return &Manager{
 		strategy: strategy,
-		logger:   logger.WithComponent("migration.manager"),
+		logger:   logger.NewLogger().With("component", "migration.manager"),
 	}
 }
 
 // Migrate executes the configured migration strategy
 func (m *Manager) Migrate(db *gorm.DB, models ...interface{}) error {
-	m.logger.Info("starting database migration",
-		zap.String("strategy", m.strategy.GetName()),
-		zap.Int("models_count", len(models)))
+	m.logger.Infow("starting database migration",
+		"strategy", m.strategy.GetName(),
+		"models_count", len(models))
 
 	if err := m.strategy.Migrate(db, models...); err != nil {
-		m.logger.Error("migration failed",
-			zap.String("strategy", m.strategy.GetName()),
-			zap.Error(err))
+		m.logger.Errorw("migration failed",
+			"strategy", m.strategy.GetName(),
+			"error", err)
 		return fmt.Errorf("migration failed with strategy %s: %w", m.strategy.GetName(), err)
 	}
 
-	m.logger.Info("database migration completed successfully",
-		zap.String("strategy", m.strategy.GetName()))
+	m.logger.Infow("database migration completed successfully",
+		"strategy", m.strategy.GetName())
 
 	return nil
 }
@@ -75,9 +73,9 @@ func (m *Manager) GetStrategy() Strategy {
 
 // SetStrategy sets a new migration strategy
 func (m *Manager) SetStrategy(strategy Strategy) {
-	m.logger.Info("changing migration strategy",
-		zap.String("from", m.strategy.GetName()),
-		zap.String("to", strategy.GetName()))
+	m.logger.Infow("changing migration strategy",
+		"from", m.strategy.GetName(),
+		"to", strategy.GetName())
 	m.strategy = strategy
 }
 

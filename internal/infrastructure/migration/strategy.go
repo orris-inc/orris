@@ -8,7 +8,6 @@ import (
 	"github.com/golang-migrate/migrate/v4/database/mysql"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/pressly/goose/v3"
-	"go.uber.org/zap"
 	"gorm.io/gorm"
 
 	"orris/internal/shared/logger"
@@ -24,26 +23,26 @@ type Strategy interface {
 
 // GormAutoMigrateStrategy implements migration using GORM AutoMigrate
 type GormAutoMigrateStrategy struct {
-	logger *zap.Logger
+	logger logger.Interface
 }
 
 // NewGormAutoMigrateStrategy creates a new GORM AutoMigrate strategy
 func NewGormAutoMigrateStrategy() Strategy {
 	return &GormAutoMigrateStrategy{
-		logger: logger.WithComponent("migration.gorm"),
+		logger: logger.NewLogger().With("component", "migration.gorm"),
 	}
 }
 
 // Migrate executes GORM AutoMigrate
 func (s *GormAutoMigrateStrategy) Migrate(db *gorm.DB, models ...interface{}) error {
-	s.logger.Info("starting GORM AutoMigrate")
+	s.logger.Infow("starting GORM AutoMigrate")
 
 	if err := db.AutoMigrate(models...); err != nil {
-		s.logger.Error("GORM AutoMigrate failed", zap.Error(err))
+		s.logger.Errorw("GORM AutoMigrate failed", "error", err)
 		return fmt.Errorf("failed to run GORM AutoMigrate: %w", err)
 	}
 
-	s.logger.Info("GORM AutoMigrate completed successfully")
+	s.logger.Infow("GORM AutoMigrate completed successfully")
 	return nil
 }
 
@@ -55,21 +54,21 @@ func (s *GormAutoMigrateStrategy) GetName() string {
 // GolangMigrateStrategy implements migration using golang-migrate
 type GolangMigrateStrategy struct {
 	scriptsPath string
-	logger      *zap.Logger
+	logger      logger.Interface
 }
 
 // NewGolangMigrateStrategy creates a new golang-migrate strategy
 func NewGolangMigrateStrategy(scriptsPath string) Strategy {
 	return &GolangMigrateStrategy{
 		scriptsPath: scriptsPath,
-		logger:      logger.WithComponent("migration.golang-migrate"),
+		logger:      logger.NewLogger().With("component", "migration.golang-migrate"),
 	}
 }
 
 // Migrate executes golang-migrate migration
 func (s *GolangMigrateStrategy) Migrate(db *gorm.DB, models ...interface{}) error {
-	s.logger.Info("starting golang-migrate migration",
-		zap.String("scripts_path", s.scriptsPath))
+	s.logger.Infow("starting golang-migrate migration",
+		"scripts_path", s.scriptsPath)
 
 	// Get underlying SQL database
 	sqlDB, err := db.DB()
@@ -87,36 +86,36 @@ func (s *GolangMigrateStrategy) Migrate(db *gorm.DB, models ...interface{}) erro
 	// Get current version
 	currentVersion, dirty, err := m.Version()
 	if err != nil && err != migrate.ErrNilVersion {
-		s.logger.Error("failed to get current migration version", zap.Error(err))
+		s.logger.Errorw("failed to get current migration version", "error", err)
 		return fmt.Errorf("failed to get current migration version: %w", err)
 	}
 
-	s.logger.Info("current migration status",
-		zap.Uint("version", currentVersion),
-		zap.Bool("dirty", dirty))
+	s.logger.Infow("current migration status",
+		"version", currentVersion,
+		"dirty", dirty)
 
 	// Check if database is dirty
 	if dirty {
-		s.logger.Warn("database is in dirty state, please fix manually")
+		s.logger.Warnw("database is in dirty state, please fix manually")
 		return fmt.Errorf("database is in dirty state at version %d", currentVersion)
 	}
 
 	// Run migrations
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
-		s.logger.Error("migration failed", zap.Error(err))
+		s.logger.Errorw("migration failed", "error", err)
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
 	// Get final version
 	finalVersion, _, err := m.Version()
 	if err != nil && err != migrate.ErrNilVersion {
-		s.logger.Error("failed to get final migration version", zap.Error(err))
+		s.logger.Errorw("failed to get final migration version", "error", err)
 		return fmt.Errorf("failed to get final migration version: %w", err)
 	}
 
-	s.logger.Info("migration completed successfully",
-		zap.Uint("from_version", currentVersion),
-		zap.Uint("to_version", finalVersion))
+	s.logger.Infow("migration completed successfully",
+		"from_version", currentVersion,
+		"to_version", finalVersion)
 
 	return nil
 }
@@ -146,7 +145,7 @@ func (s *GolangMigrateStrategy) createMigrateInstance(sqlDB *sql.DB) (*migrate.M
 
 // MigrateDown executes down migrations to a specific version
 func (s *GolangMigrateStrategy) MigrateDown(db *gorm.DB, steps int) error {
-	s.logger.Info("starting down migration", zap.Int("steps", steps))
+	s.logger.Infow("starting down migration", "steps", steps)
 
 	sqlDB, err := db.DB()
 	if err != nil {
@@ -161,11 +160,11 @@ func (s *GolangMigrateStrategy) MigrateDown(db *gorm.DB, steps int) error {
 
 	// Execute down migrations
 	if err := m.Steps(-steps); err != nil && err != migrate.ErrNoChange {
-		s.logger.Error("down migration failed", zap.Error(err))
+		s.logger.Errorw("down migration failed", "error", err)
 		return fmt.Errorf("failed to run down migrations: %w", err)
 	}
 
-	s.logger.Info("down migration completed successfully")
+	s.logger.Infow("down migration completed successfully")
 	return nil
 }
 
@@ -187,7 +186,7 @@ func (s *GolangMigrateStrategy) GetVersion(db *gorm.DB) (uint, bool, error) {
 
 // Force sets the database migration version and clears dirty flag
 func (s *GolangMigrateStrategy) Force(db *gorm.DB, version int) error {
-	s.logger.Info("forcing migration version", zap.Int("version", version))
+	s.logger.Infow("forcing migration version", "version", version)
 
 	sqlDB, err := db.DB()
 	if err != nil {
@@ -201,29 +200,29 @@ func (s *GolangMigrateStrategy) Force(db *gorm.DB, version int) error {
 	defer m.Close()
 
 	if err := m.Force(version); err != nil {
-		s.logger.Error("force migration failed", zap.Error(err))
+		s.logger.Errorw("force migration failed", "error", err)
 		return fmt.Errorf("failed to force version: %w", err)
 	}
 
-	s.logger.Info("force migration completed successfully", zap.Int("version", version))
+	s.logger.Infow("force migration completed successfully", "version", version)
 	return nil
 }
 
 type GooseStrategy struct {
 	scriptsPath string
-	logger      *zap.Logger
+	logger      logger.Interface
 }
 
 func NewGooseStrategy(scriptsPath string) Strategy {
 	return &GooseStrategy{
 		scriptsPath: scriptsPath,
-		logger:      logger.WithComponent("migration.goose"),
+		logger:      logger.NewLogger().With("component", "migration.goose"),
 	}
 }
 
 func (s *GooseStrategy) Migrate(db *gorm.DB, models ...interface{}) error {
-	s.logger.Info("starting goose migration",
-		zap.String("scripts_path", s.scriptsPath))
+	s.logger.Infow("starting goose migration",
+		"scripts_path", s.scriptsPath)
 
 	sqlDB, err := db.DB()
 	if err != nil {
@@ -236,27 +235,27 @@ func (s *GooseStrategy) Migrate(db *gorm.DB, models ...interface{}) error {
 
 	currentVersion, err := goose.GetDBVersion(sqlDB)
 	if err != nil {
-		s.logger.Error("failed to get current version", zap.Error(err))
+		s.logger.Errorw("failed to get current version", "error", err)
 		return fmt.Errorf("failed to get current version: %w", err)
 	}
 
-	s.logger.Info("current migration status",
-		zap.Int64("version", currentVersion))
+	s.logger.Infow("current migration status",
+		"version", currentVersion)
 
 	if err := goose.Up(sqlDB, s.scriptsPath); err != nil {
-		s.logger.Error("migration failed", zap.Error(err))
+		s.logger.Errorw("migration failed", "error", err)
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
 	finalVersion, err := goose.GetDBVersion(sqlDB)
 	if err != nil {
-		s.logger.Error("failed to get final version", zap.Error(err))
+		s.logger.Errorw("failed to get final version", "error", err)
 		return fmt.Errorf("failed to get final version: %w", err)
 	}
 
-	s.logger.Info("migration completed successfully",
-		zap.Int64("from_version", currentVersion),
-		zap.Int64("to_version", finalVersion))
+	s.logger.Infow("migration completed successfully",
+		"from_version", currentVersion,
+		"to_version", finalVersion)
 
 	return nil
 }
@@ -266,7 +265,7 @@ func (s *GooseStrategy) GetName() string {
 }
 
 func (s *GooseStrategy) MigrateDown(db *gorm.DB, steps int) error {
-	s.logger.Info("starting down migration", zap.Int("steps", steps))
+	s.logger.Infow("starting down migration", "steps", steps)
 
 	sqlDB, err := db.DB()
 	if err != nil {
@@ -279,12 +278,12 @@ func (s *GooseStrategy) MigrateDown(db *gorm.DB, steps int) error {
 
 	for i := 0; i < steps; i++ {
 		if err := goose.Down(sqlDB, s.scriptsPath); err != nil {
-			s.logger.Error("down migration failed", zap.Error(err))
+			s.logger.Errorw("down migration failed", "error", err)
 			return fmt.Errorf("failed to run down migration: %w", err)
 		}
 	}
 
-	s.logger.Info("down migration completed successfully")
+	s.logger.Infow("down migration completed successfully")
 	return nil
 }
 
@@ -332,6 +331,6 @@ func (s *GooseStrategy) Create(name string) error {
 		return fmt.Errorf("failed to create migration: %w", err)
 	}
 
-	s.logger.Info("migration created successfully", zap.String("name", name))
+	s.logger.Infow("migration created successfully", "name", name)
 	return nil
 }
