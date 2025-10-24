@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 
+	"orris/internal/application/ticket/dto"
 	"orris/internal/domain/ticket"
 	vo "orris/internal/domain/ticket/value_objects"
 	"orris/internal/shared/errors"
@@ -22,23 +23,8 @@ type ListTicketsQuery struct {
 	SortOrder  string
 }
 
-type TicketListItem struct {
-	ID           uint
-	Number       string
-	Title        string
-	Status       string
-	Priority     string
-	Category     string
-	CreatorID    uint
-	AssigneeID   *uint
-	SLADueTime   *string
-	IsOverdue    bool
-	CreatedAt    string
-	UpdatedAt    string
-}
-
 type ListTicketsResult struct {
-	Tickets    []TicketListItem
+	Tickets    []dto.TicketListItemDTO
 	TotalCount int64
 	Page       int
 	PageSize   int
@@ -138,29 +124,10 @@ func (uc *ListTicketsUseCase) Execute(
 		return nil, errors.NewInternalError("failed to list tickets")
 	}
 
-	items := make([]TicketListItem, 0, len(tickets))
+	items := make([]dto.TicketListItemDTO, 0, len(tickets))
 	for _, t := range tickets {
 		if uc.canViewTicket(t, query.UserID, query.UserRoles) {
-			item := TicketListItem{
-				ID:         t.ID(),
-				Number:     t.Number(),
-				Title:      t.Title(),
-				Status:     t.Status().String(),
-				Priority:   t.Priority().String(),
-				Category:   t.Category().String(),
-				CreatorID:  t.CreatorID(),
-				AssigneeID: t.AssigneeID(),
-				IsOverdue:  t.IsOverdue(),
-				CreatedAt:  t.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
-				UpdatedAt:  t.UpdatedAt().Format("2006-01-02T15:04:05Z07:00"),
-			}
-
-			if t.SLADueTime() != nil {
-				slaTime := t.SLADueTime().Format("2006-01-02T15:04:05Z07:00")
-				item.SLADueTime = &slaTime
-			}
-
-			items = append(items, item)
+			items = append(items, dto.ToTicketListItemDTO(t))
 		}
 	}
 

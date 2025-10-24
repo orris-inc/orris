@@ -9,7 +9,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	"orris/internal/infrastructure/config"
+	"orris/internal/shared/config"
 	appLogger "orris/internal/shared/logger"
 )
 

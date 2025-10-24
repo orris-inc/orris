@@ -5,21 +5,20 @@ import (
 	"fmt"
 
 	"orris/internal/domain/permission"
-	permissionInfra "orris/internal/infrastructure/permission"
 	"orris/internal/shared/logger"
 )
 
 type Service struct {
 	roleRepo       permission.RoleRepository
 	permissionRepo permission.PermissionRepository
-	enforcer       *permissionInfra.Enforcer
+	enforcer       permission.PermissionEnforcer
 	logger         logger.Interface
 }
 
 func NewService(
 	roleRepo permission.RoleRepository,
 	permissionRepo permission.PermissionRepository,
-	enforcer *permissionInfra.Enforcer,
+	enforcer permission.PermissionEnforcer,
 	logger logger.Interface,
 ) *Service {
 	return &Service{

@@ -5,108 +5,17 @@ import (
 	"strings"
 
 	"github.com/spf13/viper"
+
+	sharedConfig "orris/internal/shared/config"
 )
 
-// Config represents application configuration
 type Config struct {
-	Server   ServerConfig   `mapstructure:"server"`
-	Database DatabaseConfig `mapstructure:"database"`
-	Logger   LoggerConfig   `mapstructure:"logger"`
-	Auth     AuthConfig     `mapstructure:"auth"`
-	OAuth    OAuthConfig    `mapstructure:"oauth"`
-	Email    EmailConfig    `mapstructure:"email"`
-}
-
-// ServerConfig represents server configuration
-type ServerConfig struct {
-	Host string `mapstructure:"host"`
-	Port int    `mapstructure:"port"`
-	Mode string `mapstructure:"mode"` // debug, release, test
-}
-
-// DatabaseConfig represents database configuration
-type DatabaseConfig struct {
-	Host            string `mapstructure:"host"`
-	Port            int    `mapstructure:"port"`
-	Username        string `mapstructure:"username"`
-	Password        string `mapstructure:"password"`
-	Database        string `mapstructure:"database"`
-	MaxIdleConns    int    `mapstructure:"max_idle_conns"`
-	MaxOpenConns    int    `mapstructure:"max_open_conns"`
-	ConnMaxLifetime int    `mapstructure:"conn_max_lifetime"` // in minutes
-}
-
-// LoggerConfig represents logger configuration
-type LoggerConfig struct {
-	Level      string `mapstructure:"level"`       // debug, info, warn, error
-	Format     string `mapstructure:"format"`      // json, console
-	OutputPath string `mapstructure:"output_path"` // stdout, stderr, or file path
-}
-
-// AuthConfig represents authentication configuration
-type AuthConfig struct {
-	Password PasswordConfig `mapstructure:"password"`
-	Token    TokenConfig    `mapstructure:"token"`
-	JWT      JWTConfig      `mapstructure:"jwt"`
-}
-
-// PasswordConfig represents password hashing configuration
-type PasswordConfig struct {
-	BcryptCost int `mapstructure:"bcrypt_cost"`
-}
-
-// TokenConfig represents token expiration configuration
-type TokenConfig struct {
-	VerificationExpiresHours int `mapstructure:"verification_expires_hours"`
-	ResetExpiresMinutes      int `mapstructure:"reset_expires_minutes"`
-}
-
-// JWTConfig represents JWT configuration
-type JWTConfig struct {
-	Secret            string `mapstructure:"secret"`
-	AccessExpMinutes  int    `mapstructure:"access_exp_minutes"`
-	RefreshExpDays    int    `mapstructure:"refresh_exp_days"`
-}
-
-// OAuthConfig represents OAuth providers configuration
-type OAuthConfig struct {
-	Google GoogleOAuthConfig `mapstructure:"google"`
-	GitHub GitHubOAuthConfig `mapstructure:"github"`
-}
-
-// GoogleOAuthConfig represents Google OAuth configuration
-type GoogleOAuthConfig struct {
-	ClientID     string `mapstructure:"client_id"`
-	ClientSecret string `mapstructure:"client_secret"`
-	RedirectURL  string `mapstructure:"redirect_url"`
-}
-
-// GitHubOAuthConfig represents GitHub OAuth configuration
-type GitHubOAuthConfig struct {
-	ClientID     string `mapstructure:"client_id"`
-	ClientSecret string `mapstructure:"client_secret"`
-	RedirectURL  string `mapstructure:"redirect_url"`
-}
-
-// EmailConfig represents email service configuration
-type EmailConfig struct {
-	SMTPHost     string `mapstructure:"smtp_host"`
-	SMTPPort     int    `mapstructure:"smtp_port"`
-	SMTPUser     string `mapstructure:"smtp_user"`
-	SMTPPassword string `mapstructure:"smtp_password"`
-	FromAddress  string `mapstructure:"from_address"`
-	FromName     string `mapstructure:"from_name"`
-}
-
-// GetAddr returns the server address
-func (s *ServerConfig) GetAddr() string {
-	return fmt.Sprintf("%s:%d", s.Host, s.Port)
-}
-
-// GetDSN returns the MySQL DSN (Data Source Name)
-func (d *DatabaseConfig) GetDSN() string {
-	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local",
-		d.Username, d.Password, d.Host, d.Port, d.Database)
+	Server   sharedConfig.ServerConfig   `mapstructure:"server"`
+	Database sharedConfig.DatabaseConfig `mapstructure:"database"`
+	Logger   sharedConfig.LoggerConfig   `mapstructure:"logger"`
+	Auth     sharedConfig.AuthConfig     `mapstructure:"auth"`
+	OAuth    sharedConfig.OAuthConfig    `mapstructure:"oauth"`
+	Email    sharedConfig.EmailConfig    `mapstructure:"email"`
 }
 
 var appConfig *Config

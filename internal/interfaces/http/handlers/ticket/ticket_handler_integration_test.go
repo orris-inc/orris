@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"orris/internal/application/ticket/dto"
 	"orris/internal/application/ticket/usecases"
 )
 
@@ -111,14 +112,15 @@ func (m *mockReopenTicketUC) Execute(ctx context.Context, cmd usecases.ReopenTic
 }
 
 type mockGetTicketUC struct {
-	executeFunc func(ctx context.Context, query usecases.GetTicketQuery) (*usecases.GetTicketResult, error)
+	executeFunc func(ctx context.Context, query usecases.GetTicketQuery) (*dto.TicketDTO, error)
 }
 
-func (m *mockGetTicketUC) Execute(ctx context.Context, query usecases.GetTicketQuery) (*usecases.GetTicketResult, error) {
+func (m *mockGetTicketUC) Execute(ctx context.Context, query usecases.GetTicketQuery) (*dto.TicketDTO, error) {
 	if m.executeFunc != nil {
 		return m.executeFunc(ctx, query)
 	}
-	return &usecases.GetTicketResult{
+	now := time.Now()
+	return &dto.TicketDTO{
 		ID:          query.TicketID,
 		Number:      "TK-001",
 		Title:       "Test Ticket",
@@ -129,9 +131,9 @@ func (m *mockGetTicketUC) Execute(ctx context.Context, query usecases.GetTicketQ
 		CreatorID:   1,
 		Tags:        []string{},
 		Metadata:    make(map[string]interface{}),
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
-		Comments:    []usecases.CommentDTO{},
+		CreatedAt:   now,
+		UpdatedAt:   now,
+		Comments:    []dto.CommentDTO{},
 	}, nil
 }
 
@@ -145,7 +147,7 @@ func (m *mockListTicketsUC) Execute(ctx context.Context, query usecases.ListTick
 	}
 	now := time.Now().Format("2006-01-02T15:04:05Z07:00")
 	return &usecases.ListTicketsResult{
-		Tickets: []usecases.TicketListItem{
+		Tickets: []dto.TicketListItemDTO{
 			{
 				ID:         1,
 				Number:     "TK-001",

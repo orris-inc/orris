@@ -1,6 +1,10 @@
 package usecases
 
-import "context"
+import (
+	"context"
+
+	"orris/internal/application/ticket/dto"
+)
 
 type CreateTicketExecutor interface {
 	Execute(ctx context.Context, cmd CreateTicketCommand) (*CreateTicketResult, error)
@@ -15,7 +19,7 @@ type DeleteTicketExecutor interface {
 }
 
 type GetTicketExecutor interface {
-	Execute(ctx context.Context, query GetTicketQuery) (*GetTicketResult, error)
+	Execute(ctx context.Context, query GetTicketQuery) (*dto.TicketDTO, error)
 }
 
 type AddCommentExecutor interface {

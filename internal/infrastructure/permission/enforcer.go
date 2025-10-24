@@ -8,8 +8,11 @@ import (
 	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"gorm.io/gorm"
 
+	"orris/internal/domain/permission"
 	"orris/internal/shared/logger"
 )
+
+var _ permission.PermissionEnforcer = (*Enforcer)(nil)
 
 type Enforcer struct {
 	enforcer *casbin.Enforcer

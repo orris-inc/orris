@@ -10,7 +10,7 @@ import (
 	"github.com/lmittmann/tint"
 	"golang.org/x/term"
 
-	"orris/internal/infrastructure/config"
+	"orris/internal/shared/config"
 )
 
 var (
@@ -49,14 +49,7 @@ func Init(cfg *config.LoggerConfig) error {
 		writer = file
 	}
 
-	// Determine which log levels should show source location
-	// By default: warn and error show source, debug and info don't (production-friendly)
 	showSourceLevels := []slog.Level{slog.LevelWarn, slog.LevelError}
-	serverCfg := config.Get().Server
-	if serverCfg.Mode == "debug" {
-		// In debug mode, show source for all levels
-		showSourceLevels = []slog.Level{slog.LevelDebug, slog.LevelInfo, slog.LevelWarn, slog.LevelError}
-	}
 
 	var handler slog.Handler
 
