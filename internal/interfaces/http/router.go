@@ -21,6 +21,7 @@ import (
 	"orris/internal/infrastructure/repository"
 	"orris/internal/infrastructure/token"
 	"orris/internal/interfaces/http/handlers"
+	ticketHandlers "orris/internal/interfaces/http/handlers/ticket"
 	"orris/internal/interfaces/http/middleware"
 	"orris/internal/interfaces/http/routes"
 	"orris/internal/shared/logger"
@@ -41,6 +42,7 @@ type Router struct {
 	nodeGroupHandler          *handlers.NodeGroupHandler
 	nodeSubscriptionHandler   *handlers.NodeSubscriptionHandler
 	nodeReportHandler         *handlers.NodeReportHandler
+	ticketHandler             *ticketHandlers.TicketHandler
 	authMiddleware            *middleware.AuthMiddleware
 	permissionMiddleware      *middleware.PermissionMiddleware
 	nodeTokenMiddleware       *middleware.NodeTokenMiddleware
@@ -250,6 +252,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	nodeReportHandler := handlers.NewNodeReportHandler(nil, nil)
 	nodeTokenMiddleware := middleware.NewNodeTokenMiddleware(nil, log)
 
+	ticketHandler := ticketHandlers.NewTicketHandler(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+
 	return &Router{
 		engine:                   engine,
 		userHandler:              userHandler,
@@ -262,6 +266,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		nodeGroupHandler:         nodeGroupHandler,
 		nodeSubscriptionHandler:  nodeSubscriptionHandler,
 		nodeReportHandler:        nodeReportHandler,
+		ticketHandler:            ticketHandler,
 		authMiddleware:           authMiddleware,
 		permissionMiddleware:     permissionMiddleware,
 		nodeTokenMiddleware:      nodeTokenMiddleware,
@@ -360,6 +365,12 @@ func (r *Router) SetupRoutes() {
 		PermissionMiddleware:    r.permissionMiddleware,
 		NodeTokenMW:             r.nodeTokenMiddleware,
 		RateLimiter:             r.rateLimiter,
+	})
+
+	routes.SetupTicketRoutes(r.engine, &routes.TicketRouteConfig{
+		TicketHandler:        r.ticketHandler,
+		AuthMiddleware:       r.authMiddleware,
+		PermissionMiddleware: r.permissionMiddleware,
 	})
 }
 

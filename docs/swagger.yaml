@@ -240,6 +240,13 @@ definitions:
     required:
     - node_id
     type: object
+  internal_interfaces_http_handlers_node.AssociatePlanRequest:
+    properties:
+      plan_id:
+        type: integer
+    required:
+    - plan_id
+    type: object
   internal_interfaces_http_handlers_node.CreateNodeGroupRequest:
     properties:
       description:
@@ -367,6 +374,56 @@ definitions:
         type: array
       traffic_limit:
         type: integer
+    type: object
+  internal_interfaces_http_handlers_ticket.AddCommentRequest:
+    properties:
+      content:
+        maxLength: 10000
+        type: string
+      is_internal:
+        type: boolean
+    required:
+    - content
+    type: object
+  internal_interfaces_http_handlers_ticket.AssignTicketRequest:
+    properties:
+      assignee_id:
+        type: integer
+    required:
+    - assignee_id
+    type: object
+  internal_interfaces_http_handlers_ticket.CloseTicketRequest:
+    properties:
+      reason:
+        maxLength: 500
+        type: string
+    required:
+    - reason
+    type: object
+  internal_interfaces_http_handlers_ticket.CreateTicketRequest:
+    properties:
+      category:
+        type: string
+      description:
+        maxLength: 5000
+        type: string
+      metadata:
+        additionalProperties: true
+        type: object
+      priority:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      title:
+        maxLength: 200
+        type: string
+    required:
+    - category
+    - description
+    - priority
+    - title
     type: object
   orris_internal_interfaces_dto.CreateUserRequest:
     properties:
@@ -1027,6 +1084,44 @@ paths:
       tags:
       - node-groups
   /node-groups/{id}/nodes:
+    get:
+      consumes:
+      - application/json
+      description: Get all nodes in a node group
+      parameters:
+      - description: Node group ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of nodes in group
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid node group ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Node group not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: List nodes in group
+      tags:
+      - node-groups
     post:
       consumes:
       - application/json
@@ -1111,6 +1206,93 @@ paths:
       security:
       - Bearer: []
       summary: Remove node from group
+      tags:
+      - node-groups
+  /node-groups/{id}/plans:
+    post:
+      consumes:
+      - application/json
+      description: Associate a subscription plan with a node group
+      parameters:
+      - description: Node group ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Plan to associate
+        in: body
+        name: plan
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers_node.AssociatePlanRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Plan associated successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Node group not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Associate subscription plan with node group
+      tags:
+      - node-groups
+  /node-groups/{id}/plans/{planId}:
+    delete:
+      consumes:
+      - application/json
+      description: Remove association between subscription plan and node group
+      parameters:
+      - description: Node group ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Plan ID
+        in: path
+        name: planId
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Plan disassociated successfully
+        "400":
+          description: Invalid ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Node group or plan not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Disassociate subscription plan from node group
       tags:
       - node-groups
   /nodes:
@@ -1315,6 +1497,84 @@ paths:
       summary: Update node
       tags:
       - nodes
+  /nodes/{id}/activate:
+    post:
+      consumes:
+      - application/json
+      description: Activate a node by ID
+      parameters:
+      - description: Node ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Node activated successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid node ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Node not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Activate node
+      tags:
+      - nodes
+  /nodes/{id}/deactivate:
+    post:
+      consumes:
+      - application/json
+      description: Deactivate a node by ID
+      parameters:
+      - description: Node ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Node deactivated successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid node ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Node not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Deactivate node
+      tags:
+      - nodes
   /nodes/{id}/token:
     post:
       consumes:
@@ -1354,6 +1614,53 @@ paths:
       summary: Generate new API token for node
       tags:
       - nodes
+  /nodes/{id}/traffic:
+    get:
+      consumes:
+      - application/json
+      description: Get traffic statistics for a node
+      parameters:
+      - description: Node ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Start time (RFC3339)
+        in: query
+        name: start
+        type: string
+      - description: End time (RFC3339)
+        in: query
+        name: end
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Node traffic statistics
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid node ID or parameters
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Node not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Get node traffic statistics
+      tags:
+      - nodes
   /nodes/report:
     post:
       consumes:
@@ -1388,6 +1695,32 @@ paths:
       security:
       - NodeToken: []
       summary: Report node data
+      tags:
+      - nodes
+  /nodes/report/heartbeat:
+    post:
+      consumes:
+      - application/json
+      description: Send heartbeat signal to indicate node is alive (requires node
+        token)
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Heartbeat received
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - NodeToken: []
+      summary: Node heartbeat
       tags:
       - nodes
   /sub/{token}:
@@ -2289,6 +2622,239 @@ paths:
       summary: Refresh subscription token
       tags:
       - subscription-tokens
+  /tickets:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of tickets
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      - description: Status filter
+        in: query
+        name: status
+        type: string
+      - description: Priority filter
+        in: query
+        name: priority
+        type: string
+      - description: Category filter
+        in: query
+        name: category
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: List tickets
+      tags:
+      - tickets
+    post:
+      consumes:
+      - application/json
+      description: Create a new support ticket
+      parameters:
+      - description: Ticket data
+        in: body
+        name: ticket
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers_ticket.CreateTicketRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Create a new ticket
+      tags:
+      - tickets
+  /tickets/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a ticket (admin only)
+      parameters:
+      - description: Ticket ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Delete ticket
+      tags:
+      - tickets
+    get:
+      consumes:
+      - application/json
+      description: Get details of a ticket
+      parameters:
+      - description: Ticket ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Get ticket by ID
+      tags:
+      - tickets
+  /tickets/{id}/assign:
+    post:
+      consumes:
+      - application/json
+      description: Assign a ticket to an agent
+      parameters:
+      - description: Ticket ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Assignment data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers_ticket.AssignTicketRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Assign ticket
+      tags:
+      - tickets
+  /tickets/{id}/close:
+    post:
+      consumes:
+      - application/json
+      description: Close a ticket with a reason
+      parameters:
+      - description: Ticket ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Close data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers_ticket.CloseTicketRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Close ticket
+      tags:
+      - tickets
+  /tickets/{id}/comments:
+    post:
+      consumes:
+      - application/json
+      description: Add a comment to a ticket
+      parameters:
+      - description: Ticket ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Comment data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers_ticket.AddCommentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Add comment
+      tags:
+      - tickets
   /users:
     get:
       consumes:

@@ -976,6 +976,65 @@ const docTemplate = `{
             }
         },
         "/node-groups/{id}/nodes": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get all nodes in a node group",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "node-groups"
+                ],
+                "summary": "List nodes in group",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Node group ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of nodes in group",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid node group ID",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Node group not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            },
             "post": {
                 "security": [
                     {
@@ -1097,6 +1156,141 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Node group not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/node-groups/{id}/plans": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Associate a subscription plan with a node group",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "node-groups"
+                ],
+                "summary": "Associate subscription plan with node group",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Node group ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Plan to associate",
+                        "name": "plan",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_interfaces_http_handlers_node.AssociatePlanRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Plan associated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Node group not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/node-groups/{id}/plans/{planId}": {
+            "delete": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Remove association between subscription plan and node group",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "node-groups"
+                ],
+                "summary": "Disassociate subscription plan from node group",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Node group ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Plan ID",
+                        "name": "planId",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Plan disassociated successfully"
+                    },
+                    "400": {
+                        "description": "Invalid ID",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Node group or plan not found",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -1277,6 +1471,46 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/nodes/report/heartbeat": {
+            "post": {
+                "security": [
+                    {
+                        "NodeToken": []
+                    }
+                ],
+                "description": "Send heartbeat signal to indicate node is alive (requires node token)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "nodes"
+                ],
+                "summary": "Node heartbeat",
+                "responses": {
+                    "200": {
+                        "description": "Heartbeat received",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -1481,6 +1715,128 @@ const docTemplate = `{
                 }
             }
         },
+        "/nodes/{id}/activate": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Activate a node by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "nodes"
+                ],
+                "summary": "Activate node",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Node ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Node activated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid node ID",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Node not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/nodes/{id}/deactivate": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Deactivate a node by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "nodes"
+                ],
+                "summary": "Deactivate node",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Node ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Node deactivated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid node ID",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Node not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/nodes/{id}/token": {
             "post": {
                 "security": [
@@ -1517,6 +1873,79 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Invalid node ID",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Node not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/nodes/{id}/traffic": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get traffic statistics for a node",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "nodes"
+                ],
+                "summary": "Get node traffic statistics",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Node ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start time (RFC3339)",
+                        "name": "start",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End time (RFC3339)",
+                        "name": "end",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Node traffic statistics",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid node ID or parameters",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -2924,6 +3353,372 @@ const docTemplate = `{
                 }
             }
         },
+        "/tickets": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get a paginated list of tickets",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tickets"
+                ],
+                "summary": "List tickets",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Page size",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Status filter",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Priority filter",
+                        "name": "priority",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Category filter",
+                        "name": "category",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Create a new support ticket",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tickets"
+                ],
+                "summary": "Create a new ticket",
+                "parameters": [
+                    {
+                        "description": "Ticket data",
+                        "name": "ticket",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_interfaces_http_handlers_ticket.CreateTicketRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/tickets/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get details of a ticket",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tickets"
+                ],
+                "summary": "Get ticket by ID",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Ticket ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Delete a ticket (admin only)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tickets"
+                ],
+                "summary": "Delete ticket",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Ticket ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/tickets/{id}/assign": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Assign a ticket to an agent",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tickets"
+                ],
+                "summary": "Assign ticket",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Ticket ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Assignment data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_interfaces_http_handlers_ticket.AssignTicketRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/tickets/{id}/close": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Close a ticket with a reason",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tickets"
+                ],
+                "summary": "Close ticket",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Ticket ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Close data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_interfaces_http_handlers_ticket.CloseTicketRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/tickets/{id}/comments": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Add a comment to a ticket",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "tickets"
+                ],
+                "summary": "Add comment",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Ticket ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Comment data",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_interfaces_http_handlers_ticket.AddCommentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/users": {
             "get": {
                 "security": [
@@ -3861,6 +4656,17 @@ const docTemplate = `{
                 }
             }
         },
+        "internal_interfaces_http_handlers_node.AssociatePlanRequest": {
+            "type": "object",
+            "required": [
+                "plan_id"
+            ],
+            "properties": {
+                "plan_id": {
+                    "type": "integer"
+                }
+            }
+        },
         "internal_interfaces_http_handlers_node.CreateNodeGroupRequest": {
             "type": "object",
             "required": [
@@ -4050,6 +4856,79 @@ const docTemplate = `{
                 },
                 "traffic_limit": {
                     "type": "integer"
+                }
+            }
+        },
+        "internal_interfaces_http_handlers_ticket.AddCommentRequest": {
+            "type": "object",
+            "required": [
+                "content"
+            ],
+            "properties": {
+                "content": {
+                    "type": "string",
+                    "maxLength": 10000
+                },
+                "is_internal": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "internal_interfaces_http_handlers_ticket.AssignTicketRequest": {
+            "type": "object",
+            "required": [
+                "assignee_id"
+            ],
+            "properties": {
+                "assignee_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_interfaces_http_handlers_ticket.CloseTicketRequest": {
+            "type": "object",
+            "required": [
+                "reason"
+            ],
+            "properties": {
+                "reason": {
+                    "type": "string",
+                    "maxLength": 500
+                }
+            }
+        },
+        "internal_interfaces_http_handlers_ticket.CreateTicketRequest": {
+            "type": "object",
+            "required": [
+                "category",
+                "description",
+                "priority",
+                "title"
+            ],
+            "properties": {
+                "category": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string",
+                    "maxLength": 5000
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "priority": {
+                    "type": "string"
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 200
                 }
             }
         },
