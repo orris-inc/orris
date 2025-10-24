@@ -425,6 +425,93 @@ definitions:
     - priority
     - title
     type: object
+  orris_internal_interfaces_dto.AnnouncementResponse:
+    properties:
+      content:
+        type: string
+      created_at:
+        type: string
+      creator_id:
+        type: integer
+      expires_at:
+        type: string
+      id:
+        type: integer
+      priority:
+        type: integer
+      scheduled_at:
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+      type:
+        type: string
+      updated_at:
+        type: string
+      version:
+        type: integer
+      view_count:
+        type: integer
+    type: object
+  orris_internal_interfaces_dto.CreateAnnouncementRequest:
+    properties:
+      content:
+        minLength: 1
+        type: string
+      expires_at:
+        type: string
+      priority:
+        maximum: 5
+        minimum: 1
+        type: integer
+      scheduled_at:
+        type: string
+      title:
+        maxLength: 255
+        minLength: 1
+        type: string
+      type:
+        enum:
+        - system
+        - maintenance
+        - feature
+        - promotion
+        type: string
+    required:
+    - content
+    - title
+    - type
+    type: object
+  orris_internal_interfaces_dto.CreateTemplateRequest:
+    properties:
+      content:
+        minLength: 1
+        type: string
+      enabled:
+        type: boolean
+      name:
+        maxLength: 100
+        minLength: 1
+        type: string
+      template_type:
+        maxLength: 50
+        minLength: 1
+        type: string
+      title:
+        maxLength: 255
+        minLength: 1
+        type: string
+      variables:
+        items:
+          type: string
+        type: array
+    required:
+    - content
+    - name
+    - template_type
+    - title
+    type: object
   orris_internal_interfaces_dto.CreateUserRequest:
     properties:
       email:
@@ -436,6 +523,103 @@ definitions:
     required:
     - email
     - name
+    type: object
+  orris_internal_interfaces_dto.NotificationResponse:
+    properties:
+      archived_at:
+        type: string
+      content:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      read_status:
+        type: string
+      related_id:
+        type: integer
+      title:
+        type: string
+      type:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        type: integer
+      version:
+        type: integer
+    type: object
+  orris_internal_interfaces_dto.RenderTemplateRequest:
+    properties:
+      template_type:
+        type: string
+      variables:
+        additionalProperties: true
+        type: object
+    required:
+    - template_type
+    type: object
+  orris_internal_interfaces_dto.RenderTemplateResponse:
+    properties:
+      content:
+        type: string
+      title:
+        type: string
+    type: object
+  orris_internal_interfaces_dto.TemplateResponse:
+    properties:
+      content:
+        type: string
+      created_at:
+        type: string
+      enabled:
+        type: boolean
+      id:
+        type: integer
+      name:
+        type: string
+      template_type:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+      variables:
+        items:
+          type: string
+        type: array
+      version:
+        type: integer
+    type: object
+  orris_internal_interfaces_dto.UnreadCountResponse:
+    properties:
+      count:
+        type: integer
+    type: object
+  orris_internal_interfaces_dto.UpdateAnnouncementRequest:
+    properties:
+      content:
+        minLength: 1
+        type: string
+      expires_at:
+        type: string
+      priority:
+        maximum: 5
+        minimum: 1
+        type: integer
+      scheduled_at:
+        type: string
+      title:
+        maxLength: 255
+        minLength: 1
+        type: string
+      type:
+        enum:
+        - system
+        - maintenance
+        - feature
+        - promotion
+        type: string
     type: object
   orris_internal_interfaces_dto.UpdateUserRequest:
     properties:
@@ -468,6 +652,18 @@ definitions:
       type:
         type: string
     type: object
+  orris_internal_shared_utils.ListResponse:
+    properties:
+      items: {}
+      page:
+        type: integer
+      page_size:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
 info:
   contact:
     email: support@orris.io
@@ -480,6 +676,281 @@ info:
   title: Orris API
   version: "1.0"
 paths:
+  /announcements:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of announcements with optional filters
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      - description: Filter by type
+        enum:
+        - system
+        - maintenance
+        - feature
+        - promotion
+        in: query
+        name: type
+        type: string
+      - description: Filter by status
+        enum:
+        - draft
+        - published
+        - archived
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Announcements list
+          schema:
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_shared_utils.ListResponse'
+              type: object
+        "400":
+          description: Invalid query parameters
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: List announcements
+      tags:
+      - announcements
+    post:
+      consumes:
+      - application/json
+      description: Create a new announcement with the provided data
+      parameters:
+      - description: Announcement data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/orris_internal_interfaces_dto.CreateAnnouncementRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Announcement created successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_interfaces_dto.AnnouncementResponse'
+              type: object
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Create announcement
+      tags:
+      - announcements
+  /announcements/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete an announcement by ID
+      parameters:
+      - description: Announcement ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Announcement deleted successfully
+        "400":
+          description: Invalid announcement ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Announcement not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Delete announcement
+      tags:
+      - announcements
+    get:
+      consumes:
+      - application/json
+      description: Get detailed information of an announcement by ID
+      parameters:
+      - description: Announcement ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Announcement details
+          schema:
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_interfaces_dto.AnnouncementResponse'
+              type: object
+        "400":
+          description: Invalid announcement ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Announcement not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Get announcement
+      tags:
+      - announcements
+    put:
+      consumes:
+      - application/json
+      description: Update an existing announcement by ID
+      parameters:
+      - description: Announcement ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Updated announcement data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/orris_internal_interfaces_dto.UpdateAnnouncementRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Announcement updated successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_interfaces_dto.AnnouncementResponse'
+              type: object
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Announcement not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Update announcement
+      tags:
+      - announcements
+  /announcements/{id}/publish:
+    post:
+      consumes:
+      - application/json
+      description: Publish a draft announcement to make it visible to users
+      parameters:
+      - description: Announcement ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Announcement published successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_interfaces_dto.AnnouncementResponse'
+              type: object
+        "400":
+          description: Invalid announcement ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Announcement not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Publish announcement
+      tags:
+      - announcements
   /auth/check-permission:
     get:
       consumes:
@@ -1723,6 +2194,427 @@ paths:
       summary: Node heartbeat
       tags:
       - nodes
+  /notification-templates:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of notification templates
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      - description: Filter by enabled status
+        in: query
+        name: enabled
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Templates list
+          schema:
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_shared_utils.ListResponse'
+              type: object
+        "400":
+          description: Invalid query parameters
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: List notification templates
+      tags:
+      - notification-templates
+    post:
+      consumes:
+      - application/json
+      description: Create a new notification template
+      parameters:
+      - description: Template data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/orris_internal_interfaces_dto.CreateTemplateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Template created successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_interfaces_dto.TemplateResponse'
+              type: object
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "409":
+          description: Template type already exists
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Create notification template
+      tags:
+      - notification-templates
+  /notification-templates/render:
+    post:
+      consumes:
+      - application/json
+      description: Render a notification template with provided variables
+      parameters:
+      - description: Render data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/orris_internal_interfaces_dto.RenderTemplateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Template rendered successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_interfaces_dto.RenderTemplateResponse'
+              type: object
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Template not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Render notification template
+      tags:
+      - notification-templates
+  /notifications:
+    get:
+      consumes:
+      - application/json
+      description: Get a list of notifications for the authenticated user
+      parameters:
+      - default: 20
+        description: Limit
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Offset
+        in: query
+        name: offset
+        type: integer
+      - description: Filter by status
+        enum:
+        - read
+        - unread
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Notifications list
+          schema:
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/orris_internal_interfaces_dto.NotificationResponse'
+                  type: array
+              type: object
+        "400":
+          description: Invalid query parameters
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: List notifications for current user
+      tags:
+      - notifications
+  /notifications/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a notification for the authenticated user
+      parameters:
+      - description: Notification ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Notification deleted successfully
+        "400":
+          description: Invalid notification ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Notification not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Delete notification
+      tags:
+      - notifications
+  /notifications/{id}/archive:
+    post:
+      consumes:
+      - application/json
+      description: Archive a notification for the authenticated user
+      parameters:
+      - description: Notification ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Notification archived successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_interfaces_dto.NotificationResponse'
+              type: object
+        "400":
+          description: Invalid notification ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Notification not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Archive notification
+      tags:
+      - notifications
+  /notifications/{id}/read:
+    put:
+      consumes:
+      - application/json
+      description: Mark a specific notification as read for the authenticated user
+      parameters:
+      - description: Notification ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Notification marked as read
+          schema:
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_interfaces_dto.NotificationResponse'
+              type: object
+        "400":
+          description: Invalid notification ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Notification not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Mark notification as read
+      tags:
+      - notifications
+  /notifications/read-all:
+    put:
+      consumes:
+      - application/json
+      description: Mark all notifications as read for the authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: All notifications marked as read
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Mark all notifications as read
+      tags:
+      - notifications
+  /notifications/unread-count:
+    get:
+      consumes:
+      - application/json
+      description: Get the count of unread notifications for the authenticated user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Unread count
+          schema:
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_interfaces_dto.UnreadCountResponse'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Get unread notifications count
+      tags:
+      - notifications
+  /public/announcements:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of published announcements (public endpoint,
+        no authentication required)
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      - description: Filter by type
+        enum:
+        - system
+        - maintenance
+        - feature
+        - promotion
+        in: query
+        name: type
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Public announcements list
+          schema:
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_shared_utils.ListResponse'
+              type: object
+        "400":
+          description: Invalid query parameters
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      summary: List public announcements
+      tags:
+      - announcements
   /sub/{token}:
     get:
       consumes:

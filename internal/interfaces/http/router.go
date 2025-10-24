@@ -10,10 +10,13 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/gorm"
 
+	notificationApp "orris/internal/application/notification"
+	nodeUsecases "orris/internal/application/node/usecases"
 	"orris/internal/application/permission"
 	subscriptionUsecases "orris/internal/application/subscription/usecases"
 	"orris/internal/application/user"
 	"orris/internal/application/user/usecases"
+	"orris/internal/infrastructure/adapters"
 	"orris/internal/infrastructure/auth"
 	"orris/internal/infrastructure/config"
 	"orris/internal/infrastructure/email"
@@ -25,6 +28,7 @@ import (
 	"orris/internal/interfaces/http/middleware"
 	"orris/internal/interfaces/http/routes"
 	"orris/internal/shared/logger"
+	"orris/internal/shared/services/markdown"
 
 	_ "orris/docs"
 )
@@ -43,6 +47,7 @@ type Router struct {
 	nodeSubscriptionHandler   *handlers.NodeSubscriptionHandler
 	nodeReportHandler         *handlers.NodeReportHandler
 	ticketHandler             *ticketHandlers.TicketHandler
+	notificationHandler       *handlers.NotificationHandler
 	authMiddleware            *middleware.AuthMiddleware
 	permissionMiddleware      *middleware.PermissionMiddleware
 	nodeTokenMiddleware       *middleware.NodeTokenMiddleware
@@ -246,13 +251,44 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		generateTokenUC, listTokensUC, revokeTokenUC, refreshSubscriptionTokenUC,
 	)
 
+	nodeRepo := adapters.NewNodeRepositoryAdapter(log)
+	tokenValidator := adapters.NewSubscriptionTokenValidatorAdapter(db, log)
+	generateSubscriptionUC := nodeUsecases.NewGenerateSubscriptionUseCase(
+		nodeRepo, tokenValidator, log,
+	)
+
 	nodeHandler := handlers.NewNodeHandler(nil, nil, nil, nil, nil)
 	nodeGroupHandler := handlers.NewNodeGroupHandler()
-	nodeSubscriptionHandler := handlers.NewNodeSubscriptionHandler(nil)
+	nodeSubscriptionHandler := handlers.NewNodeSubscriptionHandler(generateSubscriptionUC)
 	nodeReportHandler := handlers.NewNodeReportHandler(nil, nil)
 	nodeTokenMiddleware := middleware.NewNodeTokenMiddleware(nil, log)
 
 	ticketHandler := ticketHandlers.NewTicketHandler(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+
+	announcementRepo := adapters.NewAnnouncementRepositoryAdapter(repository.NewAnnouncementRepository(db))
+	notificationRepo := adapters.NewNotificationRepositoryAdapter(repository.NewNotificationRepository(db))
+	templateRepo := adapters.NewTemplateRepositoryAdapter(repository.NewNotificationTemplateRepository(db))
+	userRepoAdapter := adapters.NewUserRepositoryAdapter(userRepo)
+
+	markdownService := markdown.NewMarkdownService()
+
+	announcementFactory := adapters.NewAnnouncementFactoryAdapter()
+	notificationFactory := adapters.NewNotificationFactoryAdapter()
+	templateFactory := adapters.NewTemplateFactoryAdapter()
+
+	notificationServiceDDD := notificationApp.NewServiceDDD(
+		announcementRepo,
+		notificationRepo,
+		templateRepo,
+		userRepoAdapter,
+		announcementFactory,
+		notificationFactory,
+		templateFactory,
+		markdownService,
+		log,
+	)
+
+	notificationHandler := handlers.NewNotificationHandler(notificationServiceDDD, log)
 
 	return &Router{
 		engine:                   engine,
@@ -267,6 +303,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		nodeSubscriptionHandler:  nodeSubscriptionHandler,
 		nodeReportHandler:        nodeReportHandler,
 		ticketHandler:            ticketHandler,
+		notificationHandler:      notificationHandler,
 		authMiddleware:           authMiddleware,
 		permissionMiddleware:     permissionMiddleware,
 		nodeTokenMiddleware:      nodeTokenMiddleware,
@@ -369,6 +406,12 @@ func (r *Router) SetupRoutes() {
 
 	routes.SetupTicketRoutes(r.engine, &routes.TicketRouteConfig{
 		TicketHandler:        r.ticketHandler,
+		AuthMiddleware:       r.authMiddleware,
+		PermissionMiddleware: r.permissionMiddleware,
+	})
+
+	routes.SetupNotificationRoutes(r.engine, &routes.NotificationRouteConfig{
+		NotificationHandler:  r.notificationHandler,
 		AuthMiddleware:       r.authMiddleware,
 		PermissionMiddleware: r.permissionMiddleware,
 	})
