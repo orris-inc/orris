@@ -26,7 +26,6 @@ import (
 
 var (
 	env                string
-	autoMigrate        bool
 	skipMigrationCheck bool
 )
 
@@ -39,7 +38,6 @@ func NewCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&env, "env", "e", "development", "Environment (development, test, production)")
-	cmd.Flags().BoolVar(&autoMigrate, "auto-migrate", false, "Automatically run database migrations on startup (not recommended for production)")
 	cmd.Flags().BoolVar(&skipMigrationCheck, "skip-migration-check", false, "Skip migration status check on startup")
 
 	return cmd
@@ -66,8 +64,7 @@ func run(cmd *cobra.Command, args []string) error {
 
 	logger.Info("starting server",
 		"environment", env,
-		"version", "1.0.0",
-		"auto-migrate", autoMigrate)
+		"version", "1.0.0")
 
 	gin.SetMode(cfg.Server.Mode)
 
@@ -142,15 +139,6 @@ func handleMigrations(environment string) error {
 	if skipMigrationCheck {
 		logger.Info("skipping migration check")
 		return nil
-	}
-
-	if autoMigrate {
-		if environment == "production" {
-			logger.Warn("auto-migration is enabled in production environment - this is not recommended!")
-		}
-
-		logger.Warn("auto-migration is deprecated, please use 'orris migrate up' instead")
-		return fmt.Errorf("auto-migration is no longer supported, use 'orris migrate up'")
 	}
 
 	logger.Info("checking migration status")

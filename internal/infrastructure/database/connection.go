@@ -3,6 +3,7 @@ package database
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"gorm.io/driver/mysql"
@@ -13,7 +14,10 @@ import (
 	appLogger "orris/internal/shared/logger"
 )
 
-var db *gorm.DB
+var (
+	db   *gorm.DB
+	dbMu sync.RWMutex
+)
 
 // Init initializes the database connection with minimal configuration
 func Init(cfg *config.DatabaseConfig) error {
@@ -60,7 +64,9 @@ func Init(cfg *config.DatabaseConfig) error {
 		return fmt.Errorf("failed to ping database: %w", err)
 	}
 
+	dbMu.Lock()
 	db = database
+	dbMu.Unlock()
 
 	appLogger.Info("database connection established",
 		"database", cfg.Database)
@@ -70,16 +76,22 @@ func Init(cfg *config.DatabaseConfig) error {
 
 // Get returns the database connection
 func Get() *gorm.DB {
+	dbMu.RLock()
+	defer dbMu.RUnlock()
 	return db
 }
 
 // Close closes the database connection
 func Close() error {
-	if db == nil {
+	dbMu.RLock()
+	currentDB := db
+	dbMu.RUnlock()
+
+	if currentDB == nil {
 		return nil
 	}
 
-	sqlDB, err := db.DB()
+	sqlDB, err := currentDB.DB()
 	if err != nil {
 		return fmt.Errorf("failed to get underlying sql.DB: %w", err)
 	}
@@ -89,22 +101,6 @@ func Close() error {
 	}
 
 	appLogger.Info("database connection closed")
-	return nil
-}
-
-// Migrate runs database migrations for given models
-func Migrate(models ...interface{}) error {
-	if db == nil {
-		return fmt.Errorf("database not initialized")
-	}
-
-	appLogger.Info("running database migrations")
-
-	if err := db.AutoMigrate(models...); err != nil {
-		return fmt.Errorf("failed to run migrations: %w", err)
-	}
-
-	appLogger.Info("database migrations completed successfully")
 	return nil
 }
 

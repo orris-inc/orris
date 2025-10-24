@@ -21,36 +21,6 @@ type Strategy interface {
 	GetName() string
 }
 
-// GormAutoMigrateStrategy implements migration using GORM AutoMigrate
-type GormAutoMigrateStrategy struct {
-	logger logger.Interface
-}
-
-// NewGormAutoMigrateStrategy creates a new GORM AutoMigrate strategy
-func NewGormAutoMigrateStrategy() Strategy {
-	return &GormAutoMigrateStrategy{
-		logger: logger.NewLogger().With("component", "migration.gorm"),
-	}
-}
-
-// Migrate executes GORM AutoMigrate
-func (s *GormAutoMigrateStrategy) Migrate(db *gorm.DB, models ...interface{}) error {
-	s.logger.Infow("starting GORM AutoMigrate")
-
-	if err := db.AutoMigrate(models...); err != nil {
-		s.logger.Errorw("GORM AutoMigrate failed", "error", err)
-		return fmt.Errorf("failed to run GORM AutoMigrate: %w", err)
-	}
-
-	s.logger.Infow("GORM AutoMigrate completed successfully")
-	return nil
-}
-
-// GetName returns the strategy name
-func (s *GormAutoMigrateStrategy) GetName() string {
-	return "gorm_auto_migrate"
-}
-
 // GolangMigrateStrategy implements migration using golang-migrate
 type GolangMigrateStrategy struct {
 	scriptsPath string

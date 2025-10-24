@@ -3,11 +3,9 @@ package migration
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"gorm.io/gorm"
 
-	"orris/internal/shared/constants"
 	"orris/internal/shared/logger"
 )
 
@@ -21,18 +19,8 @@ type Manager struct {
 func NewManager(environment string) *Manager {
 	var strategy Strategy
 
-	// Choose strategy based on environment
-	switch strings.ToLower(environment) {
-	case constants.EnvDevelopment:
-		strategy = NewGormAutoMigrateStrategy()
-	case constants.EnvTest, constants.EnvProduction:
-		// Get absolute path to migration scripts
-		scriptsPath, _ := filepath.Abs("./internal/infrastructure/migration/scripts")
-		strategy = NewGolangMigrateStrategy(scriptsPath)
-	default:
-		// Default to GORM AutoMigrate for unknown environments
-		strategy = NewGormAutoMigrateStrategy()
-	}
+	scriptsPath, _ := filepath.Abs("./internal/infrastructure/migration/scripts")
+	strategy = NewGooseStrategy(scriptsPath)
 
 	return &Manager{
 		strategy: strategy,
@@ -90,8 +78,8 @@ func (m *Manager) GetStrategyInfo() map[string]interface{} {
 // getStrategyDescription returns a description for the given strategy
 func getStrategyDescription(strategyName string) string {
 	switch strategyName {
-	case "gorm_auto_migrate":
-		return "GORM AutoMigrate - Automatic schema migration based on struct definitions"
+	case "goose":
+		return "Goose - Version-controlled SQL migration scripts"
 	case "golang_migrate":
 		return "golang-migrate - Version-controlled SQL migration scripts"
 	default:
@@ -99,9 +87,9 @@ func getStrategyDescription(strategyName string) string {
 	}
 }
 
-// MigrateWithGormAutoMigrate is a convenience function for GORM AutoMigrate
-func MigrateWithGormAutoMigrate(db *gorm.DB, models ...interface{}) error {
-	manager := NewManagerWithStrategy(NewGormAutoMigrateStrategy())
+// MigrateWithGoose is a convenience function for goose migration
+func MigrateWithGoose(db *gorm.DB, scriptsPath string, models ...interface{}) error {
+	manager := NewManagerWithStrategy(NewGooseStrategy(scriptsPath))
 	return manager.Migrate(db, models...)
 }
 

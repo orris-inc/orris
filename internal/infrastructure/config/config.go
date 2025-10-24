@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/spf13/viper"
 
@@ -18,7 +19,11 @@ type Config struct {
 	Email    sharedConfig.EmailConfig    `mapstructure:"email"`
 }
 
-var appConfig *Config
+var (
+	appConfig     *Config
+	appConfigOnce sync.Once
+	appConfigMu   sync.RWMutex
+)
 
 // Load loads configuration from file and environment variables
 func Load(env string) (*Config, error) {
@@ -51,12 +56,17 @@ func Load(env string) (*Config, error) {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
+	appConfigMu.Lock()
 	appConfig = &config
+	appConfigMu.Unlock()
+
 	return &config, nil
 }
 
 // Get returns the loaded configuration
 func Get() *Config {
+	appConfigMu.RLock()
+	defer appConfigMu.RUnlock()
 	return appConfig
 }
 
