@@ -5,8 +5,8 @@ import (
 
 	"orris/internal/application/user/dto"
 	"orris/internal/application/user/usecases"
-	domainUser "orris/internal/domain/user"
 	"orris/internal/domain/shared/events"
+	domainUser "orris/internal/domain/user"
 	"orris/internal/shared/logger"
 )
 

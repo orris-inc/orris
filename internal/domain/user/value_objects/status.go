@@ -10,11 +10,11 @@ type Status string
 
 // Status constants
 const (
-	StatusActive   Status = "active"
-	StatusInactive Status = "inactive"
-	StatusPending  Status = "pending"
+	StatusActive    Status = "active"
+	StatusInactive  Status = "inactive"
+	StatusPending   Status = "pending"
 	StatusSuspended Status = "suspended"
-	StatusDeleted  Status = "deleted"
+	StatusDeleted   Status = "deleted"
 )
 
 // ValidStatuses contains all valid status values
@@ -126,13 +126,13 @@ func (s Status) CanTransitionTo(target Status) bool {
 	if !exists {
 		return false
 	}
-	
+
 	for _, allowed := range allowedTransitions {
 		if allowed == target {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -141,7 +141,7 @@ func (s *Status) TransitionTo(target Status) error {
 	if !s.CanTransitionTo(target) {
 		return fmt.Errorf("cannot transition from %s to %s", s.String(), target.String())
 	}
-	
+
 	*s = target
 	return nil
 }
@@ -182,12 +182,12 @@ func (s *Status) UnmarshalJSON(data []byte) error {
 	if len(str) >= 2 && str[0] == '"' && str[len(str)-1] == '"' {
 		str = str[1 : len(str)-1]
 	}
-	
+
 	status, err := NewStatus(str)
 	if err != nil {
 		return err
 	}
-	
+
 	*s = *status
 	return nil
 }

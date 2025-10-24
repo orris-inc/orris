@@ -28,16 +28,16 @@ type TokenPair struct {
 }
 
 type JWTService struct {
-	secret             []byte
-	accessExpMinutes   int
-	refreshExpDays     int
+	secret           []byte
+	accessExpMinutes int
+	refreshExpDays   int
 }
 
 func NewJWTService(secret string, accessExpMinutes, refreshExpDays int) *JWTService {
 	return &JWTService{
-		secret:             []byte(secret),
-		accessExpMinutes:   accessExpMinutes,
-		refreshExpDays:     refreshExpDays,
+		secret:           []byte(secret),
+		accessExpMinutes: accessExpMinutes,
+		refreshExpDays:   refreshExpDays,
 	}
 }
 

@@ -18,12 +18,12 @@ type ServiceDDD struct {
 	listAnnouncements   *usecases.ListAnnouncementsUseCase
 	getAnnouncement     *usecases.GetAnnouncementUseCase
 
-	listNotifications         *usecases.ListNotificationsUseCase
-	markNotificationAsRead    *usecases.MarkNotificationAsReadUseCase
-	markAllAsRead             *usecases.MarkAllAsReadUseCase
-	archiveNotification       *usecases.ArchiveNotificationUseCase
-	deleteNotification        *usecases.DeleteNotificationUseCase
-	getUnreadCount            *usecases.GetUnreadCountUseCase
+	listNotifications      *usecases.ListNotificationsUseCase
+	markNotificationAsRead *usecases.MarkNotificationAsReadUseCase
+	markAllAsRead          *usecases.MarkAllAsReadUseCase
+	archiveNotification    *usecases.ArchiveNotificationUseCase
+	deleteNotification     *usecases.DeleteNotificationUseCase
+	getUnreadCount         *usecases.GetUnreadCountUseCase
 
 	createTemplate *usecases.CreateTemplateUseCase
 	updateTemplate *usecases.UpdateTemplateUseCase

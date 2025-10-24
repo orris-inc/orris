@@ -9,16 +9,16 @@ import (
 
 // Event types
 const (
-	EventTypeUserCreated              = "user.created"
-	EventTypeUserUpdated              = "user.updated"
-	EventTypeUserDeleted              = "user.deleted"
-	EventTypeUserStatusChanged        = "user.status.changed"
-	EventTypeUserEmailChanged         = "user.email.changed"
-	EventTypeUserNameChanged          = "user.name.changed"
-	EventTypeUserPasswordChanged      = "user.password.changed"
-	EventTypeUserEmailVerified        = "user.email.verified"
-	EventTypeUserPasswordResetReq     = "user.password.reset.requested"
-	EventTypeUserAccountLocked        = "user.account.locked"
+	EventTypeUserCreated          = "user.created"
+	EventTypeUserUpdated          = "user.updated"
+	EventTypeUserDeleted          = "user.deleted"
+	EventTypeUserStatusChanged    = "user.status.changed"
+	EventTypeUserEmailChanged     = "user.email.changed"
+	EventTypeUserNameChanged      = "user.name.changed"
+	EventTypeUserPasswordChanged  = "user.password.changed"
+	EventTypeUserEmailVerified    = "user.email.verified"
+	EventTypeUserPasswordResetReq = "user.password.reset.requested"
+	EventTypeUserAccountLocked    = "user.account.locked"
 )
 
 // UserCreatedEvent is emitted when a new user is created
@@ -51,8 +51,8 @@ func NewUserCreatedEvent(userID uint, email, name, status string) UserCreatedEve
 // UserUpdatedEvent is emitted when a user is updated
 type UserUpdatedEvent struct {
 	events.BaseEvent
-	UserID    uint      `json:"user_id"`
-	UpdatedAt time.Time `json:"updated_at"`
+	UserID    uint                   `json:"user_id"`
+	UpdatedAt time.Time              `json:"updated_at"`
 	Changes   map[string]interface{} `json:"changes"`
 }
 
@@ -234,10 +234,10 @@ func NewUserPasswordResetRequestedEvent(userID uint, email string) UserPasswordR
 
 type UserAccountLockedEvent struct {
 	events.BaseEvent
-	UserID          uint          `json:"user_id"`
-	FailedAttempts  int           `json:"failed_attempts"`
-	LockDuration    time.Duration `json:"lock_duration_seconds"`
-	LockedAt        time.Time     `json:"locked_at"`
+	UserID         uint          `json:"user_id"`
+	FailedAttempts int           `json:"failed_attempts"`
+	LockDuration   time.Duration `json:"lock_duration_seconds"`
+	LockedAt       time.Time     `json:"locked_at"`
 }
 
 func NewUserAccountLockedEvent(userID uint, failedAttempts int, lockDuration time.Duration) UserAccountLockedEvent {

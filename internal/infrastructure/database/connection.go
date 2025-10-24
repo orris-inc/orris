@@ -99,7 +99,7 @@ func Migrate(models ...interface{}) error {
 	}
 
 	appLogger.Info("running database migrations")
-	
+
 	if err := db.AutoMigrate(models...); err != nil {
 		return fmt.Errorf("failed to run migrations: %w", err)
 	}
@@ -113,13 +113,13 @@ type filteredLogger struct{}
 
 func (l *filteredLogger) Printf(format string, args ...interface{}) {
 	msg := fmt.Sprintf(format, args...)
-	
+
 	// Filter schema validation queries
 	if strings.Contains(strings.ToLower(msg), "information_schema.schemata") ||
 		strings.Contains(strings.ToLower(msg), "select version()") {
 		return
 	}
-	
+
 	// Log other messages
 	if strings.Contains(msg, "[error]") || strings.Contains(msg, "ERROR") {
 		appLogger.Error("database error", "details", msg)

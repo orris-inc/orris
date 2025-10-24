@@ -76,4 +76,3 @@ type SubscriptionUsageRepository interface {
 	GetUsageHistory(ctx context.Context, subscriptionID uint, from, to time.Time) ([]*SubscriptionUsage, error)
 	ResetUsage(ctx context.Context, subscriptionID uint, period time.Time) error
 }
-

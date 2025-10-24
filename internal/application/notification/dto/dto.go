@@ -71,14 +71,14 @@ type AnnouncementResponse struct {
 }
 
 type NotificationResponse struct {
-	ID          uint       `json:"id"`
-	Type        string     `json:"type"`
-	Title       string     `json:"title"`
-	Content     string     `json:"content"`
-	ContentHTML string     `json:"content_html"`
-	RelatedID   *uint      `json:"related_id"`
-	ReadStatus  string     `json:"read_status"`
-	CreatedAt   time.Time  `json:"created_at"`
+	ID          uint      `json:"id"`
+	Type        string    `json:"type"`
+	Title       string    `json:"title"`
+	Content     string    `json:"content"`
+	ContentHTML string    `json:"content_html"`
+	RelatedID   *uint     `json:"related_id"`
+	ReadStatus  string    `json:"read_status"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 type TemplateResponse struct {

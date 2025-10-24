@@ -95,13 +95,13 @@ type DeleteUserRequest struct {
 
 // SearchUsersRequest represents a complex search request
 type SearchUsersRequest struct {
-	EmailDomain      string   `json:"email_domain,omitempty"`
-	IsBusinessEmail  *bool    `json:"is_business_email,omitempty"`
-	Statuses         []string `json:"statuses,omitempty"`
-	CreatedAfter     *time.Time `json:"created_after,omitempty"`
-	CreatedBefore    *time.Time `json:"created_before,omitempty"`
-	Page             int      `json:"page"`
-	PageSize         int      `json:"page_size"`
+	EmailDomain     string     `json:"email_domain,omitempty"`
+	IsBusinessEmail *bool      `json:"is_business_email,omitempty"`
+	Statuses        []string   `json:"statuses,omitempty"`
+	CreatedAfter    *time.Time `json:"created_after,omitempty"`
+	CreatedBefore   *time.Time `json:"created_before,omitempty"`
+	Page            int        `json:"page"`
+	PageSize        int        `json:"page_size"`
 }
 
 // BulkUserOperationRequest represents a bulk operation on users
@@ -120,27 +120,27 @@ type BulkUserOperationResponse struct {
 
 // UserStatisticsResponse represents user statistics
 type UserStatisticsResponse struct {
-	TotalUsers       int            `json:"total_users"`
-	ActiveUsers      int            `json:"active_users"`
-	PendingUsers     int            `json:"pending_users"`
-	InactiveUsers    int            `json:"inactive_users"`
-	SuspendedUsers   int            `json:"suspended_users"`
-	BusinessUsers    int            `json:"business_users"`
-	UsersByStatus    map[string]int `json:"users_by_status"`
-	UsersByDomain    map[string]int `json:"users_by_domain"`
-	RecentSignups    int            `json:"recent_signups"`
+	TotalUsers     int            `json:"total_users"`
+	ActiveUsers    int            `json:"active_users"`
+	PendingUsers   int            `json:"pending_users"`
+	InactiveUsers  int            `json:"inactive_users"`
+	SuspendedUsers int            `json:"suspended_users"`
+	BusinessUsers  int            `json:"business_users"`
+	UsersByStatus  map[string]int `json:"users_by_status"`
+	UsersByDomain  map[string]int `json:"users_by_domain"`
+	RecentSignups  int            `json:"recent_signups"`
 }
 
 // UserImportRequest represents a request to import users
 type UserImportRequest struct {
-	Users           []CreateUserRequest `json:"users" binding:"required,min=1"`
-	SkipValidation  bool                `json:"skip_validation,omitempty"`
-	AutoActivate    bool                `json:"auto_activate,omitempty"`
+	Users          []CreateUserRequest `json:"users" binding:"required,min=1"`
+	SkipValidation bool                `json:"skip_validation,omitempty"`
+	AutoActivate   bool                `json:"auto_activate,omitempty"`
 }
 
 // UserImportResponse represents the response for user import
 type UserImportResponse struct {
-	TotalProcessed   int      `json:"total_processed"`
+	TotalProcessed    int      `json:"total_processed"`
 	SuccessfulImports int      `json:"successful_imports"`
 	FailedImports     int      `json:"failed_imports"`
 	ImportedUserIDs   []uint   `json:"imported_user_ids"`
@@ -162,9 +162,9 @@ type UserValidationRequest struct {
 
 // UserValidationResponse represents the response for user validation
 type UserValidationResponse struct {
-	IsValid           bool     `json:"is_valid"`
-	Errors            []string `json:"errors,omitempty"`
-	Suggestions       []string `json:"suggestions,omitempty"`
-	IsBusinessEmail   bool     `json:"is_business_email"`
-	EmailDomain       string   `json:"email_domain"`
+	IsValid         bool     `json:"is_valid"`
+	Errors          []string `json:"errors,omitempty"`
+	Suggestions     []string `json:"suggestions,omitempty"`
+	IsBusinessEmail bool     `json:"is_business_email"`
+	EmailDomain     string   `json:"email_domain"`
 }

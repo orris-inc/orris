@@ -10,19 +10,19 @@ var (
 )
 
 type SubscriptionUsage struct {
-	id                uint
-	subscriptionID    uint
-	period            time.Time
-	apiRequests       uint64
-	apiDataOut        uint64
-	apiDataIn         uint64
-	storageUsed       uint64
-	usersCount        uint
-	projectsCount     uint
-	webhookCalls      uint64
-	emailsSent        uint64
-	reportsGenerated  uint
-	updatedAt         time.Time
+	id               uint
+	subscriptionID   uint
+	period           time.Time
+	apiRequests      uint64
+	apiDataOut       uint64
+	apiDataIn        uint64
+	storageUsed      uint64
+	usersCount       uint
+	projectsCount    uint
+	webhookCalls     uint64
+	emailsSent       uint64
+	reportsGenerated uint
+	updatedAt        time.Time
 }
 
 func NewSubscriptionUsage(subscriptionID uint, period time.Time) (*SubscriptionUsage, error) {

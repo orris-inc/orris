@@ -9,21 +9,21 @@ import (
 )
 
 type Announcement struct {
-	id          uint
-	title       string
-	content     string
+	id               uint
+	title            string
+	content          string
 	announcementType vo.AnnouncementType
-	status      vo.AnnouncementStatus
-	creatorID   uint
-	priority    int
-	scheduledAt *time.Time
-	expiresAt   *time.Time
-	viewCount   int
-	version     int
-	createdAt   time.Time
-	updatedAt   time.Time
-	events      []interface{}
-	mu          sync.RWMutex
+	status           vo.AnnouncementStatus
+	creatorID        uint
+	priority         int
+	scheduledAt      *time.Time
+	expiresAt        *time.Time
+	viewCount        int
+	version          int
+	createdAt        time.Time
+	updatedAt        time.Time
+	events           []interface{}
+	mu               sync.RWMutex
 }
 
 func NewAnnouncement(

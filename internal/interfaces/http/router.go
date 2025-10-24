@@ -10,8 +10,8 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/gorm"
 
-	notificationApp "orris/internal/application/notification"
 	nodeUsecases "orris/internal/application/node/usecases"
+	notificationApp "orris/internal/application/notification"
 	"orris/internal/application/permission"
 	subscriptionUsecases "orris/internal/application/subscription/usecases"
 	"orris/internal/application/user"
@@ -35,23 +35,23 @@ import (
 
 // Router represents the HTTP router configuration
 type Router struct {
-	engine                    *gin.Engine
-	userHandler               *handlers.UserHandler
-	authHandler               *handlers.AuthHandler
-	permissionHandler         *handlers.PermissionHandler
-	subscriptionHandler       *handlers.SubscriptionHandler
-	subscriptionPlanHandler   *handlers.SubscriptionPlanHandler
-	subscriptionTokenHandler  *handlers.SubscriptionTokenHandler
-	nodeHandler               *handlers.NodeHandler
-	nodeGroupHandler          *handlers.NodeGroupHandler
-	nodeSubscriptionHandler   *handlers.NodeSubscriptionHandler
-	nodeReportHandler         *handlers.NodeReportHandler
-	ticketHandler             *ticketHandlers.TicketHandler
-	notificationHandler       *handlers.NotificationHandler
-	authMiddleware            *middleware.AuthMiddleware
-	permissionMiddleware      *middleware.PermissionMiddleware
-	nodeTokenMiddleware       *middleware.NodeTokenMiddleware
-	rateLimiter               *middleware.RateLimiter
+	engine                   *gin.Engine
+	userHandler              *handlers.UserHandler
+	authHandler              *handlers.AuthHandler
+	permissionHandler        *handlers.PermissionHandler
+	subscriptionHandler      *handlers.SubscriptionHandler
+	subscriptionPlanHandler  *handlers.SubscriptionPlanHandler
+	subscriptionTokenHandler *handlers.SubscriptionTokenHandler
+	nodeHandler              *handlers.NodeHandler
+	nodeGroupHandler         *handlers.NodeGroupHandler
+	nodeSubscriptionHandler  *handlers.NodeSubscriptionHandler
+	nodeReportHandler        *handlers.NodeReportHandler
+	ticketHandler            *ticketHandlers.TicketHandler
+	notificationHandler      *handlers.NotificationHandler
+	authMiddleware           *middleware.AuthMiddleware
+	permissionMiddleware     *middleware.PermissionMiddleware
+	nodeTokenMiddleware      *middleware.NodeTokenMiddleware
+	rateLimiter              *middleware.RateLimiter
 }
 
 type jwtServiceAdapter struct {
@@ -394,14 +394,14 @@ func (r *Router) SetupRoutes() {
 	}
 
 	routes.SetupNodeRoutes(r.engine, &routes.NodeRouteConfig{
-		NodeHandler:             r.nodeHandler,
-		NodeGroupHandler:        r.nodeGroupHandler,
-		SubscriptionHandler:     r.nodeSubscriptionHandler,
-		NodeReportHandler:       r.nodeReportHandler,
-		AuthMiddleware:          r.authMiddleware,
-		PermissionMiddleware:    r.permissionMiddleware,
-		NodeTokenMW:             r.nodeTokenMiddleware,
-		RateLimiter:             r.rateLimiter,
+		NodeHandler:          r.nodeHandler,
+		NodeGroupHandler:     r.nodeGroupHandler,
+		SubscriptionHandler:  r.nodeSubscriptionHandler,
+		NodeReportHandler:    r.nodeReportHandler,
+		AuthMiddleware:       r.authMiddleware,
+		PermissionMiddleware: r.permissionMiddleware,
+		NodeTokenMW:          r.nodeTokenMiddleware,
+		RateLimiter:          r.rateLimiter,
 	})
 
 	routes.SetupTicketRoutes(r.engine, &routes.TicketRouteConfig{

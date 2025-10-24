@@ -275,9 +275,9 @@ func TestName_DisplayName(t *testing.T) {
 
 func TestName_IsMononym(t *testing.T) {
 	tests := []struct {
-		name       string
-		input      string
-		isMononym  bool
+		name      string
+		input     string
+		isMononym bool
 	}{
 		{
 			name:      "single name",

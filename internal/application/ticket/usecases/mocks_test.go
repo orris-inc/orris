@@ -10,15 +10,15 @@ import (
 )
 
 type mockTicketRepository struct {
-	SaveFunc             func(ctx context.Context, t *ticket.Ticket) error
-	UpdateFunc           func(ctx context.Context, t *ticket.Ticket) error
-	DeleteFunc           func(ctx context.Context, ticketID uint) error
-	GetByIDFunc          func(ctx context.Context, ticketID uint) (*ticket.Ticket, error)
-	GetByNumberFunc      func(ctx context.Context, number string) (*ticket.Ticket, error)
-	ListFunc             func(ctx context.Context, filters ticket.TicketFilter) ([]*ticket.Ticket, int64, error)
-	GetUserTicketsFunc   func(ctx context.Context, userID uint, filters ticket.TicketFilter) ([]*ticket.Ticket, int64, error)
+	SaveFunc               func(ctx context.Context, t *ticket.Ticket) error
+	UpdateFunc             func(ctx context.Context, t *ticket.Ticket) error
+	DeleteFunc             func(ctx context.Context, ticketID uint) error
+	GetByIDFunc            func(ctx context.Context, ticketID uint) (*ticket.Ticket, error)
+	GetByNumberFunc        func(ctx context.Context, number string) (*ticket.Ticket, error)
+	ListFunc               func(ctx context.Context, filters ticket.TicketFilter) ([]*ticket.Ticket, int64, error)
+	GetUserTicketsFunc     func(ctx context.Context, userID uint, filters ticket.TicketFilter) ([]*ticket.Ticket, int64, error)
 	GetAssignedTicketsFunc func(ctx context.Context, assigneeID uint, filters ticket.TicketFilter) ([]*ticket.Ticket, int64, error)
-	GetOverdueTicketsFunc func(ctx context.Context) ([]*ticket.Ticket, error)
+	GetOverdueTicketsFunc  func(ctx context.Context) ([]*ticket.Ticket, error)
 }
 
 func (m *mockTicketRepository) Save(ctx context.Context, t *ticket.Ticket) error {
@@ -85,9 +85,9 @@ func (m *mockTicketRepository) GetOverdueTickets(ctx context.Context) ([]*ticket
 }
 
 type mockCommentRepository struct {
-	SaveFunc         func(ctx context.Context, comment *ticket.Comment) error
+	SaveFunc          func(ctx context.Context, comment *ticket.Comment) error
 	GetByTicketIDFunc func(ctx context.Context, ticketID uint) ([]*ticket.Comment, error)
-	DeleteFunc       func(ctx context.Context, commentID uint) error
+	DeleteFunc        func(ctx context.Context, commentID uint) error
 }
 
 func (m *mockCommentRepository) Save(ctx context.Context, comment *ticket.Comment) error {

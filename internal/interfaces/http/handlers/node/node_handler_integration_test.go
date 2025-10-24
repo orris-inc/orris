@@ -191,8 +191,8 @@ func TestCreateNode_ValidationError(t *testing.T) {
 			expectedError:  "internal",
 		},
 		{
-			name: "invalid json",
-			reqBody: "invalid-json",
+			name:           "invalid json",
+			reqBody:        "invalid-json",
 			expectedStatus: http.StatusInternalServerError,
 			expectedError:  "internal",
 		},

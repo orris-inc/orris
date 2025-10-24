@@ -9,15 +9,15 @@ import (
 
 // NodeRouteConfig holds dependencies for node routes
 type NodeRouteConfig struct {
-	NodeHandler              *handlers.NodeHandler
-	NodeGroupHandler         *handlers.NodeGroupHandler
-	SubscriptionHandler      *handlers.NodeSubscriptionHandler
-	NodeReportHandler        *handlers.NodeReportHandler
-	AuthMiddleware           *middleware.AuthMiddleware
-	PermissionMiddleware     *middleware.PermissionMiddleware
-	SubscriptionTokenMW      *middleware.SubscriptionTokenMiddleware
-	NodeTokenMW              *middleware.NodeTokenMiddleware
-	RateLimiter              *middleware.RateLimiter
+	NodeHandler          *handlers.NodeHandler
+	NodeGroupHandler     *handlers.NodeGroupHandler
+	SubscriptionHandler  *handlers.NodeSubscriptionHandler
+	NodeReportHandler    *handlers.NodeReportHandler
+	AuthMiddleware       *middleware.AuthMiddleware
+	PermissionMiddleware *middleware.PermissionMiddleware
+	SubscriptionTokenMW  *middleware.SubscriptionTokenMiddleware
+	NodeTokenMW          *middleware.NodeTokenMiddleware
+	RateLimiter          *middleware.RateLimiter
 }
 
 // SetupNodeRoutes configures all node management routes

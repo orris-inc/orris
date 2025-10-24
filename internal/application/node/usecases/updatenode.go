@@ -9,22 +9,22 @@ import (
 )
 
 type UpdateNodeCommand struct {
-	NodeID         uint
-	Name           *string
-	ServerAddress  *string
-	ServerPort     *uint16
-	Method         *string
-	Password       *string
-	Plugin         *string
-	PluginOpts     map[string]string
-	Country        *string
-	Region         *string
-	Tags           []string
-	Description    *string
-	MaxUsers       *uint32
-	TrafficLimit   *uint64
-	SortOrder      *int
-	Status         *string
+	NodeID        uint
+	Name          *string
+	ServerAddress *string
+	ServerPort    *uint16
+	Method        *string
+	Password      *string
+	Plugin        *string
+	PluginOpts    map[string]string
+	Country       *string
+	Region        *string
+	Tags          []string
+	Description   *string
+	MaxUsers      *uint32
+	TrafficLimit  *uint64
+	SortOrder     *int
+	Status        *string
 }
 
 type UpdateNodeResult struct {

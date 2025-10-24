@@ -4,16 +4,16 @@ import (
 	"context"
 	"fmt"
 
-	"orris/internal/domain/subscription"
 	permissionApp "orris/internal/application/permission"
+	"orris/internal/domain/subscription"
 	"orris/internal/shared/logger"
 )
 
 type Service struct {
-	subscriptionRepo subscription.SubscriptionRepository
-	planRepo         subscription.SubscriptionPlanRepository
+	subscriptionRepo  subscription.SubscriptionRepository
+	planRepo          subscription.SubscriptionPlanRepository
 	permissionService *permissionApp.Service
-	logger           logger.Interface
+	logger            logger.Interface
 }
 
 func NewService(
@@ -23,10 +23,10 @@ func NewService(
 	logger logger.Interface,
 ) *Service {
 	return &Service{
-		subscriptionRepo: subscriptionRepo,
-		planRepo:         planRepo,
+		subscriptionRepo:  subscriptionRepo,
+		planRepo:          planRepo,
 		permissionService: permissionService,
-		logger:           logger,
+		logger:            logger,
 	}
 }
 

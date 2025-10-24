@@ -36,18 +36,18 @@ type CommentDTO struct {
 }
 
 type TicketListItemDTO struct {
-	ID           uint       `json:"id"`
-	Number       string     `json:"number"`
-	Title        string     `json:"title"`
-	Status       string     `json:"status"`
-	Priority     string     `json:"priority"`
-	Category     string     `json:"category"`
-	CreatorID    uint       `json:"creator_id"`
-	AssigneeID   *uint      `json:"assignee_id"`
-	SLADueTime   *string    `json:"sla_due_time"`
-	IsOverdue    bool       `json:"is_overdue"`
-	CreatedAt    string     `json:"created_at"`
-	UpdatedAt    string     `json:"updated_at"`
+	ID         uint    `json:"id"`
+	Number     string  `json:"number"`
+	Title      string  `json:"title"`
+	Status     string  `json:"status"`
+	Priority   string  `json:"priority"`
+	Category   string  `json:"category"`
+	CreatorID  uint    `json:"creator_id"`
+	AssigneeID *uint   `json:"assignee_id"`
+	SLADueTime *string `json:"sla_due_time"`
+	IsOverdue  bool    `json:"is_overdue"`
+	CreatedAt  string  `json:"created_at"`
+	UpdatedAt  string  `json:"updated_at"`
 }
 
 func ToTicketDTO(t *ticket.Ticket, comments []*ticket.Comment, isAgentOrAdmin bool) *TicketDTO {

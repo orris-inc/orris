@@ -18,10 +18,10 @@ type ChangePriorityCommand struct {
 }
 
 type ChangePriorityResult struct {
-	TicketID    uint   `json:"ticket_id"`
-	Priority    string `json:"priority"`
-	SLADueTime  string `json:"sla_due_time"`
-	UpdatedAt   string `json:"updated_at"`
+	TicketID   uint   `json:"ticket_id"`
+	Priority   string `json:"priority"`
+	SLADueTime string `json:"sla_due_time"`
+	UpdatedAt  string `json:"updated_at"`
 }
 
 type ChangePriorityExecutor interface {

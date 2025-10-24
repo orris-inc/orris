@@ -5,9 +5,9 @@ import (
 	"fmt"
 
 	"orris/internal/application/user/dto"
+	"orris/internal/domain/shared/events"
 	domainUser "orris/internal/domain/user"
 	"orris/internal/domain/user/specifications"
-	"orris/internal/domain/shared/events"
 	"orris/internal/shared/errors"
 	"orris/internal/shared/logger"
 )
@@ -38,7 +38,7 @@ func NewCreateUserUseCase(
 func (uc *CreateUserUseCase) Execute(ctx context.Context, request dto.CreateUserRequest) (*dto.UserResponse, error) {
 	// Log the start of the use case
 	uc.logger.Infow("executing create user use case", "email", request.Email)
-	
+
 	// Check if user already exists using specification
 	emailSpec := specifications.NewEmailSpecification(request.Email)
 	existingUsers, err := uc.userRepo.FindBySpecification(ctx, emailSpec, 1)
@@ -46,19 +46,19 @@ func (uc *CreateUserUseCase) Execute(ctx context.Context, request dto.CreateUser
 		uc.logger.Errorw("database error while checking for existing user", "email", request.Email, "error", err)
 		return nil, fmt.Errorf("failed to check existing user: %w", err)
 	}
-	
+
 	if len(existingUsers) > 0 {
 		uc.logger.Warnw("user with email already exists", "email", request.Email)
 		return nil, errors.NewConflictError("user with this email already exists", request.Email)
 	}
-	
+
 	// Create user using factory
 	userEntity, err := uc.userFactory.CreateUser(request.Email, request.Name)
 	if err != nil {
 		uc.logger.Errorw("failed to create user entity", "error", err)
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
-	
+
 	// Apply business rules via domain service if needed
 	// For example, auto-activate users from trusted domains
 	if userEntity.IsBusinessEmail() {
@@ -67,13 +67,13 @@ func (uc *CreateUserUseCase) Execute(ctx context.Context, request dto.CreateUser
 			// Don't fail the operation, just log the warning
 		}
 	}
-	
+
 	// Persist the user
 	if err := uc.userRepo.Create(ctx, userEntity); err != nil {
 		uc.logger.Errorw("failed to persist user", "error", err)
 		return nil, fmt.Errorf("failed to save user: %w", err)
 	}
-	
+
 	// Map to response DTO
 	response := &dto.UserResponse{
 		ID:        userEntity.ID(),
@@ -83,7 +83,7 @@ func (uc *CreateUserUseCase) Execute(ctx context.Context, request dto.CreateUser
 		CreatedAt: userEntity.CreatedAt(),
 		UpdatedAt: userEntity.UpdatedAt(),
 	}
-	
+
 	uc.logger.Infow("user created successfully", "id", response.ID, "email", response.Email)
 	return response, nil
 }

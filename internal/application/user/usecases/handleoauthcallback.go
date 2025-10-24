@@ -27,7 +27,6 @@ type OAuthCallbackClient interface {
 	GetAuthURL(state string) string
 }
 
-
 type HandleOAuthCallbackCommand struct {
 	Provider   string
 	Code       string
@@ -81,7 +80,7 @@ func NewHandleOAuthCallbackUseCase(
 		githubClient:      githubClient,
 		jwtService:        jwtService,
 		oauthInitiator:    oauthInitiator,
-		logger:         logger,
+		logger:            logger,
 	}
 }
 

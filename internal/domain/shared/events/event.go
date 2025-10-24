@@ -8,13 +8,13 @@ import (
 type DomainEvent interface {
 	// GetAggregateID returns the ID of the aggregate that generated the event
 	GetAggregateID() string
-	
+
 	// GetEventType returns the type/name of the event
 	GetEventType() string
-	
+
 	// GetOccurredAt returns when the event occurred
 	GetOccurredAt() time.Time
-	
+
 	// GetVersion returns the event version for schema evolution
 	GetVersion() int
 }
@@ -51,7 +51,7 @@ func (e BaseEvent) GetVersion() int {
 type EventHandler interface {
 	// Handle processes a domain event
 	Handle(event DomainEvent) error
-	
+
 	// CanHandle checks if this handler can handle the given event type
 	CanHandle(eventType string) bool
 }
@@ -60,7 +60,7 @@ type EventHandler interface {
 type EventPublisher interface {
 	// Publish publishes a single event
 	Publish(event DomainEvent) error
-	
+
 	// PublishAll publishes multiple events
 	PublishAll(events []DomainEvent) error
 }
@@ -69,7 +69,7 @@ type EventPublisher interface {
 type EventSubscriber interface {
 	// Subscribe registers a handler for specific event types
 	Subscribe(eventType string, handler EventHandler) error
-	
+
 	// Unsubscribe removes a handler for specific event types
 	Unsubscribe(eventType string, handler EventHandler) error
 }
@@ -78,10 +78,10 @@ type EventSubscriber interface {
 type EventDispatcher interface {
 	EventPublisher
 	EventSubscriber
-	
+
 	// Start starts the event dispatcher
 	Start() error
-	
+
 	// Stop stops the event dispatcher
 	Stop() error
 }

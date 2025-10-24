@@ -526,14 +526,14 @@ func TestSubscriptionUsage_HasUsage(t *testing.T) {
 	now := time.Now()
 
 	tests := []struct {
-		name   string
-		setup  func(*SubscriptionUsage)
-		want   bool
+		name  string
+		setup func(*SubscriptionUsage)
+		want  bool
 	}{
 		{
-			name:   "no usage",
-			setup:  func(u *SubscriptionUsage) {},
-			want:   false,
+			name:  "no usage",
+			setup: func(u *SubscriptionUsage) {},
+			want:  false,
 		},
 		{
 			name: "has API requests",

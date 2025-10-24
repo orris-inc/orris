@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"orris/internal/domain/ticket"
 	"orris/internal/domain/shared/events"
+	"orris/internal/domain/ticket"
 	"orris/internal/shared/logger"
 )
 

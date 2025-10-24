@@ -20,7 +20,7 @@ func NewInMemoryEventDispatcher(bufferSize int) *InMemoryEventDispatcher {
 	if bufferSize <= 0 {
 		bufferSize = 100
 	}
-	
+
 	return &InMemoryEventDispatcher{
 		handlers: make(map[string][]EventHandler),
 		stopCh:   make(chan struct{}),
@@ -33,7 +33,7 @@ func (d *InMemoryEventDispatcher) Publish(event DomainEvent) error {
 	if !d.running {
 		return fmt.Errorf("event dispatcher is not running")
 	}
-	
+
 	select {
 	case d.eventCh <- event:
 		return nil
@@ -47,13 +47,13 @@ func (d *InMemoryEventDispatcher) PublishAll(events []DomainEvent) error {
 	if !d.running {
 		return fmt.Errorf("event dispatcher is not running")
 	}
-	
+
 	for _, event := range events {
 		if err := d.Publish(event); err != nil {
 			return fmt.Errorf("failed to publish event %s: %w", event.GetEventType(), err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -61,15 +61,15 @@ func (d *InMemoryEventDispatcher) PublishAll(events []DomainEvent) error {
 func (d *InMemoryEventDispatcher) Subscribe(eventType string, handler EventHandler) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	
+
 	if eventType == "" {
 		return fmt.Errorf("event type cannot be empty")
 	}
-	
+
 	if handler == nil {
 		return fmt.Errorf("handler cannot be nil")
 	}
-	
+
 	d.handlers[eventType] = append(d.handlers[eventType], handler)
 	return nil
 }
@@ -78,25 +78,25 @@ func (d *InMemoryEventDispatcher) Subscribe(eventType string, handler EventHandl
 func (d *InMemoryEventDispatcher) Unsubscribe(eventType string, handler EventHandler) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	
+
 	handlers, exists := d.handlers[eventType]
 	if !exists {
 		return nil
 	}
-	
+
 	newHandlers := make([]EventHandler, 0, len(handlers))
 	for _, h := range handlers {
 		if h != handler {
 			newHandlers = append(newHandlers, h)
 		}
 	}
-	
+
 	if len(newHandlers) == 0 {
 		delete(d.handlers, eventType)
 	} else {
 		d.handlers[eventType] = newHandlers
 	}
-	
+
 	return nil
 }
 
@@ -104,19 +104,19 @@ func (d *InMemoryEventDispatcher) Unsubscribe(eventType string, handler EventHan
 func (d *InMemoryEventDispatcher) Start() error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	
+
 	if d.running {
 		return fmt.Errorf("event dispatcher is already running")
 	}
-	
+
 	d.running = true
 	d.wg.Add(1)
-	
+
 	go func() {
 		defer d.wg.Done()
 		d.processEvents()
 	}()
-	
+
 	return nil
 }
 
@@ -127,13 +127,13 @@ func (d *InMemoryEventDispatcher) Stop() error {
 		d.mu.Unlock()
 		return fmt.Errorf("event dispatcher is not running")
 	}
-	
+
 	d.running = false
 	d.mu.Unlock()
-	
+
 	close(d.stopCh)
 	d.wg.Wait()
-	
+
 	return nil
 }
 
@@ -162,7 +162,7 @@ func (d *InMemoryEventDispatcher) handleEvent(event DomainEvent) {
 	d.mu.RLock()
 	handlers := d.handlers[event.GetEventType()]
 	d.mu.RUnlock()
-	
+
 	for _, handler := range handlers {
 		if handler.CanHandle(event.GetEventType()) {
 			// Handle in goroutine to avoid blocking

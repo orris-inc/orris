@@ -10,7 +10,7 @@ import (
 
 var (
 	ErrInvalidTokenHash = errors.New("token hash cannot be empty")
-	ErrInvalidPrefix   = errors.New("token prefix cannot be empty")
+	ErrInvalidPrefix    = errors.New("token prefix cannot be empty")
 )
 
 type SubscriptionToken struct {

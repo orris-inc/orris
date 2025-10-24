@@ -10,7 +10,7 @@ import (
 func CORS() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
-		
+
 		// Set CORS headers
 		c.Header("Access-Control-Allow-Origin", getAllowedOrigin(origin))
 		c.Header("Access-Control-Allow-Credentials", "true")
@@ -63,7 +63,7 @@ func SecurityHeaders() gin.HandlerFunc {
 		c.Header("X-XSS-Protection", "1; mode=block")
 		c.Header("Referrer-Policy", "strict-origin-when-cross-origin")
 		c.Header("Content-Security-Policy", "default-src 'self'")
-		
+
 		c.Next()
 	}
 }

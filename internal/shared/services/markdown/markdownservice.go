@@ -18,8 +18,8 @@ type MarkdownService interface {
 }
 
 type markdownServiceImpl struct {
-	md      goldmark.Markdown
-	policy  *bluemonday.Policy
+	md     goldmark.Markdown
+	policy *bluemonday.Policy
 }
 
 func NewMarkdownService() MarkdownService {

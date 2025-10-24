@@ -18,19 +18,19 @@ type Email struct {
 func NewEmail(value string) (*Email, error) {
 	// Normalize the email address
 	normalized := strings.TrimSpace(strings.ToLower(value))
-	
+
 	if normalized == "" {
 		return nil, fmt.Errorf("email cannot be empty")
 	}
-	
+
 	if len(normalized) > 255 {
 		return nil, fmt.Errorf("email cannot exceed 255 characters")
 	}
-	
+
 	if !emailRegex.MatchString(normalized) {
 		return nil, fmt.Errorf("invalid email format: %s", value)
 	}
-	
+
 	return &Email{value: normalized}, nil
 }
 
@@ -68,20 +68,20 @@ func (e *Email) LocalPart() string {
 // IsBusinessEmail checks if the email is from a business domain (not free email providers)
 func (e *Email) IsBusinessEmail() bool {
 	freeEmailDomains := map[string]bool{
-		"gmail.com":     true,
-		"yahoo.com":     true,
-		"hotmail.com":   true,
-		"outlook.com":   true,
-		"icloud.com":    true,
-		"me.com":        true,
-		"qq.com":        true,
-		"163.com":       true,
-		"126.com":       true,
-		"sina.com":      true,
+		"gmail.com":      true,
+		"yahoo.com":      true,
+		"hotmail.com":    true,
+		"outlook.com":    true,
+		"icloud.com":     true,
+		"me.com":         true,
+		"qq.com":         true,
+		"163.com":        true,
+		"126.com":        true,
+		"sina.com":       true,
 		"protonmail.com": true,
-		"mail.com":      true,
+		"mail.com":       true,
 	}
-	
+
 	domain := e.Domain()
 	return !freeEmailDomains[domain]
 }
@@ -97,12 +97,12 @@ func (e *Email) UnmarshalJSON(data []byte) error {
 	if err := unmarshalJSON(data, &value); err != nil {
 		return err
 	}
-	
+
 	email, err := NewEmail(value)
 	if err != nil {
 		return err
 	}
-	
+
 	*e = *email
 	return nil
 }
@@ -114,7 +114,7 @@ func unmarshalJSON(data []byte, v interface{}) error {
 	if len(str) >= 2 && str[0] == '"' && str[len(str)-1] == '"' {
 		str = str[1 : len(str)-1]
 	}
-	
+
 	switch val := v.(type) {
 	case *string:
 		*val = str

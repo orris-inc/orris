@@ -10,10 +10,10 @@ import (
 type Factory interface {
 	// CreateUser creates a new user with validation
 	CreateUser(email, name string) (*User, error)
-	
+
 	// CreateUserWithStatus creates a new user with a specific status
 	CreateUserWithStatus(email, name, status string) (*User, error)
-	
+
 	// CreateBusinessUser creates a new user with business email validation
 	CreateBusinessUser(email, name string) (*User, error)
 }
@@ -35,19 +35,19 @@ func (f *UserFactory) CreateUser(email, name string) (*User, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid email: %w", err)
 	}
-	
+
 	// Create and validate name value object
 	nameVO, err := vo.NewName(name)
 	if err != nil {
 		return nil, fmt.Errorf("invalid name: %w", err)
 	}
-	
+
 	// Create the user aggregate
 	user, err := NewUser(emailVO, nameVO)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
-	
+
 	return user, nil
 }
 
@@ -58,30 +58,30 @@ func (f *UserFactory) CreateUserWithStatus(email, name, status string) (*User, e
 	if err != nil {
 		return nil, fmt.Errorf("invalid email: %w", err)
 	}
-	
+
 	// Create and validate name value object
 	nameVO, err := vo.NewName(name)
 	if err != nil {
 		return nil, fmt.Errorf("invalid name: %w", err)
 	}
-	
+
 	// Create and validate status value object
 	statusVO, err := vo.NewStatus(status)
 	if err != nil {
 		return nil, fmt.Errorf("invalid status: %w", err)
 	}
-	
+
 	// Create the user aggregate
 	user, err := NewUser(emailVO, nameVO)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
-	
+
 	// Set the specific status if not pending
 	if *statusVO != vo.StatusPending {
 		user.status = *statusVO
 	}
-	
+
 	return user, nil
 }
 
@@ -92,24 +92,24 @@ func (f *UserFactory) CreateBusinessUser(email, name string) (*User, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid email: %w", err)
 	}
-	
+
 	// Ensure it's a business email
 	if !emailVO.IsBusinessEmail() {
 		return nil, fmt.Errorf("business email required, got: %s", emailVO.Domain())
 	}
-	
+
 	// Create and validate name value object
 	nameVO, err := vo.NewName(name)
 	if err != nil {
 		return nil, fmt.Errorf("invalid name: %w", err)
 	}
-	
+
 	// Create the user aggregate
 	user, err := NewUser(emailVO, nameVO)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
-	
+
 	// Business users can be auto-activated based on business rules
 	// This is an example of encapsulating business logic in the factory
 	if emailVO.IsBusinessEmail() {
@@ -118,12 +118,12 @@ func (f *UserFactory) CreateBusinessUser(email, name string) (*User, error) {
 			"company.com": true,
 			"partner.org": true,
 		}
-		
+
 		if trustedDomains[emailVO.Domain()] {
 			user.status = vo.StatusActive
 		}
 	}
-	
+
 	return user, nil
 }
 
@@ -164,24 +164,24 @@ func (b *UserBuilder) Build() (*User, error) {
 	if len(b.errors) > 0 {
 		return nil, fmt.Errorf("builder has errors: %v", b.errors)
 	}
-	
+
 	// Create value objects
 	emailVO, err := vo.NewEmail(b.email)
 	if err != nil {
 		return nil, fmt.Errorf("invalid email: %w", err)
 	}
-	
+
 	nameVO, err := vo.NewName(b.name)
 	if err != nil {
 		return nil, fmt.Errorf("invalid name: %w", err)
 	}
-	
+
 	// Create user
 	user, err := NewUser(emailVO, nameVO)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
-	
+
 	// Set status if provided
 	if b.status != "" {
 		statusVO, err := vo.NewStatus(b.status)
@@ -190,21 +190,21 @@ func (b *UserBuilder) Build() (*User, error) {
 		}
 		user.status = *statusVO
 	}
-	
+
 	return user, nil
 }
 
 // Validate checks if the builder state is valid
 func (b *UserBuilder) Validate() []error {
 	var errors []error
-	
+
 	if b.email == "" {
 		errors = append(errors, fmt.Errorf("email is required"))
 	}
-	
+
 	if b.name == "" {
 		errors = append(errors, fmt.Errorf("name is required"))
 	}
-	
+
 	return errors
 }

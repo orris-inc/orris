@@ -179,14 +179,14 @@ func TestTicket_AssignTo(t *testing.T) {
 
 func TestTicket_ChangeStatus(t *testing.T) {
 	tests := []struct {
-		name           string
-		setupStatuses  []vo.TicketStatus
-		newStatus      vo.TicketStatus
-		changedBy      uint
-		wantErr        bool
-		checkResolved  bool
-		checkClosed    bool
-		checkReopened  bool
+		name          string
+		setupStatuses []vo.TicketStatus
+		newStatus     vo.TicketStatus
+		changedBy     uint
+		wantErr       bool
+		checkResolved bool
+		checkClosed   bool
+		checkReopened bool
 	}{
 		{
 			name:          "new to open",
@@ -286,11 +286,11 @@ func TestTicket_ChangeStatus(t *testing.T) {
 
 func TestTicket_Close(t *testing.T) {
 	tests := []struct {
-		name      string
-		reason    string
-		closedBy  uint
-		wantErr   bool
-		errMsg    string
+		name     string
+		reason   string
+		closedBy uint
+		wantErr  bool
+		errMsg   string
 	}{
 		{
 			name:     "valid close",
@@ -411,11 +411,11 @@ func TestTicket_Reopen(t *testing.T) {
 
 func TestTicket_AddComment(t *testing.T) {
 	tests := []struct {
-		name           string
-		setupFunc      func(*Ticket) (*Comment, error)
-		wantErr        bool
-		errMsg         string
-		checkResponse  bool
+		name          string
+		setupFunc     func(*Ticket) (*Comment, error)
+		wantErr       bool
+		errMsg        string
+		checkResponse bool
 	}{
 		{
 			name: "add valid comment",
@@ -557,11 +557,11 @@ func TestTicket_IsOverdue(t *testing.T) {
 
 func TestTicket_ChangePriority(t *testing.T) {
 	tests := []struct {
-		name         string
-		newPriority  vo.Priority
-		changedBy    uint
-		wantErr      bool
-		checkSLA     bool
+		name        string
+		newPriority vo.Priority
+		changedBy   uint
+		wantErr     bool
+		checkSLA    bool
 	}{
 		{
 			name:        "change to high priority",
@@ -825,15 +825,15 @@ func TestReconstructTicket(t *testing.T) {
 	assigneeID := uint(2)
 
 	tests := []struct {
-		name      string
-		id        uint
-		number    string
-		title     string
-		category  vo.Category
-		priority  vo.Priority
-		status    vo.TicketStatus
-		wantErr   bool
-		errMsg    string
+		name     string
+		id       uint
+		number   string
+		title    string
+		category vo.Category
+		priority vo.Priority
+		status   vo.TicketStatus
+		wantErr  bool
+		errMsg   string
 	}{
 		{
 			name:     "valid reconstruction",

@@ -12,17 +12,17 @@ import (
 )
 
 type AuthHandler struct {
-	registerUseCase         *usecases.RegisterWithPasswordUseCase
-	loginUseCase            *usecases.LoginWithPasswordUseCase
-	verifyEmailUseCase      *usecases.VerifyEmailUseCase
-	requestResetUseCase     *usecases.RequestPasswordResetUseCase
-	resetPasswordUseCase    *usecases.ResetPasswordUseCase
-	initiateOAuthUseCase    *usecases.InitiateOAuthLoginUseCase
-	handleOAuthUseCase      *usecases.HandleOAuthCallbackUseCase
-	refreshTokenUseCase     *usecases.RefreshTokenUseCase
-	logoutUseCase           *usecases.LogoutUseCase
-	userRepo                user.Repository
-	logger                  logger.Interface
+	registerUseCase      *usecases.RegisterWithPasswordUseCase
+	loginUseCase         *usecases.LoginWithPasswordUseCase
+	verifyEmailUseCase   *usecases.VerifyEmailUseCase
+	requestResetUseCase  *usecases.RequestPasswordResetUseCase
+	resetPasswordUseCase *usecases.ResetPasswordUseCase
+	initiateOAuthUseCase *usecases.InitiateOAuthLoginUseCase
+	handleOAuthUseCase   *usecases.HandleOAuthCallbackUseCase
+	refreshTokenUseCase  *usecases.RefreshTokenUseCase
+	logoutUseCase        *usecases.LogoutUseCase
+	userRepo             user.Repository
+	logger               logger.Interface
 }
 
 func NewAuthHandler(

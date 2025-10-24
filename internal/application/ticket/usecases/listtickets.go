@@ -68,10 +68,9 @@ func (uc *ListTicketsUseCase) Execute(
 		query.Page = 1
 	}
 
-
 	filter := ticket.TicketFilter{
 		Page:      query.Page,
-		PageSize:    query.PageSize,
+		PageSize:  query.PageSize,
 		SortBy:    query.SortBy,
 		SortOrder: query.SortOrder,
 	}

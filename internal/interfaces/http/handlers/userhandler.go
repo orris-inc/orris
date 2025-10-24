@@ -243,7 +243,7 @@ func (h *UserHandler) GetUserByEmail(c *gin.Context) {
 // @Router /health [get]
 func (h *UserHandler) HealthCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"status": "healthy",
+		"status":  "healthy",
 		"service": "orris",
 	})
 }

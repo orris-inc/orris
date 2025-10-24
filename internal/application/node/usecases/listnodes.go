@@ -7,14 +7,14 @@ import (
 )
 
 type ListNodesQuery struct {
-	Status      *string
-	Country     *string
-	GroupID     *uint
-	Search      *string
-	Limit       int
-	Offset      int
-	SortBy      string
-	SortOrder   string
+	Status    *string
+	Country   *string
+	GroupID   *uint
+	Search    *string
+	Limit     int
+	Offset    int
+	SortBy    string
+	SortOrder string
 }
 
 type NodeListItem struct {

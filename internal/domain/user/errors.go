@@ -15,7 +15,7 @@ func NewDomainError(message string, details ...string) *DomainError {
 	if len(details) > 0 {
 		detail = details[0]
 	}
-	
+
 	return &DomainError{
 		AppError: errors.NewValidationError(message, detail),
 	}

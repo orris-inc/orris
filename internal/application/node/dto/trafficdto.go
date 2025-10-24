@@ -18,17 +18,17 @@ type NodeTrafficDTO struct {
 }
 
 type TrafficStatsDTO struct {
-	TotalUpload      uint64               `json:"total_upload"`
-	TotalDownload    uint64               `json:"total_download"`
-	TotalTraffic     uint64               `json:"total_traffic"`
-	TotalLimit       uint64               `json:"total_limit"`
-	AverageUsage     float64              `json:"average_usage"`
-	NodeStats        []*NodeTrafficDTO    `json:"node_stats"`
-	TopUsageNodes    []*NodeTrafficDTO    `json:"top_usage_nodes"`
-	LowUsageNodes    []*NodeTrafficDTO    `json:"low_usage_nodes"`
-	ExceededNodes    []*NodeTrafficDTO    `json:"exceeded_nodes"`
-	PeriodStart      time.Time            `json:"period_start"`
-	PeriodEnd        time.Time            `json:"period_end"`
+	TotalUpload   uint64            `json:"total_upload"`
+	TotalDownload uint64            `json:"total_download"`
+	TotalTraffic  uint64            `json:"total_traffic"`
+	TotalLimit    uint64            `json:"total_limit"`
+	AverageUsage  float64           `json:"average_usage"`
+	NodeStats     []*NodeTrafficDTO `json:"node_stats"`
+	TopUsageNodes []*NodeTrafficDTO `json:"top_usage_nodes"`
+	LowUsageNodes []*NodeTrafficDTO `json:"low_usage_nodes"`
+	ExceededNodes []*NodeTrafficDTO `json:"exceeded_nodes"`
+	PeriodStart   time.Time         `json:"period_start"`
+	PeriodEnd     time.Time         `json:"period_end"`
 }
 
 type RecordTrafficRequest struct {

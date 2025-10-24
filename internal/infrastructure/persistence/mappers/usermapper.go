@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"gorm.io/gorm"
-	
+
 	"orris/internal/domain/user"
 	vo "orris/internal/domain/user/value_objects"
 	"orris/internal/infrastructure/persistence/models"
@@ -14,13 +14,13 @@ import (
 type UserMapper interface {
 	// ToEntity converts a persistence model to a domain entity
 	ToEntity(model *models.UserModel) (*user.User, error)
-	
+
 	// ToModel converts a domain entity to a persistence model
 	ToModel(entity *user.User) (*models.UserModel, error)
-	
+
 	// ToEntities converts multiple persistence models to domain entities
 	ToEntities(models []*models.UserModel) ([]*user.User, error)
-	
+
 	// ToModels converts multiple domain entities to persistence models
 	ToModels(entities []*user.User) ([]*models.UserModel, error)
 }
@@ -124,7 +124,7 @@ func (m *UserMapperImpl) ToModel(entity *user.User) (*models.UserModel, error) {
 // ToEntities converts multiple persistence models to domain entities
 func (m *UserMapperImpl) ToEntities(models []*models.UserModel) ([]*user.User, error) {
 	entities := make([]*user.User, 0, len(models))
-	
+
 	for _, model := range models {
 		entity, err := m.ToEntity(model)
 		if err != nil {
@@ -134,14 +134,14 @@ func (m *UserMapperImpl) ToEntities(models []*models.UserModel) ([]*user.User, e
 			entities = append(entities, entity)
 		}
 	}
-	
+
 	return entities, nil
 }
 
 // ToModels converts multiple domain entities to persistence models
 func (m *UserMapperImpl) ToModels(entities []*user.User) ([]*models.UserModel, error) {
 	models := make([]*models.UserModel, 0, len(entities))
-	
+
 	for _, entity := range entities {
 		model, err := m.ToModel(entity)
 		if err != nil {
@@ -151,7 +151,6 @@ func (m *UserMapperImpl) ToModels(entities []*user.User) ([]*models.UserModel, e
 			models = append(models, model)
 		}
 	}
-	
+
 	return models, nil
 }
-

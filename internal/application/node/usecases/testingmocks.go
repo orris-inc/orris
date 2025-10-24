@@ -114,7 +114,6 @@ func (m *mockLogger) Fatalw(msg string, keysAndValues ...interface{}) {
 	m.Called(msg, keysAndValues)
 }
 
-
 type mockNodeGroupRepository struct {
 	mock.Mock
 }

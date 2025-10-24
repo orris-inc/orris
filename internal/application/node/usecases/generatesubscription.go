@@ -28,10 +28,10 @@ type SubscriptionFormatter interface {
 }
 
 type GenerateSubscriptionUseCase struct {
-	nodeRepo          NodeRepository
-	tokenValidator    SubscriptionTokenValidator
-	formatters        map[string]SubscriptionFormatter
-	logger            logger.Interface
+	nodeRepo       NodeRepository
+	tokenValidator SubscriptionTokenValidator
+	formatters     map[string]SubscriptionFormatter
+	logger         logger.Interface
 }
 
 func NewGenerateSubscriptionUseCase(

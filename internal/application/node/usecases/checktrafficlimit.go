@@ -17,10 +17,10 @@ type CheckTrafficLimitQuery struct {
 }
 
 type TrafficLimitResult struct {
-	Exceeded       bool   `json:"exceeded"`
-	TotalTraffic   uint64 `json:"total_traffic"`
-	TrafficLimit   uint64 `json:"traffic_limit"`
-	RemainingBytes uint64 `json:"remaining_bytes"`
+	Exceeded       bool    `json:"exceeded"`
+	TotalTraffic   uint64  `json:"total_traffic"`
+	TrafficLimit   uint64  `json:"traffic_limit"`
+	RemainingBytes uint64  `json:"remaining_bytes"`
 	UsagePercent   float64 `json:"usage_percent"`
 }
 

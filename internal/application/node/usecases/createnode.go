@@ -9,20 +9,20 @@ import (
 )
 
 type CreateNodeCommand struct {
-	Name           string
-	ServerAddress  string
-	ServerPort     uint16
-	Method         string
-	Password       string
-	Plugin         *string
-	PluginOpts     map[string]string
-	Country        string
-	Region         string
-	Tags           []string
-	Description    string
-	MaxUsers       uint32
-	TrafficLimit   uint64
-	SortOrder      int
+	Name          string
+	ServerAddress string
+	ServerPort    uint16
+	Method        string
+	Password      string
+	Plugin        *string
+	PluginOpts    map[string]string
+	Country       string
+	Region        string
+	Tags          []string
+	Description   string
+	MaxUsers      uint32
+	TrafficLimit  uint64
+	SortOrder     int
 }
 
 type CreateNodeResult struct {

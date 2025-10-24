@@ -79,11 +79,11 @@ func (m *mockGenerateSubscriptionUC) Execute(ctx context.Context, cmd usecases.G
 			"version": 1,
 			"servers": []interface{}{
 				map[string]interface{}{
-					"server":   "192.168.1.1",
+					"server":      "192.168.1.1",
 					"server_port": 8388,
-					"method":   "aes-256-gcm",
-					"password": "testpassword",
-					"remarks":  "TestNode",
+					"method":      "aes-256-gcm",
+					"password":    "testpassword",
+					"remarks":     "TestNode",
 				},
 			},
 		}

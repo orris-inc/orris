@@ -34,10 +34,10 @@ type PermissionRepository interface {
 }
 
 type RoleFilter struct {
-	Name   string
-	Slug   string
-	Status RoleStatus
-	Page   int
+	Name     string
+	Slug     string
+	Status   RoleStatus
+	Page     int
 	PageSize int
 }
 

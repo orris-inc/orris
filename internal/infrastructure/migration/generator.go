@@ -29,11 +29,11 @@ func (g *Generator) CreateMigration(name string) error {
 
 	// Generate timestamp
 	timestamp := time.Now().Format("20060102150405")
-	
+
 	// Generate file names
 	upFileName := fmt.Sprintf("%s_%s.up.sql", timestamp, name)
 	downFileName := fmt.Sprintf("%s_%s.down.sql", timestamp, name)
-	
+
 	upFilePath := filepath.Join(g.scriptsPath, upFileName)
 	downFilePath := filepath.Join(g.scriptsPath, downFileName)
 
@@ -111,10 +111,10 @@ func (g *Generator) CreateUserTableMigration() error {
 	// Use a fixed timestamp for the initial migration
 	timestamp := "000001"
 	name := "create_users_table"
-	
+
 	upFileName := fmt.Sprintf("%s_%s.up.sql", timestamp, name)
 	downFileName := fmt.Sprintf("%s_%s.down.sql", timestamp, name)
-	
+
 	upFilePath := filepath.Join(g.scriptsPath, upFileName)
 	downFilePath := filepath.Join(g.scriptsPath, downFileName)
 

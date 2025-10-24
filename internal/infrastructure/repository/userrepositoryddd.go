@@ -6,9 +6,9 @@ import (
 
 	"gorm.io/gorm"
 
+	domainEvents "orris/internal/domain/shared/events"
 	"orris/internal/domain/user"
 	"orris/internal/domain/user/specifications"
-	domainEvents "orris/internal/domain/shared/events"
 	"orris/internal/infrastructure/persistence/mappers"
 	"orris/internal/infrastructure/persistence/models"
 	"orris/internal/shared/logger"
@@ -74,7 +74,7 @@ func (r *UserRepositoryDDD) Create(ctx context.Context, userEntity *user.User) e
 // GetByID retrieves a user by ID
 func (r *UserRepositoryDDD) GetByID(ctx context.Context, id uint) (*user.User, error) {
 	var model models.UserModel
-	
+
 	if err := r.db.WithContext(ctx).First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
@@ -96,7 +96,7 @@ func (r *UserRepositoryDDD) GetByID(ctx context.Context, id uint) (*user.User, e
 // GetByEmail retrieves a user by email
 func (r *UserRepositoryDDD) GetByEmail(ctx context.Context, email string) (*user.User, error) {
 	var model models.UserModel
-	
+
 	if err := r.db.WithContext(ctx).Where("email = ?", email).First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
@@ -287,7 +287,7 @@ func (r *UserRepositoryDDD) ExistsByEmail(ctx context.Context, email string) (bo
 // FindBySpecification finds users by specification
 func (r *UserRepositoryDDD) FindBySpecification(ctx context.Context, spec interface{}, limit int) ([]*user.User, error) {
 	query := r.db.WithContext(ctx).Table("users")
-	
+
 	// Apply specification to query
 	if spec != nil {
 		if specification, ok := spec.(specifications.Specification); ok {
@@ -295,12 +295,12 @@ func (r *UserRepositoryDDD) FindBySpecification(ctx context.Context, spec interf
 			query = query.Where(sql, args...)
 		}
 	}
-	
+
 	// Apply limit
 	if limit > 0 {
 		query = query.Limit(limit)
 	}
-	
+
 	var models []*models.UserModel
 	if err := query.Find(&models).Error; err != nil {
 		r.logger.Errorw("failed to find users by specification", "error", err)
@@ -313,13 +313,14 @@ func (r *UserRepositoryDDD) FindBySpecification(ctx context.Context, spec interf
 		r.logger.Errorw("failed to map user models to entities", "error", err)
 		return nil, fmt.Errorf("failed to map users: %w", err)
 	}
-	
+
 	return entities, nil
 }
+
 // GetByVerificationToken retrieves a user by email verification token
 func (r *UserRepositoryDDD) GetByVerificationToken(ctx context.Context, token string) (*user.User, error) {
 	var model models.UserModel
-	
+
 	if err := r.db.WithContext(ctx).Where("email_verification_token = ?", token).First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, fmt.Errorf("user not found")
@@ -340,7 +341,7 @@ func (r *UserRepositoryDDD) GetByVerificationToken(ctx context.Context, token st
 // GetByPasswordResetToken retrieves a user by password reset token
 func (r *UserRepositoryDDD) GetByPasswordResetToken(ctx context.Context, token string) (*user.User, error) {
 	var model models.UserModel
-	
+
 	if err := r.db.WithContext(ctx).Where("password_reset_token = ?", token).First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, fmt.Errorf("user not found")

@@ -282,8 +282,8 @@ func (h *PermissionHandler) CheckPermission(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "success", gin.H{
-		"allowed": allowed,
+		"allowed":  allowed,
 		"resource": resource,
-		"action": action,
+		"action":   action,
 	})
 }

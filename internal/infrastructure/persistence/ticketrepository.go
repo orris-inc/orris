@@ -27,9 +27,9 @@ type TicketModel struct {
 	SLADueTime   *int64 `gorm:"index"`
 	ResponseTime *int64
 	ResolvedTime *int64
-	Version      int            `gorm:"not null;default:1"`
-	CreatedAt    int64          `gorm:"autoCreateTime:milli;not null"`
-	UpdatedAt    int64          `gorm:"autoUpdateTime:milli;not null"`
+	Version      int   `gorm:"not null;default:1"`
+	CreatedAt    int64 `gorm:"autoCreateTime:milli;not null"`
+	UpdatedAt    int64 `gorm:"autoUpdateTime:milli;not null"`
 	ClosedAt     *int64
 	Comments     []CommentModel `gorm:"foreignKey:TicketID;constraint:OnDelete:CASCADE"`
 }

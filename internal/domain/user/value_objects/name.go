@@ -21,29 +21,29 @@ type Name struct {
 func NewName(value string) (*Name, error) {
 	// Normalize the name
 	normalized := strings.TrimSpace(value)
-	
+
 	if normalized == "" {
 		return nil, fmt.Errorf("name cannot be empty")
 	}
-	
+
 	if len(normalized) < 2 {
 		return nil, fmt.Errorf("name must be at least 2 characters long")
 	}
-	
+
 	if len(normalized) > 100 {
 		return nil, fmt.Errorf("name cannot exceed 100 characters")
 	}
-	
+
 	// Check for valid characters
 	if !nameRegex.MatchString(normalized) {
 		return nil, fmt.Errorf("name contains invalid characters: %s", value)
 	}
-	
+
 	// Check for consecutive spaces
 	if strings.Contains(normalized, "  ") {
 		return nil, fmt.Errorf("name cannot contain consecutive spaces")
 	}
-	
+
 	return &Name{value: normalized}, nil
 }
 
@@ -130,12 +130,12 @@ func (n *Name) UnmarshalJSON(data []byte) error {
 	if len(str) >= 2 && str[0] == '"' && str[len(str)-1] == '"' {
 		str = str[1 : len(str)-1]
 	}
-	
+
 	name, err := NewName(str)
 	if err != nil {
 		return err
 	}
-	
+
 	*n = *name
 	return nil
 }

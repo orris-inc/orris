@@ -13,14 +13,14 @@ import (
 )
 
 type SubscriptionHandler struct {
-	createUseCase           *usecases.CreateSubscriptionUseCase
-	getUseCase              *usecases.GetSubscriptionUseCase
-	listUserUseCase         *usecases.ListUserSubscriptionsUseCase
-	cancelUseCase           *usecases.CancelSubscriptionUseCase
-	renewUseCase            *usecases.RenewSubscriptionUseCase
-	changePlanUseCase       *usecases.ChangePlanUseCase
-	activateUseCase         *usecases.ActivateSubscriptionUseCase
-	logger                  logger.Interface
+	createUseCase     *usecases.CreateSubscriptionUseCase
+	getUseCase        *usecases.GetSubscriptionUseCase
+	listUserUseCase   *usecases.ListUserSubscriptionsUseCase
+	cancelUseCase     *usecases.CancelSubscriptionUseCase
+	renewUseCase      *usecases.RenewSubscriptionUseCase
+	changePlanUseCase *usecases.ChangePlanUseCase
+	activateUseCase   *usecases.ActivateSubscriptionUseCase
+	logger            logger.Interface
 }
 
 func NewSubscriptionHandler(

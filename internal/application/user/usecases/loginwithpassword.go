@@ -22,7 +22,6 @@ type JWTService interface {
 	Refresh(refreshToken string) (string, error)
 }
 
-
 type LoginWithPasswordCommand struct {
 	Email      string
 	Password   string

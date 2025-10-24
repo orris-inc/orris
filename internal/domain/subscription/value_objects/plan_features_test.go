@@ -77,9 +77,9 @@ func TestPlanFeatures_HasFeature(t *testing.T) {
 
 func TestPlanFeatures_GetLimit(t *testing.T) {
 	pf := NewPlanFeatures(nil, map[string]interface{}{
-		"max_users": 10,
+		"max_users":   10,
 		"max_storage": 100.5,
-		"enabled": true,
+		"enabled":     true,
 	})
 
 	tests := []struct {
@@ -128,10 +128,10 @@ func TestPlanFeatures_GetLimit(t *testing.T) {
 
 func TestPlanFeatures_IsWithinLimit(t *testing.T) {
 	pf := NewPlanFeatures(nil, map[string]interface{}{
-		"max_users": 10,
+		"max_users":   10,
 		"max_storage": 100.5,
-		"plan_type": "premium",
-		"enabled": true,
+		"plan_type":   "premium",
+		"enabled":     true,
 	})
 
 	tests := []struct {
@@ -267,7 +267,7 @@ func TestPlanFeatures_SetLimit(t *testing.T) {
 
 func TestPlanFeatures_RemoveLimit(t *testing.T) {
 	pf := NewPlanFeatures(nil, map[string]interface{}{
-		"max_users": 10,
+		"max_users":   10,
 		"max_storage": 100,
 	})
 
@@ -285,9 +285,9 @@ func TestPlanFeatures_RemoveLimit(t *testing.T) {
 
 func TestPlanFeatures_GetIntLimit(t *testing.T) {
 	pf := NewPlanFeatures(nil, map[string]interface{}{
-		"max_users": 10,
+		"max_users":   10,
 		"max_storage": 100.5,
-		"plan_type": "premium",
+		"plan_type":   "premium",
 	})
 
 	tests := []struct {
@@ -380,7 +380,7 @@ func TestPlanFeatures_GetStringLimit(t *testing.T) {
 
 func TestPlanFeatures_GetBoolLimit(t *testing.T) {
 	pf := NewPlanFeatures(nil, map[string]interface{}{
-		"enabled": true,
+		"enabled":   true,
 		"max_users": 10,
 	})
 
@@ -515,10 +515,10 @@ func TestPlanFeatures_Equals(t *testing.T) {
 	)
 
 	tests := []struct {
-		name  string
-		pf1   *PlanFeatures
-		pf2   *PlanFeatures
-		want  bool
+		name string
+		pf1  *PlanFeatures
+		pf2  *PlanFeatures
+		want bool
 	}{
 		{
 			name: "equal plan features",

@@ -48,11 +48,11 @@ func TestTemplateType_String(t *testing.T) {
 
 func TestTemplateType_CheckMethods(t *testing.T) {
 	tests := []struct {
-		name                    string
-		typeVal                 TemplateType
-		isSubscriptionExpiring  bool
-		isSystemMaintenance     bool
-		isWelcome               bool
+		name                   string
+		typeVal                TemplateType
+		isSubscriptionExpiring bool
+		isSystemMaintenance    bool
+		isWelcome              bool
 	}{
 		{"subscription expiring", TemplateTypeSubscriptionExpiring, true, false, false},
 		{"system maintenance", TemplateTypeSystemMaintenance, false, true, false},

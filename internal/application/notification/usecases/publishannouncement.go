@@ -14,12 +14,12 @@ type NotificationFactory interface {
 }
 
 type PublishAnnouncementUseCase struct {
-	announcementRepo AnnouncementRepository
-	notificationRepo NotificationRepository
-	userRepo         UserRepository
+	announcementRepo    AnnouncementRepository
+	notificationRepo    NotificationRepository
+	userRepo            UserRepository
 	notificationFactory NotificationFactory
-	markdownService  dto.MarkdownService
-	logger           logger.Interface
+	markdownService     dto.MarkdownService
+	logger              logger.Interface
 }
 
 func NewPublishAnnouncementUseCase(

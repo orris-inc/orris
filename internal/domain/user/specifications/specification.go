@@ -12,16 +12,16 @@ import (
 type Specification interface {
 	// IsSatisfiedBy checks if the user satisfies the specification
 	IsSatisfiedBy(user *user.User) bool
-	
+
 	// ToSQL converts the specification to SQL WHERE clause
 	ToSQL() (string, []interface{})
-	
+
 	// And creates a composite specification with AND operator
 	And(spec Specification) Specification
-	
+
 	// Or creates a composite specification with OR operator
 	Or(spec Specification) Specification
-	
+
 	// Not creates a negated specification
 	Not() Specification
 }
@@ -77,10 +77,10 @@ func (s *AndSpecification) IsSatisfiedBy(user *user.User) bool {
 func (s *AndSpecification) ToSQL() (string, []interface{}) {
 	leftSQL, leftArgs := s.left.ToSQL()
 	rightSQL, rightArgs := s.right.ToSQL()
-	
+
 	sql := fmt.Sprintf("(%s AND %s)", leftSQL, rightSQL)
 	args := append(leftArgs, rightArgs...)
-	
+
 	return sql, args
 }
 
@@ -122,10 +122,10 @@ func (s *OrSpecification) IsSatisfiedBy(user *user.User) bool {
 func (s *OrSpecification) ToSQL() (string, []interface{}) {
 	leftSQL, leftArgs := s.left.ToSQL()
 	rightSQL, rightArgs := s.right.ToSQL()
-	
+
 	sql := fmt.Sprintf("(%s OR %s)", leftSQL, rightSQL)
 	args := append(leftArgs, rightArgs...)
-	
+
 	return sql, args
 }
 
@@ -279,15 +279,15 @@ func (s *BusinessEmailSpecification) ToSQL() (string, []interface{}) {
 		"gmail.com", "yahoo.com", "hotmail.com", "outlook.com",
 		"icloud.com", "me.com", "qq.com", "163.com",
 	}
-	
+
 	conditions := make([]string, len(freeEmailDomains))
 	args := make([]interface{}, len(freeEmailDomains))
-	
+
 	for i, domain := range freeEmailDomains {
 		conditions[i] = "email NOT LIKE ?"
 		args[i] = "%@" + domain
 	}
-	
+
 	return strings.Join(conditions, " AND "), args
 }
 

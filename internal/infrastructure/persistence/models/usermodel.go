@@ -11,21 +11,21 @@ import (
 // UserModel represents the database persistence model for users
 // This is the anti-corruption layer between domain and database
 type UserModel struct {
-	ID                         uint           `gorm:"primarykey"`
-	Email                      string         `gorm:"uniqueIndex;not null;size:255"`
-	Name                       string         `gorm:"not null;size:100"`
-	AvatarURL                  *string        `gorm:"size:500"`
-	EmailVerified              bool           `gorm:"default:false;index:idx_email_verified"`
-	Locale                     string         `gorm:"size:10;default:en"`
-	Status                     string         `gorm:"not null;default:pending;size:20"`
-	Version                    int            `gorm:"not null;default:1"`
-	PasswordHash               *string        `gorm:"size:255"`
-	EmailVerificationToken     *string        `gorm:"size:255;index:idx_email_verification_token"`
+	ID                         uint    `gorm:"primarykey"`
+	Email                      string  `gorm:"uniqueIndex;not null;size:255"`
+	Name                       string  `gorm:"not null;size:100"`
+	AvatarURL                  *string `gorm:"size:500"`
+	EmailVerified              bool    `gorm:"default:false;index:idx_email_verified"`
+	Locale                     string  `gorm:"size:10;default:en"`
+	Status                     string  `gorm:"not null;default:pending;size:20"`
+	Version                    int     `gorm:"not null;default:1"`
+	PasswordHash               *string `gorm:"size:255"`
+	EmailVerificationToken     *string `gorm:"size:255;index:idx_email_verification_token"`
 	EmailVerificationExpiresAt *time.Time
 	PasswordResetToken         *string `gorm:"size:255;index:idx_password_reset_token"`
 	PasswordResetExpiresAt     *time.Time
 	LastPasswordChangeAt       *time.Time
-	FailedLoginAttempts        int       `gorm:"default:0"`
+	FailedLoginAttempts        int `gorm:"default:0"`
 	LockedUntil                *time.Time
 	CreatedAt                  time.Time
 	UpdatedAt                  time.Time

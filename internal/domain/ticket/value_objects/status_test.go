@@ -136,7 +136,7 @@ func TestTicketStatus_String(t *testing.T) {
 
 func TestTicketStatus_CanTransitionTo(t *testing.T) {
 	tests := []struct {
-		name        string
+		name          string
 		currentStatus TicketStatus
 		newStatus     TicketStatus
 		want          bool

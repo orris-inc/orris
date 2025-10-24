@@ -10,13 +10,13 @@ import (
 // SubscriptionHistoryModel represents the database persistence model for subscription history
 // This is the anti-corruption layer between domain and database
 type SubscriptionHistoryModel struct {
-	ID             uint           `gorm:"primarykey"`
-	SubscriptionID uint           `gorm:"not null;index:idx_subscription_history"`
-	UserID         uint           `gorm:"not null;index:idx_user_history"`
-	PlanID         uint           `gorm:"not null"`
-	Action         string         `gorm:"not null;size:50;index:idx_action"` // created, renewed, upgraded, downgraded, cancelled, expired
-	OldStatus      *string        `gorm:"size:20"`
-	NewStatus      string         `gorm:"not null;size:20"`
+	ID             uint    `gorm:"primarykey"`
+	SubscriptionID uint    `gorm:"not null;index:idx_subscription_history"`
+	UserID         uint    `gorm:"not null;index:idx_user_history"`
+	PlanID         uint    `gorm:"not null"`
+	Action         string  `gorm:"not null;size:50;index:idx_action"` // created, renewed, upgraded, downgraded, cancelled, expired
+	OldStatus      *string `gorm:"size:20"`
+	NewStatus      string  `gorm:"not null;size:20"`
 	OldPlanID      *uint
 	NewPlanID      *uint
 	Amount         *uint64

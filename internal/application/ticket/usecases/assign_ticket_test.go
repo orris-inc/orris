@@ -16,10 +16,10 @@ import (
 )
 
 type mockUser struct {
-	id                 uint
-	email              string
-	status             uservo.Status
-	canPerformActions  bool
+	id                uint
+	email             string
+	status            uservo.Status
+	canPerformActions bool
 }
 
 func (m *mockUser) ID() uint {

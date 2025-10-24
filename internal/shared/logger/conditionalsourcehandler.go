@@ -20,11 +20,12 @@ type conditionalSourceHandler struct {
 // This wrapper will conditionally add source attributes for specified levels.
 //
 // Example:
-//   handler := NewConditionalSourceHandler(
-//       tint.NewHandler(os.Stdout, opts),
-//       slog.LevelWarn,
-//       slog.LevelError,
-//   )
+//
+//	handler := NewConditionalSourceHandler(
+//	    tint.NewHandler(os.Stdout, opts),
+//	    slog.LevelWarn,
+//	    slog.LevelError,
+//	)
 func NewConditionalSourceHandler(handler slog.Handler, showSourceForLevels ...slog.Level) slog.Handler {
 	levelMap := make(map[slog.Level]bool)
 	for _, level := range showSourceForLevels {

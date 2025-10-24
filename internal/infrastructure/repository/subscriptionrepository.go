@@ -7,8 +7,8 @@ import (
 
 	"gorm.io/gorm"
 
-	"orris/internal/domain/subscription"
 	domainEvents "orris/internal/domain/shared/events"
+	"orris/internal/domain/subscription"
 	"orris/internal/infrastructure/persistence/mappers"
 	"orris/internal/infrastructure/persistence/models"
 	"orris/internal/shared/logger"

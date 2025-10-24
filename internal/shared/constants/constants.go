@@ -12,11 +12,11 @@ const (
 	MaxPageSize     = 100
 
 	// HTTP Headers
-	HeaderContentType     = "Content-Type"
-	HeaderAuthorization   = "Authorization"
-	HeaderXRequestID      = "X-Request-ID"
-	HeaderXForwardedFor   = "X-Forwarded-For"
-	HeaderUserAgent       = "User-Agent"
+	HeaderContentType   = "Content-Type"
+	HeaderAuthorization = "Authorization"
+	HeaderXRequestID    = "X-Request-ID"
+	HeaderXForwardedFor = "X-Forwarded-For"
+	HeaderUserAgent     = "User-Agent"
 
 	// Content Types
 	ContentTypeJSON = "application/json"

@@ -50,20 +50,20 @@ type CreateNodeDTO struct {
 }
 
 type UpdateNodeDTO struct {
-	Name             *string                 `json:"name,omitempty" binding:"omitempty,min=2,max=100"`
-	ServerAddress    *string                 `json:"server_address,omitempty"`
-	ServerPort       *uint16                 `json:"server_port,omitempty" binding:"omitempty,min=1,max=65535"`
-	EncryptionMethod *string                 `json:"encryption_method,omitempty"`
-	Password         *string                 `json:"password,omitempty"`
-	Plugin           *string                 `json:"plugin,omitempty"`
-	PluginOpts       map[string]string       `json:"plugin_opts,omitempty"`
-	Country          *string                 `json:"country,omitempty"`
-	Region           *string                 `json:"region,omitempty"`
-	Tags             []string                `json:"tags,omitempty"`
-	CustomFields     map[string]interface{}  `json:"custom_fields,omitempty"`
-	MaxUsers         *uint                   `json:"max_users,omitempty" binding:"omitempty,min=1"`
-	TrafficLimit     *uint64                 `json:"traffic_limit,omitempty" binding:"omitempty,min=1"`
-	SortOrder        *int                    `json:"sort_order,omitempty"`
+	Name             *string                `json:"name,omitempty" binding:"omitempty,min=2,max=100"`
+	ServerAddress    *string                `json:"server_address,omitempty"`
+	ServerPort       *uint16                `json:"server_port,omitempty" binding:"omitempty,min=1,max=65535"`
+	EncryptionMethod *string                `json:"encryption_method,omitempty"`
+	Password         *string                `json:"password,omitempty"`
+	Plugin           *string                `json:"plugin,omitempty"`
+	PluginOpts       map[string]string      `json:"plugin_opts,omitempty"`
+	Country          *string                `json:"country,omitempty"`
+	Region           *string                `json:"region,omitempty"`
+	Tags             []string               `json:"tags,omitempty"`
+	CustomFields     map[string]interface{} `json:"custom_fields,omitempty"`
+	MaxUsers         *uint                  `json:"max_users,omitempty" binding:"omitempty,min=1"`
+	TrafficLimit     *uint64                `json:"traffic_limit,omitempty" binding:"omitempty,min=1"`
+	SortOrder        *int                   `json:"sort_order,omitempty"`
 }
 
 type NodeListDTO struct {

@@ -35,6 +35,7 @@ func NewSubscriptionURLSigner(secretKey string, logger logger.Interface) *Subscr
 //   - subscriptionID: the subscription ID
 //   - expiresAt: expiration time of the URL
 //   - baseURL: base URL for the subscription endpoint
+//
 // Returns the complete signed URL
 func (s *SubscriptionURLSigner) GenerateURL(subscriptionID uint, expiresAt time.Time, baseURL string) string {
 	timestamp := expiresAt.Unix()
@@ -55,6 +56,7 @@ func (s *SubscriptionURLSigner) GenerateURL(subscriptionID uint, expiresAt time.
 //   - subscriptionID: the subscription ID from URL
 //   - expiresAt: expiration timestamp from URL
 //   - signature: signature from URL
+//
 // Returns true if signature is valid and not expired
 func (s *SubscriptionURLSigner) Verify(subscriptionID uint, expiresAt int64, signature string) bool {
 	// Check if expired

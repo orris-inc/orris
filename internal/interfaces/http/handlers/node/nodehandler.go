@@ -13,12 +13,12 @@ import (
 )
 
 type NodeHandler struct {
-	createNodeUC       usecases.CreateNodeExecutor
-	updateNodeUC       usecases.UpdateNodeExecutor
-	deleteNodeUC       usecases.DeleteNodeExecutor
-	listNodesUC        usecases.ListNodesExecutor
-	generateTokenUC    usecases.GenerateNodeTokenExecutor
-	logger             logger.Interface
+	createNodeUC    usecases.CreateNodeExecutor
+	updateNodeUC    usecases.UpdateNodeExecutor
+	deleteNodeUC    usecases.DeleteNodeExecutor
+	listNodesUC     usecases.ListNodesExecutor
+	generateTokenUC usecases.GenerateNodeTokenExecutor
+	logger          logger.Interface
 }
 
 func NewNodeHandler(

@@ -38,7 +38,7 @@ type Repository interface {
 // RepositoryWithSpecifications extends Repository with specification-based queries
 type RepositoryWithSpecifications interface {
 	Repository
-	
+
 	// FindBySpecification finds users matching a specification
 	FindBySpecification(ctx context.Context, spec interface{}, limit int) ([]*User, error)
 }

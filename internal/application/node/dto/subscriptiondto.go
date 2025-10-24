@@ -5,12 +5,12 @@ import (
 )
 
 type SubscriptionResponseDTO struct {
-	Content     string    `json:"content"`
-	Format      string    `json:"format"`
-	NodeCount   int       `json:"node_count"`
-	GeneratedAt time.Time `json:"generated_at"`
+	Content     string     `json:"content"`
+	Format      string     `json:"format"`
+	NodeCount   int        `json:"node_count"`
+	GeneratedAt time.Time  `json:"generated_at"`
 	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
-	UserAgent   string    `json:"user_agent,omitempty"`
+	UserAgent   string     `json:"user_agent,omitempty"`
 }
 
 type GenerateSubscriptionRequestDTO struct {
@@ -43,33 +43,33 @@ type SubscriptionNodeDTO struct {
 }
 
 type ClashConfigDTO struct {
-	Port               int                         `json:"port" yaml:"port"`
-	SocksPort          int                         `json:"socks-port" yaml:"socks-port"`
-	AllowLan           bool                        `json:"allow-lan" yaml:"allow-lan"`
-	Mode               string                      `json:"mode" yaml:"mode"`
-	LogLevel           string                      `json:"log-level" yaml:"log-level"`
-	ExternalController string                      `json:"external-controller" yaml:"external-controller"`
-	Proxies            []map[string]interface{}    `json:"proxies" yaml:"proxies"`
-	ProxyGroups        []map[string]interface{}    `json:"proxy-groups" yaml:"proxy-groups"`
-	Rules              []string                    `json:"rules" yaml:"rules"`
+	Port               int                      `json:"port" yaml:"port"`
+	SocksPort          int                      `json:"socks-port" yaml:"socks-port"`
+	AllowLan           bool                     `json:"allow-lan" yaml:"allow-lan"`
+	Mode               string                   `json:"mode" yaml:"mode"`
+	LogLevel           string                   `json:"log-level" yaml:"log-level"`
+	ExternalController string                   `json:"external-controller" yaml:"external-controller"`
+	Proxies            []map[string]interface{} `json:"proxies" yaml:"proxies"`
+	ProxyGroups        []map[string]interface{} `json:"proxy-groups" yaml:"proxy-groups"`
+	Rules              []string                 `json:"rules" yaml:"rules"`
 }
 
 type SurgeConfigDTO struct {
-	General  map[string]interface{}   `json:"general"`
-	Replica  map[string]interface{}   `json:"replica"`
-	Proxies  []map[string]interface{} `json:"proxies"`
-	Groups   []map[string]interface{} `json:"groups"`
-	Rules    []string                 `json:"rules"`
+	General map[string]interface{}   `json:"general"`
+	Replica map[string]interface{}   `json:"replica"`
+	Proxies []map[string]interface{} `json:"proxies"`
+	Groups  []map[string]interface{} `json:"groups"`
+	Rules   []string                 `json:"rules"`
 }
 
 type SubscriptionStatsDTO struct {
-	TotalSubscriptions   int                `json:"total_subscriptions"`
-	ActiveSubscriptions  int                `json:"active_subscriptions"`
-	SubscriptionsByFormat map[string]int    `json:"subscriptions_by_format"`
-	SubscriptionsByUser   map[uint]int      `json:"subscriptions_by_user"`
-	LastGenerated        *time.Time         `json:"last_generated,omitempty"`
-	MostPopularFormat    string             `json:"most_popular_format"`
-	AverageNodesPerSub   float64            `json:"average_nodes_per_sub"`
+	TotalSubscriptions    int            `json:"total_subscriptions"`
+	ActiveSubscriptions   int            `json:"active_subscriptions"`
+	SubscriptionsByFormat map[string]int `json:"subscriptions_by_format"`
+	SubscriptionsByUser   map[uint]int   `json:"subscriptions_by_user"`
+	LastGenerated         *time.Time     `json:"last_generated,omitempty"`
+	MostPopularFormat     string         `json:"most_popular_format"`
+	AverageNodesPerSub    float64        `json:"average_nodes_per_sub"`
 }
 
 func ToSubscriptionResponseDTO(content, format string, nodeCount int, userAgent string) *SubscriptionResponseDTO {

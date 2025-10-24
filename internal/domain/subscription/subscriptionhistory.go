@@ -6,14 +6,14 @@ import (
 )
 
 const (
-	EventTypeCreated      = "created"
-	EventTypeActivated    = "activated"
-	EventTypeCancelled    = "cancelled"
-	EventTypeRenewed      = "renewed"
-	EventTypePlanChanged  = "plan_changed"
-	EventTypeSuspended    = "suspended"
-	EventTypeReactivated  = "reactivated"
-	EventTypeExpired      = "expired"
+	EventTypeCreated     = "created"
+	EventTypeActivated   = "activated"
+	EventTypeCancelled   = "cancelled"
+	EventTypeRenewed     = "renewed"
+	EventTypePlanChanged = "plan_changed"
+	EventTypeSuspended   = "suspended"
+	EventTypeReactivated = "reactivated"
+	EventTypeExpired     = "expired"
 )
 
 var ValidEventTypes = map[string]bool{
@@ -28,8 +28,8 @@ var ValidEventTypes = map[string]bool{
 }
 
 var (
-	ErrInvalidEventType  = errors.New("invalid event type")
-	ErrHistoryImmutable  = errors.New("history record is immutable")
+	ErrInvalidEventType = errors.New("invalid event type")
+	ErrHistoryImmutable = errors.New("history record is immutable")
 )
 
 type SubscriptionHistory struct {

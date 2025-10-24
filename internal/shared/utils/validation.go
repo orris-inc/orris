@@ -15,7 +15,7 @@ var validate *validator.Validate
 // init initializes the validator
 func init() {
 	validate = validator.New()
-	
+
 	// Use JSON tag names for validation errors
 	validate.RegisterTagNameFunc(func(fld reflect.StructField) string {
 		name := strings.SplitN(fld.Tag.Get("json"), ",", 2)[0]

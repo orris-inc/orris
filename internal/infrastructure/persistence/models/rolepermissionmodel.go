@@ -7,9 +7,9 @@ import (
 )
 
 type RolePermissionModel struct {
-	ID           uint      `gorm:"primarykey"`
-	RoleID       uint      `gorm:"not null;uniqueIndex:idx_role_permission"`
-	PermissionID uint      `gorm:"not null;uniqueIndex:idx_role_permission"`
+	ID           uint `gorm:"primarykey"`
+	RoleID       uint `gorm:"not null;uniqueIndex:idx_role_permission"`
+	PermissionID uint `gorm:"not null;uniqueIndex:idx_role_permission"`
 	CreatedAt    time.Time
 }
 
@@ -18,9 +18,9 @@ func (RolePermissionModel) TableName() string {
 }
 
 type UserRoleModel struct {
-	ID        uint      `gorm:"primarykey"`
-	UserID    uint      `gorm:"not null;uniqueIndex:idx_user_role"`
-	RoleID    uint      `gorm:"not null;uniqueIndex:idx_user_role"`
+	ID        uint `gorm:"primarykey"`
+	UserID    uint `gorm:"not null;uniqueIndex:idx_user_role"`
+	RoleID    uint `gorm:"not null;uniqueIndex:idx_user_role"`
 	CreatedAt time.Time
 }
 
