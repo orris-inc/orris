@@ -3,9 +3,10 @@ package config
 import "fmt"
 
 type ServerConfig struct {
-	Host string `mapstructure:"host"`
-	Port int    `mapstructure:"port"`
-	Mode string `mapstructure:"mode"`
+	Host    string `mapstructure:"host"`
+	Port    int    `mapstructure:"port"`
+	Mode    string `mapstructure:"mode"`
+	BaseURL string `mapstructure:"base_url"`
 }
 
 func (s *ServerConfig) GetAddr() string {

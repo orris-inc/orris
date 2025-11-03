@@ -469,6 +469,226 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/payments": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Create a payment for subscription",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "payments"
+                ],
+                "summary": "Create payment",
+                "parameters": [
+                    {
+                        "description": "Payment data",
+                        "name": "payment",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_interfaces_http_handlers.CreatePaymentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Payment created successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/internal_interfaces_http_handlers.CreatePaymentResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/payments/callback": {
+            "post": {
+                "description": "Handle payment gateway callback notification",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "payments"
+                ],
+                "summary": "Handle payment callback",
+                "responses": {
+                    "200": {
+                        "description": "Callback processed successfully",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/payments/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get payment details by payment ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "payments"
+                ],
+                "summary": "Get payment by ID",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Payment ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Payment details",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Payment not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/subscriptions/{id}/payments": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "List all payments for a subscription",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "payments"
+                ],
+                "summary": "List subscription payments",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Subscription ID",
+                        "name": "subscription_id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Payments list",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/auth/check-permission": {
             "get": {
                 "security": [
@@ -5497,6 +5717,49 @@ const docTemplate = `{
                 },
                 "new_plan_id": {
                     "type": "integer"
+                }
+            }
+        },
+        "internal_interfaces_http_handlers.CreatePaymentRequest": {
+            "type": "object",
+            "required": [
+                "payment_method",
+                "subscription_id"
+            ],
+            "properties": {
+                "payment_method": {
+                    "type": "string",
+                    "enum": [
+                        "alipay",
+                        "wechat",
+                        "stripe"
+                    ]
+                },
+                "return_url": {
+                    "type": "string"
+                },
+                "subscription_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_interfaces_http_handlers.CreatePaymentResponse": {
+            "type": "object",
+            "properties": {
+                "expired_at": {
+                    "type": "string"
+                },
+                "order_no": {
+                    "type": "string"
+                },
+                "payment_id": {
+                    "type": "integer"
+                },
+                "payment_url": {
+                    "type": "string"
+                },
+                "qr_code": {
+                    "type": "string"
                 }
             }
         },

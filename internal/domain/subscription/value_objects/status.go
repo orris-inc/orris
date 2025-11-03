@@ -3,12 +3,13 @@ package value_objects
 type SubscriptionStatus string
 
 const (
-	StatusInactive  SubscriptionStatus = "inactive"
-	StatusTrialing  SubscriptionStatus = "trialing"
-	StatusActive    SubscriptionStatus = "active"
-	StatusPastDue   SubscriptionStatus = "past_due"
-	StatusCancelled SubscriptionStatus = "cancelled"
-	StatusExpired   SubscriptionStatus = "expired"
+	StatusInactive       SubscriptionStatus = "inactive"
+	StatusPendingPayment SubscriptionStatus = "pending_payment"
+	StatusTrialing       SubscriptionStatus = "trialing"
+	StatusActive         SubscriptionStatus = "active"
+	StatusPastDue        SubscriptionStatus = "past_due"
+	StatusCancelled      SubscriptionStatus = "cancelled"
+	StatusExpired        SubscriptionStatus = "expired"
 )
 
 func (s SubscriptionStatus) String() string {
@@ -25,12 +26,13 @@ func (s SubscriptionStatus) CanRenew() bool {
 
 func (s SubscriptionStatus) CanTransitionTo(target SubscriptionStatus) bool {
 	transitions := map[SubscriptionStatus][]SubscriptionStatus{
-		StatusInactive:  {StatusActive, StatusTrialing},
-		StatusTrialing:  {StatusActive, StatusCancelled, StatusExpired},
-		StatusActive:    {StatusPastDue, StatusCancelled, StatusExpired},
-		StatusPastDue:   {StatusActive, StatusCancelled, StatusExpired},
-		StatusCancelled: {},
-		StatusExpired:   {StatusActive},
+		StatusInactive:       {StatusPendingPayment, StatusActive, StatusTrialing},
+		StatusPendingPayment: {StatusActive, StatusInactive, StatusExpired},
+		StatusTrialing:       {StatusActive, StatusCancelled, StatusExpired},
+		StatusActive:         {StatusPastDue, StatusCancelled, StatusExpired},
+		StatusPastDue:        {StatusActive, StatusCancelled, StatusExpired},
+		StatusCancelled:      {},
+		StatusExpired:        {StatusActive},
 	}
 
 	allowed, exists := transitions[s]
@@ -47,10 +49,11 @@ func (s SubscriptionStatus) CanTransitionTo(target SubscriptionStatus) bool {
 }
 
 var ValidStatuses = map[SubscriptionStatus]bool{
-	StatusInactive:  true,
-	StatusTrialing:  true,
-	StatusActive:    true,
-	StatusPastDue:   true,
-	StatusCancelled: true,
-	StatusExpired:   true,
+	StatusInactive:       true,
+	StatusPendingPayment: true,
+	StatusTrialing:       true,
+	StatusActive:         true,
+	StatusPastDue:        true,
+	StatusCancelled:      true,
+	StatusExpired:        true,
 }

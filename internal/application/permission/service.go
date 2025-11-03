@@ -84,3 +84,80 @@ func (s *Service) GetUserPermissions(ctx context.Context, userID uint) ([]*permi
 
 	return permissions, nil
 }
+
+func (s *Service) GrantPermissionsToUser(ctx context.Context, userID uint, permissionNames []string) error {
+	s.logger.Infow("granting permissions to user", "user_id", userID, "permissions", permissionNames)
+
+	for _, permName := range permissionNames {
+		resource := extractResource(permName)
+		action := extractAction(permName)
+
+		perm, err := s.permissionRepo.GetByCode(ctx, resource, action)
+		if err != nil {
+			s.logger.Warnw("permission not found, skipping", "permission", permName, "error", err)
+			continue
+		}
+		if perm == nil {
+			s.logger.Warnw("permission not found, skipping", "permission", permName)
+			continue
+		}
+
+		if err := s.enforcer.AddPolicy(
+			fmt.Sprintf("user:%d", userID),
+			resource,
+			action,
+		); err != nil {
+			s.logger.Errorw("failed to add permission to enforcer", "error", err, "permission", permName)
+			return fmt.Errorf("failed to grant permission %s: %w", permName, err)
+		}
+	}
+
+	s.logger.Infow("permissions granted successfully", "user_id", userID, "count", len(permissionNames))
+	return nil
+}
+
+func (s *Service) RevokePermissionsFromUser(ctx context.Context, userID uint, permissionNames []string) error {
+	s.logger.Infow("revoking permissions from user", "user_id", userID, "permissions", permissionNames)
+
+	for _, permName := range permissionNames {
+		resource := extractResource(permName)
+		action := extractAction(permName)
+
+		perm, err := s.permissionRepo.GetByCode(ctx, resource, action)
+		if err != nil {
+			continue
+		}
+		if perm == nil {
+			continue
+		}
+
+		if err := s.enforcer.RemovePolicy(
+			fmt.Sprintf("user:%d", userID),
+			resource,
+			action,
+		); err != nil {
+			s.logger.Errorw("failed to remove permission from enforcer", "error", err)
+		}
+	}
+
+	s.logger.Infow("permissions revoked successfully", "user_id", userID, "count", len(permissionNames))
+	return nil
+}
+
+func extractResource(permissionName string) string {
+	for i := 0; i < len(permissionName); i++ {
+		if permissionName[i] == ':' {
+			return permissionName[:i]
+		}
+	}
+	return permissionName
+}
+
+func extractAction(permissionName string) string {
+	for i := 0; i < len(permissionName); i++ {
+		if permissionName[i] == ':' {
+			return permissionName[i+1:]
+		}
+	}
+	return ""
+}

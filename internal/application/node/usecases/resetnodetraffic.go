@@ -67,9 +67,9 @@ func (uc *ResetNodeTrafficUseCase) Execute(
 		SubscriptionID: cmd.SubscriptionID,
 		From:           time.Time{},
 		To:             time.Now(),
-		Page:           1,
-		PageSize:       10000,
 	}
+	filter.Page = 1
+	filter.PageSize = 10000
 
 	trafficRecords, err := uc.trafficRepo.GetTrafficStats(ctx, filter)
 	if err != nil {

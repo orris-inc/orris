@@ -141,9 +141,9 @@ func (uc *GetNodeTrafficStatsUseCase) buildFilter(query GetNodeTrafficStatsQuery
 		SubscriptionID: query.SubscriptionID,
 		From:           query.From,
 		To:             query.To,
-		Page:           page,
-		PageSize:       pageSize,
 	}
+	filter.Page = page
+	filter.PageSize = pageSize
 
 	if query.Granularity != "" {
 		filter.Period = &query.Granularity

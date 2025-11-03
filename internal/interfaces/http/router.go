@@ -12,7 +12,10 @@ import (
 
 	nodeUsecases "orris/internal/application/node/usecases"
 	notificationApp "orris/internal/application/notification"
+	paymentGateway "orris/internal/application/payment/payment_gateway"
+	paymentUsecases "orris/internal/application/payment/usecases"
 	"orris/internal/application/permission"
+	subscriptionApp "orris/internal/application/subscription"
 	subscriptionUsecases "orris/internal/application/subscription/usecases"
 	"orris/internal/application/user"
 	"orris/internal/application/user/usecases"
@@ -21,6 +24,7 @@ import (
 	"orris/internal/infrastructure/config"
 	"orris/internal/infrastructure/email"
 	permissionInfra "orris/internal/infrastructure/permission"
+	"orris/internal/infrastructure/persistence"
 	"orris/internal/infrastructure/repository"
 	"orris/internal/infrastructure/token"
 	"orris/internal/interfaces/http/handlers"
@@ -42,6 +46,7 @@ type Router struct {
 	subscriptionHandler      *handlers.SubscriptionHandler
 	subscriptionPlanHandler  *handlers.SubscriptionPlanHandler
 	subscriptionTokenHandler *handlers.SubscriptionTokenHandler
+	paymentHandler           *handlers.PaymentHandler
 	nodeHandler              *handlers.NodeHandler
 	nodeGroupHandler         *handlers.NodeGroupHandler
 	nodeSubscriptionHandler  *handlers.NodeSubscriptionHandler
@@ -178,8 +183,20 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	subscriptionRepo := repository.NewSubscriptionRepository(db, nil, log)
 	subscriptionPlanRepo := repository.NewSubscriptionPlanRepository(db, log)
 	subscriptionTokenRepo := repository.NewSubscriptionTokenRepository(db, log)
+	paymentRepo := persistence.NewPaymentRepository(db)
 
 	tokenGenerator := token.NewTokenGenerator()
+
+	subscriptionService := subscriptionApp.NewService(
+		subscriptionRepo,
+		subscriptionPlanRepo,
+		permissionService,
+		log,
+	)
+	syncPermissionsUC := subscriptionUsecases.NewSyncSubscriptionPermissionsUseCase(
+		subscriptionService,
+		log,
+	)
 
 	createSubscriptionUC := subscriptionUsecases.NewCreateSubscriptionUseCase(
 		subscriptionRepo, subscriptionPlanRepo, subscriptionTokenRepo, tokenGenerator, log,
@@ -290,6 +307,28 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	notificationHandler := handlers.NewNotificationHandler(notificationServiceDDD, log)
 
+	gateway := paymentGateway.NewMockGateway(true)
+	paymentConfig := paymentUsecases.PaymentConfig{
+		NotifyURL: cfg.Server.BaseURL + "/payments/callback",
+	}
+	createPaymentUC := paymentUsecases.NewCreatePaymentUseCase(
+		paymentRepo,
+		subscriptionRepo,
+		subscriptionPlanRepo,
+		gateway,
+		log,
+		paymentConfig,
+	)
+	handleCallbackUC := paymentUsecases.NewHandlePaymentCallbackUseCase(
+		paymentRepo,
+		activateSubscriptionUC,
+		syncPermissionsUC,
+		gateway,
+		log,
+	)
+
+	paymentHandler := handlers.NewPaymentHandler(createPaymentUC, handleCallbackUC, log)
+
 	return &Router{
 		engine:                   engine,
 		userHandler:              userHandler,
@@ -298,6 +337,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		subscriptionHandler:      subscriptionHandler,
 		subscriptionPlanHandler:  subscriptionPlanHandler,
 		subscriptionTokenHandler: subscriptionTokenHandler,
+		paymentHandler:           paymentHandler,
 		nodeHandler:              nodeHandler,
 		nodeGroupHandler:         nodeGroupHandler,
 		nodeSubscriptionHandler:  nodeSubscriptionHandler,
@@ -375,6 +415,20 @@ func (r *Router) SetupRoutes() {
 		subscriptions.GET("/:id/tokens", r.subscriptionTokenHandler.ListTokens)
 		subscriptions.DELETE("/:id/tokens/:token_id", r.subscriptionTokenHandler.RevokeToken)
 		subscriptions.POST("/:id/tokens/:token_id/refresh", r.subscriptionTokenHandler.RefreshToken)
+
+		subscriptions.GET("/:id/payments", r.paymentHandler.ListPayments)
+	}
+
+	payments := r.engine.Group("/payments")
+	{
+		payments.POST("/callback", r.paymentHandler.HandleCallback)
+
+		paymentsProtected := payments.Group("")
+		paymentsProtected.Use(r.authMiddleware.RequireAuth())
+		{
+			paymentsProtected.POST("", r.paymentHandler.CreatePayment)
+			paymentsProtected.GET("/:id", r.paymentHandler.GetPayment)
+		}
 	}
 
 	plans := r.engine.Group("/subscription-plans")

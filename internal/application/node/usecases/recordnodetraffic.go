@@ -92,13 +92,13 @@ func (uc *RecordNodeTrafficUseCase) findOrCreateTraffic(
 	period time.Time,
 ) (*node.NodeTraffic, error) {
 	filter := node.TrafficStatsFilter{
-		NodeID:   &cmd.NodeID,
-		UserID:   cmd.UserID,
-		From:     period,
-		To:       period.Add(time.Hour),
-		Page:     1,
-		PageSize: 1,
+		NodeID: &cmd.NodeID,
+		UserID: cmd.UserID,
+		From:   period,
+		To:     period.Add(time.Hour),
 	}
+	filter.Page = 1
+	filter.PageSize = 1
 
 	existingRecords, err := uc.trafficRepo.GetTrafficStats(ctx, filter)
 	if err != nil {

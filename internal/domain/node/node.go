@@ -1,16 +1,13 @@
 package node
 
 import (
-	"crypto/rand"
-	"crypto/sha256"
 	"crypto/subtle"
-	"encoding/base64"
-	"encoding/hex"
 	"fmt"
 	"sync"
 	"time"
 
 	vo "orris/internal/domain/node/value_objects"
+	"orris/internal/domain/shared/services"
 )
 
 // Node represents the node aggregate root
@@ -36,6 +33,7 @@ type Node struct {
 	updatedAt         time.Time
 	events            []interface{}
 	mu                sync.RWMutex
+	tokenGenerator    services.TokenGenerator
 }
 
 // NewNode creates a new node aggregate
@@ -57,7 +55,8 @@ func NewNode(
 		return nil, fmt.Errorf("server port is required")
 	}
 
-	plainToken, tokenHash, err := generateAPIToken()
+	tokenGen := services.NewTokenGenerator()
+	plainToken, tokenHash, err := tokenGen.GenerateAPIToken("node")
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate API token: %w", err)
 	}
@@ -82,6 +81,7 @@ func NewNode(
 		createdAt:        now,
 		updatedAt:        now,
 		events:           []interface{}{},
+		tokenGenerator:   tokenGen,
 	}
 
 	n.recordEvent(NewNodeCreatedEvent(
@@ -149,6 +149,7 @@ func ReconstructNode(
 		createdAt:         createdAt,
 		updatedAt:         updatedAt,
 		events:            []interface{}{},
+		tokenGenerator:    services.NewTokenGenerator(),
 	}, nil
 }
 
@@ -508,9 +509,12 @@ func (n *Node) UpdateSortOrder(order int) error {
 	return nil
 }
 
-// GenerateAPIToken generates a new API token
 func (n *Node) GenerateAPIToken() (string, error) {
-	plainToken, tokenHash, err := generateAPIToken()
+	if n.tokenGenerator == nil {
+		n.tokenGenerator = services.NewTokenGenerator()
+	}
+
+	plainToken, tokenHash, err := n.tokenGenerator.GenerateAPIToken("node")
 	if err != nil {
 		return "", fmt.Errorf("failed to generate API token: %w", err)
 	}
@@ -531,11 +535,12 @@ func (n *Node) GenerateAPIToken() (string, error) {
 	return plainToken, nil
 }
 
-// VerifyAPIToken verifies the provided API token
 func (n *Node) VerifyAPIToken(plainToken string) bool {
-	hash := sha256.Sum256([]byte(plainToken))
-	tokenHash := hex.EncodeToString(hash[:])
-	return subtle.ConstantTimeCompare([]byte(n.tokenHash), []byte(tokenHash)) == 1
+	if n.tokenGenerator == nil {
+		n.tokenGenerator = services.NewTokenGenerator()
+	}
+	computedHash := n.tokenGenerator.HashToken(plainToken)
+	return subtle.ConstantTimeCompare([]byte(n.tokenHash), []byte(computedHash)) == 1
 }
 
 // RecordTraffic records traffic usage
@@ -648,17 +653,3 @@ func (n *Node) Validate() error {
 }
 
 // generateAPIToken generates a new API token and its hash
-func generateAPIToken() (plainToken string, tokenHash string, err error) {
-	tokenBytes := make([]byte, 32)
-	_, err = rand.Read(tokenBytes)
-	if err != nil {
-		return "", "", err
-	}
-
-	plainToken = "node_" + base64.RawURLEncoding.EncodeToString(tokenBytes)
-
-	hash := sha256.Sum256([]byte(plainToken))
-	tokenHash = hex.EncodeToString(hash[:])
-
-	return plainToken, tokenHash, nil
-}

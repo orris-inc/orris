@@ -47,6 +47,35 @@ definitions:
     - effective_date
     - new_plan_id
     type: object
+  internal_interfaces_http_handlers.CreatePaymentRequest:
+    properties:
+      payment_method:
+        enum:
+        - alipay
+        - wechat
+        - stripe
+        type: string
+      return_url:
+        type: string
+      subscription_id:
+        type: integer
+    required:
+    - payment_method
+    - subscription_id
+    type: object
+  internal_interfaces_http_handlers.CreatePaymentResponse:
+    properties:
+      expired_at:
+        type: string
+      order_no:
+        type: string
+      payment_id:
+        type: integer
+      payment_url:
+        type: string
+      qr_code:
+        type: string
+    type: object
   internal_interfaces_http_handlers.CreatePlanRequest:
     properties:
       api_rate_limit:
@@ -951,6 +980,144 @@ paths:
       summary: Publish announcement
       tags:
       - announcements
+  /api/v1/payments:
+    post:
+      consumes:
+      - application/json
+      description: Create a payment for subscription
+      parameters:
+      - description: Payment data
+        in: body
+        name: payment
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers.CreatePaymentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Payment created successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/internal_interfaces_http_handlers.CreatePaymentResponse'
+              type: object
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Create payment
+      tags:
+      - payments
+  /api/v1/payments/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get payment details by payment ID
+      parameters:
+      - description: Payment ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Payment details
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Payment not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Get payment by ID
+      tags:
+      - payments
+  /api/v1/payments/callback:
+    post:
+      consumes:
+      - application/json
+      description: Handle payment gateway callback notification
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Callback processed successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      summary: Handle payment callback
+      tags:
+      - payments
+  /api/v1/subscriptions/{id}/payments:
+    get:
+      consumes:
+      - application/json
+      description: List all payments for a subscription
+      parameters:
+      - description: Subscription ID
+        in: path
+        name: subscription_id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Payments list
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: List subscription payments
+      tags:
+      - payments
   /auth/check-permission:
     get:
       consumes:

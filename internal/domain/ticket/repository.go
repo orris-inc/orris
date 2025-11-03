@@ -4,6 +4,7 @@ import (
 	"context"
 
 	vo "orris/internal/domain/ticket/value_objects"
+	"orris/internal/shared/query"
 )
 
 type TicketRepository interface {
@@ -13,12 +14,10 @@ type TicketRepository interface {
 	GetByID(ctx context.Context, ticketID uint) (*Ticket, error)
 	GetByNumber(ctx context.Context, number string) (*Ticket, error)
 	List(ctx context.Context, filters TicketFilter) ([]*Ticket, int64, error)
-	GetUserTickets(ctx context.Context, userID uint, filters TicketFilter) ([]*Ticket, int64, error)
-	GetAssignedTickets(ctx context.Context, assigneeID uint, filters TicketFilter) ([]*Ticket, int64, error)
-	GetOverdueTickets(ctx context.Context) ([]*Ticket, error)
 }
 
 type TicketFilter struct {
+	query.BaseFilter
 	Status     *vo.TicketStatus
 	Priority   *vo.Priority
 	Category   *vo.Category
@@ -26,10 +25,6 @@ type TicketFilter struct {
 	AssigneeID *uint
 	Tags       []string
 	Overdue    *bool
-	Page       int
-	PageSize   int
-	SortBy     string
-	SortOrder  string
 }
 
 type CommentRepository interface {

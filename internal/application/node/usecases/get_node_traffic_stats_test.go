@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"orris/internal/domain/node"
+	"orris/internal/shared/query"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -215,11 +216,13 @@ func TestGetNodeTrafficStats_WithPagination(t *testing.T) {
 	}
 
 	filter := node.TrafficStatsFilter{
-		NodeID:   &nodeID,
-		From:     from,
-		To:       to,
-		Page:     1,
-		PageSize: 10,
+		PageFilter: query.PageFilter{
+			Page:     1,
+			PageSize: 10,
+		},
+		NodeID: &nodeID,
+		From:   from,
+		To:     to,
 	}
 
 	repo.On("GetTrafficStats", mock.Anything, filter).Return(expectedTraffic, nil)

@@ -128,12 +128,5 @@ func (uc *ChangePlanUseCase) determineChangeType(oldPlan, newPlan *subscription.
 }
 
 func (uc *ChangePlanUseCase) applyPlanChange(sub *subscription.Subscription, newPlanID uint, changeType ChangeType) error {
-	switch changeType {
-	case ChangeTypeUpgrade:
-		return sub.UpgradePlan(newPlanID)
-	case ChangeTypeDowngrade:
-		return sub.DowngradePlan(newPlanID)
-	default:
-		return fmt.Errorf("invalid change type: %s", changeType)
-	}
+	return sub.ChangePlan(newPlanID)
 }

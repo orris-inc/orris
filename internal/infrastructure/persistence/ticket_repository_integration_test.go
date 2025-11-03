@@ -12,6 +12,7 @@ import (
 
 	"orris/internal/domain/ticket"
 	vo "orris/internal/domain/ticket/value_objects"
+	"orris/internal/shared/query"
 )
 
 func setupTestDB(t *testing.T) *gorm.DB {
@@ -226,8 +227,12 @@ func TestTicketRepository_List(t *testing.T) {
 
 	t.Run("list all tickets", func(t *testing.T) {
 		filter := ticket.TicketFilter{
-			Page:     1,
-			PageSize: 10,
+			BaseFilter: query.BaseFilter{
+				PageFilter: query.PageFilter{
+					Page:     1,
+					PageSize: 10,
+				},
+			},
 		}
 
 		tickets, total, err := repo.List(ctx, filter)
@@ -239,9 +244,13 @@ func TestTicketRepository_List(t *testing.T) {
 	t.Run("filter by category", func(t *testing.T) {
 		category := vo.CategoryTechnical
 		filter := ticket.TicketFilter{
+			BaseFilter: query.BaseFilter{
+				PageFilter: query.PageFilter{
+					Page:     1,
+					PageSize: 10,
+				},
+			},
 			Category: &category,
-			Page:     1,
-			PageSize: 10,
 		}
 
 		tickets, total, err := repo.List(ctx, filter)
@@ -253,9 +262,13 @@ func TestTicketRepository_List(t *testing.T) {
 	t.Run("filter by priority", func(t *testing.T) {
 		priority := vo.PriorityHigh
 		filter := ticket.TicketFilter{
+			BaseFilter: query.BaseFilter{
+				PageFilter: query.PageFilter{
+					Page:     1,
+					PageSize: 10,
+				},
+			},
 			Priority: &priority,
-			Page:     1,
-			PageSize: 10,
 		}
 
 		tickets, total, err := repo.List(ctx, filter)
@@ -267,9 +280,13 @@ func TestTicketRepository_List(t *testing.T) {
 	t.Run("filter by creator ID", func(t *testing.T) {
 		creatorID := uint(1)
 		filter := ticket.TicketFilter{
+			BaseFilter: query.BaseFilter{
+				PageFilter: query.PageFilter{
+					Page:     1,
+					PageSize: 10,
+				},
+			},
 			CreatorID: &creatorID,
-			Page:      1,
-			PageSize:  10,
 		}
 
 		tickets, total, err := repo.List(ctx, filter)
@@ -280,8 +297,12 @@ func TestTicketRepository_List(t *testing.T) {
 
 	t.Run("pagination", func(t *testing.T) {
 		filter := ticket.TicketFilter{
-			Page:     1,
-			PageSize: 2,
+			BaseFilter: query.BaseFilter{
+				PageFilter: query.PageFilter{
+					Page:     1,
+					PageSize: 2,
+				},
+			},
 		}
 
 		tickets, total, err := repo.List(ctx, filter)
@@ -289,7 +310,7 @@ func TestTicketRepository_List(t *testing.T) {
 		assert.Equal(t, int64(3), total)
 		assert.Len(t, tickets, 2)
 
-		filter.Page = 2
+		filter.BaseFilter.PageFilter.Page = 2
 		tickets, total, err = repo.List(ctx, filter)
 		assert.NoError(t, err)
 		assert.Equal(t, int64(3), total)
@@ -298,10 +319,16 @@ func TestTicketRepository_List(t *testing.T) {
 
 	t.Run("sort by created_at desc", func(t *testing.T) {
 		filter := ticket.TicketFilter{
-			Page:      1,
-			PageSize:  10,
-			SortBy:    "created_at",
-			SortOrder: "desc",
+			BaseFilter: query.BaseFilter{
+				PageFilter: query.PageFilter{
+					Page:     1,
+					PageSize: 10,
+				},
+				SortFilter: query.SortFilter{
+					SortBy:    "created_at",
+					SortOrder: "desc",
+				},
+			},
 		}
 
 		tickets, _, err := repo.List(ctx, filter)

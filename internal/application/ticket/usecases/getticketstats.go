@@ -59,10 +59,9 @@ func (uc *GetTicketStatsUseCase) Execute(
 	isAdmin := uc.isAdmin(query.UserRoles)
 	isSupportAgent := uc.isSupportAgent(query.UserRoles)
 
-	filter := ticket.TicketFilter{
-		Page:     1,
-		PageSize: 10000,
-	}
+	filter := ticket.TicketFilter{}
+	filter.Page = 1
+	filter.PageSize = 10000
 
 	if !isAdmin && !isSupportAgent {
 		filter.CreatorID = &query.UserID

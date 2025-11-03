@@ -164,70 +164,48 @@ func ReconstructTicket(
 }
 
 func (t *Ticket) ID() uint {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return t.id
 }
 
 func (t *Ticket) Number() string {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return t.number
 }
 
 func (t *Ticket) Title() string {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return t.title
 }
 
 func (t *Ticket) Description() string {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return t.description
 }
 
 func (t *Ticket) Category() vo.Category {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return t.category
 }
 
 func (t *Ticket) Priority() vo.Priority {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return t.priority
 }
 
 func (t *Ticket) Status() vo.TicketStatus {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return t.status
 }
 
 func (t *Ticket) CreatorID() uint {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return t.creatorID
 }
 
 func (t *Ticket) AssigneeID() *uint {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return t.assigneeID
 }
 
 func (t *Ticket) Tags() []string {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	tagsCopy := make([]string, len(t.tags))
 	copy(tagsCopy, t.tags)
 	return tagsCopy
 }
 
 func (t *Ticket) Metadata() map[string]interface{} {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	metadataCopy := make(map[string]interface{})
 	for k, v := range t.metadata {
 		metadataCopy[k] = v
@@ -236,50 +214,34 @@ func (t *Ticket) Metadata() map[string]interface{} {
 }
 
 func (t *Ticket) SLADueTime() *time.Time {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return t.slaDueTime
 }
 
 func (t *Ticket) ResponseTime() *time.Time {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return t.responseTime
 }
 
 func (t *Ticket) ResolvedTime() *time.Time {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return t.resolvedTime
 }
 
 func (t *Ticket) Version() int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return t.version
 }
 
 func (t *Ticket) CreatedAt() time.Time {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return t.createdAt
 }
 
 func (t *Ticket) UpdatedAt() time.Time {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return t.updatedAt
 }
 
 func (t *Ticket) ClosedAt() *time.Time {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return t.closedAt
 }
 
 func (t *Ticket) Comments() []*Comment {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	commentsCopy := make([]*Comment, len(t.comments))
 	copy(commentsCopy, t.comments)
 	return commentsCopy
@@ -513,9 +475,6 @@ func (t *Ticket) Reopen(reason string, reopenedBy uint) error {
 }
 
 func (t *Ticket) IsOverdue() bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-
 	if t.slaDueTime == nil {
 		return false
 	}
@@ -558,9 +517,6 @@ func (t *Ticket) MarkResolved() error {
 }
 
 func (t *Ticket) CanBeViewedBy(userID uint, userRoles []string) bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-
 	for _, role := range userRoles {
 		if role == "admin" || role == "support_agent" {
 			return true
@@ -579,9 +535,6 @@ func (t *Ticket) CanBeViewedBy(userID uint, userRoles []string) bool {
 }
 
 func (t *Ticket) Validate() error {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-
 	if len(t.title) == 0 {
 		return fmt.Errorf("title is required")
 	}

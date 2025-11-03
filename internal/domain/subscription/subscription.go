@@ -213,7 +213,7 @@ func (s *Subscription) Activate() error {
 		return nil
 	}
 
-	if s.status != vo.StatusInactive && s.status != vo.StatusTrialing {
+	if s.status != vo.StatusInactive && s.status != vo.StatusPendingPayment && s.status != vo.StatusTrialing {
 		return fmt.Errorf("cannot activate subscription with status %s", s.status)
 	}
 
@@ -304,8 +304,7 @@ func (s *Subscription) Renew(endDate time.Time) error {
 	return nil
 }
 
-// UpgradePlan upgrades to a new plan
-func (s *Subscription) UpgradePlan(newPlanID uint) error {
+func (s *Subscription) ChangePlan(newPlanID uint) error {
 	if newPlanID == 0 {
 		return fmt.Errorf("new plan ID is required")
 	}
@@ -315,37 +314,7 @@ func (s *Subscription) UpgradePlan(newPlanID uint) error {
 	}
 
 	if s.status != vo.StatusActive && s.status != vo.StatusTrialing {
-		return fmt.Errorf("cannot upgrade plan for subscription with status %s", s.status)
-	}
-
-	oldPlanID := s.planID
-	s.planID = newPlanID
-	s.updatedAt = time.Now()
-	s.version++
-
-	s.recordEvent(NewSubscriptionPlanChangedEvent(
-		s.id,
-		s.userID,
-		oldPlanID,
-		newPlanID,
-		time.Now(),
-	))
-
-	return nil
-}
-
-// DowngradePlan downgrades to a new plan
-func (s *Subscription) DowngradePlan(newPlanID uint) error {
-	if newPlanID == 0 {
-		return fmt.Errorf("new plan ID is required")
-	}
-
-	if newPlanID == s.planID {
-		return nil
-	}
-
-	if s.status != vo.StatusActive && s.status != vo.StatusTrialing {
-		return fmt.Errorf("cannot downgrade plan for subscription with status %s", s.status)
+		return fmt.Errorf("cannot change plan for subscription with status %s", s.status)
 	}
 
 	oldPlanID := s.planID

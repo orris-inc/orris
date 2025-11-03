@@ -68,12 +68,11 @@ func (uc *ListTicketsUseCase) Execute(
 		query.Page = 1
 	}
 
-	filter := ticket.TicketFilter{
-		Page:      query.Page,
-		PageSize:  query.PageSize,
-		SortBy:    query.SortBy,
-		SortOrder: query.SortOrder,
-	}
+	filter := ticket.TicketFilter{}
+	filter.Page = query.Page
+	filter.PageSize = query.PageSize
+	filter.SortBy = query.SortBy
+	filter.SortOrder = query.SortOrder
 
 	if query.SortBy == "" {
 		filter.SortBy = "created_at"

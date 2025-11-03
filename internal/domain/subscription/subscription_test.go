@@ -476,7 +476,7 @@ func TestRenew(t *testing.T) {
 	}
 }
 
-func TestUpgradePlan(t *testing.T) {
+func TestChangePlan(t *testing.T) {
 	tests := []struct {
 		name          string
 		initialStatus vo.SubscriptionStatus
@@ -486,7 +486,7 @@ func TestUpgradePlan(t *testing.T) {
 		errMsg        string
 	}{
 		{
-			name:          "upgrade active subscription",
+			name:          "change plan for active subscription",
 			initialStatus: vo.StatusActive,
 			currentPlanID: 1,
 			newPlanID:     2,
@@ -508,12 +508,12 @@ func TestUpgradePlan(t *testing.T) {
 			errMsg:        "new plan ID is required",
 		},
 		{
-			name:          "cannot upgrade cancelled",
+			name:          "cannot change plan for cancelled",
 			initialStatus: vo.StatusCancelled,
 			currentPlanID: 1,
 			newPlanID:     2,
 			wantErr:       true,
-			errMsg:        "cannot upgrade plan for subscription with status cancelled",
+			errMsg:        "cannot change plan for subscription with status cancelled",
 		},
 	}
 
@@ -531,7 +531,7 @@ func TestUpgradePlan(t *testing.T) {
 			)
 
 			initialVersion := sub.Version()
-			err := sub.UpgradePlan(tt.newPlanID)
+			err := sub.ChangePlan(tt.newPlanID)
 
 			if tt.wantErr {
 				if err == nil {
@@ -566,7 +566,7 @@ func TestUpgradePlan(t *testing.T) {
 	}
 }
 
-func TestDowngradePlan(t *testing.T) {
+func TestChangePlan_AdditionalCases(t *testing.T) {
 	tests := []struct {
 		name          string
 		initialStatus vo.SubscriptionStatus
@@ -576,7 +576,7 @@ func TestDowngradePlan(t *testing.T) {
 		errMsg        string
 	}{
 		{
-			name:          "downgrade active subscription",
+			name:          "change plan for active subscription",
 			initialStatus: vo.StatusActive,
 			currentPlanID: 2,
 			newPlanID:     1,
@@ -590,12 +590,12 @@ func TestDowngradePlan(t *testing.T) {
 			wantErr:       false,
 		},
 		{
-			name:          "cannot downgrade inactive",
+			name:          "cannot change plan for inactive",
 			initialStatus: vo.StatusInactive,
 			currentPlanID: 2,
 			newPlanID:     1,
 			wantErr:       true,
-			errMsg:        "cannot downgrade plan for subscription with status inactive",
+			errMsg:        "cannot change plan for subscription with status inactive",
 		},
 	}
 
@@ -612,7 +612,7 @@ func TestDowngradePlan(t *testing.T) {
 				1, now, now,
 			)
 
-			err := sub.DowngradePlan(tt.newPlanID)
+			err := sub.ChangePlan(tt.newPlanID)
 
 			if tt.wantErr {
 				if err == nil {

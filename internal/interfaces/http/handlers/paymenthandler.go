@@ -1,0 +1,175 @@
+package handlers
+
+import (
+	"net/http"
+	"strconv"
+
+	"github.com/gin-gonic/gin"
+
+	paymentUsecases "orris/internal/application/payment/usecases"
+	"orris/internal/shared/logger"
+	"orris/internal/shared/utils"
+)
+
+type PaymentHandler struct {
+	createPaymentUC  *paymentUsecases.CreatePaymentUseCase
+	handleCallbackUC *paymentUsecases.HandlePaymentCallbackUseCase
+	logger           logger.Interface
+}
+
+func NewPaymentHandler(
+	createPaymentUC *paymentUsecases.CreatePaymentUseCase,
+	handleCallbackUC *paymentUsecases.HandlePaymentCallbackUseCase,
+	logger logger.Interface,
+) *PaymentHandler {
+	return &PaymentHandler{
+		createPaymentUC:  createPaymentUC,
+		handleCallbackUC: handleCallbackUC,
+		logger:           logger,
+	}
+}
+
+type CreatePaymentRequest struct {
+	SubscriptionID uint   `json:"subscription_id" binding:"required"`
+	PaymentMethod  string `json:"payment_method" binding:"required,oneof=alipay wechat stripe"`
+	ReturnURL      string `json:"return_url"`
+}
+
+type CreatePaymentResponse struct {
+	PaymentID  uint   `json:"payment_id"`
+	OrderNo    string `json:"order_no"`
+	PaymentURL string `json:"payment_url"`
+	QRCode     string `json:"qr_code,omitempty"`
+	ExpiredAt  string `json:"expired_at"`
+}
+
+// @Summary Create payment
+// @Description Create a payment for subscription
+// @Tags payments
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param payment body CreatePaymentRequest true "Payment data"
+// @Success 200 {object} utils.APIResponse{data=CreatePaymentResponse} "Payment created successfully"
+// @Failure 400 {object} utils.APIResponse "Bad request"
+// @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 500 {object} utils.APIResponse "Internal server error"
+// @Router /api/v1/payments [post]
+func (h *PaymentHandler) CreatePayment(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+		return
+	}
+
+	var req CreatePaymentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Errorw("failed to bind request", "error", err)
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid request: "+err.Error())
+		return
+	}
+
+	cmd := paymentUsecases.CreatePaymentCommand{
+		SubscriptionID: req.SubscriptionID,
+		UserID:         userID.(uint),
+		PaymentMethod:  req.PaymentMethod,
+		ReturnURL:      req.ReturnURL,
+	}
+
+	result, err := h.createPaymentUC.Execute(c.Request.Context(), cmd)
+	if err != nil {
+		h.logger.Errorw("failed to create payment", "error", err, "user_id", userID)
+		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to create payment: "+err.Error())
+		return
+	}
+
+	response := CreatePaymentResponse{
+		PaymentID:  result.Payment.ID(),
+		OrderNo:    result.Payment.OrderNo(),
+		PaymentURL: result.PaymentURL,
+		QRCode:     result.QRCode,
+		ExpiredAt:  result.Payment.ExpiredAt().Format("2006-01-02T15:04:05Z07:00"),
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "payment created successfully", response)
+}
+
+// @Summary Handle payment callback
+// @Description Handle payment gateway callback notification
+// @Tags payments
+// @Accept json
+// @Produce json
+// @Success 200 {object} utils.APIResponse "Callback processed successfully"
+// @Failure 400 {object} utils.APIResponse "Bad request"
+// @Failure 500 {object} utils.APIResponse "Internal server error"
+// @Router /api/v1/payments/callback [post]
+func (h *PaymentHandler) HandleCallback(c *gin.Context) {
+	if err := h.handleCallbackUC.Execute(c.Request.Context(), c.Request); err != nil {
+		h.logger.Errorw("failed to handle payment callback", "error", err)
+		utils.ErrorResponse(c, http.StatusBadRequest, "failed to process callback: "+err.Error())
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "callback processed successfully", nil)
+}
+
+// @Summary Get payment by ID
+// @Description Get payment details by payment ID
+// @Tags payments
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path int true "Payment ID"
+// @Success 200 {object} utils.APIResponse "Payment details"
+// @Failure 400 {object} utils.APIResponse "Bad request"
+// @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 404 {object} utils.APIResponse "Payment not found"
+// @Failure 500 {object} utils.APIResponse "Internal server error"
+// @Router /api/v1/payments/{id} [get]
+func (h *PaymentHandler) GetPayment(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+		return
+	}
+
+	paymentIDStr := c.Param("id")
+	paymentID, err := strconv.ParseUint(paymentIDStr, 10, 32)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid payment ID")
+		return
+	}
+
+	h.logger.Infow("get payment", "payment_id", paymentID, "user_id", userID)
+	utils.ErrorResponse(c, http.StatusNotImplemented, "not implemented yet")
+}
+
+// @Summary List subscription payments
+// @Description List all payments for a subscription
+// @Tags payments
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param subscription_id path int true "Subscription ID"
+// @Success 200 {object} utils.APIResponse "Payments list"
+// @Failure 400 {object} utils.APIResponse "Bad request"
+// @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 500 {object} utils.APIResponse "Internal server error"
+// @Router /api/v1/subscriptions/{id}/payments [get]
+func (h *PaymentHandler) ListPayments(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+		return
+	}
+
+	subscriptionIDStr := c.Param("id")
+	subscriptionID, err := strconv.ParseUint(subscriptionIDStr, 10, 32)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID")
+		return
+	}
+
+	h.logger.Infow("list payments", "subscription_id", subscriptionID, "user_id", userID)
+	utils.ErrorResponse(c, http.StatusNotImplemented, "not implemented yet")
+}

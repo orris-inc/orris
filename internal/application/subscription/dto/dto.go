@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"orris/internal/domain/subscription"
+	"orris/internal/shared/mapper"
 )
 
 type SubscriptionDTO struct {
@@ -60,7 +61,36 @@ type SubscriptionTokenDTO struct {
 	CreatedAt      time.Time
 }
 
+var (
+	SubscriptionMapper = mapper.New(
+		func(sub *subscription.Subscription) *SubscriptionDTO {
+			return toSubscriptionDTOInternal(sub, nil)
+		},
+		func(dto *SubscriptionDTO) *subscription.Subscription {
+			return nil
+		},
+	)
+
+	SubscriptionPlanMapper = mapper.New(
+		ToSubscriptionPlanDTO,
+		func(dto *SubscriptionPlanDTO) *subscription.SubscriptionPlan {
+			return nil
+		},
+	)
+
+	SubscriptionTokenMapper = mapper.New(
+		ToSubscriptionTokenDTO,
+		func(dto *SubscriptionTokenDTO) *subscription.SubscriptionToken {
+			return nil
+		},
+	)
+)
+
 func ToSubscriptionDTO(sub *subscription.Subscription, plan *subscription.SubscriptionPlan) *SubscriptionDTO {
+	return toSubscriptionDTOInternal(sub, plan)
+}
+
+func toSubscriptionDTOInternal(sub *subscription.Subscription, plan *subscription.SubscriptionPlan) *SubscriptionDTO {
 	if sub == nil {
 		return nil
 	}

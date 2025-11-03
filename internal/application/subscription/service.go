@@ -50,10 +50,21 @@ func (s *Service) SyncPermissions(ctx context.Context, subscriptionID uint) erro
 	}
 
 	if !sub.IsActive() {
-		s.logger.Infow("subscription is not active, skipping permission sync",
+		s.logger.Infow("subscription is not active, revoking permissions",
 			"subscription_id", subscriptionID,
 			"user_id", sub.UserID(),
 			"status", sub.Status())
+
+		var features []string
+		if plan.Features() != nil {
+			features = plan.Features().Features
+		}
+		permissions := GetPermissionsForFeatures(features)
+		if len(permissions) > 0 {
+			if err := s.permissionService.RevokePermissionsFromUser(ctx, sub.UserID(), permissions); err != nil {
+				s.logger.Errorw("failed to revoke permissions", "error", err)
+			}
+		}
 		return nil
 	}
 
@@ -75,6 +86,15 @@ func (s *Service) SyncPermissions(ctx context.Context, subscriptionID uint) erro
 		"user_id", sub.UserID(),
 		"plan_name", plan.Name(),
 		"permission_count", len(permissions))
+
+	if err := s.permissionService.GrantPermissionsToUser(ctx, sub.UserID(), permissions); err != nil {
+		s.logger.Errorw("failed to grant permissions", "error", err)
+		return fmt.Errorf("failed to sync permissions: %w", err)
+	}
+
+	s.logger.Infow("permissions synced successfully",
+		"subscription_id", subscriptionID,
+		"user_id", sub.UserID())
 
 	return nil
 }

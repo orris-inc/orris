@@ -65,10 +65,14 @@ func (uc *ListNodeGroupsUseCase) Execute(
 	filter := node.NodeGroupFilter{
 		Name:     query.Name,
 		IsPublic: query.IsPublic,
-		Page:     query.Page,
-		PageSize: query.PageSize,
-		SortBy:   query.SortBy,
-		SortDesc: query.SortDesc,
+	}
+	filter.Page = query.Page
+	filter.PageSize = query.PageSize
+	filter.SortBy = query.SortBy
+	if query.SortDesc {
+		filter.SortOrder = "DESC"
+	} else {
+		filter.SortOrder = "ASC"
 	}
 
 	groups, total, err := uc.nodeGroupRepo.List(ctx, filter)
