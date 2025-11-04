@@ -125,7 +125,6 @@ func TestNewTicket(t *testing.T) {
 				assert.Equal(t, tt.description, ticket.Description())
 				assert.Equal(t, vo.StatusNew, ticket.Status())
 				assert.NotNil(t, ticket.SLADueTime())
-				assert.Equal(t, 1, len(ticket.GetEvents()))
 			}
 		})
 	}
@@ -170,8 +169,6 @@ func TestTicket_AssignTo(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, tt.assigneeID, *ticket.AssigneeID())
 				assert.Equal(t, vo.StatusOpen, ticket.Status())
-				events := ticket.GetEvents()
-				assert.Len(t, events, 2)
 			}
 		})
 	}

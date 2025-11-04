@@ -3,7 +3,6 @@ package usecases
 import (
 	"context"
 
-	"orris/internal/domain/shared/events"
 	"orris/internal/shared/errors"
 	"orris/internal/shared/logger"
 )
@@ -19,16 +18,13 @@ type DeleteNodeResult struct {
 }
 
 type DeleteNodeUseCase struct {
-	eventDispatcher events.EventDispatcher
 	logger          logger.Interface
 }
 
 func NewDeleteNodeUseCase(
-	eventDispatcher events.EventDispatcher,
 	logger logger.Interface,
 ) *DeleteNodeUseCase {
 	return &DeleteNodeUseCase{
-		eventDispatcher: eventDispatcher,
 		logger:          logger,
 	}
 }

@@ -319,15 +319,21 @@ func (a *TemplateRepositoryAdapter) FindAll(ctx context.Context) ([]usecases.Not
 }
 
 type UserRepositoryAdapter struct {
-	repo user.RepositoryWithSpecifications
+	repo user.Repository
 }
 
-func NewUserRepositoryAdapter(repo user.RepositoryWithSpecifications) usecases.UserRepository {
+func NewUserRepositoryAdapter(repo user.Repository) usecases.UserRepository {
 	return &UserRepositoryAdapter{repo: repo}
 }
 
 func (a *UserRepositoryAdapter) FindAllActiveUserIDs(ctx context.Context) ([]uint, error) {
-	users, err := a.repo.FindBySpecification(ctx, nil, 10000)
+	// List all users with a large page size to get all active users
+	filter := user.ListFilter{
+		Page:     1,
+		PageSize: 10000,
+		Status:   "active", // Only get active users
+	}
+	users, _, err := a.repo.List(ctx, filter)
 	if err != nil {
 		return nil, err
 	}

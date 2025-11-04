@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"orris/internal/application/user/helpers"
 	"orris/internal/domain/user"
 	vo "orris/internal/domain/user/value_objects"
 	"orris/internal/shared/authorization"
@@ -52,6 +53,7 @@ type HandleOAuthCallbackUseCase struct {
 	githubClient   OAuthCallbackClient
 	jwtService     JWTService
 	oauthInitiator *InitiateOAuthLoginUseCase
+	authHelper     *helpers.AuthHelper
 	logger         logger.Interface
 }
 
@@ -65,6 +67,7 @@ func NewHandleOAuthCallbackUseCase(
 	oauthInitiator *InitiateOAuthLoginUseCase,
 	roleRepo interface{},
 	permissionService interface{},
+	authHelper *helpers.AuthHelper,
 	logger logger.Interface,
 ) *HandleOAuthCallbackUseCase {
 	return &HandleOAuthCallbackUseCase{
@@ -75,6 +78,7 @@ func NewHandleOAuthCallbackUseCase(
 		githubClient:   githubClient,
 		jwtService:     jwtService,
 		oauthInitiator: oauthInitiator,
+		authHelper:     authHelper,
 		logger:         logger,
 	}
 }
@@ -163,7 +167,7 @@ func (uc *HandleOAuthCallbackUseCase) Execute(ctx context.Context, cmd HandleOAu
 
 			isNewUser = true
 
-			isFirstUser, err := uc.isFirstUser(ctx)
+			isFirstUser, err := uc.authHelper.IsFirstUser(ctx)
 			if err != nil {
 				uc.logger.Errorw("failed to check if first user", "error", err)
 			} else if isFirstUser {
@@ -215,8 +219,8 @@ func (uc *HandleOAuthCallbackUseCase) Execute(ctx context.Context, cmd HandleOAu
 		return nil, fmt.Errorf("failed to generate tokens: %w", err)
 	}
 
-	session.TokenHash = hashToken(tokens.AccessToken)
-	session.RefreshTokenHash = hashToken(tokens.RefreshToken)
+	session.TokenHash = uc.authHelper.HashToken(tokens.AccessToken)
+	session.RefreshTokenHash = uc.authHelper.HashToken(tokens.RefreshToken)
 
 	if err := uc.sessionRepo.Create(session); err != nil {
 		uc.logger.Errorw("failed to create session in database", "error", err)
@@ -232,13 +236,4 @@ func (uc *HandleOAuthCallbackUseCase) Execute(ctx context.Context, cmd HandleOAu
 		ExpiresIn:    tokens.ExpiresIn,
 		IsNewUser:    isNewUser,
 	}, nil
-}
-
-func (uc *HandleOAuthCallbackUseCase) isFirstUser(ctx context.Context) (bool, error) {
-	filter := user.ListFilter{Page: 1, PageSize: 1}
-	_, total, err := uc.userRepo.List(ctx, filter)
-	if err != nil {
-		return false, fmt.Errorf("failed to count users: %w", err)
-	}
-	return total == 1, nil
 }

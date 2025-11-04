@@ -48,16 +48,6 @@ type TrafficQueryRequest struct {
 	Limit     int        `json:"limit,omitempty" form:"limit"`
 }
 
-type BulkResetTrafficRequest struct {
-	NodeIDs []uint `json:"node_ids" binding:"required,min=1"`
-}
-
-type BulkResetTrafficResponse struct {
-	Successful []uint   `json:"successful"`
-	Failed     []uint   `json:"failed"`
-	Errors     []string `json:"errors,omitempty"`
-}
-
 func CalculateUsagePercent(used, limit uint64) float64 {
 	if limit == 0 {
 		return 0

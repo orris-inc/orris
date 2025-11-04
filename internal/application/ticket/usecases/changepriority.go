@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"orris/internal/domain/shared/events"
 	"orris/internal/domain/ticket"
 	vo "orris/internal/domain/ticket/value_objects"
 	"orris/internal/shared/errors"
@@ -29,20 +28,17 @@ type ChangePriorityExecutor interface {
 }
 
 type ChangePriorityUseCase struct {
-	ticketRepo      ticket.TicketRepository
-	eventDispatcher events.EventDispatcher
-	logger          logger.Interface
+	ticketRepo ticket.TicketRepository
+	logger     logger.Interface
 }
 
 func NewChangePriorityUseCase(
 	ticketRepo ticket.TicketRepository,
-	eventDispatcher events.EventDispatcher,
 	logger logger.Interface,
 ) *ChangePriorityUseCase {
 	return &ChangePriorityUseCase{
-		ticketRepo:      ticketRepo,
-		eventDispatcher: eventDispatcher,
-		logger:          logger,
+		ticketRepo: ticketRepo,
+		logger:     logger,
 	}
 }
 
@@ -79,14 +75,6 @@ func (uc *ChangePriorityUseCase) Execute(
 	if err := uc.ticketRepo.Update(ctx, ticketAggregate); err != nil {
 		uc.logger.Errorw("failed to update ticket", "error", err)
 		return nil, errors.NewInternalError("failed to update ticket")
-	}
-
-	for _, event := range ticketAggregate.GetEvents() {
-		if domainEvent, ok := event.(events.DomainEvent); ok {
-			if err := uc.eventDispatcher.Publish(domainEvent); err != nil {
-				uc.logger.Warnw("failed to dispatch event", "error", err)
-			}
-		}
 	}
 
 	uc.logger.Infow("ticket priority changed successfully",

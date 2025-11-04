@@ -3,7 +3,6 @@ package node
 import (
 	"crypto/subtle"
 	"fmt"
-	"sync"
 	"time"
 
 	vo "orris/internal/domain/node/value_objects"
@@ -31,8 +30,6 @@ type Node struct {
 	version           int
 	createdAt         time.Time
 	updatedAt         time.Time
-	events            []interface{}
-	mu                sync.RWMutex
 	tokenGenerator    services.TokenGenerator
 }
 
@@ -80,18 +77,8 @@ func NewNode(
 		version:          1,
 		createdAt:        now,
 		updatedAt:        now,
-		events:           []interface{}{},
 		tokenGenerator:   tokenGen,
 	}
-
-	n.recordEvent(NewNodeCreatedEvent(
-		n.id,
-		n.name,
-		n.serverAddress.Value(),
-		n.serverPort,
-		n.status.String(),
-		0,
-	))
 
 	return n, nil
 }
@@ -148,7 +135,6 @@ func ReconstructNode(
 		version:           version,
 		createdAt:         createdAt,
 		updatedAt:         updatedAt,
-		events:            []interface{}{},
 		tokenGenerator:    services.NewTokenGenerator(),
 	}, nil
 }
@@ -265,17 +251,9 @@ func (n *Node) Activate() error {
 		return fmt.Errorf("cannot activate node with status %s", n.status)
 	}
 
-	oldStatus := n.status
 	n.status = vo.NodeStatusActive
 	n.updatedAt = time.Now()
 	n.version++
-
-	n.recordEvent(NewNodeStatusChangedEvent(
-		n.id,
-		oldStatus.String(),
-		n.status.String(),
-		"Node activated",
-	))
 
 	return nil
 }
@@ -290,17 +268,9 @@ func (n *Node) Deactivate() error {
 		return fmt.Errorf("cannot deactivate node with status %s", n.status)
 	}
 
-	oldStatus := n.status
 	n.status = vo.NodeStatusInactive
 	n.updatedAt = time.Now()
 	n.version++
-
-	n.recordEvent(NewNodeStatusChangedEvent(
-		n.id,
-		oldStatus.String(),
-		n.status.String(),
-		"Node deactivated",
-	))
 
 	return nil
 }
@@ -319,18 +289,10 @@ func (n *Node) EnterMaintenance(reason string) error {
 		return fmt.Errorf("maintenance reason is required")
 	}
 
-	oldStatus := n.status
 	n.status = vo.NodeStatusMaintenance
 	n.maintenanceReason = &reason
 	n.updatedAt = time.Now()
 	n.version++
-
-	n.recordEvent(NewNodeStatusChangedEvent(
-		n.id,
-		oldStatus.String(),
-		n.status.String(),
-		reason,
-	))
 
 	return nil
 }
@@ -341,18 +303,10 @@ func (n *Node) ExitMaintenance() error {
 		return fmt.Errorf("node is not in maintenance mode")
 	}
 
-	oldStatus := n.status
 	n.status = vo.NodeStatusActive
 	n.maintenanceReason = nil
 	n.updatedAt = time.Now()
 	n.version++
-
-	n.recordEvent(NewNodeStatusChangedEvent(
-		n.id,
-		oldStatus.String(),
-		n.status.String(),
-		"Exited maintenance mode",
-	))
 
 	return nil
 }
@@ -363,18 +317,9 @@ func (n *Node) UpdateServerAddress(address vo.ServerAddress) error {
 		return nil
 	}
 
-	oldAddress := n.serverAddress.Value()
 	n.serverAddress = address
 	n.updatedAt = time.Now()
 	n.version++
-
-	n.recordEvent(NewNodeUpdatedEvent(
-		n.id,
-		[]string{"server_address"},
-		map[string]interface{}{"server_address": oldAddress},
-		map[string]interface{}{"server_address": address.Value()},
-		0,
-	))
 
 	return nil
 }
@@ -389,18 +334,9 @@ func (n *Node) UpdateServerPort(port uint16) error {
 		return nil
 	}
 
-	oldPort := n.serverPort
 	n.serverPort = port
 	n.updatedAt = time.Now()
 	n.version++
-
-	n.recordEvent(NewNodeUpdatedEvent(
-		n.id,
-		[]string{"server_port"},
-		map[string]interface{}{"server_port": oldPort},
-		map[string]interface{}{"server_port": port},
-		0,
-	))
 
 	return nil
 }
@@ -411,13 +347,6 @@ func (n *Node) UpdateEncryption(config vo.EncryptionConfig) error {
 	n.updatedAt = time.Now()
 	n.version++
 
-	n.recordEvent(NewNodeUpdatedEvent(
-		n.id,
-		[]string{"encryption_config"},
-		map[string]interface{}{},
-		map[string]interface{}{},
-		0,
-	))
 
 	return nil
 }
@@ -428,13 +357,6 @@ func (n *Node) UpdatePlugin(config *vo.PluginConfig) error {
 	n.updatedAt = time.Now()
 	n.version++
 
-	n.recordEvent(NewNodeUpdatedEvent(
-		n.id,
-		[]string{"plugin_config"},
-		map[string]interface{}{},
-		map[string]interface{}{},
-		0,
-	))
 
 	return nil
 }
@@ -445,13 +367,6 @@ func (n *Node) UpdateMetadata(metadata vo.NodeMetadata) error {
 	n.updatedAt = time.Now()
 	n.version++
 
-	n.recordEvent(NewNodeUpdatedEvent(
-		n.id,
-		[]string{"metadata"},
-		map[string]interface{}{},
-		map[string]interface{}{},
-		0,
-	))
 
 	return nil
 }
@@ -466,18 +381,9 @@ func (n *Node) UpdateName(name string) error {
 		return nil
 	}
 
-	oldName := n.name
 	n.name = name
 	n.updatedAt = time.Now()
 	n.version++
-
-	n.recordEvent(NewNodeUpdatedEvent(
-		n.id,
-		[]string{"name"},
-		map[string]interface{}{"name": oldName},
-		map[string]interface{}{"name": name},
-		0,
-	))
 
 	return nil
 }
@@ -524,13 +430,6 @@ func (n *Node) GenerateAPIToken() (string, error) {
 	n.updatedAt = time.Now()
 	n.version++
 
-	n.recordEvent(NewNodeUpdatedEvent(
-		n.id,
-		[]string{"api_token"},
-		map[string]interface{}{},
-		map[string]interface{}{},
-		0,
-	))
 
 	return plainToken, nil
 }
@@ -553,11 +452,6 @@ func (n *Node) RecordTraffic(upload, download uint64) error {
 	n.updatedAt = time.Now()
 
 	if n.IsTrafficExceeded() {
-		n.recordEvent(NewNodeTrafficExceededEvent(
-			n.id,
-			n.trafficLimit,
-			n.trafficUsed,
-		))
 	}
 
 	return nil
@@ -578,13 +472,6 @@ func (n *Node) ResetTraffic() error {
 	n.updatedAt = time.Now()
 	n.version++
 
-	n.recordEvent(NewNodeUpdatedEvent(
-		n.id,
-		[]string{"traffic_used"},
-		map[string]interface{}{"traffic_used": n.trafficUsed},
-		map[string]interface{}{"traffic_used": uint64(0)},
-		0,
-	))
 
 	return nil
 }
@@ -610,29 +497,6 @@ func (n *Node) GetAPIToken() string {
 // ClearAPIToken clears the plain API token from memory
 func (n *Node) ClearAPIToken() {
 	n.apiToken = ""
-}
-
-// recordEvent records a domain event
-func (n *Node) recordEvent(event interface{}) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	n.events = append(n.events, event)
-}
-
-// GetEvents returns and clears recorded domain events
-func (n *Node) GetEvents() []interface{} {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	events := n.events
-	n.events = []interface{}{}
-	return events
-}
-
-// ClearEvents clears all recorded events
-func (n *Node) ClearEvents() {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	n.events = []interface{}{}
 }
 
 // Validate performs domain-level validation

@@ -27,8 +27,6 @@ func (u *User) SetPassword(password *vo.Password, hasher PasswordHasher) error {
 	u.updatedAt = time.Now()
 	u.version++
 
-	u.recordEvent(NewUserPasswordChangedEvent(u.id))
-
 	return nil
 }
 
@@ -87,8 +85,6 @@ func (u *User) VerifyEmail(plainToken string) error {
 	u.updatedAt = time.Now()
 	u.version++
 
-	u.recordEvent(NewUserEmailVerifiedEvent(u.id, u.email.String()))
-
 	return nil
 }
 
@@ -101,8 +97,6 @@ func (u *User) GeneratePasswordResetToken() (*vo.Token, error) {
 	u.passwordResetToken = stringPtr(token.Hash())
 	u.passwordResetExpiresAt = timePtr(time.Now().Add(30 * time.Minute))
 	u.updatedAt = time.Now()
-
-	u.recordEvent(NewUserPasswordResetRequestedEvent(u.id, u.email.String()))
 
 	return token, nil
 }
@@ -149,7 +143,6 @@ func (u *User) recordFailedLogin() {
 	if u.failedLoginAttempts >= maxAttempts {
 		lockDuration := 30 * time.Minute
 		u.lockedUntil = timePtr(time.Now().Add(lockDuration))
-		u.recordEvent(NewUserAccountLockedEvent(u.id, maxAttempts, lockDuration))
 	}
 }
 

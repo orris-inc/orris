@@ -6,6 +6,7 @@ import (
 
 	"orris/internal/domain/ticket"
 	vo "orris/internal/domain/ticket/value_objects"
+	"orris/internal/shared/auth"
 	"orris/internal/shared/logger"
 )
 
@@ -56,8 +57,8 @@ func (uc *GetTicketStatsUseCase) Execute(
 		ByCategory: make(map[string]int64),
 	}
 
-	isAdmin := uc.isAdmin(query.UserRoles)
-	isSupportAgent := uc.isSupportAgent(query.UserRoles)
+	isAdmin := auth.IsAdmin(query.UserRoles)
+	isSupportAgent := auth.IsSupportAgent(query.UserRoles)
 
 	filter := ticket.TicketFilter{}
 	filter.Page = 1
@@ -116,7 +117,7 @@ func (uc *GetTicketStatsUseCase) Execute(
 	now := time.Now()
 
 	for _, t := range tickets {
-		if !uc.canViewTicket(t, query.UserID, query.UserRoles) {
+		if !t.CanBeViewedBy(query.UserID, query.UserRoles) {
 			continue
 		}
 
@@ -144,26 +145,4 @@ func (uc *GetTicketStatsUseCase) Execute(
 		"overdue", result.OverdueTickets)
 
 	return result, nil
-}
-
-func (uc *GetTicketStatsUseCase) canViewTicket(t *ticket.Ticket, userID uint, userRoles []string) bool {
-	return t.CanBeViewedBy(userID, userRoles)
-}
-
-func (uc *GetTicketStatsUseCase) isAdmin(roles []string) bool {
-	for _, role := range roles {
-		if role == "admin" {
-			return true
-		}
-	}
-	return false
-}
-
-func (uc *GetTicketStatsUseCase) isSupportAgent(roles []string) bool {
-	for _, role := range roles {
-		if role == "support_agent" {
-			return true
-		}
-	}
-	return false
 }

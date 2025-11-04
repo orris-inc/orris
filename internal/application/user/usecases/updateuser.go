@@ -14,14 +14,14 @@ import (
 
 // UpdateUserUseCase handles the business logic for updating a user
 type UpdateUserUseCase struct {
-	userRepo        domainUser.RepositoryWithSpecifications
+	userRepo        domainUser.Repository
 	eventDispatcher events.EventDispatcher
 	logger          logger.Interface
 }
 
 // NewUpdateUserUseCase creates a new update user use case
 func NewUpdateUserUseCase(
-	userRepo domainUser.RepositoryWithSpecifications,
+	userRepo domainUser.Repository,
 	eventDispatcher events.EventDispatcher,
 	logger logger.Interface,
 ) *UpdateUserUseCase {

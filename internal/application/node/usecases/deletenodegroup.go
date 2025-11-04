@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"orris/internal/domain/node"
-	"orris/internal/domain/shared/events"
 	"orris/internal/shared/errors"
 	"orris/internal/shared/logger"
 )
@@ -21,18 +20,15 @@ type DeleteNodeGroupResult struct {
 
 type DeleteNodeGroupUseCase struct {
 	nodeGroupRepo   node.NodeGroupRepository
-	eventDispatcher events.EventDispatcher
 	logger          logger.Interface
 }
 
 func NewDeleteNodeGroupUseCase(
 	nodeGroupRepo node.NodeGroupRepository,
-	eventDispatcher events.EventDispatcher,
 	logger logger.Interface,
 ) *DeleteNodeGroupUseCase {
 	return &DeleteNodeGroupUseCase{
 		nodeGroupRepo:   nodeGroupRepo,
-		eventDispatcher: eventDispatcher,
 		logger:          logger,
 	}
 }

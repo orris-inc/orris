@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"orris/internal/domain/node"
-	"orris/internal/domain/shared/events"
 	"orris/internal/shared/errors"
 	"orris/internal/shared/logger"
 )
@@ -29,18 +28,15 @@ type ResetNodeTrafficResult struct {
 
 type ResetNodeTrafficUseCase struct {
 	trafficRepo     node.NodeTrafficRepository
-	eventDispatcher events.EventDispatcher
 	logger          logger.Interface
 }
 
 func NewResetNodeTrafficUseCase(
 	trafficRepo node.NodeTrafficRepository,
-	eventDispatcher events.EventDispatcher,
 	logger logger.Interface,
 ) *ResetNodeTrafficUseCase {
 	return &ResetNodeTrafficUseCase{
 		trafficRepo:     trafficRepo,
-		eventDispatcher: eventDispatcher,
 		logger:          logger,
 	}
 }

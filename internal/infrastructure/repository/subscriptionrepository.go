@@ -7,7 +7,6 @@ import (
 
 	"gorm.io/gorm"
 
-	domainEvents "orris/internal/domain/shared/events"
 	"orris/internal/domain/subscription"
 	"orris/internal/infrastructure/persistence/mappers"
 	"orris/internal/infrastructure/persistence/models"
@@ -15,22 +14,19 @@ import (
 )
 
 type SubscriptionRepositoryImpl struct {
-	db              *gorm.DB
-	mapper          mappers.SubscriptionMapper
-	eventDispatcher domainEvents.EventDispatcher
-	logger          logger.Interface
+	db     *gorm.DB
+	mapper mappers.SubscriptionMapper
+	logger logger.Interface
 }
 
 func NewSubscriptionRepository(
 	db *gorm.DB,
-	eventDispatcher domainEvents.EventDispatcher,
 	logger logger.Interface,
 ) subscription.SubscriptionRepository {
 	return &SubscriptionRepositoryImpl{
-		db:              db,
-		mapper:          mappers.NewSubscriptionMapper(),
-		eventDispatcher: eventDispatcher,
-		logger:          logger,
+		db:     db,
+		mapper: mappers.NewSubscriptionMapper(),
+		logger: logger,
 	}
 }
 
@@ -49,17 +45,6 @@ func (r *SubscriptionRepositoryImpl) Create(ctx context.Context, subscriptionEnt
 	if err := subscriptionEntity.SetID(model.ID); err != nil {
 		r.logger.Errorw("failed to set subscription ID", "error", err)
 		return fmt.Errorf("failed to set subscription ID: %w", err)
-	}
-
-	if r.eventDispatcher != nil {
-		events := subscriptionEntity.GetEvents()
-		for _, event := range events {
-			if domainEvent, ok := event.(domainEvents.DomainEvent); ok {
-				if err := r.eventDispatcher.Publish(domainEvent); err != nil {
-					r.logger.Errorw("failed to publish domain event", "event_type", domainEvent.GetEventType(), "error", err)
-				}
-			}
-		}
 	}
 
 	r.logger.Infow("subscription created successfully", "id", model.ID, "user_id", model.UserID, "plan_id", model.PlanID)
@@ -159,17 +144,6 @@ func (r *SubscriptionRepositoryImpl) Update(ctx context.Context, subscriptionEnt
 
 		if result.RowsAffected == 0 {
 			return fmt.Errorf("subscription not found or version mismatch (optimistic lock failed)")
-		}
-
-		if r.eventDispatcher != nil {
-			events := subscriptionEntity.GetEvents()
-			for _, event := range events {
-				if domainEvent, ok := event.(domainEvents.DomainEvent); ok {
-					if err := r.eventDispatcher.Publish(domainEvent); err != nil {
-						r.logger.Errorw("failed to publish domain event", "event_type", domainEvent.GetEventType(), "error", err)
-					}
-				}
-			}
 		}
 
 		return nil

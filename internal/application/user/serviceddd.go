@@ -20,7 +20,7 @@ type ServiceDDD struct {
 
 // NewServiceDDD creates a new DDD application service
 func NewServiceDDD(
-	userRepo domainUser.RepositoryWithSpecifications,
+	userRepo domainUser.Repository,
 	eventDispatcher events.EventDispatcher,
 	logger logger.Interface,
 ) *ServiceDDD {

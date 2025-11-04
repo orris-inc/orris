@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"orris/internal/domain/shared/events"
 	"orris/internal/domain/ticket"
+	"orris/internal/shared/auth"
 	"orris/internal/shared/logger"
 )
 
@@ -24,23 +24,20 @@ type AddCommentResult struct {
 }
 
 type AddCommentUseCase struct {
-	ticketRepo      ticket.TicketRepository
-	commentRepo     ticket.CommentRepository
-	eventDispatcher events.EventDispatcher
-	logger          logger.Interface
+	ticketRepo  ticket.TicketRepository
+	commentRepo ticket.CommentRepository
+	logger      logger.Interface
 }
 
 func NewAddCommentUseCase(
 	ticketRepo ticket.TicketRepository,
 	commentRepo ticket.CommentRepository,
-	eventDispatcher events.EventDispatcher,
 	logger logger.Interface,
 ) *AddCommentUseCase {
 	return &AddCommentUseCase{
-		ticketRepo:      ticketRepo,
-		commentRepo:     commentRepo,
-		eventDispatcher: eventDispatcher,
-		logger:          logger,
+		ticketRepo:  ticketRepo,
+		commentRepo: commentRepo,
+		logger:      logger,
 	}
 }
 
@@ -59,14 +56,7 @@ func (uc *AddCommentUseCase) Execute(ctx context.Context, cmd AddCommentCommand)
 	}
 
 	if cmd.IsInternal {
-		hasPermission := false
-		for _, role := range cmd.UserRoles {
-			if role == "admin" || role == "support_agent" {
-				hasPermission = true
-				break
-			}
-		}
-		if !hasPermission {
+		if !auth.IsAdminOrAgent(cmd.UserRoles) {
 			uc.logger.Warnw("user cannot create internal comment", "user_id", cmd.UserID)
 			return nil, fmt.Errorf("permission denied: only admin/support_agent can create internal comments")
 		}
@@ -91,15 +81,6 @@ func (uc *AddCommentUseCase) Execute(ctx context.Context, cmd AddCommentCommand)
 	if err := uc.ticketRepo.Update(ctx, t); err != nil {
 		uc.logger.Errorw("failed to update ticket", "error", err)
 		return nil, fmt.Errorf("failed to update ticket: %w", err)
-	}
-
-	domainEvents := t.GetEvents()
-	for _, event := range domainEvents {
-		if domainEvent, ok := event.(events.DomainEvent); ok {
-			if err := uc.eventDispatcher.Publish(domainEvent); err != nil {
-				uc.logger.Warnw("failed to publish event", "event_type", domainEvent.GetEventType(), "error", err)
-			}
-		}
 	}
 
 	result := &AddCommentResult{

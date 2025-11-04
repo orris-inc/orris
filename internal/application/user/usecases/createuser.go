@@ -7,27 +7,25 @@ import (
 	"orris/internal/application/user/dto"
 	"orris/internal/domain/shared/events"
 	domainUser "orris/internal/domain/user"
-	"orris/internal/domain/user/specifications"
+	vo "orris/internal/domain/user/value_objects"
 	"orris/internal/shared/errors"
 	"orris/internal/shared/logger"
 )
 
 // CreateUserUseCase handles the business logic for creating a user
 type CreateUserUseCase struct {
-	userFactory     *domainUser.UserFactory
-	userRepo        domainUser.RepositoryWithSpecifications
+	userRepo        domainUser.Repository
 	eventDispatcher events.EventDispatcher
 	logger          logger.Interface
 }
 
 // NewCreateUserUseCase creates a new create user use case
 func NewCreateUserUseCase(
-	userRepo domainUser.RepositoryWithSpecifications,
+	userRepo domainUser.Repository,
 	eventDispatcher events.EventDispatcher,
 	logger logger.Interface,
 ) *CreateUserUseCase {
 	return &CreateUserUseCase{
-		userFactory:     domainUser.NewUserFactory(),
 		userRepo:        userRepo,
 		eventDispatcher: eventDispatcher,
 		logger:          logger,
@@ -39,21 +37,33 @@ func (uc *CreateUserUseCase) Execute(ctx context.Context, request dto.CreateUser
 	// Log the start of the use case
 	uc.logger.Infow("executing create user use case", "email", request.Email)
 
-	// Check if user already exists using specification
-	emailSpec := specifications.NewEmailSpecification(request.Email)
-	existingUsers, err := uc.userRepo.FindBySpecification(ctx, emailSpec, 1)
+	// Check if user already exists using GetByEmail
+	existingUser, err := uc.userRepo.GetByEmail(ctx, request.Email)
 	if err != nil {
 		uc.logger.Errorw("database error while checking for existing user", "email", request.Email, "error", err)
 		return nil, fmt.Errorf("failed to check existing user: %w", err)
 	}
 
-	if len(existingUsers) > 0 {
+	if existingUser != nil {
 		uc.logger.Warnw("user with email already exists", "email", request.Email)
 		return nil, errors.NewConflictError("user with this email already exists", request.Email)
 	}
 
-	// Create user using factory
-	userEntity, err := uc.userFactory.CreateUser(request.Email, request.Name)
+	// Create value objects
+	email, err := vo.NewEmail(request.Email)
+	if err != nil {
+		uc.logger.Errorw("invalid email", "error", err)
+		return nil, fmt.Errorf("invalid email: %w", err)
+	}
+
+	name, err := vo.NewName(request.Name)
+	if err != nil {
+		uc.logger.Errorw("invalid name", "error", err)
+		return nil, fmt.Errorf("invalid name: %w", err)
+	}
+
+	// Create user using constructor
+	userEntity, err := domainUser.NewUser(email, name)
 	if err != nil {
 		uc.logger.Errorw("failed to create user entity", "error", err)
 		return nil, fmt.Errorf("failed to create user: %w", err)

@@ -2,7 +2,6 @@ package subscription
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
 	vo "orris/internal/domain/subscription/value_objects"
@@ -25,8 +24,6 @@ type Subscription struct {
 	version            int
 	createdAt          time.Time
 	updatedAt          time.Time
-	events             []interface{}
-	mu                 sync.RWMutex
 }
 
 // NewSubscription creates a new subscription
@@ -55,17 +52,7 @@ func NewSubscription(userID, planID uint, startDate, endDate time.Time, autoRene
 		version:            1,
 		createdAt:          now,
 		updatedAt:          now,
-		events:             []interface{}{},
 	}
-
-	s.recordEvent(NewSubscriptionCreatedEvent(
-		s.id,
-		s.userID,
-		s.planID,
-		s.status.String(),
-		s.startDate,
-		s.endDate,
-	))
 
 	return s, nil
 }
@@ -116,7 +103,6 @@ func ReconstructSubscription(
 		version:            version,
 		createdAt:          createdAt,
 		updatedAt:          updatedAt,
-		events:             []interface{}{},
 	}, nil
 }
 
@@ -225,13 +211,6 @@ func (s *Subscription) Activate() error {
 	s.updatedAt = time.Now()
 	s.version++
 
-	s.recordEvent(NewSubscriptionActivatedEvent(
-		s.id,
-		s.userID,
-		s.planID,
-		time.Now(),
-	))
-
 	return nil
 }
 
@@ -260,14 +239,6 @@ func (s *Subscription) Cancel(reason string) error {
 	s.updatedAt = now
 	s.version++
 
-	s.recordEvent(NewSubscriptionCancelledEvent(
-		s.id,
-		s.userID,
-		s.planID,
-		reason,
-		now,
-	))
-
 	return nil
 }
 
@@ -281,7 +252,6 @@ func (s *Subscription) Renew(endDate time.Time) error {
 		return fmt.Errorf("new end date must be after current end date")
 	}
 
-	oldEndDate := s.endDate
 	s.endDate = endDate
 	s.currentPeriodStart = s.currentPeriodEnd
 	s.currentPeriodEnd = endDate
@@ -291,15 +261,6 @@ func (s *Subscription) Renew(endDate time.Time) error {
 	if s.status == vo.StatusExpired {
 		s.status = vo.StatusActive
 	}
-
-	s.recordEvent(NewSubscriptionRenewedEvent(
-		s.id,
-		s.userID,
-		s.planID,
-		oldEndDate,
-		endDate,
-		time.Now(),
-	))
 
 	return nil
 }
@@ -317,18 +278,9 @@ func (s *Subscription) ChangePlan(newPlanID uint) error {
 		return fmt.Errorf("cannot change plan for subscription with status %s", s.status)
 	}
 
-	oldPlanID := s.planID
 	s.planID = newPlanID
 	s.updatedAt = time.Now()
 	s.version++
-
-	s.recordEvent(NewSubscriptionPlanChangedEvent(
-		s.id,
-		s.userID,
-		oldPlanID,
-		newPlanID,
-		time.Now(),
-	))
 
 	return nil
 }
@@ -357,13 +309,6 @@ func (s *Subscription) MarkAsExpired() error {
 	s.updatedAt = time.Now()
 	s.version++
 
-	s.recordEvent(NewSubscriptionExpiredEvent(
-		s.id,
-		s.userID,
-		s.planID,
-		time.Now(),
-	))
-
 	return nil
 }
 
@@ -390,29 +335,6 @@ func (s *Subscription) UpdateCurrentPeriod(start, end time.Time) error {
 	s.version++
 
 	return nil
-}
-
-// recordEvent records a domain event
-func (s *Subscription) recordEvent(event interface{}) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.events = append(s.events, event)
-}
-
-// GetEvents returns and clears recorded domain events
-func (s *Subscription) GetEvents() []interface{} {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	events := s.events
-	s.events = []interface{}{}
-	return events
-}
-
-// ClearEvents clears all recorded events
-func (s *Subscription) ClearEvents() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.events = []interface{}{}
 }
 
 // Validate performs domain-level validation

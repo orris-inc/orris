@@ -28,7 +28,6 @@ type Ticket struct {
 	updatedAt    time.Time
 	closedAt     *time.Time
 	comments     []*Comment
-	events       []interface{}
 	mu           sync.RWMutex
 }
 
@@ -78,18 +77,7 @@ func NewTicket(
 		createdAt:   now,
 		updatedAt:   now,
 		comments:    []*Comment{},
-		events:      []interface{}{},
 	}
-
-	t.recordEvent(NewTicketCreatedEvent(
-		t.id,
-		t.number,
-		t.title,
-		t.creatorID,
-		t.priority.String(),
-		t.category.String(),
-		now,
-	))
 
 	return t, nil
 }
@@ -159,7 +147,6 @@ func ReconstructTicket(
 		updatedAt:    updatedAt,
 		closedAt:     closedAt,
 		comments:     []*Comment{},
-		events:       []interface{}{},
 	}, nil
 }
 
@@ -291,13 +278,6 @@ func (t *Ticket) AssignTo(assigneeID uint, assignedBy uint) error {
 		t.status = vo.StatusOpen
 	}
 
-	t.recordEventUnsafe(NewTicketAssignedEvent(
-		t.id,
-		assigneeID,
-		assignedBy,
-		time.Now(),
-	))
-
 	return nil
 }
 
@@ -317,7 +297,6 @@ func (t *Ticket) ChangeStatus(newStatus vo.TicketStatus, changedBy uint) error {
 		return fmt.Errorf("cannot transition from %s to %s", t.status, newStatus)
 	}
 
-	oldStatus := t.status
 	t.status = newStatus
 	t.updatedAt = time.Now()
 	t.version++
@@ -337,14 +316,6 @@ func (t *Ticket) ChangeStatus(newStatus vo.TicketStatus, changedBy uint) error {
 		t.resolvedTime = nil
 	}
 
-	t.recordEventUnsafe(NewTicketStatusChangedEvent(
-		t.id,
-		oldStatus.String(),
-		newStatus.String(),
-		changedBy,
-		time.Now(),
-	))
-
 	return nil
 }
 
@@ -360,7 +331,6 @@ func (t *Ticket) ChangePriority(newPriority vo.Priority, changedBy uint) error {
 		return nil
 	}
 
-	oldPriority := t.priority
 	t.priority = newPriority
 	t.updatedAt = time.Now()
 	t.version++
@@ -369,14 +339,6 @@ func (t *Ticket) ChangePriority(newPriority vo.Priority, changedBy uint) error {
 		newSLADueTime := t.createdAt.Add(time.Duration(newPriority.GetSLAHours()) * time.Hour)
 		t.slaDueTime = &newSLADueTime
 	}
-
-	t.recordEventUnsafe(NewTicketPriorityChangedEvent(
-		t.id,
-		oldPriority.String(),
-		newPriority.String(),
-		changedBy,
-		time.Now(),
-	))
 
 	return nil
 }
@@ -403,14 +365,6 @@ func (t *Ticket) AddComment(comment *Comment) error {
 		}
 	}
 
-	t.recordEventUnsafe(NewCommentAddedEvent(
-		t.id,
-		comment.ID(),
-		comment.UserID(),
-		comment.IsInternal(),
-		time.Now(),
-	))
-
 	return nil
 }
 
@@ -436,13 +390,6 @@ func (t *Ticket) Close(reason string, closedBy uint) error {
 	t.updatedAt = now
 	t.version++
 
-	t.recordEventUnsafe(NewTicketClosedEvent(
-		t.id,
-		reason,
-		closedBy,
-		now,
-	))
-
 	return nil
 }
 
@@ -463,13 +410,6 @@ func (t *Ticket) Reopen(reason string, reopenedBy uint) error {
 	t.resolvedTime = nil
 	t.updatedAt = time.Now()
 	t.version++
-
-	t.recordEventUnsafe(NewTicketReopenedEvent(
-		t.id,
-		reason,
-		reopenedBy,
-		time.Now(),
-	))
 
 	return nil
 }
@@ -554,29 +494,4 @@ func (t *Ticket) Validate() error {
 		return fmt.Errorf("creator ID is required")
 	}
 	return nil
-}
-
-func (t *Ticket) recordEvent(event interface{}) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.events = append(t.events, event)
-}
-
-func (t *Ticket) recordEventUnsafe(event interface{}) {
-	t.events = append(t.events, event)
-}
-
-func (t *Ticket) GetEvents() []interface{} {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	events := make([]interface{}, len(t.events))
-	copy(events, t.events)
-	t.events = []interface{}{}
-	return events
-}
-
-func (t *Ticket) ClearEvents() {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.events = []interface{}{}
 }

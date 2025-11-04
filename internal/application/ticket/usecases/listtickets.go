@@ -6,6 +6,7 @@ import (
 	"orris/internal/application/ticket/dto"
 	"orris/internal/domain/ticket"
 	vo "orris/internal/domain/ticket/value_objects"
+	"orris/internal/shared/auth"
 	"orris/internal/shared/errors"
 	"orris/internal/shared/logger"
 )
@@ -109,8 +110,8 @@ func (uc *ListTicketsUseCase) Execute(
 		filter.AssigneeID = query.AssigneeID
 	}
 
-	isAdmin := uc.isAdmin(query.UserRoles)
-	isSupportAgent := uc.isSupportAgent(query.UserRoles)
+	isAdmin := auth.IsAdmin(query.UserRoles)
+	isSupportAgent := auth.IsSupportAgent(query.UserRoles)
 
 	if !isAdmin && !isSupportAgent {
 		filter.CreatorID = &query.UserID
@@ -124,7 +125,7 @@ func (uc *ListTicketsUseCase) Execute(
 
 	items := make([]dto.TicketListItemDTO, 0, len(tickets))
 	for _, t := range tickets {
-		if uc.canViewTicket(t, query.UserID, query.UserRoles) {
+		if t.CanBeViewedBy(query.UserID, query.UserRoles) {
 			items = append(items, dto.ToTicketListItemDTO(t))
 		}
 	}
@@ -139,26 +140,4 @@ func (uc *ListTicketsUseCase) Execute(
 		Page:       query.Page,
 		PageSize:   query.PageSize,
 	}, nil
-}
-
-func (uc *ListTicketsUseCase) canViewTicket(t *ticket.Ticket, userID uint, userRoles []string) bool {
-	return t.CanBeViewedBy(userID, userRoles)
-}
-
-func (uc *ListTicketsUseCase) isAdmin(roles []string) bool {
-	for _, role := range roles {
-		if role == "admin" {
-			return true
-		}
-	}
-	return false
-}
-
-func (uc *ListTicketsUseCase) isSupportAgent(roles []string) bool {
-	for _, role := range roles {
-		if role == "support_agent" {
-			return true
-		}
-	}
-	return false
 }

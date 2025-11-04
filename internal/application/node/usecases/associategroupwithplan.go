@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"orris/internal/domain/node"
-	"orris/internal/domain/shared/events"
 	"orris/internal/domain/subscription"
 	"orris/internal/shared/errors"
 	"orris/internal/shared/logger"
@@ -25,20 +24,17 @@ type AssociateGroupWithPlanResult struct {
 type AssociateGroupWithPlanUseCase struct {
 	nodeGroupRepo   node.NodeGroupRepository
 	planRepo        subscription.SubscriptionPlanRepository
-	eventDispatcher events.EventDispatcher
 	logger          logger.Interface
 }
 
 func NewAssociateGroupWithPlanUseCase(
 	nodeGroupRepo node.NodeGroupRepository,
 	planRepo subscription.SubscriptionPlanRepository,
-	eventDispatcher events.EventDispatcher,
 	logger logger.Interface,
 ) *AssociateGroupWithPlanUseCase {
 	return &AssociateGroupWithPlanUseCase{
 		nodeGroupRepo:   nodeGroupRepo,
 		planRepo:        planRepo,
-		eventDispatcher: eventDispatcher,
 		logger:          logger,
 	}
 }
@@ -78,19 +74,6 @@ func (uc *AssociateGroupWithPlanUseCase) Execute(ctx context.Context, cmd Associ
 	if err := uc.nodeGroupRepo.Update(ctx, group); err != nil {
 		uc.logger.Errorw("failed to update node group in database", "error", err)
 		return nil, fmt.Errorf("failed to update node group: %w", err)
-	}
-
-	allEvents := group.GetEvents()
-	domainEvents := make([]events.DomainEvent, 0, len(allEvents))
-	for _, event := range allEvents {
-		if de, ok := event.(events.DomainEvent); ok {
-			domainEvents = append(domainEvents, de)
-		}
-	}
-	if len(domainEvents) > 0 {
-		if err := uc.eventDispatcher.PublishAll(domainEvents); err != nil {
-			uc.logger.Warnw("failed to publish events", "error", err)
-		}
 	}
 
 	uc.logger.Infow("group associated with plan successfully",

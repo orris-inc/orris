@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"orris/internal/domain/node"
-	"orris/internal/domain/shared/events"
 	"orris/internal/shared/errors"
 	"orris/internal/shared/logger"
 )
@@ -28,20 +27,17 @@ type CreateNodeGroupResult struct {
 }
 
 type CreateNodeGroupUseCase struct {
-	nodeGroupRepo   node.NodeGroupRepository
-	eventDispatcher events.EventDispatcher
-	logger          logger.Interface
+	nodeGroupRepo node.NodeGroupRepository
+	logger        logger.Interface
 }
 
 func NewCreateNodeGroupUseCase(
 	nodeGroupRepo node.NodeGroupRepository,
-	eventDispatcher events.EventDispatcher,
 	logger logger.Interface,
 ) *CreateNodeGroupUseCase {
 	return &CreateNodeGroupUseCase{
-		nodeGroupRepo:   nodeGroupRepo,
-		eventDispatcher: eventDispatcher,
-		logger:          logger,
+		nodeGroupRepo: nodeGroupRepo,
+		logger:        logger,
 	}
 }
 
@@ -71,19 +67,6 @@ func (uc *CreateNodeGroupUseCase) Execute(ctx context.Context, cmd CreateNodeGro
 	if err := uc.nodeGroupRepo.Create(ctx, group); err != nil {
 		uc.logger.Errorw("failed to create node group in database", "error", err)
 		return nil, fmt.Errorf("failed to create node group: %w", err)
-	}
-
-	allEvents := group.GetEvents()
-	domainEvents := make([]events.DomainEvent, 0, len(allEvents))
-	for _, event := range allEvents {
-		if de, ok := event.(events.DomainEvent); ok {
-			domainEvents = append(domainEvents, de)
-		}
-	}
-	if len(domainEvents) > 0 {
-		if err := uc.eventDispatcher.PublishAll(domainEvents); err != nil {
-			uc.logger.Warnw("failed to publish events", "error", err)
-		}
 	}
 
 	uc.logger.Infow("node group created successfully",

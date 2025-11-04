@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"orris/internal/application/user/helpers"
 	"orris/internal/domain/user"
 	vo "orris/internal/domain/user/value_objects"
 	"orris/internal/shared/authorization"
@@ -26,6 +27,7 @@ type RegisterWithPasswordUseCase struct {
 	userRepo       user.Repository
 	passwordHasher user.PasswordHasher
 	emailService   EmailService
+	authHelper     *helpers.AuthHelper
 	logger         logger.Interface
 }
 
@@ -35,12 +37,14 @@ func NewRegisterWithPasswordUseCase(
 	hasher user.PasswordHasher,
 	emailService EmailService,
 	permissionService interface{},
+	authHelper *helpers.AuthHelper,
 	logger logger.Interface,
 ) *RegisterWithPasswordUseCase {
 	return &RegisterWithPasswordUseCase{
 		userRepo:       userRepo,
 		passwordHasher: hasher,
 		emailService:   emailService,
+		authHelper:     authHelper,
 		logger:         logger,
 	}
 }
@@ -92,7 +96,7 @@ func (uc *RegisterWithPasswordUseCase) Execute(ctx context.Context, cmd Register
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
-	isFirstUser, err := uc.isFirstUser(ctx)
+	isFirstUser, err := uc.authHelper.IsFirstUser(ctx)
 	if err != nil {
 		uc.logger.Errorw("failed to check if first user", "error", err)
 	} else if isFirstUser {
@@ -111,13 +115,4 @@ func (uc *RegisterWithPasswordUseCase) Execute(ctx context.Context, cmd Register
 	uc.logger.Infow("user registered successfully", "user_id", newUser.ID(), "email", email.String())
 
 	return newUser, nil
-}
-
-func (uc *RegisterWithPasswordUseCase) isFirstUser(ctx context.Context) (bool, error) {
-	filter := user.ListFilter{Page: 1, PageSize: 1}
-	_, total, err := uc.userRepo.List(ctx, filter)
-	if err != nil {
-		return false, fmt.Errorf("failed to count users: %w", err)
-	}
-	return total == 1, nil
 }

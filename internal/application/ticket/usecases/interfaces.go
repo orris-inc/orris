@@ -30,10 +30,6 @@ type ChangeStatusExecutor interface {
 	Execute(ctx context.Context, cmd ChangeStatusCommand) (*ChangeStatusResult, error)
 }
 
-type ReopenTicketExecutor interface {
-	Execute(ctx context.Context, cmd ReopenTicketCommand) (*ReopenTicketResult, error)
-}
-
 type UpdateTicketStatusExecutor = ChangeStatusExecutor
 
 type UpdateTicketPriorityExecutor = ChangePriorityExecutor

@@ -2,7 +2,6 @@ package node
 
 import (
 	"fmt"
-	"sync"
 	"time"
 )
 
@@ -19,8 +18,6 @@ type NodeGroup struct {
 	version             int
 	createdAt           time.Time
 	updatedAt           time.Time
-	events              []interface{}
-	mu                  sync.RWMutex
 }
 
 // NewNodeGroup creates a new node group
@@ -41,15 +38,7 @@ func NewNodeGroup(name, description string, isPublic bool, sortOrder int) (*Node
 		version:             1,
 		createdAt:           now,
 		updatedAt:           now,
-		events:              []interface{}{},
 	}
-
-	ng.recordEvent(NewNodeGroupCreatedEvent(
-		ng.id,
-		ng.name,
-		ng.description,
-		ng.isPublic,
-	))
 
 	return ng, nil
 }
@@ -94,7 +83,6 @@ func ReconstructNodeGroup(
 		version:             version,
 		createdAt:           createdAt,
 		updatedAt:           updatedAt,
-		events:              []interface{}{},
 	}, nil
 }
 
@@ -115,8 +103,6 @@ func (ng *NodeGroup) Description() string {
 
 // NodeIDs returns the list of node IDs in this group
 func (ng *NodeGroup) NodeIDs() []uint {
-	ng.mu.RLock()
-	defer ng.mu.RUnlock()
 	ids := make([]uint, len(ng.nodeIDs))
 	copy(ids, ng.nodeIDs)
 	return ids
@@ -124,8 +110,6 @@ func (ng *NodeGroup) NodeIDs() []uint {
 
 // SubscriptionPlanIDs returns the list of subscription plan IDs associated with this group
 func (ng *NodeGroup) SubscriptionPlanIDs() []uint {
-	ng.mu.RLock()
-	defer ng.mu.RUnlock()
 	ids := make([]uint, len(ng.subscriptionPlanIDs))
 	copy(ids, ng.subscriptionPlanIDs)
 	return ids
@@ -179,9 +163,6 @@ func (ng *NodeGroup) AddNode(nodeID uint) error {
 		return fmt.Errorf("node ID cannot be zero")
 	}
 
-	ng.mu.Lock()
-	defer ng.mu.Unlock()
-
 	if ng.containsNodeUnsafe(nodeID) {
 		return nil
 	}
@@ -190,11 +171,6 @@ func (ng *NodeGroup) AddNode(nodeID uint) error {
 	ng.updatedAt = time.Now()
 	ng.version++
 
-	ng.recordEventUnsafe(NewNodeAddedToGroupEvent(
-		ng.id,
-		nodeID,
-		time.Now(),
-	))
 
 	return nil
 }
@@ -205,9 +181,6 @@ func (ng *NodeGroup) RemoveNode(nodeID uint) error {
 		return fmt.Errorf("node ID cannot be zero")
 	}
 
-	ng.mu.Lock()
-	defer ng.mu.Unlock()
-
 	index := ng.findNodeIndexUnsafe(nodeID)
 	if index == -1 {
 		return nil
@@ -217,19 +190,12 @@ func (ng *NodeGroup) RemoveNode(nodeID uint) error {
 	ng.updatedAt = time.Now()
 	ng.version++
 
-	ng.recordEventUnsafe(NewNodeRemovedFromGroupEvent(
-		ng.id,
-		nodeID,
-		time.Now(),
-	))
 
 	return nil
 }
 
 // ContainsNode checks if the group contains a specific node
 func (ng *NodeGroup) ContainsNode(nodeID uint) bool {
-	ng.mu.RLock()
-	defer ng.mu.RUnlock()
 	return ng.containsNodeUnsafe(nodeID)
 }
 
@@ -239,9 +205,6 @@ func (ng *NodeGroup) AssociatePlan(planID uint) error {
 		return fmt.Errorf("plan ID cannot be zero")
 	}
 
-	ng.mu.Lock()
-	defer ng.mu.Unlock()
-
 	if ng.containsPlanUnsafe(planID) {
 		return nil
 	}
@@ -250,11 +213,6 @@ func (ng *NodeGroup) AssociatePlan(planID uint) error {
 	ng.updatedAt = time.Now()
 	ng.version++
 
-	ng.recordEventUnsafe(NewPlanAssociatedWithGroupEvent(
-		ng.id,
-		planID,
-		time.Now(),
-	))
 
 	return nil
 }
@@ -265,9 +223,6 @@ func (ng *NodeGroup) DisassociatePlan(planID uint) error {
 		return fmt.Errorf("plan ID cannot be zero")
 	}
 
-	ng.mu.Lock()
-	defer ng.mu.Unlock()
-
 	index := ng.findPlanIndexUnsafe(planID)
 	if index == -1 {
 		return nil
@@ -277,26 +232,17 @@ func (ng *NodeGroup) DisassociatePlan(planID uint) error {
 	ng.updatedAt = time.Now()
 	ng.version++
 
-	ng.recordEventUnsafe(NewPlanDisassociatedFromGroupEvent(
-		ng.id,
-		planID,
-		time.Now(),
-	))
 
 	return nil
 }
 
 // IsAssociatedWithPlan checks if the group is associated with a specific plan
 func (ng *NodeGroup) IsAssociatedWithPlan(planID uint) bool {
-	ng.mu.RLock()
-	defer ng.mu.RUnlock()
 	return ng.containsPlanUnsafe(planID)
 }
 
 // NodeCount returns the number of nodes in the group
 func (ng *NodeGroup) NodeCount() int {
-	ng.mu.RLock()
-	defer ng.mu.RUnlock()
 	return len(ng.nodeIDs)
 }
 
@@ -310,17 +256,9 @@ func (ng *NodeGroup) UpdateName(name string) error {
 		return nil
 	}
 
-	oldName := ng.name
 	ng.name = name
 	ng.updatedAt = time.Now()
 	ng.version++
-
-	ng.recordEvent(NewNodeGroupNameChangedEvent(
-		ng.id,
-		oldName,
-		name,
-		time.Now(),
-	))
 
 	return nil
 }
@@ -348,11 +286,6 @@ func (ng *NodeGroup) SetPublic(isPublic bool) error {
 	ng.updatedAt = time.Now()
 	ng.version++
 
-	ng.recordEvent(NewNodeGroupVisibilityChangedEvent(
-		ng.id,
-		isPublic,
-		time.Now(),
-	))
 
 	return nil
 }
@@ -398,34 +331,6 @@ func (ng *NodeGroup) findPlanIndexUnsafe(planID uint) int {
 		}
 	}
 	return -1
-}
-
-// recordEvent records a domain event
-func (ng *NodeGroup) recordEvent(event interface{}) {
-	ng.mu.Lock()
-	defer ng.mu.Unlock()
-	ng.recordEventUnsafe(event)
-}
-
-// recordEventUnsafe records a domain event without acquiring the lock
-func (ng *NodeGroup) recordEventUnsafe(event interface{}) {
-	ng.events = append(ng.events, event)
-}
-
-// GetEvents returns and clears recorded domain events
-func (ng *NodeGroup) GetEvents() []interface{} {
-	ng.mu.Lock()
-	defer ng.mu.Unlock()
-	events := ng.events
-	ng.events = []interface{}{}
-	return events
-}
-
-// ClearEvents clears all recorded events
-func (ng *NodeGroup) ClearEvents() {
-	ng.mu.Lock()
-	defer ng.mu.Unlock()
-	ng.events = []interface{}{}
 }
 
 // Validate performs domain-level validation

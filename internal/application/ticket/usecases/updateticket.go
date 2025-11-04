@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"orris/internal/domain/shared/events"
 	"orris/internal/domain/ticket"
+	"orris/internal/shared/auth"
 	"orris/internal/shared/errors"
 	"orris/internal/shared/logger"
 )
@@ -28,20 +28,17 @@ type UpdateTicketResult struct {
 }
 
 type UpdateTicketUseCase struct {
-	ticketRepo      ticket.TicketRepository
-	eventDispatcher events.EventDispatcher
-	logger          logger.Interface
+	ticketRepo ticket.TicketRepository
+	logger     logger.Interface
 }
 
 func NewUpdateTicketUseCase(
 	ticketRepo ticket.TicketRepository,
-	eventDispatcher events.EventDispatcher,
 	logger logger.Interface,
 ) *UpdateTicketUseCase {
 	return &UpdateTicketUseCase{
-		ticketRepo:      ticketRepo,
-		eventDispatcher: eventDispatcher,
-		logger:          logger,
+		ticketRepo: ticketRepo,
+		logger:     logger,
 	}
 }
 
@@ -73,19 +70,6 @@ func (uc *UpdateTicketUseCase) Execute(ctx context.Context, cmd UpdateTicketComm
 	if err := uc.ticketRepo.Update(ctx, existingTicket); err != nil {
 		uc.logger.Errorw("failed to update ticket", "error", err)
 		return nil, err
-	}
-
-	domainEvents := existingTicket.GetEvents()
-	if len(domainEvents) > 0 {
-		convertedEvents := make([]events.DomainEvent, 0, len(domainEvents))
-		for _, evt := range domainEvents {
-			if domainEvent, ok := evt.(events.DomainEvent); ok {
-				convertedEvents = append(convertedEvents, domainEvent)
-			}
-		}
-		if err := uc.eventDispatcher.PublishAll(convertedEvents); err != nil {
-			uc.logger.Warnw("failed to publish events", "error", err)
-		}
 	}
 
 	uc.logger.Infow("ticket updated successfully", "ticket_id", existingTicket.ID())
@@ -129,10 +113,8 @@ func (uc *UpdateTicketUseCase) validateCommand(cmd UpdateTicketCommand) error {
 }
 
 func (uc *UpdateTicketUseCase) canUserUpdate(t *ticket.Ticket, userID uint, userRoles []string) bool {
-	for _, role := range userRoles {
-		if role == "admin" || role == "support_agent" {
-			return true
-		}
+	if auth.IsAdminOrAgent(userRoles) {
+		return true
 	}
 
 	if t.CreatorID() == userID {

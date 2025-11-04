@@ -30,8 +30,6 @@ type Payment struct {
 	version   int
 	createdAt time.Time
 	updatedAt time.Time
-
-	events []interface{}
 }
 
 func NewPayment(subscriptionID, userID uint, amount vo.Money, method vo.PaymentMethod) (*Payment, error) {
@@ -60,7 +58,6 @@ func NewPayment(subscriptionID, userID uint, amount vo.Money, method vo.PaymentM
 		metadata:       make(map[string]interface{}),
 		createdAt:      time.Now(),
 		updatedAt:      time.Now(),
-		events:         []interface{}{},
 	}, nil
 }
 
@@ -80,8 +77,6 @@ func (p *Payment) MarkAsPaid(transactionID string) error {
 	p.updatedAt = now
 	p.version++
 
-	p.recordEvent(NewPaymentSucceededEvent(p.id, p.subscriptionID, p.userID, p.amount))
-
 	return nil
 }
 
@@ -94,8 +89,6 @@ func (p *Payment) MarkAsFailed(reason string) error {
 	p.metadata["failure_reason"] = reason
 	p.updatedAt = time.Now()
 	p.version++
-
-	p.recordEvent(NewPaymentFailedEvent(p.id, p.subscriptionID, reason))
 
 	return nil
 }
@@ -121,10 +114,6 @@ func (p *Payment) SetGatewayInfo(gatewayOrderNo, paymentURL, qrCode string) {
 
 func (p *Payment) IsExpired() bool {
 	return time.Now().After(p.expiredAt) && p.status == vo.PaymentStatusPending
-}
-
-func (p *Payment) recordEvent(event interface{}) {
-	p.events = append(p.events, event)
 }
 
 func (p *Payment) ID() uint {
@@ -195,14 +184,6 @@ func (p *Payment) UpdatedAt() time.Time {
 	return p.updatedAt
 }
 
-func (p *Payment) Events() []interface{} {
-	return p.events
-}
-
-func (p *Payment) ClearEvents() {
-	p.events = []interface{}{}
-}
-
 func ReconstructPayment(
 	id uint,
 	orderNo string,
@@ -235,6 +216,5 @@ func ReconstructPayment(
 		version:        version,
 		createdAt:      createdAt,
 		updatedAt:      updatedAt,
-		events:         []interface{}{},
 	}
 }

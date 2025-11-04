@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"orris/internal/domain/shared/events"
 	"orris/internal/domain/ticket"
 	vo "orris/internal/domain/ticket/value_objects"
 	"orris/internal/shared/errors"
@@ -25,20 +24,17 @@ type ChangeStatusResult struct {
 }
 
 type ChangeStatusUseCase struct {
-	ticketRepo      ticket.TicketRepository
-	eventDispatcher events.EventDispatcher
-	logger          logger.Interface
+	ticketRepo ticket.TicketRepository
+	logger     logger.Interface
 }
 
 func NewChangeStatusUseCase(
 	ticketRepo ticket.TicketRepository,
-	eventDispatcher events.EventDispatcher,
 	logger logger.Interface,
 ) *ChangeStatusUseCase {
 	return &ChangeStatusUseCase{
-		ticketRepo:      ticketRepo,
-		eventDispatcher: eventDispatcher,
-		logger:          logger,
+		ticketRepo: ticketRepo,
+		logger:     logger,
 	}
 }
 
@@ -66,19 +62,6 @@ func (uc *ChangeStatusUseCase) Execute(ctx context.Context, cmd ChangeStatusComm
 	if err := uc.ticketRepo.Update(ctx, t); err != nil {
 		uc.logger.Errorw("failed to update ticket", "ticket_id", cmd.TicketID, "error", err)
 		return nil, errors.NewInternalError("failed to update ticket")
-	}
-
-	domainEvents := t.GetEvents()
-	if len(domainEvents) > 0 {
-		convertedEvents := make([]events.DomainEvent, 0, len(domainEvents))
-		for _, evt := range domainEvents {
-			if domainEvent, ok := evt.(events.DomainEvent); ok {
-				convertedEvents = append(convertedEvents, domainEvent)
-			}
-		}
-		if err := uc.eventDispatcher.PublishAll(convertedEvents); err != nil {
-			uc.logger.Warnw("failed to publish events", "error", err)
-		}
 	}
 
 	uc.logger.Infow("ticket status changed successfully", "ticket_id", cmd.TicketID, "old_status", oldStatus, "new_status", cmd.NewStatus)

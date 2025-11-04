@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"orris/internal/domain/shared/events"
 	"orris/internal/shared/errors"
 	"orris/internal/shared/logger"
 )
@@ -23,16 +22,13 @@ type GenerateNodeTokenResult struct {
 }
 
 type GenerateNodeTokenUseCase struct {
-	eventDispatcher events.EventDispatcher
 	logger          logger.Interface
 }
 
 func NewGenerateNodeTokenUseCase(
-	eventDispatcher events.EventDispatcher,
 	logger logger.Interface,
 ) *GenerateNodeTokenUseCase {
 	return &GenerateNodeTokenUseCase{
-		eventDispatcher: eventDispatcher,
 		logger:          logger,
 	}
 }

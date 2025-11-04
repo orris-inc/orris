@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"orris/internal/domain/node"
-	"orris/internal/domain/shared/events"
 	"orris/internal/shared/errors"
 	"orris/internal/shared/logger"
 )
@@ -31,18 +30,15 @@ type UpdateNodeGroupResult struct {
 
 type UpdateNodeGroupUseCase struct {
 	nodeGroupRepo   node.NodeGroupRepository
-	eventDispatcher events.EventDispatcher
 	logger          logger.Interface
 }
 
 func NewUpdateNodeGroupUseCase(
 	nodeGroupRepo node.NodeGroupRepository,
-	eventDispatcher events.EventDispatcher,
 	logger logger.Interface,
 ) *UpdateNodeGroupUseCase {
 	return &UpdateNodeGroupUseCase{
 		nodeGroupRepo:   nodeGroupRepo,
-		eventDispatcher: eventDispatcher,
 		logger:          logger,
 	}
 }
@@ -107,19 +103,6 @@ func (uc *UpdateNodeGroupUseCase) Execute(ctx context.Context, cmd UpdateNodeGro
 	if err := uc.nodeGroupRepo.Update(ctx, group); err != nil {
 		uc.logger.Errorw("failed to update node group in database", "error", err)
 		return nil, fmt.Errorf("failed to update node group: %w", err)
-	}
-
-	allEvents := group.GetEvents()
-	domainEvents := make([]events.DomainEvent, 0, len(allEvents))
-	for _, event := range allEvents {
-		if de, ok := event.(events.DomainEvent); ok {
-			domainEvents = append(domainEvents, de)
-		}
-	}
-	if len(domainEvents) > 0 {
-		if err := uc.eventDispatcher.PublishAll(domainEvents); err != nil {
-			uc.logger.Warnw("failed to publish events", "error", err)
-		}
 	}
 
 	uc.logger.Infow("node group updated successfully",

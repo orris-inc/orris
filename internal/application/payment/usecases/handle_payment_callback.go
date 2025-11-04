@@ -15,7 +15,6 @@ import (
 type HandlePaymentCallbackUseCase struct {
 	paymentRepo            payment.PaymentRepository
 	activateSubscriptionUC *subscriptionUsecases.ActivateSubscriptionUseCase
-	syncPermissionsUC      *subscriptionUsecases.SyncSubscriptionPermissionsUseCase
 	gateway                payment_gateway.PaymentGateway
 	logger                 logger.Interface
 }
@@ -23,14 +22,12 @@ type HandlePaymentCallbackUseCase struct {
 func NewHandlePaymentCallbackUseCase(
 	paymentRepo payment.PaymentRepository,
 	activateSubscriptionUC *subscriptionUsecases.ActivateSubscriptionUseCase,
-	syncPermissionsUC *subscriptionUsecases.SyncSubscriptionPermissionsUseCase,
 	gateway payment_gateway.PaymentGateway,
 	logger logger.Interface,
 ) *HandlePaymentCallbackUseCase {
 	return &HandlePaymentCallbackUseCase{
 		paymentRepo:            paymentRepo,
 		activateSubscriptionUC: activateSubscriptionUC,
-		syncPermissionsUC:      syncPermissionsUC,
 		gateway:                gateway,
 		logger:                 logger,
 	}
@@ -81,14 +78,6 @@ func (uc *HandlePaymentCallbackUseCase) handlePaymentSuccess(
 	if err := uc.activateSubscriptionUC.Execute(ctx, activateCmd); err != nil {
 		uc.logger.Errorw("failed to activate subscription", "error", err, "subscription_id", paymentOrder.SubscriptionID())
 		return fmt.Errorf("failed to activate subscription: %w", err)
-	}
-
-	syncCmd := subscriptionUsecases.SyncSubscriptionPermissionsCommand{
-		SubscriptionID: paymentOrder.SubscriptionID(),
-	}
-
-	if err := uc.syncPermissionsUC.Execute(ctx, syncCmd); err != nil {
-		uc.logger.Warnw("failed to sync permissions", "error", err, "subscription_id", paymentOrder.SubscriptionID())
 	}
 
 	uc.logger.Infow("payment processed successfully",

@@ -3,7 +3,6 @@ package usecases
 import (
 	"context"
 
-	"orris/internal/domain/shared/events"
 	"orris/internal/domain/ticket"
 	"orris/internal/domain/user"
 	"orris/internal/shared/errors"
@@ -28,23 +27,20 @@ type AssignTicketExecutor interface {
 }
 
 type AssignTicketUseCase struct {
-	ticketRepo      ticket.TicketRepository
-	userRepo        user.Repository
-	eventDispatcher events.EventDispatcher
-	logger          logger.Interface
+	ticketRepo ticket.TicketRepository
+	userRepo   user.Repository
+	logger     logger.Interface
 }
 
 func NewAssignTicketUseCase(
 	ticketRepo ticket.TicketRepository,
 	userRepo user.Repository,
-	eventDispatcher events.EventDispatcher,
 	logger logger.Interface,
 ) *AssignTicketUseCase {
 	return &AssignTicketUseCase{
-		ticketRepo:      ticketRepo,
-		userRepo:        userRepo,
-		eventDispatcher: eventDispatcher,
-		logger:          logger,
+		ticketRepo: ticketRepo,
+		userRepo:   userRepo,
+		logger:     logger,
 	}
 }
 
@@ -89,14 +85,6 @@ func (uc *AssignTicketUseCase) Execute(
 	if err := uc.ticketRepo.Update(ctx, ticketAggregate); err != nil {
 		uc.logger.Errorw("failed to update ticket", "error", err)
 		return nil, errors.NewInternalError("failed to update ticket")
-	}
-
-	for _, event := range ticketAggregate.GetEvents() {
-		if domainEvent, ok := event.(events.DomainEvent); ok {
-			if err := uc.eventDispatcher.Publish(domainEvent); err != nil {
-				uc.logger.Warnw("failed to dispatch event", "error", err)
-			}
-		}
 	}
 
 	uc.logger.Infow("ticket assigned successfully",

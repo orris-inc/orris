@@ -79,38 +79,6 @@ func (m *mockAddCommentUC) Execute(ctx context.Context, cmd usecases.AddCommentC
 	}, nil
 }
 
-type mockCloseTicketUC struct {
-	executeFunc func(ctx context.Context, cmd usecases.CloseTicketCommand) (*usecases.CloseTicketResult, error)
-}
-
-func (m *mockCloseTicketUC) Execute(ctx context.Context, cmd usecases.CloseTicketCommand) (*usecases.CloseTicketResult, error) {
-	if m.executeFunc != nil {
-		return m.executeFunc(ctx, cmd)
-	}
-	return &usecases.CloseTicketResult{
-		TicketID: cmd.TicketID,
-		Status:   "closed",
-		Reason:   cmd.Reason,
-		ClosedAt: time.Now().Format("2006-01-02T15:04:05Z07:00"),
-	}, nil
-}
-
-type mockReopenTicketUC struct {
-	executeFunc func(ctx context.Context, cmd usecases.ReopenTicketCommand) (*usecases.ReopenTicketResult, error)
-}
-
-func (m *mockReopenTicketUC) Execute(ctx context.Context, cmd usecases.ReopenTicketCommand) (*usecases.ReopenTicketResult, error) {
-	if m.executeFunc != nil {
-		return m.executeFunc(ctx, cmd)
-	}
-	return &usecases.ReopenTicketResult{
-		TicketID:   cmd.TicketID,
-		Status:     "reopened",
-		Reason:     cmd.Reason,
-		ReopenedAt: time.Now().Format("2006-01-02T15:04:05Z07:00"),
-	}, nil
-}
-
 type mockGetTicketUC struct {
 	executeFunc func(ctx context.Context, query usecases.GetTicketQuery) (*dto.TicketDTO, error)
 }
@@ -211,10 +179,8 @@ func setupTestRouter() (*gin.Engine, *TicketHandler) {
 
 	createUC := &mockCreateTicketUC{}
 	assignUC := &mockAssignTicketUC{}
-	updateStatusUC := &mockUpdateTicketStatusUC{}
+	changeStatusUC := &mockUpdateTicketStatusUC{}
 	addCommentUC := &mockAddCommentUC{}
-	closeUC := &mockCloseTicketUC{}
-	reopenUC := &mockReopenTicketUC{}
 	getUC := &mockGetTicketUC{}
 	listUC := &mockListTicketsUC{}
 	deleteUC := &mockDeleteTicketUC{}
@@ -223,10 +189,9 @@ func setupTestRouter() (*gin.Engine, *TicketHandler) {
 	handler := NewTicketHandler(
 		createUC,
 		assignUC,
-		updateStatusUC,
+		changeStatusUC,
 		addCommentUC,
-		closeUC,
-		reopenUC,
+		changeStatusUC,
 		getUC,
 		listUC,
 		deleteUC,
@@ -246,6 +211,7 @@ func setupTestRouter() (*gin.Engine, *TicketHandler) {
 	router.POST("/tickets/:id/assign", handler.AssignTicket)
 	router.POST("/tickets/:id/comments", handler.AddComment)
 	router.POST("/tickets/:id/close", handler.CloseTicket)
+	router.POST("/tickets/:id/reopen", handler.ReopenTicket)
 
 	return router, handler
 }

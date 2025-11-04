@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"orris/internal/application/ticket/usecases"
+	vo "orris/internal/domain/ticket/value_objects"
 	"orris/internal/shared/errors"
 	"orris/internal/shared/logger"
 	"orris/internal/shared/utils"
@@ -17,8 +18,7 @@ type TicketHandler struct {
 	assignTicketUC   usecases.AssignTicketExecutor
 	updateStatusUC   usecases.UpdateTicketStatusExecutor
 	addCommentUC     usecases.AddCommentExecutor
-	closeTicketUC    usecases.CloseTicketExecutor
-	reopenTicketUC   usecases.ReopenTicketExecutor
+	changeStatusUC   usecases.ChangeStatusExecutor
 	getTicketUC      usecases.GetTicketExecutor
 	listTicketsUC    usecases.ListTicketsExecutor
 	deleteTicketUC   usecases.DeleteTicketExecutor
@@ -31,8 +31,7 @@ func NewTicketHandler(
 	assignTicketUC usecases.AssignTicketExecutor,
 	updateStatusUC usecases.UpdateTicketStatusExecutor,
 	addCommentUC usecases.AddCommentExecutor,
-	closeTicketUC usecases.CloseTicketExecutor,
-	reopenTicketUC usecases.ReopenTicketExecutor,
+	changeStatusUC usecases.ChangeStatusExecutor,
 	getTicketUC usecases.GetTicketExecutor,
 	listTicketsUC usecases.ListTicketsExecutor,
 	deleteTicketUC usecases.DeleteTicketExecutor,
@@ -43,8 +42,7 @@ func NewTicketHandler(
 		assignTicketUC:   assignTicketUC,
 		updateStatusUC:   updateStatusUC,
 		addCommentUC:     addCommentUC,
-		closeTicketUC:    closeTicketUC,
-		reopenTicketUC:   reopenTicketUC,
+		changeStatusUC:   changeStatusUC,
 		getTicketUC:      getTicketUC,
 		listTicketsUC:    listTicketsUC,
 		deleteTicketUC:   deleteTicketUC,
@@ -263,19 +261,60 @@ func (h *TicketHandler) CloseTicket(c *gin.Context) {
 	}
 
 	userID, _ := c.Get("user_id")
-	cmd := usecases.CloseTicketCommand{
-		TicketID: ticketID,
-		Reason:   req.Reason,
-		ClosedBy: userID.(uint),
+	cmd := usecases.ChangeStatusCommand{
+		TicketID:  ticketID,
+		NewStatus: vo.StatusClosed,
+		ChangedBy: userID.(uint),
 	}
 
-	result, err := h.closeTicketUC.Execute(c.Request.Context(), cmd)
+	result, err := h.changeStatusUC.Execute(c.Request.Context(), cmd)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "Ticket closed successfully", result)
+}
+
+// ReopenTicket handles POST /tickets/:id/reopen
+// @Summary Reopen ticket
+// @Description Reopen a closed or resolved ticket
+// @Tags tickets
+// @Accept json
+// @Produce json
+// @Security Bearer
+// @Param id path int true "Ticket ID"
+// @Param body body ReopenTicketRequest true "Reopen data"
+// @Success 200 {object} utils.APIResponse
+// @Failure 400 {object} utils.APIResponse
+// @Router /tickets/{id}/reopen [post]
+func (h *TicketHandler) ReopenTicket(c *gin.Context) {
+	ticketID, err := parseTicketID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	var req ReopenTicketRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	userID, _ := c.Get("user_id")
+	cmd := usecases.ChangeStatusCommand{
+		TicketID:  ticketID,
+		NewStatus: vo.StatusReopened,
+		ChangedBy: userID.(uint),
+	}
+
+	result, err := h.changeStatusUC.Execute(c.Request.Context(), cmd)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Ticket reopened successfully", result)
 }
 
 // DeleteTicket handles DELETE /tickets/:id

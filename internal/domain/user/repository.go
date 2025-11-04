@@ -35,14 +35,6 @@ type Repository interface {
 	GetByPasswordResetToken(ctx context.Context, token string) (*User, error)
 }
 
-// RepositoryWithSpecifications extends Repository with specification-based queries
-type RepositoryWithSpecifications interface {
-	Repository
-
-	// FindBySpecification finds users matching a specification
-	FindBySpecification(ctx context.Context, spec interface{}, limit int) ([]*User, error)
-}
-
 // ListFilter represents filtering and pagination options for user list
 type ListFilter struct {
 	Page     int    `json:"page"`

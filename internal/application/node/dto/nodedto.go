@@ -89,19 +89,6 @@ type ListNodesRequest struct {
 	Order    string   `json:"order,omitempty" form:"order" binding:"omitempty,oneof=asc desc"`
 }
 
-type ActivateNodeRequest struct {
-	NodeID uint `json:"node_id" binding:"required"`
-}
-
-type DeactivateNodeRequest struct {
-	NodeID uint `json:"node_id" binding:"required"`
-}
-
-type MaintenanceNodeRequest struct {
-	NodeID uint   `json:"node_id" binding:"required"`
-	Reason string `json:"reason" binding:"required"`
-}
-
 func ToNodeDTO(n *node.Node) *NodeDTO {
 	if n == nil {
 		return nil

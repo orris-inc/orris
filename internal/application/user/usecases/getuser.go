@@ -6,19 +6,18 @@ import (
 
 	"orris/internal/application/user/dto"
 	domainUser "orris/internal/domain/user"
-	"orris/internal/domain/user/specifications"
 	"orris/internal/shared/errors"
 	"orris/internal/shared/logger"
 )
 
 // GetUserUseCase handles the business logic for retrieving a user
 type GetUserUseCase struct {
-	userRepo domainUser.RepositoryWithSpecifications
+	userRepo domainUser.Repository
 	logger   logger.Interface
 }
 
 // NewGetUserUseCase creates a new get user use case
-func NewGetUserUseCase(userRepo domainUser.RepositoryWithSpecifications, logger logger.Interface) *GetUserUseCase {
+func NewGetUserUseCase(userRepo domainUser.Repository, logger logger.Interface) *GetUserUseCase {
 	return &GetUserUseCase{
 		userRepo: userRepo,
 		logger:   logger,
@@ -57,21 +56,20 @@ func (uc *GetUserUseCase) ExecuteByEmail(ctx context.Context, email string) (*dt
 		return nil, errors.NewValidationError("email cannot be empty")
 	}
 
-	// Use specification to find user
-	emailSpec := specifications.NewEmailSpecification(email)
-	users, err := uc.userRepo.FindBySpecification(ctx, emailSpec, 1)
+	// Use GetByEmail method to find user
+	userEntity, err := uc.userRepo.GetByEmail(ctx, email)
 	if err != nil {
 		uc.logger.Errorw("failed to get user by email", "email", email, "error", err)
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
-	if len(users) == 0 {
+	if userEntity == nil {
 		uc.logger.Warnw("user not found", "email", email)
 		return nil, errors.NewNotFoundError("user not found")
 	}
 
 	// Map to response DTO
-	return uc.mapToResponse(users[0]), nil
+	return uc.mapToResponse(userEntity), nil
 }
 
 // ExecuteList retrieves a paginated list of users
@@ -128,27 +126,6 @@ func (uc *GetUserUseCase) ExecuteList(ctx context.Context, request dto.ListUsers
 
 	uc.logger.Infow("users listed successfully", "count", len(users), "total", total)
 	return response, nil
-}
-
-// ExecuteBySpecification retrieves users matching a specification
-func (uc *GetUserUseCase) ExecuteBySpecification(ctx context.Context, spec specifications.Specification, limit int) ([]*dto.UserResponse, error) {
-	uc.logger.Infow("executing get users by specification")
-
-	// Retrieve users matching specification
-	users, err := uc.userRepo.FindBySpecification(ctx, spec, limit)
-	if err != nil {
-		uc.logger.Errorw("failed to find users by specification", "error", err)
-		return nil, fmt.Errorf("failed to find users: %w", err)
-	}
-
-	// Map to response DTOs
-	responses := make([]*dto.UserResponse, len(users))
-	for i, userEntity := range users {
-		responses[i] = uc.mapToResponse(userEntity)
-	}
-
-	uc.logger.Infow("users found by specification", "count", len(users))
-	return responses, nil
 }
 
 // mapToResponse maps a user entity to a response DTO

@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"orris/internal/domain/node"
-	"orris/internal/domain/shared/events"
 	"orris/internal/shared/errors"
 	"orris/internal/shared/logger"
 )
@@ -24,18 +23,15 @@ type RemoveNodeFromGroupResult struct {
 
 type RemoveNodeFromGroupUseCase struct {
 	nodeGroupRepo   node.NodeGroupRepository
-	eventDispatcher events.EventDispatcher
 	logger          logger.Interface
 }
 
 func NewRemoveNodeFromGroupUseCase(
 	nodeGroupRepo node.NodeGroupRepository,
-	eventDispatcher events.EventDispatcher,
 	logger logger.Interface,
 ) *RemoveNodeFromGroupUseCase {
 	return &RemoveNodeFromGroupUseCase{
 		nodeGroupRepo:   nodeGroupRepo,
-		eventDispatcher: eventDispatcher,
 		logger:          logger,
 	}
 }
@@ -69,19 +65,6 @@ func (uc *RemoveNodeFromGroupUseCase) Execute(ctx context.Context, cmd RemoveNod
 	if err := uc.nodeGroupRepo.Update(ctx, group); err != nil {
 		uc.logger.Errorw("failed to update node group in database", "error", err)
 		return nil, fmt.Errorf("failed to update node group: %w", err)
-	}
-
-	allEvents := group.GetEvents()
-	domainEvents := make([]events.DomainEvent, 0, len(allEvents))
-	for _, event := range allEvents {
-		if de, ok := event.(events.DomainEvent); ok {
-			domainEvents = append(domainEvents, de)
-		}
-	}
-	if len(domainEvents) > 0 {
-		if err := uc.eventDispatcher.PublishAll(domainEvents); err != nil {
-			uc.logger.Warnw("failed to publish events", "error", err)
-		}
 	}
 
 	uc.logger.Infow("node removed from group successfully",

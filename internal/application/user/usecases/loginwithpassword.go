@@ -2,11 +2,10 @@ package usecases
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"time"
 
+	"orris/internal/application/user/helpers"
 	"orris/internal/domain/user"
 	"orris/internal/shared/logger"
 )
@@ -43,6 +42,7 @@ type LoginWithPasswordUseCase struct {
 	sessionRepo    user.SessionRepository
 	passwordHasher user.PasswordHasher
 	jwtService     JWTService
+	authHelper     *helpers.AuthHelper
 	logger         logger.Interface
 }
 
@@ -51,6 +51,7 @@ func NewLoginWithPasswordUseCase(
 	sessionRepo user.SessionRepository,
 	hasher user.PasswordHasher,
 	jwtService JWTService,
+	authHelper *helpers.AuthHelper,
 	logger logger.Interface,
 ) *LoginWithPasswordUseCase {
 	return &LoginWithPasswordUseCase{
@@ -58,6 +59,7 @@ func NewLoginWithPasswordUseCase(
 		sessionRepo:    sessionRepo,
 		passwordHasher: hasher,
 		jwtService:     jwtService,
+		authHelper:     authHelper,
 		logger:         logger,
 	}
 }
@@ -111,8 +113,8 @@ func (uc *LoginWithPasswordUseCase) Execute(ctx context.Context, cmd LoginWithPa
 		return nil, fmt.Errorf("failed to generate tokens: %w", err)
 	}
 
-	session.TokenHash = hashToken(tokens.AccessToken)
-	session.RefreshTokenHash = hashToken(tokens.RefreshToken)
+	session.TokenHash = uc.authHelper.HashToken(tokens.AccessToken)
+	session.RefreshTokenHash = uc.authHelper.HashToken(tokens.RefreshToken)
 
 	if err := uc.sessionRepo.Create(session); err != nil {
 		uc.logger.Errorw("failed to create session in database", "error", err)
@@ -131,9 +133,4 @@ func (uc *LoginWithPasswordUseCase) Execute(ctx context.Context, cmd LoginWithPa
 		RefreshToken: tokens.RefreshToken,
 		ExpiresIn:    tokens.ExpiresIn,
 	}, nil
-}
-
-func hashToken(token string) string {
-	hash := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(hash[:])
 }

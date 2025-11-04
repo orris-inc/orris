@@ -1,8 +1,6 @@
 package subscription
 
 import (
-	"context"
-
 	"orris/internal/domain/subscription"
 	"orris/internal/shared/logger"
 )
@@ -26,8 +24,3 @@ func NewService(
 	}
 }
 
-func (s *Service) SyncPermissions(ctx context.Context, subscriptionID uint) error {
-	s.logger.Infow("permission sync is no longer needed in simplified permission system",
-		"subscription_id", subscriptionID)
-	return nil
-}

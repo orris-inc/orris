@@ -63,11 +63,6 @@ type AssociatePlanRequest struct {
 	PlanID  uint `json:"plan_id" binding:"required"`
 }
 
-type DisassociatePlanRequest struct {
-	GroupID uint `json:"group_id" binding:"required"`
-	PlanID  uint `json:"plan_id" binding:"required"`
-}
-
 func ToNodeGroupDTO(ng *node.NodeGroup) *NodeGroupDTO {
 	if ng == nil {
 		return nil

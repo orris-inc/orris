@@ -3,7 +3,6 @@ package usecases
 import (
 	"context"
 
-	"orris/internal/domain/shared/events"
 	"orris/internal/shared/errors"
 	"orris/internal/shared/logger"
 )
@@ -37,16 +36,13 @@ type UpdateNodeResult struct {
 }
 
 type UpdateNodeUseCase struct {
-	eventDispatcher events.EventDispatcher
 	logger          logger.Interface
 }
 
 func NewUpdateNodeUseCase(
-	eventDispatcher events.EventDispatcher,
 	logger logger.Interface,
 ) *UpdateNodeUseCase {
 	return &UpdateNodeUseCase{
-		eventDispatcher: eventDispatcher,
 		logger:          logger,
 	}
 }

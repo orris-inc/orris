@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"orris/internal/domain/node"
-	"orris/internal/domain/shared/events"
 	"orris/internal/shared/errors"
 	"orris/internal/shared/logger"
 )
@@ -20,18 +19,15 @@ type RecordNodeTrafficCommand struct {
 
 type RecordNodeTrafficUseCase struct {
 	trafficRepo     node.NodeTrafficRepository
-	eventDispatcher events.EventDispatcher
 	logger          logger.Interface
 }
 
 func NewRecordNodeTrafficUseCase(
 	trafficRepo node.NodeTrafficRepository,
-	eventDispatcher events.EventDispatcher,
 	logger logger.Interface,
 ) *RecordNodeTrafficUseCase {
 	return &RecordNodeTrafficUseCase{
 		trafficRepo:     trafficRepo,
-		eventDispatcher: eventDispatcher,
 		logger:          logger,
 	}
 }

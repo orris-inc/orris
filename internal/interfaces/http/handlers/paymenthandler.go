@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -113,63 +112,3 @@ func (h *PaymentHandler) HandleCallback(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "callback processed successfully", nil)
 }
 
-// @Summary Get payment by ID
-// @Description Get payment details by payment ID
-// @Tags payments
-// @Accept json
-// @Produce json
-// @Security Bearer
-// @Param id path int true "Payment ID"
-// @Success 200 {object} utils.APIResponse "Payment details"
-// @Failure 400 {object} utils.APIResponse "Bad request"
-// @Failure 401 {object} utils.APIResponse "Unauthorized"
-// @Failure 404 {object} utils.APIResponse "Payment not found"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /api/v1/payments/{id} [get]
-func (h *PaymentHandler) GetPayment(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
-		return
-	}
-
-	paymentIDStr := c.Param("id")
-	paymentID, err := strconv.ParseUint(paymentIDStr, 10, 32)
-	if err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "invalid payment ID")
-		return
-	}
-
-	h.logger.Infow("get payment", "payment_id", paymentID, "user_id", userID)
-	utils.ErrorResponse(c, http.StatusNotImplemented, "not implemented yet")
-}
-
-// @Summary List subscription payments
-// @Description List all payments for a subscription
-// @Tags payments
-// @Accept json
-// @Produce json
-// @Security Bearer
-// @Param subscription_id path int true "Subscription ID"
-// @Success 200 {object} utils.APIResponse "Payments list"
-// @Failure 400 {object} utils.APIResponse "Bad request"
-// @Failure 401 {object} utils.APIResponse "Unauthorized"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /api/v1/subscriptions/{id}/payments [get]
-func (h *PaymentHandler) ListPayments(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
-		return
-	}
-
-	subscriptionIDStr := c.Param("id")
-	subscriptionID, err := strconv.ParseUint(subscriptionIDStr, 10, 32)
-	if err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID")
-		return
-	}
-
-	h.logger.Infow("list payments", "subscription_id", subscriptionID, "user_id", userID)
-	utils.ErrorResponse(c, http.StatusNotImplemented, "not implemented yet")
-}

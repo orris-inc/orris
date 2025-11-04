@@ -13,9 +13,9 @@ import (
 	notificationApp "orris/internal/application/notification"
 	paymentGateway "orris/internal/application/payment/payment_gateway"
 	paymentUsecases "orris/internal/application/payment/usecases"
-	subscriptionApp "orris/internal/application/subscription"
 	subscriptionUsecases "orris/internal/application/subscription/usecases"
 	"orris/internal/application/user"
+	"orris/internal/application/user/helpers"
 	"orris/internal/application/user/usecases"
 	"orris/internal/infrastructure/adapters"
 	"orris/internal/infrastructure/auth"
@@ -139,14 +139,16 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	})
 	githubClient := &oauthClientAdapter{githubBase}
 
-	registerUC := usecases.NewRegisterWithPasswordUseCase(userRepo, nil, hasher, emailService, nil, log)
-	loginUC := usecases.NewLoginWithPasswordUseCase(userRepo, sessionRepo, hasher, jwtService, log)
+	authHelper := helpers.NewAuthHelper(userRepo)
+
+	registerUC := usecases.NewRegisterWithPasswordUseCase(userRepo, nil, hasher, emailService, nil, authHelper, log)
+	loginUC := usecases.NewLoginWithPasswordUseCase(userRepo, sessionRepo, hasher, jwtService, authHelper, log)
 	verifyEmailUC := usecases.NewVerifyEmailUseCase(userRepo, log)
 	requestResetUC := usecases.NewRequestPasswordResetUseCase(userRepo, emailService, log)
 	resetPasswordUC := usecases.NewResetPasswordUseCase(userRepo, sessionRepo, hasher, emailService, log)
 	initiateOAuthUC := usecases.NewInitiateOAuthLoginUseCase(googleClient, githubClient, log)
-	handleOAuthUC := usecases.NewHandleOAuthCallbackUseCase(userRepo, oauthRepo, sessionRepo, googleClient, githubClient, jwtService, initiateOAuthUC, nil, nil, log)
-	refreshTokenUC := usecases.NewRefreshTokenUseCase(sessionRepo, jwtService, log)
+	handleOAuthUC := usecases.NewHandleOAuthCallbackUseCase(userRepo, oauthRepo, sessionRepo, googleClient, githubClient, jwtService, initiateOAuthUC, nil, nil, authHelper, log)
+	refreshTokenUC := usecases.NewRefreshTokenUseCase(sessionRepo, jwtService, authHelper, log)
 	logoutUC := usecases.NewLogoutUseCase(sessionRepo, log)
 
 	authHandler := handlers.NewAuthHandler(
@@ -157,23 +159,12 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	authMiddleware := middleware.NewAuthMiddleware(jwtSvc, log)
 	rateLimiter := middleware.NewRateLimiter(100, 1*time.Minute)
 
-	subscriptionRepo := repository.NewSubscriptionRepository(db, nil, log)
+	subscriptionRepo := repository.NewSubscriptionRepository(db, log)
 	subscriptionPlanRepo := repository.NewSubscriptionPlanRepository(db, log)
 	subscriptionTokenRepo := repository.NewSubscriptionTokenRepository(db, log)
 	paymentRepo := repository.NewPaymentRepository(db)
 
 	tokenGenerator := token.NewTokenGenerator()
-
-	subscriptionService := subscriptionApp.NewService(
-		subscriptionRepo,
-		subscriptionPlanRepo,
-		nil,
-		log,
-	)
-	syncPermissionsUC := subscriptionUsecases.NewSyncSubscriptionPermissionsUseCase(
-		subscriptionService,
-		log,
-	)
 
 	createSubscriptionUC := subscriptionUsecases.NewCreateSubscriptionUseCase(
 		subscriptionRepo, subscriptionPlanRepo, subscriptionTokenRepo, tokenGenerator, log,
@@ -257,7 +248,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	nodeReportHandler := handlers.NewNodeReportHandler(nil, nil)
 	nodeTokenMiddleware := middleware.NewNodeTokenMiddleware(nil, log)
 
-	ticketHandler := ticketHandlers.NewTicketHandler(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	ticketHandler := ticketHandlers.NewTicketHandler(nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	announcementRepo := adapters.NewAnnouncementRepositoryAdapter(repository.NewAnnouncementRepository(db))
 	notificationRepo := adapters.NewNotificationRepositoryAdapter(repository.NewNotificationRepository(db))
@@ -284,7 +275,9 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	notificationHandler := handlers.NewNotificationHandler(notificationServiceDDD, log)
 
-	gateway := paymentGateway.NewMockGateway(true)
+	// TODO: Implement real payment gateway (Alipay/WeChat/Stripe)
+	// Currently mock gateway is removed as per CLAUDE.md rule: "不允许mock数据"
+	var gateway paymentGateway.PaymentGateway = nil // Temporary placeholder until real implementation
 	paymentConfig := paymentUsecases.PaymentConfig{
 		NotifyURL: cfg.Server.BaseURL + "/payments/callback",
 	}
@@ -299,7 +292,6 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	handleCallbackUC := paymentUsecases.NewHandlePaymentCallbackUseCase(
 		paymentRepo,
 		activateSubscriptionUC,
-		syncPermissionsUC,
 		gateway,
 		log,
 	)
@@ -378,8 +370,6 @@ func (r *Router) SetupRoutes() {
 		subscriptions.GET("/:id/tokens", r.subscriptionTokenHandler.ListTokens)
 		subscriptions.DELETE("/:id/tokens/:token_id", r.subscriptionTokenHandler.RevokeToken)
 		subscriptions.POST("/:id/tokens/:token_id/refresh", r.subscriptionTokenHandler.RefreshToken)
-
-		subscriptions.GET("/:id/payments", r.paymentHandler.ListPayments)
 	}
 
 	payments := r.engine.Group("/payments")
@@ -390,7 +380,6 @@ func (r *Router) SetupRoutes() {
 		paymentsProtected.Use(r.authMiddleware.RequireAuth())
 		{
 			paymentsProtected.POST("", r.paymentHandler.CreatePayment)
-			paymentsProtected.GET("/:id", r.paymentHandler.GetPayment)
 		}
 	}
 

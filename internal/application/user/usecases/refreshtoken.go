@@ -3,6 +3,7 @@ package usecases
 import (
 	"fmt"
 
+	"orris/internal/application/user/helpers"
 	"orris/internal/domain/user"
 	"orris/internal/shared/logger"
 )
@@ -19,23 +20,26 @@ type RefreshTokenResult struct {
 type RefreshTokenUseCase struct {
 	sessionRepo user.SessionRepository
 	jwtService  JWTService
+	authHelper  *helpers.AuthHelper
 	logger      logger.Interface
 }
 
 func NewRefreshTokenUseCase(
 	sessionRepo user.SessionRepository,
 	jwtService JWTService,
+	authHelper *helpers.AuthHelper,
 	logger logger.Interface,
 ) *RefreshTokenUseCase {
 	return &RefreshTokenUseCase{
 		sessionRepo: sessionRepo,
 		jwtService:  jwtService,
+		authHelper:  authHelper,
 		logger:      logger,
 	}
 }
 
 func (uc *RefreshTokenUseCase) Execute(cmd RefreshTokenCommand) (*RefreshTokenResult, error) {
-	refreshTokenHash := hashToken(cmd.RefreshToken)
+	refreshTokenHash := uc.authHelper.HashToken(cmd.RefreshToken)
 
 	session, err := uc.sessionRepo.GetByTokenHash(refreshTokenHash)
 	if err != nil {
@@ -53,7 +57,7 @@ func (uc *RefreshTokenUseCase) Execute(cmd RefreshTokenCommand) (*RefreshTokenRe
 		return nil, fmt.Errorf("failed to refresh token: %w", err)
 	}
 
-	session.TokenHash = hashToken(newAccessToken)
+	session.TokenHash = uc.authHelper.HashToken(newAccessToken)
 	session.UpdateActivity()
 
 	if err := uc.sessionRepo.Update(session); err != nil {

@@ -8,7 +8,6 @@ import (
 
 	domainEvents "orris/internal/domain/shared/events"
 	"orris/internal/domain/user"
-	"orris/internal/domain/user/specifications"
 	"orris/internal/infrastructure/persistence/mappers"
 	"orris/internal/infrastructure/persistence/models"
 	"orris/internal/shared/logger"
@@ -23,7 +22,7 @@ type UserRepositoryDDD struct {
 }
 
 // NewUserRepositoryDDD creates a new DDD user repository
-func NewUserRepositoryDDD(db *gorm.DB, eventDispatcher domainEvents.EventDispatcher, logger logger.Interface) user.RepositoryWithSpecifications {
+func NewUserRepositoryDDD(db *gorm.DB, eventDispatcher domainEvents.EventDispatcher, logger logger.Interface) user.Repository {
 	return &UserRepositoryDDD{
 		db:              db,
 		mapper:          mappers.NewUserMapper(),
@@ -51,20 +50,6 @@ func (r *UserRepositoryDDD) Create(ctx context.Context, userEntity *user.User) e
 	if err := userEntity.SetID(model.ID); err != nil {
 		r.logger.Errorw("failed to set user ID", "error", err)
 		return fmt.Errorf("failed to set user ID: %w", err)
-	}
-
-	// Publish domain events
-	if r.eventDispatcher != nil {
-		events := userEntity.GetEvents()
-		for _, event := range events {
-			if domainEvent, ok := event.(domainEvents.DomainEvent); ok {
-				if err := r.eventDispatcher.Publish(domainEvent); err != nil {
-					r.logger.Errorw("failed to publish domain event", "event_type", domainEvent.GetEventType(), "error", err)
-					// Don't fail the creation due to event publishing failure
-					// In production, consider using outbox pattern
-				}
-			}
-		}
 	}
 
 	r.logger.Infow("user created successfully", "id", model.ID, "email", model.Email)
@@ -146,20 +131,6 @@ func (r *UserRepositoryDDD) Update(ctx context.Context, userEntity *user.User) e
 			return fmt.Errorf("user not found or version mismatch (optimistic lock failed)")
 		}
 
-		// Publish domain events after successful update
-		if r.eventDispatcher != nil {
-			events := userEntity.GetEvents()
-			for _, event := range events {
-				if domainEvent, ok := event.(domainEvents.DomainEvent); ok {
-					if err := r.eventDispatcher.Publish(domainEvent); err != nil {
-						r.logger.Errorw("failed to publish domain event", "event_type", domainEvent.GetEventType(), "error", err)
-						// Don't fail the transaction due to event publishing failure
-						// In production, consider using outbox pattern
-					}
-				}
-			}
-		}
-
 		return nil
 	})
 
@@ -191,18 +162,6 @@ func (r *UserRepositoryDDD) Delete(ctx context.Context, id uint) error {
 	if err := r.db.WithContext(ctx).Delete(&models.UserModel{}, id).Error; err != nil {
 		r.logger.Errorw("failed to delete user", "id", id, "error", err)
 		return fmt.Errorf("failed to delete user: %w", err)
-	}
-
-	// Publish domain events
-	if r.eventDispatcher != nil {
-		entityEvents := userEntity.GetEvents()
-		for _, event := range entityEvents {
-			if domainEvent, ok := event.(domainEvents.DomainEvent); ok {
-				if err := r.eventDispatcher.Publish(domainEvent); err != nil {
-					r.logger.Errorw("failed to publish domain event", "error", err)
-				}
-			}
-		}
 	}
 
 	r.logger.Infow("user deleted successfully", "id", id)
@@ -282,39 +241,6 @@ func (r *UserRepositoryDDD) ExistsByEmail(ctx context.Context, email string) (bo
 		return false, fmt.Errorf("failed to check existence: %w", err)
 	}
 	return count > 0, nil
-}
-
-// FindBySpecification finds users by specification
-func (r *UserRepositoryDDD) FindBySpecification(ctx context.Context, spec interface{}, limit int) ([]*user.User, error) {
-	query := r.db.WithContext(ctx).Table("users")
-
-	// Apply specification to query
-	if spec != nil {
-		if specification, ok := spec.(specifications.Specification); ok {
-			sql, args := specification.ToSQL()
-			query = query.Where(sql, args...)
-		}
-	}
-
-	// Apply limit
-	if limit > 0 {
-		query = query.Limit(limit)
-	}
-
-	var models []*models.UserModel
-	if err := query.Find(&models).Error; err != nil {
-		r.logger.Errorw("failed to find users by specification", "error", err)
-		return nil, fmt.Errorf("failed to find users: %w", err)
-	}
-
-	// Convert models to entities
-	entities, err := r.mapper.ToEntities(models)
-	if err != nil {
-		r.logger.Errorw("failed to map user models to entities", "error", err)
-		return nil, fmt.Errorf("failed to map users: %w", err)
-	}
-
-	return entities, nil
 }
 
 // GetByVerificationToken retrieves a user by email verification token

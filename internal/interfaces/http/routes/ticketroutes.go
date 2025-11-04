@@ -34,5 +34,7 @@ func SetupTicketRoutes(engine *gin.Engine, config *TicketRouteConfig) {
 			config.TicketHandler.AddComment)
 		tickets.POST("/:id/close",
 			config.TicketHandler.CloseTicket)
+		tickets.POST("/:id/reopen",
+			config.TicketHandler.ReopenTicket)
 	}
 }

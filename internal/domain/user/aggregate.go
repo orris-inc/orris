@@ -2,7 +2,6 @@ package user
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
 	"orris/internal/shared/authorization"
@@ -19,8 +18,6 @@ type User struct {
 	createdAt                  time.Time
 	updatedAt                  time.Time
 	version                    int
-	events                     []interface{}
-	mu                         sync.RWMutex
 	passwordHash               *string
 	emailVerified              bool
 	emailVerificationToken     *string
@@ -50,16 +47,7 @@ func NewUser(email *vo.Email, name *vo.Name) (*User, error) {
 		createdAt: now,
 		updatedAt: now,
 		version:   1,
-		events:    []interface{}{},
 	}
-
-	// Record user created event
-	user.recordEvent(NewUserCreatedEvent(
-		user.id,
-		email.String(),
-		name.String(),
-		user.status.String(),
-	))
 
 	return user, nil
 }
@@ -85,7 +73,6 @@ func ReconstructUser(id uint, email *vo.Email, name *vo.Name, role authorization
 		createdAt: createdAt,
 		updatedAt: updatedAt,
 		version:   version,
-		events:    []interface{}{},
 	}, nil
 }
 
@@ -163,8 +150,6 @@ func (u *User) IsAdmin() bool {
 
 // SetRole sets the user's role
 func (u *User) SetRole(role authorization.UserRole) {
-	u.mu.Lock()
-	defer u.mu.Unlock()
 	u.role = role
 	u.updatedAt = time.Now()
 }
@@ -211,16 +196,9 @@ func (u *User) UpdateEmail(newEmail *vo.Email) error {
 		return nil // No change needed
 	}
 
-	oldEmail := u.email.String()
 	u.email = newEmail
 	u.updatedAt = time.Now()
 	u.version++
-
-	u.recordEvent(NewUserEmailChangedEvent(
-		u.id,
-		oldEmail,
-		newEmail.String(),
-	))
 
 	return nil
 }
@@ -235,16 +213,9 @@ func (u *User) UpdateName(newName *vo.Name) error {
 		return nil // No change needed
 	}
 
-	oldName := u.name.String()
 	u.name = newName
 	u.updatedAt = time.Now()
 	u.version++
-
-	u.recordEvent(NewUserNameChangedEvent(
-		u.id,
-		oldName,
-		newName.String(),
-	))
 
 	return nil
 }
@@ -259,17 +230,9 @@ func (u *User) Activate() error {
 		return fmt.Errorf("cannot activate user with status %s", u.status.String())
 	}
 
-	oldStatus := u.status
 	u.status = vo.StatusActive
 	u.updatedAt = time.Now()
 	u.version++
-
-	u.recordEvent(NewUserStatusChangedEvent(
-		u.id,
-		oldStatus.String(),
-		u.status.String(),
-		"User activated",
-	))
 
 	return nil
 }
@@ -284,7 +247,6 @@ func (u *User) Deactivate(reason string) error {
 		return fmt.Errorf("cannot deactivate user with status %s", u.status.String())
 	}
 
-	oldStatus := u.status
 	u.status = vo.StatusInactive
 	u.updatedAt = time.Now()
 	u.version++
@@ -292,13 +254,6 @@ func (u *User) Deactivate(reason string) error {
 	if reason == "" {
 		reason = "User deactivated"
 	}
-
-	u.recordEvent(NewUserStatusChangedEvent(
-		u.id,
-		oldStatus.String(),
-		u.status.String(),
-		reason,
-	))
 
 	return nil
 }
@@ -317,17 +272,9 @@ func (u *User) Suspend(reason string) error {
 		return fmt.Errorf("suspension reason is required")
 	}
 
-	oldStatus := u.status
 	u.status = vo.StatusSuspended
 	u.updatedAt = time.Now()
 	u.version++
-
-	u.recordEvent(NewUserStatusChangedEvent(
-		u.id,
-		oldStatus.String(),
-		u.status.String(),
-		reason,
-	))
 
 	return nil
 }
@@ -342,15 +289,9 @@ func (u *User) Delete() error {
 		return fmt.Errorf("cannot delete user with status %s", u.status.String())
 	}
 
-	oldStatus := u.status
 	u.status = vo.StatusDeleted
 	u.updatedAt = time.Now()
 	u.version++
-
-	u.recordEvent(NewUserDeletedEvent(
-		u.id,
-		oldStatus.String(),
-	))
 
 	return nil
 }
@@ -380,29 +321,6 @@ func (u *User) GetDisplayInfo() UserDisplayInfo {
 		Status:      u.status.String(),
 		CreatedAt:   u.createdAt,
 	}
-}
-
-// recordEvent records a domain event
-func (u *User) recordEvent(event interface{}) {
-	u.mu.Lock()
-	defer u.mu.Unlock()
-	u.events = append(u.events, event)
-}
-
-// GetEvents returns and clears recorded domain events
-func (u *User) GetEvents() []interface{} {
-	u.mu.Lock()
-	defer u.mu.Unlock()
-	events := u.events
-	u.events = []interface{}{}
-	return events
-}
-
-// ClearEvents clears all recorded events
-func (u *User) ClearEvents() {
-	u.mu.Lock()
-	defer u.mu.Unlock()
-	u.events = []interface{}{}
 }
 
 // UserDisplayInfo represents user information for display purposes
