@@ -1,4 +1,4 @@
-package persistence
+package repository
 
 import (
 	"context"
@@ -10,47 +10,8 @@ import (
 
 	"orris/internal/domain/ticket"
 	vo "orris/internal/domain/ticket/value_objects"
+	"orris/internal/infrastructure/persistence/models"
 )
-
-type TicketModel struct {
-	ID           uint   `gorm:"primaryKey"`
-	Number       string `gorm:"uniqueIndex;size:50;not null"`
-	Title        string `gorm:"size:200;not null"`
-	Description  string `gorm:"type:text;not null"`
-	Category     string `gorm:"size:50;not null;index"`
-	Priority     string `gorm:"size:20;not null;index"`
-	Status       string `gorm:"size:20;not null;index"`
-	CreatorID    uint   `gorm:"not null;index"`
-	AssigneeID   *uint  `gorm:"index"`
-	Tags         string `gorm:"type:json"`
-	Metadata     string `gorm:"type:json"`
-	SLADueTime   *int64 `gorm:"index"`
-	ResponseTime *int64
-	ResolvedTime *int64
-	Version      int   `gorm:"not null;default:1"`
-	CreatedAt    int64 `gorm:"autoCreateTime:milli;not null"`
-	UpdatedAt    int64 `gorm:"autoUpdateTime:milli;not null"`
-	ClosedAt     *int64
-	Comments     []CommentModel `gorm:"foreignKey:TicketID;constraint:OnDelete:CASCADE"`
-}
-
-func (TicketModel) TableName() string {
-	return "tickets"
-}
-
-type CommentModel struct {
-	ID         uint   `gorm:"primaryKey"`
-	TicketID   uint   `gorm:"not null;index"`
-	UserID     uint   `gorm:"not null;index"`
-	Content    string `gorm:"type:text;not null"`
-	IsInternal bool   `gorm:"not null;default:false"`
-	CreatedAt  int64  `gorm:"autoCreateTime:milli;not null;index"`
-	UpdatedAt  int64  `gorm:"autoUpdateTime:milli;not null"`
-}
-
-func (CommentModel) TableName() string {
-	return "ticket_comments"
-}
 
 type TicketRepository struct {
 	db *gorm.DB
@@ -78,7 +39,7 @@ func (r *TicketRepository) Update(ctx context.Context, t *ticket.Ticket) error {
 	model := r.toModel(t)
 
 	result := r.db.WithContext(ctx).
-		Model(&TicketModel{}).
+		Model(&models.TicketModel{}).
 		Where("id = ? AND version = ?", model.ID, model.Version-1).
 		Updates(model)
 
@@ -94,7 +55,7 @@ func (r *TicketRepository) Update(ctx context.Context, t *ticket.Ticket) error {
 }
 
 func (r *TicketRepository) FindByID(ctx context.Context, id uint) (*ticket.Ticket, error) {
-	var model TicketModel
+	var model models.TicketModel
 
 	if err := r.db.WithContext(ctx).
 		Preload("Comments").
@@ -109,7 +70,7 @@ func (r *TicketRepository) FindByID(ctx context.Context, id uint) (*ticket.Ticke
 }
 
 func (r *TicketRepository) FindByNumber(ctx context.Context, number string) (*ticket.Ticket, error) {
-	var model TicketModel
+	var model models.TicketModel
 
 	if err := r.db.WithContext(ctx).
 		Preload("Comments").
@@ -125,7 +86,7 @@ func (r *TicketRepository) FindByNumber(ctx context.Context, number string) (*ti
 }
 
 func (r *TicketRepository) Delete(ctx context.Context, id uint) error {
-	result := r.db.WithContext(ctx).Delete(&TicketModel{}, id)
+	result := r.db.WithContext(ctx).Delete(&models.TicketModel{}, id)
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete ticket: %w", result.Error)
 	}
@@ -139,7 +100,7 @@ func (r *TicketRepository) List(
 	ctx context.Context,
 	filter ticket.TicketFilter,
 ) ([]*ticket.Ticket, int64, error) {
-	query := r.db.WithContext(ctx).Model(&TicketModel{})
+	query := r.db.WithContext(ctx).Model(&models.TicketModel{})
 
 	if filter.Status != nil {
 		query = query.Where("status = ?", filter.Status.String())
@@ -179,13 +140,13 @@ func (r *TicketRepository) List(
 		query = query.Limit(filter.PageSize).Offset(offset)
 	}
 
-	var models []TicketModel
-	if err := query.Preload("Comments").Find(&models).Error; err != nil {
+	var ticketModels []models.TicketModel
+	if err := query.Preload("Comments").Find(&ticketModels).Error; err != nil {
 		return nil, 0, fmt.Errorf("failed to list tickets: %w", err)
 	}
 
-	tickets := make([]*ticket.Ticket, len(models))
-	for i, model := range models {
+	tickets := make([]*ticket.Ticket, len(ticketModels))
+	for i, model := range ticketModels {
 		t, err := r.toDomain(&model)
 		if err != nil {
 			return nil, 0, err
@@ -197,7 +158,7 @@ func (r *TicketRepository) List(
 }
 
 func (r *TicketRepository) SaveComment(ctx context.Context, c *ticket.Comment) error {
-	model := &CommentModel{
+	model := &models.CommentModel{
 		TicketID:   c.TicketID(),
 		UserID:     c.UserID(),
 		Content:    c.Content(),
@@ -221,17 +182,17 @@ func (r *TicketRepository) FindCommentsByTicketID(
 	ctx context.Context,
 	ticketID uint,
 ) ([]*ticket.Comment, error) {
-	var models []CommentModel
+	var commentModels []models.CommentModel
 
 	if err := r.db.WithContext(ctx).
 		Where("ticket_id = ?", ticketID).
 		Order("created_at ASC").
-		Find(&models).Error; err != nil {
+		Find(&commentModels).Error; err != nil {
 		return nil, fmt.Errorf("failed to find comments: %w", err)
 	}
 
-	comments := make([]*ticket.Comment, len(models))
-	for i, model := range models {
+	comments := make([]*ticket.Comment, len(commentModels))
+	for i, model := range commentModels {
 		c, err := r.commentToDomain(&model)
 		if err != nil {
 			return nil, err
@@ -242,8 +203,8 @@ func (r *TicketRepository) FindCommentsByTicketID(
 	return comments, nil
 }
 
-func (r *TicketRepository) toModel(t *ticket.Ticket) *TicketModel {
-	model := &TicketModel{
+func (r *TicketRepository) toModel(t *ticket.Ticket) *models.TicketModel {
+	model := &models.TicketModel{
 		ID:          t.ID(),
 		Number:      t.Number(),
 		Title:       t.Title(),
@@ -291,7 +252,7 @@ func (r *TicketRepository) toModel(t *ticket.Ticket) *TicketModel {
 	return model
 }
 
-func (r *TicketRepository) toDomain(model *TicketModel) (*ticket.Ticket, error) {
+func (r *TicketRepository) toDomain(model *models.TicketModel) (*ticket.Ticket, error) {
 	category, _ := vo.NewCategory(model.Category)
 	priority, _ := vo.NewPriority(model.Priority)
 	status, _ := vo.NewTicketStatus(model.Status)
@@ -363,7 +324,7 @@ func (r *TicketRepository) toDomain(model *TicketModel) (*ticket.Ticket, error) 
 	return t, nil
 }
 
-func (r *TicketRepository) commentToDomain(model *CommentModel) (*ticket.Comment, error) {
+func (r *TicketRepository) commentToDomain(model *models.CommentModel) (*ticket.Comment, error) {
 	createdAt := convertMillisToTime(model.CreatedAt)
 	updatedAt := convertMillisToTime(model.UpdatedAt)
 

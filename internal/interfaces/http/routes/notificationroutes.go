@@ -5,12 +5,12 @@ import (
 
 	"orris/internal/interfaces/http/handlers"
 	"orris/internal/interfaces/http/middleware"
+	"orris/internal/shared/authorization"
 )
 
 type NotificationRouteConfig struct {
-	NotificationHandler  *handlers.NotificationHandler
-	AuthMiddleware       *middleware.AuthMiddleware
-	PermissionMiddleware *middleware.PermissionMiddleware
+	NotificationHandler *handlers.NotificationHandler
+	AuthMiddleware      *middleware.AuthMiddleware
 }
 
 func SetupNotificationRoutes(engine *gin.Engine, config *NotificationRouteConfig) {
@@ -37,16 +37,16 @@ func SetupNotificationRoutes(engine *gin.Engine, config *NotificationRouteConfig
 		announcements.GET("/:id", config.NotificationHandler.GetAnnouncement)
 
 		announcements.POST("",
-			config.PermissionMiddleware.RequirePermission("announcement", "create"),
+			authorization.RequireAdmin(),
 			config.NotificationHandler.CreateAnnouncement)
 		announcements.PUT("/:id",
-			config.PermissionMiddleware.RequirePermission("announcement", "update"),
+			authorization.RequireAdmin(),
 			config.NotificationHandler.UpdateAnnouncement)
 		announcements.DELETE("/:id",
-			config.PermissionMiddleware.RequirePermission("announcement", "delete"),
+			authorization.RequireAdmin(),
 			config.NotificationHandler.DeleteAnnouncement)
 		announcements.POST("/:id/publish",
-			config.PermissionMiddleware.RequirePermission("announcement", "publish"),
+			authorization.RequireAdmin(),
 			config.NotificationHandler.PublishAnnouncement)
 	}
 
@@ -56,7 +56,7 @@ func SetupNotificationRoutes(engine *gin.Engine, config *NotificationRouteConfig
 		templates.GET("", config.NotificationHandler.ListTemplates)
 		templates.POST("/render", config.NotificationHandler.RenderTemplate)
 		templates.POST("",
-			config.PermissionMiddleware.RequirePermission("notification_template", "create"),
+			authorization.RequireAdmin(),
 			config.NotificationHandler.CreateTemplate)
 	}
 }

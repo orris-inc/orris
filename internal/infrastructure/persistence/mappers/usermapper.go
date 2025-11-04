@@ -8,6 +8,7 @@ import (
 	"orris/internal/domain/user"
 	vo "orris/internal/domain/user/value_objects"
 	"orris/internal/infrastructure/persistence/models"
+	"orris/internal/shared/authorization"
 )
 
 // UserMapper handles the conversion between domain entities and persistence models
@@ -54,6 +55,8 @@ func (m *UserMapperImpl) ToEntity(model *models.UserModel) (*user.User, error) {
 		return nil, fmt.Errorf("failed to create status value object: %w", err)
 	}
 
+	role := authorization.ParseUserRole(model.Role)
+
 	authData := &user.UserAuthData{
 		PasswordHash:               model.PasswordHash,
 		EmailVerified:              model.EmailVerified,
@@ -70,6 +73,7 @@ func (m *UserMapperImpl) ToEntity(model *models.UserModel) (*user.User, error) {
 		model.ID,
 		email,
 		name,
+		role,
 		*status,
 		model.CreatedAt,
 		model.UpdatedAt,
@@ -95,6 +99,7 @@ func (m *UserMapperImpl) ToModel(entity *user.User) (*models.UserModel, error) {
 		ID:                         entity.ID(),
 		Email:                      entity.Email().String(),
 		Name:                       entity.Name().String(),
+		Role:                       entity.Role().String(),
 		Status:                     entity.Status().String(),
 		Version:                    entity.Version(),
 		CreatedAt:                  entity.CreatedAt(),

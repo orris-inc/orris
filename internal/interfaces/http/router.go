@@ -2,7 +2,6 @@ package http
 
 import (
 	"context"
-	"path/filepath"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -14,7 +13,6 @@ import (
 	notificationApp "orris/internal/application/notification"
 	paymentGateway "orris/internal/application/payment/payment_gateway"
 	paymentUsecases "orris/internal/application/payment/usecases"
-	"orris/internal/application/permission"
 	subscriptionApp "orris/internal/application/subscription"
 	subscriptionUsecases "orris/internal/application/subscription/usecases"
 	"orris/internal/application/user"
@@ -23,14 +21,13 @@ import (
 	"orris/internal/infrastructure/auth"
 	"orris/internal/infrastructure/config"
 	"orris/internal/infrastructure/email"
-	permissionInfra "orris/internal/infrastructure/permission"
-	"orris/internal/infrastructure/persistence"
 	"orris/internal/infrastructure/repository"
 	"orris/internal/infrastructure/token"
 	"orris/internal/interfaces/http/handlers"
 	ticketHandlers "orris/internal/interfaces/http/handlers/ticket"
 	"orris/internal/interfaces/http/middleware"
 	"orris/internal/interfaces/http/routes"
+	"orris/internal/shared/authorization"
 	"orris/internal/shared/logger"
 	"orris/internal/shared/services/markdown"
 
@@ -42,7 +39,6 @@ type Router struct {
 	engine                   *gin.Engine
 	userHandler              *handlers.UserHandler
 	authHandler              *handlers.AuthHandler
-	permissionHandler        *handlers.PermissionHandler
 	subscriptionHandler      *handlers.SubscriptionHandler
 	subscriptionPlanHandler  *handlers.SubscriptionPlanHandler
 	subscriptionTokenHandler *handlers.SubscriptionTokenHandler
@@ -54,7 +50,6 @@ type Router struct {
 	ticketHandler            *ticketHandlers.TicketHandler
 	notificationHandler      *handlers.NotificationHandler
 	authMiddleware           *middleware.AuthMiddleware
-	permissionMiddleware     *middleware.PermissionMiddleware
 	nodeTokenMiddleware      *middleware.NodeTokenMiddleware
 	rateLimiter              *middleware.RateLimiter
 }
@@ -144,29 +139,13 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	})
 	githubClient := &oauthClientAdapter{githubBase}
 
-	roleRepo := repository.NewRoleRepository(db)
-	permissionRepo := repository.NewPermissionRepository(db)
-
-	modelPath := filepath.Join("configs", "rbac_model.conf")
-	enforcer, err := permissionInfra.NewEnforcer(db, modelPath, log)
-	if err != nil {
-		log.Fatalw("failed to initialize permission enforcer", "error", err)
-	}
-
-	permissionSync := permissionInfra.NewPermissionSync(db, log)
-	if err := permissionSync.SyncToCasbin(); err != nil {
-		log.Errorw("failed to sync permissions to Casbin", "error", err)
-	}
-
-	permissionService := permission.NewService(roleRepo, permissionRepo, enforcer, log)
-
-	registerUC := usecases.NewRegisterWithPasswordUseCase(userRepo, roleRepo, hasher, emailService, permissionService, log)
+	registerUC := usecases.NewRegisterWithPasswordUseCase(userRepo, nil, hasher, emailService, nil, log)
 	loginUC := usecases.NewLoginWithPasswordUseCase(userRepo, sessionRepo, hasher, jwtService, log)
 	verifyEmailUC := usecases.NewVerifyEmailUseCase(userRepo, log)
 	requestResetUC := usecases.NewRequestPasswordResetUseCase(userRepo, emailService, log)
 	resetPasswordUC := usecases.NewResetPasswordUseCase(userRepo, sessionRepo, hasher, emailService, log)
 	initiateOAuthUC := usecases.NewInitiateOAuthLoginUseCase(googleClient, githubClient, log)
-	handleOAuthUC := usecases.NewHandleOAuthCallbackUseCase(userRepo, oauthRepo, sessionRepo, googleClient, githubClient, jwtService, initiateOAuthUC, roleRepo, permissionService, log)
+	handleOAuthUC := usecases.NewHandleOAuthCallbackUseCase(userRepo, oauthRepo, sessionRepo, googleClient, githubClient, jwtService, initiateOAuthUC, nil, nil, log)
 	refreshTokenUC := usecases.NewRefreshTokenUseCase(sessionRepo, jwtService, log)
 	logoutUC := usecases.NewLogoutUseCase(sessionRepo, log)
 
@@ -177,20 +156,18 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	authMiddleware := middleware.NewAuthMiddleware(jwtSvc, log)
 	rateLimiter := middleware.NewRateLimiter(100, 1*time.Minute)
-	permissionMiddleware := middleware.NewPermissionMiddleware(permissionService, log)
-	permissionHandler := handlers.NewPermissionHandler(permissionService, log)
 
 	subscriptionRepo := repository.NewSubscriptionRepository(db, nil, log)
 	subscriptionPlanRepo := repository.NewSubscriptionPlanRepository(db, log)
 	subscriptionTokenRepo := repository.NewSubscriptionTokenRepository(db, log)
-	paymentRepo := persistence.NewPaymentRepository(db)
+	paymentRepo := repository.NewPaymentRepository(db)
 
 	tokenGenerator := token.NewTokenGenerator()
 
 	subscriptionService := subscriptionApp.NewService(
 		subscriptionRepo,
 		subscriptionPlanRepo,
-		permissionService,
+		nil,
 		log,
 	)
 	syncPermissionsUC := subscriptionUsecases.NewSyncSubscriptionPermissionsUseCase(
@@ -333,7 +310,6 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		engine:                   engine,
 		userHandler:              userHandler,
 		authHandler:              authHandler,
-		permissionHandler:        permissionHandler,
 		subscriptionHandler:      subscriptionHandler,
 		subscriptionPlanHandler:  subscriptionPlanHandler,
 		subscriptionTokenHandler: subscriptionTokenHandler,
@@ -345,7 +321,6 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		ticketHandler:            ticketHandler,
 		notificationHandler:      notificationHandler,
 		authMiddleware:           authMiddleware,
-		permissionMiddleware:     permissionMiddleware,
 		nodeTokenMiddleware:      nodeTokenMiddleware,
 		rateLimiter:              rateLimiter,
 	}
@@ -376,29 +351,17 @@ func (r *Router) SetupRoutes() {
 		auth.POST("/refresh", r.authHandler.RefreshToken)
 		auth.POST("/logout", r.authMiddleware.RequireAuth(), r.authHandler.Logout)
 		auth.GET("/me", r.authMiddleware.RequireAuth(), r.authHandler.GetCurrentUser)
-
-		authProtected := auth.Group("")
-		authProtected.Use(r.authMiddleware.RequireAuth())
-		{
-			authProtected.GET("/permissions", r.permissionHandler.GetMyPermissions)
-			authProtected.GET("/roles", r.permissionHandler.GetMyRoles)
-			authProtected.GET("/check-permission", r.permissionHandler.CheckPermission)
-		}
 	}
 
 	users := r.engine.Group("/users")
 	users.Use(r.authMiddleware.RequireAuth())
 	{
-		users.POST("", r.permissionMiddleware.RequirePermission("user", "create"), r.userHandler.CreateUser)
-		users.GET("", r.permissionMiddleware.RequirePermission("user", "list"), r.userHandler.ListUsers)
-		users.GET("/:id", r.permissionMiddleware.RequirePermission("user", "read"), r.userHandler.GetUser)
-		users.PUT("/:id", r.permissionMiddleware.RequirePermission("user", "update"), r.userHandler.UpdateUser)
-		users.DELETE("/:id", r.permissionMiddleware.RequirePermission("user", "delete"), r.userHandler.DeleteUser)
-		users.GET("/email/:email", r.permissionMiddleware.RequirePermission("user", "read"), r.userHandler.GetUserByEmail)
-
-		users.POST("/:id/roles", r.permissionMiddleware.RequireRole("admin"), r.permissionHandler.AssignRolesToUser)
-		users.GET("/:id/roles", r.permissionMiddleware.RequirePermission("user", "read"), r.permissionHandler.GetUserRoles)
-		users.GET("/:id/permissions", r.permissionMiddleware.RequirePermission("user", "read"), r.permissionHandler.GetUserPermissions)
+		users.POST("", authorization.RequireAdmin(), r.userHandler.CreateUser)
+		users.GET("", authorization.RequireAdmin(), r.userHandler.ListUsers)
+		users.GET("/:id", authorization.RequireAdmin(), r.userHandler.GetUser)
+		users.PUT("/:id", authorization.RequireAdmin(), r.userHandler.UpdateUser)
+		users.DELETE("/:id", authorization.RequireAdmin(), r.userHandler.DeleteUser)
+		users.GET("/email/:email", authorization.RequireAdmin(), r.userHandler.GetUserByEmail)
 	}
 
 	subscriptions := r.engine.Group("/subscriptions")
@@ -448,26 +411,23 @@ func (r *Router) SetupRoutes() {
 	}
 
 	routes.SetupNodeRoutes(r.engine, &routes.NodeRouteConfig{
-		NodeHandler:          r.nodeHandler,
-		NodeGroupHandler:     r.nodeGroupHandler,
-		SubscriptionHandler:  r.nodeSubscriptionHandler,
-		NodeReportHandler:    r.nodeReportHandler,
-		AuthMiddleware:       r.authMiddleware,
-		PermissionMiddleware: r.permissionMiddleware,
-		NodeTokenMW:          r.nodeTokenMiddleware,
-		RateLimiter:          r.rateLimiter,
+		NodeHandler:         r.nodeHandler,
+		NodeGroupHandler:    r.nodeGroupHandler,
+		SubscriptionHandler: r.nodeSubscriptionHandler,
+		NodeReportHandler:   r.nodeReportHandler,
+		AuthMiddleware:      r.authMiddleware,
+		NodeTokenMW:         r.nodeTokenMiddleware,
+		RateLimiter:         r.rateLimiter,
 	})
 
 	routes.SetupTicketRoutes(r.engine, &routes.TicketRouteConfig{
-		TicketHandler:        r.ticketHandler,
-		AuthMiddleware:       r.authMiddleware,
-		PermissionMiddleware: r.permissionMiddleware,
+		TicketHandler:  r.ticketHandler,
+		AuthMiddleware: r.authMiddleware,
 	})
 
 	routes.SetupNotificationRoutes(r.engine, &routes.NotificationRouteConfig{
-		NotificationHandler:  r.notificationHandler,
-		AuthMiddleware:       r.authMiddleware,
-		PermissionMiddleware: r.permissionMiddleware,
+		NotificationHandler: r.notificationHandler,
+		AuthMiddleware:      r.authMiddleware,
 	})
 }
 

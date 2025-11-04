@@ -2,12 +2,12 @@ package migrations
 
 import (
 	"gorm.io/gorm"
-	"orris/internal/infrastructure/persistence"
+	"orris/internal/infrastructure/persistence/models"
 )
 
 func MigrateTicketTables(db *gorm.DB) error {
 	return db.AutoMigrate(
-		&persistence.TicketModel{},
-		&persistence.CommentModel{},
+		&models.TicketModel{},
+		&models.CommentModel{},
 	)
 }

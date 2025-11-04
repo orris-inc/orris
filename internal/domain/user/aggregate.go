@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"orris/internal/shared/authorization"
 	vo "orris/internal/domain/user/value_objects"
 )
 
@@ -13,6 +14,7 @@ type User struct {
 	id                         uint
 	email                      *vo.Email
 	name                       *vo.Name
+	role                       authorization.UserRole
 	status                     vo.Status
 	createdAt                  time.Time
 	updatedAt                  time.Time
@@ -43,6 +45,7 @@ func NewUser(email *vo.Email, name *vo.Name) (*User, error) {
 	user := &User{
 		email:     email,
 		name:      name,
+		role:      authorization.RoleUser,
 		status:    vo.StatusPending,
 		createdAt: now,
 		updatedAt: now,
@@ -62,7 +65,7 @@ func NewUser(email *vo.Email, name *vo.Name) (*User, error) {
 }
 
 // ReconstructUser reconstructs a user from persistence
-func ReconstructUser(id uint, email *vo.Email, name *vo.Name, status vo.Status, createdAt, updatedAt time.Time, version int) (*User, error) {
+func ReconstructUser(id uint, email *vo.Email, name *vo.Name, role authorization.UserRole, status vo.Status, createdAt, updatedAt time.Time, version int) (*User, error) {
 	if id == 0 {
 		return nil, fmt.Errorf("user ID cannot be zero")
 	}
@@ -77,6 +80,7 @@ func ReconstructUser(id uint, email *vo.Email, name *vo.Name, status vo.Status, 
 		id:        id,
 		email:     email,
 		name:      name,
+		role:      role,
 		status:    status,
 		createdAt: createdAt,
 		updatedAt: updatedAt,
@@ -97,8 +101,8 @@ type UserAuthData struct {
 	LockedUntil                *time.Time
 }
 
-func ReconstructUserWithAuth(id uint, email *vo.Email, name *vo.Name, status vo.Status, createdAt, updatedAt time.Time, version int, authData *UserAuthData) (*User, error) {
-	u, err := ReconstructUser(id, email, name, status, createdAt, updatedAt, version)
+func ReconstructUserWithAuth(id uint, email *vo.Email, name *vo.Name, role authorization.UserRole, status vo.Status, createdAt, updatedAt time.Time, version int, authData *UserAuthData) (*User, error) {
+	u, err := ReconstructUser(id, email, name, role, status, createdAt, updatedAt, version)
 	if err != nil {
 		return nil, err
 	}
@@ -145,6 +149,24 @@ func (u *User) Email() *vo.Email {
 // Name returns the user's name
 func (u *User) Name() *vo.Name {
 	return u.name
+}
+
+// Role returns the user's role
+func (u *User) Role() authorization.UserRole {
+	return u.role
+}
+
+// IsAdmin returns true if the user has admin role
+func (u *User) IsAdmin() bool {
+	return u.role.IsAdmin()
+}
+
+// SetRole sets the user's role
+func (u *User) SetRole(role authorization.UserRole) {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	u.role = role
+	u.updatedAt = time.Now()
 }
 
 // Status returns the user's status

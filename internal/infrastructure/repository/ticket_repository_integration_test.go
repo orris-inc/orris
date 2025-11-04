@@ -1,4 +1,4 @@
-package persistence
+package repository
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 
 	"orris/internal/domain/ticket"
 	vo "orris/internal/domain/ticket/value_objects"
+	"orris/internal/infrastructure/persistence/models"
 	"orris/internal/shared/query"
 )
 
@@ -19,7 +20,7 @@ func setupTestDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 
-	err = db.AutoMigrate(&TicketModel{}, &CommentModel{})
+	err = db.AutoMigrate(&models.TicketModel{}, &models.CommentModel{})
 	require.NoError(t, err)
 
 	return db

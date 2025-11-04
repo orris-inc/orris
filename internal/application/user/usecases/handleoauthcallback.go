@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	permissionApp "orris/internal/application/permission"
-	"orris/internal/domain/permission"
 	"orris/internal/domain/user"
 	vo "orris/internal/domain/user/value_objects"
+	"orris/internal/shared/authorization"
 	"orris/internal/shared/logger"
 )
 
@@ -46,16 +45,14 @@ type HandleOAuthCallbackResult struct {
 }
 
 type HandleOAuthCallbackUseCase struct {
-	userRepo          user.Repository
-	roleRepo          permission.RoleRepository
-	permissionService *permissionApp.Service
-	oauthRepo         user.OAuthAccountRepository
-	sessionRepo       user.SessionRepository
-	googleClient      OAuthCallbackClient
-	githubClient      OAuthCallbackClient
-	jwtService        JWTService
-	oauthInitiator    *InitiateOAuthLoginUseCase
-	logger            logger.Interface
+	userRepo       user.Repository
+	oauthRepo      user.OAuthAccountRepository
+	sessionRepo    user.SessionRepository
+	googleClient   OAuthCallbackClient
+	githubClient   OAuthCallbackClient
+	jwtService     JWTService
+	oauthInitiator *InitiateOAuthLoginUseCase
+	logger         logger.Interface
 }
 
 func NewHandleOAuthCallbackUseCase(
@@ -66,21 +63,19 @@ func NewHandleOAuthCallbackUseCase(
 	githubClient OAuthCallbackClient,
 	jwtService JWTService,
 	oauthInitiator *InitiateOAuthLoginUseCase,
-	roleRepo permission.RoleRepository,
-	permissionService *permissionApp.Service,
+	roleRepo interface{},
+	permissionService interface{},
 	logger logger.Interface,
 ) *HandleOAuthCallbackUseCase {
 	return &HandleOAuthCallbackUseCase{
-		userRepo:          userRepo,
-		roleRepo:          roleRepo,
-		permissionService: permissionService,
-		oauthRepo:         oauthRepo,
-		sessionRepo:       sessionRepo,
-		googleClient:      googleClient,
-		githubClient:      githubClient,
-		jwtService:        jwtService,
-		oauthInitiator:    oauthInitiator,
-		logger:            logger,
+		userRepo:       userRepo,
+		oauthRepo:      oauthRepo,
+		sessionRepo:    sessionRepo,
+		googleClient:   googleClient,
+		githubClient:   githubClient,
+		jwtService:     jwtService,
+		oauthInitiator: oauthInitiator,
+		logger:         logger,
 	}
 }
 
@@ -172,8 +167,9 @@ func (uc *HandleOAuthCallbackUseCase) Execute(ctx context.Context, cmd HandleOAu
 			if err != nil {
 				uc.logger.Errorw("failed to check if first user", "error", err)
 			} else if isFirstUser {
-				if err := uc.assignAdminRoleToFirstUser(ctx, existingUser.ID()); err != nil {
-					uc.logger.Errorw("failed to assign admin role to first user", "error", err, "user_id", existingUser.ID())
+				existingUser.SetRole(authorization.RoleAdmin)
+				if err := uc.userRepo.Update(ctx, existingUser); err != nil {
+					uc.logger.Errorw("failed to update user role to admin", "error", err, "user_id", existingUser.ID())
 				} else {
 					uc.logger.Infow("admin role assigned to first user", "user_id", existingUser.ID())
 				}
@@ -245,17 +241,4 @@ func (uc *HandleOAuthCallbackUseCase) isFirstUser(ctx context.Context) (bool, er
 		return false, fmt.Errorf("failed to count users: %w", err)
 	}
 	return total == 1, nil
-}
-
-func (uc *HandleOAuthCallbackUseCase) assignAdminRoleToFirstUser(ctx context.Context, userID uint) error {
-	adminRole, err := uc.roleRepo.GetBySlug(ctx, "admin")
-	if err != nil {
-		return fmt.Errorf("failed to get admin role: %w", err)
-	}
-
-	if err := uc.permissionService.AssignRoleToUser(ctx, userID, []uint{adminRole.ID()}); err != nil {
-		return fmt.Errorf("failed to assign admin role: %w", err)
-	}
-
-	return nil
 }

@@ -4,10 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	permissionApp "orris/internal/application/permission"
-	"orris/internal/domain/permission"
 	"orris/internal/domain/user"
 	vo "orris/internal/domain/user/value_objects"
+	"orris/internal/shared/authorization"
 	"orris/internal/shared/logger"
 )
 
@@ -24,29 +23,25 @@ type RegisterWithPasswordCommand struct {
 }
 
 type RegisterWithPasswordUseCase struct {
-	userRepo          user.Repository
-	permissionService *permissionApp.Service
-	roleRepo          permission.RoleRepository
-	passwordHasher    user.PasswordHasher
-	emailService      EmailService
-	logger            logger.Interface
+	userRepo       user.Repository
+	passwordHasher user.PasswordHasher
+	emailService   EmailService
+	logger         logger.Interface
 }
 
 func NewRegisterWithPasswordUseCase(
 	userRepo user.Repository,
-	roleRepo permission.RoleRepository,
+	roleRepo interface{},
 	hasher user.PasswordHasher,
 	emailService EmailService,
-	permissionService *permissionApp.Service,
+	permissionService interface{},
 	logger logger.Interface,
 ) *RegisterWithPasswordUseCase {
 	return &RegisterWithPasswordUseCase{
-		userRepo:          userRepo,
-		roleRepo:          roleRepo,
-		permissionService: permissionService,
-		passwordHasher:    hasher,
-		emailService:      emailService,
-		logger:            logger,
+		userRepo:       userRepo,
+		passwordHasher: hasher,
+		emailService:   emailService,
+		logger:         logger,
 	}
 }
 
@@ -101,8 +96,9 @@ func (uc *RegisterWithPasswordUseCase) Execute(ctx context.Context, cmd Register
 	if err != nil {
 		uc.logger.Errorw("failed to check if first user", "error", err)
 	} else if isFirstUser {
-		if err := uc.assignAdminRoleToFirstUser(ctx, newUser.ID()); err != nil {
-			uc.logger.Errorw("failed to assign admin role to first user", "error", err, "user_id", newUser.ID())
+		newUser.SetRole(authorization.RoleAdmin)
+		if err := uc.userRepo.Update(ctx, newUser); err != nil {
+			uc.logger.Errorw("failed to update user role to admin", "error", err, "user_id", newUser.ID())
 		} else {
 			uc.logger.Infow("admin role assigned to first user", "user_id", newUser.ID())
 		}
@@ -124,17 +120,4 @@ func (uc *RegisterWithPasswordUseCase) isFirstUser(ctx context.Context) (bool, e
 		return false, fmt.Errorf("failed to count users: %w", err)
 	}
 	return total == 1, nil
-}
-
-func (uc *RegisterWithPasswordUseCase) assignAdminRoleToFirstUser(ctx context.Context, userID uint) error {
-	adminRole, err := uc.roleRepo.GetBySlug(ctx, "admin")
-	if err != nil {
-		return fmt.Errorf("failed to get admin role: %w", err)
-	}
-
-	if err := uc.permissionService.AssignRoleToUser(ctx, userID, []uint{adminRole.ID()}); err != nil {
-		return fmt.Errorf("failed to assign admin role: %w", err)
-	}
-
-	return nil
 }

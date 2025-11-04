@@ -5,19 +5,19 @@ import (
 
 	"orris/internal/interfaces/http/handlers"
 	"orris/internal/interfaces/http/middleware"
+	"orris/internal/shared/authorization"
 )
 
 // NodeRouteConfig holds dependencies for node routes
 type NodeRouteConfig struct {
-	NodeHandler          *handlers.NodeHandler
-	NodeGroupHandler     *handlers.NodeGroupHandler
-	SubscriptionHandler  *handlers.NodeSubscriptionHandler
-	NodeReportHandler    *handlers.NodeReportHandler
-	AuthMiddleware       *middleware.AuthMiddleware
-	PermissionMiddleware *middleware.PermissionMiddleware
-	SubscriptionTokenMW  *middleware.SubscriptionTokenMiddleware
-	NodeTokenMW          *middleware.NodeTokenMiddleware
-	RateLimiter          *middleware.RateLimiter
+	NodeHandler         *handlers.NodeHandler
+	NodeGroupHandler    *handlers.NodeGroupHandler
+	SubscriptionHandler *handlers.NodeSubscriptionHandler
+	NodeReportHandler   *handlers.NodeReportHandler
+	AuthMiddleware      *middleware.AuthMiddleware
+	SubscriptionTokenMW *middleware.SubscriptionTokenMiddleware
+	NodeTokenMW         *middleware.NodeTokenMiddleware
+	RateLimiter         *middleware.RateLimiter
 }
 
 // SetupNodeRoutes configures all node management routes
@@ -28,37 +28,37 @@ func SetupNodeRoutes(engine *gin.Engine, config *NodeRouteConfig) {
 	{
 		// Node CRUD operations
 		nodes.POST("",
-			config.PermissionMiddleware.RequirePermission("node", "create"),
+			authorization.RequireAdmin(),
 			config.NodeHandler.CreateNode)
 		nodes.GET("",
-			config.PermissionMiddleware.RequirePermission("node", "list"),
+			authorization.RequireAdmin(),
 			config.NodeHandler.ListNodes)
 		nodes.GET("/:id",
-			config.PermissionMiddleware.RequirePermission("node", "read"),
+			authorization.RequireAdmin(),
 			config.NodeHandler.GetNode)
 		nodes.PUT("/:id",
-			config.PermissionMiddleware.RequirePermission("node", "update"),
+			authorization.RequireAdmin(),
 			config.NodeHandler.UpdateNode)
 		nodes.DELETE("/:id",
-			config.PermissionMiddleware.RequirePermission("node", "delete"),
+			authorization.RequireAdmin(),
 			config.NodeHandler.DeleteNode)
 
 		// Node activation management
 		nodes.POST("/:id/activate",
-			config.PermissionMiddleware.RequirePermission("node", "update"),
+			authorization.RequireAdmin(),
 			config.NodeHandler.ActivateNode)
 		nodes.POST("/:id/deactivate",
-			config.PermissionMiddleware.RequirePermission("node", "update"),
+			authorization.RequireAdmin(),
 			config.NodeHandler.DeactivateNode)
 
 		// Node token management
 		nodes.POST("/:id/token",
-			config.PermissionMiddleware.RequirePermission("node", "update"),
+			authorization.RequireAdmin(),
 			config.NodeHandler.GenerateToken)
 
 		// Node traffic statistics
 		nodes.GET("/:id/traffic",
-			config.PermissionMiddleware.RequirePermission("node", "read"),
+			authorization.RequireAdmin(),
 			config.NodeHandler.GetNodeTraffic)
 	}
 
@@ -68,38 +68,38 @@ func SetupNodeRoutes(engine *gin.Engine, config *NodeRouteConfig) {
 	{
 		// Node group CRUD operations
 		nodeGroups.POST("",
-			config.PermissionMiddleware.RequirePermission("node_group", "create"),
+			authorization.RequireAdmin(),
 			config.NodeGroupHandler.CreateNodeGroup)
 		nodeGroups.GET("",
-			config.PermissionMiddleware.RequirePermission("node_group", "list"),
+			authorization.RequireAdmin(),
 			config.NodeGroupHandler.ListNodeGroups)
 		nodeGroups.GET("/:id",
-			config.PermissionMiddleware.RequirePermission("node_group", "read"),
+			authorization.RequireAdmin(),
 			config.NodeGroupHandler.GetNodeGroup)
 		nodeGroups.PUT("/:id",
-			config.PermissionMiddleware.RequirePermission("node_group", "update"),
+			authorization.RequireAdmin(),
 			config.NodeGroupHandler.UpdateNodeGroup)
 		nodeGroups.DELETE("/:id",
-			config.PermissionMiddleware.RequirePermission("node_group", "delete"),
+			authorization.RequireAdmin(),
 			config.NodeGroupHandler.DeleteNodeGroup)
 
 		// Node-Group relationship management
 		nodeGroups.POST("/:id/nodes",
-			config.PermissionMiddleware.RequirePermission("node_group", "update"),
+			authorization.RequireAdmin(),
 			config.NodeGroupHandler.AddNodeToGroup)
 		nodeGroups.DELETE("/:id/nodes/:node_id",
-			config.PermissionMiddleware.RequirePermission("node_group", "update"),
+			authorization.RequireAdmin(),
 			config.NodeGroupHandler.RemoveNodeFromGroup)
 		nodeGroups.GET("/:id/nodes",
-			config.PermissionMiddleware.RequirePermission("node_group", "read"),
+			authorization.RequireAdmin(),
 			config.NodeGroupHandler.ListGroupNodes)
 
 		// Subscription plan association
 		nodeGroups.POST("/:id/plans",
-			config.PermissionMiddleware.RequirePermission("node_group", "update"),
+			authorization.RequireAdmin(),
 			config.NodeGroupHandler.AssociatePlan)
 		nodeGroups.DELETE("/:id/plans/:plan_id",
-			config.PermissionMiddleware.RequirePermission("node_group", "update"),
+			authorization.RequireAdmin(),
 			config.NodeGroupHandler.DisassociatePlan)
 	}
 

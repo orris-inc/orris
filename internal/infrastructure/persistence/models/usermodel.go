@@ -14,6 +14,7 @@ type UserModel struct {
 	ID                         uint    `gorm:"primarykey"`
 	Email                      string  `gorm:"uniqueIndex;not null;size:255"`
 	Name                       string  `gorm:"not null;size:100"`
+	Role                       string  `gorm:"not null;default:user;size:20;index"`
 	AvatarURL                  *string `gorm:"size:500"`
 	EmailVerified              bool    `gorm:"default:false;index:idx_email_verified"`
 	Locale                     string  `gorm:"size:10;default:en"`

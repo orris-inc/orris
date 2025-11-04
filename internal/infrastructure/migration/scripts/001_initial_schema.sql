@@ -1,12 +1,13 @@
 -- +goose Up
 -- Migration: Initial database schema
 -- Created: 2025-10-20
--- Description: Create all tables for Orris application including users, OAuth, sessions, and RBAC system
+-- Description: Create all tables for Orris application including users, OAuth, and sessions
 
 CREATE TABLE users (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     email VARCHAR(255) NOT NULL UNIQUE,
     name VARCHAR(100) NOT NULL,
+    role VARCHAR(20) NOT NULL DEFAULT 'user',
     avatar_url VARCHAR(500),
     email_verified BOOLEAN DEFAULT FALSE,
     locale VARCHAR(10) DEFAULT 'en',
@@ -24,6 +25,7 @@ CREATE TABLE users (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP NULL,
     INDEX idx_users_email (email),
+    INDEX idx_users_role (role),
     INDEX idx_users_status (status),
     INDEX idx_users_deleted_at (deleted_at),
     INDEX idx_email_verified (email_verified),
@@ -88,104 +90,10 @@ INSERT INTO oauth_providers (name, display_name, auth_url, token_url, user_info_
 ('google', 'Google', 'https://accounts.google.com/o/oauth2/v2/auth', 'https://oauth2.googleapis.com/token', 'https://www.googleapis.com/oauth2/v2/userinfo', 'openid email profile'),
 ('github', 'GitHub', 'https://github.com/login/oauth/authorize', 'https://github.com/login/oauth/access_token', 'https://api.github.com/user', 'read:user user:email');
 
-CREATE TABLE roles (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(50) NOT NULL,
-    slug VARCHAR(50) NOT NULL UNIQUE,
-    description TEXT,
-    status VARCHAR(20) NOT NULL DEFAULT 'active',
-    is_system BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_roles_status (status),
-    INDEX idx_roles_slug (slug)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-CREATE TABLE permissions (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    resource VARCHAR(50) NOT NULL,
-    action VARCHAR(20) NOT NULL,
-    description TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY unique_permission (resource, action),
-    INDEX idx_permissions_resource (resource),
-    INDEX idx_permissions_action (action)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-CREATE TABLE role_permissions (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    role_id BIGINT UNSIGNED NOT NULL,
-    permission_id BIGINT UNSIGNED NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY unique_role_permission (role_id, permission_id),
-    INDEX idx_role_permissions_role (role_id),
-    INDEX idx_role_permissions_permission (permission_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-CREATE TABLE user_roles (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT UNSIGNED NOT NULL,
-    role_id BIGINT UNSIGNED NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY unique_user_role (user_id, role_id),
-    INDEX idx_user_roles_user (user_id),
-    INDEX idx_user_roles_role (role_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-INSERT INTO roles (name, slug, description, is_system) VALUES
-('Administrator', 'admin', 'System administrator with full access', TRUE),
-('User', 'user', 'Regular user with basic permissions', TRUE);
-
-INSERT INTO permissions (resource, action, description) VALUES
-('user', 'create', 'Create new users'),
-('user', 'read', 'View user information'),
-('user', 'update', 'Update user information'),
-('user', 'delete', 'Delete users'),
-('user', 'list', 'List all users'),
-('role', 'create', 'Create new roles'),
-('role', 'read', 'View role information'),
-('role', 'update', 'Update role information'),
-('role', 'delete', 'Delete roles'),
-('role', 'list', 'List all roles'),
-('permission', 'read', 'View permission information'),
-('permission', 'list', 'List all permissions');
-
-INSERT INTO role_permissions (role_id, permission_id)
-SELECT r.id, p.id
-FROM roles r
-CROSS JOIN permissions p
-WHERE r.slug = 'admin';
-
-INSERT INTO role_permissions (role_id, permission_id)
-SELECT r.id, p.id
-FROM roles r
-CROSS JOIN permissions p
-WHERE r.slug = 'user' AND p.resource = 'user' AND p.action IN ('read');
-
-CREATE TABLE IF NOT EXISTS casbin_rule (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    ptype VARCHAR(100),
-    v0 VARCHAR(100),
-    v1 VARCHAR(100),
-    v2 VARCHAR(100),
-    v3 VARCHAR(100),
-    v4 VARCHAR(100),
-    v5 VARCHAR(100),
-    INDEX idx_ptype (ptype),
-    INDEX idx_v0 (v0),
-    INDEX idx_v1 (v1)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
 -- +goose Down
 -- Rollback Migration: Drop all tables
 -- Description: Remove all application tables
 
-DROP TABLE IF EXISTS casbin_rule;
-DROP TABLE IF EXISTS user_roles;
-DROP TABLE IF EXISTS role_permissions;
-DROP TABLE IF EXISTS permissions;
-DROP TABLE IF EXISTS roles;
 DROP TABLE IF EXISTS oauth_providers;
 DROP TABLE IF EXISTS sessions;
 DROP TABLE IF EXISTS oauth_accounts;

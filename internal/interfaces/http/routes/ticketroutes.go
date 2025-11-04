@@ -5,12 +5,12 @@ import (
 
 	tickethandlers "orris/internal/interfaces/http/handlers/ticket"
 	"orris/internal/interfaces/http/middleware"
+	"orris/internal/shared/authorization"
 )
 
 type TicketRouteConfig struct {
-	TicketHandler        *tickethandlers.TicketHandler
-	AuthMiddleware       *middleware.AuthMiddleware
-	PermissionMiddleware *middleware.PermissionMiddleware
+	TicketHandler  *tickethandlers.TicketHandler
+	AuthMiddleware *middleware.AuthMiddleware
 }
 
 func SetupTicketRoutes(engine *gin.Engine, config *TicketRouteConfig) {
@@ -24,11 +24,11 @@ func SetupTicketRoutes(engine *gin.Engine, config *TicketRouteConfig) {
 		tickets.GET("/:id",
 			config.TicketHandler.GetTicket)
 		tickets.DELETE("/:id",
-			config.PermissionMiddleware.RequirePermission("ticket", "delete"),
+			authorization.RequireAdmin(),
 			config.TicketHandler.DeleteTicket)
 
 		tickets.POST("/:id/assign",
-			config.PermissionMiddleware.RequirePermission("ticket", "assign"),
+			authorization.RequireAdmin(),
 			config.TicketHandler.AssignTicket)
 		tickets.POST("/:id/comments",
 			config.TicketHandler.AddComment)
