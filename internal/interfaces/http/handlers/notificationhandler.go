@@ -35,6 +35,7 @@ func NewNotificationHandler(serviceDDD *notification.ServiceDDD, logger logger.I
 // @Success 201 {object} utils.APIResponse{data=dto.AnnouncementResponse} "Announcement created successfully"
 // @Failure 400 {object} utils.APIResponse "Bad request"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /announcements [post]
 func (h *NotificationHandler) CreateAnnouncement(c *gin.Context) {
@@ -86,6 +87,7 @@ func (h *NotificationHandler) CreateAnnouncement(c *gin.Context) {
 // @Success 200 {object} utils.APIResponse{data=dto.AnnouncementResponse} "Announcement updated successfully"
 // @Failure 400 {object} utils.APIResponse "Bad request"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 404 {object} utils.APIResponse "Announcement not found"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /announcements/{id} [put]

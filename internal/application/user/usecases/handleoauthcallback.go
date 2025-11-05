@@ -21,9 +21,9 @@ type OAuthUserInfo struct {
 }
 
 type OAuthCallbackClient interface {
-	ExchangeCode(ctx context.Context, code string) (accessToken string, err error)
+	ExchangeCode(ctx context.Context, code string, codeVerifier string) (accessToken string, err error)
 	GetUserInfo(ctx context.Context, accessToken string) (*OAuthUserInfo, error)
-	GetAuthURL(state string) string
+	GetAuthURL(state string) (authURL string, codeVerifier string, err error)
 }
 
 type HandleOAuthCallbackCommand struct {
@@ -81,7 +81,13 @@ func NewHandleOAuthCallbackUseCase(
 }
 
 func (uc *HandleOAuthCallbackUseCase) Execute(ctx context.Context, cmd HandleOAuthCallbackCommand) (*HandleOAuthCallbackResult, error) {
-	if !uc.oauthInitiator.VerifyState(cmd.State) {
+	// Verify state and retrieve code_verifier from Redis
+	stateInfo, err := uc.oauthInitiator.VerifyStateAndGetVerifier(ctx, cmd.State)
+	if err != nil {
+		uc.logger.Warnw("state verification failed",
+			"provider", cmd.Provider,
+			"error", err,
+		)
 		return nil, fmt.Errorf("invalid or expired state parameter")
 	}
 
@@ -95,7 +101,8 @@ func (uc *HandleOAuthCallbackUseCase) Execute(ctx context.Context, cmd HandleOAu
 		return nil, fmt.Errorf("unsupported OAuth provider: %s", cmd.Provider)
 	}
 
-	accessToken, err := client.ExchangeCode(ctx, cmd.Code)
+	// Exchange authorization code for access token using code_verifier
+	accessToken, err := client.ExchangeCode(ctx, cmd.Code, stateInfo.CodeVerifier)
 	if err != nil {
 		uc.logger.Errorw("failed to exchange code", "error", err, "provider", cmd.Provider)
 		return nil, fmt.Errorf("failed to exchange authorization code: %w", err)

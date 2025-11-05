@@ -53,7 +53,7 @@ type CreatePaymentResponse struct {
 // @Failure 400 {object} utils.APIResponse "Bad request"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /api/v1/payments [post]
+// @Router /payments [post]
 func (h *PaymentHandler) CreatePayment(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -101,7 +101,7 @@ func (h *PaymentHandler) CreatePayment(c *gin.Context) {
 // @Success 200 {object} utils.APIResponse "Callback processed successfully"
 // @Failure 400 {object} utils.APIResponse "Bad request"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /api/v1/payments/callback [post]
+// @Router /payments/callback [post]
 func (h *PaymentHandler) HandleCallback(c *gin.Context) {
 	if err := h.handleCallbackUC.Execute(c.Request.Context(), c.Request); err != nil {
 		h.logger.Errorw("failed to handle payment callback", "error", err)

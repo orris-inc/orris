@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/gorm"
@@ -19,6 +20,7 @@ import (
 	"orris/internal/application/user/usecases"
 	"orris/internal/infrastructure/adapters"
 	"orris/internal/infrastructure/auth"
+	"orris/internal/infrastructure/cache"
 	"orris/internal/infrastructure/config"
 	"orris/internal/infrastructure/email"
 	"orris/internal/infrastructure/repository"
@@ -72,18 +74,18 @@ func (a *jwtServiceAdapter) Generate(userID uint, sessionID string) (*usecases.T
 
 type oauthClientAdapter struct {
 	client interface {
-		GetAuthURL(state string) string
-		ExchangeCode(ctx context.Context, code string) (string, error)
+		GetAuthURL(state string) (authURL string, codeVerifier string, err error)
+		ExchangeCode(ctx context.Context, code string, codeVerifier string) (string, error)
 		GetUserInfo(ctx context.Context, accessToken string) (*auth.OAuthUserInfo, error)
 	}
 }
 
-func (a *oauthClientAdapter) GetAuthURL(state string) string {
+func (a *oauthClientAdapter) GetAuthURL(state string) (string, string, error) {
 	return a.client.GetAuthURL(state)
 }
 
-func (a *oauthClientAdapter) ExchangeCode(ctx context.Context, code string) (string, error) {
-	return a.client.ExchangeCode(ctx, code)
+func (a *oauthClientAdapter) ExchangeCode(ctx context.Context, code string, codeVerifier string) (string, error) {
+	return a.client.ExchangeCode(ctx, code, codeVerifier)
 }
 
 func (a *oauthClientAdapter) GetUserInfo(ctx context.Context, accessToken string) (*usecases.OAuthUserInfo, error) {
@@ -139,6 +141,27 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	})
 	githubClient := &oauthClientAdapter{githubBase}
 
+	// Initialize Redis client for OAuth state storage
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     cfg.Redis.GetAddr(),
+		Password: cfg.Redis.Password,
+		DB:       cfg.Redis.DB,
+	})
+
+	// Test Redis connection
+	ctx := context.Background()
+	if err := redisClient.Ping(ctx).Err(); err != nil {
+		log.Fatalw("failed to connect to Redis", "error", err, "addr", cfg.Redis.GetAddr())
+	}
+	log.Infow("Redis connection established", "addr", cfg.Redis.GetAddr())
+
+	// Create OAuth StateStore with 10 minute TTL
+	stateStore := cache.NewRedisStateStore(
+		redisClient,
+		"oauth:state:",
+		10*time.Minute,
+	)
+
 	authHelper := helpers.NewAuthHelper(userRepo, sessionRepo, log)
 
 	registerUC := usecases.NewRegisterWithPasswordUseCase(userRepo, hasher, emailService, authHelper, log)
@@ -146,7 +169,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	verifyEmailUC := usecases.NewVerifyEmailUseCase(userRepo, log)
 	requestResetUC := usecases.NewRequestPasswordResetUseCase(userRepo, emailService, log)
 	resetPasswordUC := usecases.NewResetPasswordUseCase(userRepo, sessionRepo, hasher, emailService, log)
-	initiateOAuthUC := usecases.NewInitiateOAuthLoginUseCase(googleClient, githubClient, log)
+	initiateOAuthUC := usecases.NewInitiateOAuthLoginUseCase(googleClient, githubClient, log, stateStore)
 	handleOAuthUC := usecases.NewHandleOAuthCallbackUseCase(userRepo, oauthRepo, sessionRepo, googleClient, githubClient, jwtService, initiateOAuthUC, authHelper, log)
 	refreshTokenUC := usecases.NewRefreshTokenUseCase(sessionRepo, jwtService, authHelper, log)
 	logoutUC := usecases.NewLogoutUseCase(sessionRepo, log)
@@ -154,6 +177,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	authHandler := handlers.NewAuthHandler(
 		registerUC, loginUC, verifyEmailUC, requestResetUC, resetPasswordUC,
 		initiateOAuthUC, handleOAuthUC, refreshTokenUC, logoutUC, userRepo, log,
+		cfg.Server.FrontendCallbackURL, cfg.Server.AllowedOrigins,
 	)
 
 	authMiddleware := middleware.NewAuthMiddleware(jwtSvc, log)
@@ -319,10 +343,10 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 }
 
 // SetupRoutes configures all HTTP routes
-func (r *Router) SetupRoutes() {
+func (r *Router) SetupRoutes(cfg *config.Config) {
 	r.engine.Use(middleware.Logger())
 	r.engine.Use(middleware.Recovery())
-	r.engine.Use(middleware.CORS())
+	r.engine.Use(middleware.CORS(cfg.Server.AllowedOrigins))
 
 	r.engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 

@@ -63,6 +63,31 @@ type ChangePlanRequest struct {
 	EffectiveDate string `json:"effective_date" binding:"required,oneof=immediate period_end"`
 }
 
+// SubscriptionCreateResult represents the response for creating a subscription
+type SubscriptionCreateResult struct {
+	Subscription interface{} `json:"subscription"`
+	Token        interface{} `json:"token"`
+}
+
+// SubscriptionResponse represents the response for subscription details
+type SubscriptionResponse struct {
+	ID                 uint        `json:"id"`
+	UserID             uint        `json:"user_id"`
+	PlanID             uint        `json:"plan_id"`
+	Status             string      `json:"status"`
+	StartDate          time.Time   `json:"start_date"`
+	EndDate            time.Time   `json:"end_date"`
+	AutoRenew          bool        `json:"auto_renew"`
+	CurrentPeriodStart time.Time   `json:"current_period_start"`
+	CurrentPeriodEnd   time.Time   `json:"current_period_end"`
+	IsExpired          bool        `json:"is_expired"`
+	IsActive           bool        `json:"is_active"`
+	CancelledAt        *time.Time  `json:"cancelled_at,omitempty"`
+	CancelReason       *string     `json:"cancel_reason,omitempty"`
+	CreatedAt          time.Time   `json:"created_at"`
+	UpdatedAt          time.Time   `json:"updated_at"`
+}
+
 // @Summary Create a new subscription
 // @Description Create a new subscription for the authenticated user with the specified plan
 // @Tags subscriptions
@@ -70,7 +95,7 @@ type ChangePlanRequest struct {
 // @Produce json
 // @Security Bearer
 // @Param subscription body CreateSubscriptionRequest true "Subscription data"
-// @Success 201 {object} utils.APIResponse "Subscription created successfully"
+// @Success 201 {object} utils.APIResponse{data=SubscriptionCreateResult} "Subscription created successfully"
 // @Failure 400 {object} utils.APIResponse "Bad request"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
 // @Failure 404 {object} utils.APIResponse "Plan not found"
@@ -128,7 +153,7 @@ func (h *SubscriptionHandler) CreateSubscription(c *gin.Context) {
 // @Produce json
 // @Security Bearer
 // @Param id path int true "Subscription ID"
-// @Success 200 {object} utils.APIResponse "Subscription details"
+// @Success 200 {object} utils.APIResponse{data=SubscriptionResponse} "Subscription details"
 // @Failure 400 {object} utils.APIResponse "Invalid subscription ID"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
 // @Failure 403 {object} utils.APIResponse "Access denied"
@@ -175,8 +200,8 @@ func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 // @Security Bearer
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Page size" default(20)
-// @Param status query string false "Subscription status filter"
-// @Success 200 {object} utils.APIResponse "Subscriptions list"
+// @Param status query string false "Subscription status filter" Enums(active,inactive,cancelled,expired,pending)
+// @Success 200 {object} utils.APIResponse{data=utils.ListResponse} "Subscriptions list"
 // @Failure 400 {object} utils.APIResponse "Invalid query parameters"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
 // @Failure 500 {object} utils.APIResponse "Internal server error"

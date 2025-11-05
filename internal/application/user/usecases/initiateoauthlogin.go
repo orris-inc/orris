@@ -1,16 +1,23 @@
 package usecases
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
-	"time"
 
+	"orris/internal/infrastructure/cache"
 	"orris/internal/shared/logger"
 )
 
+// StateStore defines the interface for OAuth state storage
+type StateStore interface {
+	Set(ctx context.Context, state string, codeVerifier string) error
+	VerifyAndGet(ctx context.Context, state string) (*cache.StateInfo, error)
+}
+
 type OAuthClient interface {
-	GetAuthURL(state string) string
+	GetAuthURL(state string) (authURL string, codeVerifier string, err error)
 }
 
 type InitiateOAuthLoginCommand struct {
@@ -26,19 +33,20 @@ type InitiateOAuthLoginUseCase struct {
 	googleClient OAuthClient
 	githubClient OAuthClient
 	logger       logger.Interface
-	stateStore   map[string]time.Time
+	stateStore   StateStore
 }
 
 func NewInitiateOAuthLoginUseCase(
 	googleClient OAuthClient,
 	githubClient OAuthClient,
 	logger logger.Interface,
+	stateStore StateStore,
 ) *InitiateOAuthLoginUseCase {
 	return &InitiateOAuthLoginUseCase{
 		googleClient: googleClient,
 		githubClient: githubClient,
 		logger:       logger,
-		stateStore:   make(map[string]time.Time),
+		stateStore:   stateStore,
 	}
 }
 
@@ -48,8 +56,6 @@ func (uc *InitiateOAuthLoginUseCase) Execute(cmd InitiateOAuthLoginCommand) (*In
 		uc.logger.Errorw("failed to generate state", "error", err)
 		return nil, fmt.Errorf("failed to generate state: %w", err)
 	}
-
-	uc.stateStore[state] = time.Now().Add(10 * time.Minute)
 
 	var client OAuthClient
 	switch cmd.Provider {
@@ -61,9 +67,21 @@ func (uc *InitiateOAuthLoginUseCase) Execute(cmd InitiateOAuthLoginCommand) (*In
 		return nil, fmt.Errorf("unsupported OAuth provider: %s", cmd.Provider)
 	}
 
-	authURL := client.GetAuthURL(state)
+	// Get auth URL with PKCE parameters
+	authURL, codeVerifier, err := client.GetAuthURL(state)
+	if err != nil {
+		uc.logger.Errorw("failed to get auth URL", "error", err, "provider", cmd.Provider)
+		return nil, fmt.Errorf("failed to get auth URL: %w", err)
+	}
 
-	uc.logger.Infow("OAuth login initiated", "provider", cmd.Provider)
+	// Store state and code_verifier in Redis
+	ctx := context.TODO()
+	if err := uc.stateStore.Set(ctx, state, codeVerifier); err != nil {
+		uc.logger.Errorw("failed to store OAuth state", "error", err, "state", state)
+		return nil, fmt.Errorf("failed to store state: %w", err)
+	}
+
+	uc.logger.Infow("OAuth login initiated", "provider", cmd.Provider, "state", state)
 
 	return &InitiateOAuthLoginResult{
 		AuthURL: authURL,
@@ -71,19 +89,14 @@ func (uc *InitiateOAuthLoginUseCase) Execute(cmd InitiateOAuthLoginCommand) (*In
 	}, nil
 }
 
-func (uc *InitiateOAuthLoginUseCase) VerifyState(state string) bool {
-	expiry, exists := uc.stateStore[state]
-	if !exists {
-		return false
+// VerifyStateAndGetVerifier verifies state and retrieves code_verifier from Redis
+func (uc *InitiateOAuthLoginUseCase) VerifyStateAndGetVerifier(ctx context.Context, state string) (*cache.StateInfo, error) {
+	stateInfo, err := uc.stateStore.VerifyAndGet(ctx, state)
+	if err != nil {
+		uc.logger.Warnw("invalid or expired OAuth state", "state", state, "error", err)
+		return nil, fmt.Errorf("invalid or expired state parameter")
 	}
-
-	if time.Now().After(expiry) {
-		delete(uc.stateStore, state)
-		return false
-	}
-
-	delete(uc.stateStore, state)
-	return true
+	return stateInfo, nil
 }
 
 func generateState() (string, error) {

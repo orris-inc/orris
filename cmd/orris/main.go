@@ -26,6 +26,11 @@ import (
 // @in header
 // @name Authorization
 // @description Type "Bearer" followed by a space and JWT token.
+
+// @securityDefinitions.apikey NodeToken
+// @in header
+// @name X-Node-Token
+// @description Node authentication token for reporting endpoints
 func main() {
 	rootCmd := &cobra.Command{
 		Use:   "orris",

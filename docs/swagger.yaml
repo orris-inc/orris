@@ -8,6 +8,8 @@ definitions:
         type: integer
       refresh_token:
         type: string
+      token_type:
+        type: string
       user: {}
     type: object
   internal_interfaces_http_handlers.CancelSubscriptionRequest:
@@ -187,6 +189,44 @@ definitions:
     required:
     - password
     - token
+    type: object
+  internal_interfaces_http_handlers.SubscriptionCreateResult:
+    properties:
+      subscription: {}
+      token: {}
+    type: object
+  internal_interfaces_http_handlers.SubscriptionResponse:
+    properties:
+      auto_renew:
+        type: boolean
+      cancel_reason:
+        type: string
+      cancelled_at:
+        type: string
+      created_at:
+        type: string
+      current_period_end:
+        type: string
+      current_period_start:
+        type: string
+      end_date:
+        type: string
+      id:
+        type: integer
+      is_active:
+        type: boolean
+      is_expired:
+        type: boolean
+      plan_id:
+        type: integer
+      start_date:
+        type: string
+      status:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        type: integer
     type: object
   internal_interfaces_http_handlers.UpdatePlanRequest:
     properties:
@@ -424,6 +464,38 @@ definitions:
         type: string
     required:
     - reason
+    type: object
+  orris_internal_application_user_dto.UserMetadata:
+    properties:
+      can_perform_actions:
+        type: boolean
+      email_domain:
+        type: string
+      is_business_email:
+        type: boolean
+      requires_verification:
+        type: boolean
+    type: object
+  orris_internal_application_user_dto.UserResponse:
+    properties:
+      created_at:
+        type: string
+      display_name:
+        type: string
+      email:
+        type: string
+      id:
+        type: integer
+      initials:
+        type: string
+      metadata:
+        $ref: '#/definitions/orris_internal_application_user_dto.UserMetadata'
+      name:
+        type: string
+      status:
+        type: string
+      updated_at:
+        type: string
     type: object
   orris_internal_interfaces_dto.AnnouncementResponse:
     properties:
@@ -769,6 +841,10 @@ paths:
           description: Unauthorized
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "500":
           description: Internal server error
           schema:
@@ -894,6 +970,10 @@ paths:
           description: Unauthorized
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "404":
           description: Announcement not found
           schema:
@@ -951,70 +1031,6 @@ paths:
       summary: Publish announcement
       tags:
       - announcements
-  /api/v1/payments:
-    post:
-      consumes:
-      - application/json
-      description: Create a payment for subscription
-      parameters:
-      - description: Payment data
-        in: body
-        name: payment
-        required: true
-        schema:
-          $ref: '#/definitions/internal_interfaces_http_handlers.CreatePaymentRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Payment created successfully
-          schema:
-            allOf:
-            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/internal_interfaces_http_handlers.CreatePaymentResponse'
-              type: object
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
-      security:
-      - Bearer: []
-      summary: Create payment
-      tags:
-      - payments
-  /api/v1/payments/callback:
-    post:
-      consumes:
-      - application/json
-      description: Handle payment gateway callback notification
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Callback processed successfully
-          schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
-      summary: Handle payment callback
-      tags:
-      - payments
   /auth/forgot-password:
     post:
       consumes:
@@ -1163,29 +1179,30 @@ paths:
       - description: Authorization code from OAuth provider
         in: query
         name: code
-        required: true
         type: string
       - description: State parameter for CSRF protection
         in: query
         name: state
-        required: true
+        type: string
+      - description: OAuth error code
+        in: query
+        name: error
+        type: string
+      - description: OAuth error description
+        in: query
+        name: error_description
         type: string
       produces:
-      - application/json
+      - text/html
       responses:
         "200":
-          description: OK
+          description: HTML page with postMessage script
           schema:
-            allOf:
-            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/internal_interfaces_http_handlers.AuthResponse'
-              type: object
+            type: string
         "400":
-          description: Bad Request
+          description: HTML error page
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            type: string
       summary: Handle OAuth callback
       tags:
       - auth
@@ -1351,6 +1368,10 @@ paths:
           description: Unauthorized
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "500":
           description: Internal server error
           schema:
@@ -1386,6 +1407,10 @@ paths:
           description: Unauthorized
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "500":
           description: Internal server error
           schema:
@@ -1417,6 +1442,10 @@ paths:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "404":
@@ -1455,6 +1484,10 @@ paths:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "404":
@@ -1501,6 +1534,10 @@ paths:
           description: Unauthorized
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "404":
           description: Node group not found
           schema:
@@ -1538,6 +1575,10 @@ paths:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "404":
@@ -1584,6 +1625,10 @@ paths:
           description: Unauthorized
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "404":
           description: Node group not found
           schema:
@@ -1624,6 +1669,10 @@ paths:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "404":
@@ -1671,6 +1720,10 @@ paths:
           description: Unauthorized
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "404":
           description: Node group not found
           schema:
@@ -1713,6 +1766,10 @@ paths:
           description: Unauthorized
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "404":
           description: Node group or plan not found
           schema:
@@ -1743,6 +1800,11 @@ paths:
         name: page_size
         type: integer
       - description: Node status filter
+        enum:
+        - active
+        - inactive
+        - maintenance
+        - error
         in: query
         name: status
         type: string
@@ -1763,6 +1825,10 @@ paths:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "500":
@@ -1800,6 +1866,10 @@ paths:
           description: Unauthorized
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "500":
           description: Internal server error
           schema:
@@ -1831,6 +1901,10 @@ paths:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "404":
@@ -1869,6 +1943,10 @@ paths:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "404":
@@ -1915,6 +1993,10 @@ paths:
           description: Unauthorized
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "404":
           description: Node not found
           schema:
@@ -1952,6 +2034,10 @@ paths:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "404":
@@ -1993,6 +2079,10 @@ paths:
           description: Unauthorized
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "404":
           description: Node not found
           schema:
@@ -2030,6 +2120,10 @@ paths:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "404":
@@ -2077,6 +2171,10 @@ paths:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "404":
@@ -2526,6 +2624,70 @@ paths:
       summary: Get unread notifications count
       tags:
       - notifications
+  /payments:
+    post:
+      consumes:
+      - application/json
+      description: Create a payment for subscription
+      parameters:
+      - description: Payment data
+        in: body
+        name: payment
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers.CreatePaymentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Payment created successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/internal_interfaces_http_handlers.CreatePaymentResponse'
+              type: object
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Create payment
+      tags:
+      - payments
+  /payments/callback:
+    post:
+      consumes:
+      - application/json
+      description: Handle payment gateway callback notification
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Callback processed successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      summary: Handle payment callback
+      tags:
+      - payments
   /public/announcements:
     get:
       consumes:
@@ -2757,6 +2919,10 @@ paths:
         name: page_size
         type: integer
       - description: Plan status filter
+        enum:
+        - active
+        - inactive
+        - archived
         in: query
         name: status
         type: string
@@ -2765,6 +2931,12 @@ paths:
         name: is_public
         type: boolean
       - description: Filter by billing cycle
+        enum:
+        - monthly
+        - quarterly
+        - semi_annual
+        - annual
+        - lifetime
         in: query
         name: billing_cycle
         type: string
@@ -3029,6 +3201,12 @@ paths:
         name: page_size
         type: integer
       - description: Subscription status filter
+        enum:
+        - active
+        - inactive
+        - cancelled
+        - expired
+        - pending
         in: query
         name: status
         type: string
@@ -3038,7 +3216,12 @@ paths:
         "200":
           description: Subscriptions list
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_shared_utils.ListResponse'
+              type: object
         "400":
           description: Invalid query parameters
           schema:
@@ -3074,7 +3257,12 @@ paths:
         "201":
           description: Subscription created successfully
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/internal_interfaces_http_handlers.SubscriptionCreateResult'
+              type: object
         "400":
           description: Bad request
           schema:
@@ -3113,7 +3301,12 @@ paths:
         "200":
           description: Subscription details
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/internal_interfaces_http_handlers.SubscriptionResponse'
+              type: object
         "400":
           description: Invalid subscription ID
           schema:
@@ -3491,14 +3684,33 @@ paths:
         name: page_size
         type: integer
       - description: Status filter
+        enum:
+        - open
+        - in_progress
+        - resolved
+        - closed
+        - reopened
         in: query
         name: status
         type: string
       - description: Priority filter
+        enum:
+        - low
+        - normal
+        - high
+        - urgent
+        - critical
         in: query
         name: priority
         type: string
       - description: Category filter
+        enum:
+        - technical
+        - billing
+        - account
+        - general
+        - feature_request
+        - bug_report
         in: query
         name: category
         type: string
@@ -3506,11 +3718,15 @@ paths:
       - application/json
       responses:
         "200":
-          description: OK
+          description: Tickets list
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "400":
           description: Bad Request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
       security:
@@ -3533,7 +3749,7 @@ paths:
       - application/json
       responses:
         "201":
-          description: Created
+          description: Ticket created successfully
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "400":
@@ -3545,7 +3761,7 @@ paths:
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "500":
-          description: Internal Server Error
+          description: Internal server error
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
       security:
@@ -3570,7 +3786,23 @@ paths:
         "204":
           description: No Content
         "400":
-          description: Bad Request
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Ticket not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
       security:
@@ -3592,7 +3824,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: OK
+          description: Ticket details
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "400":
@@ -3601,6 +3833,10 @@ paths:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "404":
           description: Not Found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
       security:
@@ -3629,11 +3865,27 @@ paths:
       - application/json
       responses:
         "200":
-          description: OK
+          description: Ticket assigned successfully
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "400":
-          description: Bad Request
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Ticket not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
       security:
@@ -3662,11 +3914,15 @@ paths:
       - application/json
       responses:
         "200":
-          description: OK
+          description: Ticket closed successfully
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "400":
           description: Bad Request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
       security:
@@ -3695,11 +3951,15 @@ paths:
       - application/json
       responses:
         "201":
-          description: Created
+          description: Comment added successfully
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "400":
           description: Bad Request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
       security:
@@ -3728,11 +3988,15 @@ paths:
       - application/json
       responses:
         "200":
-          description: OK
+          description: Ticket reopened successfully
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "400":
           description: Bad Request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
       security:
@@ -3757,6 +4021,11 @@ paths:
         name: page_size
         type: integer
       - description: User status filter
+        enum:
+        - active
+        - inactive
+        - pending
+        - suspended
         in: query
         name: status
         type: string
@@ -3766,13 +4035,22 @@ paths:
         "200":
           description: Users list
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_shared_utils.ListResponse'
+              type: object
         "400":
           description: Invalid query parameters
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "500":
@@ -3801,13 +4079,22 @@ paths:
         "201":
           description: User created successfully
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_application_user_dto.UserResponse'
+              type: object
         "400":
           description: Bad request
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "409":
@@ -3847,6 +4134,10 @@ paths:
           description: Unauthorized
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "404":
           description: User not found
           schema:
@@ -3876,13 +4167,22 @@ paths:
         "200":
           description: User details
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_application_user_dto.UserResponse'
+              type: object
         "400":
           description: Invalid user ID
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "404":
@@ -3920,13 +4220,22 @@ paths:
         "200":
           description: User updated successfully
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_application_user_dto.UserResponse'
+              type: object
         "400":
           description: Bad request
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "404":
@@ -3959,13 +4268,22 @@ paths:
         "200":
           description: User details
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_application_user_dto.UserResponse'
+              type: object
         "400":
           description: Invalid email
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "401":
           description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "404":
@@ -3986,5 +4304,10 @@ securityDefinitions:
     description: Type "Bearer" followed by a space and JWT token.
     in: header
     name: Authorization
+    type: apiKey
+  NodeToken:
+    description: Node authentication token for reporting endpoints
+    in: header
+    name: X-Node-Token
     type: apiKey
 swagger: "2.0"

@@ -7,12 +7,12 @@ import (
 )
 
 // CORS returns a Gin middleware for handling Cross-Origin Resource Sharing
-func CORS() gin.HandlerFunc {
+func CORS(allowedOrigins []string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
 
 		// Set CORS headers
-		c.Header("Access-Control-Allow-Origin", getAllowedOrigin(origin))
+		c.Header("Access-Control-Allow-Origin", getAllowedOrigin(origin, allowedOrigins))
 		c.Header("Access-Control-Allow-Credentials", "true")
 		c.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, Accept, Origin, Cache-Control, X-Requested-With, X-Request-ID")
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
@@ -30,14 +30,7 @@ func CORS() gin.HandlerFunc {
 }
 
 // getAllowedOrigin returns the allowed origin based on the request origin
-func getAllowedOrigin(origin string) string {
-	// In production, you should maintain a list of allowed origins
-	allowedOrigins := []string{
-		"http://localhost:3000",
-		"http://localhost:8080",
-		"https://your-frontend-domain.com",
-	}
-
+func getAllowedOrigin(origin string, allowedOrigins []string) string {
 	// Check if the origin is in the allowed list
 	for _, allowedOrigin := range allowedOrigins {
 		if origin == allowedOrigin {
@@ -45,13 +38,8 @@ func getAllowedOrigin(origin string) string {
 		}
 	}
 
-	// Default to the first allowed origin if not found
-	// In production, you might want to return empty string for security
-	if len(allowedOrigins) > 0 {
-		return allowedOrigins[0]
-	}
-
-	return "*"
+	// Origin not in whitelist, return empty string to reject the request
+	return ""
 }
 
 // SecurityHeaders returns a middleware that sets security headers

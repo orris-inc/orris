@@ -32,6 +32,7 @@ func NewNodeGroupHandler() *NodeGroupHandler {
 // @Success 201 {object} utils.APIResponse "Node group created successfully"
 // @Failure 400 {object} utils.APIResponse "Bad request"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /node-groups [post]
 func (h *NodeGroupHandler) CreateNodeGroup(c *gin.Context) {
@@ -58,6 +59,7 @@ func (h *NodeGroupHandler) CreateNodeGroup(c *gin.Context) {
 // @Success 200 {object} utils.APIResponse "Node group details"
 // @Failure 400 {object} utils.APIResponse "Invalid node group ID"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 404 {object} utils.APIResponse "Node group not found"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /node-groups/{id} [get]
@@ -85,6 +87,7 @@ func (h *NodeGroupHandler) GetNodeGroup(c *gin.Context) {
 // @Success 200 {object} utils.APIResponse "Node group updated successfully"
 // @Failure 400 {object} utils.APIResponse "Bad request"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 404 {object} utils.APIResponse "Node group not found"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /node-groups/{id} [put]
@@ -120,6 +123,7 @@ func (h *NodeGroupHandler) UpdateNodeGroup(c *gin.Context) {
 // @Success 204 "Node group deleted successfully"
 // @Failure 400 {object} utils.APIResponse "Invalid node group ID"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 404 {object} utils.APIResponse "Node group not found"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /node-groups/{id} [delete]
@@ -147,6 +151,7 @@ func (h *NodeGroupHandler) DeleteNodeGroup(c *gin.Context) {
 // @Success 200 {object} utils.APIResponse "Node groups list"
 // @Failure 400 {object} utils.APIResponse "Invalid query parameters"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /node-groups [get]
 func (h *NodeGroupHandler) ListNodeGroups(c *gin.Context) {
@@ -171,6 +176,7 @@ func (h *NodeGroupHandler) ListNodeGroups(c *gin.Context) {
 // @Success 200 {object} utils.APIResponse "Node added successfully"
 // @Failure 400 {object} utils.APIResponse "Bad request"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 404 {object} utils.APIResponse "Node group not found"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /node-groups/{id}/nodes [post]
@@ -209,6 +215,7 @@ func (h *NodeGroupHandler) AddNodeToGroup(c *gin.Context) {
 // @Success 204 "Node removed successfully"
 // @Failure 400 {object} utils.APIResponse "Invalid ID"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 404 {object} utils.APIResponse "Node group not found"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /node-groups/{id}/nodes/{nodeId} [delete]
@@ -288,6 +295,7 @@ type ListNodeGroupsRequest struct {
 // @Success 200 {object} utils.APIResponse "List of nodes in group"
 // @Failure 400 {object} utils.APIResponse "Invalid node group ID"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 404 {object} utils.APIResponse "Node group not found"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /node-groups/{id}/nodes [get]
@@ -316,6 +324,7 @@ func (h *NodeGroupHandler) ListGroupNodes(c *gin.Context) {
 // @Success 200 {object} utils.APIResponse "Plan associated successfully"
 // @Failure 400 {object} utils.APIResponse "Bad request"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 404 {object} utils.APIResponse "Node group not found"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /node-groups/{id}/plans [post]
@@ -354,6 +363,7 @@ func (h *NodeGroupHandler) AssociatePlan(c *gin.Context) {
 // @Success 204 "Plan disassociated successfully"
 // @Failure 400 {object} utils.APIResponse "Invalid ID"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 404 {object} utils.APIResponse "Node group or plan not found"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /node-groups/{id}/plans/{planId} [delete]

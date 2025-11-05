@@ -178,6 +178,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
                     },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
@@ -325,6 +331,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
                     },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
                     "404": {
                         "description": "Announcement not found",
                         "schema": {
@@ -456,110 +468,6 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Announcement not found",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/payments": {
-            "post": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Create a payment for subscription",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "payments"
-                ],
-                "summary": "Create payment",
-                "parameters": [
-                    {
-                        "description": "Payment data",
-                        "name": "payment",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/internal_interfaces_http_handlers.CreatePaymentRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Payment created successfully",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/internal_interfaces_http_handlers.CreatePaymentResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/v1/payments/callback": {
-            "post": {
-                "description": "Handle payment gateway callback notification",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "payments"
-                ],
-                "summary": "Handle payment callback",
-                "responses": {
-                    "200": {
-                        "description": "Callback processed successfully",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -793,7 +701,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "produces": [
-                    "application/json"
+                    "text/html"
                 ],
                 "tags": [
                     "auth"
@@ -811,40 +719,38 @@ const docTemplate = `{
                         "type": "string",
                         "description": "Authorization code from OAuth provider",
                         "name": "code",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
                     },
                     {
                         "type": "string",
                         "description": "State parameter for CSRF protection",
                         "name": "state",
-                        "in": "query",
-                        "required": true
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "OAuth error code",
+                        "name": "error",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "OAuth error description",
+                        "name": "error_description",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "HTML page with postMessage script",
                         "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/internal_interfaces_http_handlers.AuthResponse"
-                                        }
-                                    }
-                                }
-                            ]
+                            "type": "string"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "HTML error page",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "type": "string"
                         }
                     }
                 }
@@ -1104,6 +1010,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
                     },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
@@ -1159,6 +1071,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
                     },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
@@ -1210,6 +1128,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -1282,6 +1206,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
                     },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
                     "404": {
                         "description": "Node group not found",
                         "schema": {
@@ -1334,6 +1264,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -1395,6 +1331,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -1467,6 +1409,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
                     },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
                     "404": {
                         "description": "Node group not found",
                         "schema": {
@@ -1528,6 +1476,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -1602,6 +1556,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
                     },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
                     "404": {
                         "description": "Node group not found",
                         "schema": {
@@ -1667,6 +1627,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
                     },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
                     "404": {
                         "description": "Node group or plan not found",
                         "schema": {
@@ -1716,6 +1682,12 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            "active",
+                            "inactive",
+                            "maintenance",
+                            "error"
+                        ],
                         "type": "string",
                         "description": "Node status filter",
                         "name": "status",
@@ -1743,6 +1715,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -1798,6 +1776,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -1954,6 +1938,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
                     },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
                     "404": {
                         "description": "Node not found",
                         "schema": {
@@ -2022,6 +2012,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
                     },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
                     "404": {
                         "description": "Node not found",
                         "schema": {
@@ -2074,6 +2070,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -2139,6 +2141,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
                     },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
                     "404": {
                         "description": "Node not found",
                         "schema": {
@@ -2200,6 +2208,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
                     },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
                     "404": {
                         "description": "Node not found",
                         "schema": {
@@ -2257,6 +2271,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -2330,6 +2350,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -2960,6 +2986,110 @@ const docTemplate = `{
                 }
             }
         },
+        "/payments": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Create a payment for subscription",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "payments"
+                ],
+                "summary": "Create payment",
+                "parameters": [
+                    {
+                        "description": "Payment data",
+                        "name": "payment",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_interfaces_http_handlers.CreatePaymentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Payment created successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/internal_interfaces_http_handlers.CreatePaymentResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/payments/callback": {
+            "post": {
+                "description": "Handle payment gateway callback notification",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "payments"
+                ],
+                "summary": "Handle payment callback",
+                "responses": {
+                    "200": {
+                        "description": "Callback processed successfully",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/public/announcements": {
             "get": {
                 "description": "Get a paginated list of published announcements (public endpoint, no authentication required)",
@@ -3319,6 +3449,11 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            "active",
+                            "inactive",
+                            "archived"
+                        ],
                         "type": "string",
                         "description": "Plan status filter",
                         "name": "status",
@@ -3331,6 +3466,13 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            "monthly",
+                            "quarterly",
+                            "semi_annual",
+                            "annual",
+                            "lifetime"
+                        ],
                         "type": "string",
                         "description": "Filter by billing cycle",
                         "name": "billing_cycle",
@@ -3740,6 +3882,13 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            "active",
+                            "inactive",
+                            "cancelled",
+                            "expired",
+                            "pending"
+                        ],
                         "type": "string",
                         "description": "Subscription status filter",
                         "name": "status",
@@ -3750,7 +3899,19 @@ const docTemplate = `{
                     "200": {
                         "description": "Subscriptions list",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/orris_internal_shared_utils.ListResponse"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -3805,7 +3966,19 @@ const docTemplate = `{
                     "201": {
                         "description": "Subscription created successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/internal_interfaces_http_handlers.SubscriptionCreateResult"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -3866,7 +4039,19 @@ const docTemplate = `{
                     "200": {
                         "description": "Subscription details",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/internal_interfaces_http_handlers.SubscriptionResponse"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -4451,18 +4636,40 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            "open",
+                            "in_progress",
+                            "resolved",
+                            "closed",
+                            "reopened"
+                        ],
                         "type": "string",
                         "description": "Status filter",
                         "name": "status",
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            "low",
+                            "normal",
+                            "high",
+                            "urgent",
+                            "critical"
+                        ],
                         "type": "string",
                         "description": "Priority filter",
                         "name": "priority",
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            "technical",
+                            "billing",
+                            "account",
+                            "general",
+                            "feature_request",
+                            "bug_report"
+                        ],
                         "type": "string",
                         "description": "Category filter",
                         "name": "category",
@@ -4471,13 +4678,19 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Tickets list",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -4514,7 +4727,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "201": {
-                        "description": "Created",
+                        "description": "Ticket created successfully",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -4532,7 +4745,7 @@ const docTemplate = `{
                         }
                     },
                     "500": {
-                        "description": "Internal Server Error",
+                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -4569,7 +4782,7 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Ticket details",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -4582,6 +4795,12 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "Not Found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -4619,7 +4838,31 @@ const docTemplate = `{
                         "description": "No Content"
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Ticket not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -4665,13 +4908,37 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Ticket assigned successfully",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
                     },
                     "400": {
-                        "description": "Bad Request",
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Ticket not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -4717,13 +4984,19 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Ticket closed successfully",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -4769,13 +5042,19 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "201": {
-                        "description": "Created",
+                        "description": "Comment added successfully",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -4821,13 +5100,19 @@ const docTemplate = `{
                 ],
                 "responses": {
                     "200": {
-                        "description": "OK",
+                        "description": "Ticket reopened successfully",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -4869,6 +5154,12 @@ const docTemplate = `{
                         "in": "query"
                     },
                     {
+                        "enum": [
+                            "active",
+                            "inactive",
+                            "pending",
+                            "suspended"
+                        ],
                         "type": "string",
                         "description": "User status filter",
                         "name": "status",
@@ -4879,7 +5170,19 @@ const docTemplate = `{
                     "200": {
                         "description": "Users list",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/orris_internal_shared_utils.ListResponse"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -4890,6 +5193,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -4934,7 +5243,19 @@ const docTemplate = `{
                     "201": {
                         "description": "User created successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/orris_internal_application_user_dto.UserResponse"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -4945,6 +5266,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -4995,7 +5322,19 @@ const docTemplate = `{
                     "200": {
                         "description": "User details",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/orris_internal_application_user_dto.UserResponse"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -5006,6 +5345,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -5056,7 +5401,19 @@ const docTemplate = `{
                     "200": {
                         "description": "User details",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/orris_internal_application_user_dto.UserResponse"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -5067,6 +5424,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -5124,7 +5487,19 @@ const docTemplate = `{
                     "200": {
                         "description": "User updated successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/orris_internal_application_user_dto.UserResponse"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -5135,6 +5510,12 @@ const docTemplate = `{
                     },
                     "401": {
                         "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -5195,6 +5576,12 @@ const docTemplate = `{
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
                     },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
                     "404": {
                         "description": "User not found",
                         "schema": {
@@ -5222,6 +5609,9 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "refresh_token": {
+                    "type": "string"
+                },
+                "token_type": {
                     "type": "string"
                 },
                 "user": {}
@@ -5486,6 +5876,63 @@ const docTemplate = `{
                 },
                 "token": {
                     "type": "string"
+                }
+            }
+        },
+        "internal_interfaces_http_handlers.SubscriptionCreateResult": {
+            "type": "object",
+            "properties": {
+                "subscription": {},
+                "token": {}
+            }
+        },
+        "internal_interfaces_http_handlers.SubscriptionResponse": {
+            "type": "object",
+            "properties": {
+                "auto_renew": {
+                    "type": "boolean"
+                },
+                "cancel_reason": {
+                    "type": "string"
+                },
+                "cancelled_at": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "current_period_end": {
+                    "type": "string"
+                },
+                "current_period_start": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "is_expired": {
+                    "type": "boolean"
+                },
+                "plan_id": {
+                    "type": "integer"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
                 }
             }
         },
@@ -5844,6 +6291,55 @@ const docTemplate = `{
                 }
             }
         },
+        "orris_internal_application_user_dto.UserMetadata": {
+            "type": "object",
+            "properties": {
+                "can_perform_actions": {
+                    "type": "boolean"
+                },
+                "email_domain": {
+                    "type": "string"
+                },
+                "is_business_email": {
+                    "type": "boolean"
+                },
+                "requires_verification": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "orris_internal_application_user_dto.UserResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "initials": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/orris_internal_application_user_dto.UserMetadata"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
         "orris_internal_interfaces_dto.AnnouncementResponse": {
             "type": "object",
             "properties": {
@@ -6197,6 +6693,12 @@ const docTemplate = `{
             "description": "Type \"Bearer\" followed by a space and JWT token.",
             "type": "apiKey",
             "name": "Authorization",
+            "in": "header"
+        },
+        "NodeToken": {
+            "description": "Node authentication token for reporting endpoints",
+            "type": "apiKey",
+            "name": "X-Node-Token",
             "in": "header"
         }
     }

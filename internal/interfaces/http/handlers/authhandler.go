@@ -2,11 +2,13 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
 	"orris/internal/application/user/usecases"
 	"orris/internal/domain/user"
+	"orris/internal/shared/constants"
 	"orris/internal/shared/logger"
 	"orris/internal/shared/utils"
 )
@@ -23,6 +25,8 @@ type AuthHandler struct {
 	logoutUseCase        *usecases.LogoutUseCase
 	userRepo             user.Repository
 	logger               logger.Interface
+	frontendCallbackURL  string
+	allowedOrigins       []string
 }
 
 func NewAuthHandler(
@@ -37,6 +41,8 @@ func NewAuthHandler(
 	logoutUC *usecases.LogoutUseCase,
 	userRepo user.Repository,
 	logger logger.Interface,
+	frontendCallbackURL string,
+	allowedOrigins []string,
 ) *AuthHandler {
 	return &AuthHandler{
 		registerUseCase:      registerUC,
@@ -50,6 +56,8 @@ func NewAuthHandler(
 		logoutUseCase:        logoutUC,
 		userRepo:             userRepo,
 		logger:               logger,
+		frontendCallbackURL:  frontendCallbackURL,
+		allowedOrigins:       allowedOrigins,
 	}
 }
 
@@ -85,6 +93,7 @@ type AuthResponse struct {
 	User         interface{} `json:"user"`
 	AccessToken  string      `json:"access_token"`
 	RefreshToken string      `json:"refresh_token"`
+	TokenType    string      `json:"token_type"`
 	ExpiresIn    int64       `json:"expires_in"`
 }
 
@@ -162,6 +171,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		User:         result.User.GetDisplayInfo(),
 		AccessToken:  result.AccessToken,
 		RefreshToken: result.RefreshToken,
+		TokenType:    "Bearer",
 		ExpiresIn:    result.ExpiresIn,
 	})
 }
@@ -288,20 +298,46 @@ func (h *AuthHandler) InitiateOAuth(c *gin.Context) {
 // @Description Handle OAuth provider callback and login/register user
 // @Tags auth
 // @Accept json
-// @Produce json
+// @Produce html
 // @Param provider path string true "OAuth provider (google or github)"
-// @Param code query string true "Authorization code from OAuth provider"
-// @Param state query string true "State parameter for CSRF protection"
-// @Success 200 {object} utils.APIResponse{data=AuthResponse}
-// @Failure 400 {object} utils.APIResponse
+// @Param code query string false "Authorization code from OAuth provider"
+// @Param state query string false "State parameter for CSRF protection"
+// @Param error query string false "OAuth error code"
+// @Param error_description query string false "OAuth error description"
+// @Success 200 {string} string "HTML page with postMessage script"
+// @Failure 400 {string} string "HTML error page"
 // @Router /auth/oauth/{provider}/callback [get]
 func (h *AuthHandler) HandleOAuthCallback(c *gin.Context) {
 	provider := c.Param("provider")
 	code := c.Query("code")
 	state := c.Query("state")
 
-	if code == "" || state == "" {
-		utils.ErrorResponse(c, http.StatusBadRequest, "missing code or state parameter")
+	// Check OAuth provider errors
+	if errParam := c.Query("error"); errParam != "" {
+		errorDesc := c.Query("error_description")
+
+		userMsg := constants.GetOAuthErrorMessageFromString(errParam)
+
+		h.logger.Warnw("OAuth provider returned error",
+			"provider", provider,
+			"error_code", errParam,
+			"error_description", errorDesc,
+		)
+
+		h.renderOAuthError(c, userMsg)
+		return
+	}
+
+	// Check missing parameters
+	if code == "" {
+		h.logger.Warnw("OAuth callback missing code", "provider", provider)
+		h.renderOAuthError(c, constants.GetOAuthErrorMessage(constants.OAuthErrorMissingCode))
+		return
+	}
+
+	if state == "" {
+		h.logger.Warnw("OAuth callback missing state", "provider", provider)
+		h.renderOAuthError(c, constants.GetOAuthErrorMessage(constants.OAuthErrorMissingState))
 		return
 	}
 
@@ -310,7 +346,7 @@ func (h *AuthHandler) HandleOAuthCallback(c *gin.Context) {
 		Code:       code,
 		State:      state,
 		DeviceName: c.GetHeader("User-Agent"),
-		DeviceType: "web",
+		DeviceType: detectDeviceType(c.GetHeader("User-Agent")),
 		IPAddress:  c.ClientIP(),
 		UserAgent:  c.GetHeader("User-Agent"),
 	}
@@ -318,16 +354,24 @@ func (h *AuthHandler) HandleOAuthCallback(c *gin.Context) {
 	result, err := h.handleOAuthUseCase.Execute(c.Request.Context(), cmd)
 	if err != nil {
 		h.logger.Errorw("OAuth callback failed", "error", err, "provider", provider)
-		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
+
+		// Map error to user-friendly message
+		var userMsg string
+		if strings.Contains(err.Error(), "invalid or expired state") {
+			userMsg = constants.GetOAuthErrorMessage(constants.OAuthErrorInvalidState)
+		} else if strings.Contains(err.Error(), "exchange") {
+			userMsg = constants.GetOAuthErrorMessage(constants.OAuthErrorExchangeFailed)
+		} else if strings.Contains(err.Error(), "user info") {
+			userMsg = constants.GetOAuthErrorMessage(constants.OAuthErrorUserInfoFailed)
+		} else {
+			userMsg = constants.GetOAuthErrorMessage("") // default message
+		}
+
+		h.renderOAuthError(c, userMsg)
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "OAuth login successful", AuthResponse{
-		User:         result.User.GetDisplayInfo(),
-		AccessToken:  result.AccessToken,
-		RefreshToken: result.RefreshToken,
-		ExpiresIn:    result.ExpiresIn,
-	})
+	h.renderOAuthSuccess(c, result)
 }
 
 // RefreshToken godoc
@@ -359,6 +403,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 
 	utils.SuccessResponse(c, http.StatusOK, "token refreshed successfully", gin.H{
 		"access_token": result.AccessToken,
+		"token_type":   "Bearer",
 		"expires_in":   result.ExpiresIn,
 	})
 }

@@ -49,12 +49,22 @@ func NewGitHubOAuthClient(cfg GitHubOAuthConfig) *GitHubOAuthClient {
 	}
 }
 
-func (c *GitHubOAuthClient) GetAuthURL(state string) string {
-	return c.config.AuthCodeURL(state)
+func (c *GitHubOAuthClient) GetAuthURL(state string) (string, string, error) {
+	codeVerifier, codeChallenge, err := generatePKCEParams()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to generate PKCE parameters: %w", err)
+	}
+
+	authURL := c.config.AuthCodeURL(state,
+		oauth2.SetAuthURLParam("code_challenge", codeChallenge),
+		oauth2.SetAuthURLParam("code_challenge_method", "S256"),
+	)
+
+	return authURL, codeVerifier, nil
 }
 
-func (c *GitHubOAuthClient) ExchangeCode(ctx context.Context, code string) (string, error) {
-	token, err := c.config.Exchange(ctx, code)
+func (c *GitHubOAuthClient) ExchangeCode(ctx context.Context, code string, codeVerifier string) (string, error) {
+	token, err := c.config.Exchange(ctx, code, oauth2.SetAuthURLParam("code_verifier", codeVerifier))
 	if err != nil {
 		return "", fmt.Errorf("failed to exchange code: %w", err)
 	}

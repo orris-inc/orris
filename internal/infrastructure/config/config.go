@@ -17,6 +17,7 @@ type Config struct {
 	Auth     sharedConfig.AuthConfig     `mapstructure:"auth"`
 	OAuth    sharedConfig.OAuthConfig    `mapstructure:"oauth"`
 	Email    sharedConfig.EmailConfig    `mapstructure:"email"`
+	Redis    sharedConfig.RedisConfig    `mapstructure:"redis"`
 }
 
 var (
@@ -115,4 +116,10 @@ func setDefaults() {
 	viper.SetDefault("email.smtp_password", "")
 	viper.SetDefault("email.from_address", "noreply@orris.local")
 	viper.SetDefault("email.from_name", "Orris")
+
+	// Redis defaults
+	viper.SetDefault("redis.host", "localhost")
+	viper.SetDefault("redis.port", 6379)
+	viper.SetDefault("redis.password", "")
+	viper.SetDefault("redis.db", 0)
 }

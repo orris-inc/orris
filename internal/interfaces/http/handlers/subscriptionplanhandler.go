@@ -219,9 +219,9 @@ func (h *SubscriptionPlanHandler) GetPlan(c *gin.Context) {
 // @Security Bearer
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Page size" default(20)
-// @Param status query string false "Plan status filter"
+// @Param status query string false "Plan status filter" Enums(active,inactive,archived)
 // @Param is_public query bool false "Filter by public/private plans"
-// @Param billing_cycle query string false "Filter by billing cycle"
+// @Param billing_cycle query string false "Filter by billing cycle" Enums(monthly,quarterly,semi_annual,annual,lifetime)
 // @Success 200 {object} utils.APIResponse "Subscription plans list"
 // @Failure 400 {object} utils.APIResponse "Invalid query parameters"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"

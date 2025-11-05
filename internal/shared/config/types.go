@@ -3,10 +3,12 @@ package config
 import "fmt"
 
 type ServerConfig struct {
-	Host    string `mapstructure:"host"`
-	Port    int    `mapstructure:"port"`
-	Mode    string `mapstructure:"mode"`
-	BaseURL string `mapstructure:"base_url"`
+	Host                  string   `mapstructure:"host"`
+	Port                  int      `mapstructure:"port"`
+	Mode                  string   `mapstructure:"mode"`
+	BaseURL               string   `mapstructure:"base_url"`
+	AllowedOrigins        []string `mapstructure:"allowed_origins"`
+	FrontendCallbackURL   string   `mapstructure:"frontend_callback_url"`
 }
 
 func (s *ServerConfig) GetAddr() string {
@@ -80,4 +82,15 @@ type EmailConfig struct {
 	SMTPPassword string `mapstructure:"smtp_password"`
 	FromAddress  string `mapstructure:"from_address"`
 	FromName     string `mapstructure:"from_name"`
+}
+
+type RedisConfig struct {
+	Host     string `mapstructure:"host"`
+	Port     int    `mapstructure:"port"`
+	Password string `mapstructure:"password"`
+	DB       int    `mapstructure:"db"`
+}
+
+func (r *RedisConfig) GetAddr() string {
+	return fmt.Sprintf("%s:%d", r.Host, r.Port)
 }

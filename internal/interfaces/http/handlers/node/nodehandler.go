@@ -49,6 +49,7 @@ func NewNodeHandler(
 // @Success 201 {object} utils.APIResponse "Node created successfully"
 // @Failure 400 {object} utils.APIResponse "Bad request"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /nodes [post]
 func (h *NodeHandler) CreateNode(c *gin.Context) {
@@ -80,6 +81,7 @@ func (h *NodeHandler) CreateNode(c *gin.Context) {
 // @Success 200 {object} utils.APIResponse "Node details"
 // @Failure 400 {object} utils.APIResponse "Invalid node ID"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 404 {object} utils.APIResponse "Node not found"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /nodes/{id} [get]
@@ -107,6 +109,7 @@ func (h *NodeHandler) GetNode(c *gin.Context) {
 // @Success 200 {object} utils.APIResponse "Node updated successfully"
 // @Failure 400 {object} utils.APIResponse "Bad request"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 404 {object} utils.APIResponse "Node not found"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /nodes/{id} [put]
@@ -147,6 +150,7 @@ func (h *NodeHandler) UpdateNode(c *gin.Context) {
 // @Success 204 "Node deleted successfully"
 // @Failure 400 {object} utils.APIResponse "Invalid node ID"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 404 {object} utils.APIResponse "Node not found"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /nodes/{id} [delete]
@@ -176,11 +180,12 @@ func (h *NodeHandler) DeleteNode(c *gin.Context) {
 // @Security Bearer
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Page size" default(20)
-// @Param status query string false "Node status filter"
+// @Param status query string false "Node status filter" Enums(active,inactive,maintenance,error)
 // @Param country query string false "Country filter"
 // @Success 200 {object} utils.APIResponse "Nodes list"
 // @Failure 400 {object} utils.APIResponse "Invalid query parameters"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /nodes [get]
 func (h *NodeHandler) ListNodes(c *gin.Context) {
@@ -211,6 +216,7 @@ func (h *NodeHandler) ListNodes(c *gin.Context) {
 // @Success 200 {object} utils.APIResponse "Token generated successfully"
 // @Failure 400 {object} utils.APIResponse "Invalid node ID"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 404 {object} utils.APIResponse "Node not found"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /nodes/{id}/token [post]
@@ -242,6 +248,7 @@ func (h *NodeHandler) GenerateToken(c *gin.Context) {
 // @Success 200 {object} utils.APIResponse "Node activated successfully"
 // @Failure 400 {object} utils.APIResponse "Invalid node ID"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 404 {object} utils.APIResponse "Node not found"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /nodes/{id}/activate [post]
@@ -277,6 +284,7 @@ func (h *NodeHandler) ActivateNode(c *gin.Context) {
 // @Success 200 {object} utils.APIResponse "Node deactivated successfully"
 // @Failure 400 {object} utils.APIResponse "Invalid node ID"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 404 {object} utils.APIResponse "Node not found"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /nodes/{id}/deactivate [post]
@@ -314,6 +322,7 @@ func (h *NodeHandler) DeactivateNode(c *gin.Context) {
 // @Success 200 {object} utils.APIResponse "Node traffic statistics"
 // @Failure 400 {object} utils.APIResponse "Invalid node ID or parameters"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 404 {object} utils.APIResponse "Node not found"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /nodes/{id}/traffic [get]

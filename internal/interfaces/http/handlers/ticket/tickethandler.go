@@ -59,10 +59,10 @@ func NewTicketHandler(
 // @Produce json
 // @Security Bearer
 // @Param ticket body CreateTicketRequest true "Ticket data"
-// @Success 201 {object} utils.APIResponse
+// @Success 201 {object} utils.APIResponse "Ticket created successfully"
 // @Failure 400 {object} utils.APIResponse
 // @Failure 401 {object} utils.APIResponse
-// @Failure 500 {object} utils.APIResponse
+// @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /tickets [post]
 func (h *TicketHandler) CreateTicket(c *gin.Context) {
 	var req CreateTicketRequest
@@ -92,9 +92,10 @@ func (h *TicketHandler) CreateTicket(c *gin.Context) {
 // @Produce json
 // @Security Bearer
 // @Param id path int true "Ticket ID"
-// @Success 200 {object} utils.APIResponse
+// @Success 200 {object} utils.APIResponse "Ticket details"
 // @Failure 400 {object} utils.APIResponse
 // @Failure 404 {object} utils.APIResponse
+// @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /tickets/{id} [get]
 func (h *TicketHandler) GetTicket(c *gin.Context) {
 	ticketID, err := parseTicketID(c)
@@ -127,11 +128,12 @@ func (h *TicketHandler) GetTicket(c *gin.Context) {
 // @Security Bearer
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Page size" default(20)
-// @Param status query string false "Status filter"
-// @Param priority query string false "Priority filter"
-// @Param category query string false "Category filter"
-// @Success 200 {object} utils.APIResponse
+// @Param status query string false "Status filter" Enums(open,in_progress,resolved,closed,reopened)
+// @Param priority query string false "Priority filter" Enums(low,normal,high,urgent,critical)
+// @Param category query string false "Category filter" Enums(technical,billing,account,general,feature_request,bug_report)
+// @Success 200 {object} utils.APIResponse "Tickets list"
 // @Failure 400 {object} utils.APIResponse
+// @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /tickets [get]
 func (h *TicketHandler) ListTickets(c *gin.Context) {
 	req, err := parseListTicketsRequest(c)
@@ -161,8 +163,12 @@ func (h *TicketHandler) ListTickets(c *gin.Context) {
 // @Security Bearer
 // @Param id path int true "Ticket ID"
 // @Param body body AssignTicketRequest true "Assignment data"
-// @Success 200 {object} utils.APIResponse
-// @Failure 400 {object} utils.APIResponse
+// @Success 200 {object} utils.APIResponse "Ticket assigned successfully"
+// @Failure 400 {object} utils.APIResponse "Bad request"
+// @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
+// @Failure 404 {object} utils.APIResponse "Ticket not found"
+// @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /tickets/{id}/assign [post]
 func (h *TicketHandler) AssignTicket(c *gin.Context) {
 	ticketID, err := parseTicketID(c)
@@ -202,8 +208,9 @@ func (h *TicketHandler) AssignTicket(c *gin.Context) {
 // @Security Bearer
 // @Param id path int true "Ticket ID"
 // @Param body body AddCommentRequest true "Comment data"
-// @Success 201 {object} utils.APIResponse
+// @Success 201 {object} utils.APIResponse "Comment added successfully"
 // @Failure 400 {object} utils.APIResponse
+// @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /tickets/{id}/comments [post]
 func (h *TicketHandler) AddComment(c *gin.Context) {
 	ticketID, err := parseTicketID(c)
@@ -244,8 +251,9 @@ func (h *TicketHandler) AddComment(c *gin.Context) {
 // @Security Bearer
 // @Param id path int true "Ticket ID"
 // @Param body body CloseTicketRequest true "Close data"
-// @Success 200 {object} utils.APIResponse
+// @Success 200 {object} utils.APIResponse "Ticket closed successfully"
 // @Failure 400 {object} utils.APIResponse
+// @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /tickets/{id}/close [post]
 func (h *TicketHandler) CloseTicket(c *gin.Context) {
 	ticketID, err := parseTicketID(c)
@@ -285,8 +293,9 @@ func (h *TicketHandler) CloseTicket(c *gin.Context) {
 // @Security Bearer
 // @Param id path int true "Ticket ID"
 // @Param body body ReopenTicketRequest true "Reopen data"
-// @Success 200 {object} utils.APIResponse
+// @Success 200 {object} utils.APIResponse "Ticket reopened successfully"
 // @Failure 400 {object} utils.APIResponse
+// @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /tickets/{id}/reopen [post]
 func (h *TicketHandler) ReopenTicket(c *gin.Context) {
 	ticketID, err := parseTicketID(c)
@@ -326,7 +335,11 @@ func (h *TicketHandler) ReopenTicket(c *gin.Context) {
 // @Security Bearer
 // @Param id path int true "Ticket ID"
 // @Success 204
-// @Failure 400 {object} utils.APIResponse
+// @Failure 400 {object} utils.APIResponse "Bad request"
+// @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
+// @Failure 404 {object} utils.APIResponse "Ticket not found"
+// @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /tickets/{id} [delete]
 func (h *TicketHandler) DeleteTicket(c *gin.Context) {
 	ticketID, err := parseTicketID(c)

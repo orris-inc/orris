@@ -31,6 +31,17 @@ server:
   port: 8081       # HTTP server port
   mode: "debug"    # Options: debug, release, test
                    # Env override: ORRIS_SERVER_MODE=release
+  base_url: "http://localhost:8081"  # Base URL for API
+  allowed_origins:  # CORS allowed origins
+    - "http://localhost:3000"
+    - "http://localhost:8080"
+    # Production environment: replace with your actual domain
+    # - "https://yourdomain.com"
+    # - "https://app.yourdomain.com"
+  frontend_callback_url: "http://localhost:3000/oauth/callback"  # Frontend OAuth callback URL
+    # Env override: ORRIS_SERVER_FRONTEND_CALLBACK_URL=https://yourdomain.com/oauth/callback
+    # Production example:
+    # frontend_callback_url: "https://yourdomain.com/oauth/callback"
 
 # ------------------------------------------------------------
 # Database Configuration
@@ -61,6 +72,18 @@ logger:
                          # Env override: ORRIS_LOGGER_FORMAT=json
   output_path: "stdout"  # Output: stdout, stderr, or file path
                          # Env override: ORRIS_LOGGER_OUTPUT_PATH=/var/log/orris.log
+
+# ------------------------------------------------------------
+# Redis Configuration
+# ------------------------------------------------------------
+redis:
+  host: "localhost"      # Redis server host
+                         # Env override: ORRIS_REDIS_HOST=redis-server
+  port: 6379             # Redis server port
+  password: ""           # ⚠️ LEAVE EMPTY - Use environment variable!
+                         # OPTIONAL: ORRIS_REDIS_PASSWORD=your_redis_password
+  db: 0                  # Redis database number (0-15)
+                         # Env override: ORRIS_REDIS_DB=1
 
 # ============================================================
 # Usage Examples

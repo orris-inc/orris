@@ -85,7 +85,7 @@ func run(cmd *cobra.Command, args []string) error {
 	userAppService := userApp.NewServiceDDD(userRepo, logger.NewLogger())
 
 	router := httpRouter.NewRouter(userAppService, database.Get(), cfg, logger.NewLogger())
-	router.SetupRoutes()
+	router.SetupRoutes(cfg)
 
 	srv := &http.Server{
 		Addr:         cfg.Server.GetAddr(),

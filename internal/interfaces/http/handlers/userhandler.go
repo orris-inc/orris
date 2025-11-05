@@ -6,11 +6,14 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"orris/internal/application/user"
+	userdto "orris/internal/application/user/dto"
 	"orris/internal/interfaces/dto"
 	"orris/internal/shared/errors"
 	"orris/internal/shared/logger"
 	"orris/internal/shared/utils"
 )
+
+var _ = userdto.UserResponse{} // ensure import is used for swagger
 
 // UserHandler handles HTTP requests for user operations
 type UserHandler struct {
@@ -34,9 +37,10 @@ func NewUserHandler(userService *user.ServiceDDD) *UserHandler {
 // @Produce json
 // @Security Bearer
 // @Param user body dto.CreateUserRequest true "User data"
-// @Success 201 {object} utils.APIResponse "User created successfully"
+// @Success 201 {object} utils.APIResponse{data=userdto.UserResponse} "User created successfully"
 // @Failure 400 {object} utils.APIResponse "Bad request"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 409 {object} utils.APIResponse "Email already exists"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /users [post]
@@ -69,9 +73,10 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 // @Produce json
 // @Security Bearer
 // @Param id path int true "User ID"
-// @Success 200 {object} utils.APIResponse "User details"
+// @Success 200 {object} utils.APIResponse{data=userdto.UserResponse} "User details"
 // @Failure 400 {object} utils.APIResponse "Invalid user ID"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 404 {object} utils.APIResponse "User not found"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /users/{id} [get]
@@ -102,9 +107,10 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 // @Security Bearer
 // @Param id path int true "User ID"
 // @Param user body dto.UpdateUserRequest true "User update data"
-// @Success 200 {object} utils.APIResponse "User updated successfully"
+// @Success 200 {object} utils.APIResponse{data=userdto.UserResponse} "User updated successfully"
 // @Failure 400 {object} utils.APIResponse "Bad request"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 404 {object} utils.APIResponse "User not found"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /users/{id} [put]
@@ -149,6 +155,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 // @Success 204 "User deleted successfully"
 // @Failure 400 {object} utils.APIResponse "Invalid user ID"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 404 {object} utils.APIResponse "User not found"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /users/{id} [delete]
@@ -178,10 +185,11 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 // @Security Bearer
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Page size" default(20)
-// @Param status query string false "User status filter"
-// @Success 200 {object} utils.APIResponse "Users list"
+// @Param status query string false "User status filter" Enums(active,inactive,pending,suspended)
+// @Success 200 {object} utils.APIResponse{data=utils.ListResponse} "Users list"
 // @Failure 400 {object} utils.APIResponse "Invalid query parameters"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /users [get]
 func (h *UserHandler) ListUsers(c *gin.Context) {
@@ -210,9 +218,10 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 // @Produce json
 // @Security Bearer
 // @Param email path string true "User email address"
-// @Success 200 {object} utils.APIResponse "User details"
+// @Success 200 {object} utils.APIResponse{data=userdto.UserResponse} "User details"
 // @Failure 400 {object} utils.APIResponse "Invalid email"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 404 {object} utils.APIResponse "User not found"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /users/email/{email} [get]
