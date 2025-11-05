@@ -2,7 +2,6 @@ package ticket
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
 	vo "orris/internal/domain/ticket/value_objects"
@@ -28,7 +27,6 @@ type Ticket struct {
 	updatedAt    time.Time
 	closedAt     *time.Time
 	comments     []*Comment
-	mu           sync.RWMutex
 }
 
 func NewTicket(
@@ -235,9 +233,6 @@ func (t *Ticket) Comments() []*Comment {
 }
 
 func (t *Ticket) SetID(id uint) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	if t.id != 0 {
 		return fmt.Errorf("ticket ID is already set")
 	}
@@ -249,9 +244,6 @@ func (t *Ticket) SetID(id uint) error {
 }
 
 func (t *Ticket) SetNumber(number string) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	if len(t.number) > 0 {
 		return fmt.Errorf("ticket number is already set")
 	}
@@ -263,9 +255,6 @@ func (t *Ticket) SetNumber(number string) error {
 }
 
 func (t *Ticket) AssignTo(assigneeID uint, assignedBy uint) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	if assigneeID == 0 {
 		return fmt.Errorf("assignee ID cannot be zero")
 	}
@@ -282,9 +271,6 @@ func (t *Ticket) AssignTo(assigneeID uint, assignedBy uint) error {
 }
 
 func (t *Ticket) ChangeStatus(newStatus vo.TicketStatus, changedBy uint) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	if !newStatus.IsValid() {
 		return fmt.Errorf("invalid status: %s", newStatus)
 	}
@@ -320,9 +306,6 @@ func (t *Ticket) ChangeStatus(newStatus vo.TicketStatus, changedBy uint) error {
 }
 
 func (t *Ticket) ChangePriority(newPriority vo.Priority, changedBy uint) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	if !newPriority.IsValid() {
 		return fmt.Errorf("invalid priority: %s", newPriority)
 	}
@@ -344,9 +327,6 @@ func (t *Ticket) ChangePriority(newPriority vo.Priority, changedBy uint) error {
 }
 
 func (t *Ticket) AddComment(comment *Comment) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	if comment == nil {
 		return fmt.Errorf("comment cannot be nil")
 	}
@@ -369,9 +349,6 @@ func (t *Ticket) AddComment(comment *Comment) error {
 }
 
 func (t *Ticket) Close(reason string, closedBy uint) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	if len(reason) == 0 {
 		return fmt.Errorf("close reason is required")
 	}
@@ -394,9 +371,6 @@ func (t *Ticket) Close(reason string, closedBy uint) error {
 }
 
 func (t *Ticket) Reopen(reason string, reopenedBy uint) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	if len(reason) == 0 {
 		return fmt.Errorf("reopen reason is required")
 	}
@@ -427,9 +401,6 @@ func (t *Ticket) IsOverdue() bool {
 }
 
 func (t *Ticket) MarkFirstResponse() error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	if t.responseTime != nil {
 		return fmt.Errorf("first response already marked")
 	}
@@ -442,9 +413,6 @@ func (t *Ticket) MarkFirstResponse() error {
 }
 
 func (t *Ticket) MarkResolved() error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	if t.resolvedTime != nil {
 		return fmt.Errorf("ticket already marked as resolved")
 	}

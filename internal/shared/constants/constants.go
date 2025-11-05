@@ -37,11 +37,9 @@ const (
 	UserStatusPending  = "pending"
 
 	// Database table names
-	TableUsers           = "users"
-	TableRoles           = "roles"
-	TablePermissions     = "permissions"
-	TableRolePermissions = "role_permissions"
-	TableUserRoles       = "user_roles"
+	TableUsers     = "users"
+	TableRoles     = "roles"
+	TableUserRoles = "user_roles"
 
 	// Default values
 	DefaultUserStatus = UserStatusActive

@@ -2,7 +2,6 @@ package notification
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
 	vo "orris/internal/domain/notification/value_objects"
@@ -21,7 +20,6 @@ type Notification struct {
 	createdAt        time.Time
 	updatedAt        time.Time
 	events           []interface{}
-	mu               sync.RWMutex
 }
 
 func NewNotification(
@@ -63,12 +61,6 @@ func NewNotification(
 		updatedAt:        now,
 		events:           []interface{}{},
 	}
-
-	n.recordEventUnsafe(NotificationCreatedEvent{
-		NotificationID: n.id,
-		UserID:         userID,
-		CreatedAt:      now,
-	})
 
 	return n, nil
 }
@@ -115,75 +107,50 @@ func ReconstructNotification(
 }
 
 func (n *Notification) ID() uint {
-	n.mu.RLock()
-	defer n.mu.RUnlock()
 	return n.id
 }
 
 func (n *Notification) UserID() uint {
-	n.mu.RLock()
-	defer n.mu.RUnlock()
 	return n.userID
 }
 
 func (n *Notification) Type() vo.NotificationType {
-	n.mu.RLock()
-	defer n.mu.RUnlock()
 	return n.notificationType
 }
 
 func (n *Notification) Title() string {
-	n.mu.RLock()
-	defer n.mu.RUnlock()
 	return n.title
 }
 
 func (n *Notification) Content() string {
-	n.mu.RLock()
-	defer n.mu.RUnlock()
 	return n.content
 }
 
 func (n *Notification) RelatedID() *uint {
-	n.mu.RLock()
-	defer n.mu.RUnlock()
 	return n.relatedID
 }
 
 func (n *Notification) ReadStatus() vo.ReadStatus {
-	n.mu.RLock()
-	defer n.mu.RUnlock()
 	return n.readStatus
 }
 
 func (n *Notification) ArchivedAt() *time.Time {
-	n.mu.RLock()
-	defer n.mu.RUnlock()
 	return n.archivedAt
 }
 
 func (n *Notification) Version() int {
-	n.mu.RLock()
-	defer n.mu.RUnlock()
 	return n.version
 }
 
 func (n *Notification) CreatedAt() time.Time {
-	n.mu.RLock()
-	defer n.mu.RUnlock()
 	return n.createdAt
 }
 
 func (n *Notification) UpdatedAt() time.Time {
-	n.mu.RLock()
-	defer n.mu.RUnlock()
 	return n.updatedAt
 }
 
 func (n *Notification) SetID(id uint) error {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
 	if n.id != 0 {
 		return fmt.Errorf("notification ID is already set")
 	}
@@ -195,9 +162,6 @@ func (n *Notification) SetID(id uint) error {
 }
 
 func (n *Notification) MarkAsRead() error {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
 	if n.readStatus.IsRead() {
 		return nil
 	}
@@ -210,9 +174,6 @@ func (n *Notification) MarkAsRead() error {
 }
 
 func (n *Notification) Archive() error {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
 	if n.archivedAt != nil {
 		return fmt.Errorf("notification is already archived")
 	}
@@ -226,8 +187,6 @@ func (n *Notification) Archive() error {
 }
 
 func (n *Notification) IsArchived() bool {
-	n.mu.RLock()
-	defer n.mu.RUnlock()
 	return n.archivedAt != nil
 }
 
@@ -236,8 +195,6 @@ func (n *Notification) recordEventUnsafe(event interface{}) {
 }
 
 func (n *Notification) GetEvents() []interface{} {
-	n.mu.Lock()
-	defer n.mu.Unlock()
 	events := make([]interface{}, len(n.events))
 	copy(events, n.events)
 	n.events = []interface{}{}
@@ -245,7 +202,5 @@ func (n *Notification) GetEvents() []interface{} {
 }
 
 func (n *Notification) ClearEvents() {
-	n.mu.Lock()
-	defer n.mu.Unlock()
 	n.events = []interface{}{}
 }

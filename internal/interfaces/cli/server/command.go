@@ -15,7 +15,6 @@ import (
 	"github.com/spf13/cobra"
 
 	userApp "orris/internal/application/user"
-	"orris/internal/domain/shared/events"
 	"orris/internal/infrastructure/config"
 	"orris/internal/infrastructure/database"
 	"orris/internal/infrastructure/migration"
@@ -81,20 +80,9 @@ func run(cmd *cobra.Command, args []string) error {
 		logger.Fatal("migration handling failed", "error", err)
 	}
 
-	eventDispatcher := events.NewInMemoryEventDispatcher(100)
-	if err := eventDispatcher.Start(); err != nil {
-		logger.Fatal("failed to start event dispatcher", "error", err)
-	}
-	defer func() {
-		if err := eventDispatcher.Stop(); err != nil {
-			logger.Error("failed to stop event dispatcher", "error", err)
-		}
-	}()
-	logger.Info("event dispatcher started")
+	userRepo := repository.NewUserRepositoryDDD(database.Get(), logger.NewLogger())
 
-	userRepo := repository.NewUserRepositoryDDD(database.Get(), eventDispatcher, logger.NewLogger())
-
-	userAppService := userApp.NewServiceDDD(userRepo, eventDispatcher, logger.NewLogger())
+	userAppService := userApp.NewServiceDDD(userRepo, logger.NewLogger())
 
 	router := httpRouter.NewRouter(userAppService, database.Get(), cfg, logger.NewLogger())
 	router.SetupRoutes()

@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"orris/internal/application/user/dto"
-	"orris/internal/domain/shared/events"
 	domainUser "orris/internal/domain/user"
 	vo "orris/internal/domain/user/value_objects"
 	"orris/internal/shared/errors"
@@ -14,21 +13,18 @@ import (
 
 // UpdateUserUseCase handles the business logic for updating a user
 type UpdateUserUseCase struct {
-	userRepo        domainUser.Repository
-	eventDispatcher events.EventDispatcher
-	logger          logger.Interface
+	userRepo domainUser.Repository
+	logger   logger.Interface
 }
 
 // NewUpdateUserUseCase creates a new update user use case
 func NewUpdateUserUseCase(
 	userRepo domainUser.Repository,
-	eventDispatcher events.EventDispatcher,
 	logger logger.Interface,
 ) *UpdateUserUseCase {
 	return &UpdateUserUseCase{
-		userRepo:        userRepo,
-		eventDispatcher: eventDispatcher,
-		logger:          logger,
+		userRepo: userRepo,
+		logger:   logger,
 	}
 }
 

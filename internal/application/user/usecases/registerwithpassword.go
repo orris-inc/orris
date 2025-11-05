@@ -7,7 +7,6 @@ import (
 	"orris/internal/application/user/helpers"
 	"orris/internal/domain/user"
 	vo "orris/internal/domain/user/value_objects"
-	"orris/internal/shared/authorization"
 	"orris/internal/shared/logger"
 )
 
@@ -33,10 +32,8 @@ type RegisterWithPasswordUseCase struct {
 
 func NewRegisterWithPasswordUseCase(
 	userRepo user.Repository,
-	roleRepo interface{},
 	hasher user.PasswordHasher,
 	emailService EmailService,
-	permissionService interface{},
 	authHelper *helpers.AuthHelper,
 	logger logger.Interface,
 ) *RegisterWithPasswordUseCase {
@@ -96,16 +93,10 @@ func (uc *RegisterWithPasswordUseCase) Execute(ctx context.Context, cmd Register
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
-	isFirstUser, err := uc.authHelper.IsFirstUser(ctx)
-	if err != nil {
-		uc.logger.Errorw("failed to check if first user", "error", err)
-	} else if isFirstUser {
-		newUser.SetRole(authorization.RoleAdmin)
-		if err := uc.userRepo.Update(ctx, newUser); err != nil {
-			uc.logger.Errorw("failed to update user role to admin", "error", err, "user_id", newUser.ID())
-		} else {
-			uc.logger.Infow("admin role assigned to first user", "user_id", newUser.ID())
-		}
+	// Grant admin role to first user if applicable
+	if err := uc.authHelper.GrantAdminAndSave(ctx, newUser); err != nil {
+		uc.logger.Warnw("failed to grant admin role to first user", "error", err, "user_id", newUser.ID())
+		// Continue despite error as user is already created
 	}
 
 	if err := uc.emailService.SendVerificationEmail(email.String(), token.Value()); err != nil {

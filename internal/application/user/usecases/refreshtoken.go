@@ -57,7 +57,7 @@ func (uc *RefreshTokenUseCase) Execute(cmd RefreshTokenCommand) (*RefreshTokenRe
 		return nil, fmt.Errorf("failed to refresh token: %w", err)
 	}
 
-	session.TokenHash = uc.authHelper.HashToken(newAccessToken)
+	uc.authHelper.UpdateSessionAccessToken(session, newAccessToken)
 	session.UpdateActivity()
 
 	if err := uc.sessionRepo.Update(session); err != nil {

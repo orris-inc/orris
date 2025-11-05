@@ -5,7 +5,6 @@ import (
 
 	"orris/internal/application/user/dto"
 	"orris/internal/application/user/usecases"
-	"orris/internal/domain/shared/events"
 	domainUser "orris/internal/domain/user"
 	"orris/internal/shared/logger"
 )
@@ -21,12 +20,11 @@ type ServiceDDD struct {
 // NewServiceDDD creates a new DDD application service
 func NewServiceDDD(
 	userRepo domainUser.Repository,
-	eventDispatcher events.EventDispatcher,
 	logger logger.Interface,
 ) *ServiceDDD {
 	return &ServiceDDD{
-		createUserUC: usecases.NewCreateUserUseCase(userRepo, eventDispatcher, logger),
-		updateUserUC: usecases.NewUpdateUserUseCase(userRepo, eventDispatcher, logger),
+		createUserUC: usecases.NewCreateUserUseCase(userRepo, logger),
+		updateUserUC: usecases.NewUpdateUserUseCase(userRepo, logger),
 		getUserUC:    usecases.NewGetUserUseCase(userRepo, logger),
 		logger:       logger,
 	}

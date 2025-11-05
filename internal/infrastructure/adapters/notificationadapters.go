@@ -27,7 +27,7 @@ func (a *announcementAdapter) Archive() error {
 }
 
 func (a *announcementAdapter) Publish() error {
-	return a.Announcement.Publish(true)
+	return a.Announcement.Publish()
 }
 
 type notificationAdapter struct {

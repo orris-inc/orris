@@ -2,7 +2,6 @@ package ticket
 
 import (
 	"fmt"
-	"sync"
 	"time"
 )
 
@@ -14,7 +13,6 @@ type Comment struct {
 	isInternal bool
 	createdAt  time.Time
 	updatedAt  time.Time
-	mu         sync.RWMutex
 }
 
 func NewComment(
@@ -77,51 +75,34 @@ func ReconstructComment(
 }
 
 func (c *Comment) ID() uint {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
 	return c.id
 }
 
 func (c *Comment) TicketID() uint {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
 	return c.ticketID
 }
 
 func (c *Comment) UserID() uint {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
 	return c.userID
 }
 
 func (c *Comment) Content() string {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
 	return c.content
 }
 
 func (c *Comment) IsInternal() bool {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
 	return c.isInternal
 }
 
 func (c *Comment) CreatedAt() time.Time {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
 	return c.createdAt
 }
 
 func (c *Comment) UpdatedAt() time.Time {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
 	return c.updatedAt
 }
 
 func (c *Comment) SetID(id uint) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if c.id != 0 {
 		return fmt.Errorf("comment ID is already set")
 	}
@@ -133,9 +114,6 @@ func (c *Comment) SetID(id uint) error {
 }
 
 func (c *Comment) UpdateContent(content string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	if len(content) == 0 {
 		return fmt.Errorf("content cannot be empty")
 	}

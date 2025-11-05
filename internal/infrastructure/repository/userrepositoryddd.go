@@ -6,7 +6,6 @@ import (
 
 	"gorm.io/gorm"
 
-	domainEvents "orris/internal/domain/shared/events"
 	"orris/internal/domain/user"
 	"orris/internal/infrastructure/persistence/mappers"
 	"orris/internal/infrastructure/persistence/models"
@@ -15,19 +14,17 @@ import (
 
 // UserRepositoryDDD implements the user repository interface with DDD patterns
 type UserRepositoryDDD struct {
-	db              *gorm.DB
-	mapper          mappers.UserMapper
-	eventDispatcher domainEvents.EventDispatcher
-	logger          logger.Interface
+	db     *gorm.DB
+	mapper mappers.UserMapper
+	logger logger.Interface
 }
 
 // NewUserRepositoryDDD creates a new DDD user repository
-func NewUserRepositoryDDD(db *gorm.DB, eventDispatcher domainEvents.EventDispatcher, logger logger.Interface) user.Repository {
+func NewUserRepositoryDDD(db *gorm.DB, logger logger.Interface) user.Repository {
 	return &UserRepositoryDDD{
-		db:              db,
-		mapper:          mappers.NewUserMapper(),
-		eventDispatcher: eventDispatcher,
-		logger:          logger,
+		db:     db,
+		mapper: mappers.NewUserMapper(),
+		logger: logger,
 	}
 }
 

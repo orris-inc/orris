@@ -8,7 +8,6 @@ import (
 	"orris/internal/application/user/helpers"
 	"orris/internal/domain/user"
 	vo "orris/internal/domain/user/value_objects"
-	"orris/internal/shared/authorization"
 	"orris/internal/shared/logger"
 )
 
@@ -65,8 +64,6 @@ func NewHandleOAuthCallbackUseCase(
 	githubClient OAuthCallbackClient,
 	jwtService JWTService,
 	oauthInitiator *InitiateOAuthLoginUseCase,
-	roleRepo interface{},
-	permissionService interface{},
 	authHelper *helpers.AuthHelper,
 	logger logger.Interface,
 ) *HandleOAuthCallbackUseCase {
@@ -167,16 +164,10 @@ func (uc *HandleOAuthCallbackUseCase) Execute(ctx context.Context, cmd HandleOAu
 
 			isNewUser = true
 
-			isFirstUser, err := uc.authHelper.IsFirstUser(ctx)
-			if err != nil {
-				uc.logger.Errorw("failed to check if first user", "error", err)
-			} else if isFirstUser {
-				existingUser.SetRole(authorization.RoleAdmin)
-				if err := uc.userRepo.Update(ctx, existingUser); err != nil {
-					uc.logger.Errorw("failed to update user role to admin", "error", err, "user_id", existingUser.ID())
-				} else {
-					uc.logger.Infow("admin role assigned to first user", "user_id", existingUser.ID())
-				}
+			// Grant admin role to first user if applicable
+			if err := uc.authHelper.GrantAdminAndSave(ctx, existingUser); err != nil {
+				uc.logger.Warnw("failed to grant admin role to first user", "error", err, "user_id", existingUser.ID())
+				// Continue despite error as user is already created
 			}
 		}
 
@@ -195,45 +186,40 @@ func (uc *HandleOAuthCallbackUseCase) Execute(ctx context.Context, cmd HandleOAu
 		}
 	}
 
-	if !existingUser.CanPerformActions() {
-		return nil, fmt.Errorf("account is not active")
+	// Validate user can perform actions using unified helper (checks account status)
+	if validationErr := uc.authHelper.ValidateUserCanPerformAction(existingUser); validationErr != nil {
+		return nil, validationErr
 	}
 
-	expiresAt := time.Now().Add(7 * 24 * time.Hour)
-	session, err := user.NewSession(
+	// Create session with tokens using unified helper
+	sessionWithTokens, err := uc.authHelper.CreateAndSaveSessionWithTokens(
 		existingUser.ID(),
-		cmd.DeviceName,
-		cmd.DeviceType,
-		cmd.IPAddress,
-		cmd.UserAgent,
-		expiresAt,
+		helpers.DeviceInfo{
+			DeviceName: cmd.DeviceName,
+			DeviceType: cmd.DeviceType,
+			IPAddress:  cmd.IPAddress,
+			UserAgent:  cmd.UserAgent,
+		},
+		7*24*time.Hour, // Session duration: 7 days
+		func(userID uint, sessionID string) (string, string, int64, error) {
+			tokens, err := uc.jwtService.Generate(userID, sessionID)
+			if err != nil {
+				return "", "", 0, err
+			}
+			return tokens.AccessToken, tokens.RefreshToken, tokens.ExpiresIn, nil
+		},
 	)
 	if err != nil {
-		uc.logger.Errorw("failed to create session", "error", err)
-		return nil, fmt.Errorf("failed to create session: %w", err)
-	}
-
-	tokens, err := uc.jwtService.Generate(existingUser.ID(), session.ID)
-	if err != nil {
-		uc.logger.Errorw("failed to generate JWT tokens", "error", err)
-		return nil, fmt.Errorf("failed to generate tokens: %w", err)
-	}
-
-	session.TokenHash = uc.authHelper.HashToken(tokens.AccessToken)
-	session.RefreshTokenHash = uc.authHelper.HashToken(tokens.RefreshToken)
-
-	if err := uc.sessionRepo.Create(session); err != nil {
-		uc.logger.Errorw("failed to create session in database", "error", err)
-		return nil, fmt.Errorf("failed to create session: %w", err)
+		return nil, err // Error already logged and wrapped in helper
 	}
 
 	uc.logger.Infow("OAuth login successful", "user_id", existingUser.ID(), "provider", cmd.Provider, "is_new_user", isNewUser)
 
 	return &HandleOAuthCallbackResult{
 		User:         existingUser,
-		AccessToken:  tokens.AccessToken,
-		RefreshToken: tokens.RefreshToken,
-		ExpiresIn:    tokens.ExpiresIn,
+		AccessToken:  sessionWithTokens.AccessToken,
+		RefreshToken: sessionWithTokens.RefreshToken,
+		ExpiresIn:    sessionWithTokens.ExpiresIn,
 		IsNewUser:    isNewUser,
 	}, nil
 }

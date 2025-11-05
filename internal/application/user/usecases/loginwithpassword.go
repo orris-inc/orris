@@ -70,67 +70,55 @@ func (uc *LoginWithPasswordUseCase) Execute(ctx context.Context, cmd LoginWithPa
 		uc.logger.Errorw("failed to get user by email", "error", err)
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
+
+	// Return generic error if user not found (security: don't reveal if email exists)
 	if existingUser == nil {
 		return nil, fmt.Errorf("invalid email or password")
 	}
 
-	if existingUser.IsLocked() {
-		return nil, fmt.Errorf("account is temporarily locked due to too many failed login attempts")
+	// Validate user can login using unified helper (checks lock, password availability, status)
+	if validationErr := uc.authHelper.ValidateUserCanLogin(existingUser); validationErr != nil {
+		return nil, validationErr
 	}
 
-	if !existingUser.HasPassword() {
-		return nil, fmt.Errorf("password login not available for this account")
-	}
-
+	// Verify password
 	if err := existingUser.VerifyPassword(cmd.Password, uc.passwordHasher); err != nil {
-		if updateErr := uc.userRepo.Update(ctx, existingUser); updateErr != nil {
-			uc.logger.Errorw("failed to update user after failed login", "error", updateErr)
-		}
+		// Record failed login and save (non-critical operation)
+		uc.authHelper.RecordFailedLoginAndSave(ctx, existingUser)
 		return nil, fmt.Errorf("invalid email or password")
 	}
 
-	if !existingUser.CanPerformActions() {
-		return nil, fmt.Errorf("account is not active")
-	}
-
-	expiresAt := time.Now().Add(7 * 24 * time.Hour)
-	session, err := user.NewSession(
+	// Create session with tokens using unified helper
+	sessionWithTokens, err := uc.authHelper.CreateAndSaveSessionWithTokens(
 		existingUser.ID(),
-		cmd.DeviceName,
-		cmd.DeviceType,
-		cmd.IPAddress,
-		cmd.UserAgent,
-		expiresAt,
+		helpers.DeviceInfo{
+			DeviceName: cmd.DeviceName,
+			DeviceType: cmd.DeviceType,
+			IPAddress:  cmd.IPAddress,
+			UserAgent:  cmd.UserAgent,
+		},
+		7*24*time.Hour, // Session duration: 7 days
+		func(userID uint, sessionID string) (string, string, int64, error) {
+			tokens, err := uc.jwtService.Generate(userID, sessionID)
+			if err != nil {
+				return "", "", 0, err
+			}
+			return tokens.AccessToken, tokens.RefreshToken, tokens.ExpiresIn, nil
+		},
 	)
 	if err != nil {
-		uc.logger.Errorw("failed to create session", "error", err)
-		return nil, fmt.Errorf("failed to create session: %w", err)
+		return nil, err // Error already logged and wrapped in helper
 	}
 
-	tokens, err := uc.jwtService.Generate(existingUser.ID(), session.ID)
-	if err != nil {
-		uc.logger.Errorw("failed to generate JWT tokens", "error", err)
-		return nil, fmt.Errorf("failed to generate tokens: %w", err)
-	}
+	// Save user after successful login (reset failed attempts) - non-critical
+	uc.authHelper.SaveUserAfterSuccessfulLogin(ctx, existingUser)
 
-	session.TokenHash = uc.authHelper.HashToken(tokens.AccessToken)
-	session.RefreshTokenHash = uc.authHelper.HashToken(tokens.RefreshToken)
-
-	if err := uc.sessionRepo.Create(session); err != nil {
-		uc.logger.Errorw("failed to create session in database", "error", err)
-		return nil, fmt.Errorf("failed to create session: %w", err)
-	}
-
-	if err := uc.userRepo.Update(ctx, existingUser); err != nil {
-		uc.logger.Errorw("failed to update user", "error", err)
-	}
-
-	uc.logger.Infow("user logged in successfully", "user_id", existingUser.ID(), "session_id", session.ID)
+	uc.logger.Infow("user logged in successfully", "user_id", existingUser.ID(), "session_id", sessionWithTokens.Session.ID)
 
 	return &LoginWithPasswordResult{
 		User:         existingUser,
-		AccessToken:  tokens.AccessToken,
-		RefreshToken: tokens.RefreshToken,
-		ExpiresIn:    tokens.ExpiresIn,
+		AccessToken:  sessionWithTokens.AccessToken,
+		RefreshToken: sessionWithTokens.RefreshToken,
+		ExpiresIn:    sessionWithTokens.ExpiresIn,
 	}, nil
 }

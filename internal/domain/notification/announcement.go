@@ -2,7 +2,6 @@ package notification
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
 	vo "orris/internal/domain/notification/value_objects"
@@ -23,7 +22,6 @@ type Announcement struct {
 	createdAt        time.Time
 	updatedAt        time.Time
 	events           []interface{}
-	mu               sync.RWMutex
 }
 
 func NewAnnouncement(
@@ -129,87 +127,58 @@ func ReconstructAnnouncement(
 }
 
 func (a *Announcement) ID() uint {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
 	return a.id
 }
 
 func (a *Announcement) Title() string {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
 	return a.title
 }
 
 func (a *Announcement) Content() string {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
 	return a.content
 }
 
 func (a *Announcement) Type() vo.AnnouncementType {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
 	return a.announcementType
 }
 
 func (a *Announcement) Status() vo.AnnouncementStatus {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
 	return a.status
 }
 
 func (a *Announcement) CreatorID() uint {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
 	return a.creatorID
 }
 
 func (a *Announcement) Priority() int {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
 	return a.priority
 }
 
 func (a *Announcement) ScheduledAt() *time.Time {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
 	return a.scheduledAt
 }
 
 func (a *Announcement) ExpiresAt() *time.Time {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
 	return a.expiresAt
 }
 
 func (a *Announcement) ViewCount() int {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
 	return a.viewCount
 }
 
 func (a *Announcement) Version() int {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
 	return a.version
 }
 
 func (a *Announcement) CreatedAt() time.Time {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
 	return a.createdAt
 }
 
 func (a *Announcement) UpdatedAt() time.Time {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
 	return a.updatedAt
 }
 
 func (a *Announcement) SetID(id uint) error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
 	if a.id != 0 {
 		return fmt.Errorf("announcement ID is already set")
 	}
@@ -220,10 +189,7 @@ func (a *Announcement) SetID(id uint) error {
 	return nil
 }
 
-func (a *Announcement) Publish(sendNotification bool) error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
+func (a *Announcement) Publish() error {
 	if !a.status.CanTransitionTo(vo.AnnouncementStatusPublished) {
 		return fmt.Errorf("cannot publish announcement with status %s", a.status)
 	}
@@ -241,19 +207,10 @@ func (a *Announcement) Publish(sendNotification bool) error {
 	a.updatedAt = now
 	a.version++
 
-	a.recordEventUnsafe(AnnouncementPublishedEvent{
-		AnnouncementID:   a.id,
-		SendNotification: sendNotification,
-		PublishedAt:      now,
-	})
-
 	return nil
 }
 
 func (a *Announcement) Update(title, content string, priority int, expiresAt *time.Time) error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
 	if len(title) == 0 {
 		return fmt.Errorf("title is required")
 	}
@@ -281,9 +238,6 @@ func (a *Announcement) Update(title, content string, priority int, expiresAt *ti
 }
 
 func (a *Announcement) MarkAsExpired() error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
 	if a.status.IsExpired() {
 		return nil
 	}
@@ -300,15 +254,10 @@ func (a *Announcement) MarkAsExpired() error {
 }
 
 func (a *Announcement) IncrementViewCount() {
-	a.mu.Lock()
-	defer a.mu.Unlock()
 	a.viewCount++
 }
 
 func (a *Announcement) IsExpired() bool {
-	a.mu.RLock()
-	defer a.mu.RUnlock()
-
 	if a.expiresAt == nil {
 		return false
 	}
@@ -321,8 +270,6 @@ func (a *Announcement) recordEventUnsafe(event interface{}) {
 }
 
 func (a *Announcement) GetEvents() []interface{} {
-	a.mu.Lock()
-	defer a.mu.Unlock()
 	events := make([]interface{}, len(a.events))
 	copy(events, a.events)
 	a.events = []interface{}{}
@@ -330,7 +277,5 @@ func (a *Announcement) GetEvents() []interface{} {
 }
 
 func (a *Announcement) ClearEvents() {
-	a.mu.Lock()
-	defer a.mu.Unlock()
 	a.events = []interface{}{}
 }

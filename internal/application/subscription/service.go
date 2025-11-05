@@ -14,7 +14,6 @@ type Service struct {
 func NewService(
 	subscriptionRepo subscription.SubscriptionRepository,
 	planRepo subscription.SubscriptionPlanRepository,
-	permissionService interface{},
 	logger logger.Interface,
 ) *Service {
 	return &Service{

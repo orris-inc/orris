@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"orris/internal/application/user/dto"
-	"orris/internal/domain/shared/events"
 	domainUser "orris/internal/domain/user"
 	vo "orris/internal/domain/user/value_objects"
 	"orris/internal/shared/errors"
@@ -14,21 +13,18 @@ import (
 
 // CreateUserUseCase handles the business logic for creating a user
 type CreateUserUseCase struct {
-	userRepo        domainUser.Repository
-	eventDispatcher events.EventDispatcher
-	logger          logger.Interface
+	userRepo domainUser.Repository
+	logger   logger.Interface
 }
 
 // NewCreateUserUseCase creates a new create user use case
 func NewCreateUserUseCase(
 	userRepo domainUser.Repository,
-	eventDispatcher events.EventDispatcher,
 	logger logger.Interface,
 ) *CreateUserUseCase {
 	return &CreateUserUseCase{
-		userRepo:        userRepo,
-		eventDispatcher: eventDispatcher,
-		logger:          logger,
+		userRepo: userRepo,
+		logger:   logger,
 	}
 }
 

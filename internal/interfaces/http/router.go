@@ -107,7 +107,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	userHandler := handlers.NewUserHandler(userService)
 
-	userRepo := repository.NewUserRepositoryDDD(db, nil, log)
+	userRepo := repository.NewUserRepositoryDDD(db, log)
 	sessionRepo := repository.NewSessionRepository(db)
 	oauthRepo := repository.NewOAuthAccountRepository(db)
 
@@ -139,15 +139,15 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	})
 	githubClient := &oauthClientAdapter{githubBase}
 
-	authHelper := helpers.NewAuthHelper(userRepo)
+	authHelper := helpers.NewAuthHelper(userRepo, sessionRepo, log)
 
-	registerUC := usecases.NewRegisterWithPasswordUseCase(userRepo, nil, hasher, emailService, nil, authHelper, log)
+	registerUC := usecases.NewRegisterWithPasswordUseCase(userRepo, hasher, emailService, authHelper, log)
 	loginUC := usecases.NewLoginWithPasswordUseCase(userRepo, sessionRepo, hasher, jwtService, authHelper, log)
 	verifyEmailUC := usecases.NewVerifyEmailUseCase(userRepo, log)
 	requestResetUC := usecases.NewRequestPasswordResetUseCase(userRepo, emailService, log)
 	resetPasswordUC := usecases.NewResetPasswordUseCase(userRepo, sessionRepo, hasher, emailService, log)
 	initiateOAuthUC := usecases.NewInitiateOAuthLoginUseCase(googleClient, githubClient, log)
-	handleOAuthUC := usecases.NewHandleOAuthCallbackUseCase(userRepo, oauthRepo, sessionRepo, googleClient, githubClient, jwtService, initiateOAuthUC, nil, nil, authHelper, log)
+	handleOAuthUC := usecases.NewHandleOAuthCallbackUseCase(userRepo, oauthRepo, sessionRepo, googleClient, githubClient, jwtService, initiateOAuthUC, authHelper, log)
 	refreshTokenUC := usecases.NewRefreshTokenUseCase(sessionRepo, jwtService, authHelper, log)
 	logoutUC := usecases.NewLogoutUseCase(sessionRepo, log)
 

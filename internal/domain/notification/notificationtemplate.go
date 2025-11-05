@@ -3,7 +3,6 @@ package notification
 import (
 	"bytes"
 	"fmt"
-	"sync"
 	"text/template"
 	"time"
 
@@ -21,7 +20,6 @@ type NotificationTemplate struct {
 	version      int
 	createdAt    time.Time
 	updatedAt    time.Time
-	mu           sync.RWMutex
 }
 
 func NewNotificationTemplate(
@@ -111,71 +109,48 @@ func ReconstructNotificationTemplate(
 }
 
 func (t *NotificationTemplate) ID() uint {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return t.id
 }
 
 func (t *NotificationTemplate) TemplateType() vo.TemplateType {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return t.templateType
 }
 
 func (t *NotificationTemplate) Name() string {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return t.name
 }
 
 func (t *NotificationTemplate) Title() string {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return t.title
 }
 
 func (t *NotificationTemplate) Content() string {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return t.content
 }
 
 func (t *NotificationTemplate) Variables() []string {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	vars := make([]string, len(t.variables))
 	copy(vars, t.variables)
 	return vars
 }
 
 func (t *NotificationTemplate) Enabled() bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return t.enabled
 }
 
 func (t *NotificationTemplate) Version() int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return t.version
 }
 
 func (t *NotificationTemplate) CreatedAt() time.Time {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return t.createdAt
 }
 
 func (t *NotificationTemplate) UpdatedAt() time.Time {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
 	return t.updatedAt
 }
 
 func (t *NotificationTemplate) SetID(id uint) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	if t.id != 0 {
 		return fmt.Errorf("template ID is already set")
 	}
@@ -187,9 +162,6 @@ func (t *NotificationTemplate) SetID(id uint) error {
 }
 
 func (t *NotificationTemplate) Render(data map[string]interface{}) (string, string, error) {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-
 	if !t.enabled {
 		return "", "", fmt.Errorf("template is disabled")
 	}
@@ -218,9 +190,6 @@ func (t *NotificationTemplate) Render(data map[string]interface{}) (string, stri
 }
 
 func (t *NotificationTemplate) Enable() {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	if t.enabled {
 		return
 	}
@@ -231,9 +200,6 @@ func (t *NotificationTemplate) Enable() {
 }
 
 func (t *NotificationTemplate) Disable() {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	if !t.enabled {
 		return
 	}
@@ -244,9 +210,6 @@ func (t *NotificationTemplate) Disable() {
 }
 
 func (t *NotificationTemplate) Update(name, title, content string, variables []string) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	if len(name) == 0 {
 		return fmt.Errorf("name is required")
 	}
