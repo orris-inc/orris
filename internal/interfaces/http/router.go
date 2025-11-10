@@ -41,6 +41,7 @@ type Router struct {
 	engine                   *gin.Engine
 	userHandler              *handlers.UserHandler
 	authHandler              *handlers.AuthHandler
+	profileHandler           *handlers.ProfileHandler
 	subscriptionHandler      *handlers.SubscriptionHandler
 	subscriptionPlanHandler  *handlers.SubscriptionPlanHandler
 	subscriptionTokenHandler *handlers.SubscriptionTokenHandler
@@ -49,6 +50,7 @@ type Router struct {
 	nodeGroupHandler         *handlers.NodeGroupHandler
 	nodeSubscriptionHandler  *handlers.NodeSubscriptionHandler
 	nodeReportHandler        *handlers.NodeReportHandler
+	xrayrHandler             *handlers.XrayRHandler
 	ticketHandler            *ticketHandlers.TicketHandler
 	notificationHandler      *handlers.NotificationHandler
 	authMiddleware           *middleware.AuthMiddleware
@@ -60,8 +62,8 @@ type jwtServiceAdapter struct {
 	*auth.JWTService
 }
 
-func (a *jwtServiceAdapter) Generate(userID uint, sessionID string) (*usecases.TokenPair, error) {
-	pair, err := a.JWTService.Generate(userID, sessionID)
+func (a *jwtServiceAdapter) Generate(userID uint, sessionID string, role authorization.UserRole) (*usecases.TokenPair, error) {
+	pair, err := a.JWTService.Generate(userID, sessionID, role)
 	if err != nil {
 		return nil, err
 	}
@@ -151,9 +153,9 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Test Redis connection
 	ctx := context.Background()
 	if err := redisClient.Ping(ctx).Err(); err != nil {
-		log.Fatalw("failed to connect to Redis", "error", err, "addr", cfg.Redis.GetAddr())
+		log.Fatalw("failed to connect to Redis", "error", err)
 	}
-	log.Infow("Redis connection established", "addr", cfg.Redis.GetAddr())
+	log.Infow("Redis connection established successfully")
 
 	// Create OAuth StateStore with 10 minute TTL
 	stateStore := cache.NewRedisStateStore(
@@ -260,7 +262,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		generateTokenUC, listTokensUC, revokeTokenUC, refreshSubscriptionTokenUC,
 	)
 
-	nodeRepo := adapters.NewNodeRepositoryAdapter(log)
+	nodeRepoImpl := repository.NewNodeRepository(db, log)
+	nodeRepo := adapters.NewNodeRepositoryAdapter(nodeRepoImpl, db, log)
 	tokenValidator := adapters.NewSubscriptionTokenValidatorAdapter(db, log)
 	generateSubscriptionUC := nodeUsecases.NewGenerateSubscriptionUseCase(
 		nodeRepo, tokenValidator, log,
@@ -270,7 +273,10 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	nodeGroupHandler := handlers.NewNodeGroupHandler()
 	nodeSubscriptionHandler := handlers.NewNodeSubscriptionHandler(generateSubscriptionUC)
 	nodeReportHandler := handlers.NewNodeReportHandler(nil, nil)
-	nodeTokenMiddleware := middleware.NewNodeTokenMiddleware(nil, log)
+
+	// Initialize node authentication middleware using the same node repository adapter
+	validateNodeTokenUC := nodeUsecases.NewValidateNodeTokenUseCase(nodeRepo, log)
+	nodeTokenMiddleware := middleware.NewNodeTokenMiddleware(validateNodeTokenUC, log)
 
 	ticketHandler := ticketHandlers.NewTicketHandler(nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
@@ -299,6 +305,9 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	notificationHandler := handlers.NewNotificationHandler(notificationServiceDDD, log)
 
+	// Create profile handler
+	profileHandler := handlers.NewProfileHandler(userService)
+
 	// TODO: Implement real payment gateway (Alipay/WeChat/Stripe)
 	// Currently mock gateway is removed as per CLAUDE.md rule: "不允许mock数据"
 	var gateway paymentGateway.PaymentGateway = nil // Temporary placeholder until real implementation
@@ -322,10 +331,27 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	paymentHandler := handlers.NewPaymentHandler(createPaymentUC, handleCallbackUC, log)
 
+	// XrayR API handlers - v2raysocks compatible backend
+	// TODO: Implement proper adapters for UserTrafficRecorder, NodeSystemStatusUpdater, OnlineUserTracker
+	getNodeConfigUC := nodeUsecases.NewGetNodeConfigUseCase(nodeRepoImpl, log)
+	getNodeUsersUC := nodeUsecases.NewGetNodeUsersUseCase(subscriptionRepo, log)
+	reportUserTrafficUC := nodeUsecases.NewReportUserTrafficUseCase(nil, log) // TODO: implement UserTrafficRecorder
+	reportNodeStatusUC := nodeUsecases.NewReportNodeStatusUseCase(nil, log)   // TODO: implement NodeSystemStatusUpdater
+	reportOnlineUsersUC := nodeUsecases.NewReportOnlineUsersUseCase(nil, log) // TODO: implement OnlineUserTracker
+	xrayrHandler := handlers.NewXrayRHandler(
+		getNodeConfigUC,
+		getNodeUsersUC,
+		reportUserTrafficUC,
+		reportNodeStatusUC,
+		reportOnlineUsersUC,
+		log,
+	)
+
 	return &Router{
 		engine:                   engine,
 		userHandler:              userHandler,
 		authHandler:              authHandler,
+		profileHandler:           profileHandler,
 		subscriptionHandler:      subscriptionHandler,
 		subscriptionPlanHandler:  subscriptionPlanHandler,
 		subscriptionTokenHandler: subscriptionTokenHandler,
@@ -334,6 +360,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		nodeGroupHandler:         nodeGroupHandler,
 		nodeSubscriptionHandler:  nodeSubscriptionHandler,
 		nodeReportHandler:        nodeReportHandler,
+		xrayrHandler:             xrayrHandler,
 		ticketHandler:            ticketHandler,
 		notificationHandler:      notificationHandler,
 		authMiddleware:           authMiddleware,
@@ -375,9 +402,13 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		users.POST("", authorization.RequireAdmin(), r.userHandler.CreateUser)
 		users.GET("", authorization.RequireAdmin(), r.userHandler.ListUsers)
 		users.GET("/:id", authorization.RequireAdmin(), r.userHandler.GetUser)
-		users.PUT("/:id", authorization.RequireAdmin(), r.userHandler.UpdateUser)
+		users.PUT("/:id", authorization.RequireOwnerOrAdmin("id"), r.userHandler.UpdateUser)
 		users.DELETE("/:id", authorization.RequireAdmin(), r.userHandler.DeleteUser)
 		users.GET("/email/:email", authorization.RequireAdmin(), r.userHandler.GetUserByEmail)
+
+		// Profile management routes
+		users.PATCH("/me", r.profileHandler.UpdateProfile)
+		users.PUT("/me/password", r.profileHandler.ChangePassword)
 	}
 
 	subscriptions := r.engine.Group("/subscriptions")
@@ -432,6 +463,17 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		NodeTokenMW:         r.nodeTokenMiddleware,
 		RateLimiter:         r.rateLimiter,
 	})
+
+	// Node Backend API routes (v2raysocks compatible)
+	// These routes handle node backend communication for XrayR/v2ray integration
+	nodeAPI := r.engine.Group("/api/node")
+	nodeAPI.Use(r.nodeTokenMiddleware.RequireNodeTokenXrayR())
+	{
+		// Unified endpoint for all node backend operations
+		// Query params: act=config|user|submit|nodestatus|onlineusers, node_id, token, node_type
+		nodeAPI.GET("", r.xrayrHandler.HandleXrayRRequest)
+		nodeAPI.POST("", r.xrayrHandler.HandleXrayRRequest)
+	}
 
 	routes.SetupTicketRoutes(r.engine, &routes.TicketRouteConfig{
 		TicketHandler:  r.ticketHandler,

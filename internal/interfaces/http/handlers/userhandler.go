@@ -100,7 +100,7 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 
 // UpdateUser handles PUT /users/:id
 // @Summary Update user
-// @Description Update user information by ID
+// @Description Update user information by ID. Users can update their own information, admins can update any user.
 // @Tags users
 // @Accept json
 // @Produce json
@@ -110,17 +110,26 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 // @Success 200 {object} utils.APIResponse{data=userdto.UserResponse} "User updated successfully"
 // @Failure 400 {object} utils.APIResponse "Bad request"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
-// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role or owner access"
 // @Failure 404 {object} utils.APIResponse "User not found"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /users/{id} [put]
 func (h *UserHandler) UpdateUser(c *gin.Context) {
+	// Log access control information
+	currentUserID, _ := c.Get("user_id")
+	userRole := c.GetString("user_role")
+
 	// Parse user ID
 	userID, err := dto.ParseUserID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
+
+	h.logger.Infow("update user request",
+		"current_user_id", currentUserID,
+		"user_role", userRole,
+		"target_user_id", userID)
 
 	var req dto.UpdateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

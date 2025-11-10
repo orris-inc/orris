@@ -85,6 +85,42 @@ redis:
   db: 0                  # Redis database number (0-15)
                          # Env override: ORRIS_REDIS_DB=1
 
+# ------------------------------------------------------------
+# OAuth2 Configuration
+# ------------------------------------------------------------
+# Setup instructions:
+#   1. Google OAuth:
+#      - Visit https://console.cloud.google.com/apis/credentials
+#      - Create OAuth 2.0 Client ID
+#      - Set authorized redirect URI: http://localhost:8081/auth/oauth/google/callback
+#   2. GitHub OAuth:
+#      - Visit https://github.com/settings/developers
+#      - Create new OAuth App
+#      - Set callback URL: http://localhost:8081/auth/oauth/github/callback
+
+oauth:
+  google:
+    client_id: ""        # ⚠️ REQUIRED for Google OAuth
+                         # Get from: https://console.cloud.google.com/apis/credentials
+                         # Env override: ORRIS_OAUTH_GOOGLE_CLIENT_ID=your-client-id
+    client_secret: ""    # ⚠️ LEAVE EMPTY - Use environment variable!
+                         # REQUIRED: ORRIS_OAUTH_GOOGLE_CLIENT_SECRET=your-secret
+    redirect_url: "http://localhost:8081/auth/oauth/google/callback"
+                         # Development: http://localhost:8081/auth/oauth/google/callback
+                         # Production: https://api.yourdomain.com/auth/oauth/google/callback
+                         # Env override: ORRIS_OAUTH_GOOGLE_REDIRECT_URL=...
+
+  github:
+    client_id: ""        # ⚠️ REQUIRED for GitHub OAuth
+                         # Get from: https://github.com/settings/developers
+                         # Env override: ORRIS_OAUTH_GITHUB_CLIENT_ID=your-client-id
+    client_secret: ""    # ⚠️ LEAVE EMPTY - Use environment variable!
+                         # REQUIRED: ORRIS_OAUTH_GITHUB_CLIENT_SECRET=your-secret
+    redirect_url: "http://localhost:8081/auth/oauth/github/callback"
+                         # Development: http://localhost:8081/auth/oauth/github/callback
+                         # Production: https://api.yourdomain.com/auth/oauth/github/callback
+                         # Env override: ORRIS_OAUTH_GITHUB_REDIRECT_URL=...
+
 # ============================================================
 # Usage Examples
 # ============================================================
@@ -92,17 +128,28 @@ redis:
 # Development (local with config.yaml):
 #   1. cp config.example.yaml config.yaml
 #   2. Edit config.yaml with your local DB settings
-#   3. Set only the password as env var:
+#   3. Set sensitive values as environment variables:
 #      export ORRIS_DATABASE_PASSWORD=local_password
+#      export ORRIS_OAUTH_GOOGLE_CLIENT_SECRET=your-google-secret
+#      export ORRIS_OAUTH_GITHUB_CLIENT_SECRET=your-github-secret
 #   4. Run: ./bin/orris server
 #
 # Production (environment variables only):
 #   export ORRIS_SERVER_MODE=release
 #   export ORRIS_SERVER_PORT=8080
+#   export ORRIS_SERVER_FRONTEND_CALLBACK_URL=https://yourdomain.com/oauth/callback
 #   export ORRIS_DATABASE_HOST=prod-db.example.com
 #   export ORRIS_DATABASE_USERNAME=prod_user
 #   export ORRIS_DATABASE_PASSWORD=secure_prod_password
 #   export ORRIS_DATABASE_DATABASE=orris_production
+#   export ORRIS_REDIS_HOST=redis-server
+#   export ORRIS_REDIS_PASSWORD=redis_password
+#   export ORRIS_OAUTH_GOOGLE_CLIENT_ID=your-google-client-id
+#   export ORRIS_OAUTH_GOOGLE_CLIENT_SECRET=your-google-secret
+#   export ORRIS_OAUTH_GOOGLE_REDIRECT_URL=https://api.yourdomain.com/auth/oauth/google/callback
+#   export ORRIS_OAUTH_GITHUB_CLIENT_ID=your-github-client-id
+#   export ORRIS_OAUTH_GITHUB_CLIENT_SECRET=your-github-secret
+#   export ORRIS_OAUTH_GITHUB_REDIRECT_URL=https://api.yourdomain.com/auth/oauth/github/callback
 #   export ORRIS_LOGGER_LEVEL=warn
 #   export ORRIS_LOGGER_FORMAT=json
 #   ./bin/orris server
@@ -111,10 +158,19 @@ redis:
 #   environment:
 #     - ORRIS_DATABASE_HOST=mysql
 #     - ORRIS_DATABASE_PASSWORD=${DB_PASSWORD}
+#     - ORRIS_REDIS_HOST=redis
+#     - ORRIS_OAUTH_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+#     - ORRIS_OAUTH_GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+#     - ORRIS_OAUTH_GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+#     - ORRIS_OAUTH_GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
 #     - ORRIS_SERVER_MODE=release
 #
 # Kubernetes (using ConfigMap + Secret):
 #   # ConfigMap for non-sensitive configs
-#   # Secret for ORRIS_DATABASE_PASSWORD
+#   # Secret for passwords and OAuth secrets:
+#   #   - ORRIS_DATABASE_PASSWORD
+#   #   - ORRIS_REDIS_PASSWORD
+#   #   - ORRIS_OAUTH_GOOGLE_CLIENT_SECRET
+#   #   - ORRIS_OAUTH_GITHUB_CLIENT_SECRET
 #   # See deployment examples in docs/
 # ============================================================

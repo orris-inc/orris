@@ -209,7 +209,7 @@ func (uc *HandleOAuthCallbackUseCase) Execute(ctx context.Context, cmd HandleOAu
 		},
 		7*24*time.Hour, // Session duration: 7 days
 		func(userID uint, sessionID string) (string, string, int64, error) {
-			tokens, err := uc.jwtService.Generate(userID, sessionID)
+			tokens, err := uc.jwtService.Generate(userID, sessionID, existingUser.Role())
 			if err != nil {
 				return "", "", 0, err
 			}

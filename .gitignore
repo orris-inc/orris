@@ -75,3 +75,6 @@ tmp/
 # Test coverage
 coverage.out
 coverage.html
+
+CLAUDE.md
+

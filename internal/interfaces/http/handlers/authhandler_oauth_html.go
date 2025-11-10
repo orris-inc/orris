@@ -24,9 +24,13 @@ func detectDeviceType(userAgent string) string {
 }
 
 // getAllowedOriginsJS generates JavaScript array string of allowed origins
+// SECURITY: Never returns '*' - requires explicit origin configuration
 func (h *AuthHandler) getAllowedOriginsJS() string {
 	if len(h.allowedOrigins) == 0 {
-		return "'*'" // fallback
+		// Log warning but return empty array instead of '*'
+		// This will prevent postMessage from sending tokens
+		h.logger.Errorw("SECURITY: allowed_origins not configured, OAuth callback will fail")
+		return "" // Empty - will cause postMessage to fail safely
 	}
 
 	quoted := make([]string, len(h.allowedOrigins))

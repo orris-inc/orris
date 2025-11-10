@@ -33,21 +33,28 @@ func NewNodeTokenMiddleware(
 
 func (m *NodeTokenMiddleware) RequireNodeToken() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Try to get token from Authorization header first (Bearer token)
 		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			utils.ErrorResponse(c, http.StatusUnauthorized, "missing authorization header")
+		var token string
+
+		if authHeader != "" {
+			parts := strings.SplitN(authHeader, " ", 2)
+			if len(parts) == 2 && parts[0] == "Bearer" {
+				token = parts[1]
+			}
+		}
+
+		// If no token in header, try query parameter (for XrayR compatibility)
+		if token == "" {
+			token = c.Query("token")
+		}
+
+		if token == "" {
+			utils.ErrorResponse(c, http.StatusUnauthorized, "missing authorization token")
 			c.Abort()
 			return
 		}
 
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			utils.ErrorResponse(c, http.StatusUnauthorized, "invalid authorization header format")
-			c.Abort()
-			return
-		}
-
-		token := parts[1]
 		cmd := usecases.ValidateNodeTokenCommand{
 			PlainToken: token,
 		}
@@ -65,3 +72,44 @@ func (m *NodeTokenMiddleware) RequireNodeToken() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// RequireNodeTokenXrayR is a middleware for XrayR API that validates node token
+// Returns v2raysocks-formatted error responses for compatibility
+func (m *NodeTokenMiddleware) RequireNodeTokenXrayR() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// XrayR sends token as query parameter
+		token := c.Query("token")
+
+		if token == "" {
+			m.logger.Warnw("XrayR request without token", "ip", c.ClientIP())
+			utils.V2RaySocksError(c, http.StatusUnauthorized, "unauthorized")
+			c.Abort()
+			return
+		}
+
+		cmd := usecases.ValidateNodeTokenCommand{
+			PlainToken: token,
+		}
+
+		result, err := m.validateTokenUC.Execute(c.Request.Context(), cmd)
+		if err != nil {
+			m.logger.Warnw("XrayR node token validation failed", "error", err, "ip", c.ClientIP())
+			utils.V2RaySocksError(c, http.StatusUnauthorized, "unauthorized")
+			c.Abort()
+			return
+		}
+
+		// Store node info in context
+		c.Set("node_id", result.NodeID)
+		c.Set("node_name", result.Name)
+
+		m.logger.Infow("XrayR node authenticated",
+			"node_id", result.NodeID,
+			"node_name", result.Name,
+			"ip", c.ClientIP(),
+		)
+
+		c.Next()
+	}
+}
+

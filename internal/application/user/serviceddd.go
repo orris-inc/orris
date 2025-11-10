@@ -11,22 +11,28 @@ import (
 
 // ServiceDDD is the application service that orchestrates use cases
 type ServiceDDD struct {
-	createUserUC *usecases.CreateUserUseCase
-	updateUserUC *usecases.UpdateUserUseCase
-	getUserUC    *usecases.GetUserUseCase
-	logger       logger.Interface
+	createUserUC         *usecases.CreateUserUseCase
+	updateUserUC         *usecases.UpdateUserUseCase
+	getUserUC            *usecases.GetUserUseCase
+	updateProfileUC      *usecases.UpdateProfileUseCase
+	changePasswordUC     *usecases.ChangePasswordUseCase
+	logger               logger.Interface
 }
 
 // NewServiceDDD creates a new DDD application service
 func NewServiceDDD(
 	userRepo domainUser.Repository,
+	sessionRepo domainUser.SessionRepository,
+	passwordHasher domainUser.PasswordHasher,
 	logger logger.Interface,
 ) *ServiceDDD {
 	return &ServiceDDD{
-		createUserUC: usecases.NewCreateUserUseCase(userRepo, logger),
-		updateUserUC: usecases.NewUpdateUserUseCase(userRepo, logger),
-		getUserUC:    usecases.NewGetUserUseCase(userRepo, logger),
-		logger:       logger,
+		createUserUC:         usecases.NewCreateUserUseCase(userRepo, logger),
+		updateUserUC:         usecases.NewUpdateUserUseCase(userRepo, logger),
+		getUserUC:            usecases.NewGetUserUseCase(userRepo, logger),
+		updateProfileUC:      usecases.NewUpdateProfileUseCase(userRepo, logger),
+		changePasswordUC:     usecases.NewChangePasswordUseCase(userRepo, sessionRepo, passwordHasher, logger),
+		logger:               logger,
 	}
 }
 
@@ -70,4 +76,20 @@ func (s *ServiceDDD) DeleteUser(ctx context.Context, id uint) error {
 	}
 	_, err := s.updateUserUC.Execute(ctx, id, updateRequest)
 	return err
+}
+
+// UpdateProfile updates the current user's profile (name, email)
+func (s *ServiceDDD) UpdateProfile(ctx context.Context, userID uint, request dto.UpdateProfileRequest) (*dto.UserResponse, error) {
+	if err := s.updateProfileUC.ValidateRequest(request); err != nil {
+		return nil, err
+	}
+	return s.updateProfileUC.Execute(ctx, userID, request)
+}
+
+// ChangePassword changes the current user's password
+func (s *ServiceDDD) ChangePassword(ctx context.Context, userID uint, request dto.ChangePasswordRequest) error {
+	if err := s.changePasswordUC.ValidateRequest(request); err != nil {
+		return err
+	}
+	return s.changePasswordUC.Execute(ctx, userID, request)
 }

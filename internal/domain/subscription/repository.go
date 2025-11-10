@@ -9,7 +9,8 @@ type SubscriptionRepository interface {
 	Create(ctx context.Context, subscription *Subscription) error
 	GetByID(ctx context.Context, id uint) (*Subscription, error)
 	GetByUserID(ctx context.Context, userID uint) ([]*Subscription, error)
-	GetActiveByUserID(ctx context.Context, userID uint) (*Subscription, error)
+	GetActiveByUserID(ctx context.Context, userID uint) ([]*Subscription, error)
+	GetActiveSubscriptionsByNodeID(ctx context.Context, nodeID uint) ([]*Subscription, error)
 	Update(ctx context.Context, subscription *Subscription) error
 	Delete(ctx context.Context, id uint) error
 

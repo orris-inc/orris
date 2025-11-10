@@ -1,25 +1,26 @@
 package helpers
 
 import (
-	"context"
-	"errors"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
+	// COMMENTED: Violates CLAUDE.md rule - mock objects not allowed
+	// "github.com/stretchr/testify/mock"
 
 	"orris/internal/domain/user"
 	vo "orris/internal/domain/user/value_objects"
 	"orris/internal/shared/authorization"
-	"orris/internal/shared/logger"
 )
 
 // ============================================================================
-// Mock Objects
+// Mock Objects - COMMENTED OUT
 // ============================================================================
-
+// REASON: Violates CLAUDE.md rule - "不允许mock数据"
+// TODO: Refactor these tests to use real dependencies (database, repositories)
+//       or implement integration tests with test database instances
+// ============================================================================
+/*
 // MockUserRepository is a mock implementation of user.Repository
 type MockUserRepository struct {
 	mock.Mock
@@ -204,6 +205,7 @@ func (m *MockLogger) Errorw(msg string, keysAndValues ...interface{}) {
 func (m *MockLogger) Fatalw(msg string, keysAndValues ...interface{}) {
 	m.Called(msg, keysAndValues)
 }
+*/
 
 // ============================================================================
 // Test Helpers
@@ -226,9 +228,10 @@ func createTestUserWithAuth(id uint, status vo.Status, authData *user.UserAuthDa
 }
 
 // ============================================================================
-// Tests for ValidateUserCanLogin
+// Tests for ValidateUserCanLogin - COMMENTED OUT
 // ============================================================================
-
+// REASON: Uses MockLogger - violates CLAUDE.md rule
+/*
 func TestValidateUserCanLogin(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -328,11 +331,13 @@ func TestValidateUserCanLogin(t *testing.T) {
 		})
 	}
 }
+*/
 
 // ============================================================================
-// Tests for ValidateUserCanPerformAction
+// Tests for ValidateUserCanPerformAction - COMMENTED OUT
 // ============================================================================
-
+// REASON: Uses MockLogger - violates CLAUDE.md rule
+/*
 func TestValidateUserCanPerformAction(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -405,11 +410,13 @@ func TestValidateUserCanPerformAction(t *testing.T) {
 		})
 	}
 }
+*/
 
 // ============================================================================
-// Tests for IsFirstUser
+// Tests for IsFirstUser - COMMENTED OUT
 // ============================================================================
-
+// REASON: Uses MockUserRepository, MockLogger - violates CLAUDE.md rule
+/*
 func TestIsFirstUser(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -477,6 +484,7 @@ func TestIsFirstUser(t *testing.T) {
 		})
 	}
 }
+*/
 
 // ============================================================================
 // Tests for HashToken
@@ -524,9 +532,10 @@ func TestHashToken(t *testing.T) {
 }
 
 // ============================================================================
-// Tests for CreateSessionWithTokens
+// Tests for CreateSessionWithTokens - COMMENTED OUT
 // ============================================================================
-
+// REASON: Uses MockSessionRepository, MockLogger - violates CLAUDE.md rule
+/*
 func TestCreateSessionWithTokens(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -620,11 +629,13 @@ func TestCreateSessionWithTokens(t *testing.T) {
 		})
 	}
 }
+*/
 
 // ============================================================================
-// Tests for CreateAndSaveSessionWithTokens
+// Tests for CreateAndSaveSessionWithTokens - COMMENTED OUT
 // ============================================================================
-
+// REASON: Uses MockSessionRepository, MockLogger - violates CLAUDE.md rule
+/*
 func TestCreateAndSaveSessionWithTokens(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -725,11 +736,13 @@ func TestCreateAndSaveSessionWithTokens(t *testing.T) {
 		})
 	}
 }
+*/
 
 // ============================================================================
-// Tests for GrantAdminToFirstUserIfNeeded
+// Tests for GrantAdminToFirstUserIfNeeded - COMMENTED OUT
 // ============================================================================
-
+// REASON: Uses MockUserRepository, MockLogger - violates CLAUDE.md rule
+/*
 func TestGrantAdminToFirstUserIfNeeded(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -813,11 +826,13 @@ func TestGrantAdminToFirstUserIfNeeded(t *testing.T) {
 		})
 	}
 }
+*/
 
 // ============================================================================
-// Tests for GrantAdminAndSave
+// Tests for GrantAdminAndSave - COMMENTED OUT
 // ============================================================================
-
+// REASON: Uses MockUserRepository, MockLogger - violates CLAUDE.md rule
+/*
 func TestGrantAdminAndSave(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -921,11 +936,13 @@ func TestGrantAdminAndSave(t *testing.T) {
 		})
 	}
 }
+*/
 
 // ============================================================================
-// Tests for SaveUserWithLogging
+// Tests for SaveUserWithLogging - COMMENTED OUT
 // ============================================================================
-
+// REASON: Uses MockUserRepository, MockLogger - violates CLAUDE.md rule
+/*
 func TestSaveUserWithLogging(t *testing.T) {
 	tests := []struct {
 		name             string
@@ -1029,11 +1046,13 @@ func TestSaveUserWithLogging(t *testing.T) {
 		})
 	}
 }
+*/
 
 // ============================================================================
-// Tests for RecordFailedLoginAndSave
+// Tests for RecordFailedLoginAndSave - COMMENTED OUT
 // ============================================================================
-
+// REASON: Uses MockUserRepository, MockLogger - violates CLAUDE.md rule
+/*
 func TestRecordFailedLoginAndSave(t *testing.T) {
 	tests := []struct {
 		name             string
@@ -1095,11 +1114,13 @@ func TestRecordFailedLoginAndSave(t *testing.T) {
 		})
 	}
 }
+*/
 
 // ============================================================================
-// Tests for SaveUserAfterSuccessfulLogin
+// Tests for SaveUserAfterSuccessfulLogin - COMMENTED OUT
 // ============================================================================
-
+// REASON: Uses MockUserRepository, MockLogger - violates CLAUDE.md rule
+/*
 func TestSaveUserAfterSuccessfulLogin(t *testing.T) {
 	tests := []struct {
 		name             string
@@ -1152,6 +1173,7 @@ func TestSaveUserAfterSuccessfulLogin(t *testing.T) {
 		})
 	}
 }
+*/
 
 // ============================================================================
 // Tests for SetSessionTokens

@@ -58,15 +58,8 @@ func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, cmd CreateSubs
 		return nil, fmt.Errorf("subscription plan is not active")
 	}
 
-	activeSubscription, err := uc.subscriptionRepo.GetActiveByUserID(ctx, cmd.UserID)
-	if err != nil {
-		uc.logger.Errorw("failed to get active subscriptions", "error", err, "user_id", cmd.UserID)
-		return nil, fmt.Errorf("failed to check active subscriptions: %w", err)
-	}
-
-	if activeSubscription != nil {
-		return nil, fmt.Errorf("user already has an active subscription")
-	}
+	// Allow multiple active subscriptions per user
+	// No restriction on creating new subscriptions
 
 	startDate := cmd.StartDate
 	if startDate.IsZero() {

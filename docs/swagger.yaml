@@ -1,4 +1,3 @@
-basePath: /
 definitions:
   internal_interfaces_http_handlers.AuthResponse:
     properties:
@@ -526,6 +525,20 @@ definitions:
       view_count:
         type: integer
     type: object
+  orris_internal_interfaces_dto.ChangePasswordRequest:
+    properties:
+      logout_all_devices:
+        type: boolean
+      new_password:
+        minLength: 8
+        type: string
+      old_password:
+        minLength: 8
+        type: string
+    required:
+    - new_password
+    - old_password
+    type: object
   orris_internal_interfaces_dto.CreateAnnouncementRequest:
     properties:
       content:
@@ -693,6 +706,15 @@ definitions:
         - promotion
         type: string
     type: object
+  orris_internal_interfaces_dto.UpdateProfileRequest:
+    properties:
+      email:
+        type: string
+      name:
+        maxLength: 100
+        minLength: 2
+        type: string
+    type: object
   orris_internal_interfaces_dto.UpdateUserRequest:
     properties:
       email:
@@ -736,17 +758,14 @@ definitions:
       total_pages:
         type: integer
     type: object
+  orris_internal_shared_utils.V2RaySocksResponse:
+    properties:
+      data: {}
+      ret:
+        type: integer
+    type: object
 info:
-  contact:
-    email: support@orris.io
-    name: API Support
-  description: A modern Go application with RESTful API
-  license:
-    name: MIT
-    url: https://opensource.org/licenses/MIT
-  termsOfService: http://swagger.io/terms/
-  title: Orris API
-  version: "1.0"
+  contact: {}
 paths:
   /announcements:
     get:
@@ -1031,6 +1050,145 @@ paths:
       summary: Publish announcement
       tags:
       - announcements
+  /api/node:
+    get:
+      consumes:
+      - application/json
+      description: |-
+        Unified endpoint for node backend operations (XrayR/v2ray compatible). Routes requests based on 'act' parameter.
+
+        Supported actions and their request bodies:
+        - act=config (GET): No body required - returns node configuration
+        - act=user (GET): No body required - returns authorized user list
+        - act=submit (POST): Body should be []UserTrafficItem - report user traffic data
+        - act=nodestatus (POST): Body should be ReportNodeStatusRequest - report node system status
+        - act=onlineusers (POST): Body should be ReportOnlineUsersRequest - report online users
+      parameters:
+      - description: Action type
+        enum:
+        - config
+        - user
+        - submit
+        - nodestatus
+        - onlineusers
+        in: query
+        name: act
+        required: true
+        type: string
+      - description: Node ID
+        in: query
+        name: node_id
+        required: true
+        type: integer
+      - description: Node authentication token
+        in: query
+        name: token
+        required: true
+        type: string
+      - description: Node type (shadowsocks, trojan)
+        enum:
+        - shadowsocks
+        - trojan
+        in: query
+        name: node_type
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success response with data
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.V2RaySocksResponse'
+        "400":
+          description: Invalid parameters
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.V2RaySocksResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.V2RaySocksResponse'
+        "404":
+          description: Node not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.V2RaySocksResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.V2RaySocksResponse'
+      security:
+      - NodeToken: []
+      summary: Node backend unified API endpoint (v2raysocks compatible)
+      tags:
+      - node-backend
+    post:
+      consumes:
+      - application/json
+      description: |-
+        Unified endpoint for node backend operations (XrayR/v2ray compatible). Routes requests based on 'act' parameter.
+
+        Supported actions and their request bodies:
+        - act=config (GET): No body required - returns node configuration
+        - act=user (GET): No body required - returns authorized user list
+        - act=submit (POST): Body should be []UserTrafficItem - report user traffic data
+        - act=nodestatus (POST): Body should be ReportNodeStatusRequest - report node system status
+        - act=onlineusers (POST): Body should be ReportOnlineUsersRequest - report online users
+      parameters:
+      - description: Action type
+        enum:
+        - config
+        - user
+        - submit
+        - nodestatus
+        - onlineusers
+        in: query
+        name: act
+        required: true
+        type: string
+      - description: Node ID
+        in: query
+        name: node_id
+        required: true
+        type: integer
+      - description: Node authentication token
+        in: query
+        name: token
+        required: true
+        type: string
+      - description: Node type (shadowsocks, trojan)
+        enum:
+        - shadowsocks
+        - trojan
+        in: query
+        name: node_type
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success response with data
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.V2RaySocksResponse'
+        "400":
+          description: Invalid parameters
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.V2RaySocksResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.V2RaySocksResponse'
+        "404":
+          description: Node not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.V2RaySocksResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.V2RaySocksResponse'
+      security:
+      - NodeToken: []
+      summary: Node backend unified API endpoint (v2raysocks compatible)
+      tags:
+      - node-backend
   /auth/forgot-password:
     post:
       consumes:
@@ -4201,7 +4359,8 @@ paths:
     put:
       consumes:
       - application/json
-      description: Update user information by ID
+      description: Update user information by ID. Users can update their own information,
+        admins can update any user.
       parameters:
       - description: User ID
         in: path
@@ -4235,7 +4394,7 @@ paths:
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "403":
-          description: Forbidden - Requires admin role
+          description: Forbidden - Requires admin role or owner access
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "404":
@@ -4299,15 +4458,89 @@ paths:
       summary: Get user by email
       tags:
       - users
-securityDefinitions:
-  Bearer:
-    description: Type "Bearer" followed by a space and JWT token.
-    in: header
-    name: Authorization
-    type: apiKey
-  NodeToken:
-    description: Node authentication token for reporting endpoints
-    in: header
-    name: X-Node-Token
-    type: apiKey
+  /users/me:
+    patch:
+      consumes:
+      - application/json
+      description: Update the authenticated user's profile information (name, email)
+      parameters:
+      - description: Profile update data
+        in: body
+        name: profile
+        required: true
+        schema:
+          $ref: '#/definitions/orris_internal_interfaces_dto.UpdateProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Profile updated successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_application_user_dto.UserResponse'
+              type: object
+        "400":
+          description: Bad request or validation error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Update current user profile
+      tags:
+      - profile
+  /users/me/password:
+    put:
+      consumes:
+      - application/json
+      description: Change the authenticated user's password
+      parameters:
+      - description: Password change data
+        in: body
+        name: password
+        required: true
+        schema:
+          $ref: '#/definitions/orris_internal_interfaces_dto.ChangePasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Password changed successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request or validation error (e.g., incorrect old password)
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: User not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Change password
+      tags:
+      - profile
 swagger: "2.0"

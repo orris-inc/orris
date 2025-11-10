@@ -63,3 +63,16 @@ type PaginationResponse struct {
 	TotalPages int `json:"total_pages"`
 }
 
+// UpdateProfileRequest represents the request to update user profile
+type UpdateProfileRequest struct {
+	Name  *string `json:"name,omitempty" binding:"omitempty,min=2,max=100"`
+	Email *string `json:"email,omitempty" binding:"omitempty,email"`
+}
+
+// ChangePasswordRequest represents the request to change password
+type ChangePasswordRequest struct {
+	OldPassword      string `json:"old_password" binding:"required,min=8"`
+	NewPassword      string `json:"new_password" binding:"required,min=8"`
+	LogoutAllDevices bool   `json:"logout_all_devices"`
+}
+

@@ -88,27 +88,95 @@ func (r *SubscriptionRepositoryImpl) GetByUserID(ctx context.Context, userID uin
 	return entities, nil
 }
 
-func (r *SubscriptionRepositoryImpl) GetActiveByUserID(ctx context.Context, userID uint) (*subscription.Subscription, error) {
-	var model models.SubscriptionModel
+func (r *SubscriptionRepositoryImpl) GetActiveByUserID(ctx context.Context, userID uint) ([]*subscription.Subscription, error) {
+	var models []*models.SubscriptionModel
 
 	if err := r.db.WithContext(ctx).
 		Where("user_id = ? AND status = ?", userID, "active").
 		Order("created_at DESC").
-		First(&model).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, nil
-		}
-		r.logger.Errorw("failed to get active subscription by user ID", "user_id", userID, "error", err)
-		return nil, fmt.Errorf("failed to get active subscription: %w", err)
+		Find(&models).Error; err != nil {
+		r.logger.Errorw("failed to get active subscriptions by user ID", "user_id", userID, "error", err)
+		return nil, fmt.Errorf("failed to get active subscriptions: %w", err)
 	}
 
-	entity, err := r.mapper.ToEntity(&model)
+	entities, err := r.mapper.ToEntities(models)
 	if err != nil {
-		r.logger.Errorw("failed to map subscription model to entity", "user_id", userID, "error", err)
-		return nil, fmt.Errorf("failed to map subscription: %w", err)
+		r.logger.Errorw("failed to map subscription models to entities", "user_id", userID, "error", err)
+		return nil, fmt.Errorf("failed to map subscriptions: %w", err)
 	}
 
-	return entity, nil
+	return entities, nil
+}
+
+func (r *SubscriptionRepositoryImpl) GetActiveSubscriptionsByNodeID(ctx context.Context, nodeID uint) ([]*subscription.Subscription, error) {
+	// Query node groups that contain this node
+	var nodeGroupNodeModels []models.NodeGroupNodeModel
+	if err := r.db.WithContext(ctx).
+		Where("node_id = ?", nodeID).
+		Find(&nodeGroupNodeModels).Error; err != nil {
+		r.logger.Errorw("failed to query node groups for node", "node_id", nodeID, "error", err)
+		return nil, fmt.Errorf("failed to query node groups: %w", err)
+	}
+
+	if len(nodeGroupNodeModels) == 0 {
+		r.logger.Infow("no node groups found for node", "node_id", nodeID)
+		return []*subscription.Subscription{}, nil
+	}
+
+	// Extract node group IDs
+	nodeGroupIDs := make([]uint, len(nodeGroupNodeModels))
+	for i, ngn := range nodeGroupNodeModels {
+		nodeGroupIDs[i] = ngn.NodeGroupID
+	}
+
+	// Query subscription plans associated with these node groups
+	var nodeGroupPlanModels []models.NodeGroupPlanModel
+	if err := r.db.WithContext(ctx).
+		Where("node_group_id IN ?", nodeGroupIDs).
+		Find(&nodeGroupPlanModels).Error; err != nil {
+		r.logger.Errorw("failed to query plans for node groups", "node_group_ids", nodeGroupIDs, "error", err)
+		return nil, fmt.Errorf("failed to query subscription plans: %w", err)
+	}
+
+	if len(nodeGroupPlanModels) == 0 {
+		r.logger.Infow("no subscription plans found for node groups", "node_group_ids", nodeGroupIDs)
+		return []*subscription.Subscription{}, nil
+	}
+
+	// Extract unique plan IDs
+	planIDsMap := make(map[uint]bool)
+	for _, ngp := range nodeGroupPlanModels {
+		planIDsMap[ngp.SubscriptionPlanID] = true
+	}
+	planIDs := make([]uint, 0, len(planIDsMap))
+	for planID := range planIDsMap {
+		planIDs = append(planIDs, planID)
+	}
+
+	// Query active subscriptions for these plans
+	var subscriptionModels []*models.SubscriptionModel
+	if err := r.db.WithContext(ctx).
+		Where("plan_id IN ? AND status = ?", planIDs, "active").
+		Order("created_at DESC").
+		Find(&subscriptionModels).Error; err != nil {
+		r.logger.Errorw("failed to query active subscriptions", "plan_ids", planIDs, "error", err)
+		return nil, fmt.Errorf("failed to query subscriptions: %w", err)
+	}
+
+	entities, err := r.mapper.ToEntities(subscriptionModels)
+	if err != nil {
+		r.logger.Errorw("failed to map subscription models to entities", "error", err)
+		return nil, fmt.Errorf("failed to map subscriptions: %w", err)
+	}
+
+	r.logger.Infow("retrieved active subscriptions for node",
+		"node_id", nodeID,
+		"node_group_count", len(nodeGroupIDs),
+		"plan_count", len(planIDs),
+		"subscription_count", len(entities),
+	)
+
+	return entities, nil
 }
 
 func (r *SubscriptionRepositoryImpl) Update(ctx context.Context, subscriptionEntity *subscription.Subscription) error {

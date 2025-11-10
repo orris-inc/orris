@@ -37,9 +37,15 @@ const (
 	UserStatusPending  = "pending"
 
 	// Database table names
-	TableUsers     = "users"
-	TableRoles     = "roles"
-	TableUserRoles = "user_roles"
+	TableUsers        = "users"
+	TableRoles        = "roles"
+	TableUserRoles    = "user_roles"
+	TableNodes        = "nodes"
+	TableNodeGroups   = "node_groups"
+	TableNodeGroupNodes = "node_group_nodes"
+	TableNodeGroupPlans = "node_group_plans"
+	TableNodeTraffic  = "node_traffic"
+	TableUserTraffic  = "user_traffic"
 
 	// Default values
 	DefaultUserStatus = UserStatusActive

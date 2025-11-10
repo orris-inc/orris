@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/cobra"
 
 	userApp "orris/internal/application/user"
+	"orris/internal/infrastructure/auth"
 	"orris/internal/infrastructure/config"
 	"orris/internal/infrastructure/database"
 	"orris/internal/infrastructure/migration"
@@ -81,8 +82,10 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	userRepo := repository.NewUserRepositoryDDD(database.Get(), logger.NewLogger())
+	sessionRepo := repository.NewSessionRepository(database.Get())
+	hasher := auth.NewBcryptPasswordHasher(cfg.Auth.Password.BcryptCost)
 
-	userAppService := userApp.NewServiceDDD(userRepo, logger.NewLogger())
+	userAppService := userApp.NewServiceDDD(userRepo, sessionRepo, hasher, logger.NewLogger())
 
 	router := httpRouter.NewRouter(userAppService, database.Get(), cfg, logger.NewLogger())
 	router.SetupRoutes(cfg)

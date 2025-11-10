@@ -333,6 +333,34 @@ type UserDisplayInfo struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+// ChangePassword changes the user's password after verifying the old password
+// It updates the password hash and records the change timestamp
+func (u *User) ChangePassword(oldPassword, newPassword *vo.Password, hasher PasswordHasher) error {
+	if u.passwordHash == nil {
+		return fmt.Errorf("user has no password set")
+	}
+
+	// Verify old password
+	if err := hasher.Verify(oldPassword.String(), *u.passwordHash); err != nil {
+		return fmt.Errorf("old password is incorrect")
+	}
+
+	// Hash new password
+	newHash, err := hasher.Hash(newPassword.String())
+	if err != nil {
+		return fmt.Errorf("failed to hash new password: %w", err)
+	}
+
+	// Update password
+	u.passwordHash = &newHash
+	now := time.Now()
+	u.lastPasswordChangeAt = &now
+	u.updatedAt = now
+	u.version++
+
+	return nil
+}
+
 // Validate performs domain-level validation
 func (u *User) Validate() error {
 	if u.email == nil {

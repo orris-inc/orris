@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"orris/internal/shared/authorization"
 )
 
 type TokenType string
@@ -15,9 +16,10 @@ const (
 )
 
 type Claims struct {
-	UserID    uint      `json:"user_id"`
-	SessionID string    `json:"session_id"`
-	TokenType TokenType `json:"token_type"`
+	UserID    uint                   `json:"user_id"`
+	SessionID string                 `json:"session_id"`
+	Role      authorization.UserRole `json:"role"`
+	TokenType TokenType              `json:"token_type"`
 	jwt.RegisteredClaims
 }
 
@@ -41,13 +43,14 @@ func NewJWTService(secret string, accessExpMinutes, refreshExpDays int) *JWTServ
 	}
 }
 
-func (s *JWTService) Generate(userID uint, sessionID string) (*TokenPair, error) {
+func (s *JWTService) Generate(userID uint, sessionID string, role authorization.UserRole) (*TokenPair, error) {
 	now := time.Now()
 
 	accessExp := now.Add(time.Duration(s.accessExpMinutes) * time.Minute)
 	accessClaims := &Claims{
 		UserID:    userID,
 		SessionID: sessionID,
+		Role:      role,
 		TokenType: TokenTypeAccess,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(accessExp),
@@ -66,6 +69,7 @@ func (s *JWTService) Generate(userID uint, sessionID string) (*TokenPair, error)
 	refreshClaims := &Claims{
 		UserID:    userID,
 		SessionID: sessionID,
+		Role:      role,
 		TokenType: TokenTypeRefresh,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(refreshExp),
@@ -122,6 +126,7 @@ func (s *JWTService) Refresh(refreshTokenString string) (string, error) {
 	newClaims := &Claims{
 		UserID:    claims.UserID,
 		SessionID: claims.SessionID,
+		Role:      claims.Role,
 		TokenType: TokenTypeAccess,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(accessExp),

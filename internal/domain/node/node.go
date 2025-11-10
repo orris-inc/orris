@@ -15,8 +15,10 @@ type Node struct {
 	name              string
 	serverAddress     vo.ServerAddress
 	serverPort        uint16
+	protocol          vo.Protocol
 	encryptionConfig  vo.EncryptionConfig
 	pluginConfig      *vo.PluginConfig
+	trojanConfig      *vo.TrojanConfig
 	status            vo.NodeStatus
 	metadata          vo.NodeMetadata
 	apiToken          string
@@ -38,8 +40,10 @@ func NewNode(
 	name string,
 	serverAddress vo.ServerAddress,
 	serverPort uint16,
+	protocol vo.Protocol,
 	encryptionConfig vo.EncryptionConfig,
 	pluginConfig *vo.PluginConfig,
+	trojanConfig *vo.TrojanConfig,
 	metadata vo.NodeMetadata,
 	maxUsers uint,
 	trafficLimit uint64,
@@ -50,6 +54,17 @@ func NewNode(
 	}
 	if serverPort == 0 {
 		return nil, fmt.Errorf("server port is required")
+	}
+	if !protocol.IsValid() {
+		return nil, fmt.Errorf("invalid protocol: %s", protocol)
+	}
+
+	// Validate protocol-specific configurations
+	if protocol.IsShadowsocks() && encryptionConfig.Method() == "" {
+		return nil, fmt.Errorf("encryption config is required for Shadowsocks protocol")
+	}
+	if protocol.IsTrojan() && trojanConfig == nil {
+		return nil, fmt.Errorf("trojan config is required for Trojan protocol")
 	}
 
 	tokenGen := services.NewTokenGenerator()
@@ -63,8 +78,10 @@ func NewNode(
 		name:             name,
 		serverAddress:    serverAddress,
 		serverPort:       serverPort,
+		protocol:         protocol,
 		encryptionConfig: encryptionConfig,
 		pluginConfig:     pluginConfig,
+		trojanConfig:     trojanConfig,
 		status:           vo.NodeStatusInactive,
 		metadata:         metadata,
 		apiToken:         plainToken,
@@ -89,8 +106,10 @@ func ReconstructNode(
 	name string,
 	serverAddress vo.ServerAddress,
 	serverPort uint16,
+	protocol vo.Protocol,
 	encryptionConfig vo.EncryptionConfig,
 	pluginConfig *vo.PluginConfig,
+	trojanConfig *vo.TrojanConfig,
 	status vo.NodeStatus,
 	metadata vo.NodeMetadata,
 	tokenHash string,
@@ -115,14 +134,19 @@ func ReconstructNode(
 	if tokenHash == "" {
 		return nil, fmt.Errorf("token hash is required")
 	}
+	if !protocol.IsValid() {
+		return nil, fmt.Errorf("invalid protocol: %s", protocol)
+	}
 
 	return &Node{
 		id:                id,
 		name:              name,
 		serverAddress:     serverAddress,
 		serverPort:        serverPort,
+		protocol:          protocol,
 		encryptionConfig:  encryptionConfig,
 		pluginConfig:      pluginConfig,
+		trojanConfig:      trojanConfig,
 		status:            status,
 		metadata:          metadata,
 		tokenHash:         tokenHash,
@@ -159,6 +183,11 @@ func (n *Node) ServerPort() uint16 {
 	return n.serverPort
 }
 
+// Protocol returns the protocol type
+func (n *Node) Protocol() vo.Protocol {
+	return n.protocol
+}
+
 // EncryptionConfig returns the encryption configuration
 func (n *Node) EncryptionConfig() vo.EncryptionConfig {
 	return n.encryptionConfig
@@ -167,6 +196,11 @@ func (n *Node) EncryptionConfig() vo.EncryptionConfig {
 // PluginConfig returns the plugin configuration
 func (n *Node) PluginConfig() *vo.PluginConfig {
 	return n.pluginConfig
+}
+
+// TrojanConfig returns the trojan configuration
+func (n *Node) TrojanConfig() *vo.TrojanConfig {
+	return n.trojanConfig
 }
 
 // Status returns the node status
@@ -361,6 +395,19 @@ func (n *Node) UpdatePlugin(config *vo.PluginConfig) error {
 	return nil
 }
 
+// UpdateTrojanConfig updates the trojan configuration
+func (n *Node) UpdateTrojanConfig(config *vo.TrojanConfig) error {
+	if !n.protocol.IsTrojan() {
+		return fmt.Errorf("cannot update trojan config for non-trojan protocol")
+	}
+
+	n.trojanConfig = config
+	n.updatedAt = time.Now()
+	n.version++
+
+	return nil
+}
+
 // UpdateMetadata updates the node metadata
 func (n *Node) UpdateMetadata(metadata vo.NodeMetadata) error {
 	n.metadata = metadata
@@ -510,10 +557,42 @@ func (n *Node) Validate() error {
 	if n.tokenHash == "" {
 		return fmt.Errorf("token hash is required")
 	}
+	if !n.protocol.IsValid() {
+		return fmt.Errorf("invalid protocol: %s", n.protocol)
+	}
+	if n.protocol.IsShadowsocks() && n.encryptionConfig.Method() == "" {
+		return fmt.Errorf("encryption config is required for Shadowsocks protocol")
+	}
+	if n.protocol.IsTrojan() && n.trojanConfig == nil {
+		return fmt.Errorf("trojan config is required for Trojan protocol")
+	}
 	if n.status == vo.NodeStatusMaintenance && n.maintenanceReason == nil {
 		return fmt.Errorf("maintenance reason is required when in maintenance mode")
 	}
 	return nil
 }
+
+// GenerateSubscriptionURI generates a subscription URI for this node
+func (n *Node) GenerateSubscriptionURI(remarks string) (string, error) {
+	factory := vo.NewProtocolConfigFactory()
+	serverAddr := n.serverAddress.Value()
+
+	switch n.protocol {
+	case vo.ProtocolShadowsocks:
+		ssConfig := vo.NewShadowsocksProtocolConfig(n.encryptionConfig, n.pluginConfig)
+		return factory.GenerateSubscriptionURI(n.protocol, ssConfig, serverAddr, n.serverPort, remarks)
+
+	case vo.ProtocolTrojan:
+		if n.trojanConfig == nil {
+			return "", fmt.Errorf("trojan config is required for Trojan protocol")
+		}
+		trojanConfig := vo.NewTrojanProtocolConfig(*n.trojanConfig)
+		return factory.GenerateSubscriptionURI(n.protocol, trojanConfig, serverAddr, n.serverPort, remarks)
+
+	default:
+		return "", fmt.Errorf("unsupported protocol: %s", n.protocol)
+	}
+}
+
 
 // generateAPIToken generates a new API token and its hash

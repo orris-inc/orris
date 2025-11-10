@@ -9,15 +9,7 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "termsOfService": "http://swagger.io/terms/",
-        "contact": {
-            "name": "API Support",
-            "email": "support@orris.io"
-        },
-        "license": {
-            "name": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-        },
+        "contact": {},
         "version": "{{.Version}}"
     },
     "host": "{{.Host}}",
@@ -476,6 +468,188 @@ const docTemplate = `{
                         "description": "Internal server error",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/node": {
+            "get": {
+                "security": [
+                    {
+                        "NodeToken": []
+                    }
+                ],
+                "description": "Unified endpoint for node backend operations (XrayR/v2ray compatible). Routes requests based on 'act' parameter.\n\nSupported actions and their request bodies:\n- act=config (GET): No body required - returns node configuration\n- act=user (GET): No body required - returns authorized user list\n- act=submit (POST): Body should be []UserTrafficItem - report user traffic data\n- act=nodestatus (POST): Body should be ReportNodeStatusRequest - report node system status\n- act=onlineusers (POST): Body should be ReportOnlineUsersRequest - report online users",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "node-backend"
+                ],
+                "summary": "Node backend unified API endpoint (v2raysocks compatible)",
+                "parameters": [
+                    {
+                        "enum": [
+                            "config",
+                            "user",
+                            "submit",
+                            "nodestatus",
+                            "onlineusers"
+                        ],
+                        "type": "string",
+                        "description": "Action type",
+                        "name": "act",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Node ID",
+                        "name": "node_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Node authentication token",
+                        "name": "token",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "shadowsocks",
+                            "trojan"
+                        ],
+                        "type": "string",
+                        "description": "Node type (shadowsocks, trojan)",
+                        "name": "node_type",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success response with data",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.V2RaySocksResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid parameters",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.V2RaySocksResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.V2RaySocksResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Node not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.V2RaySocksResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.V2RaySocksResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "NodeToken": []
+                    }
+                ],
+                "description": "Unified endpoint for node backend operations (XrayR/v2ray compatible). Routes requests based on 'act' parameter.\n\nSupported actions and their request bodies:\n- act=config (GET): No body required - returns node configuration\n- act=user (GET): No body required - returns authorized user list\n- act=submit (POST): Body should be []UserTrafficItem - report user traffic data\n- act=nodestatus (POST): Body should be ReportNodeStatusRequest - report node system status\n- act=onlineusers (POST): Body should be ReportOnlineUsersRequest - report online users",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "node-backend"
+                ],
+                "summary": "Node backend unified API endpoint (v2raysocks compatible)",
+                "parameters": [
+                    {
+                        "enum": [
+                            "config",
+                            "user",
+                            "submit",
+                            "nodestatus",
+                            "onlineusers"
+                        ],
+                        "type": "string",
+                        "description": "Action type",
+                        "name": "act",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Node ID",
+                        "name": "node_id",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Node authentication token",
+                        "name": "token",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "shadowsocks",
+                            "trojan"
+                        ],
+                        "type": "string",
+                        "description": "Node type (shadowsocks, trojan)",
+                        "name": "node_type",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Success response with data",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.V2RaySocksResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid parameters",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.V2RaySocksResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.V2RaySocksResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Node not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.V2RaySocksResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.V2RaySocksResponse"
                         }
                     }
                 }
@@ -5370,6 +5544,144 @@ const docTemplate = `{
                 }
             }
         },
+        "/users/me": {
+            "patch": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Update the authenticated user's profile information (name, email)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "profile"
+                ],
+                "summary": "Update current user profile",
+                "parameters": [
+                    {
+                        "description": "Profile update data",
+                        "name": "profile",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_interfaces_dto.UpdateProfileRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Profile updated successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/orris_internal_application_user_dto.UserResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request or validation error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "User not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/users/me/password": {
+            "put": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Change the authenticated user's password",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "profile"
+                ],
+                "summary": "Change password",
+                "parameters": [
+                    {
+                        "description": "Password change data",
+                        "name": "password",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_interfaces_dto.ChangePasswordRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Password changed successfully",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request or validation error (e.g., incorrect old password)",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "User not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/users/{id}": {
             "get": {
                 "security": [
@@ -5454,7 +5766,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Update user information by ID",
+                "description": "Update user information by ID. Users can update their own information, admins can update any user.",
                 "consumes": [
                     "application/json"
                 ],
@@ -5515,7 +5827,7 @@ const docTemplate = `{
                         }
                     },
                     "403": {
-                        "description": "Forbidden - Requires admin role",
+                        "description": "Forbidden - Requires admin role or owner access",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -6384,6 +6696,26 @@ const docTemplate = `{
                 }
             }
         },
+        "orris_internal_interfaces_dto.ChangePasswordRequest": {
+            "type": "object",
+            "required": [
+                "new_password",
+                "old_password"
+            ],
+            "properties": {
+                "logout_all_devices": {
+                    "type": "boolean"
+                },
+                "new_password": {
+                    "type": "string",
+                    "minLength": 8
+                },
+                "old_password": {
+                    "type": "string",
+                    "minLength": 8
+                }
+            }
+        },
         "orris_internal_interfaces_dto.CreateAnnouncementRequest": {
             "type": "object",
             "required": [
@@ -6623,6 +6955,19 @@ const docTemplate = `{
                 }
             }
         },
+        "orris_internal_interfaces_dto.UpdateProfileRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 2
+                }
+            }
+        },
         "orris_internal_interfaces_dto.UpdateUserRequest": {
             "type": "object",
             "required": [
@@ -6686,32 +7031,27 @@ const docTemplate = `{
                     "type": "integer"
                 }
             }
-        }
-    },
-    "securityDefinitions": {
-        "Bearer": {
-            "description": "Type \"Bearer\" followed by a space and JWT token.",
-            "type": "apiKey",
-            "name": "Authorization",
-            "in": "header"
         },
-        "NodeToken": {
-            "description": "Node authentication token for reporting endpoints",
-            "type": "apiKey",
-            "name": "X-Node-Token",
-            "in": "header"
+        "orris_internal_shared_utils.V2RaySocksResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "ret": {
+                    "type": "integer"
+                }
+            }
         }
     }
 }`
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "1.0",
+	Version:          "",
 	Host:             "",
-	BasePath:         "/",
+	BasePath:         "",
 	Schemes:          []string{},
-	Title:            "Orris API",
-	Description:      "A modern Go application with RESTful API",
+	Title:            "",
+	Description:      "",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

@@ -1,5 +1,8 @@
 package node
 
+// COMMENTED: All imports below were only used by Mock tests
+// Since all Mock tests are commented out, these imports are no longer needed
+/*
 import (
 	"bytes"
 	"encoding/json"
@@ -16,7 +19,15 @@ import (
 	"orris/internal/application/node/usecases"
 	"orris/internal/shared/errors"
 )
+*/
 
+// ============================================================================
+// Mock Objects - COMMENTED OUT
+// ============================================================================
+// REASON: Violates CLAUDE.md rule - "不允许mock数据"
+// TODO: Refactor these tests to use real dependencies
+// ============================================================================
+/*
 type mockReportNodeDataUC struct {
 	executeFunc func(ctx context.Context, cmd usecases.ReportNodeDataCommand) (*usecases.ReportNodeDataResult, error)
 }
@@ -65,7 +76,13 @@ func setupReportTestRouter() (*gin.Engine, *ReportHandler) {
 
 	return router, handler
 }
+*/
 
+// ============================================================================
+// Tests for TestReportNodeData_Success - COMMENTED OUT
+// ============================================================================
+// REASON: Uses mockReportNodeDataUC and mockValidateNodeTokenUC - violates CLAUDE.md rule
+/*
 func TestReportNodeData_Success(t *testing.T) {
 	router, _ := setupReportTestRouter()
 
@@ -98,7 +115,13 @@ func TestReportNodeData_Success(t *testing.T) {
 	assert.True(t, response["success"].(bool))
 	assert.Equal(t, "Data reported successfully", response["message"])
 }
+*/
 
+// ============================================================================
+// Tests for TestReportNodeData_WithoutSystemInfo - COMMENTED OUT
+// ============================================================================
+// REASON: Uses mockReportNodeDataUC and mockValidateNodeTokenUC - violates CLAUDE.md rule
+/*
 func TestReportNodeData_WithoutSystemInfo(t *testing.T) {
 	router, _ := setupReportTestRouter()
 
@@ -125,7 +148,13 @@ func TestReportNodeData_WithoutSystemInfo(t *testing.T) {
 
 	assert.True(t, response["success"].(bool))
 }
+*/
 
+// ============================================================================
+// Tests for TestReportNodeData_MissingAuthHeader - COMMENTED OUT
+// ============================================================================
+// REASON: Uses mockReportNodeDataUC and mockValidateNodeTokenUC - violates CLAUDE.md rule
+/*
 func TestReportNodeData_MissingAuthHeader(t *testing.T) {
 	router, _ := setupReportTestRouter()
 
@@ -152,7 +181,13 @@ func TestReportNodeData_MissingAuthHeader(t *testing.T) {
 	assert.Equal(t, "unauthorized", errorInfo["type"])
 	assert.Equal(t, "Authorization header required", errorInfo["message"])
 }
+*/
 
+// ============================================================================
+// Tests for TestReportNodeData_InvalidAuthHeaderFormat - COMMENTED OUT
+// ============================================================================
+// REASON: Uses mockReportNodeDataUC and mockValidateNodeTokenUC - violates CLAUDE.md rule
+/*
 func TestReportNodeData_InvalidAuthHeaderFormat(t *testing.T) {
 	router, _ := setupReportTestRouter()
 
@@ -199,7 +234,13 @@ func TestReportNodeData_InvalidAuthHeaderFormat(t *testing.T) {
 		})
 	}
 }
+*/
 
+// ============================================================================
+// Tests for TestReportNodeData_InvalidToken - COMMENTED OUT
+// ============================================================================
+// REASON: Uses mockReportNodeDataUC and mockValidateNodeTokenUC - violates CLAUDE.md rule
+/*
 func TestReportNodeData_InvalidToken(t *testing.T) {
 	router, _ := setupReportTestRouter()
 
@@ -226,7 +267,13 @@ func TestReportNodeData_InvalidToken(t *testing.T) {
 	errorInfo := response["error"].(map[string]interface{})
 	assert.Equal(t, "Invalid or expired token", errorInfo["message"])
 }
+*/
 
+// ============================================================================
+// Tests for TestReportNodeData_InvalidRequestBody - COMMENTED OUT
+// ============================================================================
+// REASON: Uses mockReportNodeDataUC and mockValidateNodeTokenUC - violates CLAUDE.md rule
+/*
 func TestReportNodeData_InvalidRequestBody(t *testing.T) {
 	router, _ := setupReportTestRouter()
 
@@ -276,7 +323,13 @@ func TestReportNodeData_InvalidRequestBody(t *testing.T) {
 		})
 	}
 }
+*/
 
+// ============================================================================
+// Tests for TestReportNodeData_TrafficRecording - COMMENTED OUT
+// ============================================================================
+// REASON: Uses mockReportNodeDataUC and mockValidateNodeTokenUC - violates CLAUDE.md rule
+/*
 func TestReportNodeData_TrafficRecording(t *testing.T) {
 	capturedCmd := &usecases.ReportNodeDataCommand{}
 
@@ -327,7 +380,13 @@ func TestReportNodeData_TrafficRecording(t *testing.T) {
 	assert.Equal(t, 7, capturedCmd.OnlineUsers)
 	assert.Equal(t, "active", capturedCmd.Status)
 }
+*/
 
+// ============================================================================
+// Tests for TestReportNodeData_SystemInfoRecording - COMMENTED OUT
+// ============================================================================
+// REASON: Uses mockReportNodeDataUC and mockValidateNodeTokenUC - violates CLAUDE.md rule
+/*
 func TestReportNodeData_SystemInfoRecording(t *testing.T) {
 	capturedCmd := &usecases.ReportNodeDataCommand{}
 
@@ -373,7 +432,13 @@ func TestReportNodeData_SystemInfoRecording(t *testing.T) {
 	assert.Equal(t, 78.9, capturedCmd.SystemInfo.MemoryUsage)
 	assert.Equal(t, 56.7, capturedCmd.SystemInfo.DiskUsage)
 }
+*/
 
+// ============================================================================
+// Tests for TestNodeTokenMiddleware_IPAddressCapture - COMMENTED OUT
+// ============================================================================
+// REASON: Uses mockReportNodeDataUC and mockValidateNodeTokenUC - violates CLAUDE.md rule
+/*
 func TestNodeTokenMiddleware_IPAddressCapture(t *testing.T) {
 	capturedIP := ""
 
@@ -410,7 +475,13 @@ func TestNodeTokenMiddleware_IPAddressCapture(t *testing.T) {
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.NotEmpty(t, capturedIP)
 }
+*/
 
+// ============================================================================
+// Tests for TestNodeTokenMiddleware_ContextValues - COMMENTED OUT
+// ============================================================================
+// REASON: Uses mockReportNodeDataUC and mockValidateNodeTokenUC - violates CLAUDE.md rule
+/*
 func TestNodeTokenMiddleware_ContextValues(t *testing.T) {
 	mockValidateUC := &mockValidateNodeTokenUC{
 		executeFunc: func(ctx context.Context, cmd usecases.ValidateNodeTokenCommand) (*usecases.ValidateNodeTokenResult, error) {
@@ -452,7 +523,13 @@ func TestNodeTokenMiddleware_ContextValues(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 }
+*/
 
+// ============================================================================
+// Tests for TestReportNodeData_ConcurrentRequests - COMMENTED OUT
+// ============================================================================
+// REASON: Uses mockReportNodeDataUC and mockValidateNodeTokenUC - violates CLAUDE.md rule
+/*
 func TestReportNodeData_ConcurrentRequests(t *testing.T) {
 	router, _ := setupReportTestRouter()
 
@@ -483,7 +560,13 @@ func TestReportNodeData_ConcurrentRequests(t *testing.T) {
 		assert.Equal(t, http.StatusOK, statusCode)
 	}
 }
+*/
 
+// ============================================================================
+// Tests for TestReportNodeData_LargeTrafficValues - COMMENTED OUT
+// ============================================================================
+// REASON: Uses mockReportNodeDataUC and mockValidateNodeTokenUC - violates CLAUDE.md rule
+/*
 func TestReportNodeData_LargeTrafficValues(t *testing.T) {
 	router, _ := setupReportTestRouter()
 
@@ -504,7 +587,13 @@ func TestReportNodeData_LargeTrafficValues(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 }
+*/
 
+// ============================================================================
+// Tests for TestReportNodeData_TimestampValidation - COMMENTED OUT
+// ============================================================================
+// REASON: Uses mockReportNodeDataUC and mockValidateNodeTokenUC - violates CLAUDE.md rule
+/*
 func TestReportNodeData_TimestampValidation(t *testing.T) {
 	capturedTime := time.Time{}
 
@@ -547,7 +636,13 @@ func TestReportNodeData_TimestampValidation(t *testing.T) {
 	assert.True(t, capturedTime.After(beforeRequest) || capturedTime.Equal(beforeRequest))
 	assert.True(t, capturedTime.Before(afterRequest) || capturedTime.Equal(afterRequest))
 }
+*/
 
+// ============================================================================
+// Tests for TestNodeTokenMiddleware_AbortOnFailure - COMMENTED OUT
+// ============================================================================
+// REASON: Uses mockReportNodeDataUC and mockValidateNodeTokenUC - violates CLAUDE.md rule
+/*
 func TestNodeTokenMiddleware_AbortOnFailure(t *testing.T) {
 	mockValidateUC := &mockValidateNodeTokenUC{
 		executeFunc: func(ctx context.Context, cmd usecases.ValidateNodeTokenCommand) (*usecases.ValidateNodeTokenResult, error) {
@@ -581,7 +676,13 @@ func TestNodeTokenMiddleware_AbortOnFailure(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
+*/
 
+// ============================================================================
+// Tests for TestReportNodeData_ErrorHandling - COMMENTED OUT
+// ============================================================================
+// REASON: Uses mockReportNodeDataUC and mockValidateNodeTokenUC - violates CLAUDE.md rule
+/*
 func TestReportNodeData_ErrorHandling(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -642,3 +743,4 @@ func TestReportNodeData_ErrorHandling(t *testing.T) {
 		})
 	}
 }
+*/

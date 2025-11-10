@@ -7,6 +7,7 @@ import (
 
 	"orris/internal/application/user/helpers"
 	"orris/internal/domain/user"
+	"orris/internal/shared/authorization"
 	"orris/internal/shared/logger"
 )
 
@@ -17,7 +18,7 @@ type TokenPair struct {
 }
 
 type JWTService interface {
-	Generate(userID uint, sessionID string) (*TokenPair, error)
+	Generate(userID uint, sessionID string, role authorization.UserRole) (*TokenPair, error)
 	Refresh(refreshToken string) (string, error)
 }
 
@@ -99,7 +100,7 @@ func (uc *LoginWithPasswordUseCase) Execute(ctx context.Context, cmd LoginWithPa
 		},
 		7*24*time.Hour, // Session duration: 7 days
 		func(userID uint, sessionID string) (string, string, int64, error) {
-			tokens, err := uc.jwtService.Generate(userID, sessionID)
+			tokens, err := uc.jwtService.Generate(userID, sessionID, existingUser.Role())
 			if err != nil {
 				return "", "", 0, err
 			}
