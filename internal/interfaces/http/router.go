@@ -167,18 +167,19 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	authHelper := helpers.NewAuthHelper(userRepo, sessionRepo, log)
 
 	registerUC := usecases.NewRegisterWithPasswordUseCase(userRepo, hasher, emailService, authHelper, log)
-	loginUC := usecases.NewLoginWithPasswordUseCase(userRepo, sessionRepo, hasher, jwtService, authHelper, log)
+	loginUC := usecases.NewLoginWithPasswordUseCase(userRepo, sessionRepo, hasher, jwtService, authHelper, cfg.Auth.Session, log)
 	verifyEmailUC := usecases.NewVerifyEmailUseCase(userRepo, log)
 	requestResetUC := usecases.NewRequestPasswordResetUseCase(userRepo, emailService, log)
 	resetPasswordUC := usecases.NewResetPasswordUseCase(userRepo, sessionRepo, hasher, emailService, log)
 	initiateOAuthUC := usecases.NewInitiateOAuthLoginUseCase(googleClient, githubClient, log, stateStore)
-	handleOAuthUC := usecases.NewHandleOAuthCallbackUseCase(userRepo, oauthRepo, sessionRepo, googleClient, githubClient, jwtService, initiateOAuthUC, authHelper, log)
+	handleOAuthUC := usecases.NewHandleOAuthCallbackUseCase(userRepo, oauthRepo, sessionRepo, googleClient, githubClient, jwtService, initiateOAuthUC, authHelper, cfg.Auth.Session, log)
 	refreshTokenUC := usecases.NewRefreshTokenUseCase(sessionRepo, jwtService, authHelper, log)
 	logoutUC := usecases.NewLogoutUseCase(sessionRepo, log)
 
 	authHandler := handlers.NewAuthHandler(
 		registerUC, loginUC, verifyEmailUC, requestResetUC, resetPasswordUC,
 		initiateOAuthUC, handleOAuthUC, refreshTokenUC, logoutUC, userRepo, log,
+		cfg.Auth.Cookie, cfg.Auth.JWT,
 		cfg.Server.FrontendCallbackURL, cfg.Server.AllowedOrigins,
 	)
 
@@ -188,12 +189,13 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	subscriptionRepo := repository.NewSubscriptionRepository(db, log)
 	subscriptionPlanRepo := repository.NewSubscriptionPlanRepository(db, log)
 	subscriptionTokenRepo := repository.NewSubscriptionTokenRepository(db, log)
+	planPricingRepo := repository.NewPlanPricingRepository(db, log)
 	paymentRepo := repository.NewPaymentRepository(db)
 
 	tokenGenerator := token.NewTokenGenerator()
 
 	createSubscriptionUC := subscriptionUsecases.NewCreateSubscriptionUseCase(
-		subscriptionRepo, subscriptionPlanRepo, subscriptionTokenRepo, tokenGenerator, log,
+		subscriptionRepo, subscriptionPlanRepo, subscriptionTokenRepo, planPricingRepo, tokenGenerator, log,
 	)
 	activateSubscriptionUC := subscriptionUsecases.NewActivateSubscriptionUseCase(
 		subscriptionRepo, log,
@@ -227,13 +229,16 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		subscriptionPlanRepo, log,
 	)
 	getPublicPlansUC := subscriptionUsecases.NewGetPublicPlansUseCase(
-		subscriptionPlanRepo, log,
+		subscriptionPlanRepo, planPricingRepo, log,
 	)
 	activatePlanUC := subscriptionUsecases.NewActivateSubscriptionPlanUseCase(
 		subscriptionPlanRepo, log,
 	)
 	deactivatePlanUC := subscriptionUsecases.NewDeactivateSubscriptionPlanUseCase(
 		subscriptionPlanRepo, log,
+	)
+	getPlanPricingsUC := subscriptionUsecases.NewGetPlanPricingsUseCase(
+		subscriptionPlanRepo, planPricingRepo, log,
 	)
 
 	generateTokenUC := subscriptionUsecases.NewGenerateSubscriptionTokenUseCase(
@@ -256,7 +261,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	)
 	subscriptionPlanHandler := handlers.NewSubscriptionPlanHandler(
 		createPlanUC, updatePlanUC, getPlanUC, listPlansUC,
-		getPublicPlansUC, activatePlanUC, deactivatePlanUC,
+		getPublicPlansUC, activatePlanUC, deactivatePlanUC, getPlanPricingsUC,
 	)
 	subscriptionTokenHandler := handlers.NewSubscriptionTokenHandler(
 		generateTokenUC, listTokensUC, revokeTokenUC, refreshSubscriptionTokenUC,
@@ -269,7 +274,14 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		nodeRepo, tokenValidator, log,
 	)
 
-	nodeHandler := handlers.NewNodeHandler(nil, nil, nil, nil, nil)
+	// Initialize node use cases
+	createNodeUC := nodeUsecases.NewCreateNodeUseCase(log)
+	updateNodeUC := nodeUsecases.NewUpdateNodeUseCase(log)
+	deleteNodeUC := nodeUsecases.NewDeleteNodeUseCase(log)
+	listNodesUC := nodeUsecases.NewListNodesUseCase(log)
+	generateNodeTokenUC := nodeUsecases.NewGenerateNodeTokenUseCase(log)
+
+	nodeHandler := handlers.NewNodeHandler(createNodeUC, updateNodeUC, deleteNodeUC, listNodesUC, generateNodeTokenUC)
 	nodeGroupHandler := handlers.NewNodeGroupHandler()
 	nodeSubscriptionHandler := handlers.NewNodeSubscriptionHandler(generateSubscriptionUC)
 	nodeReportHandler := handlers.NewNodeReportHandler(nil, nil)
@@ -402,7 +414,7 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		users.POST("", authorization.RequireAdmin(), r.userHandler.CreateUser)
 		users.GET("", authorization.RequireAdmin(), r.userHandler.ListUsers)
 		users.GET("/:id", authorization.RequireAdmin(), r.userHandler.GetUser)
-		users.PUT("/:id", authorization.RequireOwnerOrAdmin("id"), r.userHandler.UpdateUser)
+		users.PATCH("/:id", authorization.RequireAdmin(), r.userHandler.UpdateUser)
 		users.DELETE("/:id", authorization.RequireAdmin(), r.userHandler.DeleteUser)
 		users.GET("/email/:email", authorization.RequireAdmin(), r.userHandler.GetUserByEmail)
 
@@ -441,6 +453,7 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 	plans := r.engine.Group("/subscription-plans")
 	{
 		plans.GET("/public", r.subscriptionPlanHandler.GetPublicPlans)
+		plans.GET("/:id/pricings", r.subscriptionPlanHandler.GetPlanPricings)
 
 		plansProtected := plans.Group("")
 		plansProtected.Use(r.authMiddleware.RequireAuth())

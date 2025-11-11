@@ -7,6 +7,7 @@ import (
 	"orris/internal/application/user/dto"
 	domainUser "orris/internal/domain/user"
 	vo "orris/internal/domain/user/value_objects"
+	"orris/internal/shared/authorization"
 	"orris/internal/shared/errors"
 	"orris/internal/shared/logger"
 )
@@ -114,6 +115,20 @@ func (uc *UpdateUserUseCase) Execute(ctx context.Context, id uint, request dto.U
 		}
 	}
 
+	// Update role if provided
+	if request.Role != nil {
+		var newRole authorization.UserRole
+		switch *request.Role {
+		case "user":
+			newRole = authorization.RoleUser
+		case "admin":
+			newRole = authorization.RoleAdmin
+		default:
+			return nil, errors.NewValidationError(fmt.Sprintf("invalid role: %s", *request.Role))
+		}
+		userEntity.SetRole(newRole)
+	}
+
 	// Persist the updated user
 	if err := uc.userRepo.Update(ctx, userEntity); err != nil {
 		uc.logger.Errorw("failed to persist user updates", "id", id, "error", err)
@@ -125,6 +140,7 @@ func (uc *UpdateUserUseCase) Execute(ctx context.Context, id uint, request dto.U
 		ID:        userEntity.ID(),
 		Email:     userEntity.Email().String(),
 		Name:      userEntity.Name().String(),
+		Role:      string(userEntity.Role()),
 		Status:    userEntity.Status().String(),
 		CreatedAt: userEntity.CreatedAt(),
 		UpdatedAt: userEntity.UpdatedAt(),
@@ -137,7 +153,7 @@ func (uc *UpdateUserUseCase) Execute(ctx context.Context, id uint, request dto.U
 // ValidateRequest validates the update user request
 func (uc *UpdateUserUseCase) ValidateRequest(request dto.UpdateUserRequest) error {
 	// At least one field must be provided for update
-	if request.Email == nil && request.Name == nil && request.Status == nil {
+	if request.Email == nil && request.Name == nil && request.Status == nil && request.Role == nil {
 		return errors.NewValidationError("at least one field must be provided for update")
 	}
 
@@ -155,6 +171,13 @@ func (uc *UpdateUserUseCase) ValidateRequest(request dto.UpdateUserRequest) erro
 	if request.Status != nil {
 		if _, err := vo.NewStatus(*request.Status); err != nil {
 			return errors.NewValidationError(fmt.Sprintf("invalid status: %v", err))
+		}
+	}
+
+	// Validate role if provided
+	if request.Role != nil {
+		if *request.Role != "user" && *request.Role != "admin" {
+			return errors.NewValidationError(fmt.Sprintf("invalid role: %s", *request.Role))
 		}
 	}
 

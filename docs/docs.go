@@ -9,7 +9,15 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "contact": {},
+        "termsOfService": "http://swagger.io/terms/",
+        "contact": {
+            "name": "API Support",
+            "email": "support@orris.io"
+        },
+        "license": {
+            "name": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+        },
         "version": "{{.Version}}"
     },
     "host": "{{.Host}}",
@@ -135,7 +143,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_interfaces_dto.CreateAnnouncementRequest"
+                            "$ref": "#/definitions/internal_interfaces_dto.CreateAnnouncementRequest"
                         }
                     }
                 ],
@@ -143,19 +151,7 @@ const docTemplate = `{
                     "201": {
                         "description": "Announcement created successfully",
                         "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/orris_internal_interfaces_dto.AnnouncementResponse"
-                                        }
-                                    }
-                                }
-                            ]
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
                     },
                     "400": {
@@ -224,7 +220,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/orris_internal_interfaces_dto.AnnouncementResponse"
+                                            "$ref": "#/definitions/internal_interfaces_dto.AnnouncementResponse"
                                         }
                                     }
                                 }
@@ -288,7 +284,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_interfaces_dto.UpdateAnnouncementRequest"
+                            "$ref": "#/definitions/internal_interfaces_dto.UpdateAnnouncementRequest"
                         }
                     }
                 ],
@@ -304,7 +300,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/orris_internal_interfaces_dto.AnnouncementResponse"
+                                            "$ref": "#/definitions/internal_interfaces_dto.AnnouncementResponse"
                                         }
                                     }
                                 }
@@ -439,7 +435,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/orris_internal_interfaces_dto.AnnouncementResponse"
+                                            "$ref": "#/definitions/internal_interfaces_dto.AnnouncementResponse"
                                         }
                                     }
                                 }
@@ -697,7 +693,7 @@ const docTemplate = `{
         },
         "/auth/login": {
             "post": {
-                "description": "Authenticate user with email and password, returns JWT tokens",
+                "description": "Authenticate user with email and password, sets JWT tokens in HttpOnly cookies",
                 "consumes": [
                     "application/json"
                 ],
@@ -723,19 +719,7 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/internal_interfaces_http_handlers.AuthResponse"
-                                        }
-                                    }
-                                }
-                            ]
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
                     },
                     "400": {
@@ -760,7 +744,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Logout current user and invalidate session",
+                "description": "Logout current user, invalidate session and clear auth cookies",
                 "consumes": [
                     "application/json"
                 ],
@@ -932,7 +916,7 @@ const docTemplate = `{
         },
         "/auth/refresh": {
             "post": {
-                "description": "Get new access token using refresh token",
+                "description": "Get new access token using refresh token from HttpOnly cookie or request body",
                 "consumes": [
                     "application/json"
                 ],
@@ -945,10 +929,9 @@ const docTemplate = `{
                 "summary": "Refresh access token",
                 "parameters": [
                     {
-                        "description": "Refresh token",
+                        "description": "Refresh token (optional if using cookies)",
                         "name": "request",
                         "in": "body",
-                        "required": true,
                         "schema": {
                             "$ref": "#/definitions/internal_interfaces_http_handlers.RefreshTokenRequest"
                         }
@@ -2652,7 +2635,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_interfaces_dto.CreateTemplateRequest"
+                            "$ref": "#/definitions/internal_interfaces_dto.CreateTemplateRequest"
                         }
                     }
                 ],
@@ -2668,7 +2651,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/orris_internal_interfaces_dto.TemplateResponse"
+                                            "$ref": "#/definitions/internal_interfaces_dto.TemplateResponse"
                                         }
                                     }
                                 }
@@ -2727,7 +2710,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_interfaces_dto.RenderTemplateRequest"
+                            "$ref": "#/definitions/internal_interfaces_dto.RenderTemplateRequest"
                         }
                     }
                 ],
@@ -2743,7 +2726,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/orris_internal_interfaces_dto.RenderTemplateResponse"
+                                            "$ref": "#/definitions/internal_interfaces_dto.RenderTemplateResponse"
                                         }
                                     }
                                 }
@@ -2835,7 +2818,7 @@ const docTemplate = `{
                                         "data": {
                                             "type": "array",
                                             "items": {
-                                                "$ref": "#/definitions/orris_internal_interfaces_dto.NotificationResponse"
+                                                "$ref": "#/definitions/internal_interfaces_dto.NotificationResponse"
                                             }
                                         }
                                     }
@@ -2934,7 +2917,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/orris_internal_interfaces_dto.UnreadCountResponse"
+                                            "$ref": "#/definitions/internal_interfaces_dto.UnreadCountResponse"
                                         }
                                     }
                                 }
@@ -3053,7 +3036,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/orris_internal_interfaces_dto.NotificationResponse"
+                                            "$ref": "#/definitions/internal_interfaces_dto.NotificationResponse"
                                         }
                                     }
                                 }
@@ -3126,7 +3109,7 @@ const docTemplate = `{
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/orris_internal_interfaces_dto.NotificationResponse"
+                                            "$ref": "#/definitions/internal_interfaces_dto.NotificationResponse"
                                         }
                                     }
                                 }
@@ -4022,6 +4005,53 @@ const docTemplate = `{
                 }
             }
         },
+        "/subscription-plans/{id}/pricings": {
+            "get": {
+                "description": "Returns all available billing cycles and prices for a plan",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "subscription-plans"
+                ],
+                "summary": "Get pricing options for a specific plan",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Plan ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Pricing options for the plan",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid plan ID",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Plan not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/subscriptions": {
             "get": {
                 "security": [
@@ -4114,7 +4144,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Create a new subscription for the authenticated user with the specified plan",
+                "description": "Create a new subscription for the authenticated user with the specified plan and billing cycle",
                 "consumes": [
                     "application/json"
                 ],
@@ -4124,10 +4154,10 @@ const docTemplate = `{
                 "tags": [
                     "subscriptions"
                 ],
-                "summary": "Create a new subscription",
+                "summary": "Create a new subscription with billing cycle selection",
                 "parameters": [
                     {
-                        "description": "Subscription data",
+                        "description": "Subscription data with billing cycle (weekly/monthly/quarterly/semi_annual/yearly/lifetime)",
                         "name": "subscription",
                         "in": "body",
                         "required": true,
@@ -5301,7 +5331,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Get a paginated list of users",
+                "description": "Get a paginated list of users with optional filtering",
                 "consumes": [
                     "application/json"
                 ],
@@ -5337,6 +5367,16 @@ const docTemplate = `{
                         "type": "string",
                         "description": "User status filter",
                         "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "user",
+                            "admin"
+                        ],
+                        "type": "string",
+                        "description": "User role filter",
+                        "name": "role",
                         "in": "query"
                     }
                 ],
@@ -5409,7 +5449,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_interfaces_dto.CreateUserRequest"
+                            "$ref": "#/definitions/internal_application_user_dto.CreateUserRequest"
                         }
                     }
                 ],
@@ -5417,19 +5457,7 @@ const docTemplate = `{
                     "201": {
                         "description": "User created successfully",
                         "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/orris_internal_application_user_dto.UserResponse"
-                                        }
-                                    }
-                                }
-                            ]
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
                     },
                     "400": {
@@ -5496,19 +5524,7 @@ const docTemplate = `{
                     "200": {
                         "description": "User details",
                         "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/orris_internal_application_user_dto.UserResponse"
-                                        }
-                                    }
-                                }
-                            ]
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
                     },
                     "400": {
@@ -5569,7 +5585,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_interfaces_dto.UpdateProfileRequest"
+                            "$ref": "#/definitions/internal_application_user_dto.UpdateProfileRequest"
                         }
                     }
                 ],
@@ -5577,19 +5593,7 @@ const docTemplate = `{
                     "200": {
                         "description": "Profile updated successfully",
                         "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/orris_internal_application_user_dto.UserResponse"
-                                        }
-                                    }
-                                }
-                            ]
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
                     },
                     "400": {
@@ -5644,7 +5648,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_interfaces_dto.ChangePasswordRequest"
+                            "$ref": "#/definitions/internal_application_user_dto.ChangePasswordRequest"
                         }
                     }
                 ],
@@ -5713,19 +5717,7 @@ const docTemplate = `{
                     "200": {
                         "description": "User details",
                         "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/orris_internal_application_user_dto.UserResponse"
-                                        }
-                                    }
-                                }
-                            ]
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
                     },
                     "400": {
@@ -5742,92 +5734,6 @@ const docTemplate = `{
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "User not found",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                        }
-                    }
-                }
-            },
-            "put": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Update user information by ID. Users can update their own information, admins can update any user.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "users"
-                ],
-                "summary": "Update user",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "User ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "User update data",
-                        "name": "user",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_interfaces_dto.UpdateUserRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "User updated successfully",
-                        "schema": {
-                            "allOf": [
-                                {
-                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                                },
-                                {
-                                    "type": "object",
-                                    "properties": {
-                                        "data": {
-                                            "$ref": "#/definitions/orris_internal_application_user_dto.UserResponse"
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden - Requires admin role or owner access",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -5907,26 +5813,433 @@ const docTemplate = `{
                         }
                     }
                 }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Partially update user information by ID. All fields are optional, at least one must be provided. Only admins can update users. Supports updating email, name, status, and role.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Update user (partial update)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "User ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "User update data (all fields optional)",
+                        "name": "user",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_application_user_dto.UpdateUserRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "User updated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "User not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Email already exists",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
             }
         }
     },
     "definitions": {
-        "internal_interfaces_http_handlers.AuthResponse": {
+        "internal_application_user_dto.ChangePasswordRequest": {
+            "type": "object",
+            "required": [
+                "new_password",
+                "old_password"
+            ],
+            "properties": {
+                "logout_all_devices": {
+                    "type": "boolean"
+                },
+                "new_password": {
+                    "type": "string",
+                    "minLength": 8
+                },
+                "old_password": {
+                    "type": "string",
+                    "minLength": 8
+                }
+            }
+        },
+        "internal_application_user_dto.CreateUserRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "name"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 2
+                }
+            }
+        },
+        "internal_application_user_dto.UpdateProfileRequest": {
             "type": "object",
             "properties": {
-                "access_token": {
+                "email": {
                     "type": "string"
                 },
-                "expires_in": {
+                "name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 2
+                }
+            }
+        },
+        "internal_application_user_dto.UpdateUserRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 2
+                },
+                "role": {
+                    "type": "string",
+                    "enum": [
+                        "user",
+                        "admin"
+                    ]
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "active",
+                        "inactive",
+                        "pending",
+                        "suspended"
+                    ]
+                }
+            }
+        },
+        "internal_interfaces_dto.AnnouncementResponse": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "creator_id": {
                     "type": "integer"
                 },
-                "refresh_token": {
+                "expires_at": {
                     "type": "string"
                 },
-                "token_type": {
+                "id": {
+                    "type": "integer"
+                },
+                "priority": {
+                    "type": "integer"
+                },
+                "scheduled_at": {
                     "type": "string"
                 },
-                "user": {}
+                "status": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "integer"
+                },
+                "view_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_interfaces_dto.CreateAnnouncementRequest": {
+            "type": "object",
+            "required": [
+                "content",
+                "title",
+                "type"
+            ],
+            "properties": {
+                "content": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "integer",
+                    "maximum": 5,
+                    "minimum": 1
+                },
+                "scheduled_at": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 1
+                },
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "system",
+                        "maintenance",
+                        "feature",
+                        "promotion"
+                    ]
+                }
+            }
+        },
+        "internal_interfaces_dto.CreateTemplateRequest": {
+            "type": "object",
+            "required": [
+                "content",
+                "name",
+                "template_type",
+                "title"
+            ],
+            "properties": {
+                "content": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 1
+                },
+                "template_type": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "minLength": 1
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 1
+                },
+                "variables": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "internal_interfaces_dto.NotificationResponse": {
+            "type": "object",
+            "properties": {
+                "archived_at": {
+                    "type": "string"
+                },
+                "content": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "read_status": {
+                    "type": "string"
+                },
+                "related_id": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_interfaces_dto.RenderTemplateRequest": {
+            "type": "object",
+            "required": [
+                "template_type"
+            ],
+            "properties": {
+                "template_type": {
+                    "type": "string"
+                },
+                "variables": {
+                    "type": "object",
+                    "additionalProperties": true
+                }
+            }
+        },
+        "internal_interfaces_dto.RenderTemplateResponse": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_interfaces_dto.TemplateResponse": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "template_type": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "variables": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_interfaces_dto.UnreadCountResponse": {
+            "type": "object",
+            "properties": {
+                "count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_interfaces_dto.UpdateAnnouncementRequest": {
+            "type": "object",
+            "properties": {
+                "content": {
+                    "type": "string",
+                    "minLength": 1
+                },
+                "expires_at": {
+                    "type": "string"
+                },
+                "priority": {
+                    "type": "integer",
+                    "maximum": 5,
+                    "minimum": 1
+                },
+                "scheduled_at": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "minLength": 1
+                },
+                "type": {
+                    "type": "string",
+                    "enum": [
+                        "system",
+                        "maintenance",
+                        "feature",
+                        "promotion"
+                    ]
+                }
             }
         },
         "internal_interfaces_http_handlers.CancelSubscriptionRequest": {
@@ -6080,11 +6393,23 @@ const docTemplate = `{
         "internal_interfaces_http_handlers.CreateSubscriptionRequest": {
             "type": "object",
             "required": [
+                "billing_cycle",
                 "plan_id"
             ],
             "properties": {
                 "auto_renew": {
                     "type": "boolean"
+                },
+                "billing_cycle": {
+                    "type": "string",
+                    "enum": [
+                        "weekly",
+                        "monthly",
+                        "quarterly",
+                        "semi_annual",
+                        "yearly",
+                        "lifetime"
+                    ]
                 },
                 "payment_info": {
                     "type": "object",
@@ -6139,17 +6464,18 @@ const docTemplate = `{
                 },
                 "password": {
                     "type": "string"
+                },
+                "remember_me": {
+                    "type": "boolean"
                 }
             }
         },
         "internal_interfaces_http_handlers.RefreshTokenRequest": {
             "type": "object",
-            "required": [
-                "refresh_token"
-            ],
             "properties": {
                 "refresh_token": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
                 }
             }
         },
@@ -6603,388 +6929,6 @@ const docTemplate = `{
                 }
             }
         },
-        "orris_internal_application_user_dto.UserMetadata": {
-            "type": "object",
-            "properties": {
-                "can_perform_actions": {
-                    "type": "boolean"
-                },
-                "email_domain": {
-                    "type": "string"
-                },
-                "is_business_email": {
-                    "type": "boolean"
-                },
-                "requires_verification": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "orris_internal_application_user_dto.UserResponse": {
-            "type": "object",
-            "properties": {
-                "created_at": {
-                    "type": "string"
-                },
-                "display_name": {
-                    "type": "string"
-                },
-                "email": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "initials": {
-                    "type": "string"
-                },
-                "metadata": {
-                    "$ref": "#/definitions/orris_internal_application_user_dto.UserMetadata"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                }
-            }
-        },
-        "orris_internal_interfaces_dto.AnnouncementResponse": {
-            "type": "object",
-            "properties": {
-                "content": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "creator_id": {
-                    "type": "integer"
-                },
-                "expires_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "priority": {
-                    "type": "integer"
-                },
-                "scheduled_at": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                },
-                "type": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "version": {
-                    "type": "integer"
-                },
-                "view_count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "orris_internal_interfaces_dto.ChangePasswordRequest": {
-            "type": "object",
-            "required": [
-                "new_password",
-                "old_password"
-            ],
-            "properties": {
-                "logout_all_devices": {
-                    "type": "boolean"
-                },
-                "new_password": {
-                    "type": "string",
-                    "minLength": 8
-                },
-                "old_password": {
-                    "type": "string",
-                    "minLength": 8
-                }
-            }
-        },
-        "orris_internal_interfaces_dto.CreateAnnouncementRequest": {
-            "type": "object",
-            "required": [
-                "content",
-                "title",
-                "type"
-            ],
-            "properties": {
-                "content": {
-                    "type": "string",
-                    "minLength": 1
-                },
-                "expires_at": {
-                    "type": "string"
-                },
-                "priority": {
-                    "type": "integer",
-                    "maximum": 5,
-                    "minimum": 1
-                },
-                "scheduled_at": {
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string",
-                    "maxLength": 255,
-                    "minLength": 1
-                },
-                "type": {
-                    "type": "string",
-                    "enum": [
-                        "system",
-                        "maintenance",
-                        "feature",
-                        "promotion"
-                    ]
-                }
-            }
-        },
-        "orris_internal_interfaces_dto.CreateTemplateRequest": {
-            "type": "object",
-            "required": [
-                "content",
-                "name",
-                "template_type",
-                "title"
-            ],
-            "properties": {
-                "content": {
-                    "type": "string",
-                    "minLength": 1
-                },
-                "enabled": {
-                    "type": "boolean"
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 100,
-                    "minLength": 1
-                },
-                "template_type": {
-                    "type": "string",
-                    "maxLength": 50,
-                    "minLength": 1
-                },
-                "title": {
-                    "type": "string",
-                    "maxLength": 255,
-                    "minLength": 1
-                },
-                "variables": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                }
-            }
-        },
-        "orris_internal_interfaces_dto.CreateUserRequest": {
-            "type": "object",
-            "required": [
-                "email",
-                "name"
-            ],
-            "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 100,
-                    "minLength": 2
-                }
-            }
-        },
-        "orris_internal_interfaces_dto.NotificationResponse": {
-            "type": "object",
-            "properties": {
-                "archived_at": {
-                    "type": "string"
-                },
-                "content": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "read_status": {
-                    "type": "string"
-                },
-                "related_id": {
-                    "type": "integer"
-                },
-                "title": {
-                    "type": "string"
-                },
-                "type": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "integer"
-                },
-                "version": {
-                    "type": "integer"
-                }
-            }
-        },
-        "orris_internal_interfaces_dto.RenderTemplateRequest": {
-            "type": "object",
-            "required": [
-                "template_type"
-            ],
-            "properties": {
-                "template_type": {
-                    "type": "string"
-                },
-                "variables": {
-                    "type": "object",
-                    "additionalProperties": true
-                }
-            }
-        },
-        "orris_internal_interfaces_dto.RenderTemplateResponse": {
-            "type": "object",
-            "properties": {
-                "content": {
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                }
-            }
-        },
-        "orris_internal_interfaces_dto.TemplateResponse": {
-            "type": "object",
-            "properties": {
-                "content": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "enabled": {
-                    "type": "boolean"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "template_type": {
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "variables": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "version": {
-                    "type": "integer"
-                }
-            }
-        },
-        "orris_internal_interfaces_dto.UnreadCountResponse": {
-            "type": "object",
-            "properties": {
-                "count": {
-                    "type": "integer"
-                }
-            }
-        },
-        "orris_internal_interfaces_dto.UpdateAnnouncementRequest": {
-            "type": "object",
-            "properties": {
-                "content": {
-                    "type": "string",
-                    "minLength": 1
-                },
-                "expires_at": {
-                    "type": "string"
-                },
-                "priority": {
-                    "type": "integer",
-                    "maximum": 5,
-                    "minimum": 1
-                },
-                "scheduled_at": {
-                    "type": "string"
-                },
-                "title": {
-                    "type": "string",
-                    "maxLength": 255,
-                    "minLength": 1
-                },
-                "type": {
-                    "type": "string",
-                    "enum": [
-                        "system",
-                        "maintenance",
-                        "feature",
-                        "promotion"
-                    ]
-                }
-            }
-        },
-        "orris_internal_interfaces_dto.UpdateProfileRequest": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 100,
-                    "minLength": 2
-                }
-            }
-        },
-        "orris_internal_interfaces_dto.UpdateUserRequest": {
-            "type": "object",
-            "required": [
-                "email",
-                "name"
-            ],
-            "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 100,
-                    "minLength": 2
-                }
-            }
-        },
         "orris_internal_shared_utils.APIResponse": {
             "type": "object",
             "properties": {
@@ -7041,17 +6985,31 @@ const docTemplate = `{
                 }
             }
         }
+    },
+    "securityDefinitions": {
+        "Bearer": {
+            "description": "Type \"Bearer\" followed by a space and JWT token.",
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        },
+        "NodeToken": {
+            "description": "Node authentication token for reporting endpoints",
+            "type": "apiKey",
+            "name": "X-Node-Token",
+            "in": "header"
+        }
     }
 }`
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "",
+	Version:          "1.0",
 	Host:             "",
-	BasePath:         "",
+	BasePath:         "/",
 	Schemes:          []string{},
-	Title:            "",
-	Description:      "",
+	Title:            "Orris API",
+	Description:      "A modern Go application with RESTful API",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

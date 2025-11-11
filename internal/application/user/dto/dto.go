@@ -15,6 +15,7 @@ type UpdateUserRequest struct {
 	Email  *string `json:"email,omitempty" binding:"omitempty,email"`
 	Name   *string `json:"name,omitempty" binding:"omitempty,min=2,max=100"`
 	Status *string `json:"status,omitempty" binding:"omitempty,oneof=active inactive pending suspended"`
+	Role   *string `json:"role,omitempty" binding:"omitempty,oneof=user admin"`
 }
 
 // ListUsersRequest represents the request to list users
@@ -24,6 +25,7 @@ type ListUsersRequest struct {
 	Email    string `json:"email,omitempty" form:"email"`
 	Name     string `json:"name,omitempty" form:"name"`
 	Status   string `json:"status,omitempty" form:"status"`
+	Role     string `json:"role,omitempty" form:"role"`
 	OrderBy  string `json:"order_by,omitempty" form:"order_by"`
 	Order    string `json:"order,omitempty" form:"order" binding:"omitempty,oneof=asc desc"`
 }
@@ -35,6 +37,7 @@ type UserResponse struct {
 	Name        string       `json:"name"`
 	DisplayName string       `json:"display_name"`
 	Initials    string       `json:"initials"`
+	Role        string       `json:"role"`
 	Status      string       `json:"status"`
 	CreatedAt   time.Time    `json:"created_at"`
 	UpdatedAt   time.Time    `json:"updated_at"`
@@ -75,4 +78,3 @@ type ChangePasswordRequest struct {
 	NewPassword      string `json:"new_password" binding:"required,min=8"`
 	LogoutAllDevices bool   `json:"logout_all_devices"`
 }
-

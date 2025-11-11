@@ -31,8 +31,8 @@ func NewNotificationHandler(serviceDDD *notification.ServiceDDD, logger logger.I
 // @Tags announcements
 // @Accept json
 // @Produce json
-// @Param request body dto.CreateAnnouncementRequest true "Announcement data"
-// @Success 201 {object} utils.APIResponse{data=dto.AnnouncementResponse} "Announcement created successfully"
+// @Param request body internal_interfaces_dto.CreateAnnouncementRequest true "Announcement data"
+// @Success 201 {object} utils.APIResponse "Announcement created successfully"
 // @Failure 400 {object} utils.APIResponse "Bad request"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
 // @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
@@ -83,8 +83,8 @@ func (h *NotificationHandler) CreateAnnouncement(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int true "Announcement ID"
-// @Param request body dto.UpdateAnnouncementRequest true "Updated announcement data"
-// @Success 200 {object} utils.APIResponse{data=dto.AnnouncementResponse} "Announcement updated successfully"
+// @Param request body internal_interfaces_dto.UpdateAnnouncementRequest true "Updated announcement data"
+// @Success 200 {object} utils.APIResponse{data=internal_interfaces_dto.AnnouncementResponse} "Announcement updated successfully"
 // @Failure 400 {object} utils.APIResponse "Bad request"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
 // @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
@@ -161,7 +161,7 @@ func (h *NotificationHandler) DeleteAnnouncement(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int true "Announcement ID"
-// @Success 200 {object} utils.APIResponse{data=dto.AnnouncementResponse} "Announcement published successfully"
+// @Success 200 {object} utils.APIResponse{data=internal_interfaces_dto.AnnouncementResponse} "Announcement published successfully"
 // @Failure 400 {object} utils.APIResponse "Invalid announcement ID"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
 // @Failure 404 {object} utils.APIResponse "Announcement not found"
@@ -233,7 +233,7 @@ func (h *NotificationHandler) ListAnnouncements(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int true "Announcement ID"
-// @Success 200 {object} utils.APIResponse{data=dto.AnnouncementResponse} "Announcement details"
+// @Success 200 {object} utils.APIResponse{data=internal_interfaces_dto.AnnouncementResponse} "Announcement details"
 // @Failure 400 {object} utils.APIResponse "Invalid announcement ID"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
 // @Failure 404 {object} utils.APIResponse "Announcement not found"
@@ -265,7 +265,7 @@ func (h *NotificationHandler) GetAnnouncement(c *gin.Context) {
 // @Param limit query int false "Limit" default(20)
 // @Param offset query int false "Offset" default(0)
 // @Param status query string false "Filter by status" Enums(read, unread)
-// @Success 200 {object} utils.APIResponse{data=[]dto.NotificationResponse} "Notifications list"
+// @Success 200 {object} utils.APIResponse{data=[]internal_interfaces_dto.NotificationResponse} "Notifications list"
 // @Failure 400 {object} utils.APIResponse "Invalid query parameters"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
@@ -308,7 +308,7 @@ func (h *NotificationHandler) ListNotifications(c *gin.Context) {
 // @Tags notifications
 // @Accept json
 // @Produce json
-// @Success 200 {object} utils.APIResponse{data=dto.UnreadCountResponse} "Unread count"
+// @Success 200 {object} utils.APIResponse{data=internal_interfaces_dto.UnreadCountResponse} "Unread count"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
 // @Router /notifications/unread-count [get]
@@ -343,7 +343,7 @@ func (h *NotificationHandler) GetUnreadCount(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int true "Notification ID"
-// @Success 200 {object} utils.APIResponse{data=dto.NotificationResponse} "Notification marked as read"
+// @Success 200 {object} utils.APIResponse{data=internal_interfaces_dto.NotificationResponse} "Notification marked as read"
 // @Failure 400 {object} utils.APIResponse "Invalid notification ID"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
 // @Failure 404 {object} utils.APIResponse "Notification not found"
@@ -420,7 +420,7 @@ func (h *NotificationHandler) MarkAllAsRead(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int true "Notification ID"
-// @Success 200 {object} utils.APIResponse{data=dto.NotificationResponse} "Notification archived successfully"
+// @Success 200 {object} utils.APIResponse{data=internal_interfaces_dto.NotificationResponse} "Notification archived successfully"
 // @Failure 400 {object} utils.APIResponse "Invalid notification ID"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
 // @Failure 404 {object} utils.APIResponse "Notification not found"
@@ -505,8 +505,8 @@ func (h *NotificationHandler) DeleteNotification(c *gin.Context) {
 // @Tags notification-templates
 // @Accept json
 // @Produce json
-// @Param request body dto.CreateTemplateRequest true "Template data"
-// @Success 201 {object} utils.APIResponse{data=dto.TemplateResponse} "Template created successfully"
+// @Param request body internal_interfaces_dto.CreateTemplateRequest true "Template data"
+// @Success 201 {object} utils.APIResponse{data=internal_interfaces_dto.TemplateResponse} "Template created successfully"
 // @Failure 400 {object} utils.APIResponse "Bad request"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
 // @Failure 409 {object} utils.APIResponse "Template type already exists"
@@ -574,8 +574,8 @@ func (h *NotificationHandler) ListTemplates(c *gin.Context) {
 // @Tags notification-templates
 // @Accept json
 // @Produce json
-// @Param request body dto.RenderTemplateRequest true "Render data"
-// @Success 200 {object} utils.APIResponse{data=dto.RenderTemplateResponse} "Template rendered successfully"
+// @Param request body internal_interfaces_dto.RenderTemplateRequest true "Render data"
+// @Success 200 {object} utils.APIResponse{data=internal_interfaces_dto.RenderTemplateResponse} "Template rendered successfully"
 // @Failure 400 {object} utils.APIResponse "Bad request"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
 // @Failure 404 {object} utils.APIResponse "Template not found"

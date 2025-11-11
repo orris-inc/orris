@@ -30,9 +30,9 @@ type SubscriptionPlanDTO struct {
 	Name           string
 	Slug           string
 	Description    string
-	Price          uint64
+	Price          uint64 // Deprecated: use Pricings array, kept for backward compatibility
 	Currency       string
-	BillingCycle   string
+	BillingCycle   string                // Deprecated: use Pricings array, kept for backward compatibility
 	TrialDays      int
 	Status         string
 	Features       []string
@@ -44,8 +44,17 @@ type SubscriptionPlanDTO struct {
 	StorageLimit   uint64
 	IsPublic       bool
 	SortOrder      int
+	Pricings       []*PricingOptionDTO `json:"pricings,omitempty"` // Multiple pricing options for different billing cycles
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+}
+
+// PricingOptionDTO represents a single pricing option for a specific billing cycle
+type PricingOptionDTO struct {
+	BillingCycle string `json:"billing_cycle"` // weekly, monthly, quarterly, semi_annual, yearly, lifetime
+	Price        uint64 `json:"price"`         // Price in smallest currency unit (cents)
+	Currency     string `json:"currency"`      // Currency code: CNY, USD, EUR, GBP, JPY
+	IsActive     bool   `json:"is_active"`     // Whether this pricing option is currently available
 }
 
 type SubscriptionTokenDTO struct {

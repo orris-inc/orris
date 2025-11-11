@@ -25,21 +25,28 @@ func NewAuthMiddleware(jwtService *auth.JWTService, logger logger.Interface) *Au
 
 func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			utils.ErrorResponse(c, http.StatusUnauthorized, "missing authorization header")
-			c.Abort()
-			return
+		// Try to get token from cookie first
+		token := utils.GetTokenFromCookie(c, utils.AccessTokenCookie)
+
+		// Fallback to Authorization header for backward compatibility
+		if token == "" {
+			authHeader := c.GetHeader("Authorization")
+			if authHeader == "" {
+				utils.ErrorResponse(c, http.StatusUnauthorized, "missing authorization token")
+				c.Abort()
+				return
+			}
+
+			parts := strings.SplitN(authHeader, " ", 2)
+			if len(parts) != 2 || parts[0] != "Bearer" {
+				utils.ErrorResponse(c, http.StatusUnauthorized, "invalid authorization header format")
+				c.Abort()
+				return
+			}
+
+			token = parts[1]
 		}
 
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			utils.ErrorResponse(c, http.StatusUnauthorized, "invalid authorization header format")
-			c.Abort()
-			return
-		}
-
-		token := parts[1]
 		claims, err := m.jwtService.Verify(token)
 		if err != nil {
 			m.logger.Warnw("failed to verify token", "error", err)
@@ -64,21 +71,31 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 
 func (m *AuthMiddleware) OptionalAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.Next()
-			return
+		// Try to get token from cookie first
+		token := utils.GetTokenFromCookie(c, utils.AccessTokenCookie)
+
+		// Fallback to Authorization header for backward compatibility
+		if token == "" {
+			authHeader := c.GetHeader("Authorization")
+			if authHeader == "" {
+				c.Next()
+				return
+			}
+
+			parts := strings.SplitN(authHeader, " ", 2)
+			if len(parts) == 2 && parts[0] == "Bearer" {
+				token = parts[1]
+			} else {
+				c.Next()
+				return
+			}
 		}
 
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) == 2 && parts[0] == "Bearer" {
-			token := parts[1]
-			claims, err := m.jwtService.Verify(token)
-			if err == nil && claims.TokenType == auth.TokenTypeAccess {
-				c.Set("user_id", claims.UserID)
-				c.Set("session_id", claims.SessionID)
-				c.Set("user_role", string(claims.Role))
-			}
+		claims, err := m.jwtService.Verify(token)
+		if err == nil && claims.TokenType == auth.TokenTypeAccess {
+			c.Set("user_id", claims.UserID)
+			c.Set("session_id", claims.SessionID)
+			c.Set("user_role", string(claims.Role))
 		}
 
 		c.Next()

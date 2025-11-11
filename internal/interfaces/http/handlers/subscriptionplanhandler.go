@@ -13,14 +13,15 @@ import (
 )
 
 type SubscriptionPlanHandler struct {
-	createPlanUC     *usecases.CreateSubscriptionPlanUseCase
-	updatePlanUC     *usecases.UpdateSubscriptionPlanUseCase
-	getPlanUC        *usecases.GetSubscriptionPlanUseCase
-	listPlansUC      *usecases.ListSubscriptionPlansUseCase
-	getPublicPlansUC *usecases.GetPublicPlansUseCase
-	activatePlanUC   *usecases.ActivateSubscriptionPlanUseCase
-	deactivatePlanUC *usecases.DeactivateSubscriptionPlanUseCase
-	logger           logger.Interface
+	createPlanUC      *usecases.CreateSubscriptionPlanUseCase
+	updatePlanUC      *usecases.UpdateSubscriptionPlanUseCase
+	getPlanUC         *usecases.GetSubscriptionPlanUseCase
+	listPlansUC       *usecases.ListSubscriptionPlansUseCase
+	getPublicPlansUC  *usecases.GetPublicPlansUseCase
+	activatePlanUC    *usecases.ActivateSubscriptionPlanUseCase
+	deactivatePlanUC  *usecases.DeactivateSubscriptionPlanUseCase
+	getPlanPricingsUC *usecases.GetPlanPricingsUseCase
+	logger            logger.Interface
 }
 
 func NewSubscriptionPlanHandler(
@@ -31,16 +32,18 @@ func NewSubscriptionPlanHandler(
 	getPublicPlansUC *usecases.GetPublicPlansUseCase,
 	activatePlanUC *usecases.ActivateSubscriptionPlanUseCase,
 	deactivatePlanUC *usecases.DeactivateSubscriptionPlanUseCase,
+	getPlanPricingsUC *usecases.GetPlanPricingsUseCase,
 ) *SubscriptionPlanHandler {
 	return &SubscriptionPlanHandler{
-		createPlanUC:     createPlanUC,
-		updatePlanUC:     updatePlanUC,
-		getPlanUC:        getPlanUC,
-		listPlansUC:      listPlansUC,
-		getPublicPlansUC: getPublicPlansUC,
-		activatePlanUC:   activatePlanUC,
-		deactivatePlanUC: deactivatePlanUC,
-		logger:           logger.NewLogger(),
+		createPlanUC:      createPlanUC,
+		updatePlanUC:      updatePlanUC,
+		getPlanUC:         getPlanUC,
+		listPlansUC:       listPlansUC,
+		getPublicPlansUC:  getPublicPlansUC,
+		activatePlanUC:    activatePlanUC,
+		deactivatePlanUC:  deactivatePlanUC,
+		getPlanPricingsUC: getPlanPricingsUC,
+		logger:            logger.NewLogger(),
 	}
 }
 
@@ -315,6 +318,37 @@ func (h *SubscriptionPlanHandler) DeactivatePlan(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "Subscription plan deactivated successfully", nil)
+}
+
+// @Summary Get pricing options for a specific plan
+// @Description Returns all available billing cycles and prices for a plan
+// @Tags subscription-plans
+// @Produce json
+// @Param id path int true "Plan ID"
+// @Success 200 {object} utils.APIResponse "Pricing options for the plan"
+// @Failure 400 {object} utils.APIResponse "Invalid plan ID"
+// @Failure 404 {object} utils.APIResponse "Plan not found"
+// @Failure 500 {object} utils.APIResponse "Internal server error"
+// @Router /subscription-plans/{id}/pricings [get]
+func (h *SubscriptionPlanHandler) GetPlanPricings(c *gin.Context) {
+	planID, err := parsePlanID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	query := usecases.GetPlanPricingsQuery{
+		PlanID: planID,
+	}
+
+	result, err := h.getPlanPricingsUC.Execute(c.Request.Context(), query)
+	if err != nil {
+		h.logger.Errorw("failed to get plan pricings", "error", err, "plan_id", planID)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "", result)
 }
 
 func parsePlanID(c *gin.Context) (uint, error) {

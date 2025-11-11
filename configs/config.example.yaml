@@ -86,6 +86,41 @@ redis:
                          # Env override: ORRIS_REDIS_DB=1
 
 # ------------------------------------------------------------
+# Authentication Configuration
+# ------------------------------------------------------------
+auth:
+  password:
+    bcrypt_cost: 12      # BCrypt cost factor for password hashing (10-14 recommended)
+                         # Env override: ORRIS_AUTH_PASSWORD_BCRYPT_COST=12
+
+  token:
+    verification_expires_hours: 24  # Email verification token expiry (hours)
+    reset_expires_minutes: 30       # Password reset token expiry (minutes)
+
+  jwt:
+    secret: "change-me-in-production"  # ⚠️ LEAVE EMPTY - Use environment variable!
+                                       # REQUIRED: ORRIS_AUTH_JWT_SECRET=your-secure-secret
+    access_exp_minutes: 15             # Access token expiration (minutes)
+    refresh_exp_days: 7                # Refresh token expiration (days)
+
+  session:
+    default_exp_days: 1    # Default session expiration (days)
+    remember_exp_days: 30  # Remember me session expiration (days)
+
+  cookie:
+    domain: ""             # Cookie domain (empty = current domain)
+                          # Production: ".yourdomain.com" (with leading dot for subdomains)
+                          # Env override: ORRIS_AUTH_COOKIE_DOMAIN=.yourdomain.com
+    path: "/"             # Cookie path (/ = entire domain)
+    secure: false         # HTTPS only (set true in production)
+                          # REQUIRED for production: ORRIS_AUTH_COOKIE_SECURE=true
+    same_site: "Lax"      # SameSite attribute: Strict, Lax, or None
+                          # Lax = balanced security (recommended)
+                          # Strict = maximum security (may break some flows)
+                          # None = requires Secure=true (for cross-site requests)
+                          # Env override: ORRIS_AUTH_COOKIE_SAME_SITE=Strict
+
+# ------------------------------------------------------------
 # OAuth2 Configuration
 # ------------------------------------------------------------
 # Setup instructions:

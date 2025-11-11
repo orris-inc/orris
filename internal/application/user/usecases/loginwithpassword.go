@@ -8,6 +8,7 @@ import (
 	"orris/internal/application/user/helpers"
 	"orris/internal/domain/user"
 	"orris/internal/shared/authorization"
+	"orris/internal/shared/config"
 	"orris/internal/shared/logger"
 )
 
@@ -25,6 +26,7 @@ type JWTService interface {
 type LoginWithPasswordCommand struct {
 	Email      string
 	Password   string
+	RememberMe bool
 	DeviceName string
 	DeviceType string
 	IPAddress  string
@@ -44,6 +46,7 @@ type LoginWithPasswordUseCase struct {
 	passwordHasher user.PasswordHasher
 	jwtService     JWTService
 	authHelper     *helpers.AuthHelper
+	sessionConfig  config.SessionConfig
 	logger         logger.Interface
 }
 
@@ -53,6 +56,7 @@ func NewLoginWithPasswordUseCase(
 	hasher user.PasswordHasher,
 	jwtService JWTService,
 	authHelper *helpers.AuthHelper,
+	sessionConfig config.SessionConfig,
 	logger logger.Interface,
 ) *LoginWithPasswordUseCase {
 	return &LoginWithPasswordUseCase{
@@ -61,6 +65,7 @@ func NewLoginWithPasswordUseCase(
 		passwordHasher: hasher,
 		jwtService:     jwtService,
 		authHelper:     authHelper,
+		sessionConfig:  sessionConfig,
 		logger:         logger,
 	}
 }
@@ -89,6 +94,12 @@ func (uc *LoginWithPasswordUseCase) Execute(ctx context.Context, cmd LoginWithPa
 		return nil, fmt.Errorf("invalid email or password")
 	}
 
+	// Determine session duration based on remember me option
+	sessionDuration := time.Duration(uc.sessionConfig.DefaultExpDays) * 24 * time.Hour
+	if cmd.RememberMe {
+		sessionDuration = time.Duration(uc.sessionConfig.RememberExpDays) * 24 * time.Hour
+	}
+
 	// Create session with tokens using unified helper
 	sessionWithTokens, err := uc.authHelper.CreateAndSaveSessionWithTokens(
 		existingUser.ID(),
@@ -98,7 +109,7 @@ func (uc *LoginWithPasswordUseCase) Execute(ctx context.Context, cmd LoginWithPa
 			IPAddress:  cmd.IPAddress,
 			UserAgent:  cmd.UserAgent,
 		},
-		7*24*time.Hour, // Session duration: 7 days
+		sessionDuration,
 		func(userID uint, sessionID string) (string, string, int64, error) {
 			tokens, err := uc.jwtService.Generate(userID, sessionID, existingUser.Role())
 			if err != nil {

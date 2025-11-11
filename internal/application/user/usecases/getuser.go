@@ -94,6 +94,7 @@ func (uc *GetUserUseCase) ExecuteList(ctx context.Context, request dto.ListUsers
 		Email:    request.Email,
 		Name:     request.Name,
 		Status:   request.Status,
+		Role:     request.Role,
 		OrderBy:  request.OrderBy,
 		Order:    request.Order,
 	}
@@ -138,6 +139,7 @@ func (uc *GetUserUseCase) mapToResponse(userEntity *domainUser.User) *dto.UserRe
 		Name:        userEntity.Name().String(),
 		DisplayName: displayInfo.DisplayName,
 		Initials:    displayInfo.Initials,
+		Role:        string(userEntity.Role()),
 		Status:      userEntity.Status().String(),
 		CreatedAt:   userEntity.CreatedAt(),
 		UpdatedAt:   userEntity.UpdatedAt(),

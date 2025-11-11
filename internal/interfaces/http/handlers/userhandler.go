@@ -36,8 +36,8 @@ func NewUserHandler(userService *user.ServiceDDD) *UserHandler {
 // @Accept json
 // @Produce json
 // @Security Bearer
-// @Param user body dto.CreateUserRequest true "User data"
-// @Success 201 {object} utils.APIResponse{data=userdto.UserResponse} "User created successfully"
+// @Param user body internal_application_user_dto.CreateUserRequest true "User data"
+// @Success 201 {object} utils.APIResponse "User created successfully"
 // @Failure 400 {object} utils.APIResponse "Bad request"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
 // @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
@@ -73,7 +73,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 // @Produce json
 // @Security Bearer
 // @Param id path int true "User ID"
-// @Success 200 {object} utils.APIResponse{data=userdto.UserResponse} "User details"
+// @Success 200 {object} utils.APIResponse "User details"
 // @Failure 400 {object} utils.APIResponse "Invalid user ID"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
 // @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
@@ -98,22 +98,23 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "", userResp)
 }
 
-// UpdateUser handles PUT /users/:id
-// @Summary Update user
-// @Description Update user information by ID. Users can update their own information, admins can update any user.
+// UpdateUser handles PATCH /users/:id
+// @Summary Update user (partial update)
+// @Description Partially update user information by ID. All fields are optional, at least one must be provided. Only admins can update users. Supports updating email, name, status, and role.
 // @Tags users
 // @Accept json
 // @Produce json
 // @Security Bearer
 // @Param id path int true "User ID"
-// @Param user body dto.UpdateUserRequest true "User update data"
-// @Success 200 {object} utils.APIResponse{data=userdto.UserResponse} "User updated successfully"
+// @Param user body internal_application_user_dto.UpdateUserRequest true "User update data (all fields optional)"
+// @Success 200 {object} utils.APIResponse "User updated successfully"
 // @Failure 400 {object} utils.APIResponse "Bad request"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
-// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role or owner access"
+// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
 // @Failure 404 {object} utils.APIResponse "User not found"
+// @Failure 409 {object} utils.APIResponse "Email already exists"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /users/{id} [put]
+// @Router /users/{id} [patch]
 func (h *UserHandler) UpdateUser(c *gin.Context) {
 	// Log access control information
 	currentUserID, _ := c.Get("user_id")
@@ -187,7 +188,7 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 
 // ListUsers handles GET /users
 // @Summary List users
-// @Description Get a paginated list of users
+// @Description Get a paginated list of users with optional filtering
 // @Tags users
 // @Accept json
 // @Produce json
@@ -195,6 +196,7 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Page size" default(20)
 // @Param status query string false "User status filter" Enums(active,inactive,pending,suspended)
+// @Param role query string false "User role filter" Enums(user,admin)
 // @Success 200 {object} utils.APIResponse{data=utils.ListResponse} "Users list"
 // @Failure 400 {object} utils.APIResponse "Invalid query parameters"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
@@ -227,7 +229,7 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 // @Produce json
 // @Security Bearer
 // @Param email path string true "User email address"
-// @Success 200 {object} utils.APIResponse{data=userdto.UserResponse} "User details"
+// @Success 200 {object} utils.APIResponse "User details"
 // @Failure 400 {object} utils.APIResponse "Invalid email"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
 // @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"

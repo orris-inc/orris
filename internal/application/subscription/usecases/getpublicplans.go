@@ -10,17 +10,20 @@ import (
 )
 
 type GetPublicPlansUseCase struct {
-	planRepo subscription.SubscriptionPlanRepository
-	logger   logger.Interface
+	planRepo      subscription.SubscriptionPlanRepository
+	pricingRepo   subscription.PlanPricingRepository
+	logger        logger.Interface
 }
 
 func NewGetPublicPlansUseCase(
 	planRepo subscription.SubscriptionPlanRepository,
+	pricingRepo subscription.PlanPricingRepository,
 	logger logger.Interface,
 ) *GetPublicPlansUseCase {
 	return &GetPublicPlansUseCase{
-		planRepo: planRepo,
-		logger:   logger,
+		planRepo:    planRepo,
+		pricingRepo: pricingRepo,
+		logger:      logger,
 	}
 }
 
@@ -33,7 +36,15 @@ func (uc *GetPublicPlansUseCase) Execute(ctx context.Context) ([]*dto.Subscripti
 
 	planDTOs := make([]*dto.SubscriptionPlanDTO, 0, len(plans))
 	for _, plan := range plans {
-		planDTOs = append(planDTOs, uc.toDTO(plan))
+		// Get pricing options for each plan
+		pricings, err := uc.pricingRepo.GetActivePricings(ctx, plan.ID())
+		if err != nil {
+			// Graceful degradation: log warning but continue processing
+			uc.logger.Warnw("failed to get active pricings for plan", "planID", plan.ID(), "error", err)
+			planDTOs = append(planDTOs, uc.toDTO(plan))
+		} else {
+			planDTOs = append(planDTOs, dto.ToSubscriptionPlanDTOWithPricings(plan, pricings))
+		}
 	}
 
 	return planDTOs, nil

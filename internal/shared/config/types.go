@@ -52,10 +52,24 @@ type JWTConfig struct {
 	RefreshExpDays   int    `mapstructure:"refresh_exp_days"`
 }
 
+type SessionConfig struct {
+	DefaultExpDays  int `mapstructure:"default_exp_days"`
+	RememberExpDays int `mapstructure:"remember_exp_days"`
+}
+
+type CookieConfig struct {
+	Domain   string `mapstructure:"domain"`
+	Path     string `mapstructure:"path"`
+	Secure   bool   `mapstructure:"secure"`
+	SameSite string `mapstructure:"same_site"` // Strict, Lax, None
+}
+
 type AuthConfig struct {
 	Password PasswordConfig `mapstructure:"password"`
 	Token    TokenConfig    `mapstructure:"token"`
 	JWT      JWTConfig      `mapstructure:"jwt"`
+	Session  SessionConfig  `mapstructure:"session"`
+	Cookie   CookieConfig   `mapstructure:"cookie"`
 }
 
 type GoogleOAuthConfig struct {

@@ -3,6 +3,8 @@ package subscription
 import (
 	"context"
 	"time"
+
+	vo "orris/internal/domain/subscription/value_objects"
 )
 
 type SubscriptionRepository interface {
@@ -76,4 +78,15 @@ type SubscriptionUsageRepository interface {
 	IncrementStorageUsed(ctx context.Context, subscriptionID uint, bytes uint64) error
 	GetUsageHistory(ctx context.Context, subscriptionID uint, from, to time.Time) ([]*SubscriptionUsage, error)
 	ResetUsage(ctx context.Context, subscriptionID uint, period time.Time) error
+}
+
+// PlanPricingRepository handles plan pricing persistence
+type PlanPricingRepository interface {
+	Create(ctx context.Context, pricing *vo.PlanPricing) error
+	GetByID(ctx context.Context, id uint) (*vo.PlanPricing, error)
+	GetByPlanAndCycle(ctx context.Context, planID uint, cycle vo.BillingCycle) (*vo.PlanPricing, error)
+	GetByPlanID(ctx context.Context, planID uint) ([]*vo.PlanPricing, error)
+	GetActivePricings(ctx context.Context, planID uint) ([]*vo.PlanPricing, error)
+	Update(ctx context.Context, pricing *vo.PlanPricing) error
+	Delete(ctx context.Context, id uint) error
 }

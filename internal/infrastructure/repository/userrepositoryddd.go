@@ -106,16 +106,35 @@ func (r *UserRepositoryDDD) Update(ctx context.Context, userEntity *user.User) e
 		return fmt.Errorf("failed to map user entity: %w", err)
 	}
 
+	// Log current version for debugging
+	r.logger.Infow("updating user", "id", model.ID, "current_version", model.Version)
+
 	// Wrap update and event publishing in a transaction
 	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// First, verify the record exists and get current version
+		var currentModel models.UserModel
+		if err := tx.Where("id = ?", model.ID).First(&currentModel).Error; err != nil {
+			r.logger.Errorw("failed to find user for update", "id", model.ID, "error", err)
+			return fmt.Errorf("user not found: %w", err)
+		}
+
+		r.logger.Infow("found user in database",
+			"id", currentModel.ID,
+			"db_version", currentModel.Version,
+			"entity_version", model.Version,
+		)
+
 		// Update with optimistic locking
-		result := tx.Model(model).
-			Where("id = ? AND version = ?", model.ID, model.Version).
+		// Use currentModel.Version (from DB) as WHERE condition
+		// Set model.Version (from entity) as new version value
+		result := tx.Model(&currentModel).
+			Where("id = ? AND version = ?", model.ID, currentModel.Version).
 			Updates(map[string]interface{}{
 				"email":      model.Email,
 				"name":       model.Name,
+				"role":       model.Role,
 				"status":     model.Status,
-				"version":    model.Version + 1,
+				"version":    model.Version,
 				"updated_at": model.UpdatedAt,
 			})
 
@@ -125,9 +144,15 @@ func (r *UserRepositoryDDD) Update(ctx context.Context, userEntity *user.User) e
 		}
 
 		if result.RowsAffected == 0 {
+			r.logger.Errorw("optimistic lock failed",
+				"id", model.ID,
+				"expected_version", model.Version,
+				"db_version", currentModel.Version,
+			)
 			return fmt.Errorf("user not found or version mismatch (optimistic lock failed)")
 		}
 
+		r.logger.Infow("user updated in database", "id", model.ID, "rows_affected", result.RowsAffected)
 		return nil
 	})
 
@@ -141,24 +166,22 @@ func (r *UserRepositoryDDD) Update(ctx context.Context, userEntity *user.User) e
 
 // Delete soft deletes a user
 func (r *UserRepositoryDDD) Delete(ctx context.Context, id uint) error {
-	// First get the user to trigger domain events
-	userEntity, err := r.GetByID(ctx, id)
-	if err != nil {
-		return err
+	// Soft delete in database - updates both status and deleted_at
+	result := r.db.WithContext(ctx).
+		Model(&models.UserModel{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"status":     "deleted",
+			"deleted_at": r.db.NowFunc(),
+		})
+
+	if result.Error != nil {
+		r.logger.Errorw("failed to delete user", "id", id, "error", result.Error)
+		return fmt.Errorf("failed to delete user: %w", result.Error)
 	}
-	if userEntity == nil {
+
+	if result.RowsAffected == 0 {
 		return fmt.Errorf("user not found")
-	}
-
-	// Mark as deleted in domain
-	if err := userEntity.Delete(); err != nil {
-		return fmt.Errorf("failed to delete user in domain: %w", err)
-	}
-
-	// Soft delete in database
-	if err := r.db.WithContext(ctx).Delete(&models.UserModel{}, id).Error; err != nil {
-		r.logger.Errorw("failed to delete user", "id", id, "error", err)
-		return fmt.Errorf("failed to delete user: %w", err)
 	}
 
 	r.logger.Infow("user deleted successfully", "id", id)
@@ -167,10 +190,11 @@ func (r *UserRepositoryDDD) Delete(ctx context.Context, id uint) error {
 
 // List retrieves a paginated list of users
 func (r *UserRepositoryDDD) List(ctx context.Context, filter user.ListFilter) ([]*user.User, int64, error) {
-	var models []*models.UserModel
+	var userModels []*models.UserModel
 	var total int64
 
-	query := r.db.WithContext(ctx).Table("users")
+	// Use Model() instead of Table() to ensure soft delete filtering works
+	query := r.db.WithContext(ctx).Model(&models.UserModel{})
 
 	// Apply filters
 	if filter.Email != "" {
@@ -181,6 +205,9 @@ func (r *UserRepositoryDDD) List(ctx context.Context, filter user.ListFilter) ([
 	}
 	if filter.Status != "" {
 		query = query.Where("status = ?", filter.Status)
+	}
+	if filter.Role != "" {
+		query = query.Where("role = ?", filter.Role)
 	}
 
 	// Count total records
@@ -205,13 +232,13 @@ func (r *UserRepositoryDDD) List(ctx context.Context, filter user.ListFilter) ([
 	query = query.Offset(offset).Limit(filter.PageSize)
 
 	// Execute query
-	if err := query.Find(&models).Error; err != nil {
+	if err := query.Find(&userModels).Error; err != nil {
 		r.logger.Errorw("failed to list users", "error", err)
 		return nil, 0, fmt.Errorf("failed to list users: %w", err)
 	}
 
 	// Convert models to entities
-	entities, err := r.mapper.ToEntities(models)
+	entities, err := r.mapper.ToEntities(userModels)
 	if err != nil {
 		r.logger.Errorw("failed to map user models to entities", "error", err)
 		return nil, 0, fmt.Errorf("failed to map users: %w", err)

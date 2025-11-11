@@ -42,6 +42,7 @@ type ListFilter struct {
 	Email    string `json:"email,omitempty"`
 	Name     string `json:"name,omitempty"`
 	Status   string `json:"status,omitempty"`
+	Role     string `json:"role,omitempty"`
 	OrderBy  string `json:"order_by,omitempty"` // field to order by
 	Order    string `json:"order,omitempty"`    // asc or desc
 }

@@ -100,6 +100,12 @@ func setDefaults() {
 	viper.SetDefault("auth.jwt.secret", "change-me-in-production")
 	viper.SetDefault("auth.jwt.access_exp_minutes", 15)
 	viper.SetDefault("auth.jwt.refresh_exp_days", 7)
+	viper.SetDefault("auth.session.default_exp_days", 1)
+	viper.SetDefault("auth.session.remember_exp_days", 30)
+	viper.SetDefault("auth.cookie.domain", "")
+	viper.SetDefault("auth.cookie.path", "/")
+	viper.SetDefault("auth.cookie.secure", false)
+	viper.SetDefault("auth.cookie.same_site", "Lax")
 
 	// OAuth defaults (empty by default, must be configured)
 	viper.SetDefault("oauth.google.client_id", "")

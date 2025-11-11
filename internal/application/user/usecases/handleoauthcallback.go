@@ -8,6 +8,7 @@ import (
 	"orris/internal/application/user/helpers"
 	"orris/internal/domain/user"
 	vo "orris/internal/domain/user/value_objects"
+	"orris/internal/shared/config"
 	"orris/internal/shared/logger"
 )
 
@@ -53,6 +54,7 @@ type HandleOAuthCallbackUseCase struct {
 	jwtService     JWTService
 	oauthInitiator *InitiateOAuthLoginUseCase
 	authHelper     *helpers.AuthHelper
+	sessionConfig  config.SessionConfig
 	logger         logger.Interface
 }
 
@@ -65,6 +67,7 @@ func NewHandleOAuthCallbackUseCase(
 	jwtService JWTService,
 	oauthInitiator *InitiateOAuthLoginUseCase,
 	authHelper *helpers.AuthHelper,
+	sessionConfig config.SessionConfig,
 	logger logger.Interface,
 ) *HandleOAuthCallbackUseCase {
 	return &HandleOAuthCallbackUseCase{
@@ -76,6 +79,7 @@ func NewHandleOAuthCallbackUseCase(
 		jwtService:     jwtService,
 		oauthInitiator: oauthInitiator,
 		authHelper:     authHelper,
+		sessionConfig:  sessionConfig,
 		logger:         logger,
 	}
 }
@@ -198,6 +202,9 @@ func (uc *HandleOAuthCallbackUseCase) Execute(ctx context.Context, cmd HandleOAu
 		return nil, validationErr
 	}
 
+	// OAuth login uses remember me duration by default (user convenience)
+	sessionDuration := time.Duration(uc.sessionConfig.RememberExpDays) * 24 * time.Hour
+
 	// Create session with tokens using unified helper
 	sessionWithTokens, err := uc.authHelper.CreateAndSaveSessionWithTokens(
 		existingUser.ID(),
@@ -207,7 +214,7 @@ func (uc *HandleOAuthCallbackUseCase) Execute(ctx context.Context, cmd HandleOAu
 			IPAddress:  cmd.IPAddress,
 			UserAgent:  cmd.UserAgent,
 		},
-		7*24*time.Hour, // Session duration: 7 days
+		sessionDuration,
 		func(userID uint, sessionID string) (string, string, int64, error) {
 			tokens, err := uc.jwtService.Generate(userID, sessionID, existingUser.Role())
 			if err != nil {

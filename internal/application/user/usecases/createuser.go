@@ -85,6 +85,7 @@ func (uc *CreateUserUseCase) Execute(ctx context.Context, request dto.CreateUser
 		ID:        userEntity.ID(),
 		Email:     userEntity.Email().String(),
 		Name:      userEntity.Name().String(),
+		Role:      string(userEntity.Role()),
 		Status:    userEntity.Status().String(),
 		CreatedAt: userEntity.CreatedAt(),
 		UpdatedAt: userEntity.UpdatedAt(),

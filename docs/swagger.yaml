@@ -1,15 +1,244 @@
+basePath: /
 definitions:
-  internal_interfaces_http_handlers.AuthResponse:
+  internal_application_user_dto.ChangePasswordRequest:
     properties:
-      access_token:
+      logout_all_devices:
+        type: boolean
+      new_password:
+        minLength: 8
         type: string
-      expires_in:
+      old_password:
+        minLength: 8
+        type: string
+    required:
+    - new_password
+    - old_password
+    type: object
+  internal_application_user_dto.CreateUserRequest:
+    properties:
+      email:
+        type: string
+      name:
+        maxLength: 100
+        minLength: 2
+        type: string
+    required:
+    - email
+    - name
+    type: object
+  internal_application_user_dto.UpdateProfileRequest:
+    properties:
+      email:
+        type: string
+      name:
+        maxLength: 100
+        minLength: 2
+        type: string
+    type: object
+  internal_application_user_dto.UpdateUserRequest:
+    properties:
+      email:
+        type: string
+      name:
+        maxLength: 100
+        minLength: 2
+        type: string
+      role:
+        enum:
+        - user
+        - admin
+        type: string
+      status:
+        enum:
+        - active
+        - inactive
+        - pending
+        - suspended
+        type: string
+    type: object
+  internal_interfaces_dto.AnnouncementResponse:
+    properties:
+      content:
+        type: string
+      created_at:
+        type: string
+      creator_id:
         type: integer
-      refresh_token:
+      expires_at:
         type: string
-      token_type:
+      id:
+        type: integer
+      priority:
+        type: integer
+      scheduled_at:
         type: string
-      user: {}
+      status:
+        type: string
+      title:
+        type: string
+      type:
+        type: string
+      updated_at:
+        type: string
+      version:
+        type: integer
+      view_count:
+        type: integer
+    type: object
+  internal_interfaces_dto.CreateAnnouncementRequest:
+    properties:
+      content:
+        minLength: 1
+        type: string
+      expires_at:
+        type: string
+      priority:
+        maximum: 5
+        minimum: 1
+        type: integer
+      scheduled_at:
+        type: string
+      title:
+        maxLength: 255
+        minLength: 1
+        type: string
+      type:
+        enum:
+        - system
+        - maintenance
+        - feature
+        - promotion
+        type: string
+    required:
+    - content
+    - title
+    - type
+    type: object
+  internal_interfaces_dto.CreateTemplateRequest:
+    properties:
+      content:
+        minLength: 1
+        type: string
+      enabled:
+        type: boolean
+      name:
+        maxLength: 100
+        minLength: 1
+        type: string
+      template_type:
+        maxLength: 50
+        minLength: 1
+        type: string
+      title:
+        maxLength: 255
+        minLength: 1
+        type: string
+      variables:
+        items:
+          type: string
+        type: array
+    required:
+    - content
+    - name
+    - template_type
+    - title
+    type: object
+  internal_interfaces_dto.NotificationResponse:
+    properties:
+      archived_at:
+        type: string
+      content:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: integer
+      read_status:
+        type: string
+      related_id:
+        type: integer
+      title:
+        type: string
+      type:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        type: integer
+      version:
+        type: integer
+    type: object
+  internal_interfaces_dto.RenderTemplateRequest:
+    properties:
+      template_type:
+        type: string
+      variables:
+        additionalProperties: true
+        type: object
+    required:
+    - template_type
+    type: object
+  internal_interfaces_dto.RenderTemplateResponse:
+    properties:
+      content:
+        type: string
+      title:
+        type: string
+    type: object
+  internal_interfaces_dto.TemplateResponse:
+    properties:
+      content:
+        type: string
+      created_at:
+        type: string
+      enabled:
+        type: boolean
+      id:
+        type: integer
+      name:
+        type: string
+      template_type:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+      variables:
+        items:
+          type: string
+        type: array
+      version:
+        type: integer
+    type: object
+  internal_interfaces_dto.UnreadCountResponse:
+    properties:
+      count:
+        type: integer
+    type: object
+  internal_interfaces_dto.UpdateAnnouncementRequest:
+    properties:
+      content:
+        minLength: 1
+        type: string
+      expires_at:
+        type: string
+      priority:
+        maximum: 5
+        minimum: 1
+        type: integer
+      scheduled_at:
+        type: string
+      title:
+        maxLength: 255
+        minLength: 1
+        type: string
+      type:
+        enum:
+        - system
+        - maintenance
+        - feature
+        - promotion
+        type: string
     type: object
   internal_interfaces_http_handlers.CancelSubscriptionRequest:
     properties:
@@ -116,6 +345,15 @@ definitions:
     properties:
       auto_renew:
         type: boolean
+      billing_cycle:
+        enum:
+        - weekly
+        - monthly
+        - quarterly
+        - semi_annual
+        - yearly
+        - lifetime
+        type: string
       payment_info:
         additionalProperties: true
         type: object
@@ -124,6 +362,7 @@ definitions:
       start_date:
         type: string
     required:
+    - billing_cycle
     - plan_id
     type: object
   internal_interfaces_http_handlers.ForgotPasswordRequest:
@@ -151,6 +390,8 @@ definitions:
         type: string
       password:
         type: string
+      remember_me:
+        type: boolean
     required:
     - email
     - password
@@ -158,9 +399,8 @@ definitions:
   internal_interfaces_http_handlers.RefreshTokenRequest:
     properties:
       refresh_token:
+        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
         type: string
-    required:
-    - refresh_token
     type: object
   internal_interfaces_http_handlers.RegisterRequest:
     properties:
@@ -464,269 +704,6 @@ definitions:
     required:
     - reason
     type: object
-  orris_internal_application_user_dto.UserMetadata:
-    properties:
-      can_perform_actions:
-        type: boolean
-      email_domain:
-        type: string
-      is_business_email:
-        type: boolean
-      requires_verification:
-        type: boolean
-    type: object
-  orris_internal_application_user_dto.UserResponse:
-    properties:
-      created_at:
-        type: string
-      display_name:
-        type: string
-      email:
-        type: string
-      id:
-        type: integer
-      initials:
-        type: string
-      metadata:
-        $ref: '#/definitions/orris_internal_application_user_dto.UserMetadata'
-      name:
-        type: string
-      status:
-        type: string
-      updated_at:
-        type: string
-    type: object
-  orris_internal_interfaces_dto.AnnouncementResponse:
-    properties:
-      content:
-        type: string
-      created_at:
-        type: string
-      creator_id:
-        type: integer
-      expires_at:
-        type: string
-      id:
-        type: integer
-      priority:
-        type: integer
-      scheduled_at:
-        type: string
-      status:
-        type: string
-      title:
-        type: string
-      type:
-        type: string
-      updated_at:
-        type: string
-      version:
-        type: integer
-      view_count:
-        type: integer
-    type: object
-  orris_internal_interfaces_dto.ChangePasswordRequest:
-    properties:
-      logout_all_devices:
-        type: boolean
-      new_password:
-        minLength: 8
-        type: string
-      old_password:
-        minLength: 8
-        type: string
-    required:
-    - new_password
-    - old_password
-    type: object
-  orris_internal_interfaces_dto.CreateAnnouncementRequest:
-    properties:
-      content:
-        minLength: 1
-        type: string
-      expires_at:
-        type: string
-      priority:
-        maximum: 5
-        minimum: 1
-        type: integer
-      scheduled_at:
-        type: string
-      title:
-        maxLength: 255
-        minLength: 1
-        type: string
-      type:
-        enum:
-        - system
-        - maintenance
-        - feature
-        - promotion
-        type: string
-    required:
-    - content
-    - title
-    - type
-    type: object
-  orris_internal_interfaces_dto.CreateTemplateRequest:
-    properties:
-      content:
-        minLength: 1
-        type: string
-      enabled:
-        type: boolean
-      name:
-        maxLength: 100
-        minLength: 1
-        type: string
-      template_type:
-        maxLength: 50
-        minLength: 1
-        type: string
-      title:
-        maxLength: 255
-        minLength: 1
-        type: string
-      variables:
-        items:
-          type: string
-        type: array
-    required:
-    - content
-    - name
-    - template_type
-    - title
-    type: object
-  orris_internal_interfaces_dto.CreateUserRequest:
-    properties:
-      email:
-        type: string
-      name:
-        maxLength: 100
-        minLength: 2
-        type: string
-    required:
-    - email
-    - name
-    type: object
-  orris_internal_interfaces_dto.NotificationResponse:
-    properties:
-      archived_at:
-        type: string
-      content:
-        type: string
-      created_at:
-        type: string
-      id:
-        type: integer
-      read_status:
-        type: string
-      related_id:
-        type: integer
-      title:
-        type: string
-      type:
-        type: string
-      updated_at:
-        type: string
-      user_id:
-        type: integer
-      version:
-        type: integer
-    type: object
-  orris_internal_interfaces_dto.RenderTemplateRequest:
-    properties:
-      template_type:
-        type: string
-      variables:
-        additionalProperties: true
-        type: object
-    required:
-    - template_type
-    type: object
-  orris_internal_interfaces_dto.RenderTemplateResponse:
-    properties:
-      content:
-        type: string
-      title:
-        type: string
-    type: object
-  orris_internal_interfaces_dto.TemplateResponse:
-    properties:
-      content:
-        type: string
-      created_at:
-        type: string
-      enabled:
-        type: boolean
-      id:
-        type: integer
-      name:
-        type: string
-      template_type:
-        type: string
-      title:
-        type: string
-      updated_at:
-        type: string
-      variables:
-        items:
-          type: string
-        type: array
-      version:
-        type: integer
-    type: object
-  orris_internal_interfaces_dto.UnreadCountResponse:
-    properties:
-      count:
-        type: integer
-    type: object
-  orris_internal_interfaces_dto.UpdateAnnouncementRequest:
-    properties:
-      content:
-        minLength: 1
-        type: string
-      expires_at:
-        type: string
-      priority:
-        maximum: 5
-        minimum: 1
-        type: integer
-      scheduled_at:
-        type: string
-      title:
-        maxLength: 255
-        minLength: 1
-        type: string
-      type:
-        enum:
-        - system
-        - maintenance
-        - feature
-        - promotion
-        type: string
-    type: object
-  orris_internal_interfaces_dto.UpdateProfileRequest:
-    properties:
-      email:
-        type: string
-      name:
-        maxLength: 100
-        minLength: 2
-        type: string
-    type: object
-  orris_internal_interfaces_dto.UpdateUserRequest:
-    properties:
-      email:
-        type: string
-      name:
-        maxLength: 100
-        minLength: 2
-        type: string
-    required:
-    - email
-    - name
-    type: object
   orris_internal_shared_utils.APIResponse:
     properties:
       data: {}
@@ -765,7 +742,16 @@ definitions:
         type: integer
     type: object
 info:
-  contact: {}
+  contact:
+    email: support@orris.io
+    name: API Support
+  description: A modern Go application with RESTful API
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: http://swagger.io/terms/
+  title: Orris API
+  version: "1.0"
 paths:
   /announcements:
     get:
@@ -839,19 +825,14 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/orris_internal_interfaces_dto.CreateAnnouncementRequest'
+          $ref: '#/definitions/internal_interfaces_dto.CreateAnnouncementRequest'
       produces:
       - application/json
       responses:
         "201":
           description: Announcement created successfully
           schema:
-            allOf:
-            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/orris_internal_interfaces_dto.AnnouncementResponse'
-              type: object
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "400":
           description: Bad request
           schema:
@@ -930,7 +911,7 @@ paths:
             - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/orris_internal_interfaces_dto.AnnouncementResponse'
+                  $ref: '#/definitions/internal_interfaces_dto.AnnouncementResponse'
               type: object
         "400":
           description: Invalid announcement ID
@@ -968,7 +949,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/orris_internal_interfaces_dto.UpdateAnnouncementRequest'
+          $ref: '#/definitions/internal_interfaces_dto.UpdateAnnouncementRequest'
       produces:
       - application/json
       responses:
@@ -979,7 +960,7 @@ paths:
             - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/orris_internal_interfaces_dto.AnnouncementResponse'
+                  $ref: '#/definitions/internal_interfaces_dto.AnnouncementResponse'
               type: object
         "400":
           description: Bad request
@@ -1027,7 +1008,7 @@ paths:
             - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/orris_internal_interfaces_dto.AnnouncementResponse'
+                  $ref: '#/definitions/internal_interfaces_dto.AnnouncementResponse'
               type: object
         "400":
           description: Invalid announcement ID
@@ -1219,7 +1200,8 @@ paths:
     post:
       consumes:
       - application/json
-      description: Authenticate user with email and password, returns JWT tokens
+      description: Authenticate user with email and password, sets JWT tokens in HttpOnly
+        cookies
       parameters:
       - description: Login credentials
         in: body
@@ -1233,12 +1215,7 @@ paths:
         "200":
           description: OK
           schema:
-            allOf:
-            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/internal_interfaces_http_handlers.AuthResponse'
-              type: object
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "400":
           description: Bad Request
           schema:
@@ -1254,7 +1231,7 @@ paths:
     post:
       consumes:
       - application/json
-      description: Logout current user and invalidate session
+      description: Logout current user, invalidate session and clear auth cookies
       produces:
       - application/json
       responses:
@@ -1368,12 +1345,12 @@ paths:
     post:
       consumes:
       - application/json
-      description: Get new access token using refresh token
+      description: Get new access token using refresh token from HttpOnly cookie or
+        request body
       parameters:
-      - description: Refresh token
+      - description: Refresh token (optional if using cookies)
         in: body
         name: request
-        required: true
         schema:
           $ref: '#/definitions/internal_interfaces_http_handlers.RefreshTokenRequest'
       produces:
@@ -2469,7 +2446,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/orris_internal_interfaces_dto.CreateTemplateRequest'
+          $ref: '#/definitions/internal_interfaces_dto.CreateTemplateRequest'
       produces:
       - application/json
       responses:
@@ -2480,7 +2457,7 @@ paths:
             - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/orris_internal_interfaces_dto.TemplateResponse'
+                  $ref: '#/definitions/internal_interfaces_dto.TemplateResponse'
               type: object
         "400":
           description: Bad request
@@ -2514,7 +2491,7 @@ paths:
         name: request
         required: true
         schema:
-          $ref: '#/definitions/orris_internal_interfaces_dto.RenderTemplateRequest'
+          $ref: '#/definitions/internal_interfaces_dto.RenderTemplateRequest'
       produces:
       - application/json
       responses:
@@ -2525,7 +2502,7 @@ paths:
             - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/orris_internal_interfaces_dto.RenderTemplateResponse'
+                  $ref: '#/definitions/internal_interfaces_dto.RenderTemplateResponse'
               type: object
         "400":
           description: Bad request
@@ -2582,7 +2559,7 @@ paths:
             - properties:
                 data:
                   items:
-                    $ref: '#/definitions/orris_internal_interfaces_dto.NotificationResponse'
+                    $ref: '#/definitions/internal_interfaces_dto.NotificationResponse'
                   type: array
               type: object
         "400":
@@ -2660,7 +2637,7 @@ paths:
             - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/orris_internal_interfaces_dto.NotificationResponse'
+                  $ref: '#/definitions/internal_interfaces_dto.NotificationResponse'
               type: object
         "400":
           description: Invalid notification ID
@@ -2704,7 +2681,7 @@ paths:
             - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/orris_internal_interfaces_dto.NotificationResponse'
+                  $ref: '#/definitions/internal_interfaces_dto.NotificationResponse'
               type: object
         "400":
           description: Invalid notification ID
@@ -2767,7 +2744,7 @@ paths:
             - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/orris_internal_interfaces_dto.UnreadCountResponse'
+                  $ref: '#/definitions/internal_interfaces_dto.UnreadCountResponse'
               type: object
         "401":
           description: Unauthorized
@@ -3322,6 +3299,37 @@ paths:
       summary: Deactivate subscription plan
       tags:
       - subscription-plans
+  /subscription-plans/{id}/pricings:
+    get:
+      description: Returns all available billing cycles and prices for a plan
+      parameters:
+      - description: Plan ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Pricing options for the plan
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid plan ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Plan not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      summary: Get pricing options for a specific plan
+      tags:
+      - subscription-plans
   /subscription-plans/public:
     get:
       consumes:
@@ -3401,9 +3409,9 @@ paths:
       consumes:
       - application/json
       description: Create a new subscription for the authenticated user with the specified
-        plan
+        plan and billing cycle
       parameters:
-      - description: Subscription data
+      - description: Subscription data with billing cycle (weekly/monthly/quarterly/semi_annual/yearly/lifetime)
         in: body
         name: subscription
         required: true
@@ -3439,7 +3447,7 @@ paths:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
       security:
       - Bearer: []
-      summary: Create a new subscription
+      summary: Create a new subscription with billing cycle selection
       tags:
       - subscriptions
   /subscriptions/{id}:
@@ -4166,7 +4174,7 @@ paths:
     get:
       consumes:
       - application/json
-      description: Get a paginated list of users
+      description: Get a paginated list of users with optional filtering
       parameters:
       - default: 1
         description: Page number
@@ -4186,6 +4194,13 @@ paths:
         - suspended
         in: query
         name: status
+        type: string
+      - description: User role filter
+        enum:
+        - user
+        - admin
+        in: query
+        name: role
         type: string
       produces:
       - application/json
@@ -4230,19 +4245,14 @@ paths:
         name: user
         required: true
         schema:
-          $ref: '#/definitions/orris_internal_interfaces_dto.CreateUserRequest'
+          $ref: '#/definitions/internal_application_user_dto.CreateUserRequest'
       produces:
       - application/json
       responses:
         "201":
           description: User created successfully
           schema:
-            allOf:
-            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/orris_internal_application_user_dto.UserResponse'
-              type: object
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "400":
           description: Bad request
           schema:
@@ -4325,12 +4335,7 @@ paths:
         "200":
           description: User details
           schema:
-            allOf:
-            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/orris_internal_application_user_dto.UserResponse'
-              type: object
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "400":
           description: Invalid user ID
           schema:
@@ -4356,35 +4361,31 @@ paths:
       summary: Get user by ID
       tags:
       - users
-    put:
+    patch:
       consumes:
       - application/json
-      description: Update user information by ID. Users can update their own information,
-        admins can update any user.
+      description: Partially update user information by ID. All fields are optional,
+        at least one must be provided. Only admins can update users. Supports updating
+        email, name, status, and role.
       parameters:
       - description: User ID
         in: path
         name: id
         required: true
         type: integer
-      - description: User update data
+      - description: User update data (all fields optional)
         in: body
         name: user
         required: true
         schema:
-          $ref: '#/definitions/orris_internal_interfaces_dto.UpdateUserRequest'
+          $ref: '#/definitions/internal_application_user_dto.UpdateUserRequest'
       produces:
       - application/json
       responses:
         "200":
           description: User updated successfully
           schema:
-            allOf:
-            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/orris_internal_application_user_dto.UserResponse'
-              type: object
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "400":
           description: Bad request
           schema:
@@ -4394,11 +4395,15 @@ paths:
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "403":
-          description: Forbidden - Requires admin role or owner access
+          description: Forbidden - Requires admin role
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "404":
           description: User not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "409":
+          description: Email already exists
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "500":
@@ -4407,7 +4412,7 @@ paths:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
       security:
       - Bearer: []
-      summary: Update user
+      summary: Update user (partial update)
       tags:
       - users
   /users/email/{email}:
@@ -4427,12 +4432,7 @@ paths:
         "200":
           description: User details
           schema:
-            allOf:
-            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/orris_internal_application_user_dto.UserResponse'
-              type: object
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "400":
           description: Invalid email
           schema:
@@ -4469,19 +4469,14 @@ paths:
         name: profile
         required: true
         schema:
-          $ref: '#/definitions/orris_internal_interfaces_dto.UpdateProfileRequest'
+          $ref: '#/definitions/internal_application_user_dto.UpdateProfileRequest'
       produces:
       - application/json
       responses:
         "200":
           description: Profile updated successfully
           schema:
-            allOf:
-            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
-            - properties:
-                data:
-                  $ref: '#/definitions/orris_internal_application_user_dto.UserResponse'
-              type: object
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "400":
           description: Bad request or validation error
           schema:
@@ -4514,7 +4509,7 @@ paths:
         name: password
         required: true
         schema:
-          $ref: '#/definitions/orris_internal_interfaces_dto.ChangePasswordRequest'
+          $ref: '#/definitions/internal_application_user_dto.ChangePasswordRequest'
       produces:
       - application/json
       responses:
@@ -4543,4 +4538,15 @@ paths:
       summary: Change password
       tags:
       - profile
+securityDefinitions:
+  Bearer:
+    description: Type "Bearer" followed by a space and JWT token.
+    in: header
+    name: Authorization
+    type: apiKey
+  NodeToken:
+    description: Node authentication token for reporting endpoints
+    in: header
+    name: X-Node-Token
+    type: apiKey
 swagger: "2.0"

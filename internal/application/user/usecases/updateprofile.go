@@ -102,6 +102,7 @@ func (uc *UpdateProfileUseCase) mapToResponse(userEntity *domainUser.User) *dto.
 		Name:        userEntity.Name().String(),
 		DisplayName: displayInfo.DisplayName,
 		Initials:    displayInfo.Initials,
+		Role:        string(userEntity.Role()),
 		Status:      userEntity.Status().String(),
 		CreatedAt:   userEntity.CreatedAt(),
 		UpdatedAt:   userEntity.UpdatedAt(),

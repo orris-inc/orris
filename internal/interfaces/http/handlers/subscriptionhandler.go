@@ -46,10 +46,11 @@ func NewSubscriptionHandler(
 }
 
 type CreateSubscriptionRequest struct {
-	PlanID      uint                   `json:"plan_id" binding:"required"`
-	StartDate   *time.Time             `json:"start_date"`
-	AutoRenew   *bool                  `json:"auto_renew"`
-	PaymentInfo map[string]interface{} `json:"payment_info"`
+	PlanID       uint                   `json:"plan_id" binding:"required"`
+	BillingCycle string                 `json:"billing_cycle" binding:"required,oneof=weekly monthly quarterly semi_annual yearly lifetime"`
+	StartDate    *time.Time             `json:"start_date"`
+	AutoRenew    *bool                  `json:"auto_renew"`
+	PaymentInfo  map[string]interface{} `json:"payment_info"`
 }
 
 type CancelSubscriptionRequest struct {
@@ -71,30 +72,30 @@ type SubscriptionCreateResult struct {
 
 // SubscriptionResponse represents the response for subscription details
 type SubscriptionResponse struct {
-	ID                 uint        `json:"id"`
-	UserID             uint        `json:"user_id"`
-	PlanID             uint        `json:"plan_id"`
-	Status             string      `json:"status"`
-	StartDate          time.Time   `json:"start_date"`
-	EndDate            time.Time   `json:"end_date"`
-	AutoRenew          bool        `json:"auto_renew"`
-	CurrentPeriodStart time.Time   `json:"current_period_start"`
-	CurrentPeriodEnd   time.Time   `json:"current_period_end"`
-	IsExpired          bool        `json:"is_expired"`
-	IsActive           bool        `json:"is_active"`
-	CancelledAt        *time.Time  `json:"cancelled_at,omitempty"`
-	CancelReason       *string     `json:"cancel_reason,omitempty"`
-	CreatedAt          time.Time   `json:"created_at"`
-	UpdatedAt          time.Time   `json:"updated_at"`
+	ID                 uint       `json:"id"`
+	UserID             uint       `json:"user_id"`
+	PlanID             uint       `json:"plan_id"`
+	Status             string     `json:"status"`
+	StartDate          time.Time  `json:"start_date"`
+	EndDate            time.Time  `json:"end_date"`
+	AutoRenew          bool       `json:"auto_renew"`
+	CurrentPeriodStart time.Time  `json:"current_period_start"`
+	CurrentPeriodEnd   time.Time  `json:"current_period_end"`
+	IsExpired          bool       `json:"is_expired"`
+	IsActive           bool       `json:"is_active"`
+	CancelledAt        *time.Time `json:"cancelled_at,omitempty"`
+	CancelReason       *string    `json:"cancel_reason,omitempty"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
 }
 
-// @Summary Create a new subscription
-// @Description Create a new subscription for the authenticated user with the specified plan
+// @Summary Create a new subscription with billing cycle selection
+// @Description Create a new subscription for the authenticated user with the specified plan and billing cycle
 // @Tags subscriptions
 // @Accept json
 // @Produce json
 // @Security Bearer
-// @Param subscription body CreateSubscriptionRequest true "Subscription data"
+// @Param subscription body CreateSubscriptionRequest true "Subscription data with billing cycle (weekly/monthly/quarterly/semi_annual/yearly/lifetime)"
 // @Success 201 {object} utils.APIResponse{data=SubscriptionCreateResult} "Subscription created successfully"
 // @Failure 400 {object} utils.APIResponse "Bad request"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
@@ -126,11 +127,12 @@ func (h *SubscriptionHandler) CreateSubscription(c *gin.Context) {
 	}
 
 	cmd := usecases.CreateSubscriptionCommand{
-		UserID:      userID.(uint),
-		PlanID:      req.PlanID,
-		StartDate:   startDate,
-		AutoRenew:   autoRenew,
-		PaymentInfo: req.PaymentInfo,
+		UserID:       userID.(uint),
+		PlanID:       req.PlanID,
+		BillingCycle: req.BillingCycle,
+		StartDate:    startDate,
+		AutoRenew:    autoRenew,
+		PaymentInfo:  req.PaymentInfo,
 	}
 
 	result, err := h.createUseCase.Execute(c.Request.Context(), cmd)

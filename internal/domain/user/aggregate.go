@@ -152,6 +152,7 @@ func (u *User) IsAdmin() bool {
 func (u *User) SetRole(role authorization.UserRole) {
 	u.role = role
 	u.updatedAt = time.Now()
+	u.version++
 }
 
 // Status returns the user's status
@@ -318,6 +319,7 @@ func (u *User) GetDisplayInfo() UserDisplayInfo {
 		Email:       u.email.String(),
 		DisplayName: u.name.DisplayName(),
 		Initials:    u.name.Initials(),
+		Role:        u.role.String(),
 		Status:      u.status.String(),
 		CreatedAt:   u.createdAt,
 	}
@@ -325,12 +327,13 @@ func (u *User) GetDisplayInfo() UserDisplayInfo {
 
 // UserDisplayInfo represents user information for display purposes
 type UserDisplayInfo struct {
-	ID          uint      `json:"id"`
-	Email       string    `json:"email"`
-	DisplayName string    `json:"display_name"`
-	Initials    string    `json:"initials"`
-	Status      string    `json:"status"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID          uint      `json:"id" example:"1"`
+	Email       string    `json:"email" example:"user@example.com"`
+	DisplayName string    `json:"display_name" example:"John Doe"`
+	Initials    string    `json:"initials" example:"JD"`
+	Role        string    `json:"role" example:"user" enums:"admin,user"`
+	Status      string    `json:"status" example:"active" enums:"active,inactive,locked"`
+	CreatedAt   time.Time `json:"created_at" example:"2024-01-01T00:00:00Z"`
 }
 
 // ChangePassword changes the user's password after verifying the old password

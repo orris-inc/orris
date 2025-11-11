@@ -1,32 +1,44 @@
 package value_objects
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 )
 
+var (
+	// ErrInvalidBillingCycle is returned when billing cycle is not valid
+	ErrInvalidBillingCycle = errors.New("invalid billing cycle")
+)
+
 type BillingCycle string
 
 const (
-	BillingCycleMonthly   BillingCycle = "monthly"
-	BillingCycleQuarterly BillingCycle = "quarterly"
-	BillingCycleYearly    BillingCycle = "yearly"
-	BillingCycleLifetime  BillingCycle = "lifetime"
+	BillingCycleWeekly     BillingCycle = "weekly"
+	BillingCycleMonthly    BillingCycle = "monthly"
+	BillingCycleQuarterly  BillingCycle = "quarterly"
+	BillingCycleSemiAnnual BillingCycle = "semi_annual"
+	BillingCycleYearly     BillingCycle = "yearly"
+	BillingCycleLifetime   BillingCycle = "lifetime"
 )
 
 var ValidBillingCycles = map[BillingCycle]bool{
-	BillingCycleMonthly:   true,
-	BillingCycleQuarterly: true,
-	BillingCycleYearly:    true,
-	BillingCycleLifetime:  true,
+	BillingCycleWeekly:     true,
+	BillingCycleMonthly:    true,
+	BillingCycleQuarterly:  true,
+	BillingCycleSemiAnnual: true,
+	BillingCycleYearly:     true,
+	BillingCycleLifetime:   true,
 }
 
 var BillingCycleDays = map[BillingCycle]int{
-	BillingCycleMonthly:   30,
-	BillingCycleQuarterly: 90,
-	BillingCycleYearly:    365,
-	BillingCycleLifetime:  0,
+	BillingCycleWeekly:     7,
+	BillingCycleMonthly:    30,
+	BillingCycleQuarterly:  90,
+	BillingCycleSemiAnnual: 180,
+	BillingCycleYearly:     365,
+	BillingCycleLifetime:   0,
 }
 
 func NewBillingCycle(value string) (*BillingCycle, error) {
@@ -76,10 +88,14 @@ func (b BillingCycle) Days() int {
 
 func (b BillingCycle) NextBillingDate(from time.Time) time.Time {
 	switch b {
+	case BillingCycleWeekly:
+		return from.AddDate(0, 0, 7)
 	case BillingCycleMonthly:
 		return from.AddDate(0, 1, 0)
 	case BillingCycleQuarterly:
 		return from.AddDate(0, 3, 0)
+	case BillingCycleSemiAnnual:
+		return from.AddDate(0, 6, 0)
 	case BillingCycleYearly:
 		return from.AddDate(1, 0, 0)
 	case BillingCycleLifetime:

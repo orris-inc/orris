@@ -51,7 +51,7 @@ func (u *UserModel) BeforeCreate(tx *gorm.DB) error {
 
 // BeforeUpdate hook for GORM
 func (u *UserModel) BeforeUpdate(tx *gorm.DB) error {
-	// Increment version for optimistic locking
-	tx.Statement.SetColumn("version", u.Version+1)
+	// Version is managed explicitly by the repository layer
+	// to work correctly with domain-driven version management
 	return nil
 }

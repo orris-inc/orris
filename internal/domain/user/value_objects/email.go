@@ -28,7 +28,7 @@ func NewEmail(value string) (*Email, error) {
 	}
 
 	if !emailRegex.MatchString(normalized) {
-		return nil, fmt.Errorf("invalid email format: %s", value)
+		return nil, fmt.Errorf("invalid email format: %s (only ASCII characters allowed: a-z, 0-9, . _ %% + -)", value)
 	}
 
 	return &Email{value: normalized}, nil

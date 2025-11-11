@@ -35,8 +35,8 @@ func NewProfileHandler(userService *user.ServiceDDD) *ProfileHandler {
 // @Accept json
 // @Produce json
 // @Security Bearer
-// @Param profile body dto.UpdateProfileRequest true "Profile update data"
-// @Success 200 {object} utils.APIResponse{data=userdto.UserResponse} "Profile updated successfully"
+// @Param profile body internal_application_user_dto.UpdateProfileRequest true "Profile update data"
+// @Success 200 {object} utils.APIResponse "Profile updated successfully"
 // @Failure 400 {object} utils.APIResponse "Bad request or validation error"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
 // @Failure 404 {object} utils.APIResponse "User not found"
@@ -94,7 +94,7 @@ func (h *ProfileHandler) UpdateProfile(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security Bearer
-// @Param password body dto.ChangePasswordRequest true "Password change data"
+// @Param password body internal_application_user_dto.ChangePasswordRequest true "Password change data"
 // @Success 200 {object} utils.APIResponse "Password changed successfully"
 // @Failure 400 {object} utils.APIResponse "Bad request or validation error (e.g., incorrect old password)"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"

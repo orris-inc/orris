@@ -8,6 +8,7 @@ import (
 
 	"orris/internal/application/user/usecases"
 	"orris/internal/domain/user"
+	"orris/internal/shared/config"
 	"orris/internal/shared/constants"
 	"orris/internal/shared/logger"
 	"orris/internal/shared/utils"
@@ -25,6 +26,8 @@ type AuthHandler struct {
 	logoutUseCase        *usecases.LogoutUseCase
 	userRepo             user.Repository
 	logger               logger.Interface
+	cookieConfig         config.CookieConfig
+	jwtConfig            config.JWTConfig
 	frontendCallbackURL  string
 	allowedOrigins       []string
 }
@@ -41,6 +44,8 @@ func NewAuthHandler(
 	logoutUC *usecases.LogoutUseCase,
 	userRepo user.Repository,
 	logger logger.Interface,
+	cookieConfig config.CookieConfig,
+	jwtConfig config.JWTConfig,
 	frontendCallbackURL string,
 	allowedOrigins []string,
 ) *AuthHandler {
@@ -56,6 +61,8 @@ func NewAuthHandler(
 		logoutUseCase:        logoutUC,
 		userRepo:             userRepo,
 		logger:               logger,
+		cookieConfig:         cookieConfig,
+		jwtConfig:            jwtConfig,
 		frontendCallbackURL:  frontendCallbackURL,
 		allowedOrigins:       allowedOrigins,
 	}
@@ -68,8 +75,9 @@ type RegisterRequest struct {
 }
 
 type LoginRequest struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required"`
+	Email      string `json:"email" binding:"required,email"`
+	Password   string `json:"password" binding:"required"`
+	RememberMe bool   `json:"remember_me"`
 }
 
 type VerifyEmailRequest struct {
@@ -86,15 +94,7 @@ type ResetPasswordRequest struct {
 }
 
 type RefreshTokenRequest struct {
-	RefreshToken string `json:"refresh_token" binding:"required"`
-}
-
-type AuthResponse struct {
-	User         interface{} `json:"user"`
-	AccessToken  string      `json:"access_token"`
-	RefreshToken string      `json:"refresh_token"`
-	TokenType    string      `json:"token_type"`
-	ExpiresIn    int64       `json:"expires_in"`
+	RefreshToken string `json:"refresh_token" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."`
 }
 
 // Register godoc
@@ -135,12 +135,12 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 // Login godoc
 // @Summary Login with email and password
-// @Description Authenticate user with email and password, returns JWT tokens
+// @Description Authenticate user with email and password, sets JWT tokens in HttpOnly cookies
 // @Tags auth
 // @Accept json
 // @Produce json
 // @Param request body LoginRequest true "Login credentials"
-// @Success 200 {object} utils.APIResponse{data=AuthResponse}
+// @Success 200 {object} utils.APIResponse
 // @Failure 400 {object} utils.APIResponse
 // @Failure 401 {object} utils.APIResponse
 // @Router /auth/login [post]
@@ -154,6 +154,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	cmd := usecases.LoginWithPasswordCommand{
 		Email:      req.Email,
 		Password:   req.Password,
+		RememberMe: req.RememberMe,
 		DeviceName: c.GetHeader("User-Agent"),
 		DeviceType: "web",
 		IPAddress:  c.ClientIP(),
@@ -167,12 +168,16 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "login successful", AuthResponse{
-		User:         result.User.GetDisplayInfo(),
-		AccessToken:  result.AccessToken,
-		RefreshToken: result.RefreshToken,
-		TokenType:    "Bearer",
-		ExpiresIn:    result.ExpiresIn,
+	// Calculate cookie max age in seconds
+	accessMaxAge := h.jwtConfig.AccessExpMinutes * 60
+	refreshMaxAge := h.jwtConfig.RefreshExpDays * 24 * 60 * 60
+
+	// Set tokens in HttpOnly cookies
+	utils.SetAuthCookies(c, h.cookieConfig, result.AccessToken, result.RefreshToken, accessMaxAge, refreshMaxAge)
+
+	utils.SuccessResponse(c, http.StatusOK, "login successful", gin.H{
+		"user":       result.User.GetDisplayInfo(),
+		"expires_in": result.ExpiresIn,
 	})
 }
 
@@ -371,28 +376,45 @@ func (h *AuthHandler) HandleOAuthCallback(c *gin.Context) {
 		return
 	}
 
+	// Calculate cookie max age in seconds
+	accessMaxAge := h.jwtConfig.AccessExpMinutes * 60
+	refreshMaxAge := h.jwtConfig.RefreshExpDays * 24 * 60 * 60
+
+	// Set tokens in HttpOnly cookies
+	utils.SetAuthCookies(c, h.cookieConfig, result.AccessToken, result.RefreshToken, accessMaxAge, refreshMaxAge)
+
 	h.renderOAuthSuccess(c, result)
 }
 
 // RefreshToken godoc
 // @Summary Refresh access token
-// @Description Get new access token using refresh token
+// @Description Get new access token using refresh token from HttpOnly cookie or request body
 // @Tags auth
 // @Accept json
 // @Produce json
-// @Param request body RefreshTokenRequest true "Refresh token"
+// @Param request body RefreshTokenRequest false "Refresh token (optional if using cookies)"
 // @Success 200 {object} utils.APIResponse
 // @Failure 400 {object} utils.APIResponse
 // @Failure 401 {object} utils.APIResponse
 // @Router /auth/refresh [post]
 func (h *AuthHandler) RefreshToken(c *gin.Context) {
-	var req RefreshTokenRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
+	// Try to get refresh token from cookie first
+	refreshToken := utils.GetTokenFromCookie(c, utils.RefreshTokenCookie)
+
+	// If not in cookie, try request body (backward compatibility)
+	if refreshToken == "" {
+		var req RefreshTokenRequest
+		if err := c.ShouldBindJSON(&req); err == nil {
+			refreshToken = req.RefreshToken
+		}
+	}
+
+	if refreshToken == "" {
+		utils.ErrorResponse(c, http.StatusBadRequest, "refresh token is required")
 		return
 	}
 
-	cmd := usecases.RefreshTokenCommand{RefreshToken: req.RefreshToken}
+	cmd := usecases.RefreshTokenCommand{RefreshToken: refreshToken}
 
 	result, err := h.refreshTokenUseCase.Execute(cmd)
 	if err != nil {
@@ -401,16 +423,21 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
+	// Calculate cookie max age in seconds
+	accessMaxAge := h.jwtConfig.AccessExpMinutes * 60
+	refreshMaxAge := h.jwtConfig.RefreshExpDays * 24 * 60 * 60
+
+	// Update cookies with new tokens
+	utils.SetAuthCookies(c, h.cookieConfig, result.AccessToken, refreshToken, accessMaxAge, refreshMaxAge)
+
 	utils.SuccessResponse(c, http.StatusOK, "token refreshed successfully", gin.H{
-		"access_token": result.AccessToken,
-		"token_type":   "Bearer",
-		"expires_in":   result.ExpiresIn,
+		"expires_in": result.ExpiresIn,
 	})
 }
 
 // Logout godoc
 // @Summary Logout user
-// @Description Logout current user and invalidate session
+// @Description Logout current user, invalidate session and clear auth cookies
 // @Tags auth
 // @Accept json
 // @Produce json
@@ -433,6 +460,9 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		utils.ErrorResponse(c, http.StatusInternalServerError, "logout failed")
 		return
 	}
+
+	// Clear auth cookies
+	utils.ClearAuthCookies(c, h.cookieConfig)
 
 	utils.SuccessResponse(c, http.StatusOK, "logout successful", nil)
 }

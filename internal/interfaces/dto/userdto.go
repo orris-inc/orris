@@ -17,10 +17,13 @@ type CreateUserRequest struct {
 	Name  string `json:"name" binding:"required" validate:"required,min=2,max=100"`
 }
 
-// UpdateUserRequest represents HTTP request to update a user
+// UpdateUserRequest represents HTTP request to update a user (PATCH)
+// All fields are optional, at least one field must be provided
 type UpdateUserRequest struct {
-	Email string `json:"email" binding:"required" validate:"required,email"`
-	Name  string `json:"name" binding:"required" validate:"required,min=2,max=100"`
+	Email  *string `json:"email" binding:"omitempty,email"`
+	Name   *string `json:"name" binding:"omitempty,min=2,max=100"`
+	Status *string `json:"status" binding:"omitempty,oneof=active inactive suspended deleted"`
+	Role   *string `json:"role" binding:"omitempty,oneof=user admin"`
 }
 
 // ToApplicationRequest converts HTTP DTO to application layer DTO
@@ -34,8 +37,10 @@ func (r *CreateUserRequest) ToApplicationRequest() *dto.CreateUserRequest {
 // ToApplicationRequest converts HTTP DTO to application layer DTO
 func (r *UpdateUserRequest) ToApplicationRequest() *dto.UpdateUserRequest {
 	return &dto.UpdateUserRequest{
-		Email: &r.Email,
-		Name:  &r.Name,
+		Email:  r.Email,
+		Name:   r.Name,
+		Status: r.Status,
+		Role:   r.Role,
 	}
 }
 

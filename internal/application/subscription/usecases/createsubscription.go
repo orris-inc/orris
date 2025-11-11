@@ -16,6 +16,7 @@ type CreateSubscriptionCommand struct {
 	StartDate   time.Time
 	AutoRenew   bool
 	PaymentInfo map[string]interface{}
+	BillingCycle string // User selected billing cycle
 }
 
 type CreateSubscriptionResult struct {
@@ -27,6 +28,7 @@ type CreateSubscriptionUseCase struct {
 	subscriptionRepo subscription.SubscriptionRepository
 	planRepo         subscription.SubscriptionPlanRepository
 	tokenRepo        subscription.SubscriptionTokenRepository
+	pricingRepo      subscription.PlanPricingRepository
 	tokenGenerator   TokenGenerator
 	logger           logger.Interface
 }
@@ -35,6 +37,7 @@ func NewCreateSubscriptionUseCase(
 	subscriptionRepo subscription.SubscriptionRepository,
 	planRepo subscription.SubscriptionPlanRepository,
 	tokenRepo subscription.SubscriptionTokenRepository,
+	pricingRepo subscription.PlanPricingRepository,
 	tokenGenerator TokenGenerator,
 	logger logger.Interface,
 ) *CreateSubscriptionUseCase {
@@ -42,6 +45,7 @@ func NewCreateSubscriptionUseCase(
 		subscriptionRepo: subscriptionRepo,
 		planRepo:         planRepo,
 		tokenRepo:        tokenRepo,
+		pricingRepo:      pricingRepo,
 		tokenGenerator:   tokenGenerator,
 		logger:           logger,
 	}
@@ -58,6 +62,34 @@ func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, cmd CreateSubs
 		return nil, fmt.Errorf("subscription plan is not active")
 	}
 
+	// Determine the billing cycle to use
+	billingCycle := plan.BillingCycle()
+
+	// If user specified a billing cycle, validate and use it instead
+	if cmd.BillingCycle != "" {
+		// Parse the user-provided billing cycle
+		userCycle, err := vo.ParseBillingCycle(cmd.BillingCycle)
+		if err != nil {
+			uc.logger.Warnw("invalid billing cycle provided", "error", err, "billing_cycle", cmd.BillingCycle)
+			return nil, fmt.Errorf("invalid billing cycle: %w", err)
+		}
+
+		// Verify that pricing exists for this plan and billing cycle
+		pricing, err := uc.pricingRepo.GetByPlanAndCycle(ctx, cmd.PlanID, userCycle)
+		if err != nil {
+			uc.logger.Warnw("failed to get pricing for billing cycle", "error", err, "plan_id", cmd.PlanID, "billing_cycle", userCycle)
+			return nil, fmt.Errorf("pricing not available for selected billing cycle: %w", err)
+		}
+
+		if pricing == nil {
+			uc.logger.Warnw("pricing not found for billing cycle", "plan_id", cmd.PlanID, "billing_cycle", userCycle)
+			return nil, fmt.Errorf("pricing not found for selected billing cycle")
+		}
+
+		billingCycle = userCycle
+		uc.logger.Infow("pricing selected for billing cycle", "plan_id", cmd.PlanID, "billing_cycle", billingCycle, "price", pricing.Price())
+	}
+
 	// Allow multiple active subscriptions per user
 	// No restriction on creating new subscriptions
 
@@ -66,7 +98,7 @@ func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, cmd CreateSubs
 		startDate = time.Now()
 	}
 
-	endDate := uc.calculateEndDate(startDate, plan.BillingCycle())
+	endDate := uc.calculateEndDate(startDate, billingCycle)
 
 	sub, err := subscription.NewSubscription(cmd.UserID, cmd.PlanID, startDate, endDate, cmd.AutoRenew)
 	if err != nil {
@@ -92,6 +124,7 @@ func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, cmd CreateSubs
 		"subscription_id", sub.ID(),
 		"user_id", cmd.UserID,
 		"plan_id", cmd.PlanID,
+		"billing_cycle", billingCycle,
 		"status", sub.Status(),
 	)
 

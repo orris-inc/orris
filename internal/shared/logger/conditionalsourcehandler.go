@@ -40,9 +40,9 @@ func NewConditionalSourceHandler(handler slog.Handler, showSourceForLevels ...sl
 func (h *conditionalSourceHandler) Handle(ctx context.Context, r slog.Record) error {
 	// If this level should show source, add it manually
 	if h.showSourceLevels[r.Level] {
-		// Get the source location - skip this frame and one more for the slog internal frame
+		// Get the source location - skip: Handle() + slog internal + Logger method + interface wrapper = 5 frames
 		var pcs [1]uintptr
-		runtime.Callers(3, pcs[:])
+		runtime.Callers(5, pcs[:])
 		fs := runtime.CallersFrames(pcs[:])
 		f, _ := fs.Next()
 

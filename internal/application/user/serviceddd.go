@@ -11,6 +11,7 @@ import (
 
 // ServiceDDD is the application service that orchestrates use cases
 type ServiceDDD struct {
+	userRepo             domainUser.Repository
 	createUserUC         *usecases.CreateUserUseCase
 	updateUserUC         *usecases.UpdateUserUseCase
 	getUserUC            *usecases.GetUserUseCase
@@ -27,6 +28,7 @@ func NewServiceDDD(
 	logger logger.Interface,
 ) *ServiceDDD {
 	return &ServiceDDD{
+		userRepo:             userRepo,
 		createUserUC:         usecases.NewCreateUserUseCase(userRepo, logger),
 		updateUserUC:         usecases.NewUpdateUserUseCase(userRepo, logger),
 		getUserUC:            usecases.NewGetUserUseCase(userRepo, logger),
@@ -69,13 +71,7 @@ func (s *ServiceDDD) ListUsers(ctx context.Context, request dto.ListUsersRequest
 
 // DeleteUser deletes a user by ID
 func (s *ServiceDDD) DeleteUser(ctx context.Context, id uint) error {
-	// For now, use the update use case to mark as deleted
-	// This could be extracted to a separate DeleteUserUseCase later
-	updateRequest := dto.UpdateUserRequest{
-		Status: &[]string{"deleted"}[0],
-	}
-	_, err := s.updateUserUC.Execute(ctx, id, updateRequest)
-	return err
+	return s.userRepo.Delete(ctx, id)
 }
 
 // UpdateProfile updates the current user's profile (name, email)
