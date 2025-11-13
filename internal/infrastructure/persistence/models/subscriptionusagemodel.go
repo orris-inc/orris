@@ -13,7 +13,6 @@ type SubscriptionUsageModel struct {
 	SubscriptionID uint           `gorm:"not null;uniqueIndex:idx_subscription_period"`
 	PeriodStart    time.Time      `gorm:"not null;uniqueIndex:idx_subscription_period"`
 	PeriodEnd      time.Time      `gorm:"not null;index:idx_period_end"`
-	StorageUsed    uint64         `gorm:"not null;default:0"`
 	UsersCount     uint           `gorm:"not null;default:0"`
 	LastResetAt    *time.Time
 	CreatedAt      time.Time

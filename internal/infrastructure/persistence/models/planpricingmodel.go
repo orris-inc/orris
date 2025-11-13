@@ -18,8 +18,8 @@ type SubscriptionPlanPricingModel struct {
 	UpdatedAt    time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
 	DeletedAt    gorm.DeletedAt `gorm:"index:idx_deleted_at"`
 
-	// Relationship
-	Plan *SubscriptionPlanModel `gorm:"foreignKey:PlanID;constraint:OnDelete:CASCADE,OnUpdate:CASCADE"`
+	// Note: No foreign key constraints or associations.
+	// All relationships are managed by application business logic.
 }
 
 // TableName specifies the table name for GORM

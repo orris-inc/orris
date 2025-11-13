@@ -313,7 +313,13 @@ func (r *TicketRepository) toDomain(model *models.TicketModel) (*ticket.Ticket, 
 		return nil, err
 	}
 
-	for _, commentModel := range model.Comments {
+	// Query comments manually (no foreign key associations)
+	var commentModels []models.CommentModel
+	if err := r.db.Where("ticket_id = ?", model.ID).Order("created_at ASC").Find(&commentModels).Error; err != nil {
+		return nil, err
+	}
+
+	for _, commentModel := range commentModels {
 		comment, err := r.commentToDomain(&commentModel)
 		if err != nil {
 			return nil, err

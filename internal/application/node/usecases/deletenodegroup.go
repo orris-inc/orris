@@ -47,10 +47,19 @@ func (uc *DeleteNodeGroupUseCase) Execute(ctx context.Context, cmd DeleteNodeGro
 		return nil, fmt.Errorf("failed to get node group: %w", err)
 	}
 
+	// Log warning if deleting a group with active subscription plan associations
+	// Note: Foreign key constraints have been removed for flexibility
 	if len(group.SubscriptionPlanIDs()) > 0 {
-		return nil, errors.NewValidationError("cannot delete node group that is associated with subscription plans")
+		uc.logger.Warnw("deleting node group with active subscription plan associations",
+			"group_id", cmd.GroupID,
+			"group_name", group.Name(),
+			"plan_count", len(group.SubscriptionPlanIDs()),
+		)
 	}
 
+	// Soft delete the node group
+	// Note: Associated records in node_group_nodes and node_group_plans will remain
+	// but queries should filter by deleted_at
 	if err := uc.nodeGroupRepo.Delete(ctx, cmd.GroupID); err != nil {
 		uc.logger.Errorw("failed to delete node group from database", "error", err)
 		return nil, fmt.Errorf("failed to delete node group: %w", err)

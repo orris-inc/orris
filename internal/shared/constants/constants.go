@@ -37,15 +37,15 @@ const (
 	UserStatusPending  = "pending"
 
 	// Database table names
-	TableUsers        = "users"
-	TableRoles        = "roles"
-	TableUserRoles    = "user_roles"
-	TableNodes        = "nodes"
-	TableNodeGroups   = "node_groups"
+	TableUsers          = "users"
+	TableRoles          = "roles"
+	TableUserRoles      = "user_roles"
+	TableNodes          = "nodes"
+	TableNodeGroups     = "node_groups"
 	TableNodeGroupNodes = "node_group_nodes"
 	TableNodeGroupPlans = "node_group_plans"
-	TableNodeTraffic  = "node_traffic"
-	TableUserTraffic  = "user_traffic"
+	TableNodeTraffic    = "node_traffic"
+	// TableUserTraffic removed - traffic is now tracked via node_traffic with subscription_id
 
 	// Default values
 	DefaultUserStatus = UserStatusActive

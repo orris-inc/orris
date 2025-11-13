@@ -18,14 +18,14 @@ type GetNodeConfigExecutor interface {
 	Execute(ctx context.Context, cmd usecases.GetNodeConfigCommand) (*usecases.GetNodeConfigResult, error)
 }
 
-// GetNodeUsersExecutor defines the interface for executing GetNodeUsers use case
-type GetNodeUsersExecutor interface {
-	Execute(ctx context.Context, cmd usecases.GetNodeUsersCommand) (*usecases.GetNodeUsersResult, error)
+// GetNodeSubscriptionsExecutor defines the interface for executing GetNodeSubscriptions use case
+type GetNodeSubscriptionsExecutor interface {
+	Execute(ctx context.Context, cmd usecases.GetNodeSubscriptionsCommand) (*usecases.GetNodeSubscriptionsResult, error)
 }
 
-// ReportUserTrafficExecutor defines the interface for executing ReportUserTraffic use case
-type ReportUserTrafficExecutor interface {
-	Execute(ctx context.Context, cmd usecases.ReportUserTrafficCommand) (*usecases.ReportUserTrafficResult, error)
+// ReportSubscriptionTrafficExecutor defines the interface for executing ReportSubscriptionTraffic use case
+type ReportSubscriptionTrafficExecutor interface {
+	Execute(ctx context.Context, cmd usecases.ReportSubscriptionTrafficCommand) (*usecases.ReportSubscriptionTrafficResult, error)
 }
 
 // ReportNodeStatusExecutor defines the interface for executing ReportNodeStatus use case
@@ -33,37 +33,37 @@ type ReportNodeStatusExecutor interface {
 	Execute(ctx context.Context, cmd usecases.ReportNodeStatusCommand) (*usecases.ReportNodeStatusResult, error)
 }
 
-// ReportOnlineUsersExecutor defines the interface for executing ReportOnlineUsers use case
-type ReportOnlineUsersExecutor interface {
-	Execute(ctx context.Context, cmd usecases.ReportOnlineUsersCommand) (*usecases.ReportOnlineUsersResult, error)
+// ReportOnlineSubscriptionsExecutor defines the interface for executing ReportOnlineSubscriptions use case
+type ReportOnlineSubscriptionsExecutor interface {
+	Execute(ctx context.Context, cmd usecases.ReportOnlineSubscriptionsCommand) (*usecases.ReportOnlineSubscriptionsResult, error)
 }
 
 // AgentHandler handles RESTful agent API requests (v2raysocks compatible)
 type AgentHandler struct {
-	getNodeConfigUC     GetNodeConfigExecutor
-	getNodeUsersUC      GetNodeUsersExecutor
-	reportUserTrafficUC ReportUserTrafficExecutor
-	reportNodeStatusUC  ReportNodeStatusExecutor
-	reportOnlineUsersUC ReportOnlineUsersExecutor
-	logger              logger.Interface
+	getNodeConfigUC             GetNodeConfigExecutor
+	getNodeSubscriptionsUC      GetNodeSubscriptionsExecutor
+	reportSubscriptionTrafficUC ReportSubscriptionTrafficExecutor
+	reportNodeStatusUC          ReportNodeStatusExecutor
+	reportOnlineSubscriptionsUC ReportOnlineSubscriptionsExecutor
+	logger                      logger.Interface
 }
 
 // NewAgentHandler creates a new AgentHandler instance
 func NewAgentHandler(
 	getNodeConfigUC GetNodeConfigExecutor,
-	getNodeUsersUC GetNodeUsersExecutor,
-	reportUserTrafficUC ReportUserTrafficExecutor,
+	getNodeSubscriptionsUC GetNodeSubscriptionsExecutor,
+	reportSubscriptionTrafficUC ReportSubscriptionTrafficExecutor,
 	reportNodeStatusUC ReportNodeStatusExecutor,
-	reportOnlineUsersUC ReportOnlineUsersExecutor,
+	reportOnlineSubscriptionsUC ReportOnlineSubscriptionsExecutor,
 	logger logger.Interface,
 ) *AgentHandler {
 	return &AgentHandler{
-		getNodeConfigUC:     getNodeConfigUC,
-		getNodeUsersUC:      getNodeUsersUC,
-		reportUserTrafficUC: reportUserTrafficUC,
-		reportNodeStatusUC:  reportNodeStatusUC,
-		reportOnlineUsersUC: reportOnlineUsersUC,
-		logger:              logger,
+		getNodeConfigUC:             getNodeConfigUC,
+		getNodeSubscriptionsUC:      getNodeSubscriptionsUC,
+		reportSubscriptionTrafficUC: reportSubscriptionTrafficUC,
+		reportNodeStatusUC:          reportNodeStatusUC,
+		reportOnlineSubscriptionsUC: reportOnlineSubscriptionsUC,
+		logger:                      logger,
 	}
 }
 
@@ -144,19 +144,19 @@ func (h *AgentHandler) GetConfig(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "node configuration retrieved successfully", result.Config)
 }
 
-// GetUsers godoc
-// @Summary Get authorized users list
-// @Description Retrieve list of users authorized to access the node
+// GetSubscriptions godoc
+// @Summary Get active subscriptions for node
+// @Description Retrieve list of active subscriptions authorized to access the node
 // @Tags agent-v1
 // @Accept json
 // @Produce json
 // @Param id path int true "Node ID"
-// @Success 200 {object} utils.APIResponse "User list retrieved successfully"
+// @Success 200 {object} utils.APIResponse "Subscription list retrieved successfully"
 // @Failure 400 {object} utils.APIResponse "Invalid node ID parameter"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /agents/{id}/users [get]
+// @Router /agents/{id}/subscriptions [get]
 // @Security NodeToken
-func (h *AgentHandler) GetUsers(c *gin.Context) {
+func (h *AgentHandler) GetSubscriptions(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	// Parse node ID from path parameter
@@ -172,44 +172,44 @@ func (h *AgentHandler) GetUsers(c *gin.Context) {
 		return
 	}
 
-	h.logger.Infow("node users request received",
+	h.logger.Infow("node subscriptions request received",
 		"node_id", nodeID,
 		"ip", c.ClientIP(),
 	)
 
 	// Execute use case
-	cmd := usecases.GetNodeUsersCommand{
+	cmd := usecases.GetNodeSubscriptionsCommand{
 		NodeID: uint(nodeID),
 	}
 
-	result, err := h.getNodeUsersUC.Execute(ctx, cmd)
+	result, err := h.getNodeSubscriptionsUC.Execute(ctx, cmd)
 	if err != nil {
-		h.logger.Errorw("failed to get node users",
+		h.logger.Errorw("failed to get node subscriptions",
 			"error", err,
 			"node_id", nodeID,
 		)
-		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to retrieve user list")
+		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to retrieve subscription list")
 		return
 	}
 
-	h.logger.Infow("node users retrieved",
+	h.logger.Infow("node subscriptions retrieved",
 		"node_id", nodeID,
-		"user_count", len(result.Users.Users),
+		"subscription_count", len(result.Subscriptions.Subscriptions),
 		"ip", c.ClientIP(),
 	)
 
 	// Return success response
-	utils.SuccessResponse(c, http.StatusOK, "user list retrieved successfully", result.Users.Users)
+	utils.SuccessResponse(c, http.StatusOK, "subscription list retrieved successfully", result.Subscriptions.Subscriptions)
 }
 
 // ReportTraffic godoc
-// @Summary Report user traffic data
-// @Description Submit user traffic statistics for the node
+// @Summary Report subscription traffic data
+// @Description Submit subscription traffic statistics for the node
 // @Tags agent-v1
 // @Accept json
 // @Produce json
 // @Param id path int true "Node ID"
-// @Param traffic body []dto.UserTrafficItem true "User traffic data"
+// @Param traffic body []dto.SubscriptionTrafficItem true "Subscription traffic data"
 // @Success 200 {object} utils.APIResponse "Traffic reported successfully"
 // @Failure 400 {object} utils.APIResponse "Invalid request body or node ID"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
@@ -232,8 +232,8 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 	}
 
 	// Parse request body
-	var users []dto.UserTrafficItem
-	if err := c.ShouldBindJSON(&users); err != nil {
+	var subscriptions []dto.SubscriptionTrafficItem
+	if err := c.ShouldBindJSON(&subscriptions); err != nil {
 		h.logger.Warnw("invalid traffic report request body",
 			"error", err,
 			"node_id", nodeID,
@@ -245,19 +245,19 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 
 	h.logger.Infow("traffic report received",
 		"node_id", nodeID,
-		"user_count", len(users),
+		"subscription_count", len(subscriptions),
 		"ip", c.ClientIP(),
 	)
 
 	// Execute use case
-	cmd := usecases.ReportUserTrafficCommand{
-		NodeID: uint(nodeID),
-		Users:  users,
+	cmd := usecases.ReportSubscriptionTrafficCommand{
+		NodeID:        uint(nodeID),
+		Subscriptions: subscriptions,
 	}
 
-	result, err := h.reportUserTrafficUC.Execute(ctx, cmd)
+	result, err := h.reportSubscriptionTrafficUC.Execute(ctx, cmd)
 	if err != nil {
-		h.logger.Errorw("failed to report user traffic",
+		h.logger.Errorw("failed to report subscription traffic",
 			"error", err,
 			"node_id", nodeID,
 		)
@@ -267,13 +267,13 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 
 	h.logger.Infow("traffic reported successfully",
 		"node_id", nodeID,
-		"users_updated", result.UsersUpdated,
+		"subscriptions_updated", result.SubscriptionsUpdated,
 		"ip", c.ClientIP(),
 	)
 
 	// Return success response
 	utils.SuccessResponse(c, http.StatusOK, "traffic reported successfully", map[string]any{
-		"users_updated": result.UsersUpdated,
+		"subscriptions_updated": result.SubscriptionsUpdated,
 	})
 }
 
@@ -352,20 +352,20 @@ func (h *AgentHandler) UpdateStatus(c *gin.Context) {
 	})
 }
 
-// UpdateOnlineUsers godoc
-// @Summary Update online users list
-// @Description Report currently connected users on the node
+// UpdateOnlineSubscriptions godoc
+// @Summary Update online subscriptions list
+// @Description Report currently connected subscriptions on the node
 // @Tags agent-v1
 // @Accept json
 // @Produce json
 // @Param id path int true "Node ID"
-// @Param users body dto.ReportOnlineUsersRequest true "Online users list"
-// @Success 200 {object} utils.APIResponse "Online users updated successfully"
+// @Param subscriptions body dto.ReportOnlineSubscriptionsRequest true "Online subscriptions list"
+// @Success 200 {object} utils.APIResponse "Online subscriptions updated successfully"
 // @Failure 400 {object} utils.APIResponse "Invalid request body or node ID"
 // @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /agents/{id}/online-users [put]
+// @Router /agents/{id}/online-subscriptions [put]
 // @Security NodeToken
-func (h *AgentHandler) UpdateOnlineUsers(c *gin.Context) {
+func (h *AgentHandler) UpdateOnlineSubscriptions(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	// Parse node ID from path parameter
@@ -382,9 +382,9 @@ func (h *AgentHandler) UpdateOnlineUsers(c *gin.Context) {
 	}
 
 	// Parse request body
-	var req dto.ReportOnlineUsersRequest
+	var req dto.ReportOnlineSubscriptionsRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Warnw("invalid online users report request body",
+		h.logger.Warnw("invalid online subscriptions report request body",
 			"error", err,
 			"node_id", nodeID,
 			"ip", c.ClientIP(),
@@ -393,36 +393,36 @@ func (h *AgentHandler) UpdateOnlineUsers(c *gin.Context) {
 		return
 	}
 
-	h.logger.Infow("online users update received",
+	h.logger.Infow("online subscriptions update received",
 		"node_id", nodeID,
-		"user_count", len(req.Users),
+		"subscription_count", len(req.Subscriptions),
 		"ip", c.ClientIP(),
 	)
 
 	// Execute use case
-	cmd := usecases.ReportOnlineUsersCommand{
-		NodeID: uint(nodeID),
-		Users:  req.Users,
+	cmd := usecases.ReportOnlineSubscriptionsCommand{
+		NodeID:        uint(nodeID),
+		Subscriptions: req.Subscriptions,
 	}
 
-	result, err := h.reportOnlineUsersUC.Execute(ctx, cmd)
+	result, err := h.reportOnlineSubscriptionsUC.Execute(ctx, cmd)
 	if err != nil {
-		h.logger.Errorw("failed to report online users",
+		h.logger.Errorw("failed to report online subscriptions",
 			"error", err,
 			"node_id", nodeID,
 		)
-		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to process online users report")
+		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to process online subscriptions report")
 		return
 	}
 
-	h.logger.Infow("online users updated successfully",
+	h.logger.Infow("online subscriptions updated successfully",
 		"node_id", nodeID,
 		"online_count", result.OnlineCount,
 		"ip", c.ClientIP(),
 	)
 
 	// Return success response
-	utils.SuccessResponse(c, http.StatusOK, "online users updated successfully", map[string]any{
+	utils.SuccessResponse(c, http.StatusOK, "online subscriptions updated successfully", map[string]any{
 		"online_count": result.OnlineCount,
 	})
 }

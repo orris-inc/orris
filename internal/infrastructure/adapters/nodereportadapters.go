@@ -2,6 +2,7 @@ package adapters
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"orris/internal/application/node/usecases"
@@ -191,44 +192,77 @@ func (a *NodeLimitCheckerAdapter) CheckLimits(ctx context.Context, nodeID uint) 
 	return false, 0, nil
 }
 
-// UserTrafficRecorderAdapter adapts UserTrafficRepository to UserTrafficRecorder interface
-type UserTrafficRecorderAdapter struct {
-	userTrafficRepo node.UserTrafficRepository
+// SubscriptionTrafficRecorderAdapter adapts to record subscription-based traffic
+// This adapter records traffic by subscription_id for proper traffic tracking
+//
+// Architecture: XrayR → Adapter → MySQL
+type SubscriptionTrafficRecorderAdapter struct {
+	nodeTrafficRepo node.NodeTrafficRepository
 	logger          logger.Interface
 }
 
-// NewUserTrafficRecorderAdapter creates a new user traffic recorder adapter
-func NewUserTrafficRecorderAdapter(
-	userTrafficRepo node.UserTrafficRepository,
+// NewSubscriptionTrafficRecorderAdapter creates a new subscription traffic recorder adapter
+// Note: Directly writes to database for simplicity and reliability
+func NewSubscriptionTrafficRecorderAdapter(
+	nodeTrafficRepo node.NodeTrafficRepository,
 	logger logger.Interface,
-) usecases.UserTrafficRecorder {
-	return &UserTrafficRecorderAdapter{
-		userTrafficRepo: userTrafficRepo,
+) usecases.SubscriptionTrafficRecorder {
+	return &SubscriptionTrafficRecorderAdapter{
+		nodeTrafficRepo: nodeTrafficRepo,
 		logger:          logger,
 	}
 }
 
-// RecordUserTraffic records user traffic data
-func (a *UserTrafficRecorderAdapter) RecordUserTraffic(ctx context.Context, nodeID uint, userID int, upload, download int64) error {
-	// Convert int to uint for userID
-	if userID <= 0 {
-		a.logger.Warnw("invalid user ID", "user_id", userID)
-		return nil // Skip invalid user IDs
+// RecordSubscriptionTraffic records subscription traffic data directly to database
+func (a *SubscriptionTrafficRecorderAdapter) RecordSubscriptionTraffic(ctx context.Context, nodeID uint, subscriptionID int, upload, download int64) error {
+	// Validate subscription ID
+	if subscriptionID <= 0 {
+		a.logger.Warnw("invalid subscription ID", "subscription_id", subscriptionID)
+		return nil // Skip invalid subscription IDs
 	}
 
-	// Use increment traffic for atomic updates
-	err := a.userTrafficRepo.IncrementTraffic(ctx, uint(userID), nodeID, uint64(upload), uint64(download))
+	// Skip zero traffic
+	if upload == 0 && download == 0 {
+		return nil
+	}
+
+	// Create period for current hour aggregation
+	period := time.Now().Truncate(time.Hour)
+
+	// Create domain entity
+	subIDUint := uint(subscriptionID)
+	traffic, err := node.NewNodeTraffic(nodeID, &subIDUint, nil, period)
 	if err != nil {
-		a.logger.Errorw("failed to increment user traffic",
+		a.logger.Errorw("failed to create node traffic entity",
 			"error", err,
-			"user_id", userID,
+			"node_id", nodeID,
+			"subscription_id", subscriptionID,
+		)
+		return err
+	}
+
+	// Accumulate traffic
+	if err := traffic.Accumulate(uint64(upload), uint64(download)); err != nil {
+		a.logger.Errorw("failed to accumulate traffic",
+			"error", err,
+			"node_id", nodeID,
+			"subscription_id", subscriptionID,
+		)
+		return err
+	}
+
+	// Record in repository
+	if err := a.nodeTrafficRepo.RecordTraffic(ctx, traffic); err != nil {
+		a.logger.Errorw("failed to record subscription traffic",
+			"error", err,
+			"subscription_id", subscriptionID,
 			"node_id", nodeID,
 		)
 		return err
 	}
 
-	a.logger.Debugw("user traffic recorded via adapter",
-		"user_id", userID,
+	a.logger.Debugw("subscription traffic recorded",
+		"subscription_id", subscriptionID,
 		"node_id", nodeID,
 		"upload", upload,
 		"download", download,
@@ -237,8 +271,8 @@ func (a *UserTrafficRecorderAdapter) RecordUserTraffic(ctx context.Context, node
 	return nil
 }
 
-// BatchRecordUserTraffic records multiple users' traffic data in a single batch operation
-func (a *UserTrafficRecorderAdapter) BatchRecordUserTraffic(ctx context.Context, nodeID uint, items []usecases.UserTrafficItem) error {
+// BatchRecordSubscriptionTraffic records multiple subscriptions' traffic data directly to database
+func (a *SubscriptionTrafficRecorderAdapter) BatchRecordSubscriptionTraffic(ctx context.Context, nodeID uint, items []usecases.SubscriptionTrafficItem) error {
 	if len(items) == 0 {
 		return nil
 	}
@@ -246,13 +280,15 @@ func (a *UserTrafficRecorderAdapter) BatchRecordUserTraffic(ctx context.Context,
 	// Use current hour as period for consistent aggregation
 	period := time.Now().Truncate(time.Hour)
 
-	// Convert items to domain entities
-	traffics := make([]*node.UserTraffic, 0, len(items))
+	// Process each item
+	validCount := 0
+	errorCount := 0
+
 	for _, item := range items {
-		// Skip invalid user IDs
-		if item.UserID <= 0 {
-			a.logger.Warnw("skipping invalid user ID in batch",
-				"user_id", item.UserID,
+		// Skip invalid subscription IDs
+		if item.SubscriptionID <= 0 {
+			a.logger.Warnw("skipping invalid subscription ID in batch",
+				"subscription_id", item.SubscriptionID,
 				"node_id", nodeID,
 			)
 			continue
@@ -263,85 +299,85 @@ func (a *UserTrafficRecorderAdapter) BatchRecordUserTraffic(ctx context.Context,
 			continue
 		}
 
-		// Create user traffic entity
-		traffic, err := node.NewUserTraffic(uint(item.UserID), nodeID, nil, period)
+		// Create domain entity
+		subIDUint := uint(item.SubscriptionID)
+		traffic, err := node.NewNodeTraffic(nodeID, &subIDUint, nil, period)
 		if err != nil {
-			a.logger.Errorw("failed to create user traffic entity",
+			a.logger.Errorw("failed to create node traffic entity in batch",
 				"error", err,
-				"user_id", item.UserID,
 				"node_id", nodeID,
+				"subscription_id", item.SubscriptionID,
 			)
+			errorCount++
 			continue
 		}
 
 		// Accumulate traffic
 		if err := traffic.Accumulate(uint64(item.Upload), uint64(item.Download)); err != nil {
-			a.logger.Errorw("failed to accumulate traffic",
+			a.logger.Errorw("failed to accumulate traffic in batch",
 				"error", err,
-				"user_id", item.UserID,
 				"node_id", nodeID,
+				"subscription_id", item.SubscriptionID,
 			)
+			errorCount++
 			continue
 		}
 
-		traffics = append(traffics, traffic)
+		// Record in repository
+		if err := a.nodeTrafficRepo.RecordTraffic(ctx, traffic); err != nil {
+			a.logger.Errorw("failed to record subscription traffic in batch",
+				"error", err,
+				"node_id", nodeID,
+				"subscription_id", item.SubscriptionID,
+			)
+			errorCount++
+			continue
+		}
+
+		validCount++
 	}
 
-	// If no valid traffic data, return early
-	if len(traffics) == 0 {
-		a.logger.Debugw("no valid traffic data to record in batch",
-			"node_id", nodeID,
-			"original_count", len(items),
-		)
-		return nil
-	}
-
-	// Batch upsert to database
-	err := a.userTrafficRepo.BatchUpsert(ctx, traffics)
-	if err != nil {
-		a.logger.Errorw("failed to batch upsert user traffic",
-			"error", err,
-			"node_id", nodeID,
-			"count", len(traffics),
-		)
-		return err
-	}
-
-	a.logger.Infow("user traffic batch recorded via adapter",
+	a.logger.Infow("subscription traffic batch processed",
 		"node_id", nodeID,
-		"users_recorded", len(traffics),
-		"original_count", len(items),
+		"success_count", validCount,
+		"error_count", errorCount,
+		"total_count", len(items),
 	)
+
+	// Return error if all items failed
+	if validCount == 0 && errorCount > 0 {
+		return fmt.Errorf("failed to record any traffic in batch")
+	}
 
 	return nil
 }
 
-// OnlineUserTrackerAdapter adapts to OnlineUserTracker interface
-type OnlineUserTrackerAdapter struct {
+// OnlineSubscriptionTrackerAdapter adapts to OnlineSubscriptionTracker interface
+type OnlineSubscriptionTrackerAdapter struct {
 	logger logger.Interface
 }
 
-// NewOnlineUserTrackerAdapter creates a new online user tracker adapter
-func NewOnlineUserTrackerAdapter(
+// NewOnlineSubscriptionTrackerAdapter creates a new online subscription tracker adapter
+func NewOnlineSubscriptionTrackerAdapter(
 	logger logger.Interface,
-) usecases.OnlineUserTracker {
-	return &OnlineUserTrackerAdapter{
+) usecases.OnlineSubscriptionTracker {
+	return &OnlineSubscriptionTrackerAdapter{
 		logger: logger,
 	}
 }
 
-// UpdateOnlineUsers updates online users tracking
-func (a *OnlineUserTrackerAdapter) UpdateOnlineUsers(ctx context.Context, nodeID uint, users []usecases.OnlineUserInfo) error {
-	// For now, we just log the online users
-	// A full implementation would need a cache (Redis) or database table to track online users
-	a.logger.Infow("online users updated",
+// UpdateOnlineSubscriptions updates online subscriptions tracking
+func (a *OnlineSubscriptionTrackerAdapter) UpdateOnlineSubscriptions(ctx context.Context, nodeID uint, subscriptions []usecases.OnlineSubscriptionInfo) error {
+	// For now, we just log the online subscriptions
+	// A full implementation would need a cache (Redis) or database table to track online subscriptions
+	a.logger.Infow("online subscriptions updated",
 		"node_id", nodeID,
-		"count", len(users),
+		"count", len(subscriptions),
 	)
 
-	// TODO: Implement Redis-based online user tracking if needed
+	// TODO: Implement Redis-based online subscription tracking if needed
 	// This would involve:
-	// 1. Store user IPs and timestamps in Redis with expiry
+	// 1. Store subscription IPs and timestamps in Redis with expiry
 	// 2. Use sorted sets for efficient querying
 	// 3. Clean up expired entries
 
@@ -363,7 +399,7 @@ func NewNodeSystemStatusUpdaterAdapter(
 }
 
 // UpdateSystemStatus updates node system status metrics
-func (a *NodeSystemStatusUpdaterAdapter) UpdateSystemStatus(ctx context.Context, nodeID uint, cpu, memory, disk float64, networkUsage string, uptime int) error {
+func (a *NodeSystemStatusUpdaterAdapter) UpdateSystemStatus(ctx context.Context, nodeID uint, cpu, memory, disk float64, uptime int) error {
 	// Log system status metrics
 	// A full implementation would store these in a time-series database or monitoring system
 	a.logger.Infow("node system status updated",
@@ -371,7 +407,6 @@ func (a *NodeSystemStatusUpdaterAdapter) UpdateSystemStatus(ctx context.Context,
 		"cpu", cpu,
 		"memory", memory,
 		"disk", disk,
-		"network", networkUsage,
 		"uptime", uptime,
 	)
 

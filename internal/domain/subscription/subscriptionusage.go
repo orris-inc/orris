@@ -13,7 +13,6 @@ type SubscriptionUsage struct {
 	id             uint
 	subscriptionID uint
 	period         time.Time
-	storageUsed    uint64
 	usersCount     uint
 	updatedAt      time.Time
 }
@@ -30,7 +29,6 @@ func NewSubscriptionUsage(subscriptionID uint, period time.Time) (*SubscriptionU
 	return &SubscriptionUsage{
 		subscriptionID: subscriptionID,
 		period:         period,
-		storageUsed:    0,
 		usersCount:     0,
 		updatedAt:      time.Now(),
 	}, nil
@@ -40,7 +38,6 @@ func ReconstructSubscriptionUsage(
 	id uint,
 	subscriptionID uint,
 	period time.Time,
-	storageUsed uint64,
 	usersCount uint,
 	updatedAt time.Time,
 ) (*SubscriptionUsage, error) {
@@ -60,24 +57,9 @@ func ReconstructSubscriptionUsage(
 		id:             id,
 		subscriptionID: subscriptionID,
 		period:         period,
-		storageUsed:    storageUsed,
 		usersCount:     usersCount,
 		updatedAt:      updatedAt,
 	}, nil
-}
-
-func (u *SubscriptionUsage) IncrementStorageUsed(bytes uint64) {
-	u.storageUsed += bytes
-	u.updatedAt = time.Now()
-}
-
-func (u *SubscriptionUsage) DecrementStorageUsed(bytes uint64) {
-	if bytes > u.storageUsed {
-		u.storageUsed = 0
-	} else {
-		u.storageUsed -= bytes
-	}
-	u.updatedAt = time.Now()
 }
 
 func (u *SubscriptionUsage) IncrementUsersCount() {
@@ -93,7 +75,6 @@ func (u *SubscriptionUsage) DecrementUsersCount() {
 }
 
 func (u *SubscriptionUsage) Reset() {
-	u.storageUsed = 0
 	u.usersCount = 0
 	u.updatedAt = time.Now()
 }
@@ -110,10 +91,6 @@ func (u *SubscriptionUsage) Period() time.Time {
 	return u.period
 }
 
-func (u *SubscriptionUsage) StorageUsed() uint64 {
-	return u.storageUsed
-}
-
 func (u *SubscriptionUsage) UsersCount() uint {
 	return u.usersCount
 }
@@ -123,7 +100,7 @@ func (u *SubscriptionUsage) UpdatedAt() time.Time {
 }
 
 func (u *SubscriptionUsage) HasUsage() bool {
-	return u.storageUsed > 0 || u.usersCount > 0
+	return u.usersCount > 0
 }
 
 func (u *SubscriptionUsage) SetID(id uint) error {

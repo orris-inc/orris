@@ -36,7 +36,6 @@ type SubscriptionPlan struct {
 	apiRateLimit uint
 	maxUsers       uint
 	maxProjects    uint
-	storageLimit   uint64
 	isPublic       bool
 	sortOrder      int
 	metadata       map[string]interface{}
@@ -83,7 +82,6 @@ func NewSubscriptionPlan(name, slug, description string, price uint64, currency 
 		apiRateLimit: 60,
 		maxUsers:       0,
 		maxProjects:    0,
-		storageLimit:   0,
 		isPublic:       true,
 		sortOrder:      0,
 		metadata:       make(map[string]interface{}),
@@ -95,7 +93,7 @@ func NewSubscriptionPlan(name, slug, description string, price uint64, currency 
 func ReconstructSubscriptionPlan(id uint, name, slug, description string, price uint64,
 	currency string, billingCycle vo.BillingCycle, trialDays int, status string,
 	features *vo.PlanFeatures, apiRateLimit, maxUsers, maxProjects uint,
-	storageLimit uint64, isPublic bool, sortOrder int, metadata map[string]interface{},
+	isPublic bool, sortOrder int, metadata map[string]interface{},
 	createdAt, updatedAt time.Time) (*SubscriptionPlan, error) {
 
 	if id == 0 {
@@ -125,7 +123,6 @@ func ReconstructSubscriptionPlan(id uint, name, slug, description string, price 
 		apiRateLimit: apiRateLimit,
 		maxUsers:     maxUsers,
 		maxProjects:  maxProjects,
-		storageLimit: storageLimit,
 		isPublic:     isPublic,
 		sortOrder:    sortOrder,
 		metadata:     metadata,
@@ -195,10 +192,6 @@ func (p *SubscriptionPlan) MaxUsers() uint {
 
 func (p *SubscriptionPlan) MaxProjects() uint {
 	return p.maxProjects
-}
-
-func (p *SubscriptionPlan) StorageLimit() uint64 {
-	return p.storageLimit
 }
 
 func (p *SubscriptionPlan) IsPublic() bool {
@@ -279,11 +272,6 @@ func (p *SubscriptionPlan) SetMaxUsers(max uint) {
 
 func (p *SubscriptionPlan) SetMaxProjects(max uint) {
 	p.maxProjects = max
-	p.updatedAt = time.Now()
-}
-
-func (p *SubscriptionPlan) SetStorageLimit(limit uint64) {
-	p.storageLimit = limit
 	p.updatedAt = time.Now()
 }
 

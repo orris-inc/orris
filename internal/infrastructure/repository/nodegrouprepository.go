@@ -158,35 +158,22 @@ func (r *NodeGroupRepositoryImpl) Update(ctx context.Context, group *node.NodeGr
 }
 
 // Delete soft deletes a node group
+// Note: Foreign key constraints have been removed for flexibility.
+// Associated records in node_group_nodes and node_group_plans are not deleted
+// and will be filtered by deleted_at when querying.
 func (r *NodeGroupRepositoryImpl) Delete(ctx context.Context, id uint) error {
-	// Start a transaction to delete associations first
-	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Delete node associations
-		if err := tx.Where("node_group_id = ?", id).Delete(&models.NodeGroupNodeModel{}).Error; err != nil {
-			r.logger.Errorw("failed to delete node group node associations", "id", id, "error", err)
-			return fmt.Errorf("failed to delete node associations: %w", err)
-		}
+	result := r.db.WithContext(ctx).Delete(&models.NodeGroupModel{}, id)
+	if result.Error != nil {
+		r.logger.Errorw("failed to delete node group", "id", id, "error", result.Error)
+		return fmt.Errorf("failed to delete node group: %w", result.Error)
+	}
 
-		// Delete plan associations
-		if err := tx.Where("node_group_id = ?", id).Delete(&models.NodeGroupPlanModel{}).Error; err != nil {
-			r.logger.Errorw("failed to delete node group plan associations", "id", id, "error", err)
-			return fmt.Errorf("failed to delete plan associations: %w", err)
-		}
+	if result.RowsAffected == 0 {
+		return errors.NewNotFoundError("node group not found")
+	}
 
-		// Delete the main entity (soft delete)
-		result := tx.Delete(&models.NodeGroupModel{}, id)
-		if result.Error != nil {
-			r.logger.Errorw("failed to delete node group", "id", id, "error", result.Error)
-			return fmt.Errorf("failed to delete node group: %w", result.Error)
-		}
-
-		if result.RowsAffected == 0 {
-			return errors.NewNotFoundError("node group not found")
-		}
-
-		r.logger.Infow("node group deleted successfully", "id", id)
-		return nil
-	})
+	r.logger.Infow("node group deleted successfully", "id", id)
+	return nil
 }
 
 // List retrieves a paginated list of node groups with filtering

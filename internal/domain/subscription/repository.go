@@ -74,7 +74,6 @@ type SubscriptionTokenRepository interface {
 type SubscriptionUsageRepository interface {
 	GetCurrentUsage(ctx context.Context, subscriptionID uint) (*SubscriptionUsage, error)
 	Upsert(ctx context.Context, usage *SubscriptionUsage) error
-	IncrementStorageUsed(ctx context.Context, subscriptionID uint, bytes uint64) error
 	GetUsageHistory(ctx context.Context, subscriptionID uint, from, to time.Time) ([]*SubscriptionUsage, error)
 	ResetUsage(ctx context.Context, subscriptionID uint, period time.Time) error
 }

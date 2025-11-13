@@ -22,10 +22,8 @@ type NodeTrafficModel struct {
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 
-	// Foreign keys
-	Node         *NodeModel `gorm:"foreignKey:NodeID;constraint:OnDelete:CASCADE"`
-	User         *UserModel `gorm:"foreignKey:UserID;constraint:OnDelete:SET NULL"`
-	// Subscription foreign key will reference subscriptions table
+	// Note: No foreign key constraints or associations.
+	// All relationships are managed by application business logic.
 }
 
 // TableName specifies the table name for GORM

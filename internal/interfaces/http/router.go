@@ -133,18 +133,18 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	googleBase := auth.NewGoogleOAuthClient(auth.GoogleOAuthConfig{
 		ClientID:     cfg.OAuth.Google.ClientID,
 		ClientSecret: cfg.OAuth.Google.ClientSecret,
-		RedirectURL:  cfg.OAuth.Google.RedirectURL,
+		RedirectURL:  cfg.OAuth.Google.GetRedirectURL(cfg.Server.GetBaseURL()),
 	})
 	googleClient := &oauthClientAdapter{googleBase}
 
 	githubBase := auth.NewGitHubOAuthClient(auth.GitHubOAuthConfig{
 		ClientID:     cfg.OAuth.GitHub.ClientID,
 		ClientSecret: cfg.OAuth.GitHub.ClientSecret,
-		RedirectURL:  cfg.OAuth.GitHub.RedirectURL,
+		RedirectURL:  cfg.OAuth.GitHub.GetRedirectURL(cfg.Server.GetBaseURL()),
 	})
 	githubClient := &oauthClientAdapter{githubBase}
 
-	// Initialize Redis client for OAuth state storage
+	// Initialize Redis client for OAuth state storage and Asynq
 	redisClient := redis.NewClient(&redis.Options{
 		Addr:     cfg.Redis.GetAddr(),
 		Password: cfg.Redis.Password,
@@ -290,9 +290,6 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Initialize node traffic repository (used by report adapter)
 	nodeTrafficRepo := repository.NewNodeTrafficRepository(db, log)
 
-	// Initialize user traffic repository
-	userTrafficRepo := repository.NewUserTrafficRepository(db, log)
-
 	// Initialize node authentication middleware using the same node repository adapter
 	validateNodeTokenUC := nodeUsecases.NewValidateNodeTokenUseCase(nodeRepo, log)
 	nodeTokenMiddleware := middleware.NewNodeTokenMiddleware(validateNodeTokenUC, log)
@@ -366,7 +363,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Currently mock gateway is removed as per CLAUDE.md rule: "不允许mock数据"
 	var gateway paymentGateway.PaymentGateway = nil // Temporary placeholder until real implementation
 	paymentConfig := paymentUsecases.PaymentConfig{
-		NotifyURL: cfg.Server.BaseURL + "/payments/callback",
+		NotifyURL: cfg.Server.GetBaseURL() + "/payments/callback",
 	}
 	createPaymentUC := paymentUsecases.NewCreatePaymentUseCase(
 		paymentRepo,
@@ -387,23 +384,24 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	// XrayR API handlers - v2raysocks compatible backend
 	getNodeConfigUC := nodeUsecases.NewGetNodeConfigUseCase(nodeRepoImpl, log)
-	getNodeUsersUC := nodeUsecases.NewGetNodeUsersUseCase(subscriptionRepo, log)
+	getNodeSubscriptionsUC := nodeUsecases.NewGetNodeSubscriptionsUseCase(subscriptionRepo, log)
 
 	// Initialize XrayR report use cases with adapters
-	userTrafficRecorder := adapters.NewUserTrafficRecorderAdapter(userTrafficRepo, log)
+	// Note: SubscriptionTrafficRecorderAdapter directly writes to database for simplicity
+	subscriptionTrafficRecorder := adapters.NewSubscriptionTrafficRecorderAdapter(nodeTrafficRepo, log)
 	systemStatusUpdater := adapters.NewNodeSystemStatusUpdaterAdapter(log)
-	onlineUserTracker := adapters.NewOnlineUserTrackerAdapter(log)
-	reportUserTrafficUC := nodeUsecases.NewReportUserTrafficUseCase(userTrafficRecorder, log)
+	onlineSubscriptionTracker := adapters.NewOnlineSubscriptionTrackerAdapter(log)
+	reportSubscriptionTrafficUC := nodeUsecases.NewReportSubscriptionTrafficUseCase(subscriptionTrafficRecorder, log)
 	reportNodeStatusUC := nodeUsecases.NewReportNodeStatusUseCase(systemStatusUpdater, log)
-	reportOnlineUsersUC := nodeUsecases.NewReportOnlineUsersUseCase(onlineUserTracker, log)
+	reportOnlineSubscriptionsUC := nodeUsecases.NewReportOnlineSubscriptionsUseCase(onlineSubscriptionTracker, log)
 
 	// Initialize RESTful Agent Handler
 	agentHandler := nodeHandlers.NewAgentHandler(
 		getNodeConfigUC,
-		getNodeUsersUC,
-		reportUserTrafficUC,
+		getNodeSubscriptionsUC,
+		reportSubscriptionTrafficUC,
 		reportNodeStatusUC,
-		reportOnlineUsersUC,
+		reportOnlineSubscriptionsUC,
 		log,
 	)
 
@@ -532,17 +530,17 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		// GET /agents/:id/config - Get node configuration
 		agentAPI.GET("/:id/config", r.agentHandler.GetConfig)
 
-		// GET /agents/:id/users - Get authorized users for node
-		agentAPI.GET("/:id/users", r.agentHandler.GetUsers)
+		// GET /agents/:id/subscriptions - Get active subscriptions for node
+		agentAPI.GET("/:id/subscriptions", r.agentHandler.GetSubscriptions)
 
-		// POST /agents/:id/traffic - Report user traffic data
+		// POST /agents/:id/traffic - Report subscription traffic data
 		agentAPI.POST("/:id/traffic", r.agentHandler.ReportTraffic)
 
 		// PUT /agents/:id/status - Update node system status
 		agentAPI.PUT("/:id/status", r.agentHandler.UpdateStatus)
 
-		// PUT /agents/:id/online-users - Update online users list
-		agentAPI.PUT("/:id/online-users", r.agentHandler.UpdateOnlineUsers)
+		// PUT /agents/:id/online-subscriptions - Update online subscriptions list
+		agentAPI.PUT("/:id/online-subscriptions", r.agentHandler.UpdateOnlineSubscriptions)
 	}
 
 	routes.SetupTicketRoutes(r.engine, &routes.TicketRouteConfig{

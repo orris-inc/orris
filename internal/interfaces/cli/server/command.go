@@ -90,6 +90,7 @@ func run(cmd *cobra.Command, args []string) error {
 	router := httpRouter.NewRouter(userAppService, database.Get(), cfg, logger.NewLogger())
 	router.SetupRoutes(cfg)
 
+	// HTTP Server setup
 	srv := &http.Server{
 		Addr:         cfg.Server.GetAddr(),
 		Handler:      router.GetEngine(),
@@ -98,6 +99,7 @@ func run(cmd *cobra.Command, args []string) error {
 		IdleTimeout:  60 * time.Second,
 	}
 
+	// Start HTTP Server in background
 	go func() {
 		logger.Info("server starting",
 			"address", cfg.Server.GetAddr(),
@@ -108,18 +110,19 @@ func run(cmd *cobra.Command, args []string) error {
 		}
 	}()
 
+	// Wait for shutdown signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
 	logger.Info("shutting down server...")
 
+	// Shutdown HTTP Server
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
 		logger.Error("server forced to shutdown", "error", err)
-		return err
 	}
 
 	logger.Info("server exited gracefully")

@@ -1,8 +1,90 @@
+# Build variables
+BINARY_NAME=orris
+CMD_PATH=cmd/orris/main.go
+BUILD_DIR=bin
+VERSION?=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
+LDFLAGS=-ldflags "-s -w -X main.version=$(VERSION)"
+
 .PHONY: build
-build: ## Build the application binary
-	@echo "Building orris..."
-	@go build -o bin/orris cmd/orris/main.go
-	@echo "✅ Build completed: bin/orris"
+build: ## Build the application binary for current platform
+	@echo "Building $(BINARY_NAME)..."
+	@mkdir -p $(BUILD_DIR)
+	@go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) $(CMD_PATH)
+	@echo "✅ Build completed: $(BUILD_DIR)/$(BINARY_NAME)"
+
+.PHONY: build-linux
+build-linux: ## Build for Linux AMD64
+	@echo "Building $(BINARY_NAME) for Linux AMD64..."
+	@mkdir -p $(BUILD_DIR)
+	@GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 $(CMD_PATH)
+	@echo "✅ Linux AMD64 build completed: $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64"
+
+.PHONY: build-linux-arm64
+build-linux-arm64: ## Build for Linux ARM64
+	@echo "Building $(BINARY_NAME) for Linux ARM64..."
+	@mkdir -p $(BUILD_DIR)
+	@GOOS=linux GOARCH=arm64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64 $(CMD_PATH)
+	@echo "✅ Linux ARM64 build completed: $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64"
+
+.PHONY: build-windows
+build-windows: ## Build for Windows AMD64
+	@echo "Building $(BINARY_NAME) for Windows AMD64..."
+	@mkdir -p $(BUILD_DIR)
+	@GOOS=windows GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe $(CMD_PATH)
+	@echo "✅ Windows AMD64 build completed: $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64.exe"
+
+.PHONY: build-darwin
+build-darwin: ## Build for macOS (Intel and Apple Silicon)
+	@echo "Building $(BINARY_NAME) for macOS..."
+	@mkdir -p $(BUILD_DIR)
+	@GOOS=darwin GOARCH=amd64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64 $(CMD_PATH)
+	@GOOS=darwin GOARCH=arm64 go build $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64 $(CMD_PATH)
+	@echo "✅ macOS builds completed"
+
+.PHONY: build-all
+build-all: build-linux build-linux-arm64 build-windows build-darwin ## Build for all platforms
+	@echo "✅ All platform builds completed"
+
+.PHONY: compress
+compress: ## Compress binaries with UPX
+	@echo "Compressing binaries with UPX..."
+	@if ! command -v upx >/dev/null 2>&1; then \
+		echo "❌ Error: UPX is not installed"; \
+		echo "Install with: brew install upx (macOS) or apt-get install upx (Linux)"; \
+		exit 1; \
+	fi
+	@for binary in $(BUILD_DIR)/$(BINARY_NAME)*; do \
+		if [ -f "$$binary" ]; then \
+			echo "Compressing $$binary..."; \
+			upx --best --lzma "$$binary" 2>/dev/null || upx --best "$$binary"; \
+		fi \
+	done
+	@echo "✅ Compression completed"
+
+.PHONY: compress-linux
+compress-linux: build-linux ## Build and compress Linux binary
+	@echo "Compressing Linux binary with UPX..."
+	@if ! command -v upx >/dev/null 2>&1; then \
+		echo "❌ Error: UPX is not installed"; \
+		echo "Install with: brew install upx (macOS) or apt-get install upx (Linux)"; \
+		exit 1; \
+	fi
+	@upx --best --lzma $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 2>/dev/null || upx --best $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64
+	@echo "✅ Linux binary compressed"
+
+.PHONY: release
+release: build-all compress ## Build all platforms and compress with UPX
+	@echo "📦 Creating release artifacts..."
+	@mkdir -p release
+	@for binary in $(BUILD_DIR)/$(BINARY_NAME)*; do \
+		if [ -f "$$binary" ]; then \
+			filename=$$(basename "$$binary"); \
+			echo "Packaging $$filename..."; \
+			tar -czf release/$$filename.tar.gz -C $(BUILD_DIR) $$filename; \
+		fi \
+	done
+	@echo "✅ Release artifacts created in release/"
+	@ls -lh release/
 
 .PHONY: swagger
 swagger: ## Generate Swagger documentation
@@ -49,7 +131,7 @@ test-coverage: ## Run tests with coverage
 .PHONY: clean
 clean: ## Clean build artifacts
 	@echo "Cleaning..."
-	@rm -rf bin/ coverage.out coverage.html
+	@rm -rf bin/ release/ coverage.out coverage.html
 	@echo "✅ Clean completed"
 
 .PHONY: deps

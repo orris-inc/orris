@@ -83,11 +83,10 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, toke
 		nodeGroupIDs[i] = gp.NodeGroupID
 	}
 
-	// Query nodes from these node groups
+	// Query node group associations
 	var nodeGroupNodeModels []models.NodeGroupNodeModel
 	if err := r.db.WithContext(ctx).
 		Where("node_group_id IN ?", nodeGroupIDs).
-		Preload("Node").
 		Find(&nodeGroupNodeModels).Error; err != nil {
 		r.logger.Errorw("failed to query node group nodes", "error", err)
 		return nil, err
@@ -98,42 +97,58 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, toke
 		return []*usecases.Node{}, nil
 	}
 
-	// Convert to use case Node structure (deduplicate nodes)
-	nodeMap := make(map[uint]*usecases.Node)
+	// Extract unique node IDs
+	nodeIDSet := make(map[uint]bool)
 	for _, ngn := range nodeGroupNodeModels {
-		if ngn.Node == nil {
-			continue
-		}
-		if _, exists := nodeMap[ngn.Node.ID]; !exists {
-			// Parse plugin opts from JSON
-			pluginOpts := make(map[string]string)
-			if len(ngn.Node.PluginOpts) > 0 {
-				var optsMap map[string]interface{}
-				if err := json.Unmarshal(ngn.Node.PluginOpts, &optsMap); err == nil {
-					for key, val := range optsMap {
-						if strVal, ok := val.(string); ok {
-							pluginOpts[key] = strVal
-						}
+		nodeIDSet[ngn.NodeID] = true
+	}
+
+	nodeIDs := make([]uint, 0, len(nodeIDSet))
+	for nodeID := range nodeIDSet {
+		nodeIDs = append(nodeIDs, nodeID)
+	}
+
+	// Query nodes manually (no foreign key associations)
+	var nodeModels []models.NodeModel
+	if err := r.db.WithContext(ctx).
+		Where("id IN ?", nodeIDs).
+		Where("status = ?", "active").
+		Find(&nodeModels).Error; err != nil {
+		r.logger.Errorw("failed to query nodes", "error", err)
+		return nil, err
+	}
+
+	// Convert to use case Node structure
+	nodeMap := make(map[uint]*usecases.Node)
+	for _, nodeModel := range nodeModels {
+		// Parse plugin opts from JSON
+		pluginOpts := make(map[string]string)
+		if len(nodeModel.PluginOpts) > 0 {
+			var optsMap map[string]interface{}
+			if err := json.Unmarshal(nodeModel.PluginOpts, &optsMap); err == nil {
+				for key, val := range optsMap {
+					if strVal, ok := val.(string); ok {
+						pluginOpts[key] = strVal
 					}
 				}
 			}
+		}
 
-			// Handle nil plugin
-			plugin := ""
-			if ngn.Node.Plugin != nil {
-				plugin = *ngn.Node.Plugin
-			}
+		// Handle nil plugin
+		plugin := ""
+		if nodeModel.Plugin != nil {
+			plugin = *nodeModel.Plugin
+		}
 
-			nodeMap[ngn.Node.ID] = &usecases.Node{
-				ID:               ngn.Node.ID,
-				Name:             ngn.Node.Name,
-				ServerAddress:    ngn.Node.ServerAddress,
-				ServerPort:       ngn.Node.ServerPort,
-				EncryptionMethod: ngn.Node.EncryptionMethod,
-				Password:         "", // Password is not stored at node level; will be filled with subscription UUID
-				Plugin:           plugin,
-				PluginOpts:       pluginOpts,
-			}
+		nodeMap[nodeModel.ID] = &usecases.Node{
+			ID:               nodeModel.ID,
+			Name:             nodeModel.Name,
+			ServerAddress:    nodeModel.ServerAddress,
+			ServerPort:       nodeModel.ServerPort,
+			EncryptionMethod: nodeModel.EncryptionMethod,
+			Password:         "", // Password is not stored at node level; will be filled with subscription UUID
+			Plugin:           plugin,
+			PluginOpts:       pluginOpts,
 		}
 	}
 

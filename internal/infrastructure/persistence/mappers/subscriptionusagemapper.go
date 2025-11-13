@@ -41,7 +41,6 @@ func (m *subscriptionUsageMapper) ToEntity(model *models.SubscriptionUsageModel)
 		model.ID,
 		model.SubscriptionID,
 		model.PeriodStart,
-		model.StorageUsed,
 		model.UsersCount,
 		model.UpdatedAt,
 	)
@@ -63,7 +62,6 @@ func (m *subscriptionUsageMapper) ToModel(entity *subscription.SubscriptionUsage
 		SubscriptionID: entity.SubscriptionID(),
 		PeriodStart:    entity.Period(),
 		PeriodEnd:      entity.Period(),
-		StorageUsed:    entity.StorageUsed(),
 		UsersCount:     entity.UsersCount(),
 		UpdatedAt:      entity.UpdatedAt(),
 	}

@@ -23,7 +23,7 @@ type ReportNodeStatusResult struct {
 
 // NodeSystemStatusUpdater defines the interface for updating node system status
 type NodeSystemStatusUpdater interface {
-	UpdateSystemStatus(ctx context.Context, nodeID uint, cpu, memory, disk float64, networkUsage string, uptime int) error
+	UpdateSystemStatus(ctx context.Context, nodeID uint, cpu, memory, disk float64, uptime int) error
 }
 
 // ReportNodeStatusUseCase handles reporting node system status from XrayR clients
@@ -61,7 +61,6 @@ func (uc *ReportNodeStatusUseCase) Execute(ctx context.Context, cmd ReportNodeSt
 		cpu,
 		memory,
 		disk,
-		cmd.Status.Net,
 		cmd.Status.Uptime,
 	); err != nil {
 		uc.logger.Errorw("failed to update node system status",
@@ -76,7 +75,6 @@ func (uc *ReportNodeStatusUseCase) Execute(ctx context.Context, cmd ReportNodeSt
 		"cpu", cmd.Status.CPU,
 		"memory", cmd.Status.Mem,
 		"disk", cmd.Status.Disk,
-		"network", cmd.Status.Net,
 		"uptime", cmd.Status.Uptime,
 	)
 

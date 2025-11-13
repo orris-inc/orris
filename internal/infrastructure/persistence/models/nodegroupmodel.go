@@ -51,9 +51,8 @@ type NodeGroupNodeModel struct {
 	NodeID      uint      `gorm:"not null;index:idx_node_group_node"`
 	CreatedAt   time.Time
 
-	// Foreign keys
-	NodeGroup *NodeGroupModel `gorm:"foreignKey:NodeGroupID;constraint:OnDelete:CASCADE"`
-	Node      *NodeModel      `gorm:"foreignKey:NodeID;constraint:OnDelete:CASCADE"`
+	// Note: No foreign key constraints or associations.
+	// All relationships are managed by application business logic.
 }
 
 // TableName specifies the table name for GORM
@@ -68,9 +67,8 @@ type NodeGroupPlanModel struct {
 	SubscriptionPlanID uint      `gorm:"not null;index:idx_node_group_plan"`
 	CreatedAt          time.Time
 
-	// Foreign keys
-	NodeGroup *NodeGroupModel `gorm:"foreignKey:NodeGroupID;constraint:OnDelete:CASCADE"`
-	// SubscriptionPlan foreign key will reference subscriptions table
+	// Note: No foreign key constraints or associations.
+	// All relationships are managed by application business logic.
 }
 
 // TableName specifies the table name for GORM

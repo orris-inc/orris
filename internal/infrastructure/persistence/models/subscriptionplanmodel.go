@@ -24,7 +24,6 @@ type SubscriptionPlanModel struct {
 	APIRateLimit uint `gorm:"default:60"`
 	MaxUsers       uint   `gorm:"default:1"`
 	MaxProjects    uint   `gorm:"default:1"`
-	StorageLimit   uint64 `gorm:"default:1073741824"` // 1GB in bytes
 	IsPublic       bool   `gorm:"default:true"`
 	SortOrder      int    `gorm:"default:0"`
 	Metadata       datatypes.JSON

@@ -36,36 +36,37 @@ type NodeConfigResponse struct {
 	RuleListPath      string `json:"rule_list_path,omitempty"`                              // Path to routing rule list file
 }
 
-// NodeUserInfo represents individual user information for node access
+// NodeSubscriptionInfo represents individual subscription information for node access
 // Endpoint: act=user (part of response)
-type NodeUserInfo struct {
-	ID          int    `json:"id" binding:"required"`          // User unique identifier
-	UUID        string `json:"uuid" binding:"required"`        // For Trojan: password, For SS: could be email
-	Email       string `json:"email" binding:"required,email"` // User email address
-	SpeedLimit  uint64 `json:"st"`                             // Speed limit in bps (0 = unlimited)
-	DeviceLimit int    `json:"dt"`                             // Device connection limit (0 = unlimited)
-	ExpireTime  int64  `json:"expire_time"`                    // Unix timestamp of expiration date
+// Note: SubscriptionID field represents subscription_id for traffic tracking purposes
+type NodeSubscriptionInfo struct {
+	SubscriptionID int    `json:"subscription_id" binding:"required"` // Subscription ID (used for traffic reporting)
+	UUID           string `json:"uuid" binding:"required"`            // For Trojan: password, For SS: could be email
+	Email          string `json:"email" binding:"required,email"`     // User email address
+	SpeedLimit     uint64 `json:"speed_limit"`                        // Speed limit in bps (0 = unlimited)
+	DeviceLimit    int    `json:"device_limit"`                       // Device connection limit (0 = unlimited)
+	ExpireTime     int64  `json:"expire_time"`                        // Unix timestamp of expiration date
 }
 
-// NodeUsersResponse represents the user list response for a node
+// NodeSubscriptionsResponse represents the subscription list response for a node
 // Endpoint: act=user
-type NodeUsersResponse struct {
-	Users []NodeUserInfo `json:"data" binding:"required"` // List of users authorized for this node
+type NodeSubscriptionsResponse struct {
+	Subscriptions []NodeSubscriptionInfo `json:"subscriptions" binding:"required"` // List of subscriptions authorized for this node
 }
 
-// UserTrafficItem represents traffic data for a single user
+// SubscriptionTrafficItem represents traffic data for a single subscription
 // Used in traffic reporting payload
-type UserTrafficItem struct {
-	UID      int   `json:"UID" binding:"required"`   // User unique identifier
-	Upload   int64 `json:"Upload" binding:"min=0"`   // Upload traffic in bytes
-	Download int64 `json:"Download" binding:"min=0"` // Download traffic in bytes
+type SubscriptionTrafficItem struct {
+	SubscriptionID int   `json:"subscription_id" binding:"required"` // Subscription ID for traffic tracking
+	Upload         int64 `json:"upload" binding:"min=0"`             // Upload traffic in bytes
+	Download       int64 `json:"download" binding:"min=0"`           // Download traffic in bytes
 }
 
-// ReportUserTrafficRequest represents user traffic report request
+// ReportSubscriptionTrafficRequest represents subscription traffic report request
 // Endpoint: act=submit
 // Note: According to v2raysocks spec, this could be an array sent directly as body
-type ReportUserTrafficRequest struct {
-	Users []UserTrafficItem `json:"users" binding:"required,dive"` // Array of user traffic data
+type ReportSubscriptionTrafficRequest struct {
+	Subscriptions []SubscriptionTrafficItem `json:"subscriptions" binding:"required,dive"` // Array of subscription traffic data
 }
 
 // ReportNodeStatusRequest represents node status report request
@@ -73,22 +74,21 @@ type ReportUserTrafficRequest struct {
 type ReportNodeStatusRequest struct {
 	CPU    string `json:"CPU" binding:"required"`  // CPU usage percentage (format: "XX%")
 	Mem    string `json:"Mem" binding:"required"`  // Memory usage percentage (format: "XX%")
-	Net    string `json:"Net" binding:"required"`  // Network usage (format: "XX MB")
 	Disk   string `json:"Disk" binding:"required"` // Disk usage percentage (format: "XX%")
 	Uptime int    `json:"Uptime" binding:"min=0"`  // System uptime in seconds
 }
 
-// OnlineUserItem represents a single online user connection
-// Used in online users reporting payload
-type OnlineUserItem struct {
-	UID int    `json:"UID" binding:"required"` // User unique identifier
-	IP  string `json:"IP" binding:"required"`  // User connection IP address
+// OnlineSubscriptionItem represents a single online subscription connection
+// Used in online subscriptions reporting payload
+type OnlineSubscriptionItem struct {
+	SubscriptionID int    `json:"subscription_id" binding:"required"` // Subscription unique identifier
+	IP             string `json:"ip" binding:"required"`              // Connection IP address
 }
 
-// ReportOnlineUsersRequest represents online users report request
+// ReportOnlineSubscriptionsRequest represents online subscriptions report request
 // Endpoint: act=onlineusers
-type ReportOnlineUsersRequest struct {
-	Users []OnlineUserItem `json:"users" binding:"required,dive"` // Array of currently online users
+type ReportOnlineSubscriptionsRequest struct {
+	Subscriptions []OnlineSubscriptionItem `json:"subscriptions" binding:"required,dive"` // Array of currently online subscriptions
 }
 
 // ToNodeConfigResponse converts a domain node entity to XrayR node config response
@@ -142,16 +142,16 @@ func ToNodeConfigResponse(n *node.Node) *NodeConfigResponse {
 	return config
 }
 
-// ToNodeUsersResponse converts subscription list to XrayR users response
+// ToNodeSubscriptionsResponse converts subscription list to XrayR subscriptions response
 // Maps subscription entities to v2raysocks user list format
-func ToNodeUsersResponse(subscriptions []*subscription.Subscription) *NodeUsersResponse {
+func ToNodeSubscriptionsResponse(subscriptions []*subscription.Subscription) *NodeSubscriptionsResponse {
 	if subscriptions == nil {
-		return &NodeUsersResponse{
-			Users: []NodeUserInfo{},
+		return &NodeSubscriptionsResponse{
+			Subscriptions: []NodeSubscriptionInfo{},
 		}
 	}
 
-	users := make([]NodeUserInfo, 0, len(subscriptions))
+	subscriptionInfos := make([]NodeSubscriptionInfo, 0, len(subscriptions))
 	for _, sub := range subscriptions {
 		if sub == nil {
 			continue
@@ -162,20 +162,23 @@ func ToNodeUsersResponse(subscriptions []*subscription.Subscription) *NodeUsersR
 			continue
 		}
 
-		user := NodeUserInfo{
-			ID:          int(sub.UserID()),
-			UUID:        generateUserUUID(sub),
-			Email:       generateUserEmail(sub),
-			SpeedLimit:  0, // 0 = unlimited, can be set from subscription plan limits
-			DeviceLimit: 0, // 0 = unlimited, can be set from subscription plan limits
-			ExpireTime:  sub.EndDate().Unix(),
+		// IMPORTANT: The SubscriptionID field represents subscription_id for traffic tracking
+		// XrayR uses this ID to report traffic, and traffic is tracked per subscription
+		// This allows proper traffic management when a user has multiple subscriptions
+		subscriptionInfo := NodeSubscriptionInfo{
+			SubscriptionID: int(sub.ID()), // Using subscription ID for traffic tracking
+			UUID:           generateSubscriptionUUID(sub),
+			Email:          generateSubscriptionEmail(sub),
+			SpeedLimit:     0, // 0 = unlimited, can be set from subscription plan limits
+			DeviceLimit:    0, // 0 = unlimited, can be set from subscription plan limits
+			ExpireTime:     sub.EndDate().Unix(),
 		}
 
-		users = append(users, user)
+		subscriptionInfos = append(subscriptionInfos, subscriptionInfo)
 	}
 
-	return &NodeUsersResponse{
-		Users: users,
+	return &NodeSubscriptionsResponse{
+		Subscriptions: subscriptionInfos,
 	}
 }
 
@@ -218,14 +221,14 @@ func isSSMethod(method string) bool {
 	return ssMethods[method]
 }
 
-// generateUserUUID generates UUID for user based on subscription
+// generateSubscriptionUUID generates UUID for subscription
 // For Trojan protocol: Uses UUID v5 (SHA-1 based) to generate deterministic UUIDs
 // For Shadowsocks protocol: Could use email as identifier
 //
 // The UUID is generated using a custom namespace and subscription ID as the name,
 // ensuring the same subscription always generates the same UUID (reproducible).
 // This approach is stateless and doesn't require database storage.
-func generateUserUUID(sub *subscription.Subscription) string {
+func generateSubscriptionUUID(sub *subscription.Subscription) string {
 	if sub == nil {
 		return ""
 	}
@@ -241,18 +244,22 @@ func generateUserUUID(sub *subscription.Subscription) string {
 	return subUUID.String()
 }
 
-// generateUserEmail generates email for user based on subscription
-// Note: This is a placeholder implementation. In production, you should:
-// 1. Inject UserRepository into the DTO conversion function
-// 2. Fetch actual user email from User aggregate
-// 3. Consider caching user data to avoid repeated queries
-func generateUserEmail(sub *subscription.Subscription) string {
-	// Temporary implementation: Generate a placeholder email
-	// In production, fetch actual user email via UserRepository.GetByID()
+// generateSubscriptionEmail generates email identifier based on subscription
+// Uses combination of user ID and subscription ID to ensure uniqueness
+// Format: user{userId}-sub{subscriptionId}@node.local
+//
+// This ensures each subscription has a unique identifier even when
+// a user has multiple subscriptions, maintaining subscription independence.
+//
+// Note: In production, consider:
+// 1. Inject UserRepository to fetch actual user email
+// 2. Append subscription ID to real email: "{realEmail}-sub{id}@node.local"
+// 3. Cache user data to avoid repeated queries
+func generateSubscriptionEmail(sub *subscription.Subscription) string {
 	if sub == nil {
 		return ""
 	}
-	// Format: user{userId}@node.local
-	// This is a placeholder and should be replaced with real user email
-	return fmt.Sprintf("user%d@node.local", sub.UserID())
+	// Format: user{userId}-sub{subscriptionId}@node.local
+	// This maintains subscription independence while showing user relationship
+	return fmt.Sprintf("user%d-sub%d@node.local", sub.UserID(), sub.ID())
 }

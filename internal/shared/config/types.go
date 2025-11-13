@@ -15,6 +15,19 @@ func (s *ServerConfig) GetAddr() string {
 	return fmt.Sprintf("%s:%d", s.Host, s.Port)
 }
 
+// GetBaseURL returns the base URL, auto-generated if not explicitly set
+func (s *ServerConfig) GetBaseURL() string {
+	if s.BaseURL != "" {
+		return s.BaseURL
+	}
+	// Auto-generate: use localhost for 0.0.0.0
+	host := s.Host
+	if host == "0.0.0.0" || host == "" {
+		host = "localhost"
+	}
+	return fmt.Sprintf("http://%s:%d", host, s.Port)
+}
+
 type DatabaseConfig struct {
 	Host            string `mapstructure:"host"`
 	Port            int    `mapstructure:"port"`
@@ -78,10 +91,26 @@ type GoogleOAuthConfig struct {
 	RedirectURL  string `mapstructure:"redirect_url"`
 }
 
+// GetRedirectURL returns the redirect URL, auto-generated if not explicitly set
+func (g *GoogleOAuthConfig) GetRedirectURL(baseURL string) string {
+	if g.RedirectURL != "" {
+		return g.RedirectURL
+	}
+	return fmt.Sprintf("%s/auth/oauth/google/callback", baseURL)
+}
+
 type GitHubOAuthConfig struct {
 	ClientID     string `mapstructure:"client_id"`
 	ClientSecret string `mapstructure:"client_secret"`
 	RedirectURL  string `mapstructure:"redirect_url"`
+}
+
+// GetRedirectURL returns the redirect URL, auto-generated if not explicitly set
+func (g *GitHubOAuthConfig) GetRedirectURL(baseURL string) string {
+	if g.RedirectURL != "" {
+		return g.RedirectURL
+	}
+	return fmt.Sprintf("%s/auth/oauth/github/callback", baseURL)
 }
 
 type OAuthConfig struct {
