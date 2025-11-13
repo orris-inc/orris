@@ -89,19 +89,19 @@ type SubscriptionResponse struct {
 	UpdatedAt          time.Time  `json:"updated_at"`
 }
 
-// @Summary Create a new subscription with billing cycle selection
-// @Description Create a new subscription for the authenticated user with the specified plan and billing cycle
-// @Tags subscriptions
-// @Accept json
-// @Produce json
-// @Security Bearer
-// @Param subscription body CreateSubscriptionRequest true "Subscription data with billing cycle (weekly/monthly/quarterly/semi_annual/yearly/lifetime)"
-// @Success 201 {object} utils.APIResponse{data=SubscriptionCreateResult} "Subscription created successfully"
-// @Failure 400 {object} utils.APIResponse "Bad request"
-// @Failure 401 {object} utils.APIResponse "Unauthorized"
-// @Failure 404 {object} utils.APIResponse "Plan not found"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /subscriptions [post]
+// @Summary		Create a new subscription with billing cycle selection
+// @Description	Create a new subscription for the authenticated user with the specified plan and billing cycle
+// @Tags			subscriptions
+// @Accept			json
+// @Produce		json
+// @Security		Bearer
+// @Param			subscription	body		CreateSubscriptionRequest							true	"Subscription data with billing cycle (weekly/monthly/quarterly/semi_annual/yearly/lifetime)"
+// @Success		201				{object}	utils.APIResponse{data=SubscriptionCreateResult}	"Subscription created successfully"
+// @Failure		400				{object}	utils.APIResponse									"Bad request"
+// @Failure		401				{object}	utils.APIResponse									"Unauthorized"
+// @Failure		404				{object}	utils.APIResponse									"Plan not found"
+// @Failure		500				{object}	utils.APIResponse									"Internal server error"
+// @Router			/subscriptions [post]
 func (h *SubscriptionHandler) CreateSubscription(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -148,20 +148,20 @@ func (h *SubscriptionHandler) CreateSubscription(c *gin.Context) {
 	}, "Subscription created successfully")
 }
 
-// @Summary Get subscription by ID
-// @Description Get details of a specific subscription by its ID
-// @Tags subscriptions
-// @Accept json
-// @Produce json
-// @Security Bearer
-// @Param id path int true "Subscription ID"
-// @Success 200 {object} utils.APIResponse{data=SubscriptionResponse} "Subscription details"
-// @Failure 400 {object} utils.APIResponse "Invalid subscription ID"
-// @Failure 401 {object} utils.APIResponse "Unauthorized"
-// @Failure 403 {object} utils.APIResponse "Access denied"
-// @Failure 404 {object} utils.APIResponse "Subscription not found"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /subscriptions/{id} [get]
+// @Summary		Get subscription by ID
+// @Description	Get details of a specific subscription by its ID
+// @Tags			subscriptions
+// @Accept			json
+// @Produce		json
+// @Security		Bearer
+// @Param			id	path		int												true	"Subscription ID"
+// @Success		200	{object}	utils.APIResponse{data=SubscriptionResponse}	"Subscription details"
+// @Failure		400	{object}	utils.APIResponse								"Invalid subscription ID"
+// @Failure		401	{object}	utils.APIResponse								"Unauthorized"
+// @Failure		403	{object}	utils.APIResponse								"Access denied"
+// @Failure		404	{object}	utils.APIResponse								"Subscription not found"
+// @Failure		500	{object}	utils.APIResponse								"Internal server error"
+// @Router			/subscriptions/{id} [get]
 func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -194,20 +194,20 @@ func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "", subscription)
 }
 
-// @Summary List user subscriptions
-// @Description Get a paginated list of subscriptions for the authenticated user
-// @Tags subscriptions
-// @Accept json
-// @Produce json
-// @Security Bearer
-// @Param page query int false "Page number" default(1)
-// @Param page_size query int false "Page size" default(20)
-// @Param status query string false "Subscription status filter" Enums(active,inactive,cancelled,expired,pending)
-// @Success 200 {object} utils.APIResponse{data=utils.ListResponse} "Subscriptions list"
-// @Failure 400 {object} utils.APIResponse "Invalid query parameters"
-// @Failure 401 {object} utils.APIResponse "Unauthorized"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /subscriptions [get]
+// @Summary		List user subscriptions
+// @Description	Get a paginated list of subscriptions for the authenticated user
+// @Tags			subscriptions
+// @Accept			json
+// @Produce		json
+// @Security		Bearer
+// @Param			page		query		int											false	"Page number"					default(1)
+// @Param			page_size	query		int											false	"Page size"						default(20)
+// @Param			status		query		string										false	"Subscription status filter"	Enums(active,inactive,cancelled,expired,pending)
+// @Success		200			{object}	utils.APIResponse{data=utils.ListResponse}	"Subscriptions list"
+// @Failure		400			{object}	utils.APIResponse							"Invalid query parameters"
+// @Failure		401			{object}	utils.APIResponse							"Unauthorized"
+// @Failure		500			{object}	utils.APIResponse							"Internal server error"
+// @Router			/subscriptions [get]
 func (h *SubscriptionHandler) ListUserSubscriptions(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -251,21 +251,21 @@ func (h *SubscriptionHandler) ListUserSubscriptions(c *gin.Context) {
 	utils.ListSuccessResponse(c, result.Subscriptions, result.Total, result.Page, result.PageSize)
 }
 
-// @Summary Cancel subscription
-// @Description Cancel an active subscription immediately or at the end of the billing period
-// @Tags subscriptions
-// @Accept json
-// @Produce json
-// @Security Bearer
-// @Param id path int true "Subscription ID"
-// @Param cancellation body CancelSubscriptionRequest true "Cancellation details"
-// @Success 200 {object} utils.APIResponse "Subscription cancelled successfully"
-// @Failure 400 {object} utils.APIResponse "Bad request"
-// @Failure 401 {object} utils.APIResponse "Unauthorized"
-// @Failure 403 {object} utils.APIResponse "Access denied"
-// @Failure 404 {object} utils.APIResponse "Subscription not found"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /subscriptions/{id}/cancel [post]
+// @Summary		Cancel subscription
+// @Description	Cancel an active subscription immediately or at the end of the billing period
+// @Tags			subscriptions
+// @Accept			json
+// @Produce		json
+// @Security		Bearer
+// @Param			id				path		int							true	"Subscription ID"
+// @Param			cancellation	body		CancelSubscriptionRequest	true	"Cancellation details"
+// @Success		200				{object}	utils.APIResponse			"Subscription cancelled successfully"
+// @Failure		400				{object}	utils.APIResponse			"Bad request"
+// @Failure		401				{object}	utils.APIResponse			"Unauthorized"
+// @Failure		403				{object}	utils.APIResponse			"Access denied"
+// @Failure		404				{object}	utils.APIResponse			"Subscription not found"
+// @Failure		500				{object}	utils.APIResponse			"Internal server error"
+// @Router			/subscriptions/{id}/cancel [post]
 func (h *SubscriptionHandler) CancelSubscription(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -322,20 +322,20 @@ func (h *SubscriptionHandler) CancelSubscription(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "Subscription cancelled successfully", nil)
 }
 
-// @Summary Renew subscription
-// @Description Manually renew a subscription for the next billing period
-// @Tags subscriptions
-// @Accept json
-// @Produce json
-// @Security Bearer
-// @Param id path int true "Subscription ID"
-// @Success 200 {object} utils.APIResponse "Subscription renewed successfully"
-// @Failure 400 {object} utils.APIResponse "Invalid subscription ID"
-// @Failure 401 {object} utils.APIResponse "Unauthorized"
-// @Failure 403 {object} utils.APIResponse "Access denied"
-// @Failure 404 {object} utils.APIResponse "Subscription not found"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /subscriptions/{id}/renew [post]
+// @Summary		Renew subscription
+// @Description	Manually renew a subscription for the next billing period
+// @Tags			subscriptions
+// @Accept			json
+// @Produce		json
+// @Security		Bearer
+// @Param			id	path		int					true	"Subscription ID"
+// @Success		200	{object}	utils.APIResponse	"Subscription renewed successfully"
+// @Failure		400	{object}	utils.APIResponse	"Invalid subscription ID"
+// @Failure		401	{object}	utils.APIResponse	"Unauthorized"
+// @Failure		403	{object}	utils.APIResponse	"Access denied"
+// @Failure		404	{object}	utils.APIResponse	"Subscription not found"
+// @Failure		500	{object}	utils.APIResponse	"Internal server error"
+// @Router			/subscriptions/{id}/renew [post]
 func (h *SubscriptionHandler) RenewSubscription(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -379,21 +379,21 @@ func (h *SubscriptionHandler) RenewSubscription(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "Subscription renewed successfully", nil)
 }
 
-// @Summary Change subscription plan
-// @Description Change the plan of an existing subscription (upgrade or downgrade)
-// @Tags subscriptions
-// @Accept json
-// @Produce json
-// @Security Bearer
-// @Param id path int true "Subscription ID"
-// @Param plan body ChangePlanRequest true "Plan change details"
-// @Success 200 {object} utils.APIResponse "Plan changed successfully"
-// @Failure 400 {object} utils.APIResponse "Bad request"
-// @Failure 401 {object} utils.APIResponse "Unauthorized"
-// @Failure 403 {object} utils.APIResponse "Access denied"
-// @Failure 404 {object} utils.APIResponse "Subscription or plan not found"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /subscriptions/{id}/change-plan [post]
+// @Summary		Change subscription plan
+// @Description	Change the plan of an existing subscription (upgrade or downgrade)
+// @Tags			subscriptions
+// @Accept			json
+// @Produce		json
+// @Security		Bearer
+// @Param			id		path		int					true	"Subscription ID"
+// @Param			plan	body		ChangePlanRequest	true	"Plan change details"
+// @Success		200		{object}	utils.APIResponse	"Plan changed successfully"
+// @Failure		400		{object}	utils.APIResponse	"Bad request"
+// @Failure		401		{object}	utils.APIResponse	"Unauthorized"
+// @Failure		403		{object}	utils.APIResponse	"Access denied"
+// @Failure		404		{object}	utils.APIResponse	"Subscription or plan not found"
+// @Failure		500		{object}	utils.APIResponse	"Internal server error"
+// @Router			/subscriptions/{id}/change-plan [post]
 func (h *SubscriptionHandler) ChangePlan(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {

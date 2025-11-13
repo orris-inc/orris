@@ -68,19 +68,20 @@ func NewAgentHandler(
 }
 
 // GetConfig godoc
-// @Summary Get node configuration
-// @Description Retrieve node configuration for agent clients (XrayR/v2ray compatible)
-// @Tags agent-v1
-// @Accept json
-// @Produce json
-// @Param id path int true "Node ID"
-// @Param node_type query string false "Node type override" Enums(shadowsocks, trojan)
-// @Success 200 {object} utils.APIResponse "Node configuration retrieved successfully"
-// @Failure 400 {object} utils.APIResponse "Invalid node ID parameter"
-// @Failure 404 {object} utils.APIResponse "Node not found"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /agents/{id}/config [get]
-// @Security NodeToken
+//
+//	@Summary		Get node configuration
+//	@Description	Retrieve node configuration for agent clients (XrayR/v2ray compatible)
+//	@Tags			agent-v1
+//	@Accept			json
+//	@Produce		json
+//	@Param			id			path		int					true	"Node ID"
+//	@Param			node_type	query		string				false	"Node type override"	Enums(shadowsocks, trojan)
+//	@Success		200			{object}	utils.APIResponse	"Node configuration retrieved successfully"
+//	@Failure		400			{object}	utils.APIResponse	"Invalid node ID parameter"
+//	@Failure		404			{object}	utils.APIResponse	"Node not found"
+//	@Failure		500			{object}	utils.APIResponse	"Internal server error"
+//	@Router			/agents/{id}/config [get]
+//	@Security		NodeToken
 func (h *AgentHandler) GetConfig(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -145,17 +146,18 @@ func (h *AgentHandler) GetConfig(c *gin.Context) {
 }
 
 // GetSubscriptions godoc
-// @Summary Get active subscriptions for node
-// @Description Retrieve list of active subscriptions authorized to access the node
-// @Tags agent-v1
-// @Accept json
-// @Produce json
-// @Param id path int true "Node ID"
-// @Success 200 {object} utils.APIResponse "Subscription list retrieved successfully"
-// @Failure 400 {object} utils.APIResponse "Invalid node ID parameter"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /agents/{id}/subscriptions [get]
-// @Security NodeToken
+//
+//	@Summary		Get active subscriptions for node
+//	@Description	Retrieve list of active subscriptions authorized to access the node
+//	@Tags			agent-v1
+//	@Accept			json
+//	@Produce		json
+//	@Param			id	path		int					true	"Node ID"
+//	@Success		200	{object}	utils.APIResponse	"Subscription list retrieved successfully"
+//	@Failure		400	{object}	utils.APIResponse	"Invalid node ID parameter"
+//	@Failure		500	{object}	utils.APIResponse	"Internal server error"
+//	@Router			/agents/{id}/subscriptions [get]
+//	@Security		NodeToken
 func (h *AgentHandler) GetSubscriptions(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -203,18 +205,19 @@ func (h *AgentHandler) GetSubscriptions(c *gin.Context) {
 }
 
 // ReportTraffic godoc
-// @Summary Report subscription traffic data
-// @Description Submit subscription traffic statistics for the node
-// @Tags agent-v1
-// @Accept json
-// @Produce json
-// @Param id path int true "Node ID"
-// @Param traffic body []dto.SubscriptionTrafficItem true "Subscription traffic data"
-// @Success 200 {object} utils.APIResponse "Traffic reported successfully"
-// @Failure 400 {object} utils.APIResponse "Invalid request body or node ID"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /agents/{id}/traffic [post]
-// @Security NodeToken
+//
+//	@Summary		Report subscription traffic data
+//	@Description	Submit subscription traffic statistics for the node
+//	@Tags			agent-v1
+//	@Accept			json
+//	@Produce		json
+//	@Param			id		path		int								true	"Node ID"
+//	@Param			traffic	body		[]dto.SubscriptionTrafficItem	true	"Subscription traffic data"
+//	@Success		200		{object}	utils.APIResponse				"Traffic reported successfully"
+//	@Failure		400		{object}	utils.APIResponse				"Invalid request body or node ID"
+//	@Failure		500		{object}	utils.APIResponse				"Internal server error"
+//	@Router			/agents/{id}/traffic [post]
+//	@Security		NodeToken
 func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -278,18 +281,19 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 }
 
 // UpdateStatus godoc
-// @Summary Update node system status
-// @Description Report node system metrics (CPU, memory, disk, network, uptime)
-// @Tags agent-v1
-// @Accept json
-// @Produce json
-// @Param id path int true "Node ID"
-// @Param status body dto.ReportNodeStatusRequest true "Node system status"
-// @Success 200 {object} utils.APIResponse "Status updated successfully"
-// @Failure 400 {object} utils.APIResponse "Invalid request body or node ID"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /agents/{id}/status [put]
-// @Security NodeToken
+//
+//	@Summary		Update node system status
+//	@Description	Report node system metrics (CPU, memory, disk, network, uptime)
+//	@Tags			agent-v1
+//	@Accept			json
+//	@Produce		json
+//	@Param			id		path		int							true	"Node ID"
+//	@Param			status	body		dto.ReportNodeStatusRequest	true	"Node system status"
+//	@Success		200		{object}	utils.APIResponse			"Status updated successfully"
+//	@Failure		400		{object}	utils.APIResponse			"Invalid request body or node ID"
+//	@Failure		500		{object}	utils.APIResponse			"Internal server error"
+//	@Router			/agents/{id}/status [put]
+//	@Security		NodeToken
 func (h *AgentHandler) UpdateStatus(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -353,18 +357,19 @@ func (h *AgentHandler) UpdateStatus(c *gin.Context) {
 }
 
 // UpdateOnlineSubscriptions godoc
-// @Summary Update online subscriptions list
-// @Description Report currently connected subscriptions on the node
-// @Tags agent-v1
-// @Accept json
-// @Produce json
-// @Param id path int true "Node ID"
-// @Param subscriptions body dto.ReportOnlineSubscriptionsRequest true "Online subscriptions list"
-// @Success 200 {object} utils.APIResponse "Online subscriptions updated successfully"
-// @Failure 400 {object} utils.APIResponse "Invalid request body or node ID"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /agents/{id}/online-subscriptions [put]
-// @Security NodeToken
+//
+//	@Summary		Update online subscriptions list
+//	@Description	Report currently connected subscriptions on the node
+//	@Tags			agent-v1
+//	@Accept			json
+//	@Produce		json
+//	@Param			id				path		int										true	"Node ID"
+//	@Param			subscriptions	body		dto.ReportOnlineSubscriptionsRequest	true	"Online subscriptions list"
+//	@Success		200				{object}	utils.APIResponse						"Online subscriptions updated successfully"
+//	@Failure		400				{object}	utils.APIResponse						"Invalid request body or node ID"
+//	@Failure		500				{object}	utils.APIResponse						"Internal server error"
+//	@Router			/agents/{id}/online-subscriptions [put]
+//	@Security		NodeToken
 func (h *AgentHandler) UpdateOnlineSubscriptions(c *gin.Context) {
 	ctx := c.Request.Context()
 

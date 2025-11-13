@@ -100,7 +100,6 @@ func (m *SubscriptionUsageLimitMiddleware) CheckUsageLimits() gin.HandlerFunc {
 	}
 }
 
-
 func (m *SubscriptionUsageLimitMiddleware) CheckUserLimit() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		subscriptionIDValue, exists := c.Get("subscription_id")
@@ -167,4 +166,3 @@ func (m *SubscriptionUsageLimitMiddleware) CheckUserLimit() gin.HandlerFunc {
 		c.Next()
 	}
 }
-

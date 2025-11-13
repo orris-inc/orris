@@ -19,8 +19,8 @@ type DeleteNodeGroupResult struct {
 }
 
 type DeleteNodeGroupUseCase struct {
-	nodeGroupRepo   node.NodeGroupRepository
-	logger          logger.Interface
+	nodeGroupRepo node.NodeGroupRepository
+	logger        logger.Interface
 }
 
 func NewDeleteNodeGroupUseCase(
@@ -28,8 +28,8 @@ func NewDeleteNodeGroupUseCase(
 	logger logger.Interface,
 ) *DeleteNodeGroupUseCase {
 	return &DeleteNodeGroupUseCase{
-		nodeGroupRepo:   nodeGroupRepo,
-		logger:          logger,
+		nodeGroupRepo: nodeGroupRepo,
+		logger:        logger,
 	}
 }
 

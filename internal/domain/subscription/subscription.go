@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	vo "orris/internal/domain/subscription/value_objects"
+
+	"github.com/google/uuid"
 )
 
 // Subscription represents the subscription aggregate root

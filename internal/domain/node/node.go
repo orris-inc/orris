@@ -343,7 +343,6 @@ func (n *Node) UpdateEncryption(config vo.EncryptionConfig) error {
 	n.updatedAt = time.Now()
 	n.version++
 
-
 	return nil
 }
 
@@ -352,7 +351,6 @@ func (n *Node) UpdatePlugin(config *vo.PluginConfig) error {
 	n.pluginConfig = config
 	n.updatedAt = time.Now()
 	n.version++
-
 
 	return nil
 }
@@ -375,7 +373,6 @@ func (n *Node) UpdateMetadata(metadata vo.NodeMetadata) error {
 	n.metadata = metadata
 	n.updatedAt = time.Now()
 	n.version++
-
 
 	return nil
 }
@@ -420,7 +417,6 @@ func (n *Node) GenerateAPIToken() (string, error) {
 	n.tokenHash = tokenHash
 	n.updatedAt = time.Now()
 	n.version++
-
 
 	return plainToken, nil
 }
@@ -496,6 +492,5 @@ func (n *Node) GenerateSubscriptionURI(password string, remarks string) (string,
 		return "", fmt.Errorf("unsupported protocol: %s", n.protocol)
 	}
 }
-
 
 // generateAPIToken generates a new API token and its hash

@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"orris/internal/shared/authorization"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type TokenType string

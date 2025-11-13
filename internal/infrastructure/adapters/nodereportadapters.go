@@ -5,192 +5,12 @@ import (
 	"fmt"
 	"time"
 
-	"orris/internal/application/node/usecases"
+	"github.com/redis/go-redis/v9"
+
+	nodeUsecases "orris/internal/application/node/usecases"
 	"orris/internal/domain/node"
-	"orris/internal/infrastructure/cache"
 	"orris/internal/shared/logger"
 )
-
-// NodeTrafficRecorderAdapter adapts TrafficCache and NodeTrafficRepository to NodeTrafficRecorder interface
-type NodeTrafficRecorderAdapter struct {
-	trafficCache    cache.TrafficCache
-	nodeTrafficRepo node.NodeTrafficRepository
-	logger          logger.Interface
-}
-
-// NewNodeTrafficRecorderAdapter creates a new traffic recorder adapter
-func NewNodeTrafficRecorderAdapter(
-	trafficCache cache.TrafficCache,
-	nodeTrafficRepo node.NodeTrafficRepository,
-	logger logger.Interface,
-) usecases.NodeTrafficRecorder {
-	return &NodeTrafficRecorderAdapter{
-		trafficCache:    trafficCache,
-		nodeTrafficRepo: nodeTrafficRepo,
-		logger:          logger,
-	}
-}
-
-// RecordTraffic records node traffic data
-func (a *NodeTrafficRecorderAdapter) RecordTraffic(ctx context.Context, nodeID uint, upload, download uint64) error {
-	// 1. Record to Redis cache for high performance (priority)
-	err := a.trafficCache.IncrementTraffic(ctx, nodeID, upload, download)
-	if err != nil {
-		a.logger.Warnw("failed to record traffic to redis, fallback to direct recording",
-			"error", err,
-			"node_id", nodeID,
-		)
-		// Don't fail here - Redis is cache layer, continue with historical recording
-	}
-
-	// 2. Record to NodeTraffic table for historical tracking
-	period := time.Now().Truncate(time.Hour)
-	traffic, err := node.NewNodeTraffic(nodeID, nil, nil, period)
-	if err != nil {
-		a.logger.Errorw("failed to create node traffic entity",
-			"error", err,
-			"node_id", nodeID,
-		)
-		return err
-	}
-
-	// Accumulate traffic
-	if err := traffic.Accumulate(upload, download); err != nil {
-		a.logger.Errorw("failed to accumulate traffic",
-			"error", err,
-			"node_id", nodeID,
-		)
-		return err
-	}
-
-	// Record in repository
-	if err := a.nodeTrafficRepo.RecordTraffic(ctx, traffic); err != nil {
-		return err
-	}
-
-	a.logger.Debugw("node traffic recorded via adapter",
-		"node_id", nodeID,
-		"upload", upload,
-		"download", download,
-	)
-
-	return nil
-}
-
-// NodeStatusUpdaterAdapter adapts NodeRepository to NodeStatusUpdater interface
-type NodeStatusUpdaterAdapter struct {
-	nodeRepo node.NodeRepository
-	logger   logger.Interface
-}
-
-// NewNodeStatusUpdaterAdapter creates a new status updater adapter
-func NewNodeStatusUpdaterAdapter(
-	nodeRepo node.NodeRepository,
-	logger logger.Interface,
-) usecases.NodeStatusUpdater {
-	return &NodeStatusUpdaterAdapter{
-		nodeRepo: nodeRepo,
-		logger:   logger,
-	}
-}
-
-// UpdateStatus updates node status and system information
-func (a *NodeStatusUpdaterAdapter) UpdateStatus(ctx context.Context, nodeID uint, status string, onlineUsers int, systemInfo *usecases.SystemInfo) error {
-	// Get node entity
-	nodeEntity, err := a.nodeRepo.GetByID(ctx, nodeID)
-	if err != nil {
-		a.logger.Errorw("failed to get node by ID",
-			"error", err,
-			"node_id", nodeID,
-		)
-		return err
-	}
-
-	// Update status if provided and valid
-	if status != "" {
-		// Status transitions are handled by the aggregate
-		switch status {
-		case "active", "online":
-			if err := nodeEntity.Activate(); err != nil {
-				a.logger.Warnw("failed to activate node",
-					"error", err,
-					"node_id", nodeID,
-				)
-			}
-		case "inactive", "offline":
-			if err := nodeEntity.Deactivate(); err != nil {
-				a.logger.Warnw("failed to deactivate node",
-					"error", err,
-					"node_id", nodeID,
-				)
-			}
-		}
-	}
-
-	// Update metadata with system information
-	// Note: The current domain model doesn't directly support system info fields
-	// This would need to be extended in the domain model if detailed tracking is required
-	if systemInfo != nil {
-		a.logger.Debugw("received system info",
-			"node_id", nodeID,
-			"load", systemInfo.Load,
-			"memory_usage", systemInfo.MemoryUsage,
-			"disk_usage", systemInfo.DiskUsage,
-		)
-		// For now, we log the system info
-		// TODO: Extend domain model to support system metrics if needed
-	}
-
-	// Persist updated node
-	if err := a.nodeRepo.Update(ctx, nodeEntity); err != nil {
-		a.logger.Errorw("failed to update node",
-			"error", err,
-			"node_id", nodeID,
-		)
-		return err
-	}
-
-	a.logger.Infow("node status updated via adapter",
-		"node_id", nodeID,
-		"status", status,
-		"online_users", onlineUsers,
-	)
-
-	return nil
-}
-
-// NodeLimitCheckerAdapter adapts to NodeLimitChecker interface
-// Note: Traffic limits are now managed at subscription level, not node level
-type NodeLimitCheckerAdapter struct {
-	logger logger.Interface
-}
-
-// NewNodeLimitCheckerAdapter creates a new limit checker adapter
-func NewNodeLimitCheckerAdapter(
-	logger logger.Interface,
-) usecases.NodeLimitChecker {
-	return &NodeLimitCheckerAdapter{
-		logger: logger,
-	}
-}
-
-// CheckLimits checks if node has exceeded traffic limits
-// Note: Traffic limits have been moved from node level to subscription level
-// This method now returns unlimited for all nodes
-func (a *NodeLimitCheckerAdapter) CheckLimits(ctx context.Context, nodeID uint) (exceeded bool, remaining uint64, err error) {
-	// Traffic limits are now managed at subscription level, not node level
-	// Following migration 007_remove_node_traffic_fields.sql
-	// Nodes no longer have traffic_limit or traffic_used fields
-
-	a.logger.Debugw("checked node limits - no limits at node level",
-		"node_id", nodeID,
-		"exceeded", false,
-		"note", "traffic limits are managed at subscription level",
-	)
-
-	// Return unlimited - no limits at node level
-	return false, 0, nil
-}
 
 // SubscriptionTrafficRecorderAdapter adapts to record subscription-based traffic
 // This adapter records traffic by subscription_id for proper traffic tracking
@@ -206,7 +26,7 @@ type SubscriptionTrafficRecorderAdapter struct {
 func NewSubscriptionTrafficRecorderAdapter(
 	nodeTrafficRepo node.NodeTrafficRepository,
 	logger logger.Interface,
-) usecases.SubscriptionTrafficRecorder {
+) nodeUsecases.SubscriptionTrafficRecorder {
 	return &SubscriptionTrafficRecorderAdapter{
 		nodeTrafficRepo: nodeTrafficRepo,
 		logger:          logger,
@@ -272,7 +92,7 @@ func (a *SubscriptionTrafficRecorderAdapter) RecordSubscriptionTraffic(ctx conte
 }
 
 // BatchRecordSubscriptionTraffic records multiple subscriptions' traffic data directly to database
-func (a *SubscriptionTrafficRecorderAdapter) BatchRecordSubscriptionTraffic(ctx context.Context, nodeID uint, items []usecases.SubscriptionTrafficItem) error {
+func (a *SubscriptionTrafficRecorderAdapter) BatchRecordSubscriptionTraffic(ctx context.Context, nodeID uint, items []nodeUsecases.SubscriptionTrafficItem) error {
 	if len(items) == 0 {
 		return nil
 	}
@@ -360,14 +180,14 @@ type OnlineSubscriptionTrackerAdapter struct {
 // NewOnlineSubscriptionTrackerAdapter creates a new online subscription tracker adapter
 func NewOnlineSubscriptionTrackerAdapter(
 	logger logger.Interface,
-) usecases.OnlineSubscriptionTracker {
+) nodeUsecases.OnlineSubscriptionTracker {
 	return &OnlineSubscriptionTrackerAdapter{
 		logger: logger,
 	}
 }
 
 // UpdateOnlineSubscriptions updates online subscriptions tracking
-func (a *OnlineSubscriptionTrackerAdapter) UpdateOnlineSubscriptions(ctx context.Context, nodeID uint, subscriptions []usecases.OnlineSubscriptionInfo) error {
+func (a *OnlineSubscriptionTrackerAdapter) UpdateOnlineSubscriptions(ctx context.Context, nodeID uint, subscriptions []nodeUsecases.OnlineSubscriptionInfo) error {
 	// For now, we just log the online subscriptions
 	// A full implementation would need a cache (Redis) or database table to track online subscriptions
 	a.logger.Infow("online subscriptions updated",
@@ -386,23 +206,46 @@ func (a *OnlineSubscriptionTrackerAdapter) UpdateOnlineSubscriptions(ctx context
 
 // NodeSystemStatusUpdaterAdapter adapts to NodeSystemStatusUpdater interface
 type NodeSystemStatusUpdaterAdapter struct {
-	logger logger.Interface
+	redisClient *redis.Client
+	logger      logger.Interface
 }
 
 // NewNodeSystemStatusUpdaterAdapter creates a new system status updater adapter
 func NewNodeSystemStatusUpdaterAdapter(
+	redisClient *redis.Client,
 	logger logger.Interface,
-) usecases.NodeSystemStatusUpdater {
+) nodeUsecases.NodeSystemStatusUpdater {
 	return &NodeSystemStatusUpdaterAdapter{
-		logger: logger,
+		redisClient: redisClient,
+		logger:      logger,
 	}
 }
 
-// UpdateSystemStatus updates node system status metrics
+// UpdateSystemStatus updates node system status metrics in Redis
 func (a *NodeSystemStatusUpdaterAdapter) UpdateSystemStatus(ctx context.Context, nodeID uint, cpu, memory, disk float64, uptime int) error {
-	// Log system status metrics
-	// A full implementation would store these in a time-series database or monitoring system
-	a.logger.Infow("node system status updated",
+	key := fmt.Sprintf("node:%d:status", nodeID)
+
+	// Store status in Redis hash with 5 minutes TTL
+	pipe := a.redisClient.Pipeline()
+	pipe.HSet(ctx, key, map[string]interface{}{
+		"cpu":        fmt.Sprintf("%.2f", cpu*100),    // Store as percentage string
+		"memory":     fmt.Sprintf("%.2f", memory*100), // Store as percentage string
+		"disk":       fmt.Sprintf("%.2f", disk*100),   // Store as percentage string
+		"uptime":     uptime,
+		"updated_at": time.Now().Unix(),
+	})
+	pipe.Expire(ctx, key, 5*time.Minute)
+
+	_, err := pipe.Exec(ctx)
+	if err != nil {
+		a.logger.Errorw("failed to store node status in redis",
+			"error", err,
+			"node_id", nodeID,
+		)
+		return fmt.Errorf("failed to store node status: %w", err)
+	}
+
+	a.logger.Infow("node system status updated in redis",
 		"node_id", nodeID,
 		"cpu", cpu,
 		"memory", memory,
@@ -410,11 +253,116 @@ func (a *NodeSystemStatusUpdaterAdapter) UpdateSystemStatus(ctx context.Context,
 		"uptime", uptime,
 	)
 
-	// TODO: Implement system metrics storage if needed
-	// This could involve:
-	// 1. Store in time-series database (InfluxDB, Prometheus)
-	// 2. Store in separate metrics table
-	// 3. Send to monitoring service (Grafana, Datadog)
-
 	return nil
+}
+
+// NodeSystemStatusQuerierAdapter queries node system status from Redis
+type NodeSystemStatusQuerierAdapter struct {
+	redisClient *redis.Client
+	logger      logger.Interface
+}
+
+// NewNodeSystemStatusQuerierAdapter creates a new system status querier adapter
+func NewNodeSystemStatusQuerierAdapter(
+	redisClient *redis.Client,
+	logger logger.Interface,
+) *NodeSystemStatusQuerierAdapter {
+	return &NodeSystemStatusQuerierAdapter{
+		redisClient: redisClient,
+		logger:      logger,
+	}
+}
+
+// GetNodeSystemStatus retrieves node system status from Redis
+func (a *NodeSystemStatusQuerierAdapter) GetNodeSystemStatus(ctx context.Context, nodeID uint) (*nodeUsecases.NodeSystemStatus, error) {
+	key := fmt.Sprintf("node:%d:status", nodeID)
+
+	// Get all fields from Redis hash
+	values, err := a.redisClient.HGetAll(ctx, key).Result()
+	if err != nil {
+		a.logger.Errorw("failed to get node status from redis",
+			"error", err,
+			"node_id", nodeID,
+		)
+		return nil, fmt.Errorf("failed to get node status: %w", err)
+	}
+
+	// If no data found, return nil (node status not available)
+	if len(values) == 0 {
+		return nil, nil
+	}
+
+	// Parse values
+	status := &nodeUsecases.NodeSystemStatus{
+		CPU:    values["cpu"],
+		Memory: values["memory"],
+		Disk:   values["disk"],
+	}
+
+	// Parse uptime
+	if uptimeStr, ok := values["uptime"]; ok {
+		if uptime, err := fmt.Sscanf(uptimeStr, "%d", &status.Uptime); err == nil && uptime == 1 {
+			// Uptime parsed successfully
+		}
+	}
+
+	// Parse updated_at
+	if updatedAtStr, ok := values["updated_at"]; ok {
+		if updatedAt, err := fmt.Sscanf(updatedAtStr, "%d", &status.UpdatedAt); err == nil && updatedAt == 1 {
+			// UpdatedAt parsed successfully
+		}
+	}
+
+	return status, nil
+}
+
+// GetMultipleNodeSystemStatus retrieves system status for multiple nodes in batch
+func (a *NodeSystemStatusQuerierAdapter) GetMultipleNodeSystemStatus(ctx context.Context, nodeIDs []uint) (map[uint]*nodeUsecases.NodeSystemStatus, error) {
+	result := make(map[uint]*nodeUsecases.NodeSystemStatus)
+
+	// Use pipeline for efficient batch querying
+	pipe := a.redisClient.Pipeline()
+	cmds := make(map[uint]*redis.MapStringStringCmd)
+
+	for _, nodeID := range nodeIDs {
+		key := fmt.Sprintf("node:%d:status", nodeID)
+		cmds[nodeID] = pipe.HGetAll(ctx, key)
+	}
+
+	_, err := pipe.Exec(ctx)
+	if err != nil && err != redis.Nil {
+		a.logger.Errorw("failed to get multiple node statuses from redis",
+			"error", err,
+			"node_count", len(nodeIDs),
+		)
+		return result, fmt.Errorf("failed to get node statuses: %w", err)
+	}
+
+	// Parse results
+	for nodeID, cmd := range cmds {
+		values, err := cmd.Result()
+		if err != nil || len(values) == 0 {
+			continue
+		}
+
+		status := &nodeUsecases.NodeSystemStatus{
+			CPU:    values["cpu"],
+			Memory: values["memory"],
+			Disk:   values["disk"],
+		}
+
+		// Parse uptime
+		if uptimeStr, ok := values["uptime"]; ok {
+			fmt.Sscanf(uptimeStr, "%d", &status.Uptime)
+		}
+
+		// Parse updated_at
+		if updatedAtStr, ok := values["updated_at"]; ok {
+			fmt.Sscanf(updatedAtStr, "%d", &status.UpdatedAt)
+		}
+
+		result[nodeID] = status
+	}
+
+	return result, nil
 }

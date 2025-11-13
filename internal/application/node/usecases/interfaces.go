@@ -59,6 +59,14 @@ type RemoveNodeFromGroupExecutor interface {
 	Execute(ctx context.Context, cmd RemoveNodeFromGroupCommand) (*RemoveNodeFromGroupResult, error)
 }
 
+type BatchAddNodesToGroupExecutor interface {
+	Execute(ctx context.Context, cmd BatchAddNodesToGroupCommand) (*BatchAddNodesToGroupResult, error)
+}
+
+type BatchRemoveNodesFromGroupExecutor interface {
+	Execute(ctx context.Context, cmd BatchRemoveNodesFromGroupCommand) (*BatchRemoveNodesFromGroupResult, error)
+}
+
 type ListGroupNodesExecutor interface {
 	Execute(ctx context.Context, query ListGroupNodesQuery) (*ListGroupNodesResult, error)
 }

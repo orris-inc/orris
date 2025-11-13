@@ -19,21 +19,22 @@ type V2RaySocksResponse struct {
 
 // NodeConfigResponse represents node configuration data for XrayR
 // Endpoint: act=config
+// Note: XrayR agent should map fields as needed (protocol -> node_type, encryption_method -> method)
 type NodeConfigResponse struct {
-	NodeID            int    `json:"node_id" binding:"required"`                            // Node unique identifier
-	NodeType          string `json:"node_type" binding:"required,oneof=shadowsocks trojan"` // Protocol type
-	ServerHost        string `json:"server_host" binding:"required"`                        // Server hostname or IP address
-	ServerPort        int    `json:"server_port" binding:"required,min=1,max=65535"`        // Server port number
-	Method            string `json:"method,omitempty"`                                      // Encryption method for SS (e.g., "aes-256-gcm")
-	ServerKey         string `json:"server_key,omitempty"`                                  // Server password for SS
-	TransportProtocol string `json:"transport_protocol" binding:"required,oneof=tcp ws"`    // Transport protocol
-	Host              string `json:"host,omitempty"`                                        // WebSocket host header
-	Path              string `json:"path,omitempty"`                                        // WebSocket path
-	EnableVless       bool   `json:"enable_vless"`                                          // Enable VLESS protocol
-	EnableXTLS        bool   `json:"enable_xtls"`                                           // Enable XTLS
-	SpeedLimit        uint64 `json:"speed_limit"`                                           // Speed limit in Mbps, 0 = unlimited
-	DeviceLimit       int    `json:"device_limit"`                                          // Device connection limit, 0 = unlimited
-	RuleListPath      string `json:"rule_list_path,omitempty"`                              // Path to routing rule list file
+	NodeID            int    `json:"node_id" binding:"required"`                               // Node unique identifier
+	Protocol          string `json:"protocol" binding:"required,oneof=shadowsocks trojan"`     // Protocol type (XrayR should map to node_type)
+	ServerHost        string `json:"server_host" binding:"required"`                           // Server hostname or IP address
+	ServerPort        int    `json:"server_port" binding:"required,min=1,max=65535"`           // Server port number
+	EncryptionMethod  string `json:"encryption_method,omitempty"`                              // Encryption method for SS (XrayR should map to method)
+	ServerKey         string `json:"server_key,omitempty"`                                     // Server password for SS
+	TransportProtocol string `json:"transport_protocol" binding:"required,oneof=tcp ws"`       // Transport protocol
+	Host              string `json:"host,omitempty"`                                           // WebSocket host header
+	Path              string `json:"path,omitempty"`                                           // WebSocket path
+	EnableVless       bool   `json:"enable_vless"`                                             // Enable VLESS protocol
+	EnableXTLS        bool   `json:"enable_xtls"`                                              // Enable XTLS
+	SpeedLimit        uint64 `json:"speed_limit"`                                              // Speed limit in Mbps, 0 = unlimited
+	DeviceLimit       int    `json:"device_limit"`                                             // Device connection limit, 0 = unlimited
+	RuleListPath      string `json:"rule_list_path,omitempty"`                                 // Path to routing rule list file
 }
 
 // NodeSubscriptionInfo represents individual subscription information for node access
@@ -102,8 +103,8 @@ func ToNodeConfigResponse(n *node.Node) *NodeConfigResponse {
 		NodeID:            int(n.ID()),
 		ServerHost:        n.ServerAddress().Value(),
 		ServerPort:        int(n.ServerPort()),
-		Method:            n.EncryptionConfig().Method(),
-		ServerKey:         "", // Server key is not stored at node level; each user has their own subscription UUID
+		EncryptionMethod:  n.EncryptionConfig().Method(),
+		ServerKey:         "",    // Server key is not stored at node level; each user has their own subscription UUID
 		TransportProtocol: "tcp", // Default to TCP, can be enhanced based on plugin config
 		EnableVless:       false,
 		EnableXTLS:        false,
@@ -112,12 +113,12 @@ func ToNodeConfigResponse(n *node.Node) *NodeConfigResponse {
 		RuleListPath:      "",
 	}
 
-	// Determine node type based on encryption method or plugin
+	// Determine protocol type based on encryption method or plugin
 	// Shadowsocks methods: aes-128-gcm, aes-256-gcm, chacha20-ietf-poly1305, etc.
-	if isSSMethod(config.Method) {
-		config.NodeType = "shadowsocks"
+	if isSSMethod(config.EncryptionMethod) {
+		config.Protocol = "shadowsocks"
 	} else {
-		config.NodeType = "trojan"
+		config.Protocol = "trojan"
 	}
 
 	// Handle plugin configuration for transport protocol

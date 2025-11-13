@@ -22,4 +22,3 @@ func NewService(
 		logger:           logger,
 	}
 }
-

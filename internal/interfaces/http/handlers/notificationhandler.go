@@ -25,19 +25,20 @@ func NewNotificationHandler(serviceDDD *notification.ServiceDDD, logger logger.I
 }
 
 // CreateAnnouncement godoc
-// @Summary Create announcement
-// @Description Create a new announcement with the provided data
-// @Security Bearer
-// @Tags announcements
-// @Accept json
-// @Produce json
-// @Param request body internal_interfaces_dto.CreateAnnouncementRequest true "Announcement data"
-// @Success 201 {object} utils.APIResponse "Announcement created successfully"
-// @Failure 400 {object} utils.APIResponse "Bad request"
-// @Failure 401 {object} utils.APIResponse "Unauthorized"
-// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /announcements [post]
+//
+//	@Summary		Create announcement
+//	@Description	Create a new announcement with the provided data
+//	@Security		Bearer
+//	@Tags			announcements
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		internal_interfaces_dto.CreateAnnouncementRequest	true	"Announcement data"
+//	@Success		201		{object}	utils.APIResponse									"Announcement created successfully"
+//	@Failure		400		{object}	utils.APIResponse									"Bad request"
+//	@Failure		401		{object}	utils.APIResponse									"Unauthorized"
+//	@Failure		403		{object}	utils.APIResponse									"Forbidden - Requires admin role"
+//	@Failure		500		{object}	utils.APIResponse									"Internal server error"
+//	@Router			/announcements [post]
 func (h *NotificationHandler) CreateAnnouncement(c *gin.Context) {
 	var req dto.CreateAnnouncementRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -76,21 +77,22 @@ func (h *NotificationHandler) CreateAnnouncement(c *gin.Context) {
 }
 
 // UpdateAnnouncement godoc
-// @Summary Update announcement
-// @Description Update an existing announcement by ID
-// @Security Bearer
-// @Tags announcements
-// @Accept json
-// @Produce json
-// @Param id path int true "Announcement ID"
-// @Param request body internal_interfaces_dto.UpdateAnnouncementRequest true "Updated announcement data"
-// @Success 200 {object} utils.APIResponse{data=internal_interfaces_dto.AnnouncementResponse} "Announcement updated successfully"
-// @Failure 400 {object} utils.APIResponse "Bad request"
-// @Failure 401 {object} utils.APIResponse "Unauthorized"
-// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
-// @Failure 404 {object} utils.APIResponse "Announcement not found"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /announcements/{id} [put]
+//
+//	@Summary		Update announcement
+//	@Description	Update an existing announcement by ID
+//	@Security		Bearer
+//	@Tags			announcements
+//	@Accept			json
+//	@Produce		json
+//	@Param			id		path		int																		true	"Announcement ID"
+//	@Param			request	body		internal_interfaces_dto.UpdateAnnouncementRequest						true	"Updated announcement data"
+//	@Success		200		{object}	utils.APIResponse{data=internal_interfaces_dto.AnnouncementResponse}	"Announcement updated successfully"
+//	@Failure		400		{object}	utils.APIResponse														"Bad request"
+//	@Failure		401		{object}	utils.APIResponse														"Unauthorized"
+//	@Failure		403		{object}	utils.APIResponse														"Forbidden - Requires admin role"
+//	@Failure		404		{object}	utils.APIResponse														"Announcement not found"
+//	@Failure		500		{object}	utils.APIResponse														"Internal server error"
+//	@Router			/announcements/{id} [put]
 func (h *NotificationHandler) UpdateAnnouncement(c *gin.Context) {
 	announcementID, err := dto.ParseAnnouncementID(c)
 	if err != nil {
@@ -124,19 +126,20 @@ func (h *NotificationHandler) UpdateAnnouncement(c *gin.Context) {
 }
 
 // DeleteAnnouncement godoc
-// @Summary Delete announcement
-// @Description Delete an announcement by ID
-// @Security Bearer
-// @Tags announcements
-// @Accept json
-// @Produce json
-// @Param id path int true "Announcement ID"
-// @Success 204 "Announcement deleted successfully"
-// @Failure 400 {object} utils.APIResponse "Invalid announcement ID"
-// @Failure 401 {object} utils.APIResponse "Unauthorized"
-// @Failure 404 {object} utils.APIResponse "Announcement not found"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /announcements/{id} [delete]
+//
+//	@Summary		Delete announcement
+//	@Description	Delete an announcement by ID
+//	@Security		Bearer
+//	@Tags			announcements
+//	@Accept			json
+//	@Produce		json
+//	@Param			id	path	int	true	"Announcement ID"
+//	@Success		204	"Announcement deleted successfully"
+//	@Failure		400	{object}	utils.APIResponse	"Invalid announcement ID"
+//	@Failure		401	{object}	utils.APIResponse	"Unauthorized"
+//	@Failure		404	{object}	utils.APIResponse	"Announcement not found"
+//	@Failure		500	{object}	utils.APIResponse	"Internal server error"
+//	@Router			/announcements/{id} [delete]
 func (h *NotificationHandler) DeleteAnnouncement(c *gin.Context) {
 	announcementID, err := dto.ParseAnnouncementID(c)
 	if err != nil {
@@ -154,19 +157,20 @@ func (h *NotificationHandler) DeleteAnnouncement(c *gin.Context) {
 }
 
 // PublishAnnouncement godoc
-// @Summary Publish announcement
-// @Description Publish a draft announcement to make it visible to users
-// @Security Bearer
-// @Tags announcements
-// @Accept json
-// @Produce json
-// @Param id path int true "Announcement ID"
-// @Success 200 {object} utils.APIResponse{data=internal_interfaces_dto.AnnouncementResponse} "Announcement published successfully"
-// @Failure 400 {object} utils.APIResponse "Invalid announcement ID"
-// @Failure 401 {object} utils.APIResponse "Unauthorized"
-// @Failure 404 {object} utils.APIResponse "Announcement not found"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /announcements/{id}/publish [post]
+//
+//	@Summary		Publish announcement
+//	@Description	Publish a draft announcement to make it visible to users
+//	@Security		Bearer
+//	@Tags			announcements
+//	@Accept			json
+//	@Produce		json
+//	@Param			id	path		int																		true	"Announcement ID"
+//	@Success		200	{object}	utils.APIResponse{data=internal_interfaces_dto.AnnouncementResponse}	"Announcement published successfully"
+//	@Failure		400	{object}	utils.APIResponse														"Invalid announcement ID"
+//	@Failure		401	{object}	utils.APIResponse														"Unauthorized"
+//	@Failure		404	{object}	utils.APIResponse														"Announcement not found"
+//	@Failure		500	{object}	utils.APIResponse														"Internal server error"
+//	@Router			/announcements/{id}/publish [post]
 func (h *NotificationHandler) PublishAnnouncement(c *gin.Context) {
 	announcementID, err := dto.ParseAnnouncementID(c)
 	if err != nil {
@@ -191,21 +195,22 @@ func (h *NotificationHandler) PublishAnnouncement(c *gin.Context) {
 }
 
 // ListAnnouncements godoc
-// @Summary List announcements
-// @Description Get a paginated list of announcements with optional filters
-// @Security Bearer
-// @Tags announcements
-// @Accept json
-// @Produce json
-// @Param page query int false "Page number" default(1)
-// @Param page_size query int false "Page size" default(20)
-// @Param type query string false "Filter by type" Enums(system, maintenance, feature, promotion)
-// @Param status query string false "Filter by status" Enums(draft, published, archived)
-// @Success 200 {object} utils.APIResponse{data=utils.ListResponse} "Announcements list"
-// @Failure 400 {object} utils.APIResponse "Invalid query parameters"
-// @Failure 401 {object} utils.APIResponse "Unauthorized"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /announcements [get]
+//
+//	@Summary		List announcements
+//	@Description	Get a paginated list of announcements with optional filters
+//	@Security		Bearer
+//	@Tags			announcements
+//	@Accept			json
+//	@Produce		json
+//	@Param			page		query		int											false	"Page number"		default(1)
+//	@Param			page_size	query		int											false	"Page size"			default(20)
+//	@Param			type		query		string										false	"Filter by type"	Enums(system, maintenance, feature, promotion)
+//	@Param			status		query		string										false	"Filter by status"	Enums(draft, published, archived)
+//	@Success		200			{object}	utils.APIResponse{data=utils.ListResponse}	"Announcements list"
+//	@Failure		400			{object}	utils.APIResponse							"Invalid query parameters"
+//	@Failure		401			{object}	utils.APIResponse							"Unauthorized"
+//	@Failure		500			{object}	utils.APIResponse							"Internal server error"
+//	@Router			/announcements [get]
 func (h *NotificationHandler) ListAnnouncements(c *gin.Context) {
 	req, err := dto.ParseListAnnouncementsRequest(c)
 	if err != nil {
@@ -226,19 +231,20 @@ func (h *NotificationHandler) ListAnnouncements(c *gin.Context) {
 }
 
 // GetAnnouncement godoc
-// @Summary Get announcement
-// @Description Get detailed information of an announcement by ID
-// @Security Bearer
-// @Tags announcements
-// @Accept json
-// @Produce json
-// @Param id path int true "Announcement ID"
-// @Success 200 {object} utils.APIResponse{data=internal_interfaces_dto.AnnouncementResponse} "Announcement details"
-// @Failure 400 {object} utils.APIResponse "Invalid announcement ID"
-// @Failure 401 {object} utils.APIResponse "Unauthorized"
-// @Failure 404 {object} utils.APIResponse "Announcement not found"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /announcements/{id} [get]
+//
+//	@Summary		Get announcement
+//	@Description	Get detailed information of an announcement by ID
+//	@Security		Bearer
+//	@Tags			announcements
+//	@Accept			json
+//	@Produce		json
+//	@Param			id	path		int																		true	"Announcement ID"
+//	@Success		200	{object}	utils.APIResponse{data=internal_interfaces_dto.AnnouncementResponse}	"Announcement details"
+//	@Failure		400	{object}	utils.APIResponse														"Invalid announcement ID"
+//	@Failure		401	{object}	utils.APIResponse														"Unauthorized"
+//	@Failure		404	{object}	utils.APIResponse														"Announcement not found"
+//	@Failure		500	{object}	utils.APIResponse														"Internal server error"
+//	@Router			/announcements/{id} [get]
 func (h *NotificationHandler) GetAnnouncement(c *gin.Context) {
 	announcementID, err := dto.ParseAnnouncementID(c)
 	if err != nil {
@@ -256,20 +262,21 @@ func (h *NotificationHandler) GetAnnouncement(c *gin.Context) {
 }
 
 // ListNotifications godoc
-// @Summary List notifications for current user
-// @Description Get a list of notifications for the authenticated user
-// @Security Bearer
-// @Tags notifications
-// @Accept json
-// @Produce json
-// @Param limit query int false "Limit" default(20)
-// @Param offset query int false "Offset" default(0)
-// @Param status query string false "Filter by status" Enums(read, unread)
-// @Success 200 {object} utils.APIResponse{data=[]internal_interfaces_dto.NotificationResponse} "Notifications list"
-// @Failure 400 {object} utils.APIResponse "Invalid query parameters"
-// @Failure 401 {object} utils.APIResponse "Unauthorized"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /notifications [get]
+//
+//	@Summary		List notifications for current user
+//	@Description	Get a list of notifications for the authenticated user
+//	@Security		Bearer
+//	@Tags			notifications
+//	@Accept			json
+//	@Produce		json
+//	@Param			limit	query		int																		false	"Limit"				default(20)
+//	@Param			offset	query		int																		false	"Offset"			default(0)
+//	@Param			status	query		string																	false	"Filter by status"	Enums(read, unread)
+//	@Success		200		{object}	utils.APIResponse{data=[]internal_interfaces_dto.NotificationResponse}	"Notifications list"
+//	@Failure		400		{object}	utils.APIResponse														"Invalid query parameters"
+//	@Failure		401		{object}	utils.APIResponse														"Unauthorized"
+//	@Failure		500		{object}	utils.APIResponse														"Internal server error"
+//	@Router			/notifications [get]
 func (h *NotificationHandler) ListNotifications(c *gin.Context) {
 	req, err := dto.ParseListNotificationsRequest(c)
 	if err != nil {
@@ -302,16 +309,17 @@ func (h *NotificationHandler) ListNotifications(c *gin.Context) {
 }
 
 // GetUnreadCount godoc
-// @Summary Get unread notifications count
-// @Description Get the count of unread notifications for the authenticated user
-// @Security Bearer
-// @Tags notifications
-// @Accept json
-// @Produce json
-// @Success 200 {object} utils.APIResponse{data=internal_interfaces_dto.UnreadCountResponse} "Unread count"
-// @Failure 401 {object} utils.APIResponse "Unauthorized"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /notifications/unread-count [get]
+//
+//	@Summary		Get unread notifications count
+//	@Description	Get the count of unread notifications for the authenticated user
+//	@Security		Bearer
+//	@Tags			notifications
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	utils.APIResponse{data=internal_interfaces_dto.UnreadCountResponse}	"Unread count"
+//	@Failure		401	{object}	utils.APIResponse													"Unauthorized"
+//	@Failure		500	{object}	utils.APIResponse													"Internal server error"
+//	@Router			/notifications/unread-count [get]
 func (h *NotificationHandler) GetUnreadCount(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -336,19 +344,20 @@ func (h *NotificationHandler) GetUnreadCount(c *gin.Context) {
 }
 
 // MarkAsRead godoc
-// @Summary Mark notification as read
-// @Description Mark a specific notification as read for the authenticated user
-// @Security Bearer
-// @Tags notifications
-// @Accept json
-// @Produce json
-// @Param id path int true "Notification ID"
-// @Success 200 {object} utils.APIResponse{data=internal_interfaces_dto.NotificationResponse} "Notification marked as read"
-// @Failure 400 {object} utils.APIResponse "Invalid notification ID"
-// @Failure 401 {object} utils.APIResponse "Unauthorized"
-// @Failure 404 {object} utils.APIResponse "Notification not found"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /notifications/{id}/read [put]
+//
+//	@Summary		Mark notification as read
+//	@Description	Mark a specific notification as read for the authenticated user
+//	@Security		Bearer
+//	@Tags			notifications
+//	@Accept			json
+//	@Produce		json
+//	@Param			id	path		int																		true	"Notification ID"
+//	@Success		200	{object}	utils.APIResponse{data=internal_interfaces_dto.NotificationResponse}	"Notification marked as read"
+//	@Failure		400	{object}	utils.APIResponse														"Invalid notification ID"
+//	@Failure		401	{object}	utils.APIResponse														"Unauthorized"
+//	@Failure		404	{object}	utils.APIResponse														"Notification not found"
+//	@Failure		500	{object}	utils.APIResponse														"Internal server error"
+//	@Router			/notifications/{id}/read [put]
 func (h *NotificationHandler) MarkAsRead(c *gin.Context) {
 	notificationID, err := dto.ParseNotificationID(c)
 	if err != nil {
@@ -379,16 +388,17 @@ func (h *NotificationHandler) MarkAsRead(c *gin.Context) {
 }
 
 // MarkAllAsRead godoc
-// @Summary Mark all notifications as read
-// @Description Mark all notifications as read for the authenticated user
-// @Security Bearer
-// @Tags notifications
-// @Accept json
-// @Produce json
-// @Success 200 {object} utils.APIResponse "All notifications marked as read"
-// @Failure 401 {object} utils.APIResponse "Unauthorized"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /notifications/read-all [put]
+//
+//	@Summary		Mark all notifications as read
+//	@Description	Mark all notifications as read for the authenticated user
+//	@Security		Bearer
+//	@Tags			notifications
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object}	utils.APIResponse	"All notifications marked as read"
+//	@Failure		401	{object}	utils.APIResponse	"Unauthorized"
+//	@Failure		500	{object}	utils.APIResponse	"Internal server error"
+//	@Router			/notifications/read-all [put]
 func (h *NotificationHandler) MarkAllAsRead(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -413,19 +423,20 @@ func (h *NotificationHandler) MarkAllAsRead(c *gin.Context) {
 }
 
 // ArchiveNotification godoc
-// @Summary Archive notification
-// @Description Archive a notification for the authenticated user
-// @Security Bearer
-// @Tags notifications
-// @Accept json
-// @Produce json
-// @Param id path int true "Notification ID"
-// @Success 200 {object} utils.APIResponse{data=internal_interfaces_dto.NotificationResponse} "Notification archived successfully"
-// @Failure 400 {object} utils.APIResponse "Invalid notification ID"
-// @Failure 401 {object} utils.APIResponse "Unauthorized"
-// @Failure 404 {object} utils.APIResponse "Notification not found"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /notifications/{id}/archive [post]
+//
+//	@Summary		Archive notification
+//	@Description	Archive a notification for the authenticated user
+//	@Security		Bearer
+//	@Tags			notifications
+//	@Accept			json
+//	@Produce		json
+//	@Param			id	path		int																		true	"Notification ID"
+//	@Success		200	{object}	utils.APIResponse{data=internal_interfaces_dto.NotificationResponse}	"Notification archived successfully"
+//	@Failure		400	{object}	utils.APIResponse														"Invalid notification ID"
+//	@Failure		401	{object}	utils.APIResponse														"Unauthorized"
+//	@Failure		404	{object}	utils.APIResponse														"Notification not found"
+//	@Failure		500	{object}	utils.APIResponse														"Internal server error"
+//	@Router			/notifications/{id}/archive [post]
 func (h *NotificationHandler) ArchiveNotification(c *gin.Context) {
 	notificationID, err := dto.ParseNotificationID(c)
 	if err != nil {
@@ -456,19 +467,20 @@ func (h *NotificationHandler) ArchiveNotification(c *gin.Context) {
 }
 
 // DeleteNotification godoc
-// @Summary Delete notification
-// @Description Delete a notification for the authenticated user
-// @Security Bearer
-// @Tags notifications
-// @Accept json
-// @Produce json
-// @Param id path int true "Notification ID"
-// @Success 204 "Notification deleted successfully"
-// @Failure 400 {object} utils.APIResponse "Invalid notification ID"
-// @Failure 401 {object} utils.APIResponse "Unauthorized"
-// @Failure 404 {object} utils.APIResponse "Notification not found"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /notifications/{id} [delete]
+//
+//	@Summary		Delete notification
+//	@Description	Delete a notification for the authenticated user
+//	@Security		Bearer
+//	@Tags			notifications
+//	@Accept			json
+//	@Produce		json
+//	@Param			id	path	int	true	"Notification ID"
+//	@Success		204	"Notification deleted successfully"
+//	@Failure		400	{object}	utils.APIResponse	"Invalid notification ID"
+//	@Failure		401	{object}	utils.APIResponse	"Unauthorized"
+//	@Failure		404	{object}	utils.APIResponse	"Notification not found"
+//	@Failure		500	{object}	utils.APIResponse	"Internal server error"
+//	@Router			/notifications/{id} [delete]
 func (h *NotificationHandler) DeleteNotification(c *gin.Context) {
 	notificationID, err := dto.ParseNotificationID(c)
 	if err != nil {
@@ -499,19 +511,20 @@ func (h *NotificationHandler) DeleteNotification(c *gin.Context) {
 }
 
 // CreateTemplate godoc
-// @Summary Create notification template
-// @Description Create a new notification template
-// @Security Bearer
-// @Tags notification-templates
-// @Accept json
-// @Produce json
-// @Param request body internal_interfaces_dto.CreateTemplateRequest true "Template data"
-// @Success 201 {object} utils.APIResponse{data=internal_interfaces_dto.TemplateResponse} "Template created successfully"
-// @Failure 400 {object} utils.APIResponse "Bad request"
-// @Failure 401 {object} utils.APIResponse "Unauthorized"
-// @Failure 409 {object} utils.APIResponse "Template type already exists"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /notification-templates [post]
+//
+//	@Summary		Create notification template
+//	@Description	Create a new notification template
+//	@Security		Bearer
+//	@Tags			notification-templates
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		internal_interfaces_dto.CreateTemplateRequest						true	"Template data"
+//	@Success		201		{object}	utils.APIResponse{data=internal_interfaces_dto.TemplateResponse}	"Template created successfully"
+//	@Failure		400		{object}	utils.APIResponse													"Bad request"
+//	@Failure		401		{object}	utils.APIResponse													"Unauthorized"
+//	@Failure		409		{object}	utils.APIResponse													"Template type already exists"
+//	@Failure		500		{object}	utils.APIResponse													"Internal server error"
+//	@Router			/notification-templates [post]
 func (h *NotificationHandler) CreateTemplate(c *gin.Context) {
 	var req dto.CreateTemplateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -537,20 +550,21 @@ func (h *NotificationHandler) CreateTemplate(c *gin.Context) {
 }
 
 // ListTemplates godoc
-// @Summary List notification templates
-// @Description Get a paginated list of notification templates
-// @Security Bearer
-// @Tags notification-templates
-// @Accept json
-// @Produce json
-// @Param page query int false "Page number" default(1)
-// @Param page_size query int false "Page size" default(20)
-// @Param enabled query boolean false "Filter by enabled status"
-// @Success 200 {object} utils.APIResponse{data=utils.ListResponse} "Templates list"
-// @Failure 400 {object} utils.APIResponse "Invalid query parameters"
-// @Failure 401 {object} utils.APIResponse "Unauthorized"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /notification-templates [get]
+//
+//	@Summary		List notification templates
+//	@Description	Get a paginated list of notification templates
+//	@Security		Bearer
+//	@Tags			notification-templates
+//	@Accept			json
+//	@Produce		json
+//	@Param			page		query		int											false	"Page number"	default(1)
+//	@Param			page_size	query		int											false	"Page size"		default(20)
+//	@Param			enabled		query		boolean										false	"Filter by enabled status"
+//	@Success		200			{object}	utils.APIResponse{data=utils.ListResponse}	"Templates list"
+//	@Failure		400			{object}	utils.APIResponse							"Invalid query parameters"
+//	@Failure		401			{object}	utils.APIResponse							"Unauthorized"
+//	@Failure		500			{object}	utils.APIResponse							"Internal server error"
+//	@Router			/notification-templates [get]
 func (h *NotificationHandler) ListTemplates(c *gin.Context) {
 	_, err := dto.ParseListTemplatesRequest(c)
 	if err != nil {
@@ -568,19 +582,20 @@ func (h *NotificationHandler) ListTemplates(c *gin.Context) {
 }
 
 // RenderTemplate godoc
-// @Summary Render notification template
-// @Description Render a notification template with provided variables
-// @Security Bearer
-// @Tags notification-templates
-// @Accept json
-// @Produce json
-// @Param request body internal_interfaces_dto.RenderTemplateRequest true "Render data"
-// @Success 200 {object} utils.APIResponse{data=internal_interfaces_dto.RenderTemplateResponse} "Template rendered successfully"
-// @Failure 400 {object} utils.APIResponse "Bad request"
-// @Failure 401 {object} utils.APIResponse "Unauthorized"
-// @Failure 404 {object} utils.APIResponse "Template not found"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /notification-templates/render [post]
+//
+//	@Summary		Render notification template
+//	@Description	Render a notification template with provided variables
+//	@Security		Bearer
+//	@Tags			notification-templates
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		internal_interfaces_dto.RenderTemplateRequest							true	"Render data"
+//	@Success		200		{object}	utils.APIResponse{data=internal_interfaces_dto.RenderTemplateResponse}	"Template rendered successfully"
+//	@Failure		400		{object}	utils.APIResponse														"Bad request"
+//	@Failure		401		{object}	utils.APIResponse														"Unauthorized"
+//	@Failure		404		{object}	utils.APIResponse														"Template not found"
+//	@Failure		500		{object}	utils.APIResponse														"Internal server error"
+//	@Router			/notification-templates/render [post]
 func (h *NotificationHandler) RenderTemplate(c *gin.Context) {
 	var req dto.RenderTemplateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -606,18 +621,19 @@ func (h *NotificationHandler) RenderTemplate(c *gin.Context) {
 }
 
 // ListPublicAnnouncements godoc
-// @Summary List public announcements
-// @Description Get a paginated list of published announcements (public endpoint, no authentication required)
-// @Tags announcements
-// @Accept json
-// @Produce json
-// @Param page query int false "Page number" default(1)
-// @Param page_size query int false "Page size" default(20)
-// @Param type query string false "Filter by type" Enums(system, maintenance, feature, promotion)
-// @Success 200 {object} utils.APIResponse{data=utils.ListResponse} "Public announcements list"
-// @Failure 400 {object} utils.APIResponse "Invalid query parameters"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /public/announcements [get]
+//
+//	@Summary		List public announcements
+//	@Description	Get a paginated list of published announcements (public endpoint, no authentication required)
+//	@Tags			announcements
+//	@Accept			json
+//	@Produce		json
+//	@Param			page		query		int											false	"Page number"		default(1)
+//	@Param			page_size	query		int											false	"Page size"			default(20)
+//	@Param			type		query		string										false	"Filter by type"	Enums(system, maintenance, feature, promotion)
+//	@Success		200			{object}	utils.APIResponse{data=utils.ListResponse}	"Public announcements list"
+//	@Failure		400			{object}	utils.APIResponse							"Invalid query parameters"
+//	@Failure		500			{object}	utils.APIResponse							"Internal server error"
+//	@Router			/public/announcements [get]
 func (h *NotificationHandler) ListPublicAnnouncements(c *gin.Context) {
 	req, err := dto.ParseListAnnouncementsRequest(c)
 	if err != nil {

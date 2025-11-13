@@ -1,8 +1,9 @@
 package seeds
 
 import (
-	"gorm.io/gorm"
 	"orris/internal/infrastructure/persistence/models"
+
+	"gorm.io/gorm"
 )
 
 // SeedNotificationTemplates seeds the notification templates table with default templates

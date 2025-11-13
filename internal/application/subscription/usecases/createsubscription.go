@@ -11,11 +11,11 @@ import (
 )
 
 type CreateSubscriptionCommand struct {
-	UserID      uint
-	PlanID      uint
-	StartDate   time.Time
-	AutoRenew   bool
-	PaymentInfo map[string]interface{}
+	UserID       uint
+	PlanID       uint
+	StartDate    time.Time
+	AutoRenew    bool
+	PaymentInfo  map[string]interface{}
 	BillingCycle string // User selected billing cycle
 }
 

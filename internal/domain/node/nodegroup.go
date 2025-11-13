@@ -171,7 +171,6 @@ func (ng *NodeGroup) AddNode(nodeID uint) error {
 	ng.updatedAt = time.Now()
 	ng.version++
 
-
 	return nil
 }
 
@@ -190,8 +189,69 @@ func (ng *NodeGroup) RemoveNode(nodeID uint) error {
 	ng.updatedAt = time.Now()
 	ng.version++
 
-
 	return nil
+}
+
+// AddNodes adds multiple nodes to the group in batch
+func (ng *NodeGroup) AddNodes(nodeIDs []uint) (addedCount int, err error) {
+	if len(nodeIDs) == 0 {
+		return 0, nil
+	}
+
+	addedCount = 0
+	for _, nodeID := range nodeIDs {
+		if nodeID == 0 {
+			continue // Skip invalid IDs
+		}
+
+		if ng.containsNodeUnsafe(nodeID) {
+			continue // Skip duplicates
+		}
+
+		ng.nodeIDs = append(ng.nodeIDs, nodeID)
+		addedCount++
+	}
+
+	if addedCount > 0 {
+		ng.updatedAt = time.Now()
+		ng.version++
+	}
+
+	return addedCount, nil
+}
+
+// RemoveNodes removes multiple nodes from the group in batch
+func (ng *NodeGroup) RemoveNodes(nodeIDs []uint) (removedCount int, err error) {
+	if len(nodeIDs) == 0 {
+		return 0, nil
+	}
+
+	// Create a set for faster lookup
+	nodeIDSet := make(map[uint]bool)
+	for _, nodeID := range nodeIDs {
+		if nodeID != 0 {
+			nodeIDSet[nodeID] = true
+		}
+	}
+
+	// Filter out nodes that should be removed
+	newNodeIDs := make([]uint, 0, len(ng.nodeIDs))
+	removedCount = 0
+	for _, nodeID := range ng.nodeIDs {
+		if nodeIDSet[nodeID] {
+			removedCount++
+		} else {
+			newNodeIDs = append(newNodeIDs, nodeID)
+		}
+	}
+
+	if removedCount > 0 {
+		ng.nodeIDs = newNodeIDs
+		ng.updatedAt = time.Now()
+		ng.version++
+	}
+
+	return removedCount, nil
 }
 
 // ContainsNode checks if the group contains a specific node
@@ -213,7 +273,6 @@ func (ng *NodeGroup) AssociatePlan(planID uint) error {
 	ng.updatedAt = time.Now()
 	ng.version++
 
-
 	return nil
 }
 
@@ -231,7 +290,6 @@ func (ng *NodeGroup) DisassociatePlan(planID uint) error {
 	ng.subscriptionPlanIDs = append(ng.subscriptionPlanIDs[:index], ng.subscriptionPlanIDs[index+1:]...)
 	ng.updatedAt = time.Now()
 	ng.version++
-
 
 	return nil
 }
@@ -285,7 +343,6 @@ func (ng *NodeGroup) SetPublic(isPublic bool) error {
 	ng.isPublic = isPublic
 	ng.updatedAt = time.Now()
 	ng.version++
-
 
 	return nil
 }

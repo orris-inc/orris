@@ -11,13 +11,13 @@ import (
 
 // ServiceDDD is the application service that orchestrates use cases
 type ServiceDDD struct {
-	userRepo             domainUser.Repository
-	createUserUC         *usecases.CreateUserUseCase
-	updateUserUC         *usecases.UpdateUserUseCase
-	getUserUC            *usecases.GetUserUseCase
-	updateProfileUC      *usecases.UpdateProfileUseCase
-	changePasswordUC     *usecases.ChangePasswordUseCase
-	logger               logger.Interface
+	userRepo         domainUser.Repository
+	createUserUC     *usecases.CreateUserUseCase
+	updateUserUC     *usecases.UpdateUserUseCase
+	getUserUC        *usecases.GetUserUseCase
+	updateProfileUC  *usecases.UpdateProfileUseCase
+	changePasswordUC *usecases.ChangePasswordUseCase
+	logger           logger.Interface
 }
 
 // NewServiceDDD creates a new DDD application service
@@ -28,13 +28,13 @@ func NewServiceDDD(
 	logger logger.Interface,
 ) *ServiceDDD {
 	return &ServiceDDD{
-		userRepo:             userRepo,
-		createUserUC:         usecases.NewCreateUserUseCase(userRepo, logger),
-		updateUserUC:         usecases.NewUpdateUserUseCase(userRepo, logger),
-		getUserUC:            usecases.NewGetUserUseCase(userRepo, logger),
-		updateProfileUC:      usecases.NewUpdateProfileUseCase(userRepo, logger),
-		changePasswordUC:     usecases.NewChangePasswordUseCase(userRepo, sessionRepo, passwordHasher, logger),
-		logger:               logger,
+		userRepo:         userRepo,
+		createUserUC:     usecases.NewCreateUserUseCase(userRepo, logger),
+		updateUserUC:     usecases.NewUpdateUserUseCase(userRepo, logger),
+		getUserUC:        usecases.NewGetUserUseCase(userRepo, logger),
+		updateProfileUC:  usecases.NewUpdateProfileUseCase(userRepo, logger),
+		changePasswordUC: usecases.NewChangePasswordUseCase(userRepo, sessionRepo, passwordHasher, logger),
+		logger:           logger,
 	}
 }
 

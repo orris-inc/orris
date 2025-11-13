@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"orris/internal/shared/authorization"
 	vo "orris/internal/domain/user/value_objects"
+	"orris/internal/shared/authorization"
 )
 
 // User represents the user aggregate root (pure domain model without persistence concerns)

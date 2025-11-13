@@ -1,8 +1,9 @@
 package migrations
 
 import (
-	"gorm.io/gorm"
 	"orris/internal/infrastructure/persistence/models"
+
+	"gorm.io/gorm"
 )
 
 func MigrateTicketTables(db *gorm.DB) error {

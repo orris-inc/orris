@@ -76,14 +76,14 @@ func (uc *GetNodeConfigUseCase) Execute(ctx context.Context, cmd GetNodeConfigCo
 		return nil, fmt.Errorf("failed to generate node configuration")
 	}
 
-	// Override node type if provided
+	// Override protocol type if provided
 	if cmd.NodeType != "" {
-		config.NodeType = cmd.NodeType
+		config.Protocol = cmd.NodeType
 	}
 
 	uc.logger.Infow("node configuration retrieved successfully",
 		"node_id", cmd.NodeID,
-		"node_type", config.NodeType,
+		"protocol", config.Protocol,
 	)
 
 	return &GetNodeConfigResult{

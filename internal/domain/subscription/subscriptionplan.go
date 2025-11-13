@@ -23,24 +23,24 @@ var validCurrencies = map[string]bool{
 }
 
 type SubscriptionPlan struct {
-	id             uint
-	name           string
-	slug           string
-	description    string
-	price          uint64
-	currency       string
-	billingCycle   vo.BillingCycle
-	trialDays      int
+	id           uint
+	name         string
+	slug         string
+	description  string
+	price        uint64
+	currency     string
+	billingCycle vo.BillingCycle
+	trialDays    int
 	status       PlanStatus
 	features     *vo.PlanFeatures
 	apiRateLimit uint
-	maxUsers       uint
-	maxProjects    uint
-	isPublic       bool
-	sortOrder      int
-	metadata       map[string]interface{}
-	createdAt      time.Time
-	updatedAt      time.Time
+	maxUsers     uint
+	maxProjects  uint
+	isPublic     bool
+	sortOrder    int
+	metadata     map[string]interface{}
+	createdAt    time.Time
+	updatedAt    time.Time
 }
 
 func NewSubscriptionPlan(name, slug, description string, price uint64, currency string,
@@ -70,23 +70,23 @@ func NewSubscriptionPlan(name, slug, description string, price uint64, currency 
 
 	now := time.Now()
 	return &SubscriptionPlan{
-		name:           name,
-		slug:           slug,
-		description:    description,
-		price:          price,
-		currency:       currency,
-		billingCycle:   billingCycle,
+		name:         name,
+		slug:         slug,
+		description:  description,
+		price:        price,
+		currency:     currency,
+		billingCycle: billingCycle,
 		trialDays:    trialDays,
 		status:       PlanStatusActive,
 		features:     nil,
 		apiRateLimit: 60,
-		maxUsers:       0,
-		maxProjects:    0,
-		isPublic:       true,
-		sortOrder:      0,
-		metadata:       make(map[string]interface{}),
-		createdAt:      now,
-		updatedAt:      now,
+		maxUsers:     0,
+		maxProjects:  0,
+		isPublic:     true,
+		sortOrder:    0,
+		metadata:     make(map[string]interface{}),
+		createdAt:    now,
+		updatedAt:    now,
 	}, nil
 }
 

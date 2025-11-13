@@ -74,8 +74,6 @@ func (r *SubscriptionUsageRepositoryImpl) Upsert(ctx context.Context, usage *sub
 	return nil
 }
 
-
-
 func (r *SubscriptionUsageRepositoryImpl) GetUsageHistory(ctx context.Context, subscriptionID uint, from, to time.Time) ([]*subscription.SubscriptionUsage, error) {
 	var usageModels []*models.SubscriptionUsageModel
 	err := r.db.WithContext(ctx).

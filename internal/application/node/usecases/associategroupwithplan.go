@@ -22,9 +22,9 @@ type AssociateGroupWithPlanResult struct {
 }
 
 type AssociateGroupWithPlanUseCase struct {
-	nodeGroupRepo   node.NodeGroupRepository
-	planRepo        subscription.SubscriptionPlanRepository
-	logger          logger.Interface
+	nodeGroupRepo node.NodeGroupRepository
+	planRepo      subscription.SubscriptionPlanRepository
+	logger        logger.Interface
 }
 
 func NewAssociateGroupWithPlanUseCase(
@@ -33,9 +33,9 @@ func NewAssociateGroupWithPlanUseCase(
 	logger logger.Interface,
 ) *AssociateGroupWithPlanUseCase {
 	return &AssociateGroupWithPlanUseCase{
-		nodeGroupRepo:   nodeGroupRepo,
-		planRepo:        planRepo,
-		logger:          logger,
+		nodeGroupRepo: nodeGroupRepo,
+		planRepo:      planRepo,
+		logger:        logger,
 	}
 }
 

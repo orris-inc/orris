@@ -98,15 +98,16 @@ type RefreshTokenRequest struct {
 }
 
 // Register godoc
-// @Summary Register a new user
-// @Description Register a new user with email and password
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param request body RegisterRequest true "Registration request"
-// @Success 201 {object} utils.APIResponse
-// @Failure 400 {object} utils.APIResponse
-// @Router /auth/register [post]
+//
+//	@Summary		Register a new user
+//	@Description	Register a new user with email and password
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		RegisterRequest	true	"Registration request"
+//	@Success		201		{object}	utils.APIResponse
+//	@Failure		400		{object}	utils.APIResponse
+//	@Router			/auth/register [post]
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -134,16 +135,17 @@ func (h *AuthHandler) Register(c *gin.Context) {
 }
 
 // Login godoc
-// @Summary Login with email and password
-// @Description Authenticate user with email and password, sets JWT tokens in HttpOnly cookies
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param request body LoginRequest true "Login credentials"
-// @Success 200 {object} utils.APIResponse
-// @Failure 400 {object} utils.APIResponse
-// @Failure 401 {object} utils.APIResponse
-// @Router /auth/login [post]
+//
+//	@Summary		Login with email and password
+//	@Description	Authenticate user with email and password, sets JWT tokens in HttpOnly cookies
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		LoginRequest	true	"Login credentials"
+//	@Success		200		{object}	utils.APIResponse
+//	@Failure		400		{object}	utils.APIResponse
+//	@Failure		401		{object}	utils.APIResponse
+//	@Router			/auth/login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -182,16 +184,17 @@ func (h *AuthHandler) Login(c *gin.Context) {
 }
 
 // VerifyEmail godoc
-// @Summary Verify email address
-// @Description Verify user email with token from email
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param token query string false "Verification token (can also be in body)"
-// @Param request body VerifyEmailRequest false "Verification request"
-// @Success 200 {object} utils.APIResponse
-// @Failure 400 {object} utils.APIResponse
-// @Router /auth/verify-email [post]
+//
+//	@Summary		Verify email address
+//	@Description	Verify user email with token from email
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			token	query		string				false	"Verification token (can also be in body)"
+//	@Param			request	body		VerifyEmailRequest	false	"Verification request"
+//	@Success		200		{object}	utils.APIResponse
+//	@Failure		400		{object}	utils.APIResponse
+//	@Router			/auth/verify-email [post]
 func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 	token := c.Query("token")
 	if token == "" {
@@ -215,15 +218,16 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 }
 
 // ForgotPassword godoc
-// @Summary Request password reset
-// @Description Request a password reset email
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param request body ForgotPasswordRequest true "Email address"
-// @Success 200 {object} utils.APIResponse
-// @Failure 400 {object} utils.APIResponse
-// @Router /auth/forgot-password [post]
+//
+//	@Summary		Request password reset
+//	@Description	Request a password reset email
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		ForgotPasswordRequest	true	"Email address"
+//	@Success		200		{object}	utils.APIResponse
+//	@Failure		400		{object}	utils.APIResponse
+//	@Router			/auth/forgot-password [post]
 func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 	var req ForgotPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -243,15 +247,16 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 }
 
 // ResetPassword godoc
-// @Summary Reset password
-// @Description Reset password with token from email
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param request body ResetPasswordRequest true "Reset password request"
-// @Success 200 {object} utils.APIResponse
-// @Failure 400 {object} utils.APIResponse
-// @Router /auth/reset-password [post]
+//
+//	@Summary		Reset password
+//	@Description	Reset password with token from email
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		ResetPasswordRequest	true	"Reset password request"
+//	@Success		200		{object}	utils.APIResponse
+//	@Failure		400		{object}	utils.APIResponse
+//	@Router			/auth/reset-password [post]
 func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	var req ResetPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -274,15 +279,16 @@ func (h *AuthHandler) ResetPassword(c *gin.Context) {
 }
 
 // InitiateOAuth godoc
-// @Summary Initiate OAuth login
-// @Description Redirect to OAuth provider (google or github)
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param provider path string true "OAuth provider (google or github)"
-// @Success 307 "Redirect to OAuth provider"
-// @Failure 400 {object} utils.APIResponse
-// @Router /auth/oauth/{provider} [get]
+//
+//	@Summary		Initiate OAuth login
+//	@Description	Redirect to OAuth provider (google or github)
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			provider	path	string	true	"OAuth provider (google or github)"
+//	@Success		307			"Redirect to OAuth provider"
+//	@Failure		400			{object}	utils.APIResponse
+//	@Router			/auth/oauth/{provider} [get]
 func (h *AuthHandler) InitiateOAuth(c *gin.Context) {
 	provider := c.Param("provider")
 
@@ -299,19 +305,20 @@ func (h *AuthHandler) InitiateOAuth(c *gin.Context) {
 }
 
 // HandleOAuthCallback godoc
-// @Summary Handle OAuth callback
-// @Description Handle OAuth provider callback and login/register user
-// @Tags auth
-// @Accept json
-// @Produce html
-// @Param provider path string true "OAuth provider (google or github)"
-// @Param code query string false "Authorization code from OAuth provider"
-// @Param state query string false "State parameter for CSRF protection"
-// @Param error query string false "OAuth error code"
-// @Param error_description query string false "OAuth error description"
-// @Success 200 {string} string "HTML page with postMessage script"
-// @Failure 400 {string} string "HTML error page"
-// @Router /auth/oauth/{provider}/callback [get]
+//
+//	@Summary		Handle OAuth callback
+//	@Description	Handle OAuth provider callback and login/register user
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		html
+//	@Param			provider			path		string	true	"OAuth provider (google or github)"
+//	@Param			code				query		string	false	"Authorization code from OAuth provider"
+//	@Param			state				query		string	false	"State parameter for CSRF protection"
+//	@Param			error				query		string	false	"OAuth error code"
+//	@Param			error_description	query		string	false	"OAuth error description"
+//	@Success		200					{string}	string	"HTML page with postMessage script"
+//	@Failure		400					{string}	string	"HTML error page"
+//	@Router			/auth/oauth/{provider}/callback [get]
 func (h *AuthHandler) HandleOAuthCallback(c *gin.Context) {
 	provider := c.Param("provider")
 	code := c.Query("code")
@@ -387,16 +394,17 @@ func (h *AuthHandler) HandleOAuthCallback(c *gin.Context) {
 }
 
 // RefreshToken godoc
-// @Summary Refresh access token
-// @Description Get new access token using refresh token from HttpOnly cookie or request body
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param request body RefreshTokenRequest false "Refresh token (optional if using cookies)"
-// @Success 200 {object} utils.APIResponse
-// @Failure 400 {object} utils.APIResponse
-// @Failure 401 {object} utils.APIResponse
-// @Router /auth/refresh [post]
+//
+//	@Summary		Refresh access token
+//	@Description	Get new access token using refresh token from HttpOnly cookie or request body
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Param			request	body		RefreshTokenRequest	false	"Refresh token (optional if using cookies)"
+//	@Success		200		{object}	utils.APIResponse
+//	@Failure		400		{object}	utils.APIResponse
+//	@Failure		401		{object}	utils.APIResponse
+//	@Router			/auth/refresh [post]
 func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	// Try to get refresh token from cookie first
 	refreshToken := utils.GetTokenFromCookie(c, utils.RefreshTokenCookie)
@@ -436,16 +444,17 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 }
 
 // Logout godoc
-// @Summary Logout user
-// @Description Logout current user, invalidate session and clear auth cookies
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Security Bearer
-// @Success 200 {object} utils.APIResponse
-// @Failure 401 {object} utils.APIResponse
-// @Failure 500 {object} utils.APIResponse
-// @Router /auth/logout [post]
+//
+//	@Summary		Logout user
+//	@Description	Logout current user, invalidate session and clear auth cookies
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Security		Bearer
+//	@Success		200	{object}	utils.APIResponse
+//	@Failure		401	{object}	utils.APIResponse
+//	@Failure		500	{object}	utils.APIResponse
+//	@Router			/auth/logout [post]
 func (h *AuthHandler) Logout(c *gin.Context) {
 	sessionID, exists := c.Get("session_id")
 	if !exists {
@@ -468,16 +477,17 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 }
 
 // GetCurrentUser godoc
-// @Summary Get current user
-// @Description Get current authenticated user information
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Security Bearer
-// @Success 200 {object} utils.APIResponse
-// @Failure 401 {object} utils.APIResponse
-// @Failure 404 {object} utils.APIResponse
-// @Router /auth/me [get]
+//
+//	@Summary		Get current user
+//	@Description	Get current authenticated user information
+//	@Tags			auth
+//	@Accept			json
+//	@Produce		json
+//	@Security		Bearer
+//	@Success		200	{object}	utils.APIResponse
+//	@Failure		401	{object}	utils.APIResponse
+//	@Failure		404	{object}	utils.APIResponse
+//	@Router			/auth/me [get]
 func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {

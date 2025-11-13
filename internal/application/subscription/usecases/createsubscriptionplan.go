@@ -11,20 +11,20 @@ import (
 )
 
 type CreateSubscriptionPlanCommand struct {
-	Name           string
-	Slug           string
-	Description    string
-	Price          uint64
-	Currency       string
-	BillingCycle   string
-	TrialDays      int
-	Features       []string
-	Limits         map[string]interface{}
-	APIRateLimit   uint
-	MaxUsers       uint
-	MaxProjects    uint
-	IsPublic       bool
-	SortOrder      int
+	Name         string
+	Slug         string
+	Description  string
+	Price        uint64
+	Currency     string
+	BillingCycle string
+	TrialDays    int
+	Features     []string
+	Limits       map[string]interface{}
+	APIRateLimit uint
+	MaxUsers     uint
+	MaxProjects  uint
+	IsPublic     bool
+	SortOrder    int
 }
 
 type CreateSubscriptionPlanUseCase struct {
@@ -116,22 +116,22 @@ func (uc *CreateSubscriptionPlanUseCase) Execute(
 
 func (uc *CreateSubscriptionPlanUseCase) toDTO(plan *subscription.SubscriptionPlan) *dto.SubscriptionPlanDTO {
 	result := &dto.SubscriptionPlanDTO{
-		ID:             plan.ID(),
-		Name:           plan.Name(),
-		Slug:           plan.Slug(),
-		Description:    plan.Description(),
-		Price:          plan.Price(),
-		Currency:       plan.Currency(),
-		BillingCycle:   plan.BillingCycle().String(),
-		TrialDays:      plan.TrialDays(),
-		Status:         string(plan.Status()),
-		APIRateLimit:   plan.APIRateLimit(),
-		MaxUsers:       plan.MaxUsers(),
-		MaxProjects:    plan.MaxProjects(),
-		IsPublic:       plan.IsPublic(),
-		SortOrder:      plan.SortOrder(),
-		CreatedAt:      plan.CreatedAt(),
-		UpdatedAt:      plan.UpdatedAt(),
+		ID:           plan.ID(),
+		Name:         plan.Name(),
+		Slug:         plan.Slug(),
+		Description:  plan.Description(),
+		Price:        plan.Price(),
+		Currency:     plan.Currency(),
+		BillingCycle: plan.BillingCycle().String(),
+		TrialDays:    plan.TrialDays(),
+		Status:       string(plan.Status()),
+		APIRateLimit: plan.APIRateLimit(),
+		MaxUsers:     plan.MaxUsers(),
+		MaxProjects:  plan.MaxProjects(),
+		IsPublic:     plan.IsPublic(),
+		SortOrder:    plan.SortOrder(),
+		CreatedAt:    plan.CreatedAt(),
+		UpdatedAt:    plan.UpdatedAt(),
 	}
 
 	if plan.Features() != nil {

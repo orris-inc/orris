@@ -29,8 +29,8 @@ type UpdateNodeGroupResult struct {
 }
 
 type UpdateNodeGroupUseCase struct {
-	nodeGroupRepo   node.NodeGroupRepository
-	logger          logger.Interface
+	nodeGroupRepo node.NodeGroupRepository
+	logger        logger.Interface
 }
 
 func NewUpdateNodeGroupUseCase(
@@ -38,8 +38,8 @@ func NewUpdateNodeGroupUseCase(
 	logger logger.Interface,
 ) *UpdateNodeGroupUseCase {
 	return &UpdateNodeGroupUseCase{
-		nodeGroupRepo:   nodeGroupRepo,
-		logger:          logger,
+		nodeGroupRepo: nodeGroupRepo,
+		logger:        logger,
 	}
 }
 

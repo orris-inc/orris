@@ -11,17 +11,17 @@ import (
 )
 
 type UpdateSubscriptionPlanCommand struct {
-	PlanID         uint
-	Description    *string
-	Price          *uint64
-	Currency       *string
-	Features       []string
-	Limits         map[string]interface{}
-	APIRateLimit   *uint
-	MaxUsers       *uint
-	MaxProjects    *uint
-	SortOrder      *int
-	IsPublic       *bool
+	PlanID       uint
+	Description  *string
+	Price        *uint64
+	Currency     *string
+	Features     []string
+	Limits       map[string]interface{}
+	APIRateLimit *uint
+	MaxUsers     *uint
+	MaxProjects  *uint
+	SortOrder    *int
+	IsPublic     *bool
 }
 
 type UpdateSubscriptionPlanUseCase struct {
@@ -106,22 +106,22 @@ func (uc *UpdateSubscriptionPlanUseCase) Execute(
 
 func (uc *UpdateSubscriptionPlanUseCase) toDTO(plan *subscription.SubscriptionPlan) *dto.SubscriptionPlanDTO {
 	result := &dto.SubscriptionPlanDTO{
-		ID:             plan.ID(),
-		Name:           plan.Name(),
-		Slug:           plan.Slug(),
-		Description:    plan.Description(),
-		Price:          plan.Price(),
-		Currency:       plan.Currency(),
-		BillingCycle:   plan.BillingCycle().String(),
-		TrialDays:      plan.TrialDays(),
-		Status:         string(plan.Status()),
-		APIRateLimit:   plan.APIRateLimit(),
-		MaxUsers:       plan.MaxUsers(),
-		MaxProjects:    plan.MaxProjects(),
-		IsPublic:       plan.IsPublic(),
-		SortOrder:      plan.SortOrder(),
-		CreatedAt:      plan.CreatedAt(),
-		UpdatedAt:      plan.UpdatedAt(),
+		ID:           plan.ID(),
+		Name:         plan.Name(),
+		Slug:         plan.Slug(),
+		Description:  plan.Description(),
+		Price:        plan.Price(),
+		Currency:     plan.Currency(),
+		BillingCycle: plan.BillingCycle().String(),
+		TrialDays:    plan.TrialDays(),
+		Status:       string(plan.Status()),
+		APIRateLimit: plan.APIRateLimit(),
+		MaxUsers:     plan.MaxUsers(),
+		MaxProjects:  plan.MaxProjects(),
+		IsPublic:     plan.IsPublic(),
+		SortOrder:    plan.SortOrder(),
+		CreatedAt:    plan.CreatedAt(),
+		UpdatedAt:    plan.UpdatedAt(),
 	}
 
 	if plan.Features() != nil {

@@ -11,8 +11,8 @@ func ExampleBasicPlan() *PlanFeatures {
 
 	limits := map[string]interface{}{
 		LimitKeyTraffic:     uint64(100 * 1024 * 1024 * 1024), // 100GB in bytes
-		LimitKeyDeviceCount: 3,                                 // 3 concurrent devices
-		LimitKeySpeedLimit:  100,                               // 100 Mbps
+		LimitKeyDeviceCount: 3,                                // 3 concurrent devices
+		LimitKeySpeedLimit:  100,                              // 100 Mbps
 	}
 
 	return NewPlanFeatures(features, limits)
@@ -28,10 +28,10 @@ func ExampleStandardPlan() *PlanFeatures {
 
 	limits := map[string]interface{}{
 		LimitKeyTraffic:         uint64(500 * 1024 * 1024 * 1024), // 500GB in bytes
-		LimitKeyDeviceCount:     5,                                 // 5 concurrent devices
-		LimitKeySpeedLimit:      500,                               // 500 Mbps
-		LimitKeyConnectionLimit: 100,                               // 100 concurrent connections
-		LimitKeyNodeAccess:      []uint{1, 2, 3},                   // Access to node groups 1, 2, 3
+		LimitKeyDeviceCount:     5,                                // 5 concurrent devices
+		LimitKeySpeedLimit:      500,                              // 500 Mbps
+		LimitKeyConnectionLimit: 100,                              // 100 concurrent connections
+		LimitKeyNodeAccess:      []uint{1, 2, 3},                  // Access to node groups 1, 2, 3
 	}
 
 	return NewPlanFeatures(features, limits)
@@ -68,9 +68,9 @@ func ExampleDynamicFeatureManagement() {
 
 	// Use typed setters for traffic limits (recommended)
 	pf.SetTrafficLimit(200 * 1024 * 1024 * 1024) // Upgrade to 200GB
-	pf.SetDeviceLimit(5)                          // Set 5 devices
-	pf.SetSpeedLimit(200)                         // Set 200 Mbps
-	pf.SetConnectionLimit(50)                     // Set 50 connections
+	pf.SetDeviceLimit(5)                         // Set 5 devices
+	pf.SetSpeedLimit(200)                        // Set 200 Mbps
+	pf.SetConnectionLimit(50)                    // Set 50 connections
 
 	// Add node access restrictions
 	pf.SetNodeAccess([]uint{1, 2, 3, 4, 5})

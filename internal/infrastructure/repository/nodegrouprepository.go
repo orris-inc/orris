@@ -16,19 +16,19 @@ import (
 
 // NodeGroupRepositoryImpl implements the node.NodeGroupRepository interface
 type NodeGroupRepositoryImpl struct {
-	db          *gorm.DB
-	mapper      mappers.NodeGroupMapper
-	nodeMapper  mappers.NodeMapper
-	logger      logger.Interface
+	db         *gorm.DB
+	mapper     mappers.NodeGroupMapper
+	nodeMapper mappers.NodeMapper
+	logger     logger.Interface
 }
 
 // NewNodeGroupRepository creates a new node group repository instance
 func NewNodeGroupRepository(db *gorm.DB, logger logger.Interface) node.NodeGroupRepository {
 	return &NodeGroupRepositoryImpl{
-		db:          db,
-		mapper:      mappers.NewNodeGroupMapper(),
-		nodeMapper:  mappers.NewNodeMapper(),
-		logger:      logger,
+		db:         db,
+		mapper:     mappers.NewNodeGroupMapper(),
+		nodeMapper: mappers.NewNodeMapper(),
+		logger:     logger,
 	}
 }
 
@@ -123,38 +123,53 @@ func (r *NodeGroupRepositoryImpl) Update(ctx context.Context, group *node.NodeGr
 		return fmt.Errorf("failed to map node group entity: %w", err)
 	}
 
-	// Use optimistic locking by checking version
-	// The domain entity has already incremented the version, so we need to check against the previous version
-	previousVersion := model.Version - 1
-	result := r.db.WithContext(ctx).Model(&models.NodeGroupModel{}).
-		Where("id = ? AND version = ?", model.ID, previousVersion).
-		Updates(map[string]interface{}{
-			"name":        model.Name,
-			"description": model.Description,
-			"is_public":   model.IsPublic,
-			"sort_order":  model.SortOrder,
-			"metadata":    model.Metadata,
-			"updated_at":  model.UpdatedAt,
-			"version":     model.Version,
-		})
+	// Use transaction to ensure atomicity of updates including associations
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Use optimistic locking by checking version
+		// The domain entity has already incremented the version, so we need to check against the previous version
+		previousVersion := model.Version - 1
+		result := tx.Model(&models.NodeGroupModel{}).
+			Where("id = ? AND version = ?", model.ID, previousVersion).
+			Updates(map[string]interface{}{
+				"name":        model.Name,
+				"description": model.Description,
+				"is_public":   model.IsPublic,
+				"sort_order":  model.SortOrder,
+				"metadata":    model.Metadata,
+				"updated_at":  model.UpdatedAt,
+				"version":     model.Version,
+			})
 
-	if result.Error != nil {
-		if strings.Contains(result.Error.Error(), "Duplicate entry") || strings.Contains(result.Error.Error(), "duplicate key") {
-			if strings.Contains(result.Error.Error(), "name") {
-				return errors.NewConflictError("node group with this name already exists")
+		if result.Error != nil {
+			if strings.Contains(result.Error.Error(), "Duplicate entry") || strings.Contains(result.Error.Error(), "duplicate key") {
+				if strings.Contains(result.Error.Error(), "name") {
+					return errors.NewConflictError("node group with this name already exists")
+				}
+				return errors.NewConflictError("node group already exists")
 			}
-			return errors.NewConflictError("node group already exists")
+			r.logger.Errorw("failed to update node group", "id", model.ID, "error", result.Error)
+			return fmt.Errorf("failed to update node group: %w", result.Error)
 		}
-		r.logger.Errorw("failed to update node group", "id", model.ID, "error", result.Error)
-		return fmt.Errorf("failed to update node group: %w", result.Error)
-	}
 
-	if result.RowsAffected == 0 {
-		return errors.NewConflictError("node group has been modified by another transaction or not found")
-	}
+		if result.RowsAffected == 0 {
+			return errors.NewConflictError("node group has been modified by another transaction or not found")
+		}
 
-	r.logger.Infow("node group updated successfully", "id", model.ID, "name", model.Name)
-	return nil
+		// Synchronize node associations
+		nodeIDs := mappers.GetNodeGroupNodeIDs(group)
+		if err := r.syncNodeAssociations(tx, model.ID, nodeIDs); err != nil {
+			return err
+		}
+
+		// Synchronize plan associations
+		planIDs := mappers.GetNodeGroupSubscriptionPlanIDs(group)
+		if err := r.syncPlanAssociations(tx, model.ID, planIDs); err != nil {
+			return err
+		}
+
+		r.logger.Infow("node group updated successfully", "id", model.ID, "name", model.Name)
+		return nil
+	})
 }
 
 // Delete soft deletes a node group
@@ -414,4 +429,42 @@ func (r *NodeGroupRepositoryImpl) loadPlanIDs(ctx context.Context, groupID uint)
 	}
 
 	return planIDs, nil
+}
+
+// syncNodeAssociations synchronizes node associations in a transaction
+// Deletes all existing associations and creates new ones based on the current state
+func (r *NodeGroupRepositoryImpl) syncNodeAssociations(tx *gorm.DB, groupID uint, nodeIDs []uint) error {
+	// Delete all existing node associations
+	if err := tx.Where("node_group_id = ?", groupID).Delete(&models.NodeGroupNodeModel{}).Error; err != nil {
+		r.logger.Errorw("failed to delete existing node associations", "group_id", groupID, "error", err)
+		return fmt.Errorf("failed to delete existing node associations: %w", err)
+	}
+
+	// Create new node associations
+	if len(nodeIDs) > 0 {
+		if err := r.createNodeAssociations(tx, groupID, nodeIDs); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// syncPlanAssociations synchronizes plan associations in a transaction
+// Deletes all existing associations and creates new ones based on the current state
+func (r *NodeGroupRepositoryImpl) syncPlanAssociations(tx *gorm.DB, groupID uint, planIDs []uint) error {
+	// Delete all existing plan associations
+	if err := tx.Where("node_group_id = ?", groupID).Delete(&models.NodeGroupPlanModel{}).Error; err != nil {
+		r.logger.Errorw("failed to delete existing plan associations", "group_id", groupID, "error", err)
+		return fmt.Errorf("failed to delete existing plan associations: %w", err)
+	}
+
+	// Create new plan associations
+	if len(planIDs) > 0 {
+		if err := r.createPlanAssociations(tx, groupID, planIDs); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

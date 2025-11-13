@@ -13,7 +13,6 @@ type NodeRouteConfig struct {
 	NodeHandler         *handlers.NodeHandler
 	NodeGroupHandler    *handlers.NodeGroupHandler
 	SubscriptionHandler *handlers.NodeSubscriptionHandler
-	NodeReportHandler   *handlers.NodeReportHandler
 	AuthMiddleware      *middleware.AuthMiddleware
 	SubscriptionTokenMW *middleware.SubscriptionTokenMiddleware
 	NodeTokenMW         *middleware.NodeTokenMiddleware
@@ -89,6 +88,14 @@ func SetupNodeRoutes(engine *gin.Engine, config *NodeRouteConfig) {
 			authorization.RequireAdmin(),
 			config.NodeGroupHandler.ListGroupNodes)
 
+		// Batch operations for Node-Group relationships
+		nodeGroups.POST("/:id/nodes/batch",
+			authorization.RequireAdmin(),
+			config.NodeGroupHandler.BatchAddNodesToGroup)
+		nodeGroups.DELETE("/:id/nodes/batch",
+			authorization.RequireAdmin(),
+			config.NodeGroupHandler.BatchRemoveNodesFromGroup)
+
 		// Subscription plan association
 		nodeGroups.POST("/:id/plans",
 			authorization.RequireAdmin(),
@@ -125,18 +132,5 @@ func SetupNodeRoutes(engine *gin.Engine, config *NodeRouteConfig) {
 		sub.GET("/:token/surge",
 			config.RateLimiter.Limit(),
 			config.SubscriptionHandler.GetSurgeSubscription)
-	}
-
-	// Node report routes - token authentication
-	report := engine.Group("/nodes/report")
-	report.Use(config.NodeTokenMW.RequireNodeToken())
-	{
-		// Report node data (traffic, status, online users)
-		report.POST("",
-			config.NodeReportHandler.ReportNodeData)
-
-		// Heartbeat endpoint
-		report.POST("/heartbeat",
-			config.NodeReportHandler.Heartbeat)
 	}
 }

@@ -22,4 +22,3 @@ type NotificationTemplateModel struct {
 func (NotificationTemplateModel) TableName() string {
 	return "notification_templates"
 }
-

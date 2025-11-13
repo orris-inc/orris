@@ -33,9 +33,9 @@ func FormatPrice(price uint64, currency string) string {
 
 	// Define currency symbols and formatting rules
 	currencyFormats := map[string]struct {
-		symbol   string
+		symbol    string
 		separator string
-		position string // "before" or "after"
+		position  string // "before" or "after"
 	}{
 		"CNY": {symbol: "¥", separator: "", position: "before"},
 		"USD": {symbol: "$", separator: ".", position: "before"},

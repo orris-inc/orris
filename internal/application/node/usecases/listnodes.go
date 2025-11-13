@@ -19,20 +19,21 @@ type ListNodesQuery struct {
 	SortOrder string
 }
 
-type NodeListItem struct {
-	ID            uint
-	Name          string
-	ServerAddress string
-	ServerPort    uint16
-	Region        string
-	Status        string
-	SortOrder     int
-	CreatedAt     string
-	UpdatedAt     string
-}
+// NodeListItem is deprecated - use dto.NodeDTO instead
+// type NodeListItem struct {
+// 	ID            uint
+// 	Name          string
+// 	ServerAddress string
+// 	ServerPort    uint16
+// 	Region        string
+// 	Status        string
+// 	SortOrder     int
+// 	CreatedAt     string
+// 	UpdatedAt     string
+// }
 
 type ListNodesResult struct {
-	Nodes      []NodeListItem
+	Nodes      []*dto.NodeDTO
 	TotalCount int
 	Limit      int
 	Offset     int
@@ -108,30 +109,13 @@ func (uc *ListNodesUseCase) Execute(ctx context.Context, query ListNodesQuery) (
 	// Convert domain entities to DTOs
 	nodeDTOs := dto.ToNodeDTOList(nodes)
 
-	// Convert to response items
-	nodeItems := make([]NodeListItem, 0, len(nodeDTOs))
-	for _, nodeDTO := range nodeDTOs {
-		item := NodeListItem{
-			ID:            nodeDTO.ID,
-			Name:          nodeDTO.Name,
-			ServerAddress: nodeDTO.ServerAddress,
-			ServerPort:    nodeDTO.ServerPort,
-			Region:        nodeDTO.Region,
-			Status:        nodeDTO.Status,
-			SortOrder:     nodeDTO.SortOrder,
-			CreatedAt:     nodeDTO.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-			UpdatedAt:     nodeDTO.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		}
-		nodeItems = append(nodeItems, item)
-	}
-
 	uc.logger.Infow("nodes listed successfully",
-		"count", len(nodeItems),
+		"count", len(nodeDTOs),
 		"total", totalCount,
 	)
 
 	return &ListNodesResult{
-		Nodes:      nodeItems,
+		Nodes:      nodeDTOs,
 		TotalCount: int(totalCount),
 		Limit:      query.Limit,
 		Offset:     query.Offset,

@@ -50,7 +50,6 @@ type Router struct {
 	nodeHandler              *handlers.NodeHandler
 	nodeGroupHandler         *handlers.NodeGroupHandler
 	nodeSubscriptionHandler  *handlers.NodeSubscriptionHandler
-	nodeReportHandler        *handlers.NodeReportHandler
 	agentHandler             *nodeHandlers.AgentHandler
 	ticketHandler            *ticketHandlers.TicketHandler
 	notificationHandler      *handlers.NotificationHandler
@@ -276,18 +275,18 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		nodeRepo, tokenValidator, log,
 	)
 
+	// Initialize node system status querier adapter
+	nodeStatusQuerier := adapters.NewNodeSystemStatusQuerierAdapter(redisClient, log)
+
 	// Initialize node use cases
 	createNodeUC := nodeUsecases.NewCreateNodeUseCase(nodeRepoImpl, log)
-	getNodeUC := nodeUsecases.NewGetNodeUseCase(nodeRepoImpl, log)
+	getNodeUC := nodeUsecases.NewGetNodeUseCase(nodeRepoImpl, nodeStatusQuerier, log)
 	updateNodeUC := nodeUsecases.NewUpdateNodeUseCase(log, nodeRepoImpl)
 	deleteNodeUC := nodeUsecases.NewDeleteNodeUseCase(nodeRepoImpl, nodeGroupRepoImpl, log)
 	listNodesUC := nodeUsecases.NewListNodesUseCase(nodeRepoImpl, log)
 	generateNodeTokenUC := nodeUsecases.NewGenerateNodeTokenUseCase(nodeRepoImpl, log)
 
-	// Initialize Redis traffic cache
-	trafficCache := cache.NewRedisTrafficCache(redisClient, nodeRepoImpl, log)
-
-	// Initialize node traffic repository (used by report adapter)
+	// Initialize node traffic repository (used by agent report adapter)
 	nodeTrafficRepo := repository.NewNodeTrafficRepository(db, log)
 
 	// Initialize node authentication middleware using the same node repository adapter
@@ -302,15 +301,11 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	listNodeGroupsUC := nodeUsecases.NewListNodeGroupsUseCase(nodeGroupRepoImpl, log)
 	addNodeToGroupUC := nodeUsecases.NewAddNodeToGroupUseCase(nodeRepoImpl, nodeGroupRepoImpl, log)
 	removeNodeFromGroupUC := nodeUsecases.NewRemoveNodeFromGroupUseCase(nodeGroupRepoImpl, log)
+	batchAddNodesToGroupUC := nodeUsecases.NewBatchAddNodesToGroupUseCase(nodeRepoImpl, nodeGroupRepoImpl, log)
+	batchRemoveNodesFromGroupUC := nodeUsecases.NewBatchRemoveNodesFromGroupUseCase(nodeGroupRepoImpl, log)
 	listGroupNodesUC := nodeUsecases.NewListGroupNodesUseCase(nodeRepoImpl, nodeGroupRepoImpl, log)
 	associateGroupWithPlanUC := nodeUsecases.NewAssociateGroupWithPlanUseCase(nodeGroupRepoImpl, subscriptionPlanRepo, log)
 	disassociateGroupFromPlanUC := nodeUsecases.NewDisassociateGroupFromPlanUseCase(nodeGroupRepoImpl, log)
-
-	// Initialize NodeReport use case with adapters (using Redis traffic cache)
-	trafficRecorder := adapters.NewNodeTrafficRecorderAdapter(trafficCache, nodeTrafficRepo, log)
-	statusUpdater := adapters.NewNodeStatusUpdaterAdapter(nodeRepoImpl, log)
-	limitChecker := adapters.NewNodeLimitCheckerAdapter(log)
-	reportNodeDataUC := nodeUsecases.NewReportNodeDataUseCase(trafficRecorder, statusUpdater, limitChecker, log)
 
 	// Initialize handlers
 	nodeHandler := handlers.NewNodeHandler(createNodeUC, getNodeUC, updateNodeUC, deleteNodeUC, listNodesUC, generateNodeTokenUC)
@@ -322,12 +317,13 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		listNodeGroupsUC,
 		addNodeToGroupUC,
 		removeNodeFromGroupUC,
+		batchAddNodesToGroupUC,
+		batchRemoveNodesFromGroupUC,
 		listGroupNodesUC,
 		associateGroupWithPlanUC,
 		disassociateGroupFromPlanUC,
 	)
 	nodeSubscriptionHandler := handlers.NewNodeSubscriptionHandler(generateSubscriptionUC)
-	nodeReportHandler := handlers.NewNodeReportHandler(reportNodeDataUC, validateNodeTokenUC)
 
 	ticketHandler := ticketHandlers.NewTicketHandler(nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
@@ -389,7 +385,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Initialize XrayR report use cases with adapters
 	// Note: SubscriptionTrafficRecorderAdapter directly writes to database for simplicity
 	subscriptionTrafficRecorder := adapters.NewSubscriptionTrafficRecorderAdapter(nodeTrafficRepo, log)
-	systemStatusUpdater := adapters.NewNodeSystemStatusUpdaterAdapter(log)
+	systemStatusUpdater := adapters.NewNodeSystemStatusUpdaterAdapter(redisClient, log)
 	onlineSubscriptionTracker := adapters.NewOnlineSubscriptionTrackerAdapter(log)
 	reportSubscriptionTrafficUC := nodeUsecases.NewReportSubscriptionTrafficUseCase(subscriptionTrafficRecorder, log)
 	reportNodeStatusUC := nodeUsecases.NewReportNodeStatusUseCase(systemStatusUpdater, log)
@@ -417,7 +413,6 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		nodeHandler:              nodeHandler,
 		nodeGroupHandler:         nodeGroupHandler,
 		nodeSubscriptionHandler:  nodeSubscriptionHandler,
-		nodeReportHandler:        nodeReportHandler,
 		agentHandler:             agentHandler,
 		ticketHandler:            ticketHandler,
 		notificationHandler:      notificationHandler,
@@ -517,7 +512,6 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		NodeHandler:         r.nodeHandler,
 		NodeGroupHandler:    r.nodeGroupHandler,
 		SubscriptionHandler: r.nodeSubscriptionHandler,
-		NodeReportHandler:   r.nodeReportHandler,
 		AuthMiddleware:      r.authMiddleware,
 		NodeTokenMW:         r.nodeTokenMiddleware,
 		RateLimiter:         r.rateLimiter,

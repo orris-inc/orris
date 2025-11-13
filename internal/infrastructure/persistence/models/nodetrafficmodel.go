@@ -15,9 +15,9 @@ type NodeTrafficModel struct {
 	NodeID         uint      `gorm:"not null;index:idx_node_period"`
 	UserID         *uint     `gorm:"index:idx_user_period"`
 	SubscriptionID *uint     `gorm:"index:idx_subscription"`
-	Upload         uint64    `gorm:"not null;default:0"` // bytes uploaded
-	Download       uint64    `gorm:"not null;default:0"` // bytes downloaded
-	Total          uint64    `gorm:"not null;default:0"` // total bytes (upload + download)
+	Upload         uint64    `gorm:"not null;default:0"`                                   // bytes uploaded
+	Download       uint64    `gorm:"not null;default:0"`                                   // bytes downloaded
+	Total          uint64    `gorm:"not null;default:0"`                                   // total bytes (upload + download)
 	Period         time.Time `gorm:"not null;index:idx_node_period;index:idx_user_period"` // time period for this statistic (hourly/daily)
 	CreatedAt      time.Time
 	UpdatedAt      time.Time

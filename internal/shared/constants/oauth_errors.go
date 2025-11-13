@@ -11,12 +11,12 @@ const (
 	OAuthErrorServerError        OAuthErrorCode = "server_error"
 
 	// Internal errors
-	OAuthErrorMissingCode        OAuthErrorCode = "missing_code"
-	OAuthErrorMissingState       OAuthErrorCode = "missing_state"
-	OAuthErrorInvalidState       OAuthErrorCode = "invalid_state"
-	OAuthErrorExpiredState       OAuthErrorCode = "expired_state"
-	OAuthErrorExchangeFailed     OAuthErrorCode = "exchange_failed"
-	OAuthErrorUserInfoFailed     OAuthErrorCode = "userinfo_failed"
+	OAuthErrorMissingCode    OAuthErrorCode = "missing_code"
+	OAuthErrorMissingState   OAuthErrorCode = "missing_state"
+	OAuthErrorInvalidState   OAuthErrorCode = "invalid_state"
+	OAuthErrorExpiredState   OAuthErrorCode = "expired_state"
+	OAuthErrorExchangeFailed OAuthErrorCode = "exchange_failed"
+	OAuthErrorUserInfoFailed OAuthErrorCode = "userinfo_failed"
 )
 
 // OAuthErrorMessages maps error codes to user-friendly messages
@@ -26,12 +26,12 @@ var OAuthErrorMessages = map[OAuthErrorCode]string{
 	OAuthErrorUnauthorizedClient: "OAuth application is not authorized. Please contact support.",
 	OAuthErrorServerError:        "OAuth provider encountered an error. Please try again later.",
 
-	OAuthErrorMissingCode:        "Authorization code is missing. Please try logging in again.",
-	OAuthErrorMissingState:       "Security validation failed. Please try logging in again.",
-	OAuthErrorInvalidState:       "Invalid security token. This link may have expired.",
-	OAuthErrorExpiredState:       "Login session expired (10 minutes). Please try again.",
-	OAuthErrorExchangeFailed:     "Failed to complete authentication. Please try again.",
-	OAuthErrorUserInfoFailed:     "Failed to retrieve your profile information. Please try again.",
+	OAuthErrorMissingCode:    "Authorization code is missing. Please try logging in again.",
+	OAuthErrorMissingState:   "Security validation failed. Please try logging in again.",
+	OAuthErrorInvalidState:   "Invalid security token. This link may have expired.",
+	OAuthErrorExpiredState:   "Login session expired (10 minutes). Please try again.",
+	OAuthErrorExchangeFailed: "Failed to complete authentication. Please try again.",
+	OAuthErrorUserInfoFailed: "Failed to retrieve your profile information. Please try again.",
 }
 
 // GetOAuthErrorMessage returns a user-friendly error message

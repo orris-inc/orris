@@ -68,22 +68,22 @@ func (uc *ListSubscriptionPlansUseCase) Execute(
 
 func (uc *ListSubscriptionPlansUseCase) toDTO(plan *subscription.SubscriptionPlan) *dto.SubscriptionPlanDTO {
 	result := &dto.SubscriptionPlanDTO{
-		ID:             plan.ID(),
-		Name:           plan.Name(),
-		Slug:           plan.Slug(),
-		Description:    plan.Description(),
-		Price:          plan.Price(),
-		Currency:       plan.Currency(),
-		BillingCycle:   plan.BillingCycle().String(),
-		TrialDays:      plan.TrialDays(),
-		Status:         string(plan.Status()),
-		APIRateLimit:   plan.APIRateLimit(),
-		MaxUsers:       plan.MaxUsers(),
-		MaxProjects:    plan.MaxProjects(),
-		IsPublic:       plan.IsPublic(),
-		SortOrder:      plan.SortOrder(),
-		CreatedAt:      plan.CreatedAt(),
-		UpdatedAt:      plan.UpdatedAt(),
+		ID:           plan.ID(),
+		Name:         plan.Name(),
+		Slug:         plan.Slug(),
+		Description:  plan.Description(),
+		Price:        plan.Price(),
+		Currency:     plan.Currency(),
+		BillingCycle: plan.BillingCycle().String(),
+		TrialDays:    plan.TrialDays(),
+		Status:       string(plan.Status()),
+		APIRateLimit: plan.APIRateLimit(),
+		MaxUsers:     plan.MaxUsers(),
+		MaxProjects:  plan.MaxProjects(),
+		IsPublic:     plan.IsPublic(),
+		SortOrder:    plan.SortOrder(),
+		CreatedAt:    plan.CreatedAt(),
+		UpdatedAt:    plan.UpdatedAt(),
 	}
 
 	if plan.Features() != nil {

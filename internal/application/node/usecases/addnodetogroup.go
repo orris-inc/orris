@@ -22,9 +22,9 @@ type AddNodeToGroupResult struct {
 }
 
 type AddNodeToGroupUseCase struct {
-	nodeRepo        node.NodeRepository
-	nodeGroupRepo   node.NodeGroupRepository
-	logger          logger.Interface
+	nodeRepo      node.NodeRepository
+	nodeGroupRepo node.NodeGroupRepository
+	logger        logger.Interface
 }
 
 func NewAddNodeToGroupUseCase(
@@ -33,9 +33,9 @@ func NewAddNodeToGroupUseCase(
 	logger logger.Interface,
 ) *AddNodeToGroupUseCase {
 	return &AddNodeToGroupUseCase{
-		nodeRepo:        nodeRepo,
-		nodeGroupRepo:   nodeGroupRepo,
-		logger:          logger,
+		nodeRepo:      nodeRepo,
+		nodeGroupRepo: nodeGroupRepo,
+		logger:        logger,
 	}
 }
 

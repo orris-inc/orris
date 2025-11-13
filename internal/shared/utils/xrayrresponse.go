@@ -84,10 +84,11 @@ func SetETag(c *gin.Context, etag string) {
 // Returns false if they don't match (content has been updated)
 //
 // Usage:
-//   if CheckETag(c, currentETag) {
-//       V2RaySocksNotModified(c)
-//       return
-//   }
+//
+//	if CheckETag(c, currentETag) {
+//	    V2RaySocksNotModified(c)
+//	    return
+//	}
 func CheckETag(c *gin.Context, etag string) bool {
 	clientETag := c.GetHeader("If-None-Match")
 	return clientETag != "" && clientETag == etag
@@ -119,7 +120,8 @@ func GenerateETag(data interface{}) (string, error) {
 // Otherwise, returns 200 OK with the data and new ETag
 //
 // Usage:
-//   V2RaySocksSuccessWithETag(c, nodeData)
+//
+//	V2RaySocksSuccessWithETag(c, nodeData)
 func V2RaySocksSuccessWithETag(c *gin.Context, data interface{}) {
 	// Generate ETag from data
 	etag, err := GenerateETag(data)

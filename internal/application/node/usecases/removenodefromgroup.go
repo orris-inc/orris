@@ -22,8 +22,8 @@ type RemoveNodeFromGroupResult struct {
 }
 
 type RemoveNodeFromGroupUseCase struct {
-	nodeGroupRepo   node.NodeGroupRepository
-	logger          logger.Interface
+	nodeGroupRepo node.NodeGroupRepository
+	logger        logger.Interface
 }
 
 func NewRemoveNodeFromGroupUseCase(
@@ -31,8 +31,8 @@ func NewRemoveNodeFromGroupUseCase(
 	logger logger.Interface,
 ) *RemoveNodeFromGroupUseCase {
 	return &RemoveNodeFromGroupUseCase{
-		nodeGroupRepo:   nodeGroupRepo,
-		logger:          logger,
+		nodeGroupRepo: nodeGroupRepo,
+		logger:        logger,
 	}
 }
 

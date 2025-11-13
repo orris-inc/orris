@@ -64,8 +64,8 @@ func NewAccountLockedError(details ...string) *AuthError {
 			Code:    http.StatusForbidden,
 			Details: detail,
 		},
-		ShouldLog:     true,  // Important to log
-		SecurityEvent: true,  // Security-relevant
+		ShouldLog:     true, // Important to log
+		SecurityEvent: true, // Security-relevant
 	}
 }
 
@@ -110,8 +110,8 @@ func NewTokenInvalidError(tokenType string) *AuthError {
 			Code:    http.StatusUnauthorized,
 			Details: "Token is invalid or has been revoked",
 		},
-		ShouldLog:     true,  // May indicate tampering
-		SecurityEvent: true,  // Potential security issue
+		ShouldLog:     true, // May indicate tampering
+		SecurityEvent: true, // Potential security issue
 	}
 }
 

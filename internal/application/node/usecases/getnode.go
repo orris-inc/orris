@@ -20,20 +20,37 @@ type GetNodeResult struct {
 	Node *dto.NodeDTO
 }
 
+// NodeSystemStatusQuerier defines the interface for querying node system status
+type NodeSystemStatusQuerier interface {
+	GetNodeSystemStatus(ctx context.Context, nodeID uint) (*NodeSystemStatus, error)
+}
+
+// NodeSystemStatus represents node system status metrics
+type NodeSystemStatus struct {
+	CPU       string
+	Memory    string
+	Disk      string
+	Uptime    int
+	UpdatedAt int64
+}
+
 // GetNodeUseCase handles the business logic for retrieving a node
 type GetNodeUseCase struct {
-	nodeRepo domainNode.NodeRepository
-	logger   logger.Interface
+	nodeRepo      domainNode.NodeRepository
+	statusQuerier NodeSystemStatusQuerier
+	logger        logger.Interface
 }
 
 // NewGetNodeUseCase creates a new get node use case
 func NewGetNodeUseCase(
 	nodeRepo domainNode.NodeRepository,
+	statusQuerier NodeSystemStatusQuerier,
 	logger logger.Interface,
 ) *GetNodeUseCase {
 	return &GetNodeUseCase{
-		nodeRepo: nodeRepo,
-		logger:   logger,
+		nodeRepo:      nodeRepo,
+		statusQuerier: statusQuerier,
+		logger:        logger,
 	}
 }
 
@@ -61,6 +78,24 @@ func (uc *GetNodeUseCase) Execute(ctx context.Context, query GetNodeQuery) (*Get
 
 	// Map to DTO
 	nodeDTO := dto.ToNodeDTO(nodeEntity)
+
+	// Query system status from Redis
+	systemStatus, err := uc.statusQuerier.GetNodeSystemStatus(ctx, query.NodeID)
+	if err != nil {
+		uc.logger.Warnw("failed to get node system status, continuing without it",
+			"node_id", query.NodeID,
+			"error", err,
+		)
+	} else if systemStatus != nil {
+		// Add system status to DTO
+		nodeDTO.SystemStatus = &dto.NodeSystemStatusDTO{
+			CPU:       systemStatus.CPU,
+			Memory:    systemStatus.Memory,
+			Disk:      systemStatus.Disk,
+			Uptime:    systemStatus.Uptime,
+			UpdatedAt: systemStatus.UpdatedAt,
+		}
+	}
 
 	uc.logger.Infow("node retrieved successfully", "node_id", query.NodeID, "name", nodeEntity.Name())
 

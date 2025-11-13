@@ -3,9 +3,10 @@ package migrations
 import (
 	"fmt"
 
+	"orris/internal/infrastructure/persistence/models"
+
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-	"orris/internal/infrastructure/persistence/models"
 )
 
 // MigrateSubscriptionUUID adds UUID field to subscriptions table and generates UUIDs for existing records

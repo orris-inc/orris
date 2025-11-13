@@ -7,76 +7,85 @@ import (
 )
 
 type NodeDTO struct {
-	ID                uint                   `json:"id"`
-	Name              string                 `json:"name"`
-	ServerAddress     string                 `json:"server_address"`
-	ServerPort        uint16                 `json:"server_port"`
-	Protocol          string                 `json:"protocol"`
-	Method            string                 `json:"method"`
-	EncryptionMethod  string                 `json:"encryption_method"`
-	Password          string                 `json:"password,omitempty"`
-	Plugin            string                 `json:"plugin,omitempty"`
-	PluginOpts        map[string]string      `json:"plugin_opts,omitempty"`
-	Status            string                 `json:"status"`
-	Region            string                 `json:"region,omitempty"`
-	Tags              []string               `json:"tags,omitempty"`
-	CustomFields      map[string]interface{} `json:"custom_fields,omitempty"`
-	SortOrder         int                    `json:"sort_order"`
-	MaintenanceReason *string                `json:"maintenance_reason,omitempty"`
-	IsAvailable       bool                   `json:"is_available"`
-	Version           int                    `json:"version"`
-	CreatedAt         time.Time              `json:"created_at"`
-	UpdatedAt         time.Time              `json:"updated_at"`
+	ID                uint                   `json:"id" example:"1" description:"Unique identifier for the node"`
+	Name              string                 `json:"name" example:"US-Node-01" description:"Display name of the node"`
+	ServerAddress     string                 `json:"server_address" example:"proxy.example.com" description:"Server hostname or IP address"`
+	ServerPort        uint16                 `json:"server_port" example:"8388" description:"Server port number"`
+	Protocol          string                 `json:"protocol" example:"shadowsocks" enums:"shadowsocks,trojan" description:"Proxy protocol type"`
+	EncryptionMethod  string                 `json:"encryption_method" example:"aes-256-gcm" enums:"aes-256-gcm,aes-128-gcm,chacha20-ietf-poly1305" description:"Encryption method for the proxy connection"`
+	Plugin            string                 `json:"plugin,omitempty" example:"obfs-local" description:"Optional plugin name"`
+	PluginOpts        map[string]string      `json:"plugin_opts,omitempty" example:"obfs:http,obfs-host:example.com" description:"Plugin configuration options"`
+	Status            string                 `json:"status" example:"active" enums:"active,inactive,maintenance" description:"Current operational status of the node"`
+	Region            string                 `json:"region,omitempty" example:"us-west" description:"Geographic region or location identifier"`
+	Tags              []string               `json:"tags,omitempty" example:"premium,fast" description:"Custom tags for categorization"`
+	CustomFields      map[string]interface{} `json:"custom_fields,omitempty" description:"Additional custom metadata fields"`
+	SortOrder         int                    `json:"sort_order" example:"100" description:"Display order for sorting nodes"`
+	MaintenanceReason *string                `json:"maintenance_reason,omitempty" example:"Scheduled maintenance" description:"Reason for maintenance status (only when status is maintenance)"`
+	IsAvailable       bool                   `json:"is_available" example:"true" description:"Indicates if the node is currently available for use"`
+	Version           int                    `json:"version" example:"1" description:"Version number for optimistic locking"`
+	CreatedAt         time.Time              `json:"created_at" example:"2024-01-15T10:30:00Z" description:"Timestamp when the node was created"`
+	UpdatedAt         time.Time              `json:"updated_at" example:"2024-01-15T14:20:00Z" description:"Timestamp when the node was last updated"`
+	// System status fields (from Redis)
+	SystemStatus *NodeSystemStatusDTO `json:"system_status,omitempty" description:"Real-time system metrics from monitoring"`
+}
+
+// NodeSystemStatusDTO represents real-time system status metrics
+type NodeSystemStatusDTO struct {
+	CPU       string `json:"cpu" example:"45.50" description:"CPU usage percentage"`
+	Memory    string `json:"memory" example:"65.30" description:"Memory usage percentage"`
+	Disk      string `json:"disk" example:"80.20" description:"Disk usage percentage"`
+	Uptime    int    `json:"uptime" example:"86400" description:"Uptime in seconds"`
+	UpdatedAt int64  `json:"updated_at" example:"1705324800" description:"Last update timestamp (Unix)"`
 }
 
 type CreateNodeDTO struct {
-	Name             string                 `json:"name" binding:"required,min=2,max=100"`
-	ServerAddress    string                 `json:"server_address" binding:"required"`
-	ServerPort       uint16                 `json:"server_port" binding:"required,min=1,max=65535"`
-	EncryptionMethod string                 `json:"encryption_method" binding:"required"`
-	Password         string                 `json:"password" binding:"required"`
-	Plugin           string                 `json:"plugin,omitempty"`
-	PluginOpts       map[string]string      `json:"plugin_opts,omitempty"`
-	Region           string                 `json:"region,omitempty"`
-	Tags             []string               `json:"tags,omitempty"`
-	CustomFields     map[string]interface{} `json:"custom_fields,omitempty"`
-	SortOrder        int                    `json:"sort_order"`
+	Name             string                 `json:"name" binding:"required,min=2,max=100" example:"US-Node-01" description:"Display name of the node (2-100 characters)"`
+	ServerAddress    string                 `json:"server_address" binding:"required" example:"proxy.example.com" description:"Server hostname or IP address"`
+	ServerPort       uint16                 `json:"server_port" binding:"required,min=1,max=65535" example:"8388" description:"Server port number (1-65535)"`
+	EncryptionMethod string                 `json:"encryption_method" binding:"required" example:"aes-256-gcm" enums:"aes-256-gcm,aes-128-gcm,chacha20-ietf-poly1305" description:"Encryption method for the proxy connection"`
+	Password         string                 `json:"password" binding:"required" example:"mySecurePassword123" description:"Authentication password"`
+	Plugin           string                 `json:"plugin,omitempty" example:"obfs-local" description:"Optional plugin name"`
+	PluginOpts       map[string]string      `json:"plugin_opts,omitempty" example:"obfs:http,obfs-host:example.com" description:"Plugin configuration options"`
+	Region           string                 `json:"region,omitempty" example:"us-west" description:"Geographic region or location identifier"`
+	Tags             []string               `json:"tags,omitempty" example:"premium,fast" description:"Custom tags for categorization"`
+	CustomFields     map[string]interface{} `json:"custom_fields,omitempty" description:"Additional custom metadata fields"`
+	SortOrder        int                    `json:"sort_order" example:"100" description:"Display order for sorting nodes"`
 }
 
 type UpdateNodeDTO struct {
-	Name             *string                `json:"name,omitempty" binding:"omitempty,min=2,max=100"`
-	ServerAddress    *string                `json:"server_address,omitempty"`
-	ServerPort       *uint16                `json:"server_port,omitempty" binding:"omitempty,min=1,max=65535"`
-	EncryptionMethod *string                `json:"encryption_method,omitempty"`
-	Password         *string                `json:"password,omitempty"`
-	Plugin           *string                `json:"plugin,omitempty"`
-	PluginOpts       map[string]string      `json:"plugin_opts,omitempty"`
-	Region           *string                `json:"region,omitempty"`
-	Tags             []string               `json:"tags,omitempty"`
-	CustomFields     map[string]interface{} `json:"custom_fields,omitempty"`
-	SortOrder        *int                   `json:"sort_order,omitempty"`
+	Name             *string                `json:"name,omitempty" binding:"omitempty,min=2,max=100" example:"US-Node-01" description:"Display name of the node (2-100 characters)"`
+	ServerAddress    *string                `json:"server_address,omitempty" example:"proxy.example.com" description:"Server hostname or IP address"`
+	ServerPort       *uint16                `json:"server_port,omitempty" binding:"omitempty,min=1,max=65535" example:"8388" description:"Server port number (1-65535)"`
+	EncryptionMethod *string                `json:"encryption_method,omitempty" example:"aes-256-gcm" enums:"aes-256-gcm,aes-128-gcm,chacha20-ietf-poly1305" description:"Encryption method for the proxy connection"`
+	Password         *string                `json:"password,omitempty" example:"mySecurePassword123" description:"Authentication password"`
+	Plugin           *string                `json:"plugin,omitempty" example:"obfs-local" description:"Optional plugin name"`
+	PluginOpts       map[string]string      `json:"plugin_opts,omitempty" example:"obfs:http,obfs-host:example.com" description:"Plugin configuration options"`
+	Region           *string                `json:"region,omitempty" example:"us-west" description:"Geographic region or location identifier"`
+	Tags             []string               `json:"tags,omitempty" example:"premium,fast" description:"Custom tags for categorization"`
+	CustomFields     map[string]interface{} `json:"custom_fields,omitempty" description:"Additional custom metadata fields"`
+	SortOrder        *int                   `json:"sort_order,omitempty" example:"100" description:"Display order for sorting nodes"`
 }
 
 type NodeListDTO struct {
-	Nodes      []*NodeDTO         `json:"nodes"`
-	Pagination PaginationResponse `json:"pagination"`
+	Nodes      []*NodeDTO         `json:"nodes" description:"List of node objects"`
+	Pagination PaginationResponse `json:"pagination" description:"Pagination metadata"`
 }
 
 type PaginationResponse struct {
-	Page       int `json:"page"`
-	PageSize   int `json:"page_size"`
-	Total      int `json:"total"`
-	TotalPages int `json:"total_pages"`
+	Page       int `json:"page" example:"1" description:"Current page number"`
+	PageSize   int `json:"page_size" example:"20" description:"Number of items per page"`
+	Total      int `json:"total" example:"100" description:"Total number of items"`
+	TotalPages int `json:"total_pages" example:"5" description:"Total number of pages"`
 }
 
 type ListNodesRequest struct {
-	Page     int      `json:"page" form:"page"`
-	PageSize int      `json:"page_size" form:"page_size"`
-	Status   string   `json:"status,omitempty" form:"status"`
-	Region   string   `json:"region,omitempty" form:"region"`
-	Tags     []string `json:"tags,omitempty" form:"tags"`
-	OrderBy  string   `json:"order_by,omitempty" form:"order_by"`
-	Order    string   `json:"order,omitempty" form:"order" binding:"omitempty,oneof=asc desc"`
+	Page     int      `json:"page" form:"page" example:"1" description:"Page number for pagination"`
+	PageSize int      `json:"page_size" form:"page_size" example:"20" description:"Number of items per page"`
+	Status   string   `json:"status,omitempty" form:"status" example:"active" enums:"active,inactive,maintenance" description:"Filter by node status"`
+	Region   string   `json:"region,omitempty" form:"region" example:"us-west" description:"Filter by geographic region"`
+	Tags     []string `json:"tags,omitempty" form:"tags" example:"premium,fast" description:"Filter by tags"`
+	OrderBy  string   `json:"order_by,omitempty" form:"order_by" example:"created_at" description:"Field to order by"`
+	Order    string   `json:"order,omitempty" form:"order" binding:"omitempty,oneof=asc desc" example:"desc" enums:"asc,desc" description:"Sort order (ascending or descending)"`
 }
 
 func ToNodeDTO(n *node.Node) *NodeDTO {
@@ -90,7 +99,6 @@ func ToNodeDTO(n *node.Node) *NodeDTO {
 		ServerAddress:     n.ServerAddress().Value(),
 		ServerPort:        n.ServerPort(),
 		Protocol:          n.Protocol().String(),
-		Method:            n.EncryptionConfig().Method(),
 		EncryptionMethod:  n.EncryptionConfig().Method(),
 		Status:            n.Status().String(),
 		SortOrder:         n.SortOrder(),
