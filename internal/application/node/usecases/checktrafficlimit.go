@@ -71,7 +71,11 @@ func (uc *CheckTrafficLimitUseCase) Execute(
 		return nil, errors.NewNotFoundError("subscription plan not found")
 	}
 
-	trafficLimit := plan.StorageLimit()
+	trafficLimit, err := plan.GetTrafficLimit()
+	if err != nil {
+		uc.logger.Errorw("failed to get traffic limit", "error", err)
+		return nil, errors.NewInternalError("failed to get traffic limit")
+	}
 	if trafficLimit == 0 {
 		uc.logger.Infow("no traffic limit configured",
 			"subscription_id", query.SubscriptionID,

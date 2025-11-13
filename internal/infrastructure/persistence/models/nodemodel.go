@@ -12,31 +12,25 @@ import (
 // NodeModel represents the database persistence model for nodes
 // This is the anti-corruption layer between domain and database
 type NodeModel struct {
-	ID                 uint   `gorm:"primarykey"`
-	Name               string `gorm:"uniqueIndex;not null;size:100"`
-	ServerAddress      string `gorm:"not null;size:255;index:idx_server"`
-	ServerPort         uint16 `gorm:"not null;index:idx_server"`
-	EncryptionMethod   string `gorm:"not null;size:50"`
-	EncryptionPassword string `gorm:"not null;size:255"`
-	Plugin             *string
-	PluginOpts         datatypes.JSON
-	Protocol           string `gorm:"not null;default:shadowsocks;size:20;index:idx_protocol"` // shadowsocks, trojan
-	Status             string `gorm:"not null;default:inactive;size:20;index:idx_status"`      // active, inactive, maintenance
-	Country            *string `gorm:"size:50"`
-	Region             *string `gorm:"size:100"`
-	Tags               datatypes.JSON
-	CustomFields       datatypes.JSON
-	MaxUsers           uint   `gorm:"not null;default:0"`
-	TrafficLimit       uint64 `gorm:"not null;default:0"`           // bytes
-	TrafficUsed        uint64 `gorm:"not null;default:0"`           // bytes
-	TrafficResetAt     *time.Time
-	SortOrder          int    `gorm:"not null;default:0"`
-	MaintenanceReason  *string `gorm:"size:500"`
-	TokenHash          string `gorm:"not null;uniqueIndex:idx_token_hash;size:255"` // hashed API token for node authentication
-	Version            int    `gorm:"not null;default:1"`
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
-	DeletedAt          gorm.DeletedAt `gorm:"index"`
+	ID                uint   `gorm:"primarykey"`
+	Name              string `gorm:"uniqueIndex;not null;size:100"`
+	ServerAddress     string `gorm:"not null;size:255;index:idx_server"`
+	ServerPort        uint16 `gorm:"not null;index:idx_server"`
+	EncryptionMethod  string `gorm:"not null;size:50;comment:encryption method only, password is subscription UUID"`
+	Plugin            *string
+	PluginOpts        datatypes.JSON
+	Protocol          string `gorm:"not null;default:shadowsocks;size:20;index:idx_protocol"` // shadowsocks, trojan
+	Status            string `gorm:"not null;default:inactive;size:20;index:idx_status"`      // active, inactive, maintenance
+	Region            *string `gorm:"size:100"`
+	Tags              datatypes.JSON
+	CustomFields      datatypes.JSON
+	SortOrder         int    `gorm:"not null;default:0"`
+	MaintenanceReason *string `gorm:"size:500"`
+	TokenHash         string `gorm:"not null;uniqueIndex:idx_token_hash;size:255"` // hashed API token for node authentication
+	Version           int    `gorm:"not null;default:1"`
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	DeletedAt         gorm.DeletedAt `gorm:"index"`
 }
 
 // TableName specifies the table name for GORM

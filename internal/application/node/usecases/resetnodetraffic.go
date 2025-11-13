@@ -9,6 +9,14 @@ import (
 	"orris/internal/shared/logger"
 )
 
+// DEPRECATED: This use case is deprecated as node-level traffic management has been removed.
+// Traffic tracking is now handled at the subscription level through NodeTraffic domain entity.
+// This file is kept for backward compatibility and will be removed in a future version.
+//
+// Migration path:
+// - Use subscription-level traffic tracking via NodeTraffic entity
+// - Traffic reset should be handled at subscription level
+// - For node-level resets, iterate through associated subscriptions
 type ResetNodeTrafficCommand struct {
 	NodeID         uint
 	UserID         *uint
@@ -17,6 +25,7 @@ type ResetNodeTrafficCommand struct {
 	OperatorID     uint
 }
 
+// DEPRECATED: See ResetNodeTrafficCommand deprecation notice
 type ResetNodeTrafficResult struct {
 	NodeID         uint      `json:"node_id"`
 	UserID         *uint     `json:"user_id,omitempty"`
@@ -26,11 +35,13 @@ type ResetNodeTrafficResult struct {
 	Reason         string    `json:"reason"`
 }
 
+// DEPRECATED: See ResetNodeTrafficCommand deprecation notice
 type ResetNodeTrafficUseCase struct {
 	trafficRepo     node.NodeTrafficRepository
 	logger          logger.Interface
 }
 
+// DEPRECATED: See ResetNodeTrafficCommand deprecation notice
 func NewResetNodeTrafficUseCase(
 	trafficRepo node.NodeTrafficRepository,
 	logger logger.Interface,
@@ -41,6 +52,7 @@ func NewResetNodeTrafficUseCase(
 	}
 }
 
+// DEPRECATED: See ResetNodeTrafficCommand deprecation notice
 func (uc *ResetNodeTrafficUseCase) Execute(
 	ctx context.Context,
 	cmd ResetNodeTrafficCommand,

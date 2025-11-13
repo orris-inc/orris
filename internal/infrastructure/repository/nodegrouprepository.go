@@ -124,8 +124,10 @@ func (r *NodeGroupRepositoryImpl) Update(ctx context.Context, group *node.NodeGr
 	}
 
 	// Use optimistic locking by checking version
+	// The domain entity has already incremented the version, so we need to check against the previous version
+	previousVersion := model.Version - 1
 	result := r.db.WithContext(ctx).Model(&models.NodeGroupModel{}).
-		Where("id = ? AND version = ?", model.ID, model.Version).
+		Where("id = ? AND version = ?", model.ID, previousVersion).
 		Updates(map[string]interface{}{
 			"name":        model.Name,
 			"description": model.Description,
@@ -133,7 +135,7 @@ func (r *NodeGroupRepositoryImpl) Update(ctx context.Context, group *node.NodeGr
 			"sort_order":  model.SortOrder,
 			"metadata":    model.Metadata,
 			"updated_at":  model.UpdatedAt,
-			"version":     gorm.Expr("version + 1"),
+			"version":     model.Version,
 		})
 
 	if result.Error != nil {

@@ -15,12 +15,12 @@ type NodeRepository interface {
 	List(ctx context.Context, filter NodeFilter) ([]*Node, int64, error)
 	ExistsByName(ctx context.Context, name string) (bool, error)
 	ExistsByAddress(ctx context.Context, address string, port int) (bool, error)
+	IncrementTraffic(ctx context.Context, nodeID uint, amount uint64) error
 }
 
 type NodeFilter struct {
 	query.BaseFilter
-	Name    *string
-	Status  *string
-	Country *string
-	Tag     *string
+	Name   *string
+	Status *string
+	Tag    *string
 }

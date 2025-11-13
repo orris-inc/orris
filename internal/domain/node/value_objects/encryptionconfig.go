@@ -18,22 +18,16 @@ var validMethods = map[string]bool{
 }
 
 type EncryptionConfig struct {
-	method   string
-	password string
+	method string
 }
 
-func NewEncryptionConfig(method, password string) (EncryptionConfig, error) {
+func NewEncryptionConfig(method string) (EncryptionConfig, error) {
 	if !isValidMethod(method) {
 		return EncryptionConfig{}, fmt.Errorf("unsupported encryption method: %s", method)
 	}
 
-	if len(password) < 8 {
-		return EncryptionConfig{}, fmt.Errorf("password must be at least 8 characters long")
-	}
-
 	return EncryptionConfig{
-		method:   method,
-		password: password,
+		method: method,
 	}, nil
 }
 
@@ -41,17 +35,15 @@ func (ec EncryptionConfig) Method() string {
 	return ec.method
 }
 
-func (ec EncryptionConfig) Password() string {
-	return ec.password
-}
-
-func (ec EncryptionConfig) ToShadowsocksURI() string {
-	auth := fmt.Sprintf("%s:%s", ec.method, ec.password)
+// ToShadowsocksURI generates the Shadowsocks URI with the given password
+// The password parameter should be the subscription UUID
+func (ec EncryptionConfig) ToShadowsocksURI(password string) string {
+	auth := fmt.Sprintf("%s:%s", ec.method, password)
 	return base64.URLEncoding.EncodeToString([]byte(auth))
 }
 
 func (ec EncryptionConfig) Equals(other EncryptionConfig) bool {
-	return ec.method == other.method && ec.password == other.password
+	return ec.method == other.method
 }
 
 func isValidMethod(method string) bool {

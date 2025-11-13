@@ -23,6 +23,297 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
+        "/agents/{id}/config": {
+            "get": {
+                "security": [
+                    {
+                        "NodeToken": []
+                    }
+                ],
+                "description": "Retrieve node configuration for agent clients (XrayR/v2ray compatible)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "agent-v1"
+                ],
+                "summary": "Get node configuration",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Node ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "enum": [
+                            "shadowsocks",
+                            "trojan"
+                        ],
+                        "type": "string",
+                        "description": "Node type override",
+                        "name": "node_type",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Node configuration retrieved successfully",
+                        "schema": {
+                            "$ref": "#/definitions/utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid node ID parameter",
+                        "schema": {
+                            "$ref": "#/definitions/utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Node not found",
+                        "schema": {
+                            "$ref": "#/definitions/utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/agents/{id}/online-users": {
+            "put": {
+                "security": [
+                    {
+                        "NodeToken": []
+                    }
+                ],
+                "description": "Report currently connected users on the node",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "agent-v1"
+                ],
+                "summary": "Update online users list",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Node ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Online users list",
+                        "name": "users",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.ReportOnlineUsersRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Online users updated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request body or node ID",
+                        "schema": {
+                            "$ref": "#/definitions/utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/agents/{id}/status": {
+            "put": {
+                "security": [
+                    {
+                        "NodeToken": []
+                    }
+                ],
+                "description": "Report node system metrics (CPU, memory, disk, network, uptime)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "agent-v1"
+                ],
+                "summary": "Update node system status",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Node ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Node system status",
+                        "name": "status",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.ReportNodeStatusRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Status updated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request body or node ID",
+                        "schema": {
+                            "$ref": "#/definitions/utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/agents/{id}/traffic": {
+            "post": {
+                "security": [
+                    {
+                        "NodeToken": []
+                    }
+                ],
+                "description": "Submit user traffic statistics for the node",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "agent-v1"
+                ],
+                "summary": "Report user traffic data",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Node ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "User traffic data",
+                        "name": "traffic",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/dto.UserTrafficItem"
+                            }
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Traffic reported successfully",
+                        "schema": {
+                            "$ref": "#/definitions/utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request body or node ID",
+                        "schema": {
+                            "$ref": "#/definitions/utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/agents/{id}/users": {
+            "get": {
+                "security": [
+                    {
+                        "NodeToken": []
+                    }
+                ],
+                "description": "Retrieve list of users authorized to access the node",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "agent-v1"
+                ],
+                "summary": "Get authorized users list",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Node ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "User list retrieved successfully",
+                        "schema": {
+                            "$ref": "#/definitions/utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid node ID parameter",
+                        "schema": {
+                            "$ref": "#/definitions/utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/announcements": {
             "get": {
                 "security": [
@@ -86,13 +377,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                    "$ref": "#/definitions/utils.APIResponse"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/orris_internal_shared_utils.ListResponse"
+                                            "$ref": "#/definitions/utils.ListResponse"
                                         }
                                     }
                                 }
@@ -102,19 +393,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid query parameters",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -151,31 +442,31 @@ const docTemplate = `{
                     "201": {
                         "description": "Announcement created successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -214,7 +505,7 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                    "$ref": "#/definitions/utils.APIResponse"
                                 },
                                 {
                                     "type": "object",
@@ -230,25 +521,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid announcement ID",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Announcement not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -294,7 +585,7 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                    "$ref": "#/definitions/utils.APIResponse"
                                 },
                                 {
                                     "type": "object",
@@ -310,31 +601,31 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Announcement not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -372,25 +663,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid announcement ID",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Announcement not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -429,7 +720,7 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                    "$ref": "#/definitions/utils.APIResponse"
                                 },
                                 {
                                     "type": "object",
@@ -445,207 +736,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid announcement ID",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Announcement not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/api/node": {
-            "get": {
-                "security": [
-                    {
-                        "NodeToken": []
-                    }
-                ],
-                "description": "Unified endpoint for node backend operations (XrayR/v2ray compatible). Routes requests based on 'act' parameter.\n\nSupported actions and their request bodies:\n- act=config (GET): No body required - returns node configuration\n- act=user (GET): No body required - returns authorized user list\n- act=submit (POST): Body should be []UserTrafficItem - report user traffic data\n- act=nodestatus (POST): Body should be ReportNodeStatusRequest - report node system status\n- act=onlineusers (POST): Body should be ReportOnlineUsersRequest - report online users",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "node-backend"
-                ],
-                "summary": "Node backend unified API endpoint (v2raysocks compatible)",
-                "parameters": [
-                    {
-                        "enum": [
-                            "config",
-                            "user",
-                            "submit",
-                            "nodestatus",
-                            "onlineusers"
-                        ],
-                        "type": "string",
-                        "description": "Action type",
-                        "name": "act",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Node ID",
-                        "name": "node_id",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Node authentication token",
-                        "name": "token",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "enum": [
-                            "shadowsocks",
-                            "trojan"
-                        ],
-                        "type": "string",
-                        "description": "Node type (shadowsocks, trojan)",
-                        "name": "node_type",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Success response with data",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.V2RaySocksResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid parameters",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.V2RaySocksResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.V2RaySocksResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Node not found",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.V2RaySocksResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.V2RaySocksResponse"
-                        }
-                    }
-                }
-            },
-            "post": {
-                "security": [
-                    {
-                        "NodeToken": []
-                    }
-                ],
-                "description": "Unified endpoint for node backend operations (XrayR/v2ray compatible). Routes requests based on 'act' parameter.\n\nSupported actions and their request bodies:\n- act=config (GET): No body required - returns node configuration\n- act=user (GET): No body required - returns authorized user list\n- act=submit (POST): Body should be []UserTrafficItem - report user traffic data\n- act=nodestatus (POST): Body should be ReportNodeStatusRequest - report node system status\n- act=onlineusers (POST): Body should be ReportOnlineUsersRequest - report online users",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "node-backend"
-                ],
-                "summary": "Node backend unified API endpoint (v2raysocks compatible)",
-                "parameters": [
-                    {
-                        "enum": [
-                            "config",
-                            "user",
-                            "submit",
-                            "nodestatus",
-                            "onlineusers"
-                        ],
-                        "type": "string",
-                        "description": "Action type",
-                        "name": "act",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "integer",
-                        "description": "Node ID",
-                        "name": "node_id",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Node authentication token",
-                        "name": "token",
-                        "in": "query",
-                        "required": true
-                    },
-                    {
-                        "enum": [
-                            "shadowsocks",
-                            "trojan"
-                        ],
-                        "type": "string",
-                        "description": "Node type (shadowsocks, trojan)",
-                        "name": "node_type",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Success response with data",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.V2RaySocksResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid parameters",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.V2RaySocksResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.V2RaySocksResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Node not found",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.V2RaySocksResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.V2RaySocksResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -671,7 +780,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_interfaces_http_handlers.ForgotPasswordRequest"
+                            "$ref": "#/definitions/handlers.ForgotPasswordRequest"
                         }
                     }
                 ],
@@ -679,13 +788,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -711,7 +820,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_interfaces_http_handlers.LoginRequest"
+                            "$ref": "#/definitions/handlers.LoginRequest"
                         }
                     }
                 ],
@@ -719,19 +828,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -759,19 +868,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal Server Error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -799,19 +908,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -846,7 +955,7 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -933,7 +1042,7 @@ const docTemplate = `{
                         "name": "request",
                         "in": "body",
                         "schema": {
-                            "$ref": "#/definitions/internal_interfaces_http_handlers.RefreshTokenRequest"
+                            "$ref": "#/definitions/handlers.RefreshTokenRequest"
                         }
                     }
                 ],
@@ -941,19 +1050,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -979,7 +1088,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_interfaces_http_handlers.RegisterRequest"
+                            "$ref": "#/definitions/handlers.RegisterRequest"
                         }
                     }
                 ],
@@ -987,13 +1096,13 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -1019,7 +1128,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_interfaces_http_handlers.ResetPasswordRequest"
+                            "$ref": "#/definitions/handlers.ResetPasswordRequest"
                         }
                     }
                 ],
@@ -1027,13 +1136,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -1064,7 +1173,7 @@ const docTemplate = `{
                         "name": "request",
                         "in": "body",
                         "schema": {
-                            "$ref": "#/definitions/internal_interfaces_http_handlers.VerifyEmailRequest"
+                            "$ref": "#/definitions/handlers.VerifyEmailRequest"
                         }
                     }
                 ],
@@ -1072,13 +1181,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -1152,31 +1261,31 @@ const docTemplate = `{
                     "200": {
                         "description": "Node groups list",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Invalid query parameters",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -1205,7 +1314,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_interfaces_http_handlers_node.CreateNodeGroupRequest"
+                            "$ref": "#/definitions/node.CreateNodeGroupRequest"
                         }
                     }
                 ],
@@ -1213,31 +1322,31 @@ const docTemplate = `{
                     "201": {
                         "description": "Node group created successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -1274,37 +1383,37 @@ const docTemplate = `{
                     "200": {
                         "description": "Node group details",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Invalid node group ID",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Node group not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -1340,7 +1449,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_interfaces_http_handlers_node.UpdateNodeGroupRequest"
+                            "$ref": "#/definitions/node.UpdateNodeGroupRequest"
                         }
                     }
                 ],
@@ -1348,37 +1457,37 @@ const docTemplate = `{
                     "200": {
                         "description": "Node group updated successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Node group not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -1416,31 +1525,31 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid node group ID",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Node group not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -1477,37 +1586,37 @@ const docTemplate = `{
                     "200": {
                         "description": "List of nodes in group",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Invalid node group ID",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Node group not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -1543,7 +1652,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_interfaces_http_handlers_node.AddNodeToGroupRequest"
+                            "$ref": "#/definitions/node.AddNodeToGroupRequest"
                         }
                     }
                 ],
@@ -1551,37 +1660,37 @@ const docTemplate = `{
                     "200": {
                         "description": "Node added successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Node group not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -1628,31 +1737,31 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid ID",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Node group not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -1690,7 +1799,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_interfaces_http_handlers_node.AssociatePlanRequest"
+                            "$ref": "#/definitions/node.AssociatePlanRequest"
                         }
                     }
                 ],
@@ -1698,37 +1807,37 @@ const docTemplate = `{
                     "200": {
                         "description": "Plan associated successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Node group not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -1775,31 +1884,31 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid ID",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Node group or plan not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -1849,43 +1958,37 @@ const docTemplate = `{
                         "description": "Node status filter",
                         "name": "status",
                         "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "Country filter",
-                        "name": "country",
-                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "Nodes list",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Invalid query parameters",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -1896,7 +1999,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Create a new proxy node with the input data",
+                "description": "Create a new proxy node",
                 "consumes": [
                     "application/json"
                 ],
@@ -1914,7 +2017,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_interfaces_http_handlers_node.CreateNodeRequest"
+                            "$ref": "#/definitions/node.CreateNodeRequest"
                         }
                     }
                 ],
@@ -1922,31 +2025,31 @@ const docTemplate = `{
                     "201": {
                         "description": "Node created successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -1977,7 +2080,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_interfaces_http_handlers_node.ReportNodeDataRequest"
+                            "$ref": "#/definitions/node.ReportNodeDataRequest"
                         }
                     }
                 ],
@@ -1985,25 +2088,25 @@ const docTemplate = `{
                     "200": {
                         "description": "Data reported successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -2031,19 +2134,19 @@ const docTemplate = `{
                     "200": {
                         "description": "Heartbeat received",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -2080,37 +2183,37 @@ const docTemplate = `{
                     "200": {
                         "description": "Node details",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Invalid node ID",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Node not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -2146,7 +2249,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_interfaces_http_handlers_node.UpdateNodeRequest"
+                            "$ref": "#/definitions/node.UpdateNodeRequest"
                         }
                     }
                 ],
@@ -2154,37 +2257,37 @@ const docTemplate = `{
                     "200": {
                         "description": "Node updated successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Node not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -2222,31 +2325,31 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid node ID",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Node not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -2283,37 +2386,37 @@ const docTemplate = `{
                     "200": {
                         "description": "Node activated successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Invalid node ID",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Node not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -2350,37 +2453,37 @@ const docTemplate = `{
                     "200": {
                         "description": "Node deactivated successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Invalid node ID",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Node not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -2417,116 +2520,37 @@ const docTemplate = `{
                     "200": {
                         "description": "Token generated successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Invalid node ID",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Node not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/nodes/{id}/traffic": {
-            "get": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Get traffic statistics for a node",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "nodes"
-                ],
-                "summary": "Get node traffic statistics",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Node ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "type": "string",
-                        "description": "Start time (RFC3339)",
-                        "name": "start",
-                        "in": "query"
-                    },
-                    {
-                        "type": "string",
-                        "description": "End time (RFC3339)",
-                        "name": "end",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Node traffic statistics",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Invalid node ID or parameters",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Forbidden - Requires admin role",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Node not found",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -2578,13 +2602,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                    "$ref": "#/definitions/utils.APIResponse"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/orris_internal_shared_utils.ListResponse"
+                                            "$ref": "#/definitions/utils.ListResponse"
                                         }
                                     }
                                 }
@@ -2594,19 +2618,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid query parameters",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -2645,7 +2669,7 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                    "$ref": "#/definitions/utils.APIResponse"
                                 },
                                 {
                                     "type": "object",
@@ -2661,25 +2685,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "409": {
                         "description": "Template type already exists",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -2720,7 +2744,7 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                    "$ref": "#/definitions/utils.APIResponse"
                                 },
                                 {
                                     "type": "object",
@@ -2736,25 +2760,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Template not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -2810,7 +2834,7 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                    "$ref": "#/definitions/utils.APIResponse"
                                 },
                                 {
                                     "type": "object",
@@ -2829,19 +2853,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid query parameters",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -2869,19 +2893,19 @@ const docTemplate = `{
                     "200": {
                         "description": "All notifications marked as read",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -2911,7 +2935,7 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                    "$ref": "#/definitions/utils.APIResponse"
                                 },
                                 {
                                     "type": "object",
@@ -2927,13 +2951,13 @@ const docTemplate = `{
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -2973,25 +2997,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid notification ID",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Notification not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -3030,7 +3054,7 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                    "$ref": "#/definitions/utils.APIResponse"
                                 },
                                 {
                                     "type": "object",
@@ -3046,25 +3070,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid notification ID",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Notification not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -3103,7 +3127,7 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                    "$ref": "#/definitions/utils.APIResponse"
                                 },
                                 {
                                     "type": "object",
@@ -3119,25 +3143,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid notification ID",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Notification not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -3168,7 +3192,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_interfaces_http_handlers.CreatePaymentRequest"
+                            "$ref": "#/definitions/handlers.CreatePaymentRequest"
                         }
                     }
                 ],
@@ -3178,13 +3202,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                    "$ref": "#/definitions/utils.APIResponse"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/internal_interfaces_http_handlers.CreatePaymentResponse"
+                                            "$ref": "#/definitions/handlers.CreatePaymentResponse"
                                         }
                                     }
                                 }
@@ -3194,19 +3218,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -3229,19 +3253,19 @@ const docTemplate = `{
                     "200": {
                         "description": "Callback processed successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -3294,13 +3318,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                    "$ref": "#/definitions/utils.APIResponse"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/orris_internal_shared_utils.ListResponse"
+                                            "$ref": "#/definitions/utils.ListResponse"
                                         }
                                     }
                                 }
@@ -3310,13 +3334,13 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid query parameters",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -3354,19 +3378,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid token",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Subscription not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -3404,19 +3428,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid token",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Subscription not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -3454,19 +3478,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid token",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Subscription not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -3504,19 +3528,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid token",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Subscription not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -3554,19 +3578,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid token",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Subscription not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -3640,25 +3664,25 @@ const docTemplate = `{
                     "200": {
                         "description": "Subscription plans list",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Invalid query parameters",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -3687,7 +3711,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_interfaces_http_handlers.CreatePlanRequest"
+                            "$ref": "#/definitions/handlers.CreatePlanRequest"
                         }
                     }
                 ],
@@ -3695,31 +3719,31 @@ const docTemplate = `{
                     "201": {
                         "description": "Subscription plan created successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "409": {
                         "description": "Plan slug already exists",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -3742,13 +3766,13 @@ const docTemplate = `{
                     "200": {
                         "description": "Public subscription plans",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -3785,31 +3809,31 @@ const docTemplate = `{
                     "200": {
                         "description": "Subscription plan details",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Invalid plan ID",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Plan not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -3845,7 +3869,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_interfaces_http_handlers.UpdatePlanRequest"
+                            "$ref": "#/definitions/handlers.UpdatePlanRequest"
                         }
                     }
                 ],
@@ -3853,31 +3877,31 @@ const docTemplate = `{
                     "200": {
                         "description": "Subscription plan updated successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Plan not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -3914,31 +3938,31 @@ const docTemplate = `{
                     "200": {
                         "description": "Subscription plan activated successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Invalid plan ID",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Plan not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -3975,31 +3999,31 @@ const docTemplate = `{
                     "200": {
                         "description": "Subscription plan deactivated successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Invalid plan ID",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Plan not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -4028,25 +4052,25 @@ const docTemplate = `{
                     "200": {
                         "description": "Pricing options for the plan",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Invalid plan ID",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Plan not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -4105,13 +4129,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                    "$ref": "#/definitions/utils.APIResponse"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/orris_internal_shared_utils.ListResponse"
+                                            "$ref": "#/definitions/utils.ListResponse"
                                         }
                                     }
                                 }
@@ -4121,19 +4145,19 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid query parameters",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -4162,7 +4186,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_interfaces_http_handlers.CreateSubscriptionRequest"
+                            "$ref": "#/definitions/handlers.CreateSubscriptionRequest"
                         }
                     }
                 ],
@@ -4172,13 +4196,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                    "$ref": "#/definitions/utils.APIResponse"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/internal_interfaces_http_handlers.SubscriptionCreateResult"
+                                            "$ref": "#/definitions/handlers.SubscriptionCreateResult"
                                         }
                                     }
                                 }
@@ -4188,25 +4212,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Plan not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -4245,13 +4269,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                    "$ref": "#/definitions/utils.APIResponse"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/internal_interfaces_http_handlers.SubscriptionResponse"
+                                            "$ref": "#/definitions/handlers.SubscriptionResponse"
                                         }
                                     }
                                 }
@@ -4261,31 +4285,31 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid subscription ID",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Access denied",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Subscription not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -4323,7 +4347,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_interfaces_http_handlers.CancelSubscriptionRequest"
+                            "$ref": "#/definitions/handlers.CancelSubscriptionRequest"
                         }
                     }
                 ],
@@ -4331,37 +4355,37 @@ const docTemplate = `{
                     "200": {
                         "description": "Subscription cancelled successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Access denied",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Subscription not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -4399,7 +4423,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_interfaces_http_handlers.ChangePlanRequest"
+                            "$ref": "#/definitions/handlers.ChangePlanRequest"
                         }
                     }
                 ],
@@ -4407,37 +4431,37 @@ const docTemplate = `{
                     "200": {
                         "description": "Plan changed successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Access denied",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Subscription or plan not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -4474,37 +4498,37 @@ const docTemplate = `{
                     "200": {
                         "description": "Subscription renewed successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Invalid subscription ID",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Access denied",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Subscription not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -4548,37 +4572,37 @@ const docTemplate = `{
                     "200": {
                         "description": "Subscription tokens list",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Invalid subscription ID",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Access denied",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Subscription not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -4614,7 +4638,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_interfaces_http_handlers.GenerateTokenRequest"
+                            "$ref": "#/definitions/handlers.GenerateTokenRequest"
                         }
                     }
                 ],
@@ -4622,37 +4646,37 @@ const docTemplate = `{
                     "201": {
                         "description": "Subscription token generated successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Access denied",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Subscription not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -4696,37 +4720,37 @@ const docTemplate = `{
                     "200": {
                         "description": "Subscription token revoked successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Invalid token ID",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Access denied",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Token not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -4770,37 +4794,37 @@ const docTemplate = `{
                     "200": {
                         "description": "Subscription token refreshed successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Invalid token ID",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Access denied",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Token not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -4884,19 +4908,19 @@ const docTemplate = `{
                     "200": {
                         "description": "Tickets list",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -4925,7 +4949,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_interfaces_http_handlers_ticket.CreateTicketRequest"
+                            "$ref": "#/definitions/ticket.CreateTicketRequest"
                         }
                     }
                 ],
@@ -4933,25 +4957,25 @@ const docTemplate = `{
                     "201": {
                         "description": "Ticket created successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -4988,25 +5012,25 @@ const docTemplate = `{
                     "200": {
                         "description": "Ticket details",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Not Found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -5044,31 +5068,31 @@ const docTemplate = `{
                     "400": {
                         "description": "Bad request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Ticket not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -5106,7 +5130,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_interfaces_http_handlers_ticket.AssignTicketRequest"
+                            "$ref": "#/definitions/ticket.AssignTicketRequest"
                         }
                     }
                 ],
@@ -5114,37 +5138,37 @@ const docTemplate = `{
                     "200": {
                         "description": "Ticket assigned successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "Ticket not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -5182,7 +5206,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_interfaces_http_handlers_ticket.CloseTicketRequest"
+                            "$ref": "#/definitions/ticket.CloseTicketRequest"
                         }
                     }
                 ],
@@ -5190,19 +5214,19 @@ const docTemplate = `{
                     "200": {
                         "description": "Ticket closed successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -5240,7 +5264,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_interfaces_http_handlers_ticket.AddCommentRequest"
+                            "$ref": "#/definitions/ticket.AddCommentRequest"
                         }
                     }
                 ],
@@ -5248,19 +5272,19 @@ const docTemplate = `{
                     "201": {
                         "description": "Comment added successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -5298,7 +5322,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_interfaces_http_handlers_ticket.ReopenTicketRequest"
+                            "$ref": "#/definitions/ticket.ReopenTicketRequest"
                         }
                     }
                 ],
@@ -5306,19 +5330,19 @@ const docTemplate = `{
                     "200": {
                         "description": "Ticket reopened successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad Request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -5386,13 +5410,13 @@ const docTemplate = `{
                         "schema": {
                             "allOf": [
                                 {
-                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                    "$ref": "#/definitions/utils.APIResponse"
                                 },
                                 {
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/orris_internal_shared_utils.ListResponse"
+                                            "$ref": "#/definitions/utils.ListResponse"
                                         }
                                     }
                                 }
@@ -5402,25 +5426,25 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid query parameters",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -5457,37 +5481,37 @@ const docTemplate = `{
                     "201": {
                         "description": "User created successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "409": {
                         "description": "Email already exists",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -5524,37 +5548,37 @@ const docTemplate = `{
                     "200": {
                         "description": "User details",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Invalid email",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "User not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -5593,31 +5617,31 @@ const docTemplate = `{
                     "200": {
                         "description": "Profile updated successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad request or validation error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "User not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -5656,31 +5680,31 @@ const docTemplate = `{
                     "200": {
                         "description": "Password changed successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad request or validation error (e.g., incorrect old password)",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "User not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -5717,37 +5741,37 @@ const docTemplate = `{
                     "200": {
                         "description": "User details",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Invalid user ID",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "User not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -5785,31 +5809,31 @@ const docTemplate = `{
                     "400": {
                         "description": "Invalid user ID",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "User not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -5853,43 +5877,43 @@ const docTemplate = `{
                     "200": {
                         "description": "User updated successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
                         "description": "Bad request",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "401": {
                         "description": "Unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "403": {
                         "description": "Forbidden - Requires admin role",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "404": {
                         "description": "User not found",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "409": {
                         "description": "Email already exists",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "500": {
                         "description": "Internal server error",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     }
                 }
@@ -5897,6 +5921,474 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "dto.OnlineUserItem": {
+            "type": "object",
+            "required": [
+                "IP",
+                "UID"
+            ],
+            "properties": {
+                "IP": {
+                    "description": "User connection IP address",
+                    "type": "string"
+                },
+                "UID": {
+                    "description": "User unique identifier",
+                    "type": "integer"
+                }
+            }
+        },
+        "dto.ReportNodeStatusRequest": {
+            "type": "object",
+            "required": [
+                "CPU",
+                "Disk",
+                "Mem",
+                "Net"
+            ],
+            "properties": {
+                "CPU": {
+                    "description": "CPU usage percentage (format: \"XX%\")",
+                    "type": "string"
+                },
+                "Disk": {
+                    "description": "Disk usage percentage (format: \"XX%\")",
+                    "type": "string"
+                },
+                "Mem": {
+                    "description": "Memory usage percentage (format: \"XX%\")",
+                    "type": "string"
+                },
+                "Net": {
+                    "description": "Network usage (format: \"XX MB\")",
+                    "type": "string"
+                },
+                "Uptime": {
+                    "description": "System uptime in seconds",
+                    "type": "integer",
+                    "minimum": 0
+                }
+            }
+        },
+        "dto.ReportOnlineUsersRequest": {
+            "type": "object",
+            "required": [
+                "users"
+            ],
+            "properties": {
+                "users": {
+                    "description": "Array of currently online users",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/dto.OnlineUserItem"
+                    }
+                }
+            }
+        },
+        "dto.UserTrafficItem": {
+            "type": "object",
+            "required": [
+                "UID"
+            ],
+            "properties": {
+                "Download": {
+                    "description": "Download traffic in bytes",
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "UID": {
+                    "description": "User unique identifier",
+                    "type": "integer"
+                },
+                "Upload": {
+                    "description": "Upload traffic in bytes",
+                    "type": "integer",
+                    "minimum": 0
+                }
+            }
+        },
+        "handlers.CancelSubscriptionRequest": {
+            "type": "object",
+            "required": [
+                "reason"
+            ],
+            "properties": {
+                "immediate": {
+                    "type": "boolean"
+                },
+                "reason": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.ChangePlanRequest": {
+            "type": "object",
+            "required": [
+                "change_type",
+                "effective_date",
+                "new_plan_id"
+            ],
+            "properties": {
+                "change_type": {
+                    "type": "string",
+                    "enum": [
+                        "upgrade",
+                        "downgrade"
+                    ]
+                },
+                "effective_date": {
+                    "type": "string",
+                    "enum": [
+                        "immediate",
+                        "period_end"
+                    ]
+                },
+                "new_plan_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handlers.CreatePaymentRequest": {
+            "type": "object",
+            "required": [
+                "payment_method",
+                "subscription_id"
+            ],
+            "properties": {
+                "payment_method": {
+                    "type": "string",
+                    "enum": [
+                        "alipay",
+                        "wechat",
+                        "stripe"
+                    ]
+                },
+                "return_url": {
+                    "type": "string"
+                },
+                "subscription_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handlers.CreatePaymentResponse": {
+            "type": "object",
+            "properties": {
+                "expired_at": {
+                    "type": "string"
+                },
+                "order_no": {
+                    "type": "string"
+                },
+                "payment_id": {
+                    "type": "integer"
+                },
+                "payment_url": {
+                    "type": "string"
+                },
+                "qr_code": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.CreatePlanRequest": {
+            "type": "object",
+            "required": [
+                "billing_cycle",
+                "currency",
+                "name",
+                "price",
+                "slug"
+            ],
+            "properties": {
+                "api_rate_limit": {
+                    "type": "integer"
+                },
+                "billing_cycle": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "features": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "is_public": {
+                    "type": "boolean"
+                },
+                "limits": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "max_projects": {
+                    "type": "integer"
+                },
+                "max_users": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "price": {
+                    "type": "integer"
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "storage_limit": {
+                    "type": "integer"
+                },
+                "trial_days": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handlers.CreateSubscriptionRequest": {
+            "type": "object",
+            "required": [
+                "billing_cycle",
+                "plan_id"
+            ],
+            "properties": {
+                "auto_renew": {
+                    "type": "boolean"
+                },
+                "billing_cycle": {
+                    "type": "string",
+                    "enum": [
+                        "weekly",
+                        "monthly",
+                        "quarterly",
+                        "semi_annual",
+                        "yearly",
+                        "lifetime"
+                    ]
+                },
+                "payment_info": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "plan_id": {
+                    "type": "integer"
+                },
+                "start_date": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.ForgotPasswordRequest": {
+            "type": "object",
+            "required": [
+                "email"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.GenerateTokenRequest": {
+            "type": "object",
+            "required": [
+                "name",
+                "scope"
+            ],
+            "properties": {
+                "expires_at": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "scope": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.LoginRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "password"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
+                },
+                "remember_me": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "handlers.RefreshTokenRequest": {
+            "type": "object",
+            "properties": {
+                "refresh_token": {
+                    "type": "string",
+                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                }
+            }
+        },
+        "handlers.RegisterRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "name",
+                "password"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 2
+                },
+                "password": {
+                    "type": "string",
+                    "minLength": 8
+                }
+            }
+        },
+        "handlers.ResetPasswordRequest": {
+            "type": "object",
+            "required": [
+                "password",
+                "token"
+            ],
+            "properties": {
+                "password": {
+                    "type": "string",
+                    "minLength": 8
+                },
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.SubscriptionCreateResult": {
+            "type": "object",
+            "properties": {
+                "subscription": {},
+                "token": {}
+            }
+        },
+        "handlers.SubscriptionResponse": {
+            "type": "object",
+            "properties": {
+                "auto_renew": {
+                    "type": "boolean"
+                },
+                "cancel_reason": {
+                    "type": "string"
+                },
+                "cancelled_at": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "type": "string"
+                },
+                "current_period_end": {
+                    "type": "string"
+                },
+                "current_period_start": {
+                    "type": "string"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "is_expired": {
+                    "type": "boolean"
+                },
+                "plan_id": {
+                    "type": "integer"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handlers.UpdatePlanRequest": {
+            "type": "object",
+            "properties": {
+                "api_rate_limit": {
+                    "type": "integer"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "features": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "is_public": {
+                    "type": "boolean"
+                },
+                "limits": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "max_projects": {
+                    "type": "integer"
+                },
+                "max_users": {
+                    "type": "integer"
+                },
+                "price": {
+                    "type": "integer"
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "storage_limit": {
+                    "type": "integer"
+                }
+            }
+        },
+        "handlers.VerifyEmailRequest": {
+            "type": "object",
+            "required": [
+                "token"
+            ],
+            "properties": {
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_application_user_dto.ChangePasswordRequest": {
             "type": "object",
             "required": [
@@ -6011,9 +6503,6 @@ const docTemplate = `{
                 },
                 "updated_at": {
                     "type": "string"
-                },
-                "version": {
-                    "type": "integer"
                 },
                 "view_count": {
                     "type": "integer"
@@ -6130,9 +6619,6 @@ const docTemplate = `{
                 },
                 "user_id": {
                     "type": "integer"
-                },
-                "version": {
-                    "type": "integer"
                 }
             }
         },
@@ -6194,9 +6680,6 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
-                },
-                "version": {
-                    "type": "integer"
                 }
             }
         },
@@ -6242,395 +6725,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_interfaces_http_handlers.CancelSubscriptionRequest": {
-            "type": "object",
-            "required": [
-                "reason"
-            ],
-            "properties": {
-                "immediate": {
-                    "type": "boolean"
-                },
-                "reason": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_interfaces_http_handlers.ChangePlanRequest": {
-            "type": "object",
-            "required": [
-                "change_type",
-                "effective_date",
-                "new_plan_id"
-            ],
-            "properties": {
-                "change_type": {
-                    "type": "string",
-                    "enum": [
-                        "upgrade",
-                        "downgrade"
-                    ]
-                },
-                "effective_date": {
-                    "type": "string",
-                    "enum": [
-                        "immediate",
-                        "period_end"
-                    ]
-                },
-                "new_plan_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "internal_interfaces_http_handlers.CreatePaymentRequest": {
-            "type": "object",
-            "required": [
-                "payment_method",
-                "subscription_id"
-            ],
-            "properties": {
-                "payment_method": {
-                    "type": "string",
-                    "enum": [
-                        "alipay",
-                        "wechat",
-                        "stripe"
-                    ]
-                },
-                "return_url": {
-                    "type": "string"
-                },
-                "subscription_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "internal_interfaces_http_handlers.CreatePaymentResponse": {
-            "type": "object",
-            "properties": {
-                "expired_at": {
-                    "type": "string"
-                },
-                "order_no": {
-                    "type": "string"
-                },
-                "payment_id": {
-                    "type": "integer"
-                },
-                "payment_url": {
-                    "type": "string"
-                },
-                "qr_code": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_interfaces_http_handlers.CreatePlanRequest": {
-            "type": "object",
-            "required": [
-                "billing_cycle",
-                "currency",
-                "name",
-                "price",
-                "slug"
-            ],
-            "properties": {
-                "api_rate_limit": {
-                    "type": "integer"
-                },
-                "billing_cycle": {
-                    "type": "string"
-                },
-                "currency": {
-                    "type": "string"
-                },
-                "custom_endpoint": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "features": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "is_public": {
-                    "type": "boolean"
-                },
-                "limits": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "max_projects": {
-                    "type": "integer"
-                },
-                "max_users": {
-                    "type": "integer"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "price": {
-                    "type": "integer"
-                },
-                "slug": {
-                    "type": "string"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "storage_limit": {
-                    "type": "integer"
-                },
-                "trial_days": {
-                    "type": "integer"
-                }
-            }
-        },
-        "internal_interfaces_http_handlers.CreateSubscriptionRequest": {
-            "type": "object",
-            "required": [
-                "billing_cycle",
-                "plan_id"
-            ],
-            "properties": {
-                "auto_renew": {
-                    "type": "boolean"
-                },
-                "billing_cycle": {
-                    "type": "string",
-                    "enum": [
-                        "weekly",
-                        "monthly",
-                        "quarterly",
-                        "semi_annual",
-                        "yearly",
-                        "lifetime"
-                    ]
-                },
-                "payment_info": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "plan_id": {
-                    "type": "integer"
-                },
-                "start_date": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_interfaces_http_handlers.ForgotPasswordRequest": {
-            "type": "object",
-            "required": [
-                "email"
-            ],
-            "properties": {
-                "email": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_interfaces_http_handlers.GenerateTokenRequest": {
-            "type": "object",
-            "required": [
-                "name",
-                "scope"
-            ],
-            "properties": {
-                "expires_at": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "scope": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_interfaces_http_handlers.LoginRequest": {
-            "type": "object",
-            "required": [
-                "email",
-                "password"
-            ],
-            "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "password": {
-                    "type": "string"
-                },
-                "remember_me": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "internal_interfaces_http_handlers.RefreshTokenRequest": {
-            "type": "object",
-            "properties": {
-                "refresh_token": {
-                    "type": "string",
-                    "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                }
-            }
-        },
-        "internal_interfaces_http_handlers.RegisterRequest": {
-            "type": "object",
-            "required": [
-                "email",
-                "name",
-                "password"
-            ],
-            "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 100,
-                    "minLength": 2
-                },
-                "password": {
-                    "type": "string",
-                    "minLength": 8
-                }
-            }
-        },
-        "internal_interfaces_http_handlers.ResetPasswordRequest": {
-            "type": "object",
-            "required": [
-                "password",
-                "token"
-            ],
-            "properties": {
-                "password": {
-                    "type": "string",
-                    "minLength": 8
-                },
-                "token": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_interfaces_http_handlers.SubscriptionCreateResult": {
-            "type": "object",
-            "properties": {
-                "subscription": {},
-                "token": {}
-            }
-        },
-        "internal_interfaces_http_handlers.SubscriptionResponse": {
-            "type": "object",
-            "properties": {
-                "auto_renew": {
-                    "type": "boolean"
-                },
-                "cancel_reason": {
-                    "type": "string"
-                },
-                "cancelled_at": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "current_period_end": {
-                    "type": "string"
-                },
-                "current_period_start": {
-                    "type": "string"
-                },
-                "end_date": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "is_expired": {
-                    "type": "boolean"
-                },
-                "plan_id": {
-                    "type": "integer"
-                },
-                "start_date": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "integer"
-                }
-            }
-        },
-        "internal_interfaces_http_handlers.UpdatePlanRequest": {
-            "type": "object",
-            "properties": {
-                "api_rate_limit": {
-                    "type": "integer"
-                },
-                "currency": {
-                    "type": "string"
-                },
-                "custom_endpoint": {
-                    "type": "string"
-                },
-                "description": {
-                    "type": "string"
-                },
-                "features": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    }
-                },
-                "is_public": {
-                    "type": "boolean"
-                },
-                "limits": {
-                    "type": "object",
-                    "additionalProperties": true
-                },
-                "max_projects": {
-                    "type": "integer"
-                },
-                "max_users": {
-                    "type": "integer"
-                },
-                "price": {
-                    "type": "integer"
-                },
-                "sort_order": {
-                    "type": "integer"
-                },
-                "storage_limit": {
-                    "type": "integer"
-                }
-            }
-        },
-        "internal_interfaces_http_handlers.VerifyEmailRequest": {
-            "type": "object",
-            "required": [
-                "token"
-            ],
-            "properties": {
-                "token": {
-                    "type": "string"
-                }
-            }
-        },
-        "internal_interfaces_http_handlers_node.AddNodeToGroupRequest": {
+        "node.AddNodeToGroupRequest": {
             "type": "object",
             "required": [
                 "node_id"
@@ -6641,7 +6736,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_interfaces_http_handlers_node.AssociatePlanRequest": {
+        "node.AssociatePlanRequest": {
             "type": "object",
             "required": [
                 "plan_id"
@@ -6652,7 +6747,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_interfaces_http_handlers_node.CreateNodeGroupRequest": {
+        "node.CreateNodeGroupRequest": {
             "type": "object",
             "required": [
                 "name"
@@ -6672,37 +6767,31 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_interfaces_http_handlers_node.CreateNodeRequest": {
+        "node.CreateNodeRequest": {
             "type": "object",
             "required": [
-                "country",
                 "method",
                 "name",
-                "password",
+                "protocol",
                 "server_address",
                 "server_port"
             ],
             "properties": {
-                "country": {
-                    "type": "string"
-                },
                 "description": {
-                    "type": "string"
-                },
-                "max_users": {
-                    "type": "integer"
+                    "type": "string",
+                    "example": "High-speed US server"
                 },
                 "method": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "aes-256-gcm"
                 },
                 "name": {
-                    "type": "string"
-                },
-                "password": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "US-Node-01"
                 },
                 "plugin": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "obfs-local"
                 },
                 "plugin_opts": {
                     "type": "object",
@@ -6710,30 +6799,43 @@ const docTemplate = `{
                         "type": "string"
                     }
                 },
+                "protocol": {
+                    "type": "string",
+                    "enum": [
+                        "shadowsocks",
+                        "trojan"
+                    ],
+                    "example": "shadowsocks"
+                },
                 "region": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "West Coast"
                 },
                 "server_address": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "1.2.3.4"
                 },
                 "server_port": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 8388
                 },
                 "sort_order": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 1
                 },
                 "tags": {
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
-                },
-                "traffic_limit": {
-                    "type": "integer"
+                    },
+                    "example": [
+                        "premium",
+                        "fast"
+                    ]
                 }
             }
         },
-        "internal_interfaces_http_handlers_node.ReportNodeDataRequest": {
+        "node.ReportNodeDataRequest": {
             "type": "object",
             "required": [
                 "download",
@@ -6750,14 +6852,14 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "system_info": {
-                    "$ref": "#/definitions/internal_interfaces_http_handlers_node.SystemInfo"
+                    "$ref": "#/definitions/node.SystemInfo"
                 },
                 "upload": {
                     "type": "integer"
                 }
             }
         },
-        "internal_interfaces_http_handlers_node.SystemInfo": {
+        "node.SystemInfo": {
             "type": "object",
             "properties": {
                 "disk_usage": {
@@ -6771,7 +6873,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_interfaces_http_handlers_node.UpdateNodeGroupRequest": {
+        "node.UpdateNodeGroupRequest": {
             "type": "object",
             "properties": {
                 "description": {
@@ -6788,29 +6890,24 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_interfaces_http_handlers_node.UpdateNodeRequest": {
+        "node.UpdateNodeRequest": {
             "type": "object",
             "properties": {
-                "country": {
-                    "type": "string"
-                },
                 "description": {
-                    "type": "string"
-                },
-                "max_users": {
-                    "type": "integer"
+                    "type": "string",
+                    "example": "Updated description"
                 },
                 "method": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "chacha20-ietf-poly1305"
                 },
                 "name": {
-                    "type": "string"
-                },
-                "password": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "US-Node-01-Updated"
                 },
                 "plugin": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "v2ray-plugin"
                 },
                 "plugin_opts": {
                     "type": "object",
@@ -6819,32 +6916,43 @@ const docTemplate = `{
                     }
                 },
                 "region": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "Tokyo"
                 },
                 "server_address": {
-                    "type": "string"
+                    "type": "string",
+                    "example": "2.3.4.5"
                 },
                 "server_port": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 8389
                 },
                 "sort_order": {
-                    "type": "integer"
+                    "type": "integer",
+                    "example": 2
                 },
                 "status": {
-                    "type": "string"
+                    "type": "string",
+                    "enum": [
+                        "active",
+                        "inactive",
+                        "maintenance"
+                    ],
+                    "example": "active"
                 },
                 "tags": {
                     "type": "array",
                     "items": {
                         "type": "string"
-                    }
-                },
-                "traffic_limit": {
-                    "type": "integer"
+                    },
+                    "example": [
+                        "premium",
+                        "low-latency"
+                    ]
                 }
             }
         },
-        "internal_interfaces_http_handlers_ticket.AddCommentRequest": {
+        "ticket.AddCommentRequest": {
             "type": "object",
             "required": [
                 "content"
@@ -6859,7 +6967,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_interfaces_http_handlers_ticket.AssignTicketRequest": {
+        "ticket.AssignTicketRequest": {
             "type": "object",
             "required": [
                 "assignee_id"
@@ -6870,7 +6978,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_interfaces_http_handlers_ticket.CloseTicketRequest": {
+        "ticket.CloseTicketRequest": {
             "type": "object",
             "required": [
                 "reason"
@@ -6882,7 +6990,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_interfaces_http_handlers_ticket.CreateTicketRequest": {
+        "ticket.CreateTicketRequest": {
             "type": "object",
             "required": [
                 "category",
@@ -6917,7 +7025,7 @@ const docTemplate = `{
                 }
             }
         },
-        "internal_interfaces_http_handlers_ticket.ReopenTicketRequest": {
+        "ticket.ReopenTicketRequest": {
             "type": "object",
             "required": [
                 "reason"
@@ -6929,12 +7037,12 @@ const docTemplate = `{
                 }
             }
         },
-        "orris_internal_shared_utils.APIResponse": {
+        "utils.APIResponse": {
             "type": "object",
             "properties": {
                 "data": {},
                 "error": {
-                    "$ref": "#/definitions/orris_internal_shared_utils.ErrorInfo"
+                    "$ref": "#/definitions/utils.ErrorInfo"
                 },
                 "message": {
                     "type": "string"
@@ -6944,7 +7052,7 @@ const docTemplate = `{
                 }
             }
         },
-        "orris_internal_shared_utils.ErrorInfo": {
+        "utils.ErrorInfo": {
             "type": "object",
             "properties": {
                 "details": {
@@ -6958,7 +7066,7 @@ const docTemplate = `{
                 }
             }
         },
-        "orris_internal_shared_utils.ListResponse": {
+        "utils.ListResponse": {
             "type": "object",
             "properties": {
                 "items": {},
@@ -6972,15 +7080,6 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "total_pages": {
-                    "type": "integer"
-                }
-            }
-        },
-        "orris_internal_shared_utils.V2RaySocksResponse": {
-            "type": "object",
-            "properties": {
-                "data": {},
-                "ret": {
                     "type": "integer"
                 }
             }

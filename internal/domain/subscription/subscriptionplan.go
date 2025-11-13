@@ -31,10 +31,9 @@ type SubscriptionPlan struct {
 	currency       string
 	billingCycle   vo.BillingCycle
 	trialDays      int
-	status         PlanStatus
-	features       *vo.PlanFeatures
-	customEndpoint string
-	apiRateLimit   uint
+	status       PlanStatus
+	features     *vo.PlanFeatures
+	apiRateLimit uint
 	maxUsers       uint
 	maxProjects    uint
 	storageLimit   uint64
@@ -78,11 +77,10 @@ func NewSubscriptionPlan(name, slug, description string, price uint64, currency 
 		price:          price,
 		currency:       currency,
 		billingCycle:   billingCycle,
-		trialDays:      trialDays,
-		status:         PlanStatusActive,
-		features:       nil,
-		customEndpoint: "",
-		apiRateLimit:   60,
+		trialDays:    trialDays,
+		status:       PlanStatusActive,
+		features:     nil,
+		apiRateLimit: 60,
 		maxUsers:       0,
 		maxProjects:    0,
 		storageLimit:   0,
@@ -96,7 +94,7 @@ func NewSubscriptionPlan(name, slug, description string, price uint64, currency 
 
 func ReconstructSubscriptionPlan(id uint, name, slug, description string, price uint64,
 	currency string, billingCycle vo.BillingCycle, trialDays int, status string,
-	features *vo.PlanFeatures, customEndpoint string, apiRateLimit, maxUsers, maxProjects uint,
+	features *vo.PlanFeatures, apiRateLimit, maxUsers, maxProjects uint,
 	storageLimit uint64, isPublic bool, sortOrder int, metadata map[string]interface{},
 	createdAt, updatedAt time.Time) (*SubscriptionPlan, error) {
 
@@ -114,26 +112,25 @@ func ReconstructSubscriptionPlan(id uint, name, slug, description string, price 
 	}
 
 	return &SubscriptionPlan{
-		id:             id,
-		name:           name,
-		slug:           slug,
-		description:    description,
-		price:          price,
-		currency:       currency,
-		billingCycle:   billingCycle,
-		trialDays:      trialDays,
-		status:         planStatus,
-		features:       features,
-		customEndpoint: customEndpoint,
-		apiRateLimit:   apiRateLimit,
-		maxUsers:       maxUsers,
-		maxProjects:    maxProjects,
-		storageLimit:   storageLimit,
-		isPublic:       isPublic,
-		sortOrder:      sortOrder,
-		metadata:       metadata,
-		createdAt:      createdAt,
-		updatedAt:      updatedAt,
+		id:           id,
+		name:         name,
+		slug:         slug,
+		description:  description,
+		price:        price,
+		currency:     currency,
+		billingCycle: billingCycle,
+		trialDays:    trialDays,
+		status:       planStatus,
+		features:     features,
+		apiRateLimit: apiRateLimit,
+		maxUsers:     maxUsers,
+		maxProjects:  maxProjects,
+		storageLimit: storageLimit,
+		isPublic:     isPublic,
+		sortOrder:    sortOrder,
+		metadata:     metadata,
+		createdAt:    createdAt,
+		updatedAt:    updatedAt,
 	}, nil
 }
 
@@ -186,10 +183,6 @@ func (p *SubscriptionPlan) Status() PlanStatus {
 
 func (p *SubscriptionPlan) Features() *vo.PlanFeatures {
 	return p.features
-}
-
-func (p *SubscriptionPlan) CustomEndpoint() string {
-	return p.customEndpoint
 }
 
 func (p *SubscriptionPlan) APIRateLimit() uint {
@@ -270,15 +263,6 @@ func (p *SubscriptionPlan) UpdateFeatures(features *vo.PlanFeatures) error {
 	return nil
 }
 
-func (p *SubscriptionPlan) SetCustomEndpoint(endpoint string) error {
-	if len(endpoint) > 500 {
-		return fmt.Errorf("custom endpoint too long (max 500 characters)")
-	}
-	p.customEndpoint = endpoint
-	p.updatedAt = time.Now()
-	return nil
-}
-
 func (p *SubscriptionPlan) SetAPIRateLimit(limit uint) error {
 	if limit == 0 {
 		return fmt.Errorf("API rate limit must be greater than 0")
@@ -329,4 +313,29 @@ func (p *SubscriptionPlan) GetLimit(key string) (interface{}, bool) {
 
 func (p *SubscriptionPlan) IsActive() bool {
 	return p.status == PlanStatusActive
+}
+
+// GetTrafficLimit returns the monthly traffic limit in bytes from features
+// Returns 0 if unlimited or features not set
+func (p *SubscriptionPlan) GetTrafficLimit() (uint64, error) {
+	if p.features == nil {
+		return 0, nil // unlimited if no features configured
+	}
+	return p.features.GetTrafficLimit()
+}
+
+// IsUnlimitedTraffic checks if the plan has unlimited traffic
+func (p *SubscriptionPlan) IsUnlimitedTraffic() bool {
+	if p.features == nil {
+		return true // unlimited if no features configured
+	}
+	return p.features.IsUnlimitedTraffic()
+}
+
+// HasTrafficRemaining checks if the used traffic is within the plan limit
+func (p *SubscriptionPlan) HasTrafficRemaining(usedBytes uint64) (bool, error) {
+	if p.features == nil {
+		return true, nil // unlimited if no features configured
+	}
+	return p.features.HasTrafficRemaining(usedBytes)
 }

@@ -54,7 +54,7 @@ func (m *NodeMapperImpl) ToEntity(model *models.NodeModel) (*node.Node, error) {
 	}
 
 	// Convert EncryptionConfig value object
-	encryptionConfig, err := vo.NewEncryptionConfig(model.EncryptionMethod, model.EncryptionPassword)
+	encryptionConfig, err := vo.NewEncryptionConfig(model.EncryptionMethod)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create encryption config value object: %w", err)
 	}
@@ -130,24 +130,14 @@ func (m *NodeMapperImpl) ToEntity(model *models.NodeModel) (*node.Node, error) {
 		}
 	}
 
-	// Get country and region values
-	country := ""
-	if model.Country != nil {
-		country = *model.Country
-	}
+	// Get region value
 	region := ""
 	if model.Region != nil {
 		region = *model.Region
 	}
 
 	// Create NodeMetadata value object
-	metadata := vo.NewNodeMetadata(country, region, tags, "")
-
-	// Get traffic reset time
-	trafficResetAt := model.CreatedAt
-	if model.TrafficResetAt != nil {
-		trafficResetAt = *model.TrafficResetAt
-	}
+	metadata := vo.NewNodeMetadata(region, tags, "")
 
 	// Reconstruct the domain entity
 	nodeEntity, err := node.ReconstructNode(
@@ -162,10 +152,6 @@ func (m *NodeMapperImpl) ToEntity(model *models.NodeModel) (*node.Node, error) {
 		nodeStatus,
 		metadata,
 		model.TokenHash,
-		model.MaxUsers,
-		model.TrafficLimit,
-		model.TrafficUsed,
-		trafficResetAt,
 		model.SortOrder,
 		model.MaintenanceReason,
 		model.Version,
@@ -233,45 +219,32 @@ func (m *NodeMapperImpl) ToModel(entity *node.Node) (*models.NodeModel, error) {
 		tagsJSON = tagsBytes
 	}
 
-	// Prepare country and region
-	var country, region *string
-	if entity.Metadata().Country() != "" {
-		c := entity.Metadata().Country()
-		country = &c
-	}
+	// Prepare region
+	var region *string
 	if entity.Metadata().Region() != "" {
 		r := entity.Metadata().Region()
 		region = &r
 	}
 
-	// Prepare traffic reset time
-	trafficResetAt := entity.TrafficResetAt()
-
 	model := &models.NodeModel{
-		ID:                 entity.ID(),
-		Name:               entity.Name(),
-		ServerAddress:      entity.ServerAddress().Value(),
-		ServerPort:         entity.ServerPort(),
-		EncryptionMethod:   entity.EncryptionConfig().Method(),
-		EncryptionPassword: entity.EncryptionConfig().Password(),
-		Plugin:             plugin,
-		PluginOpts:         pluginOptsJSON,
-		Protocol:           entity.Protocol().String(),
-		Status:             entity.Status().String(),
-		Country:            country,
-		Region:             region,
-		Tags:               tagsJSON,
-		CustomFields:       customFieldsJSON,
-		MaxUsers:           entity.MaxUsers(),
-		TrafficLimit:       entity.TrafficLimit(),
-		TrafficUsed:        entity.TrafficUsed(),
-		TrafficResetAt:     &trafficResetAt,
-		SortOrder:          entity.SortOrder(),
-		MaintenanceReason:  entity.MaintenanceReason(),
-		TokenHash:          entity.TokenHash(),
-		Version:            entity.Version(),
-		CreatedAt:          entity.CreatedAt(),
-		UpdatedAt:          entity.UpdatedAt(),
+		ID:                entity.ID(),
+		Name:              entity.Name(),
+		ServerAddress:     entity.ServerAddress().Value(),
+		ServerPort:        entity.ServerPort(),
+		EncryptionMethod:  entity.EncryptionConfig().Method(),
+		Plugin:            plugin,
+		PluginOpts:        pluginOptsJSON,
+		Protocol:          entity.Protocol().String(),
+		Status:            entity.Status().String(),
+		Region:            region,
+		Tags:              tagsJSON,
+		CustomFields:      customFieldsJSON,
+		SortOrder:         entity.SortOrder(),
+		MaintenanceReason: entity.MaintenanceReason(),
+		TokenHash:         entity.TokenHash(),
+		Version:           entity.Version(),
+		CreatedAt:         entity.CreatedAt(),
+		UpdatedAt:         entity.UpdatedAt(),
 	}
 
 	// Handle soft delete

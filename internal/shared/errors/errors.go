@@ -147,3 +147,21 @@ func GetAppError(err error) *AppError {
 	}
 	return nil
 }
+
+// IsConflictError checks if the error is a conflict error
+func IsConflictError(err error) bool {
+	appErr := GetAppError(err)
+	return appErr != nil && appErr.Type == ErrorTypeConflict
+}
+
+// IsNotFoundError checks if the error is a not found error
+func IsNotFoundError(err error) bool {
+	appErr := GetAppError(err)
+	return appErr != nil && appErr.Type == ErrorTypeNotFound
+}
+
+// IsValidationError checks if the error is a validation error
+func IsValidationError(err error) bool {
+	appErr := GetAppError(err)
+	return appErr != nil && appErr.Type == ErrorTypeValidation
+}

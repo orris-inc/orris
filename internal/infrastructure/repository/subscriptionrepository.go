@@ -187,8 +187,10 @@ func (r *SubscriptionRepositoryImpl) Update(ctx context.Context, subscriptionEnt
 	}
 
 	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// The domain entity has already incremented the version, so we need to check against the previous version
+		previousVersion := model.Version - 1
 		result := tx.Model(model).
-			Where("id = ? AND version = ?", model.ID, model.Version).
+			Where("id = ? AND version = ?", model.ID, previousVersion).
 			Updates(map[string]interface{}{
 				"user_id":              model.UserID,
 				"plan_id":              model.PlanID,
@@ -201,7 +203,7 @@ func (r *SubscriptionRepositoryImpl) Update(ctx context.Context, subscriptionEnt
 				"cancelled_at":         model.CancelledAt,
 				"cancel_reason":        model.CancelReason,
 				"metadata":             model.Metadata,
-				"version":              model.Version + 1,
+				"version":              model.Version,
 				"updated_at":           model.UpdatedAt,
 			})
 

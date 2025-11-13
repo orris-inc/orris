@@ -47,7 +47,6 @@ func (m *NotificationMapperImpl) ToEntity(model *models.NotificationModel) (*not
 		model.RelatedID,
 		readStatus,
 		model.ArchivedAt,
-		model.Version,
 		model.CreatedAt,
 		model.UpdatedAt,
 	)
@@ -72,7 +71,6 @@ func (m *NotificationMapperImpl) ToModel(entity *notification.Notification) (*mo
 		RelatedID:  entity.RelatedID(),
 		ReadStatus: entity.ReadStatus().String(),
 		ArchivedAt: entity.ArchivedAt(),
-		Version:    entity.Version(),
 		CreatedAt:  entity.CreatedAt(),
 		UpdatedAt:  entity.UpdatedAt(),
 	}

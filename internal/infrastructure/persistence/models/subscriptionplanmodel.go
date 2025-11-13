@@ -18,11 +18,10 @@ type SubscriptionPlanModel struct {
 	Currency       string `gorm:"not null;size:3;default:CNY"`
 	BillingCycle   string `gorm:"not null;size:20"`
 	TrialDays      int    `gorm:"default:0"`
-	Status         string `gorm:"not null;size:20;default:active"`
-	Features       datatypes.JSON
-	Limits         datatypes.JSON
-	CustomEndpoint string `gorm:"size:200"`
-	APIRateLimit   uint   `gorm:"default:60"`
+	Status       string `gorm:"not null;size:20;default:active"`
+	Features     datatypes.JSON
+	Limits       datatypes.JSON
+	APIRateLimit uint `gorm:"default:60"`
 	MaxUsers       uint   `gorm:"default:1"`
 	MaxProjects    uint   `gorm:"default:1"`
 	StorageLimit   uint64 `gorm:"default:1073741824"` // 1GB in bytes

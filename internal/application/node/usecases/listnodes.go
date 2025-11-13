@@ -3,12 +3,14 @@ package usecases
 import (
 	"context"
 
+	"orris/internal/application/node/dto"
+	"orris/internal/domain/node"
 	"orris/internal/shared/logger"
+	sharedquery "orris/internal/shared/query"
 )
 
 type ListNodesQuery struct {
 	Status    *string
-	Country   *string
 	GroupID   *uint
 	Search    *string
 	Limit     int
@@ -22,12 +24,8 @@ type NodeListItem struct {
 	Name          string
 	ServerAddress string
 	ServerPort    uint16
-	Country       string
 	Region        string
 	Status        string
-	MaxUsers      uint32
-	TrafficLimit  uint64
-	TrafficUsed   uint64
 	SortOrder     int
 	CreatedAt     string
 	UpdatedAt     string
@@ -41,14 +39,17 @@ type ListNodesResult struct {
 }
 
 type ListNodesUseCase struct {
-	logger logger.Interface
+	nodeRepo node.NodeRepository
+	logger   logger.Interface
 }
 
 func NewListNodesUseCase(
+	nodeRepo node.NodeRepository,
 	logger logger.Interface,
 ) *ListNodesUseCase {
 	return &ListNodesUseCase{
-		logger: logger,
+		nodeRepo: nodeRepo,
+		logger:   logger,
 	}
 }
 
@@ -57,9 +58,9 @@ func (uc *ListNodesUseCase) Execute(ctx context.Context, query ListNodesQuery) (
 		"limit", query.Limit,
 		"offset", query.Offset,
 		"status", query.Status,
-		"country", query.Country,
 	)
 
+	// Validate and normalize pagination parameters
 	if query.Limit <= 0 {
 		query.Limit = 20
 	}
@@ -72,6 +73,7 @@ func (uc *ListNodesUseCase) Execute(ctx context.Context, query ListNodesQuery) (
 		query.Offset = 0
 	}
 
+	// Validate and normalize sort parameters
 	if query.SortBy == "" {
 		query.SortBy = "sort_order"
 	}
@@ -80,11 +82,57 @@ func (uc *ListNodesUseCase) Execute(ctx context.Context, query ListNodesQuery) (
 		query.SortOrder = "asc"
 	}
 
-	uc.logger.Infow("nodes listed successfully", "count", 0)
+	// Calculate page from offset and limit
+	page := 1
+	if query.Limit > 0 && query.Offset > 0 {
+		page = (query.Offset / query.Limit) + 1
+	}
+
+	// Build domain filter from query parameters
+	filter := node.NodeFilter{
+		BaseFilter: sharedquery.NewBaseFilter(
+			sharedquery.WithPage(page, query.Limit),
+			sharedquery.WithSort(query.SortBy, query.SortOrder),
+		),
+		Name:   query.Search,
+		Status: query.Status,
+	}
+
+	// Query nodes from repository
+	nodes, totalCount, err := uc.nodeRepo.List(ctx, filter)
+	if err != nil {
+		uc.logger.Errorw("failed to list nodes from repository", "error", err)
+		return nil, err
+	}
+
+	// Convert domain entities to DTOs
+	nodeDTOs := dto.ToNodeDTOList(nodes)
+
+	// Convert to response items
+	nodeItems := make([]NodeListItem, 0, len(nodeDTOs))
+	for _, nodeDTO := range nodeDTOs {
+		item := NodeListItem{
+			ID:            nodeDTO.ID,
+			Name:          nodeDTO.Name,
+			ServerAddress: nodeDTO.ServerAddress,
+			ServerPort:    nodeDTO.ServerPort,
+			Region:        nodeDTO.Region,
+			Status:        nodeDTO.Status,
+			SortOrder:     nodeDTO.SortOrder,
+			CreatedAt:     nodeDTO.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+			UpdatedAt:     nodeDTO.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		}
+		nodeItems = append(nodeItems, item)
+	}
+
+	uc.logger.Infow("nodes listed successfully",
+		"count", len(nodeItems),
+		"total", totalCount,
+	)
 
 	return &ListNodesResult{
-		Nodes:      []NodeListItem{},
-		TotalCount: 0,
+		Nodes:      nodeItems,
+		TotalCount: int(totalCount),
 		Limit:      query.Limit,
 		Offset:     query.Offset,
 	}, nil

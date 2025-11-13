@@ -61,7 +61,6 @@ type AnnouncementResponse struct {
 	ScheduledAt *time.Time `json:"scheduled_at,omitempty"`
 	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
 	ViewCount   int        `json:"view_count"`
-	Version     int        `json:"version"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
 }
@@ -75,7 +74,6 @@ type NotificationResponse struct {
 	RelatedID  *uint      `json:"related_id,omitempty"`
 	ReadStatus string     `json:"read_status"`
 	ArchivedAt *time.Time `json:"archived_at,omitempty"`
-	Version    int        `json:"version"`
 	CreatedAt  time.Time  `json:"created_at"`
 	UpdatedAt  time.Time  `json:"updated_at"`
 }
@@ -111,7 +109,6 @@ type TemplateResponse struct {
 	Content      string    `json:"content"`
 	Variables    []string  `json:"variables,omitempty"`
 	Enabled      bool      `json:"enabled"`
-	Version      int       `json:"version"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }

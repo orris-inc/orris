@@ -130,7 +130,7 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, toke
 				ServerAddress:    ngn.Node.ServerAddress,
 				ServerPort:       ngn.Node.ServerPort,
 				EncryptionMethod: ngn.Node.EncryptionMethod,
-				Password:         ngn.Node.EncryptionPassword,
+				Password:         "", // Password is not stored at node level; will be filled with subscription UUID
 				Plugin:           plugin,
 				PluginOpts:       pluginOpts,
 			}

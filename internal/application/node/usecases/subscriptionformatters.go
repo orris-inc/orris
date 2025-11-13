@@ -17,10 +17,14 @@ func NewBase64Formatter() *Base64Formatter {
 }
 
 func (f *Base64Formatter) Format(nodes []*Node) (string, error) {
+	return f.FormatWithPassword(nodes, "")
+}
+
+func (f *Base64Formatter) FormatWithPassword(nodes []*Node, password string) (string, error) {
 	var links []string
 
 	for _, node := range nodes {
-		auth := fmt.Sprintf("%s:%s", node.EncryptionMethod, node.Password)
+		auth := fmt.Sprintf("%s:%s", node.EncryptionMethod, password)
 		authEncoded := base64.StdEncoding.EncodeToString([]byte(auth))
 
 		link := fmt.Sprintf("ss://%s@%s:%d",
@@ -73,6 +77,10 @@ type clashConfig struct {
 }
 
 func (f *ClashFormatter) Format(nodes []*Node) (string, error) {
+	return f.FormatWithPassword(nodes, "")
+}
+
+func (f *ClashFormatter) FormatWithPassword(nodes []*Node, password string) (string, error) {
 	config := clashConfig{
 		Proxies: make([]clashProxy, 0, len(nodes)),
 	}
@@ -84,7 +92,7 @@ func (f *ClashFormatter) Format(nodes []*Node) (string, error) {
 			Server:   node.ServerAddress,
 			Port:     node.ServerPort,
 			Cipher:   node.EncryptionMethod,
-			Password: node.Password,
+			Password: password,
 			UDP:      true,
 		}
 
@@ -125,6 +133,10 @@ type v2rayNode struct {
 }
 
 func (f *V2RayFormatter) Format(nodes []*Node) (string, error) {
+	return f.FormatWithPassword(nodes, "")
+}
+
+func (f *V2RayFormatter) FormatWithPassword(nodes []*Node, password string) (string, error) {
 	v2rayNodes := make([]v2rayNode, 0, len(nodes))
 
 	for _, node := range nodes {
@@ -132,7 +144,7 @@ func (f *V2RayFormatter) Format(nodes []*Node) (string, error) {
 			Remarks:    node.Name,
 			Server:     node.ServerAddress,
 			ServerPort: node.ServerPort,
-			Password:   node.Password,
+			Password:   password,
 			Method:     node.EncryptionMethod,
 		}
 
@@ -179,6 +191,10 @@ type sip008Config struct {
 }
 
 func (f *SIP008Formatter) Format(nodes []*Node) (string, error) {
+	return f.FormatWithPassword(nodes, "")
+}
+
+func (f *SIP008Formatter) FormatWithPassword(nodes []*Node, password string) (string, error) {
 	config := sip008Config{
 		Version: 1,
 		Servers: make([]sip008Server, 0, len(nodes)),
@@ -190,7 +206,7 @@ func (f *SIP008Formatter) Format(nodes []*Node) (string, error) {
 			Remarks:    node.Name,
 			Server:     node.ServerAddress,
 			ServerPort: node.ServerPort,
-			Password:   node.Password,
+			Password:   password,
 			Method:     node.EncryptionMethod,
 		}
 
@@ -221,6 +237,10 @@ func NewSurgeFormatter() *SurgeFormatter {
 }
 
 func (f *SurgeFormatter) Format(nodes []*Node) (string, error) {
+	return f.FormatWithPassword(nodes, "")
+}
+
+func (f *SurgeFormatter) FormatWithPassword(nodes []*Node, password string) (string, error) {
 	var lines []string
 	lines = append(lines, "[Proxy]")
 
@@ -232,7 +252,7 @@ func (f *SurgeFormatter) Format(nodes []*Node) (string, error) {
 			node.ServerAddress,
 			node.ServerPort,
 			node.EncryptionMethod,
-			node.Password)
+			password)
 
 		if node.Plugin == "obfs-local" && len(node.PluginOpts) > 0 {
 			if obfsMode, ok := node.PluginOpts["obfs"]; ok {

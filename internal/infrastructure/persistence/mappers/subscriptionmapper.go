@@ -49,6 +49,7 @@ func (m *SubscriptionMapperImpl) ToEntity(model *models.SubscriptionModel) (*sub
 		model.ID,
 		model.UserID,
 		model.PlanID,
+		model.UUID,
 		status,
 		model.StartDate,
 		model.EndDate,
@@ -85,6 +86,7 @@ func (m *SubscriptionMapperImpl) ToModel(entity *subscription.Subscription) (*mo
 
 	model := &models.SubscriptionModel{
 		ID:                 entity.ID(),
+		UUID:               entity.UUID(),
 		UserID:             entity.UserID(),
 		PlanID:             entity.PlanID(),
 		Status:             entity.Status().String(),

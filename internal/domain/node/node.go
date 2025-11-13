@@ -23,10 +23,6 @@ type Node struct {
 	metadata          vo.NodeMetadata
 	apiToken          string
 	tokenHash         string
-	maxUsers          uint
-	trafficLimit      uint64
-	trafficUsed       uint64
-	trafficResetAt    time.Time
 	sortOrder         int
 	maintenanceReason *string
 	version           int
@@ -45,8 +41,6 @@ func NewNode(
 	pluginConfig *vo.PluginConfig,
 	trojanConfig *vo.TrojanConfig,
 	metadata vo.NodeMetadata,
-	maxUsers uint,
-	trafficLimit uint64,
 	sortOrder int,
 ) (*Node, error) {
 	if name == "" {
@@ -86,10 +80,6 @@ func NewNode(
 		metadata:         metadata,
 		apiToken:         plainToken,
 		tokenHash:        tokenHash,
-		maxUsers:         maxUsers,
-		trafficLimit:     trafficLimit,
-		trafficUsed:      0,
-		trafficResetAt:   now,
 		sortOrder:        sortOrder,
 		version:          1,
 		createdAt:        now,
@@ -113,10 +103,6 @@ func ReconstructNode(
 	status vo.NodeStatus,
 	metadata vo.NodeMetadata,
 	tokenHash string,
-	maxUsers uint,
-	trafficLimit uint64,
-	trafficUsed uint64,
-	trafficResetAt time.Time,
 	sortOrder int,
 	maintenanceReason *string,
 	version int,
@@ -150,10 +136,6 @@ func ReconstructNode(
 		status:            status,
 		metadata:          metadata,
 		tokenHash:         tokenHash,
-		maxUsers:          maxUsers,
-		trafficLimit:      trafficLimit,
-		trafficUsed:       trafficUsed,
-		trafficResetAt:    trafficResetAt,
 		sortOrder:         sortOrder,
 		maintenanceReason: maintenanceReason,
 		version:           version,
@@ -216,26 +198,6 @@ func (n *Node) Metadata() vo.NodeMetadata {
 // TokenHash returns the API token hash
 func (n *Node) TokenHash() string {
 	return n.tokenHash
-}
-
-// MaxUsers returns the maximum number of users
-func (n *Node) MaxUsers() uint {
-	return n.maxUsers
-}
-
-// TrafficLimit returns the traffic limit in bytes
-func (n *Node) TrafficLimit() uint64 {
-	return n.trafficLimit
-}
-
-// TrafficUsed returns the used traffic in bytes
-func (n *Node) TrafficUsed() uint64 {
-	return n.trafficUsed
-}
-
-// TrafficResetAt returns when traffic was last reset
-func (n *Node) TrafficResetAt() time.Time {
-	return n.trafficResetAt
 }
 
 // SortOrder returns the sort order
@@ -435,24 +397,6 @@ func (n *Node) UpdateName(name string) error {
 	return nil
 }
 
-// UpdateMaxUsers updates the maximum number of users
-func (n *Node) UpdateMaxUsers(maxUsers uint) error {
-	n.maxUsers = maxUsers
-	n.updatedAt = time.Now()
-	n.version++
-
-	return nil
-}
-
-// UpdateTrafficLimit updates the traffic limit
-func (n *Node) UpdateTrafficLimit(limit uint64) error {
-	n.trafficLimit = limit
-	n.updatedAt = time.Now()
-	n.version++
-
-	return nil
-}
-
 // UpdateSortOrder updates the sort order
 func (n *Node) UpdateSortOrder(order int) error {
 	n.sortOrder = order
@@ -489,51 +433,9 @@ func (n *Node) VerifyAPIToken(plainToken string) bool {
 	return subtle.ConstantTimeCompare([]byte(n.tokenHash), []byte(computedHash)) == 1
 }
 
-// RecordTraffic records traffic usage
-func (n *Node) RecordTraffic(upload, download uint64) error {
-	if upload == 0 && download == 0 {
-		return nil
-	}
-
-	n.trafficUsed += upload + download
-	n.updatedAt = time.Now()
-
-	if n.IsTrafficExceeded() {
-	}
-
-	return nil
-}
-
-// IsTrafficExceeded checks if traffic limit is exceeded
-func (n *Node) IsTrafficExceeded() bool {
-	if n.trafficLimit == 0 {
-		return false
-	}
-	return n.trafficUsed >= n.trafficLimit
-}
-
-// ResetTraffic resets traffic usage
-func (n *Node) ResetTraffic() error {
-	n.trafficUsed = 0
-	n.trafficResetAt = time.Now()
-	n.updatedAt = time.Now()
-	n.version++
-
-
-	return nil
-}
-
 // IsAvailable checks if node is available for use
 func (n *Node) IsAvailable() bool {
-	if n.status != vo.NodeStatusActive {
-		return false
-	}
-
-	if n.IsTrafficExceeded() {
-		return false
-	}
-
-	return true
+	return n.status == vo.NodeStatusActive
 }
 
 // GetAPIToken returns the plain API token (only available after creation)
@@ -573,21 +475,22 @@ func (n *Node) Validate() error {
 }
 
 // GenerateSubscriptionURI generates a subscription URI for this node
-func (n *Node) GenerateSubscriptionURI(remarks string) (string, error) {
+// The password parameter should be the subscription UUID
+func (n *Node) GenerateSubscriptionURI(password string, remarks string) (string, error) {
 	factory := vo.NewProtocolConfigFactory()
 	serverAddr := n.serverAddress.Value()
 
 	switch n.protocol {
 	case vo.ProtocolShadowsocks:
 		ssConfig := vo.NewShadowsocksProtocolConfig(n.encryptionConfig, n.pluginConfig)
-		return factory.GenerateSubscriptionURI(n.protocol, ssConfig, serverAddr, n.serverPort, remarks)
+		return factory.GenerateSubscriptionURI(n.protocol, ssConfig, serverAddr, n.serverPort, password, remarks)
 
 	case vo.ProtocolTrojan:
 		if n.trojanConfig == nil {
 			return "", fmt.Errorf("trojan config is required for Trojan protocol")
 		}
 		trojanConfig := vo.NewTrojanProtocolConfig(*n.trojanConfig)
-		return factory.GenerateSubscriptionURI(n.protocol, trojanConfig, serverAddr, n.serverPort, remarks)
+		return factory.GenerateSubscriptionURI(n.protocol, trojanConfig, serverAddr, n.serverPort, password, remarks)
 
 	default:
 		return "", fmt.Errorf("unsupported protocol: %s", n.protocol)

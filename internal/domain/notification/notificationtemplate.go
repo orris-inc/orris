@@ -17,7 +17,6 @@ type NotificationTemplate struct {
 	content      string
 	variables    []string
 	enabled      bool
-	version      int
 	createdAt    time.Time
 	updatedAt    time.Time
 }
@@ -63,7 +62,6 @@ func NewNotificationTemplate(
 		content:      content,
 		variables:    variables,
 		enabled:      true,
-		version:      1,
 		createdAt:    now,
 		updatedAt:    now,
 	}, nil
@@ -77,7 +75,6 @@ func ReconstructNotificationTemplate(
 	content string,
 	variables []string,
 	enabled bool,
-	version int,
 	createdAt, updatedAt time.Time,
 ) (*NotificationTemplate, error) {
 	if id == 0 {
@@ -102,7 +99,6 @@ func ReconstructNotificationTemplate(
 		content:      content,
 		variables:    variables,
 		enabled:      enabled,
-		version:      version,
 		createdAt:    createdAt,
 		updatedAt:    updatedAt,
 	}, nil
@@ -136,10 +132,6 @@ func (t *NotificationTemplate) Variables() []string {
 
 func (t *NotificationTemplate) Enabled() bool {
 	return t.enabled
-}
-
-func (t *NotificationTemplate) Version() int {
-	return t.version
 }
 
 func (t *NotificationTemplate) CreatedAt() time.Time {
@@ -196,7 +188,6 @@ func (t *NotificationTemplate) Enable() {
 
 	t.enabled = true
 	t.updatedAt = time.Now()
-	t.version++
 }
 
 func (t *NotificationTemplate) Disable() {
@@ -206,7 +197,6 @@ func (t *NotificationTemplate) Disable() {
 
 	t.enabled = false
 	t.updatedAt = time.Now()
-	t.version++
 }
 
 func (t *NotificationTemplate) Update(name, title, content string, variables []string) error {
@@ -245,7 +235,6 @@ func (t *NotificationTemplate) Update(name, title, content string, variables []s
 	t.content = content
 	t.variables = variables
 	t.updatedAt = time.Now()
-	t.version++
 
 	return nil
 }

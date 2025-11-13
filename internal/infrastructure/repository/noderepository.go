@@ -112,31 +112,27 @@ func (r *NodeRepositoryImpl) Update(ctx context.Context, nodeEntity *node.Node) 
 	}
 
 	// Use optimistic locking by checking version
+	// The domain entity has already incremented the version, so we need to check against the previous version
+	previousVersion := model.Version - 1
 	result := r.db.WithContext(ctx).Model(&models.NodeModel{}).
-		Where("id = ? AND version = ?", model.ID, model.Version).
+		Where("id = ? AND version = ?", model.ID, previousVersion).
 		Updates(map[string]interface{}{
-			"name":                model.Name,
-			"server_address":      model.ServerAddress,
-			"server_port":         model.ServerPort,
-			"encryption_method":   model.EncryptionMethod,
-			"encryption_password": model.EncryptionPassword,
-			"plugin":              model.Plugin,
-			"plugin_opts":         model.PluginOpts,
-			"protocol":            model.Protocol,
-			"status":              model.Status,
-			"country":             model.Country,
-			"region":              model.Region,
-			"tags":                model.Tags,
-			"custom_fields":       model.CustomFields,
-			"max_users":           model.MaxUsers,
-			"traffic_limit":       model.TrafficLimit,
-			"traffic_used":        model.TrafficUsed,
-			"traffic_reset_at":    model.TrafficResetAt,
-			"sort_order":          model.SortOrder,
-			"maintenance_reason":  model.MaintenanceReason,
-			"token_hash":          model.TokenHash,
-			"updated_at":          model.UpdatedAt,
-			"version":             gorm.Expr("version + 1"),
+			"name":               model.Name,
+			"server_address":     model.ServerAddress,
+			"server_port":        model.ServerPort,
+			"encryption_method":  model.EncryptionMethod,
+			"plugin":             model.Plugin,
+			"plugin_opts":        model.PluginOpts,
+			"protocol":           model.Protocol,
+			"status":             model.Status,
+			"region":             model.Region,
+			"tags":               model.Tags,
+			"custom_fields":      model.CustomFields,
+			"sort_order":         model.SortOrder,
+			"maintenance_reason": model.MaintenanceReason,
+			"token_hash":         model.TokenHash,
+			"updated_at":         model.UpdatedAt,
+			"version":            model.Version,
 		})
 
 	if result.Error != nil {
@@ -184,9 +180,6 @@ func (r *NodeRepositoryImpl) List(ctx context.Context, filter node.NodeFilter) (
 	}
 	if filter.Status != nil && *filter.Status != "" {
 		query = query.Where("status = ?", *filter.Status)
-	}
-	if filter.Country != nil && *filter.Country != "" {
-		query = query.Where("country = ?", *filter.Country)
 	}
 	if filter.Tag != nil && *filter.Tag != "" {
 		// Search in JSON tags array
@@ -252,4 +245,27 @@ func (r *NodeRepositoryImpl) ExistsByAddress(ctx context.Context, address string
 		return false, fmt.Errorf("failed to check node existence: %w", err)
 	}
 	return count > 0, nil
+}
+
+// IncrementTraffic atomically increments the traffic_used field
+func (r *NodeRepositoryImpl) IncrementTraffic(ctx context.Context, nodeID uint, amount uint64) error {
+	if amount == 0 {
+		return nil
+	}
+
+	result := r.db.WithContext(ctx).Model(&models.NodeModel{}).
+		Where("id = ?", nodeID).
+		UpdateColumn("traffic_used", gorm.Expr("traffic_used + ?", amount))
+
+	if result.Error != nil {
+		r.logger.Errorw("failed to increment traffic", "node_id", nodeID, "amount", amount, "error", result.Error)
+		return fmt.Errorf("failed to increment traffic: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return errors.NewNotFoundError("node not found")
+	}
+
+	r.logger.Debugw("traffic incremented successfully", "node_id", nodeID, "amount", amount)
+	return nil
 }

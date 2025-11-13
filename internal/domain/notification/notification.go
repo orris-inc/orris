@@ -16,7 +16,6 @@ type Notification struct {
 	relatedID        *uint
 	readStatus       vo.ReadStatus
 	archivedAt       *time.Time
-	version          int
 	createdAt        time.Time
 	updatedAt        time.Time
 	events           []interface{}
@@ -56,7 +55,6 @@ func NewNotification(
 		content:          content,
 		relatedID:        relatedID,
 		readStatus:       vo.ReadStatusUnread,
-		version:          1,
 		createdAt:        now,
 		updatedAt:        now,
 		events:           []interface{}{},
@@ -74,7 +72,6 @@ func ReconstructNotification(
 	relatedID *uint,
 	readStatus vo.ReadStatus,
 	archivedAt *time.Time,
-	version int,
 	createdAt, updatedAt time.Time,
 ) (*Notification, error) {
 	if id == 0 {
@@ -99,7 +96,6 @@ func ReconstructNotification(
 		relatedID:        relatedID,
 		readStatus:       readStatus,
 		archivedAt:       archivedAt,
-		version:          version,
 		createdAt:        createdAt,
 		updatedAt:        updatedAt,
 		events:           []interface{}{},
@@ -138,10 +134,6 @@ func (n *Notification) ArchivedAt() *time.Time {
 	return n.archivedAt
 }
 
-func (n *Notification) Version() int {
-	return n.version
-}
-
 func (n *Notification) CreatedAt() time.Time {
 	return n.createdAt
 }
@@ -168,7 +160,6 @@ func (n *Notification) MarkAsRead() error {
 
 	n.readStatus = vo.ReadStatusRead
 	n.updatedAt = time.Now()
-	n.version++
 
 	return nil
 }
@@ -181,7 +172,6 @@ func (n *Notification) Archive() error {
 	now := time.Now()
 	n.archivedAt = &now
 	n.updatedAt = now
-	n.version++
 
 	return nil
 }

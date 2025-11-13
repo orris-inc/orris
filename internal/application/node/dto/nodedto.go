@@ -11,19 +11,16 @@ type NodeDTO struct {
 	Name              string                 `json:"name"`
 	ServerAddress     string                 `json:"server_address"`
 	ServerPort        uint16                 `json:"server_port"`
+	Protocol          string                 `json:"protocol"`
+	Method            string                 `json:"method"`
 	EncryptionMethod  string                 `json:"encryption_method"`
 	Password          string                 `json:"password,omitempty"`
 	Plugin            string                 `json:"plugin,omitempty"`
 	PluginOpts        map[string]string      `json:"plugin_opts,omitempty"`
 	Status            string                 `json:"status"`
-	Country           string                 `json:"country,omitempty"`
 	Region            string                 `json:"region,omitempty"`
 	Tags              []string               `json:"tags,omitempty"`
 	CustomFields      map[string]interface{} `json:"custom_fields,omitempty"`
-	MaxUsers          uint                   `json:"max_users"`
-	TrafficLimit      uint64                 `json:"traffic_limit"`
-	TrafficUsed       uint64                 `json:"traffic_used"`
-	TrafficResetAt    time.Time              `json:"traffic_reset_at"`
 	SortOrder         int                    `json:"sort_order"`
 	MaintenanceReason *string                `json:"maintenance_reason,omitempty"`
 	IsAvailable       bool                   `json:"is_available"`
@@ -40,12 +37,9 @@ type CreateNodeDTO struct {
 	Password         string                 `json:"password" binding:"required"`
 	Plugin           string                 `json:"plugin,omitempty"`
 	PluginOpts       map[string]string      `json:"plugin_opts,omitempty"`
-	Country          string                 `json:"country,omitempty"`
 	Region           string                 `json:"region,omitempty"`
 	Tags             []string               `json:"tags,omitempty"`
 	CustomFields     map[string]interface{} `json:"custom_fields,omitempty"`
-	MaxUsers         uint                   `json:"max_users" binding:"required,min=1"`
-	TrafficLimit     uint64                 `json:"traffic_limit" binding:"required,min=1"`
 	SortOrder        int                    `json:"sort_order"`
 }
 
@@ -57,12 +51,9 @@ type UpdateNodeDTO struct {
 	Password         *string                `json:"password,omitempty"`
 	Plugin           *string                `json:"plugin,omitempty"`
 	PluginOpts       map[string]string      `json:"plugin_opts,omitempty"`
-	Country          *string                `json:"country,omitempty"`
 	Region           *string                `json:"region,omitempty"`
 	Tags             []string               `json:"tags,omitempty"`
 	CustomFields     map[string]interface{} `json:"custom_fields,omitempty"`
-	MaxUsers         *uint                  `json:"max_users,omitempty" binding:"omitempty,min=1"`
-	TrafficLimit     *uint64                `json:"traffic_limit,omitempty" binding:"omitempty,min=1"`
 	SortOrder        *int                   `json:"sort_order,omitempty"`
 }
 
@@ -82,7 +73,6 @@ type ListNodesRequest struct {
 	Page     int      `json:"page" form:"page"`
 	PageSize int      `json:"page_size" form:"page_size"`
 	Status   string   `json:"status,omitempty" form:"status"`
-	Country  string   `json:"country,omitempty" form:"country"`
 	Region   string   `json:"region,omitempty" form:"region"`
 	Tags     []string `json:"tags,omitempty" form:"tags"`
 	OrderBy  string   `json:"order_by,omitempty" form:"order_by"`
@@ -99,12 +89,10 @@ func ToNodeDTO(n *node.Node) *NodeDTO {
 		Name:              n.Name(),
 		ServerAddress:     n.ServerAddress().Value(),
 		ServerPort:        n.ServerPort(),
+		Protocol:          n.Protocol().String(),
+		Method:            n.EncryptionConfig().Method(),
 		EncryptionMethod:  n.EncryptionConfig().Method(),
 		Status:            n.Status().String(),
-		MaxUsers:          n.MaxUsers(),
-		TrafficLimit:      n.TrafficLimit(),
-		TrafficUsed:       n.TrafficUsed(),
-		TrafficResetAt:    n.TrafficResetAt(),
 		SortOrder:         n.SortOrder(),
 		MaintenanceReason: n.MaintenanceReason(),
 		IsAvailable:       n.IsAvailable(),
@@ -119,9 +107,6 @@ func ToNodeDTO(n *node.Node) *NodeDTO {
 	}
 
 	metadata := n.Metadata()
-	if metadata.Country() != "" {
-		dto.Country = metadata.Country()
-	}
 	if metadata.Region() != "" {
 		dto.Region = metadata.Region()
 	}

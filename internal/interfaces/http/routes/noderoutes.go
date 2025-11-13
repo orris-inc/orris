@@ -55,11 +55,6 @@ func SetupNodeRoutes(engine *gin.Engine, config *NodeRouteConfig) {
 		nodes.POST("/:id/token",
 			authorization.RequireAdmin(),
 			config.NodeHandler.GenerateToken)
-
-		// Node traffic statistics
-		nodes.GET("/:id/traffic",
-			authorization.RequireAdmin(),
-			config.NodeHandler.GetNodeTraffic)
 	}
 
 	// Node group management routes - require authentication and permission

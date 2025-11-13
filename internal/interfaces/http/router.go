@@ -26,6 +26,7 @@ import (
 	"orris/internal/infrastructure/repository"
 	"orris/internal/infrastructure/token"
 	"orris/internal/interfaces/http/handlers"
+	nodeHandlers "orris/internal/interfaces/http/handlers/node"
 	ticketHandlers "orris/internal/interfaces/http/handlers/ticket"
 	"orris/internal/interfaces/http/middleware"
 	"orris/internal/interfaces/http/routes"
@@ -50,7 +51,7 @@ type Router struct {
 	nodeGroupHandler         *handlers.NodeGroupHandler
 	nodeSubscriptionHandler  *handlers.NodeSubscriptionHandler
 	nodeReportHandler        *handlers.NodeReportHandler
-	xrayrHandler             *handlers.XrayRHandler
+	agentHandler             *nodeHandlers.AgentHandler
 	ticketHandler            *ticketHandlers.TicketHandler
 	notificationHandler      *handlers.NotificationHandler
 	authMiddleware           *middleware.AuthMiddleware
@@ -269,26 +270,67 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	nodeRepoImpl := repository.NewNodeRepository(db, log)
 	nodeRepo := adapters.NewNodeRepositoryAdapter(nodeRepoImpl, db, log)
+	nodeGroupRepoImpl := repository.NewNodeGroupRepository(db, log)
 	tokenValidator := adapters.NewSubscriptionTokenValidatorAdapter(db, log)
 	generateSubscriptionUC := nodeUsecases.NewGenerateSubscriptionUseCase(
 		nodeRepo, tokenValidator, log,
 	)
 
 	// Initialize node use cases
-	createNodeUC := nodeUsecases.NewCreateNodeUseCase(log)
-	updateNodeUC := nodeUsecases.NewUpdateNodeUseCase(log)
-	deleteNodeUC := nodeUsecases.NewDeleteNodeUseCase(log)
-	listNodesUC := nodeUsecases.NewListNodesUseCase(log)
-	generateNodeTokenUC := nodeUsecases.NewGenerateNodeTokenUseCase(log)
+	createNodeUC := nodeUsecases.NewCreateNodeUseCase(nodeRepoImpl, log)
+	getNodeUC := nodeUsecases.NewGetNodeUseCase(nodeRepoImpl, log)
+	updateNodeUC := nodeUsecases.NewUpdateNodeUseCase(log, nodeRepoImpl)
+	deleteNodeUC := nodeUsecases.NewDeleteNodeUseCase(nodeRepoImpl, nodeGroupRepoImpl, log)
+	listNodesUC := nodeUsecases.NewListNodesUseCase(nodeRepoImpl, log)
+	generateNodeTokenUC := nodeUsecases.NewGenerateNodeTokenUseCase(nodeRepoImpl, log)
 
-	nodeHandler := handlers.NewNodeHandler(createNodeUC, updateNodeUC, deleteNodeUC, listNodesUC, generateNodeTokenUC)
-	nodeGroupHandler := handlers.NewNodeGroupHandler()
-	nodeSubscriptionHandler := handlers.NewNodeSubscriptionHandler(generateSubscriptionUC)
-	nodeReportHandler := handlers.NewNodeReportHandler(nil, nil)
+	// Initialize Redis traffic cache
+	trafficCache := cache.NewRedisTrafficCache(redisClient, nodeRepoImpl, log)
+
+	// Initialize node traffic repository (used by report adapter)
+	nodeTrafficRepo := repository.NewNodeTrafficRepository(db, log)
+
+	// Initialize user traffic repository
+	userTrafficRepo := repository.NewUserTrafficRepository(db, log)
 
 	// Initialize node authentication middleware using the same node repository adapter
 	validateNodeTokenUC := nodeUsecases.NewValidateNodeTokenUseCase(nodeRepo, log)
 	nodeTokenMiddleware := middleware.NewNodeTokenMiddleware(validateNodeTokenUC, log)
+
+	// Initialize NodeGroup use cases
+	createNodeGroupUC := nodeUsecases.NewCreateNodeGroupUseCase(nodeGroupRepoImpl, log)
+	getNodeGroupUC := nodeUsecases.NewGetNodeGroupUseCase(nodeGroupRepoImpl, log)
+	updateNodeGroupUC := nodeUsecases.NewUpdateNodeGroupUseCase(nodeGroupRepoImpl, log)
+	deleteNodeGroupUC := nodeUsecases.NewDeleteNodeGroupUseCase(nodeGroupRepoImpl, log)
+	listNodeGroupsUC := nodeUsecases.NewListNodeGroupsUseCase(nodeGroupRepoImpl, log)
+	addNodeToGroupUC := nodeUsecases.NewAddNodeToGroupUseCase(nodeRepoImpl, nodeGroupRepoImpl, log)
+	removeNodeFromGroupUC := nodeUsecases.NewRemoveNodeFromGroupUseCase(nodeGroupRepoImpl, log)
+	listGroupNodesUC := nodeUsecases.NewListGroupNodesUseCase(nodeRepoImpl, nodeGroupRepoImpl, log)
+	associateGroupWithPlanUC := nodeUsecases.NewAssociateGroupWithPlanUseCase(nodeGroupRepoImpl, subscriptionPlanRepo, log)
+	disassociateGroupFromPlanUC := nodeUsecases.NewDisassociateGroupFromPlanUseCase(nodeGroupRepoImpl, log)
+
+	// Initialize NodeReport use case with adapters (using Redis traffic cache)
+	trafficRecorder := adapters.NewNodeTrafficRecorderAdapter(trafficCache, nodeTrafficRepo, log)
+	statusUpdater := adapters.NewNodeStatusUpdaterAdapter(nodeRepoImpl, log)
+	limitChecker := adapters.NewNodeLimitCheckerAdapter(log)
+	reportNodeDataUC := nodeUsecases.NewReportNodeDataUseCase(trafficRecorder, statusUpdater, limitChecker, log)
+
+	// Initialize handlers
+	nodeHandler := handlers.NewNodeHandler(createNodeUC, getNodeUC, updateNodeUC, deleteNodeUC, listNodesUC, generateNodeTokenUC)
+	nodeGroupHandler := handlers.NewNodeGroupHandler(
+		createNodeGroupUC,
+		getNodeGroupUC,
+		updateNodeGroupUC,
+		deleteNodeGroupUC,
+		listNodeGroupsUC,
+		addNodeToGroupUC,
+		removeNodeFromGroupUC,
+		listGroupNodesUC,
+		associateGroupWithPlanUC,
+		disassociateGroupFromPlanUC,
+	)
+	nodeSubscriptionHandler := handlers.NewNodeSubscriptionHandler(generateSubscriptionUC)
+	nodeReportHandler := handlers.NewNodeReportHandler(reportNodeDataUC, validateNodeTokenUC)
 
 	ticketHandler := ticketHandlers.NewTicketHandler(nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
@@ -344,13 +386,19 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	paymentHandler := handlers.NewPaymentHandler(createPaymentUC, handleCallbackUC, log)
 
 	// XrayR API handlers - v2raysocks compatible backend
-	// TODO: Implement proper adapters for UserTrafficRecorder, NodeSystemStatusUpdater, OnlineUserTracker
 	getNodeConfigUC := nodeUsecases.NewGetNodeConfigUseCase(nodeRepoImpl, log)
 	getNodeUsersUC := nodeUsecases.NewGetNodeUsersUseCase(subscriptionRepo, log)
-	reportUserTrafficUC := nodeUsecases.NewReportUserTrafficUseCase(nil, log) // TODO: implement UserTrafficRecorder
-	reportNodeStatusUC := nodeUsecases.NewReportNodeStatusUseCase(nil, log)   // TODO: implement NodeSystemStatusUpdater
-	reportOnlineUsersUC := nodeUsecases.NewReportOnlineUsersUseCase(nil, log) // TODO: implement OnlineUserTracker
-	xrayrHandler := handlers.NewXrayRHandler(
+
+	// Initialize XrayR report use cases with adapters
+	userTrafficRecorder := adapters.NewUserTrafficRecorderAdapter(userTrafficRepo, log)
+	systemStatusUpdater := adapters.NewNodeSystemStatusUpdaterAdapter(log)
+	onlineUserTracker := adapters.NewOnlineUserTrackerAdapter(log)
+	reportUserTrafficUC := nodeUsecases.NewReportUserTrafficUseCase(userTrafficRecorder, log)
+	reportNodeStatusUC := nodeUsecases.NewReportNodeStatusUseCase(systemStatusUpdater, log)
+	reportOnlineUsersUC := nodeUsecases.NewReportOnlineUsersUseCase(onlineUserTracker, log)
+
+	// Initialize RESTful Agent Handler
+	agentHandler := nodeHandlers.NewAgentHandler(
 		getNodeConfigUC,
 		getNodeUsersUC,
 		reportUserTrafficUC,
@@ -372,7 +420,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		nodeGroupHandler:         nodeGroupHandler,
 		nodeSubscriptionHandler:  nodeSubscriptionHandler,
 		nodeReportHandler:        nodeReportHandler,
-		xrayrHandler:             xrayrHandler,
+		agentHandler:             agentHandler,
 		ticketHandler:            ticketHandler,
 		notificationHandler:      notificationHandler,
 		authMiddleware:           authMiddleware,
@@ -477,15 +525,24 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		RateLimiter:         r.rateLimiter,
 	})
 
-	// Node Backend API routes (v2raysocks compatible)
-	// These routes handle node backend communication for XrayR/v2ray integration
-	nodeAPI := r.engine.Group("/api/node")
-	nodeAPI.Use(r.nodeTokenMiddleware.RequireNodeTokenXrayR())
+	// RESTful Agent API - Modern API with resource-oriented design
+	agentAPI := r.engine.Group("/agents")
+	agentAPI.Use(r.nodeTokenMiddleware.RequireNodeTokenHeader())
 	{
-		// Unified endpoint for all node backend operations
-		// Query params: act=config|user|submit|nodestatus|onlineusers, node_id, token, node_type
-		nodeAPI.GET("", r.xrayrHandler.HandleXrayRRequest)
-		nodeAPI.POST("", r.xrayrHandler.HandleXrayRRequest)
+		// GET /agents/:id/config - Get node configuration
+		agentAPI.GET("/:id/config", r.agentHandler.GetConfig)
+
+		// GET /agents/:id/users - Get authorized users for node
+		agentAPI.GET("/:id/users", r.agentHandler.GetUsers)
+
+		// POST /agents/:id/traffic - Report user traffic data
+		agentAPI.POST("/:id/traffic", r.agentHandler.ReportTraffic)
+
+		// PUT /agents/:id/status - Update node system status
+		agentAPI.PUT("/:id/status", r.agentHandler.UpdateStatus)
+
+		// PUT /agents/:id/online-users - Update online users list
+		agentAPI.PUT("/:id/online-users", r.agentHandler.UpdateOnlineUsers)
 	}
 
 	routes.SetupTicketRoutes(r.engine, &routes.TicketRouteConfig{

@@ -15,7 +15,6 @@ type NotificationModel struct {
 	RelatedID  *uint
 	ReadStatus string `gorm:"size:20;not null;default:'unread';index:idx_user_read"`
 	ArchivedAt *time.Time
-	Version    int       `gorm:"not null;default:1"`
 	CreatedAt  time.Time `gorm:"index"`
 	UpdatedAt  time.Time
 	DeletedAt  gorm.DeletedAt `gorm:"index"`
@@ -29,13 +28,5 @@ func (n *NotificationModel) BeforeCreate(tx *gorm.DB) error {
 	if n.ReadStatus == "" {
 		n.ReadStatus = "unread"
 	}
-	if n.Version == 0 {
-		n.Version = 1
-	}
-	return nil
-}
-
-func (n *NotificationModel) BeforeUpdate(tx *gorm.DB) error {
-	tx.Statement.SetColumn("version", n.Version+1)
 	return nil
 }

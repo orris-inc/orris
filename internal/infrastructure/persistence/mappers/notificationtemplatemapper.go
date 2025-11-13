@@ -52,7 +52,6 @@ func (m *NotificationTemplateMapperImpl) ToEntity(model *models.NotificationTemp
 		model.Content,
 		variables,
 		model.Enabled,
-		model.Version,
 		model.CreatedAt,
 		model.UpdatedAt,
 	)
@@ -85,7 +84,6 @@ func (m *NotificationTemplateMapperImpl) ToModel(entity *notification.Notificati
 		Content:      entity.Content(),
 		Variables:    variablesJSON,
 		Enabled:      entity.Enabled(),
-		Version:      entity.Version(),
 		CreatedAt:    entity.CreatedAt(),
 		UpdatedAt:    entity.UpdatedAt(),
 	}

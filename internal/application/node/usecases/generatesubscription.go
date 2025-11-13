@@ -18,12 +18,18 @@ type GenerateSubscriptionResult struct {
 	Format      string
 }
 
+type SubscriptionValidationResult struct {
+	SubscriptionUUID string
+}
+
 type SubscriptionTokenValidator interface {
 	Validate(ctx context.Context, token string) error
+	ValidateAndGetSubscription(ctx context.Context, token string) (*SubscriptionValidationResult, error)
 }
 
 type SubscriptionFormatter interface {
 	Format(nodes []*Node) (string, error)
+	FormatWithPassword(nodes []*Node, password string) (string, error)
 	ContentType() string
 }
 
@@ -56,10 +62,15 @@ func NewGenerateSubscriptionUseCase(
 }
 
 func (uc *GenerateSubscriptionUseCase) Execute(ctx context.Context, cmd GenerateSubscriptionCommand) (*GenerateSubscriptionResult, error) {
-	if err := uc.tokenValidator.Validate(ctx, cmd.SubscriptionToken); err != nil {
+	// Validate subscription token and get subscription UUID
+	validationResult, err := uc.tokenValidator.ValidateAndGetSubscription(ctx, cmd.SubscriptionToken)
+	if err != nil {
 		uc.logger.Warnw("invalid subscription token", "error", err)
 		return nil, fmt.Errorf("invalid subscription token: %w", err)
 	}
+
+	// Get subscription UUID for authentication
+	subscriptionUUID := validationResult.SubscriptionUUID
 
 	nodes, err := uc.nodeRepo.GetBySubscriptionToken(ctx, cmd.SubscriptionToken)
 	if err != nil {
@@ -78,7 +89,8 @@ func (uc *GenerateSubscriptionUseCase) Execute(ctx context.Context, cmd Generate
 		return nil, fmt.Errorf("unsupported format: %s", cmd.Format)
 	}
 
-	content, err := formatter.Format(nodes)
+	// Pass subscription UUID as password for node authentication
+	content, err := formatter.FormatWithPassword(nodes, subscriptionUUID)
 	if err != nil {
 		uc.logger.Errorw("failed to format subscription", "error", err, "format", cmd.Format)
 		return nil, fmt.Errorf("failed to format subscription: %w", err)
@@ -87,6 +99,7 @@ func (uc *GenerateSubscriptionUseCase) Execute(ctx context.Context, cmd Generate
 	uc.logger.Infow("subscription generated successfully",
 		"format", cmd.Format,
 		"node_count", len(nodes),
+		"subscription_uuid", subscriptionUUID,
 	)
 
 	return &GenerateSubscriptionResult{

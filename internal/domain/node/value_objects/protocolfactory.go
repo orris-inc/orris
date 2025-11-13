@@ -45,9 +45,10 @@ func (sc ShadowsocksProtocolConfig) String() string {
 }
 
 // ToSubscriptionURI generates a subscription URI for Shadowsocks
-func (sc ShadowsocksProtocolConfig) ToSubscriptionURI(serverAddr string, serverPort uint16, remarks string) string {
+// The password parameter should be the subscription UUID
+func (sc ShadowsocksProtocolConfig) ToSubscriptionURI(serverAddr string, serverPort uint16, password string, remarks string) string {
 	// Format: ss://base64(method:password)@server:port#remarks
-	auth := sc.encryption.ToShadowsocksURI()
+	auth := sc.encryption.ToShadowsocksURI(password)
 	uri := fmt.Sprintf("ss://%s@%s:%d", auth, serverAddr, serverPort)
 
 	if sc.plugin != nil {
@@ -99,10 +100,9 @@ func NewProtocolConfigFactory() *ProtocolConfigFactory {
 // CreateShadowsocksConfig creates a Shadowsocks protocol configuration
 func (f *ProtocolConfigFactory) CreateShadowsocksConfig(
 	method string,
-	password string,
 	plugin *PluginConfig,
 ) (ShadowsocksProtocolConfig, error) {
-	encryption, err := NewEncryptionConfig(method, password)
+	encryption, err := NewEncryptionConfig(method)
 	if err != nil {
 		return ShadowsocksProtocolConfig{}, fmt.Errorf("failed to create encryption config: %w", err)
 	}
@@ -128,11 +128,13 @@ func (f *ProtocolConfigFactory) CreateTrojanConfig(
 }
 
 // GenerateSubscriptionURI generates a subscription URI based on protocol type
+// The password parameter is used as the authentication credential (subscription UUID for Shadowsocks)
 func (f *ProtocolConfigFactory) GenerateSubscriptionURI(
 	protocol Protocol,
 	config ProtocolConfig,
 	serverAddr string,
 	serverPort uint16,
+	password string,
 	remarks string,
 ) (string, error) {
 	if !protocol.IsValid() {
@@ -142,7 +144,7 @@ func (f *ProtocolConfigFactory) GenerateSubscriptionURI(
 	switch protocol {
 	case ProtocolShadowsocks:
 		if ssConfig, ok := config.(ShadowsocksProtocolConfig); ok {
-			return ssConfig.ToSubscriptionURI(serverAddr, serverPort, remarks), nil
+			return ssConfig.ToSubscriptionURI(serverAddr, serverPort, password, remarks), nil
 		}
 		return "", fmt.Errorf("invalid config type for Shadowsocks protocol")
 

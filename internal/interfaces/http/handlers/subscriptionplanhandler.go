@@ -57,11 +57,9 @@ type CreatePlanRequest struct {
 	TrialDays      int                    `json:"trial_days"`
 	Features       []string               `json:"features"`
 	Limits         map[string]interface{} `json:"limits"`
-	CustomEndpoint string                 `json:"custom_endpoint"`
 	APIRateLimit   uint                   `json:"api_rate_limit"`
 	MaxUsers       uint                   `json:"max_users"`
 	MaxProjects    uint                   `json:"max_projects"`
-	StorageLimit   uint64                 `json:"storage_limit"`
 	IsPublic       bool                   `json:"is_public"`
 	SortOrder      int                    `json:"sort_order"`
 }
@@ -72,11 +70,9 @@ type UpdatePlanRequest struct {
 	Currency       *string                `json:"currency"`
 	Features       []string               `json:"features"`
 	Limits         map[string]interface{} `json:"limits"`
-	CustomEndpoint *string                `json:"custom_endpoint"`
 	APIRateLimit   *uint                  `json:"api_rate_limit"`
 	MaxUsers       *uint                  `json:"max_users"`
 	MaxProjects    *uint                  `json:"max_projects"`
-	StorageLimit   *uint64                `json:"storage_limit"`
 	IsPublic       *bool                  `json:"is_public"`
 	SortOrder      *int                   `json:"sort_order"`
 }
@@ -112,11 +108,9 @@ func (h *SubscriptionPlanHandler) CreatePlan(c *gin.Context) {
 		TrialDays:      req.TrialDays,
 		Features:       req.Features,
 		Limits:         req.Limits,
-		CustomEndpoint: req.CustomEndpoint,
 		APIRateLimit:   req.APIRateLimit,
 		MaxUsers:       req.MaxUsers,
 		MaxProjects:    req.MaxProjects,
-		StorageLimit:   req.StorageLimit,
 		IsPublic:       req.IsPublic,
 		SortOrder:      req.SortOrder,
 	}
@@ -167,11 +161,9 @@ func (h *SubscriptionPlanHandler) UpdatePlan(c *gin.Context) {
 		Currency:       req.Currency,
 		Features:       req.Features,
 		Limits:         req.Limits,
-		CustomEndpoint: req.CustomEndpoint,
 		APIRateLimit:   req.APIRateLimit,
 		MaxUsers:       req.MaxUsers,
 		MaxProjects:    req.MaxProjects,
-		StorageLimit:   req.StorageLimit,
 		IsPublic:       req.IsPublic,
 		SortOrder:      req.SortOrder,
 	}

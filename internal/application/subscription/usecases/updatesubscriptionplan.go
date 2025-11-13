@@ -17,11 +17,9 @@ type UpdateSubscriptionPlanCommand struct {
 	Currency       *string
 	Features       []string
 	Limits         map[string]interface{}
-	CustomEndpoint *string
 	APIRateLimit   *uint
 	MaxUsers       *uint
 	MaxProjects    *uint
-	StorageLimit   *uint64
 	SortOrder      *int
 	IsPublic       *bool
 }
@@ -73,13 +71,6 @@ func (uc *UpdateSubscriptionPlanUseCase) Execute(
 		}
 	}
 
-	if cmd.CustomEndpoint != nil {
-		if err := plan.SetCustomEndpoint(*cmd.CustomEndpoint); err != nil {
-			uc.logger.Errorw("failed to set custom endpoint", "error", err)
-			return nil, fmt.Errorf("failed to set custom endpoint: %w", err)
-		}
-	}
-
 	if cmd.APIRateLimit != nil {
 		if err := plan.SetAPIRateLimit(*cmd.APIRateLimit); err != nil {
 			uc.logger.Errorw("failed to set API rate limit", "error", err)
@@ -93,10 +84,6 @@ func (uc *UpdateSubscriptionPlanUseCase) Execute(
 
 	if cmd.MaxProjects != nil {
 		plan.SetMaxProjects(*cmd.MaxProjects)
-	}
-
-	if cmd.StorageLimit != nil {
-		plan.SetStorageLimit(*cmd.StorageLimit)
 	}
 
 	if cmd.SortOrder != nil {
@@ -128,11 +115,9 @@ func (uc *UpdateSubscriptionPlanUseCase) toDTO(plan *subscription.SubscriptionPl
 		BillingCycle:   plan.BillingCycle().String(),
 		TrialDays:      plan.TrialDays(),
 		Status:         string(plan.Status()),
-		CustomEndpoint: plan.CustomEndpoint(),
 		APIRateLimit:   plan.APIRateLimit(),
 		MaxUsers:       plan.MaxUsers(),
 		MaxProjects:    plan.MaxProjects(),
-		StorageLimit:   plan.StorageLimit(),
 		IsPublic:       plan.IsPublic(),
 		SortOrder:      plan.SortOrder(),
 		CreatedAt:      plan.CreatedAt(),

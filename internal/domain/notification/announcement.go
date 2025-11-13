@@ -18,7 +18,6 @@ type Announcement struct {
 	scheduledAt      *time.Time
 	expiresAt        *time.Time
 	viewCount        int
-	version          int
 	createdAt        time.Time
 	updatedAt        time.Time
 	events           []interface{}
@@ -69,7 +68,6 @@ func NewAnnouncement(
 		scheduledAt:      scheduledAt,
 		expiresAt:        expiresAt,
 		viewCount:        0,
-		version:          1,
 		createdAt:        now,
 		updatedAt:        now,
 		events:           []interface{}{},
@@ -89,7 +87,6 @@ func ReconstructAnnouncement(
 	scheduledAt *time.Time,
 	expiresAt *time.Time,
 	viewCount int,
-	version int,
 	createdAt, updatedAt time.Time,
 ) (*Announcement, error) {
 	if id == 0 {
@@ -119,7 +116,6 @@ func ReconstructAnnouncement(
 		scheduledAt:      scheduledAt,
 		expiresAt:        expiresAt,
 		viewCount:        viewCount,
-		version:          version,
 		createdAt:        createdAt,
 		updatedAt:        updatedAt,
 		events:           []interface{}{},
@@ -166,10 +162,6 @@ func (a *Announcement) ViewCount() int {
 	return a.viewCount
 }
 
-func (a *Announcement) Version() int {
-	return a.version
-}
-
 func (a *Announcement) CreatedAt() time.Time {
 	return a.createdAt
 }
@@ -205,7 +197,6 @@ func (a *Announcement) Publish() error {
 
 	a.status = vo.AnnouncementStatusPublished
 	a.updatedAt = now
-	a.version++
 
 	return nil
 }
@@ -232,7 +223,6 @@ func (a *Announcement) Update(title, content string, priority int, expiresAt *ti
 	a.priority = priority
 	a.expiresAt = expiresAt
 	a.updatedAt = time.Now()
-	a.version++
 
 	return nil
 }
@@ -248,7 +238,6 @@ func (a *Announcement) MarkAsExpired() error {
 
 	a.status = vo.AnnouncementStatusExpired
 	a.updatedAt = time.Now()
-	a.version++
 
 	return nil
 }

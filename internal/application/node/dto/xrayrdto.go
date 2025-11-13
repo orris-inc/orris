@@ -103,7 +103,7 @@ func ToNodeConfigResponse(n *node.Node) *NodeConfigResponse {
 		ServerHost:        n.ServerAddress().Value(),
 		ServerPort:        int(n.ServerPort()),
 		Method:            n.EncryptionConfig().Method(),
-		ServerKey:         n.EncryptionConfig().Password(),
+		ServerKey:         "", // Server key is not stored at node level; each user has their own subscription UUID
 		TransportProtocol: "tcp", // Default to TCP, can be enhanced based on plugin config
 		EnableVless:       false,
 		EnableXTLS:        false,

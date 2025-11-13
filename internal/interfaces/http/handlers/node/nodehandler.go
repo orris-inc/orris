@@ -14,6 +14,7 @@ import (
 
 type NodeHandler struct {
 	createNodeUC    usecases.CreateNodeExecutor
+	getNodeUC       usecases.GetNodeExecutor
 	updateNodeUC    usecases.UpdateNodeExecutor
 	deleteNodeUC    usecases.DeleteNodeExecutor
 	listNodesUC     usecases.ListNodesExecutor
@@ -23,6 +24,7 @@ type NodeHandler struct {
 
 func NewNodeHandler(
 	createNodeUC usecases.CreateNodeExecutor,
+	getNodeUC usecases.GetNodeExecutor,
 	updateNodeUC usecases.UpdateNodeExecutor,
 	deleteNodeUC usecases.DeleteNodeExecutor,
 	listNodesUC usecases.ListNodesExecutor,
@@ -30,6 +32,7 @@ func NewNodeHandler(
 ) *NodeHandler {
 	return &NodeHandler{
 		createNodeUC:    createNodeUC,
+		getNodeUC:       getNodeUC,
 		updateNodeUC:    updateNodeUC,
 		deleteNodeUC:    deleteNodeUC,
 		listNodesUC:     listNodesUC,
@@ -40,7 +43,7 @@ func NewNodeHandler(
 
 // CreateNode handles POST /nodes
 // @Summary Create a new node
-// @Description Create a new proxy node with the input data
+// @Description Create a new proxy node
 // @Tags nodes
 // @Accept json
 // @Produce json
@@ -92,9 +95,14 @@ func (h *NodeHandler) GetNode(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "", map[string]interface{}{
-		"id": nodeID,
-	})
+	query := usecases.GetNodeQuery{NodeID: nodeID}
+	result, err := h.getNodeUC.Execute(c.Request.Context(), query)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "", result.Node)
 }
 
 // UpdateNode handles PUT /nodes/:id
@@ -181,7 +189,6 @@ func (h *NodeHandler) DeleteNode(c *gin.Context) {
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Page size" default(20)
 // @Param status query string false "Node status filter" Enums(active,inactive,maintenance,error)
-// @Param country query string false "Country filter"
 // @Success 200 {object} utils.APIResponse "Nodes list"
 // @Failure 400 {object} utils.APIResponse "Invalid query parameters"
 // @Failure 401 {object} utils.APIResponse "Unauthorized"
@@ -309,36 +316,6 @@ func (h *NodeHandler) DeactivateNode(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "Node deactivated successfully", result)
 }
 
-// GetNodeTraffic handles GET /nodes/:id/traffic
-// @Summary Get node traffic statistics
-// @Description Get traffic statistics for a node
-// @Tags nodes
-// @Accept json
-// @Produce json
-// @Security Bearer
-// @Param id path int true "Node ID"
-// @Param start query string false "Start time (RFC3339)"
-// @Param end query string false "End time (RFC3339)"
-// @Success 200 {object} utils.APIResponse "Node traffic statistics"
-// @Failure 400 {object} utils.APIResponse "Invalid node ID or parameters"
-// @Failure 401 {object} utils.APIResponse "Unauthorized"
-// @Failure 403 {object} utils.APIResponse "Forbidden - Requires admin role"
-// @Failure 404 {object} utils.APIResponse "Node not found"
-// @Failure 500 {object} utils.APIResponse "Internal server error"
-// @Router /nodes/{id}/traffic [get]
-func (h *NodeHandler) GetNodeTraffic(c *gin.Context) {
-	nodeID, err := parseNodeID(c)
-	if err != nil {
-		utils.ErrorResponseWithError(c, err)
-		return
-	}
-
-	utils.SuccessResponse(c, http.StatusOK, "", map[string]interface{}{
-		"node_id":  nodeID,
-		"upload":   0,
-		"download": 0,
-	})
-}
 
 func parseNodeID(c *gin.Context) (uint, error) {
 	idStr := c.Param("id")
@@ -353,20 +330,17 @@ func parseNodeID(c *gin.Context) (uint, error) {
 }
 
 type CreateNodeRequest struct {
-	Name          string            `json:"name" binding:"required"`
-	ServerAddress string            `json:"server_address" binding:"required"`
-	ServerPort    uint16            `json:"server_port" binding:"required"`
-	Method        string            `json:"method" binding:"required"`
-	Password      string            `json:"password" binding:"required"`
-	Plugin        *string           `json:"plugin,omitempty"`
+	Name          string            `json:"name" binding:"required" example:"US-Node-01"`
+	ServerAddress string            `json:"server_address" binding:"required" example:"1.2.3.4"`
+	ServerPort    uint16            `json:"server_port" binding:"required" example:"8388"`
+	Protocol      string            `json:"protocol" binding:"required,oneof=shadowsocks trojan" example:"shadowsocks" comment:"Protocol type: shadowsocks or trojan"`
+	Method        string            `json:"method" binding:"required" example:"aes-256-gcm" comment:"Encryption method (for Shadowsocks), password is subscription UUID"`
+	Plugin        *string           `json:"plugin,omitempty" example:"obfs-local"`
 	PluginOpts    map[string]string `json:"plugin_opts,omitempty"`
-	Country       string            `json:"country" binding:"required"`
-	Region        string            `json:"region,omitempty"`
-	Tags          []string          `json:"tags,omitempty"`
-	Description   string            `json:"description,omitempty"`
-	MaxUsers      uint32            `json:"max_users,omitempty"`
-	TrafficLimit  uint64            `json:"traffic_limit,omitempty"`
-	SortOrder     int               `json:"sort_order,omitempty"`
+	Region        string            `json:"region,omitempty" example:"West Coast"`
+	Tags          []string          `json:"tags,omitempty" example:"premium,fast"`
+	Description   string            `json:"description,omitempty" example:"High-speed US server"`
+	SortOrder     int               `json:"sort_order,omitempty" example:"1"`
 }
 
 func (r *CreateNodeRequest) ToCommand() usecases.CreateNodeCommand {
@@ -374,36 +348,29 @@ func (r *CreateNodeRequest) ToCommand() usecases.CreateNodeCommand {
 		Name:          r.Name,
 		ServerAddress: r.ServerAddress,
 		ServerPort:    r.ServerPort,
+		Protocol:      r.Protocol,
 		Method:        r.Method,
-		Password:      r.Password,
 		Plugin:        r.Plugin,
 		PluginOpts:    r.PluginOpts,
-		Country:       r.Country,
 		Region:        r.Region,
 		Tags:          r.Tags,
 		Description:   r.Description,
-		MaxUsers:      r.MaxUsers,
-		TrafficLimit:  r.TrafficLimit,
 		SortOrder:     r.SortOrder,
 	}
 }
 
 type UpdateNodeRequest struct {
-	Name          *string           `json:"name,omitempty"`
-	ServerAddress *string           `json:"server_address,omitempty"`
-	ServerPort    *uint16           `json:"server_port,omitempty"`
-	Method        *string           `json:"method,omitempty"`
-	Password      *string           `json:"password,omitempty"`
-	Plugin        *string           `json:"plugin,omitempty"`
+	Name          *string           `json:"name,omitempty" example:"US-Node-01-Updated"`
+	ServerAddress *string           `json:"server_address,omitempty" example:"2.3.4.5"`
+	ServerPort    *uint16           `json:"server_port,omitempty" example:"8389"`
+	Method        *string           `json:"method,omitempty" example:"chacha20-ietf-poly1305" comment:"Encryption method (for Shadowsocks)"`
+	Plugin        *string           `json:"plugin,omitempty" example:"v2ray-plugin"`
 	PluginOpts    map[string]string `json:"plugin_opts,omitempty"`
-	Status        *string           `json:"status,omitempty"`
-	Country       *string           `json:"country,omitempty"`
-	Region        *string           `json:"region,omitempty"`
-	Tags          []string          `json:"tags,omitempty"`
-	Description   *string           `json:"description,omitempty"`
-	MaxUsers      *uint32           `json:"max_users,omitempty"`
-	TrafficLimit  *uint64           `json:"traffic_limit,omitempty"`
-	SortOrder     *int              `json:"sort_order,omitempty"`
+	Status        *string           `json:"status,omitempty" example:"active" enums:"active,inactive,maintenance"`
+	Region        *string           `json:"region,omitempty" example:"Tokyo"`
+	Tags          []string          `json:"tags,omitempty" example:"premium,low-latency"`
+	Description   *string           `json:"description,omitempty" example:"Updated description"`
+	SortOrder     *int              `json:"sort_order,omitempty" example:"2"`
 }
 
 func (r *UpdateNodeRequest) ToCommand(nodeID uint) usecases.UpdateNodeCommand {
@@ -413,16 +380,12 @@ func (r *UpdateNodeRequest) ToCommand(nodeID uint) usecases.UpdateNodeCommand {
 		ServerAddress: r.ServerAddress,
 		ServerPort:    r.ServerPort,
 		Method:        r.Method,
-		Password:      r.Password,
 		Plugin:        r.Plugin,
 		PluginOpts:    r.PluginOpts,
 		Status:        r.Status,
-		Country:       r.Country,
 		Region:        r.Region,
 		Tags:          r.Tags,
 		Description:   r.Description,
-		MaxUsers:      r.MaxUsers,
-		TrafficLimit:  r.TrafficLimit,
 		SortOrder:     r.SortOrder,
 	}
 }
@@ -431,7 +394,6 @@ type ListNodesRequest struct {
 	Page     int
 	PageSize int
 	Status   *string
-	Country  *string
 }
 
 func parseListNodesRequest(c *gin.Context) (*ListNodesRequest, error) {
@@ -454,19 +416,14 @@ func parseListNodesRequest(c *gin.Context) (*ListNodesRequest, error) {
 		req.Status = &status
 	}
 
-	if country := c.Query("country"); country != "" {
-		req.Country = &country
-	}
-
 	return req, nil
 }
 
 func (r *ListNodesRequest) ToCommand() usecases.ListNodesQuery {
 	offset := (r.Page - 1) * r.PageSize
 	return usecases.ListNodesQuery{
-		Limit:   r.PageSize,
-		Offset:  offset,
-		Status:  r.Status,
-		Country: r.Country,
+		Limit:  r.PageSize,
+		Offset: offset,
+		Status: r.Status,
 	}
 }

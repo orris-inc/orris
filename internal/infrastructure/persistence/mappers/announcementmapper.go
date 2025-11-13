@@ -49,7 +49,6 @@ func (m *AnnouncementMapperImpl) ToEntity(model *models.AnnouncementModel) (*not
 		model.ScheduledAt,
 		model.ExpiresAt,
 		model.ViewCount,
-		model.Version,
 		model.CreatedAt,
 		model.UpdatedAt,
 	)
@@ -76,7 +75,6 @@ func (m *AnnouncementMapperImpl) ToModel(entity *notification.Announcement) (*mo
 		ScheduledAt: entity.ScheduledAt(),
 		ExpiresAt:   entity.ExpiresAt(),
 		ViewCount:   entity.ViewCount(),
-		Version:     entity.Version(),
 		CreatedAt:   entity.CreatedAt(),
 		UpdatedAt:   entity.UpdatedAt(),
 	}

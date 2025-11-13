@@ -113,3 +113,42 @@ func (m *NodeTokenMiddleware) RequireNodeTokenXrayR() gin.HandlerFunc {
 	}
 }
 
+// RequireNodeTokenHeader is a middleware for RESTful API that validates X-Node-Token header
+// Returns v2raysocks-formatted error responses for compatibility
+func (m *NodeTokenMiddleware) RequireNodeTokenHeader() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// RESTful API uses X-Node-Token header
+		token := c.GetHeader("X-Node-Token")
+
+		if token == "" {
+			m.logger.Warnw("RESTful API request without X-Node-Token header", "ip", c.ClientIP())
+			utils.V2RaySocksError(c, http.StatusUnauthorized, "unauthorized")
+			c.Abort()
+			return
+		}
+
+		cmd := usecases.ValidateNodeTokenCommand{
+			PlainToken: token,
+		}
+
+		result, err := m.validateTokenUC.Execute(c.Request.Context(), cmd)
+		if err != nil {
+			m.logger.Warnw("node token validation failed", "error", err, "ip", c.ClientIP())
+			utils.V2RaySocksError(c, http.StatusUnauthorized, "unauthorized")
+			c.Abort()
+			return
+		}
+
+		// Store node info in context
+		c.Set("node_id", result.NodeID)
+		c.Set("node_name", result.Name)
+
+		m.logger.Infow("node authenticated via X-Node-Token header",
+			"node_id", result.NodeID,
+			"node_name", result.Name,
+			"ip", c.ClientIP(),
+		)
+
+		c.Next()
+	}
+}

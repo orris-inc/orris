@@ -37,11 +37,9 @@ type SubscriptionPlanDTO struct {
 	Status         string
 	Features       []string
 	Limits         map[string]interface{}
-	CustomEndpoint string
 	APIRateLimit   uint
 	MaxUsers       uint
 	MaxProjects    uint
-	StorageLimit   uint64
 	IsPublic       bool
 	SortOrder      int
 	Pricings       []*PricingOptionDTO `json:"pricings,omitempty"` // Multiple pricing options for different billing cycles
@@ -153,11 +151,9 @@ func ToSubscriptionPlanDTO(plan *subscription.SubscriptionPlan) *SubscriptionPla
 		Status:         string(plan.Status()),
 		Features:       features,
 		Limits:         limits,
-		CustomEndpoint: plan.CustomEndpoint(),
 		APIRateLimit:   plan.APIRateLimit(),
 		MaxUsers:       plan.MaxUsers(),
 		MaxProjects:    plan.MaxProjects(),
-		StorageLimit:   plan.StorageLimit(),
 		IsPublic:       plan.IsPublic(),
 		SortOrder:      plan.SortOrder(),
 		CreatedAt:      plan.CreatedAt(),

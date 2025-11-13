@@ -17,7 +17,6 @@ type AnnouncementModel struct {
 	ScheduledAt *time.Time
 	ExpiresAt   *time.Time
 	ViewCount   int `gorm:"default:0"`
-	Version     int `gorm:"not null;default:1"`
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	DeletedAt   gorm.DeletedAt `gorm:"index"`
@@ -37,13 +36,5 @@ func (a *AnnouncementModel) BeforeCreate(tx *gorm.DB) error {
 	if a.Priority == 0 {
 		a.Priority = 3
 	}
-	if a.Version == 0 {
-		a.Version = 1
-	}
-	return nil
-}
-
-func (a *AnnouncementModel) BeforeUpdate(tx *gorm.DB) error {
-	tx.Statement.SetColumn("version", a.Version+1)
 	return nil
 }

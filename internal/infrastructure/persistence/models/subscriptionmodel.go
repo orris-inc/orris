@@ -11,6 +11,7 @@ import (
 // This is the anti-corruption layer between domain and database
 type SubscriptionModel struct {
 	ID                 uint      `gorm:"primarykey"`
+	UUID               string    `gorm:"uniqueIndex;not null;size:36;comment:unique identifier used for node authentication"`
 	UserID             uint      `gorm:"not null;index:idx_user_subscription"`
 	PlanID             uint      `gorm:"not null;index:idx_plan_subscription"`
 	Status             string    `gorm:"not null;size:20;index:idx_status"`

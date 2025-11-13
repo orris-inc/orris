@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	vo "orris/internal/domain/subscription/value_objects"
 )
 
 // Subscription represents the subscription aggregate root
 type Subscription struct {
 	id                 uint
+	uuid               string // unique identifier used for node authentication
 	userID             uint
 	planID             uint
 	status             vo.SubscriptionStatus
@@ -38,8 +40,12 @@ func NewSubscription(userID, planID uint, startDate, endDate time.Time, autoRene
 		return nil, fmt.Errorf("end date must be after start date")
 	}
 
+	// Generate unique UUID for this subscription
+	subscriptionUUID := uuid.New().String()
+
 	now := time.Now()
 	s := &Subscription{
+		uuid:               subscriptionUUID,
 		userID:             userID,
 		planID:             planID,
 		status:             vo.StatusInactive,
@@ -60,6 +66,7 @@ func NewSubscription(userID, planID uint, startDate, endDate time.Time, autoRene
 // ReconstructSubscription reconstructs a subscription from persistence
 func ReconstructSubscription(
 	id, userID, planID uint,
+	uuid string,
 	status vo.SubscriptionStatus,
 	startDate, endDate time.Time,
 	autoRenew bool,
@@ -72,6 +79,9 @@ func ReconstructSubscription(
 ) (*Subscription, error) {
 	if id == 0 {
 		return nil, fmt.Errorf("subscription ID cannot be zero")
+	}
+	if uuid == "" {
+		return nil, fmt.Errorf("subscription UUID is required")
 	}
 	if userID == 0 {
 		return nil, fmt.Errorf("user ID is required")
@@ -89,6 +99,7 @@ func ReconstructSubscription(
 
 	return &Subscription{
 		id:                 id,
+		uuid:               uuid,
 		userID:             userID,
 		planID:             planID,
 		status:             status,
@@ -109,6 +120,11 @@ func ReconstructSubscription(
 // ID returns the subscription ID
 func (s *Subscription) ID() uint {
 	return s.id
+}
+
+// UUID returns the subscription UUID
+func (s *Subscription) UUID() string {
+	return s.uuid
 }
 
 // UserID returns the user ID

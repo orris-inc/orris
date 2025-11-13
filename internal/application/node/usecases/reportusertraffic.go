@@ -20,9 +20,17 @@ type ReportUserTrafficResult struct {
 	UsersUpdated int
 }
 
+// UserTrafficItem represents a single user's traffic data for batch recording
+type UserTrafficItem struct {
+	UserID   int
+	Upload   int64
+	Download int64
+}
+
 // UserTrafficRecorder defines the interface for recording user traffic
 type UserTrafficRecorder interface {
 	RecordUserTraffic(ctx context.Context, nodeID uint, userID int, upload, download int64) error
+	BatchRecordUserTraffic(ctx context.Context, nodeID uint, items []UserTrafficItem) error
 }
 
 // ReportUserTrafficUseCase handles reporting user traffic from XrayR clients
@@ -58,7 +66,8 @@ func (uc *ReportUserTrafficUseCase) Execute(ctx context.Context, cmd ReportUserT
 		}, nil
 	}
 
-	successCount := 0
+	// Collect valid traffic items for batch processing
+	validItems := make([]UserTrafficItem, 0, len(cmd.Users))
 	for _, user := range cmd.Users {
 		if user.UID == 0 {
 			uc.logger.Warnw("skipping user traffic with invalid UID",
@@ -72,30 +81,43 @@ func (uc *ReportUserTrafficUseCase) Execute(ctx context.Context, cmd ReportUserT
 			continue
 		}
 
-		// Record user traffic
-		if err := uc.trafficRecorder.RecordUserTraffic(ctx, cmd.NodeID, user.UID, user.Upload, user.Download); err != nil {
-			uc.logger.Errorw("failed to record user traffic",
-				"error", err,
-				"node_id", cmd.NodeID,
-				"user_id", user.UID,
-				"upload", user.Upload,
-				"download", user.Download,
-			)
-			// Continue processing other users even if one fails
-			continue
-		}
+		validItems = append(validItems, UserTrafficItem{
+			UserID:   user.UID,
+			Upload:   user.Upload,
+			Download: user.Download,
+		})
+	}
 
-		successCount++
+	// If no valid items, return early
+	if len(validItems) == 0 {
+		uc.logger.Infow("no valid user traffic data to report",
+			"node_id", cmd.NodeID,
+			"total_users", len(cmd.Users),
+		)
+		return &ReportUserTrafficResult{
+			Success:      true,
+			UsersUpdated: 0,
+		}, nil
+	}
+
+	// Batch record user traffic for improved performance
+	if err := uc.trafficRecorder.BatchRecordUserTraffic(ctx, cmd.NodeID, validItems); err != nil {
+		uc.logger.Errorw("failed to batch record user traffic",
+			"error", err,
+			"node_id", cmd.NodeID,
+			"user_count", len(validItems),
+		)
+		return nil, fmt.Errorf("failed to batch record user traffic: %w", err)
 	}
 
 	uc.logger.Infow("user traffic reported successfully",
 		"node_id", cmd.NodeID,
 		"total_users", len(cmd.Users),
-		"success_count", successCount,
+		"users_recorded", len(validItems),
 	)
 
 	return &ReportUserTrafficResult{
 		Success:      true,
-		UsersUpdated: successCount,
+		UsersUpdated: len(validItems),
 	}, nil
 }

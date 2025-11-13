@@ -138,10 +138,7 @@ func (r *NotificationRepositoryImpl) MarkAsRead(ctx context.Context, id uint) er
 	result := r.db.WithContext(ctx).
 		Model(&models.NotificationModel{}).
 		Where("id = ?", id).
-		Updates(map[string]interface{}{
-			"read_status": "read",
-			"version":     gorm.Expr("version + ?", 1),
-		})
+		Update("read_status", "read")
 
 	if result.Error != nil {
 		return fmt.Errorf("failed to mark notification as read: %w", result.Error)

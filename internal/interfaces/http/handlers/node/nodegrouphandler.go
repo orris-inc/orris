@@ -6,18 +6,50 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"orris/internal/application/node/usecases"
 	"orris/internal/shared/errors"
 	"orris/internal/shared/logger"
 	"orris/internal/shared/utils"
 )
 
 type NodeGroupHandler struct {
-	logger logger.Interface
+	createNodeGroupUC             usecases.CreateNodeGroupExecutor
+	getNodeGroupUC                usecases.GetNodeGroupExecutor
+	updateNodeGroupUC             usecases.UpdateNodeGroupExecutor
+	deleteNodeGroupUC             usecases.DeleteNodeGroupExecutor
+	listNodeGroupsUC              usecases.ListNodeGroupsExecutor
+	addNodeToGroupUC              usecases.AddNodeToGroupExecutor
+	removeNodeFromGroupUC         usecases.RemoveNodeFromGroupExecutor
+	listGroupNodesUC              usecases.ListGroupNodesExecutor
+	associateGroupWithPlanUC      usecases.AssociateGroupWithPlanExecutor
+	disassociateGroupFromPlanUC   usecases.DisassociateGroupFromPlanExecutor
+	logger                        logger.Interface
 }
 
-func NewNodeGroupHandler() *NodeGroupHandler {
+func NewNodeGroupHandler(
+	createNodeGroupUC usecases.CreateNodeGroupExecutor,
+	getNodeGroupUC usecases.GetNodeGroupExecutor,
+	updateNodeGroupUC usecases.UpdateNodeGroupExecutor,
+	deleteNodeGroupUC usecases.DeleteNodeGroupExecutor,
+	listNodeGroupsUC usecases.ListNodeGroupsExecutor,
+	addNodeToGroupUC usecases.AddNodeToGroupExecutor,
+	removeNodeFromGroupUC usecases.RemoveNodeFromGroupExecutor,
+	listGroupNodesUC usecases.ListGroupNodesExecutor,
+	associateGroupWithPlanUC usecases.AssociateGroupWithPlanExecutor,
+	disassociateGroupFromPlanUC usecases.DisassociateGroupFromPlanExecutor,
+) *NodeGroupHandler {
 	return &NodeGroupHandler{
-		logger: logger.NewLogger(),
+		createNodeGroupUC:             createNodeGroupUC,
+		getNodeGroupUC:                getNodeGroupUC,
+		updateNodeGroupUC:             updateNodeGroupUC,
+		deleteNodeGroupUC:             deleteNodeGroupUC,
+		listNodeGroupsUC:              listNodeGroupsUC,
+		addNodeToGroupUC:              addNodeToGroupUC,
+		removeNodeFromGroupUC:         removeNodeFromGroupUC,
+		listGroupNodesUC:              listGroupNodesUC,
+		associateGroupWithPlanUC:      associateGroupWithPlanUC,
+		disassociateGroupFromPlanUC:   disassociateGroupFromPlanUC,
+		logger:                        logger.NewLogger(),
 	}
 }
 
@@ -43,9 +75,20 @@ func (h *NodeGroupHandler) CreateNodeGroup(c *gin.Context) {
 		return
 	}
 
-	utils.CreatedResponse(c, map[string]interface{}{
-		"name": req.Name,
-	}, "Node group created successfully")
+	cmd := usecases.CreateNodeGroupCommand{
+		Name:        req.Name,
+		Description: req.Description,
+		IsPublic:    req.IsPublic,
+		SortOrder:   req.SortOrder,
+	}
+
+	result, err := h.createNodeGroupUC.Execute(c.Request.Context(), cmd)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.CreatedResponse(c, result, "Node group created successfully")
 }
 
 // GetNodeGroup handles GET /node-groups/:id
@@ -70,9 +113,17 @@ func (h *NodeGroupHandler) GetNodeGroup(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "", map[string]interface{}{
-		"id": groupID,
-	})
+	query := usecases.GetNodeGroupQuery{
+		GroupID: groupID,
+	}
+
+	result, err := h.getNodeGroupUC.Execute(c.Request.Context(), query)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "", result)
 }
 
 // UpdateNodeGroup handles PUT /node-groups/:id
@@ -107,9 +158,28 @@ func (h *NodeGroupHandler) UpdateNodeGroup(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "Node group updated successfully", map[string]interface{}{
-		"id": groupID,
-	})
+	// Get version from query parameter (for optimistic locking)
+	version := 0
+	if versionStr := c.Query("version"); versionStr != "" {
+		version, _ = strconv.Atoi(versionStr)
+	}
+
+	cmd := usecases.UpdateNodeGroupCommand{
+		GroupID:     groupID,
+		Name:        req.Name,
+		Description: req.Description,
+		IsPublic:    req.IsPublic,
+		SortOrder:   req.SortOrder,
+		Version:     version,
+	}
+
+	result, err := h.updateNodeGroupUC.Execute(c.Request.Context(), cmd)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Node group updated successfully", result)
 }
 
 // DeleteNodeGroup handles DELETE /node-groups/:id
@@ -134,7 +204,16 @@ func (h *NodeGroupHandler) DeleteNodeGroup(c *gin.Context) {
 		return
 	}
 
-	h.logger.Infow("node group deleted", "group_id", groupID)
+	cmd := usecases.DeleteNodeGroupCommand{
+		GroupID: groupID,
+	}
+
+	_, err = h.deleteNodeGroupUC.Execute(c.Request.Context(), cmd)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
 	utils.NoContentResponse(c)
 }
 
@@ -161,7 +240,21 @@ func (h *NodeGroupHandler) ListNodeGroups(c *gin.Context) {
 		return
 	}
 
-	utils.ListSuccessResponse(c, []interface{}{}, 0, req.Page, req.PageSize)
+	query := usecases.ListNodeGroupsQuery{
+		IsPublic: req.IsPublic,
+		Page:     req.Page,
+		PageSize: req.PageSize,
+		SortBy:   "sort_order",
+		SortDesc: false,
+	}
+
+	result, err := h.listNodeGroupsUC.Execute(c.Request.Context(), query)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.ListSuccessResponse(c, result.Groups, result.Total, req.Page, req.PageSize)
 }
 
 // AddNodeToGroup handles POST /node-groups/:id/nodes
@@ -196,11 +289,18 @@ func (h *NodeGroupHandler) AddNodeToGroup(c *gin.Context) {
 		return
 	}
 
-	h.logger.Infow("node added to group", "group_id", groupID, "node_id", req.NodeID)
-	utils.SuccessResponse(c, http.StatusOK, "Node added to group successfully", map[string]interface{}{
-		"group_id": groupID,
-		"node_id":  req.NodeID,
-	})
+	cmd := usecases.AddNodeToGroupCommand{
+		GroupID: groupID,
+		NodeID:  req.NodeID,
+	}
+
+	result, err := h.addNodeToGroupUC.Execute(c.Request.Context(), cmd)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Node added to group successfully", result)
 }
 
 // RemoveNodeFromGroup handles DELETE /node-groups/:id/nodes/:nodeId
@@ -232,7 +332,17 @@ func (h *NodeGroupHandler) RemoveNodeFromGroup(c *gin.Context) {
 		return
 	}
 
-	h.logger.Infow("node removed from group", "group_id", groupID, "node_id", nodeID)
+	cmd := usecases.RemoveNodeFromGroupCommand{
+		GroupID: groupID,
+		NodeID:  nodeID,
+	}
+
+	_, err = h.removeNodeFromGroupUC.Execute(c.Request.Context(), cmd)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
 	utils.NoContentResponse(c)
 }
 
@@ -306,10 +416,17 @@ func (h *NodeGroupHandler) ListGroupNodes(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "", map[string]interface{}{
-		"group_id": groupID,
-		"nodes":    []interface{}{},
-	})
+	query := usecases.ListGroupNodesQuery{
+		GroupID: groupID,
+	}
+
+	result, err := h.listGroupNodesUC.Execute(c.Request.Context(), query)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "", result)
 }
 
 // AssociatePlan handles POST /node-groups/:id/plans
@@ -344,11 +461,18 @@ func (h *NodeGroupHandler) AssociatePlan(c *gin.Context) {
 		return
 	}
 
-	h.logger.Infow("plan associated with group", "group_id", groupID, "plan_id", req.PlanID)
-	utils.SuccessResponse(c, http.StatusOK, "Plan associated successfully", map[string]interface{}{
-		"group_id": groupID,
-		"plan_id":  req.PlanID,
-	})
+	cmd := usecases.AssociateGroupWithPlanCommand{
+		GroupID: groupID,
+		PlanID:  req.PlanID,
+	}
+
+	result, err := h.associateGroupWithPlanUC.Execute(c.Request.Context(), cmd)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Plan associated successfully", result)
 }
 
 // DisassociatePlan handles DELETE /node-groups/:id/plans/:planId
@@ -380,7 +504,17 @@ func (h *NodeGroupHandler) DisassociatePlan(c *gin.Context) {
 		return
 	}
 
-	h.logger.Infow("plan disassociated from group", "group_id", groupID, "plan_id", planID)
+	cmd := usecases.DisassociateGroupFromPlanCommand{
+		GroupID: groupID,
+		PlanID:  planID,
+	}
+
+	_, err = h.disassociateGroupFromPlanUC.Execute(c.Request.Context(), cmd)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
 	utils.NoContentResponse(c)
 }
 
