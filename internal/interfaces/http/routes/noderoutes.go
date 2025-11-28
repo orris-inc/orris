@@ -25,13 +25,29 @@ func SetupNodeRoutes(engine *gin.Engine, config *NodeRouteConfig) {
 	nodes := engine.Group("/nodes")
 	nodes.Use(config.AuthMiddleware.RequireAuth())
 	{
-		// Node CRUD operations
+		// IMPORTANT: Register specific paths BEFORE parameterized paths to avoid route conflicts
+		// Action endpoints like /:id/activate must come before generic /:id routes
+
+		// Collection operations (no ID parameter)
 		nodes.POST("",
 			authorization.RequireAdmin(),
 			config.NodeHandler.CreateNode)
 		nodes.GET("",
 			authorization.RequireAdmin(),
 			config.NodeHandler.ListNodes)
+
+		// Specific action endpoints (must come BEFORE /:id to avoid conflicts)
+		nodes.POST("/:id/activate",
+			authorization.RequireAdmin(),
+			config.NodeHandler.ActivateNode)
+		nodes.POST("/:id/deactivate",
+			authorization.RequireAdmin(),
+			config.NodeHandler.DeactivateNode)
+		nodes.POST("/:id/token",
+			authorization.RequireAdmin(),
+			config.NodeHandler.GenerateToken)
+
+		// Generic parameterized routes (must come LAST)
 		nodes.GET("/:id",
 			authorization.RequireAdmin(),
 			config.NodeHandler.GetNode)
@@ -41,32 +57,51 @@ func SetupNodeRoutes(engine *gin.Engine, config *NodeRouteConfig) {
 		nodes.DELETE("/:id",
 			authorization.RequireAdmin(),
 			config.NodeHandler.DeleteNode)
-
-		// Node activation management
-		nodes.POST("/:id/activate",
-			authorization.RequireAdmin(),
-			config.NodeHandler.ActivateNode)
-		nodes.POST("/:id/deactivate",
-			authorization.RequireAdmin(),
-			config.NodeHandler.DeactivateNode)
-
-		// Node token management
-		nodes.POST("/:id/token",
-			authorization.RequireAdmin(),
-			config.NodeHandler.GenerateToken)
 	}
 
 	// Node group management routes - require authentication and permission
 	nodeGroups := engine.Group("/node-groups")
 	nodeGroups.Use(config.AuthMiddleware.RequireAuth())
 	{
-		// Node group CRUD operations
+		// IMPORTANT: Register specific paths BEFORE parameterized paths to avoid route conflicts
+
+		// Collection operations (no ID parameter)
 		nodeGroups.POST("",
 			authorization.RequireAdmin(),
 			config.NodeGroupHandler.CreateNodeGroup)
 		nodeGroups.GET("",
 			authorization.RequireAdmin(),
 			config.NodeGroupHandler.ListNodeGroups)
+
+		// Specific sub-resource endpoints (must come BEFORE generic /:id routes)
+		// Batch operations - most specific paths first
+		nodeGroups.POST("/:id/nodes/batch",
+			authorization.RequireAdmin(),
+			config.NodeGroupHandler.BatchAddNodesToGroup)
+		nodeGroups.DELETE("/:id/nodes/batch",
+			authorization.RequireAdmin(),
+			config.NodeGroupHandler.BatchRemoveNodesFromGroup)
+
+		// Node-Group relationship management
+		nodeGroups.POST("/:id/nodes",
+			authorization.RequireAdmin(),
+			config.NodeGroupHandler.AddNodeToGroup)
+		nodeGroups.GET("/:id/nodes",
+			authorization.RequireAdmin(),
+			config.NodeGroupHandler.ListGroupNodes)
+		nodeGroups.DELETE("/:id/nodes/:node_id",
+			authorization.RequireAdmin(),
+			config.NodeGroupHandler.RemoveNodeFromGroup)
+
+		// Subscription plan association
+		nodeGroups.POST("/:id/plans",
+			authorization.RequireAdmin(),
+			config.NodeGroupHandler.AssociatePlan)
+		nodeGroups.DELETE("/:id/plans/:plan_id",
+			authorization.RequireAdmin(),
+			config.NodeGroupHandler.DisassociatePlan)
+
+		// Generic parameterized routes (must come LAST)
 		nodeGroups.GET("/:id",
 			authorization.RequireAdmin(),
 			config.NodeGroupHandler.GetNodeGroup)
@@ -76,33 +111,6 @@ func SetupNodeRoutes(engine *gin.Engine, config *NodeRouteConfig) {
 		nodeGroups.DELETE("/:id",
 			authorization.RequireAdmin(),
 			config.NodeGroupHandler.DeleteNodeGroup)
-
-		// Node-Group relationship management
-		nodeGroups.POST("/:id/nodes",
-			authorization.RequireAdmin(),
-			config.NodeGroupHandler.AddNodeToGroup)
-		nodeGroups.DELETE("/:id/nodes/:node_id",
-			authorization.RequireAdmin(),
-			config.NodeGroupHandler.RemoveNodeFromGroup)
-		nodeGroups.GET("/:id/nodes",
-			authorization.RequireAdmin(),
-			config.NodeGroupHandler.ListGroupNodes)
-
-		// Batch operations for Node-Group relationships
-		nodeGroups.POST("/:id/nodes/batch",
-			authorization.RequireAdmin(),
-			config.NodeGroupHandler.BatchAddNodesToGroup)
-		nodeGroups.DELETE("/:id/nodes/batch",
-			authorization.RequireAdmin(),
-			config.NodeGroupHandler.BatchRemoveNodesFromGroup)
-
-		// Subscription plan association
-		nodeGroups.POST("/:id/plans",
-			authorization.RequireAdmin(),
-			config.NodeGroupHandler.AssociatePlan)
-		nodeGroups.DELETE("/:id/plans/:plan_id",
-			authorization.RequireAdmin(),
-			config.NodeGroupHandler.DisassociatePlan)
 	}
 
 	// Subscription routes - public access with token validation

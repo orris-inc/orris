@@ -52,7 +52,19 @@ func (uc *DisassociateGroupFromPlanUseCase) Execute(ctx context.Context, cmd Dis
 		return nil, fmt.Errorf("failed to get node group: %w", err)
 	}
 
+	uc.logger.Infow("retrieved node group for disassociation",
+		"group_id", cmd.GroupID,
+		"group_name", group.Name(),
+		"associated_plan_ids", group.SubscriptionPlanIDs(),
+		"target_plan_id", cmd.PlanID,
+	)
+
 	if !group.IsAssociatedWithPlan(cmd.PlanID) {
+		uc.logger.Warnw("node group is not associated with the target plan",
+			"group_id", cmd.GroupID,
+			"plan_id", cmd.PlanID,
+			"current_associated_plans", group.SubscriptionPlanIDs(),
+		)
 		return nil, errors.NewValidationError("node group is not associated with this plan")
 	}
 

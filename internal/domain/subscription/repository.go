@@ -85,6 +85,9 @@ type PlanPricingRepository interface {
 	GetByPlanAndCycle(ctx context.Context, planID uint, cycle vo.BillingCycle) (*vo.PlanPricing, error)
 	GetByPlanID(ctx context.Context, planID uint) ([]*vo.PlanPricing, error)
 	GetActivePricings(ctx context.Context, planID uint) ([]*vo.PlanPricing, error)
+	// GetActivePricingsByPlanIDs retrieves active pricings for multiple plans in a single query
+	// Returns a map where key is planID and value is the list of active pricings for that plan
+	GetActivePricingsByPlanIDs(ctx context.Context, planIDs []uint) (map[uint][]*vo.PlanPricing, error)
 	Update(ctx context.Context, pricing *vo.PlanPricing) error
 	Delete(ctx context.Context, id uint) error
 }

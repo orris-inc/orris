@@ -15,8 +15,8 @@ type UpdateSubscriptionPlanCommand struct {
 	Description  *string
 	Price        *uint64
 	Currency     *string
-	Features     []string
-	Limits       map[string]interface{}
+	Features     *[]string
+	Limits       *map[string]interface{}
 	APIRateLimit *uint
 	MaxUsers     *uint
 	MaxProjects  *uint
@@ -63,8 +63,29 @@ func (uc *UpdateSubscriptionPlanUseCase) Execute(
 		}
 	}
 
-	if len(cmd.Features) > 0 || cmd.Limits != nil {
-		features := vo.NewPlanFeatures(cmd.Features, cmd.Limits)
+	if cmd.Features != nil || cmd.Limits != nil {
+		var featuresList []string
+		var limitsMap map[string]interface{}
+
+		if cmd.Features != nil {
+			featuresList = *cmd.Features
+		} else {
+			// Keep existing features if not provided
+			if plan.Features() != nil {
+				featuresList = plan.Features().Features
+			}
+		}
+
+		if cmd.Limits != nil {
+			limitsMap = *cmd.Limits
+		} else {
+			// Keep existing limits if not provided
+			if plan.Features() != nil {
+				limitsMap = plan.Features().Limits
+			}
+		}
+
+		features := vo.NewPlanFeatures(featuresList, limitsMap)
 		if err := plan.UpdateFeatures(features); err != nil {
 			uc.logger.Errorw("failed to update features", "error", err)
 			return nil, fmt.Errorf("failed to update features: %w", err)
@@ -99,35 +120,14 @@ func (uc *UpdateSubscriptionPlanUseCase) Execute(
 		return nil, fmt.Errorf("failed to update subscription plan: %w", err)
 	}
 
-	uc.logger.Infow("subscription plan updated successfully", "plan_id", plan.ID())
-
-	return uc.toDTO(plan), nil
-}
-
-func (uc *UpdateSubscriptionPlanUseCase) toDTO(plan *subscription.SubscriptionPlan) *dto.SubscriptionPlanDTO {
-	result := &dto.SubscriptionPlanDTO{
-		ID:           plan.ID(),
-		Name:         plan.Name(),
-		Slug:         plan.Slug(),
-		Description:  plan.Description(),
-		Price:        plan.Price(),
-		Currency:     plan.Currency(),
-		BillingCycle: plan.BillingCycle().String(),
-		TrialDays:    plan.TrialDays(),
-		Status:       string(plan.Status()),
-		APIRateLimit: plan.APIRateLimit(),
-		MaxUsers:     plan.MaxUsers(),
-		MaxProjects:  plan.MaxProjects(),
-		IsPublic:     plan.IsPublic(),
-		SortOrder:    plan.SortOrder(),
-		CreatedAt:    plan.CreatedAt(),
-		UpdatedAt:    plan.UpdatedAt(),
+	// Reload the plan from database to get the accurate state after update
+	updatedPlan, err := uc.planRepo.GetByID(ctx, cmd.PlanID)
+	if err != nil {
+		uc.logger.Errorw("failed to reload updated plan", "error", err, "plan_id", cmd.PlanID)
+		return nil, fmt.Errorf("failed to reload updated plan: %w", err)
 	}
 
-	if plan.Features() != nil {
-		result.Features = plan.Features().Features
-		result.Limits = plan.Features().Limits
-	}
+	uc.logger.Infow("subscription plan updated successfully", "plan_id", updatedPlan.ID())
 
-	return result
+	return dto.ToSubscriptionPlanDTO(updatedPlan), nil
 }

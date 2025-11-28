@@ -17,16 +17,15 @@ func SetupTicketRoutes(engine *gin.Engine, config *TicketRouteConfig) {
 	tickets := engine.Group("/tickets")
 	tickets.Use(config.AuthMiddleware.RequireAuth())
 	{
+		// IMPORTANT: Register specific paths BEFORE parameterized paths to avoid route conflicts
+
+		// Collection operations (no ID parameter)
 		tickets.POST("",
 			config.TicketHandler.CreateTicket)
 		tickets.GET("",
 			config.TicketHandler.ListTickets)
-		tickets.GET("/:id",
-			config.TicketHandler.GetTicket)
-		tickets.DELETE("/:id",
-			authorization.RequireAdmin(),
-			config.TicketHandler.DeleteTicket)
 
+		// Specific action endpoints (must come BEFORE /:id to avoid conflicts)
 		tickets.POST("/:id/assign",
 			authorization.RequireAdmin(),
 			config.TicketHandler.AssignTicket)
@@ -36,5 +35,12 @@ func SetupTicketRoutes(engine *gin.Engine, config *TicketRouteConfig) {
 			config.TicketHandler.CloseTicket)
 		tickets.POST("/:id/reopen",
 			config.TicketHandler.ReopenTicket)
+
+		// Generic parameterized routes (must come LAST)
+		tickets.GET("/:id",
+			config.TicketHandler.GetTicket)
+		tickets.DELETE("/:id",
+			authorization.RequireAdmin(),
+			config.TicketHandler.DeleteTicket)
 	}
 }

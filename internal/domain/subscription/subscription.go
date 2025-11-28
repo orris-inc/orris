@@ -1,3 +1,5 @@
+// Package subscription provides domain models and business logic for subscription management.
+// It includes the Subscription aggregate root, subscription plans, tokens, and usage tracking.
 package subscription
 
 import (

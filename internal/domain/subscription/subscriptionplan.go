@@ -39,6 +39,7 @@ type SubscriptionPlan struct {
 	isPublic     bool
 	sortOrder    int
 	metadata     map[string]interface{}
+	version      int
 	createdAt    time.Time
 	updatedAt    time.Time
 }
@@ -85,6 +86,7 @@ func NewSubscriptionPlan(name, slug, description string, price uint64, currency 
 		isPublic:     true,
 		sortOrder:    0,
 		metadata:     make(map[string]interface{}),
+		version:      1,
 		createdAt:    now,
 		updatedAt:    now,
 	}, nil
@@ -93,7 +95,7 @@ func NewSubscriptionPlan(name, slug, description string, price uint64, currency 
 func ReconstructSubscriptionPlan(id uint, name, slug, description string, price uint64,
 	currency string, billingCycle vo.BillingCycle, trialDays int, status string,
 	features *vo.PlanFeatures, apiRateLimit, maxUsers, maxProjects uint,
-	isPublic bool, sortOrder int, metadata map[string]interface{},
+	isPublic bool, sortOrder int, metadata map[string]interface{}, version int,
 	createdAt, updatedAt time.Time) (*SubscriptionPlan, error) {
 
 	if id == 0 {
@@ -126,6 +128,7 @@ func ReconstructSubscriptionPlan(id uint, name, slug, description string, price 
 		isPublic:     isPublic,
 		sortOrder:    sortOrder,
 		metadata:     metadata,
+		version:      version,
 		createdAt:    createdAt,
 		updatedAt:    updatedAt,
 	}, nil
@@ -214,12 +217,23 @@ func (p *SubscriptionPlan) UpdatedAt() time.Time {
 	return p.updatedAt
 }
 
+// Version returns the aggregate version for optimistic locking
+func (p *SubscriptionPlan) Version() int {
+	return p.version
+}
+
+// IncrementVersion increments the version for optimistic locking
+func (p *SubscriptionPlan) IncrementVersion() {
+	p.version++
+}
+
 func (p *SubscriptionPlan) Activate() error {
 	if p.status == PlanStatusActive {
 		return nil
 	}
 	p.status = PlanStatusActive
 	p.updatedAt = time.Now()
+	p.version++
 	return nil
 }
 
@@ -229,6 +243,7 @@ func (p *SubscriptionPlan) Deactivate() error {
 	}
 	p.status = PlanStatusInactive
 	p.updatedAt = time.Now()
+	p.version++
 	return nil
 }
 
@@ -239,12 +254,14 @@ func (p *SubscriptionPlan) UpdatePrice(price uint64, currency string) error {
 	p.price = price
 	p.currency = currency
 	p.updatedAt = time.Now()
+	p.version++
 	return nil
 }
 
 func (p *SubscriptionPlan) UpdateDescription(description string) {
 	p.description = description
 	p.updatedAt = time.Now()
+	p.version++
 }
 
 func (p *SubscriptionPlan) UpdateFeatures(features *vo.PlanFeatures) error {
@@ -253,6 +270,7 @@ func (p *SubscriptionPlan) UpdateFeatures(features *vo.PlanFeatures) error {
 	}
 	p.features = features
 	p.updatedAt = time.Now()
+	p.version++
 	return nil
 }
 
@@ -262,27 +280,32 @@ func (p *SubscriptionPlan) SetAPIRateLimit(limit uint) error {
 	}
 	p.apiRateLimit = limit
 	p.updatedAt = time.Now()
+	p.version++
 	return nil
 }
 
 func (p *SubscriptionPlan) SetMaxUsers(max uint) {
 	p.maxUsers = max
 	p.updatedAt = time.Now()
+	p.version++
 }
 
 func (p *SubscriptionPlan) SetMaxProjects(max uint) {
 	p.maxProjects = max
 	p.updatedAt = time.Now()
+	p.version++
 }
 
 func (p *SubscriptionPlan) SetSortOrder(order int) {
 	p.sortOrder = order
 	p.updatedAt = time.Now()
+	p.version++
 }
 
 func (p *SubscriptionPlan) SetPublic(isPublic bool) {
 	p.isPublic = isPublic
 	p.updatedAt = time.Now()
+	p.version++
 }
 
 func (p *SubscriptionPlan) HasFeature(feature string) bool {

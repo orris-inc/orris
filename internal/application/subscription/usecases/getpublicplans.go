@@ -6,6 +6,7 @@ import (
 
 	"orris/internal/application/subscription/dto"
 	"orris/internal/domain/subscription"
+	vo "orris/internal/domain/subscription/value_objects"
 	"orris/internal/shared/logger"
 )
 
@@ -34,46 +35,35 @@ func (uc *GetPublicPlansUseCase) Execute(ctx context.Context) ([]*dto.Subscripti
 		return nil, fmt.Errorf("failed to get active public plans: %w", err)
 	}
 
+	// Extract plan IDs for batch pricing query
+	planIDs := make([]uint, 0, len(plans))
+	for _, plan := range plans {
+		planIDs = append(planIDs, plan.ID())
+	}
+
+	// Batch fetch all pricings in a single query (solves N+1 problem)
+	pricingsByPlanID, err := uc.pricingRepo.GetActivePricingsByPlanIDs(ctx, planIDs)
+	if err != nil {
+		uc.logger.Errorw("failed to get active pricings for plans", "plan_count", len(planIDs), "error", err)
+		// Graceful degradation: continue without pricings
+		pricingsByPlanID = make(map[uint][]*vo.PlanPricing)
+	}
+
+	// Build DTOs with pricings from the batch result
 	planDTOs := make([]*dto.SubscriptionPlanDTO, 0, len(plans))
 	for _, plan := range plans {
-		// Get pricing options for each plan
-		pricings, err := uc.pricingRepo.GetActivePricings(ctx, plan.ID())
-		if err != nil {
-			// Graceful degradation: log warning but continue processing
-			uc.logger.Warnw("failed to get active pricings for plan", "planID", plan.ID(), "error", err)
-			planDTOs = append(planDTOs, uc.toDTO(plan))
-		} else {
+		pricings, hasPricings := pricingsByPlanID[plan.ID()]
+		if hasPricings && len(pricings) > 0 {
 			planDTOs = append(planDTOs, dto.ToSubscriptionPlanDTOWithPricings(plan, pricings))
+		} else {
+			// No pricings found for this plan
+			planDTOs = append(planDTOs, dto.ToSubscriptionPlanDTO(plan))
 		}
 	}
 
+	uc.logger.Infow("public plans retrieved successfully",
+		"plan_count", len(plans),
+		"plans_with_pricings", len(pricingsByPlanID))
+
 	return planDTOs, nil
-}
-
-func (uc *GetPublicPlansUseCase) toDTO(plan *subscription.SubscriptionPlan) *dto.SubscriptionPlanDTO {
-	result := &dto.SubscriptionPlanDTO{
-		ID:           plan.ID(),
-		Name:         plan.Name(),
-		Slug:         plan.Slug(),
-		Description:  plan.Description(),
-		Price:        plan.Price(),
-		Currency:     plan.Currency(),
-		BillingCycle: plan.BillingCycle().String(),
-		TrialDays:    plan.TrialDays(),
-		Status:       string(plan.Status()),
-		APIRateLimit: plan.APIRateLimit(),
-		MaxUsers:     plan.MaxUsers(),
-		MaxProjects:  plan.MaxProjects(),
-		IsPublic:     plan.IsPublic(),
-		SortOrder:    plan.SortOrder(),
-		CreatedAt:    plan.CreatedAt(),
-		UpdatedAt:    plan.UpdatedAt(),
-	}
-
-	if plan.Features() != nil {
-		result.Features = plan.Features().Features
-		result.Limits = plan.Features().Limits
-	}
-
-	return result
 }

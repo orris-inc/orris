@@ -27,6 +27,7 @@ type SubscriptionPlanModel struct {
 	IsPublic     bool `gorm:"default:true"`
 	SortOrder    int  `gorm:"default:0"`
 	Metadata     datatypes.JSON
+	Version      int `gorm:"not null;default:1"`
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 	DeletedAt    gorm.DeletedAt `gorm:"index"`

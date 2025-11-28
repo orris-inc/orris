@@ -195,7 +195,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	tokenGenerator := token.NewTokenGenerator()
 
 	createSubscriptionUC := subscriptionUsecases.NewCreateSubscriptionUseCase(
-		subscriptionRepo, subscriptionPlanRepo, subscriptionTokenRepo, planPricingRepo, tokenGenerator, log,
+		subscriptionRepo, subscriptionPlanRepo, subscriptionTokenRepo, planPricingRepo, userRepo, tokenGenerator, log,
 	)
 	activateSubscriptionUC := subscriptionUsecases.NewActivateSubscriptionUseCase(
 		subscriptionRepo, log,
@@ -452,32 +452,46 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 	users := r.engine.Group("/users")
 	users.Use(r.authMiddleware.RequireAuth())
 	{
+		// IMPORTANT: Register specific paths BEFORE parameterized paths to avoid route conflicts
+
+		// Collection operations (no ID parameter)
 		users.POST("", authorization.RequireAdmin(), r.userHandler.CreateUser)
 		users.GET("", authorization.RequireAdmin(), r.userHandler.ListUsers)
+
+		// Specific named endpoints (must come BEFORE /:id to avoid conflicts)
+		users.PATCH("/me", r.profileHandler.UpdateProfile)
+		users.PUT("/me/password", r.profileHandler.ChangePassword)
+		users.GET("/email/:email", authorization.RequireAdmin(), r.userHandler.GetUserByEmail)
+
+		// Generic parameterized routes (must come LAST)
 		users.GET("/:id", authorization.RequireAdmin(), r.userHandler.GetUser)
 		users.PATCH("/:id", authorization.RequireAdmin(), r.userHandler.UpdateUser)
 		users.DELETE("/:id", authorization.RequireAdmin(), r.userHandler.DeleteUser)
-		users.GET("/email/:email", authorization.RequireAdmin(), r.userHandler.GetUserByEmail)
-
-		// Profile management routes
-		users.PATCH("/me", r.profileHandler.UpdateProfile)
-		users.PUT("/me/password", r.profileHandler.ChangePassword)
 	}
 
 	subscriptions := r.engine.Group("/subscriptions")
 	subscriptions.Use(r.authMiddleware.RequireAuth())
 	{
+		// IMPORTANT: Register specific paths BEFORE parameterized paths to avoid route conflicts
+
+		// Collection operations (no ID parameter)
 		subscriptions.POST("", r.subscriptionHandler.CreateSubscription)
 		subscriptions.GET("", r.subscriptionHandler.ListUserSubscriptions)
-		subscriptions.GET("/:id", r.subscriptionHandler.GetSubscription)
+
+		// Specific action endpoints and sub-resources (must come BEFORE /:id to avoid conflicts)
+		subscriptions.POST("/:id/activate", r.subscriptionHandler.ActivateSubscription)
 		subscriptions.POST("/:id/cancel", r.subscriptionHandler.CancelSubscription)
 		subscriptions.POST("/:id/renew", r.subscriptionHandler.RenewSubscription)
 		subscriptions.POST("/:id/change-plan", r.subscriptionHandler.ChangePlan)
 
+		// Token sub-resource endpoints - most specific paths first
+		subscriptions.POST("/:id/tokens/:token_id/refresh", r.subscriptionTokenHandler.RefreshToken)
+		subscriptions.DELETE("/:id/tokens/:token_id", r.subscriptionTokenHandler.RevokeToken)
 		subscriptions.POST("/:id/tokens", r.subscriptionTokenHandler.GenerateToken)
 		subscriptions.GET("/:id/tokens", r.subscriptionTokenHandler.ListTokens)
-		subscriptions.DELETE("/:id/tokens/:token_id", r.subscriptionTokenHandler.RevokeToken)
-		subscriptions.POST("/:id/tokens/:token_id/refresh", r.subscriptionTokenHandler.RefreshToken)
+
+		// Generic parameterized route (must come LAST)
+		subscriptions.GET("/:id", r.subscriptionHandler.GetSubscription)
 	}
 
 	payments := r.engine.Group("/payments")
@@ -493,18 +507,29 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 
 	plans := r.engine.Group("/subscription-plans")
 	{
-		plans.GET("/public", r.subscriptionPlanHandler.GetPublicPlans)
-		plans.GET("/:id/pricings", r.subscriptionPlanHandler.GetPlanPricings)
+		// IMPORTANT: Register specific paths BEFORE parameterized paths to avoid route conflicts
+		// e.g., /public must come before /:id, /activate before /:id, etc.
 
+		// Public endpoints (no authentication required)
+		plans.GET("/public", r.subscriptionPlanHandler.GetPublicPlans)
+
+		// Protected endpoints
 		plansProtected := plans.Group("")
 		plansProtected.Use(r.authMiddleware.RequireAuth())
 		{
+			// Collection operations (no ID parameter)
 			plansProtected.POST("", r.subscriptionPlanHandler.CreatePlan)
-			plansProtected.PUT("/:id", r.subscriptionPlanHandler.UpdatePlan)
-			plansProtected.GET("/:id", r.subscriptionPlanHandler.GetPlan)
 			plansProtected.GET("", r.subscriptionPlanHandler.ListPlans)
+
+			// Specific action endpoints (must come BEFORE /:id to avoid conflicts)
+			// These handle paths like /:id/activate, /:id/deactivate, /:id/pricings
 			plansProtected.POST("/:id/activate", r.subscriptionPlanHandler.ActivatePlan)
 			plansProtected.POST("/:id/deactivate", r.subscriptionPlanHandler.DeactivatePlan)
+			plansProtected.GET("/:id/pricings", r.subscriptionPlanHandler.GetPlanPricings)
+
+			// Generic parameterized routes (must come LAST)
+			plansProtected.GET("/:id", r.subscriptionPlanHandler.GetPlan)
+			plansProtected.PUT("/:id", r.subscriptionPlanHandler.UpdatePlan)
 		}
 	}
 

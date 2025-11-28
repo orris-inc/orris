@@ -3,8 +3,8 @@ package usecases
 import (
 	"context"
 	"fmt"
-	"time"
 
+	"orris/internal/application/subscription/dto"
 	"orris/internal/domain/subscription"
 	"orris/internal/shared/logger"
 )
@@ -12,19 +12,6 @@ import (
 type ListSubscriptionTokensQuery struct {
 	SubscriptionID uint
 	ActiveOnly     bool
-}
-
-type SubscriptionTokenDTO struct {
-	ID             uint
-	SubscriptionID uint
-	Name           string
-	Prefix         string
-	Scope          string
-	ExpiresAt      *time.Time
-	LastUsedAt     *time.Time
-	UsageCount     uint64
-	IsActive       bool
-	CreatedAt      time.Time
 }
 
 type ListSubscriptionTokensUseCase struct {
@@ -42,7 +29,7 @@ func NewListSubscriptionTokensUseCase(
 	}
 }
 
-func (uc *ListSubscriptionTokensUseCase) Execute(ctx context.Context, query ListSubscriptionTokensQuery) ([]*SubscriptionTokenDTO, error) {
+func (uc *ListSubscriptionTokensUseCase) Execute(ctx context.Context, query ListSubscriptionTokensQuery) ([]*dto.SubscriptionTokenDTO, error) {
 	var tokens []*subscription.SubscriptionToken
 	var err error
 
@@ -61,9 +48,9 @@ func (uc *ListSubscriptionTokensUseCase) Execute(ctx context.Context, query List
 		return nil, fmt.Errorf("failed to get tokens: %w", err)
 	}
 
-	dtos := make([]*SubscriptionTokenDTO, 0, len(tokens))
+	dtos := make([]*dto.SubscriptionTokenDTO, 0, len(tokens))
 	for _, token := range tokens {
-		dtos = append(dtos, uc.toDTO(token))
+		dtos = append(dtos, dto.ToSubscriptionTokenDTO(token))
 	}
 
 	uc.logger.Infow("tokens listed successfully",
@@ -73,19 +60,4 @@ func (uc *ListSubscriptionTokensUseCase) Execute(ctx context.Context, query List
 	)
 
 	return dtos, nil
-}
-
-func (uc *ListSubscriptionTokensUseCase) toDTO(token *subscription.SubscriptionToken) *SubscriptionTokenDTO {
-	return &SubscriptionTokenDTO{
-		ID:             token.ID(),
-		SubscriptionID: token.SubscriptionID(),
-		Name:           token.Name(),
-		Prefix:         token.Prefix(),
-		Scope:          token.Scope().String(),
-		ExpiresAt:      token.ExpiresAt(),
-		LastUsedAt:     token.LastUsedAt(),
-		UsageCount:     token.UsageCount(),
-		IsActive:       token.IsActive(),
-		CreatedAt:      token.CreatedAt(),
-	}
 }

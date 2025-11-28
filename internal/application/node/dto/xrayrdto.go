@@ -21,20 +21,20 @@ type V2RaySocksResponse struct {
 // Endpoint: act=config
 // Note: XrayR agent should map fields as needed (protocol -> node_type, encryption_method -> method)
 type NodeConfigResponse struct {
-	NodeID            int    `json:"node_id" binding:"required"`                               // Node unique identifier
-	Protocol          string `json:"protocol" binding:"required,oneof=shadowsocks trojan"`     // Protocol type (XrayR should map to node_type)
-	ServerHost        string `json:"server_host" binding:"required"`                           // Server hostname or IP address
-	ServerPort        int    `json:"server_port" binding:"required,min=1,max=65535"`           // Server port number
-	EncryptionMethod  string `json:"encryption_method,omitempty"`                              // Encryption method for SS (XrayR should map to method)
-	ServerKey         string `json:"server_key,omitempty"`                                     // Server password for SS
-	TransportProtocol string `json:"transport_protocol" binding:"required,oneof=tcp ws"`       // Transport protocol
-	Host              string `json:"host,omitempty"`                                           // WebSocket host header
-	Path              string `json:"path,omitempty"`                                           // WebSocket path
-	EnableVless       bool   `json:"enable_vless"`                                             // Enable VLESS protocol
-	EnableXTLS        bool   `json:"enable_xtls"`                                              // Enable XTLS
-	SpeedLimit        uint64 `json:"speed_limit"`                                              // Speed limit in Mbps, 0 = unlimited
-	DeviceLimit       int    `json:"device_limit"`                                             // Device connection limit, 0 = unlimited
-	RuleListPath      string `json:"rule_list_path,omitempty"`                                 // Path to routing rule list file
+	NodeID            int    `json:"node_id" binding:"required"`                           // Node unique identifier
+	Protocol          string `json:"protocol" binding:"required,oneof=shadowsocks trojan"` // Protocol type (XrayR should map to node_type)
+	ServerHost        string `json:"server_host" binding:"required"`                       // Server hostname or IP address
+	ServerPort        int    `json:"server_port" binding:"required,min=1,max=65535"`       // Server port number
+	EncryptionMethod  string `json:"encryption_method,omitempty"`                          // Encryption method for SS (XrayR should map to method)
+	ServerKey         string `json:"server_key,omitempty"`                                 // Server password for SS
+	TransportProtocol string `json:"transport_protocol" binding:"required,oneof=tcp ws"`   // Transport protocol
+	Host              string `json:"host,omitempty"`                                       // WebSocket host header
+	Path              string `json:"path,omitempty"`                                       // WebSocket path
+	EnableVless       bool   `json:"enable_vless"`                                         // Enable VLESS protocol
+	EnableXTLS        bool   `json:"enable_xtls"`                                          // Enable XTLS
+	SpeedLimit        uint64 `json:"speed_limit"`                                          // Speed limit in Mbps, 0 = unlimited
+	DeviceLimit       int    `json:"device_limit"`                                         // Device connection limit, 0 = unlimited
+	RuleListPath      string `json:"rule_list_path,omitempty"`                             // Path to routing rule list file
 }
 
 // NodeSubscriptionInfo represents individual subscription information for node access

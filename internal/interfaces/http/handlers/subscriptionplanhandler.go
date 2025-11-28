@@ -65,16 +65,16 @@ type CreatePlanRequest struct {
 }
 
 type UpdatePlanRequest struct {
-	Description  *string                `json:"description"`
-	Price        *uint64                `json:"price"`
-	Currency     *string                `json:"currency"`
-	Features     []string               `json:"features"`
-	Limits       map[string]interface{} `json:"limits"`
-	APIRateLimit *uint                  `json:"api_rate_limit"`
-	MaxUsers     *uint                  `json:"max_users"`
-	MaxProjects  *uint                  `json:"max_projects"`
-	IsPublic     *bool                  `json:"is_public"`
-	SortOrder    *int                   `json:"sort_order"`
+	Description  *string                 `json:"description"`
+	Price        *uint64                 `json:"price"`
+	Currency     *string                 `json:"currency"`
+	Features     *[]string               `json:"features"`
+	Limits       *map[string]interface{} `json:"limits"`
+	APIRateLimit *uint                   `json:"api_rate_limit"`
+	MaxUsers     *uint                   `json:"max_users"`
+	MaxProjects  *uint                   `json:"max_projects"`
+	IsPublic     *bool                   `json:"is_public"`
+	SortOrder    *int                    `json:"sort_order"`
 }
 
 // @Summary		Create subscription plan

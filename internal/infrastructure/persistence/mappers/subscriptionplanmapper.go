@@ -84,6 +84,7 @@ func (m *subscriptionPlanMapper) ToEntity(model *models.SubscriptionPlanModel) (
 		model.IsPublic,
 		model.SortOrder,
 		metadata,
+		model.Version,
 		model.CreatedAt,
 		model.UpdatedAt,
 	)
@@ -137,6 +138,7 @@ func (m *subscriptionPlanMapper) ToModel(entity *subscription.SubscriptionPlan) 
 		IsPublic:     entity.IsPublic(),
 		SortOrder:    entity.SortOrder(),
 		Metadata:     metadataJSON,
+		Version:      entity.Version(),
 		CreatedAt:    entity.CreatedAt(),
 		UpdatedAt:    entity.UpdatedAt(),
 	}

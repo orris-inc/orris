@@ -22,32 +22,47 @@ func SetupNotificationRoutes(engine *gin.Engine, config *NotificationRouteConfig
 	notifications := engine.Group("/notifications")
 	notifications.Use(config.AuthMiddleware.RequireAuth())
 	{
+		// IMPORTANT: Register specific paths BEFORE parameterized paths to avoid route conflicts
+
+		// Collection operations (no ID parameter)
 		notifications.GET("", config.NotificationHandler.ListNotifications)
+
+		// Specific named endpoints (must come BEFORE /:id to avoid conflicts)
 		notifications.GET("/unread-count", config.NotificationHandler.GetUnreadCount)
 		notifications.PUT("/read-all", config.NotificationHandler.MarkAllAsRead)
+
+		// Specific action endpoints for individual notifications
 		notifications.PUT("/:id/read", config.NotificationHandler.MarkAsRead)
 		notifications.POST("/:id/archive", config.NotificationHandler.ArchiveNotification)
+
+		// Generic parameterized route (must come LAST)
 		notifications.DELETE("/:id", config.NotificationHandler.DeleteNotification)
 	}
 
 	announcements := engine.Group("/announcements")
 	announcements.Use(config.AuthMiddleware.RequireAuth())
 	{
-		announcements.GET("", config.NotificationHandler.ListAnnouncements)
-		announcements.GET("/:id", config.NotificationHandler.GetAnnouncement)
+		// IMPORTANT: Register specific paths BEFORE parameterized paths to avoid route conflicts
 
+		// Collection operations (no ID parameter)
+		announcements.GET("", config.NotificationHandler.ListAnnouncements)
 		announcements.POST("",
 			authorization.RequireAdmin(),
 			config.NotificationHandler.CreateAnnouncement)
+
+		// Specific action endpoints (must come BEFORE /:id to avoid conflicts)
+		announcements.POST("/:id/publish",
+			authorization.RequireAdmin(),
+			config.NotificationHandler.PublishAnnouncement)
+
+		// Generic parameterized routes (must come LAST)
+		announcements.GET("/:id", config.NotificationHandler.GetAnnouncement)
 		announcements.PUT("/:id",
 			authorization.RequireAdmin(),
 			config.NotificationHandler.UpdateAnnouncement)
 		announcements.DELETE("/:id",
 			authorization.RequireAdmin(),
 			config.NotificationHandler.DeleteAnnouncement)
-		announcements.POST("/:id/publish",
-			authorization.RequireAdmin(),
-			config.NotificationHandler.PublishAnnouncement)
 	}
 
 	templates := engine.Group("/notification-templates")

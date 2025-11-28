@@ -1,3 +1,5 @@
+// Package errors provides application-level error types and utilities.
+// It defines common error types like validation, not found, conflict, and authorization errors.
 package errors
 
 import (

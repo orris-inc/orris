@@ -7,6 +7,7 @@ import (
 
 	"orris/internal/domain/subscription"
 	vo "orris/internal/domain/subscription/value_objects"
+	"orris/internal/domain/user"
 	"orris/internal/shared/logger"
 )
 
@@ -29,6 +30,7 @@ type CreateSubscriptionUseCase struct {
 	planRepo         subscription.SubscriptionPlanRepository
 	tokenRepo        subscription.SubscriptionTokenRepository
 	pricingRepo      subscription.PlanPricingRepository
+	userRepo         user.Repository
 	tokenGenerator   TokenGenerator
 	logger           logger.Interface
 }
@@ -38,6 +40,7 @@ func NewCreateSubscriptionUseCase(
 	planRepo subscription.SubscriptionPlanRepository,
 	tokenRepo subscription.SubscriptionTokenRepository,
 	pricingRepo subscription.PlanPricingRepository,
+	userRepo user.Repository,
 	tokenGenerator TokenGenerator,
 	logger logger.Interface,
 ) *CreateSubscriptionUseCase {
@@ -46,12 +49,24 @@ func NewCreateSubscriptionUseCase(
 		planRepo:         planRepo,
 		tokenRepo:        tokenRepo,
 		pricingRepo:      pricingRepo,
+		userRepo:         userRepo,
 		tokenGenerator:   tokenGenerator,
 		logger:           logger,
 	}
 }
 
 func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, cmd CreateSubscriptionCommand) (*CreateSubscriptionResult, error) {
+	// Verify target user exists
+	targetUser, err := uc.userRepo.GetByID(ctx, cmd.UserID)
+	if err != nil {
+		uc.logger.Errorw("failed to get target user", "error", err, "user_id", cmd.UserID)
+		return nil, fmt.Errorf("failed to get target user: %w", err)
+	}
+	if targetUser == nil {
+		uc.logger.Warnw("target user not found", "user_id", cmd.UserID)
+		return nil, fmt.Errorf("user not found")
+	}
+
 	plan, err := uc.planRepo.GetByID(ctx, cmd.PlanID)
 	if err != nil {
 		uc.logger.Errorw("failed to get subscription plan", "error", err, "plan_id", cmd.PlanID)

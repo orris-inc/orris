@@ -154,6 +154,49 @@ func (r *PlanPricingRepositoryImpl) GetActivePricings(ctx context.Context, planI
 	return pricings, nil
 }
 
+// GetActivePricingsByPlanIDs retrieves active pricings for multiple plans in a single query
+// This method solves the N+1 query problem when fetching pricings for multiple plans
+func (r *PlanPricingRepositoryImpl) GetActivePricingsByPlanIDs(ctx context.Context, planIDs []uint) (map[uint][]*vo.PlanPricing, error) {
+	if len(planIDs) == 0 {
+		return make(map[uint][]*vo.PlanPricing), nil
+	}
+
+	var modelList []*models.SubscriptionPlanPricingModel
+
+	err := r.db.WithContext(ctx).
+		Where("plan_id IN ? AND is_active = ?", planIDs, true).
+		Order("plan_id ASC, FIELD(billing_cycle, 'weekly', 'monthly', 'quarterly', 'semi_annual', 'yearly', 'lifetime')").
+		Find(&modelList).Error
+
+	if err != nil {
+		r.logger.Errorw("failed to get active pricings by plan IDs", "plan_count", len(planIDs), "error", err)
+		return nil, fmt.Errorf("failed to get active pricings: %w", err)
+	}
+
+	// Group pricings by plan ID
+	pricingsByPlanID := make(map[uint][]*vo.PlanPricing)
+
+	for _, model := range modelList {
+		pricing, err := r.mapper.ToDomain(model)
+		if err != nil {
+			r.logger.Errorw("failed to map model to domain",
+				"plan_id", model.PlanID,
+				"pricing_id", model.ID,
+				"error", err)
+			return nil, fmt.Errorf("failed to map model: %w", err)
+		}
+
+		pricingsByPlanID[model.PlanID] = append(pricingsByPlanID[model.PlanID], pricing)
+	}
+
+	r.logger.Debugw("active pricings retrieved in batch",
+		"plan_count", len(planIDs),
+		"total_pricings", len(modelList),
+		"plans_with_pricings", len(pricingsByPlanID))
+
+	return pricingsByPlanID, nil
+}
+
 // Update updates an existing pricing record
 func (r *PlanPricingRepositoryImpl) Update(ctx context.Context, pricing *vo.PlanPricing) error {
 	model, err := r.mapper.ToModel(pricing)

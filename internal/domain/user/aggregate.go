@@ -1,3 +1,5 @@
+// Package user provides domain models and business logic for user management.
+// It includes the User aggregate root, authentication, and profile management.
 package user
 
 import (

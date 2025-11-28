@@ -4255,7 +4255,7 @@ const docTemplate = `{
                         "Bearer": []
                     }
                 ],
-                "description": "Create a new subscription for the authenticated user with the specified plan and billing cycle",
+                "description": "Create a new subscription for the authenticated user with the specified plan and billing cycle. Admin users can optionally specify a user_id to create subscription for any user.",
                 "consumes": [
                     "application/json"
                 ],
@@ -4268,7 +4268,7 @@ const docTemplate = `{
                 "summary": "Create a new subscription with billing cycle selection",
                 "parameters": [
                     {
-                        "description": "Subscription data with billing cycle (weekly/monthly/quarterly/semi_annual/yearly/lifetime)",
+                        "description": "Subscription data with billing cycle (weekly/monthly/quarterly/semi_annual/yearly/lifetime). For admin: optionally specify user_id to create subscription for another user.",
                         "name": "subscription",
                         "in": "body",
                         "required": true,
@@ -4308,8 +4308,14 @@ const docTemplate = `{
                             "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
+                    "403": {
+                        "description": "Forbidden - only admin can create subscription for other users",
+                        "schema": {
+                            "$ref": "#/definitions/utils.APIResponse"
+                        }
+                    },
                     "404": {
-                        "description": "Plan not found",
+                        "description": "Plan not found or user not found",
                         "schema": {
                             "$ref": "#/definitions/utils.APIResponse"
                         }
@@ -4367,6 +4373,73 @@ const docTemplate = `{
                                     }
                                 }
                             ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid subscription ID",
+                        "schema": {
+                            "$ref": "#/definitions/utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Access denied",
+                        "schema": {
+                            "$ref": "#/definitions/utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Subscription not found",
+                        "schema": {
+                            "$ref": "#/definitions/utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/subscriptions/{id}/activate": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Activate an inactive subscription to make it active",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "subscriptions"
+                ],
+                "summary": "Activate subscription",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Subscription ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Subscription activated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/utils.APIResponse"
                         }
                     },
                     "400": {
@@ -6261,6 +6334,10 @@ const docTemplate = `{
                 },
                 "start_date": {
                     "type": "string"
+                },
+                "user_id": {
+                    "description": "Optional: Admin can specify target user ID",
+                    "type": "integer"
                 }
             }
         },

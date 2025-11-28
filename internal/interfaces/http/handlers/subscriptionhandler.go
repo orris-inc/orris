@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"orris/internal/application/subscription/usecases"
+	"orris/internal/shared/authorization"
 	"orris/internal/shared/logger"
 	"orris/internal/shared/utils"
 )
@@ -46,6 +47,7 @@ func NewSubscriptionHandler(
 }
 
 type CreateSubscriptionRequest struct {
+	UserID       *uint                  `json:"user_id"` // Optional: Admin can specify target user ID
 	PlanID       uint                   `json:"plan_id" binding:"required"`
 	BillingCycle string                 `json:"billing_cycle" binding:"required,oneof=weekly monthly quarterly semi_annual yearly lifetime"`
 	StartDate    *time.Time             `json:"start_date"`
@@ -90,20 +92,21 @@ type SubscriptionResponse struct {
 }
 
 // @Summary		Create a new subscription with billing cycle selection
-// @Description	Create a new subscription for the authenticated user with the specified plan and billing cycle
+// @Description	Create a new subscription for the authenticated user with the specified plan and billing cycle. Admin users can optionally specify a user_id to create subscription for any user.
 // @Tags			subscriptions
 // @Accept			json
 // @Produce		json
 // @Security		Bearer
-// @Param			subscription	body		CreateSubscriptionRequest							true	"Subscription data with billing cycle (weekly/monthly/quarterly/semi_annual/yearly/lifetime)"
+// @Param			subscription	body		CreateSubscriptionRequest							true	"Subscription data with billing cycle (weekly/monthly/quarterly/semi_annual/yearly/lifetime). For admin: optionally specify user_id to create subscription for another user."
 // @Success		201				{object}	utils.APIResponse{data=SubscriptionCreateResult}	"Subscription created successfully"
 // @Failure		400				{object}	utils.APIResponse									"Bad request"
 // @Failure		401				{object}	utils.APIResponse									"Unauthorized"
-// @Failure		404				{object}	utils.APIResponse									"Plan not found"
+// @Failure		403				{object}	utils.APIResponse									"Forbidden - only admin can create subscription for other users"
+// @Failure		404				{object}	utils.APIResponse									"Plan not found or user not found"
 // @Failure		500				{object}	utils.APIResponse									"Internal server error"
 // @Router			/subscriptions [post]
 func (h *SubscriptionHandler) CreateSubscription(c *gin.Context) {
-	userID, exists := c.Get("user_id")
+	currentUserID, exists := c.Get("user_id")
 	if !exists {
 		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
 		return
@@ -114,6 +117,30 @@ func (h *SubscriptionHandler) CreateSubscription(c *gin.Context) {
 		h.logger.Warnw("invalid request body for create subscription", "error", err)
 		utils.ErrorResponseWithError(c, err)
 		return
+	}
+
+	// Determine target user ID based on role and request
+	var targetUserID uint
+	userRole := c.GetString("user_role")
+
+	if req.UserID != nil && *req.UserID != 0 {
+		// Request specifies a user_id
+		if userRole != string(authorization.RoleAdmin) {
+			h.logger.Warnw("non-admin user attempted to create subscription for another user",
+				"current_user_id", currentUserID,
+				"target_user_id", *req.UserID,
+			)
+			utils.ErrorResponse(c, http.StatusForbidden, "only admin can create subscription for other users")
+			return
+		}
+		targetUserID = *req.UserID
+		h.logger.Infow("admin creating subscription for user",
+			"admin_id", currentUserID,
+			"target_user_id", targetUserID,
+		)
+	} else {
+		// No user_id specified, create for current user
+		targetUserID = currentUserID.(uint)
 	}
 
 	autoRenew := true
@@ -127,7 +154,7 @@ func (h *SubscriptionHandler) CreateSubscription(c *gin.Context) {
 	}
 
 	cmd := usecases.CreateSubscriptionCommand{
-		UserID:       userID.(uint),
+		UserID:       targetUserID,
 		PlanID:       req.PlanID,
 		BillingCycle: req.BillingCycle,
 		StartDate:    startDate,
@@ -137,7 +164,7 @@ func (h *SubscriptionHandler) CreateSubscription(c *gin.Context) {
 
 	result, err := h.createUseCase.Execute(c.Request.Context(), cmd)
 	if err != nil {
-		h.logger.Errorw("failed to create subscription", "error", err, "user_id", userID)
+		h.logger.Errorw("failed to create subscription", "error", err, "target_user_id", targetUserID)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
@@ -444,4 +471,60 @@ func (h *SubscriptionHandler) ChangePlan(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "Plan changed successfully", nil)
+}
+
+// @Summary		Activate subscription
+// @Description	Activate an inactive subscription to make it active
+// @Tags			subscriptions
+// @Accept			json
+// @Produce		json
+// @Security		Bearer
+// @Param			id	path		int					true	"Subscription ID"
+// @Success		200	{object}	utils.APIResponse	"Subscription activated successfully"
+// @Failure		400	{object}	utils.APIResponse	"Invalid subscription ID"
+// @Failure		401	{object}	utils.APIResponse	"Unauthorized"
+// @Failure		403	{object}	utils.APIResponse	"Access denied"
+// @Failure		404	{object}	utils.APIResponse	"Subscription not found"
+// @Failure		500	{object}	utils.APIResponse	"Internal server error"
+// @Router			/subscriptions/{id}/activate [post]
+func (h *SubscriptionHandler) ActivateSubscription(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+		return
+	}
+
+	subscriptionID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID")
+		return
+	}
+
+	query := usecases.GetSubscriptionQuery{
+		SubscriptionID: uint(subscriptionID),
+	}
+
+	subscription, err := h.getUseCase.Execute(c.Request.Context(), query)
+	if err != nil {
+		h.logger.Errorw("failed to get subscription", "error", err, "subscription_id", subscriptionID)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	if subscription.UserID != userID.(uint) {
+		utils.ErrorResponse(c, http.StatusForbidden, "access denied")
+		return
+	}
+
+	cmd := usecases.ActivateSubscriptionCommand{
+		SubscriptionID: uint(subscriptionID),
+	}
+
+	if err := h.activateUseCase.Execute(c.Request.Context(), cmd); err != nil {
+		h.logger.Errorw("failed to activate subscription", "error", err, "subscription_id", subscriptionID)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Subscription activated successfully", nil)
 }

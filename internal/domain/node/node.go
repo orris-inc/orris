@@ -1,3 +1,5 @@
+// Package node provides domain models and business logic for node management.
+// It includes the Node aggregate root, node groups, traffic tracking, and token validation.
 package node
 
 import (

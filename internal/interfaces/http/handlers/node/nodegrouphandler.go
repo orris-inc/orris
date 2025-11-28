@@ -13,19 +13,19 @@ import (
 )
 
 type NodeGroupHandler struct {
-	createNodeGroupUC             usecases.CreateNodeGroupExecutor
-	getNodeGroupUC                usecases.GetNodeGroupExecutor
-	updateNodeGroupUC             usecases.UpdateNodeGroupExecutor
-	deleteNodeGroupUC             usecases.DeleteNodeGroupExecutor
-	listNodeGroupsUC              usecases.ListNodeGroupsExecutor
-	addNodeToGroupUC              usecases.AddNodeToGroupExecutor
-	removeNodeFromGroupUC         usecases.RemoveNodeFromGroupExecutor
-	batchAddNodesToGroupUC        usecases.BatchAddNodesToGroupExecutor
-	batchRemoveNodesFromGroupUC   usecases.BatchRemoveNodesFromGroupExecutor
-	listGroupNodesUC              usecases.ListGroupNodesExecutor
-	associateGroupWithPlanUC      usecases.AssociateGroupWithPlanExecutor
-	disassociateGroupFromPlanUC   usecases.DisassociateGroupFromPlanExecutor
-	logger                        logger.Interface
+	createNodeGroupUC           usecases.CreateNodeGroupExecutor
+	getNodeGroupUC              usecases.GetNodeGroupExecutor
+	updateNodeGroupUC           usecases.UpdateNodeGroupExecutor
+	deleteNodeGroupUC           usecases.DeleteNodeGroupExecutor
+	listNodeGroupsUC            usecases.ListNodeGroupsExecutor
+	addNodeToGroupUC            usecases.AddNodeToGroupExecutor
+	removeNodeFromGroupUC       usecases.RemoveNodeFromGroupExecutor
+	batchAddNodesToGroupUC      usecases.BatchAddNodesToGroupExecutor
+	batchRemoveNodesFromGroupUC usecases.BatchRemoveNodesFromGroupExecutor
+	listGroupNodesUC            usecases.ListGroupNodesExecutor
+	associateGroupWithPlanUC    usecases.AssociateGroupWithPlanExecutor
+	disassociateGroupFromPlanUC usecases.DisassociateGroupFromPlanExecutor
+	logger                      logger.Interface
 }
 
 func NewNodeGroupHandler(
@@ -339,7 +339,7 @@ func (h *NodeGroupHandler) RemoveNodeFromGroup(c *gin.Context) {
 		return
 	}
 
-	nodeID, err := parseNodeIDFromParam(c, "nodeId")
+	nodeID, err := parseNodeIDFromParam(c, "node_id")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -602,17 +602,36 @@ func (h *NodeGroupHandler) AssociatePlan(c *gin.Context) {
 //	@Failure		500		{object}	utils.APIResponse	"Internal server error"
 //	@Router			/node-groups/{id}/plans/{planId} [delete]
 func (h *NodeGroupHandler) DisassociatePlan(c *gin.Context) {
+	h.logger.Infow("received disassociate plan request",
+		"path", c.Request.URL.Path,
+		"method", c.Request.Method,
+	)
+
 	groupID, err := parseNodeGroupID(c)
 	if err != nil {
+		h.logger.Warnw("failed to parse group ID",
+			"error", err,
+			"param", c.Param("id"),
+		)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	planID, err := parsePlanIDFromParam(c, "planId")
+	planID, err := parsePlanIDFromParam(c, "plan_id")
 	if err != nil {
+		h.logger.Warnw("failed to parse plan ID",
+			"error", err,
+			"param", c.Param("plan_id"),
+			"group_id", groupID,
+		)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
+
+	h.logger.Infow("parsed disassociate plan request parameters",
+		"group_id", groupID,
+		"plan_id", planID,
+	)
 
 	cmd := usecases.DisassociateGroupFromPlanCommand{
 		GroupID: groupID,
@@ -621,9 +640,19 @@ func (h *NodeGroupHandler) DisassociatePlan(c *gin.Context) {
 
 	_, err = h.disassociateGroupFromPlanUC.Execute(c.Request.Context(), cmd)
 	if err != nil {
+		h.logger.Errorw("failed to disassociate plan from group",
+			"error", err,
+			"group_id", groupID,
+			"plan_id", planID,
+		)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
+
+	h.logger.Infow("successfully disassociated plan from group",
+		"group_id", groupID,
+		"plan_id", planID,
+	)
 
 	utils.NoContentResponse(c)
 }

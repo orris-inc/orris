@@ -34,7 +34,7 @@ func (uc *GetSubscriptionPlanUseCase) ExecuteByID(ctx context.Context, planID ui
 		return nil, fmt.Errorf("subscription plan not found: %d", planID)
 	}
 
-	return uc.toDTO(plan), nil
+	return dto.ToSubscriptionPlanDTO(plan), nil
 }
 
 func (uc *GetSubscriptionPlanUseCase) ExecuteBySlug(ctx context.Context, slug string) (*dto.SubscriptionPlanDTO, error) {
@@ -47,33 +47,5 @@ func (uc *GetSubscriptionPlanUseCase) ExecuteBySlug(ctx context.Context, slug st
 		return nil, fmt.Errorf("subscription plan not found: %s", slug)
 	}
 
-	return uc.toDTO(plan), nil
-}
-
-func (uc *GetSubscriptionPlanUseCase) toDTO(plan *subscription.SubscriptionPlan) *dto.SubscriptionPlanDTO {
-	result := &dto.SubscriptionPlanDTO{
-		ID:           plan.ID(),
-		Name:         plan.Name(),
-		Slug:         plan.Slug(),
-		Description:  plan.Description(),
-		Price:        plan.Price(),
-		Currency:     plan.Currency(),
-		BillingCycle: plan.BillingCycle().String(),
-		TrialDays:    plan.TrialDays(),
-		Status:       string(plan.Status()),
-		APIRateLimit: plan.APIRateLimit(),
-		MaxUsers:     plan.MaxUsers(),
-		MaxProjects:  plan.MaxProjects(),
-		IsPublic:     plan.IsPublic(),
-		SortOrder:    plan.SortOrder(),
-		CreatedAt:    plan.CreatedAt(),
-		UpdatedAt:    plan.UpdatedAt(),
-	}
-
-	if plan.Features() != nil {
-		result.Features = plan.Features().Features
-		result.Limits = plan.Features().Limits
-	}
-
-	return result
+	return dto.ToSubscriptionPlanDTO(plan), nil
 }
