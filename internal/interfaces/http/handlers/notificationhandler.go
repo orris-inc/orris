@@ -156,42 +156,65 @@ func (h *NotificationHandler) DeleteAnnouncement(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// PublishAnnouncement godoc
+// UpdateAnnouncementStatusRequest represents a request for announcement status changes
+type UpdateAnnouncementStatusRequest struct {
+	Status           string `json:"status" binding:"required,oneof=draft published archived"`
+	SendNotification *bool  `json:"send_notification"` // Optional: for publish action
+}
+
+// UpdateAnnouncementStatus godoc
 //
-//	@Summary		Publish announcement
-//	@Description	Publish a draft announcement to make it visible to users
+//	@Summary		Update announcement status
+//	@Description	Update announcement status (draft, published, or archived)
 //	@Security		Bearer
 //	@Tags			announcements
 //	@Accept			json
 //	@Produce		json
-//	@Param			id	path		int																		true	"Announcement ID"
-//	@Success		200	{object}	utils.APIResponse{data=internal_interfaces_dto.AnnouncementResponse}	"Announcement published successfully"
-//	@Failure		400	{object}	utils.APIResponse														"Invalid announcement ID"
-//	@Failure		401	{object}	utils.APIResponse														"Unauthorized"
-//	@Failure		404	{object}	utils.APIResponse														"Announcement not found"
-//	@Failure		500	{object}	utils.APIResponse														"Internal server error"
-//	@Router			/announcements/{id}/publish [post]
-func (h *NotificationHandler) PublishAnnouncement(c *gin.Context) {
+//	@Param			id		path		int																		true	"Announcement ID"
+//	@Param			status	body		UpdateAnnouncementStatusRequest											true	"Status update details"
+//	@Success		200		{object}	utils.APIResponse{data=internal_interfaces_dto.AnnouncementResponse}	"Announcement status updated successfully"
+//	@Failure		400		{object}	utils.APIResponse														"Bad request"
+//	@Failure		401		{object}	utils.APIResponse														"Unauthorized"
+//	@Failure		404		{object}	utils.APIResponse														"Announcement not found"
+//	@Failure		500		{object}	utils.APIResponse														"Internal server error"
+//	@Router			/announcements/{id}/status [patch]
+func (h *NotificationHandler) UpdateAnnouncementStatus(c *gin.Context) {
 	announcementID, err := dto.ParseAnnouncementID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	var req dto.PublishAnnouncementRequest
+	var req UpdateAnnouncementStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		req.SendNotification = false
-	}
-
-	appReq := req.ToApplicationDTO()
-
-	result, err := h.serviceDDD.PublishAnnouncement(c.Request.Context(), announcementID, appReq)
-	if err != nil {
+		h.logger.Warnw("invalid request body for update announcement status", "error", err)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "Announcement published successfully", result)
+	switch req.Status {
+	case "published":
+		// Use PublishAnnouncement service method
+		sendNotification := false
+		if req.SendNotification != nil {
+			sendNotification = *req.SendNotification
+		}
+		publishReq := &dto.PublishAnnouncementRequest{SendNotification: sendNotification}
+		appReq := publishReq.ToApplicationDTO()
+		result, err := h.serviceDDD.PublishAnnouncement(c.Request.Context(), announcementID, appReq)
+		if err != nil {
+			utils.ErrorResponseWithError(c, err)
+			return
+		}
+		utils.SuccessResponse(c, http.StatusOK, "Announcement published successfully", result)
+
+	case "draft", "archived":
+		// TODO: Implement draft/archive status change when service method is available
+		utils.ErrorResponse(c, http.StatusNotImplemented, "Status change to "+req.Status+" not yet implemented")
+
+	default:
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid status value")
+	}
 }
 
 // ListAnnouncements godoc
@@ -343,22 +366,28 @@ func (h *NotificationHandler) GetUnreadCount(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "", result)
 }
 
-// MarkAsRead godoc
+// UpdateNotificationStatusRequest represents a request for notification status changes
+type UpdateNotificationStatusRequest struct {
+	Status string `json:"status" binding:"required,oneof=read archived"`
+}
+
+// UpdateNotificationStatus godoc
 //
-//	@Summary		Mark notification as read
-//	@Description	Mark a specific notification as read for the authenticated user
+//	@Summary		Update notification status
+//	@Description	Update notification status (read or archived) for the authenticated user
 //	@Security		Bearer
 //	@Tags			notifications
 //	@Accept			json
 //	@Produce		json
-//	@Param			id	path		int																		true	"Notification ID"
-//	@Success		200	{object}	utils.APIResponse{data=internal_interfaces_dto.NotificationResponse}	"Notification marked as read"
-//	@Failure		400	{object}	utils.APIResponse														"Invalid notification ID"
-//	@Failure		401	{object}	utils.APIResponse														"Unauthorized"
-//	@Failure		404	{object}	utils.APIResponse														"Notification not found"
-//	@Failure		500	{object}	utils.APIResponse														"Internal server error"
-//	@Router			/notifications/{id}/read [put]
-func (h *NotificationHandler) MarkAsRead(c *gin.Context) {
+//	@Param			id		path		int									true	"Notification ID"
+//	@Param			status	body		UpdateNotificationStatusRequest		true	"Status update details"
+//	@Success		200		{object}	utils.APIResponse					"Notification status updated successfully"
+//	@Failure		400		{object}	utils.APIResponse					"Bad request"
+//	@Failure		401		{object}	utils.APIResponse					"Unauthorized"
+//	@Failure		404		{object}	utils.APIResponse					"Notification not found"
+//	@Failure		500		{object}	utils.APIResponse					"Internal server error"
+//	@Router			/notifications/{id}/status [patch]
+func (h *NotificationHandler) UpdateNotificationStatus(c *gin.Context) {
 	notificationID, err := dto.ParseNotificationID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
@@ -378,28 +407,55 @@ func (h *NotificationHandler) MarkAsRead(c *gin.Context) {
 		return
 	}
 
-	err = h.serviceDDD.MarkNotificationAsRead(c.Request.Context(), notificationID, uid)
-	if err != nil {
+	var req UpdateNotificationStatusRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid request body for update notification status", "error", err)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "Notification marked as read", nil)
+	switch req.Status {
+	case "read":
+		err = h.serviceDDD.MarkNotificationAsRead(c.Request.Context(), notificationID, uid)
+		if err != nil {
+			utils.ErrorResponseWithError(c, err)
+			return
+		}
+		utils.SuccessResponse(c, http.StatusOK, "Notification marked as read", nil)
+
+	case "archived":
+		err = h.serviceDDD.ArchiveNotification(c.Request.Context(), notificationID, uid)
+		if err != nil {
+			utils.ErrorResponseWithError(c, err)
+			return
+		}
+		utils.SuccessResponse(c, http.StatusOK, "Notification archived successfully", nil)
+
+	default:
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid status value")
+	}
 }
 
-// MarkAllAsRead godoc
+// UpdateAllNotificationsStatusRequest represents a request for batch notification status changes
+type UpdateAllNotificationsStatusRequest struct {
+	Status string `json:"status" binding:"required,oneof=read"`
+}
+
+// UpdateAllNotificationsStatus godoc
 //
-//	@Summary		Mark all notifications as read
-//	@Description	Mark all notifications as read for the authenticated user
+//	@Summary		Update all notifications status
+//	@Description	Update all notifications status (mark all as read) for the authenticated user
 //	@Security		Bearer
 //	@Tags			notifications
 //	@Accept			json
 //	@Produce		json
-//	@Success		200	{object}	utils.APIResponse	"All notifications marked as read"
-//	@Failure		401	{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		500	{object}	utils.APIResponse	"Internal server error"
-//	@Router			/notifications/read-all [put]
-func (h *NotificationHandler) MarkAllAsRead(c *gin.Context) {
+//	@Param			status	body		UpdateAllNotificationsStatusRequest	true	"Status update details"
+//	@Success		200		{object}	utils.APIResponse					"All notifications status updated successfully"
+//	@Failure		400		{object}	utils.APIResponse					"Bad request"
+//	@Failure		401		{object}	utils.APIResponse					"Unauthorized"
+//	@Failure		500		{object}	utils.APIResponse					"Internal server error"
+//	@Router			/notifications/status [patch]
+func (h *NotificationHandler) UpdateAllNotificationsStatus(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
 		utils.ErrorResponseWithError(c, errors.NewUnauthorizedError("User not authenticated"))
@@ -413,57 +469,25 @@ func (h *NotificationHandler) MarkAllAsRead(c *gin.Context) {
 		return
 	}
 
-	err := h.serviceDDD.MarkAllNotificationsAsRead(c.Request.Context(), uid)
-	if err != nil {
+	var req UpdateAllNotificationsStatusRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid request body for update all notifications status", "error", err)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "All notifications marked as read", nil)
-}
+	switch req.Status {
+	case "read":
+		err := h.serviceDDD.MarkAllNotificationsAsRead(c.Request.Context(), uid)
+		if err != nil {
+			utils.ErrorResponseWithError(c, err)
+			return
+		}
+		utils.SuccessResponse(c, http.StatusOK, "All notifications marked as read", nil)
 
-// ArchiveNotification godoc
-//
-//	@Summary		Archive notification
-//	@Description	Archive a notification for the authenticated user
-//	@Security		Bearer
-//	@Tags			notifications
-//	@Accept			json
-//	@Produce		json
-//	@Param			id	path		int																		true	"Notification ID"
-//	@Success		200	{object}	utils.APIResponse{data=internal_interfaces_dto.NotificationResponse}	"Notification archived successfully"
-//	@Failure		400	{object}	utils.APIResponse														"Invalid notification ID"
-//	@Failure		401	{object}	utils.APIResponse														"Unauthorized"
-//	@Failure		404	{object}	utils.APIResponse														"Notification not found"
-//	@Failure		500	{object}	utils.APIResponse														"Internal server error"
-//	@Router			/notifications/{id}/archive [post]
-func (h *NotificationHandler) ArchiveNotification(c *gin.Context) {
-	notificationID, err := dto.ParseNotificationID(c)
-	if err != nil {
-		utils.ErrorResponseWithError(c, err)
-		return
+	default:
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid status value")
 	}
-
-	userID, exists := c.Get("user_id")
-	if !exists {
-		utils.ErrorResponseWithError(c, errors.NewUnauthorizedError("User not authenticated"))
-		return
-	}
-
-	uid, ok := userID.(uint)
-	if !ok {
-		h.logger.Errorw("invalid user_id type", "user_id", userID)
-		utils.ErrorResponseWithError(c, errors.NewInternalError("Internal error"))
-		return
-	}
-
-	err = h.serviceDDD.ArchiveNotification(c.Request.Context(), notificationID, uid)
-	if err != nil {
-		utils.ErrorResponseWithError(c, err)
-		return
-	}
-
-	utils.SuccessResponse(c, http.StatusOK, "Notification archived successfully", nil)
 }
 
 // DeleteNotification godoc

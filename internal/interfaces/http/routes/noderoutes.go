@@ -37,13 +37,12 @@ func SetupNodeRoutes(engine *gin.Engine, config *NodeRouteConfig) {
 			config.NodeHandler.ListNodes)
 
 		// Specific action endpoints (must come BEFORE /:id to avoid conflicts)
-		nodes.POST("/:id/activate",
+		// Using PATCH for state changes as per RESTful best practices
+		nodes.PATCH("/:id/status",
 			authorization.RequireAdmin(),
-			config.NodeHandler.ActivateNode)
-		nodes.POST("/:id/deactivate",
-			authorization.RequireAdmin(),
-			config.NodeHandler.DeactivateNode)
-		nodes.POST("/:id/token",
+			config.NodeHandler.UpdateNodeStatus)
+		// Using POST for creating new token sub-resource
+		nodes.POST("/:id/tokens",
 			authorization.RequireAdmin(),
 			config.NodeHandler.GenerateToken)
 

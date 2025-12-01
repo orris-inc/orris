@@ -31,10 +31,9 @@ func SetupTicketRoutes(engine *gin.Engine, config *TicketRouteConfig) {
 			config.TicketHandler.AssignTicket)
 		tickets.POST("/:id/comments",
 			config.TicketHandler.AddComment)
-		tickets.POST("/:id/close",
-			config.TicketHandler.CloseTicket)
-		tickets.POST("/:id/reopen",
-			config.TicketHandler.ReopenTicket)
+		// Using PATCH for state changes as per RESTful best practices
+		tickets.PATCH("/:id/status",
+			config.TicketHandler.UpdateTicketStatus)
 
 		// Generic parameterized routes (must come LAST)
 		tickets.GET("/:id",

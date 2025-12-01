@@ -247,80 +247,64 @@ func (h *TicketHandler) AddComment(c *gin.Context) {
 	utils.CreatedResponse(c, result, "Comment added successfully")
 }
 
-// CloseTicket handles POST /tickets/:id/close
-//
-//	@Summary		Close ticket
-//	@Description	Close a ticket with a reason
-//	@Tags			tickets
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			id		path		int					true	"Ticket ID"
-//	@Param			body	body		CloseTicketRequest	true	"Close data"
-//	@Success		200		{object}	utils.APIResponse	"Ticket closed successfully"
-//	@Failure		400		{object}	utils.APIResponse
-//	@Failure		500		{object}	utils.APIResponse	"Internal server error"
-//	@Router			/tickets/{id}/close [post]
-func (h *TicketHandler) CloseTicket(c *gin.Context) {
-	ticketID, err := parseTicketID(c)
-	if err != nil {
-		utils.ErrorResponseWithError(c, err)
-		return
-	}
-
-	var req CloseTicketRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		utils.ErrorResponseWithError(c, err)
-		return
-	}
-
-	userID, _ := c.Get("user_id")
-	cmd := usecases.ChangeStatusCommand{
-		TicketID:  ticketID,
-		NewStatus: vo.StatusClosed,
-		ChangedBy: userID.(uint),
-	}
-
-	result, err := h.changeStatusUC.Execute(c.Request.Context(), cmd)
-	if err != nil {
-		utils.ErrorResponseWithError(c, err)
-		return
-	}
-
-	utils.SuccessResponse(c, http.StatusOK, "Ticket closed successfully", result)
+// UpdateTicketStatusRequest represents a request for ticket status changes
+type UpdateTicketStatusRequest struct {
+	Status string `json:"status" binding:"required,oneof=open in_progress resolved closed reopened"`
 }
 
-// ReopenTicket handles POST /tickets/:id/reopen
+// UpdateTicketStatus handles PATCH /tickets/:id/status
 //
-//	@Summary		Reopen ticket
-//	@Description	Reopen a closed or resolved ticket
+//	@Summary		Update ticket status
+//	@Description	Update ticket status (open, in_progress, resolved, closed, or reopened)
 //	@Tags			tickets
 //	@Accept			json
 //	@Produce		json
 //	@Security		Bearer
-//	@Param			id		path		int					true	"Ticket ID"
-//	@Param			body	body		ReopenTicketRequest	true	"Reopen data"
-//	@Success		200		{object}	utils.APIResponse	"Ticket reopened successfully"
-//	@Failure		400		{object}	utils.APIResponse
-//	@Failure		500		{object}	utils.APIResponse	"Internal server error"
-//	@Router			/tickets/{id}/reopen [post]
-func (h *TicketHandler) ReopenTicket(c *gin.Context) {
+//	@Param			id		path		int							true	"Ticket ID"
+//	@Param			status	body		UpdateTicketStatusRequest	true	"Status update details"
+//	@Success		200		{object}	utils.APIResponse			"Ticket status updated successfully"
+//	@Failure		400		{object}	utils.APIResponse			"Bad request"
+//	@Failure		401		{object}	utils.APIResponse			"Unauthorized"
+//	@Failure		404		{object}	utils.APIResponse			"Ticket not found"
+//	@Failure		500		{object}	utils.APIResponse			"Internal server error"
+//	@Router			/tickets/{id}/status [patch]
+func (h *TicketHandler) UpdateTicketStatus(c *gin.Context) {
 	ticketID, err := parseTicketID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	var req ReopenTicketRequest
+	var req UpdateTicketStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid request body for update ticket status", "error", err)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
 	userID, _ := c.Get("user_id")
+
+	// Map string status to vo.TicketStatus
+	var newStatus vo.TicketStatus
+	switch req.Status {
+	case "open":
+		newStatus = vo.StatusOpen
+	case "in_progress":
+		newStatus = vo.StatusInProgress
+	case "resolved":
+		newStatus = vo.StatusResolved
+	case "closed":
+		newStatus = vo.StatusClosed
+	case "reopened":
+		newStatus = vo.StatusReopened
+	default:
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid status value")
+		return
+	}
+
 	cmd := usecases.ChangeStatusCommand{
 		TicketID:  ticketID,
-		NewStatus: vo.StatusReopened,
+		NewStatus: newStatus,
 		ChangedBy: userID.(uint),
 	}
 
@@ -330,7 +314,7 @@ func (h *TicketHandler) ReopenTicket(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "Ticket reopened successfully", result)
+	utils.SuccessResponse(c, http.StatusOK, "Ticket status updated successfully", result)
 }
 
 // DeleteTicket handles DELETE /tickets/:id

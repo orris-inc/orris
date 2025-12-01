@@ -60,6 +60,13 @@ type CancelSubscriptionRequest struct {
 	Immediate *bool  `json:"immediate"`
 }
 
+// UpdateSubscriptionStatusRequest represents a unified request for subscription status changes
+type UpdateSubscriptionStatusRequest struct {
+	Status    string  `json:"status" binding:"required,oneof=active cancelled renewed"`
+	Reason    *string `json:"reason"`    // Required when status is "cancelled"
+	Immediate *bool   `json:"immediate"` // Optional for cancellation
+}
+
 type ChangePlanRequest struct {
 	NewPlanID     uint   `json:"new_plan_id" binding:"required"`
 	ChangeType    string `json:"change_type" binding:"required,oneof=upgrade downgrade"`
@@ -278,134 +285,6 @@ func (h *SubscriptionHandler) ListUserSubscriptions(c *gin.Context) {
 	utils.ListSuccessResponse(c, result.Subscriptions, result.Total, result.Page, result.PageSize)
 }
 
-// @Summary		Cancel subscription
-// @Description	Cancel an active subscription immediately or at the end of the billing period
-// @Tags			subscriptions
-// @Accept			json
-// @Produce		json
-// @Security		Bearer
-// @Param			id				path		int							true	"Subscription ID"
-// @Param			cancellation	body		CancelSubscriptionRequest	true	"Cancellation details"
-// @Success		200				{object}	utils.APIResponse			"Subscription cancelled successfully"
-// @Failure		400				{object}	utils.APIResponse			"Bad request"
-// @Failure		401				{object}	utils.APIResponse			"Unauthorized"
-// @Failure		403				{object}	utils.APIResponse			"Access denied"
-// @Failure		404				{object}	utils.APIResponse			"Subscription not found"
-// @Failure		500				{object}	utils.APIResponse			"Internal server error"
-// @Router			/subscriptions/{id}/cancel [post]
-func (h *SubscriptionHandler) CancelSubscription(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
-		return
-	}
-
-	subscriptionID, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID")
-		return
-	}
-
-	var req CancelSubscriptionRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Warnw("invalid request body for cancel subscription", "error", err)
-		utils.ErrorResponseWithError(c, err)
-		return
-	}
-
-	query := usecases.GetSubscriptionQuery{
-		SubscriptionID: uint(subscriptionID),
-	}
-
-	subscription, err := h.getUseCase.Execute(c.Request.Context(), query)
-	if err != nil {
-		h.logger.Errorw("failed to get subscription", "error", err, "subscription_id", subscriptionID)
-		utils.ErrorResponseWithError(c, err)
-		return
-	}
-
-	if subscription.UserID != userID.(uint) {
-		utils.ErrorResponse(c, http.StatusForbidden, "access denied")
-		return
-	}
-
-	immediate := false
-	if req.Immediate != nil {
-		immediate = *req.Immediate
-	}
-
-	cmd := usecases.CancelSubscriptionCommand{
-		SubscriptionID: uint(subscriptionID),
-		Reason:         req.Reason,
-		Immediate:      immediate,
-	}
-
-	if err := h.cancelUseCase.Execute(c.Request.Context(), cmd); err != nil {
-		h.logger.Errorw("failed to cancel subscription", "error", err, "subscription_id", subscriptionID)
-		utils.ErrorResponseWithError(c, err)
-		return
-	}
-
-	utils.SuccessResponse(c, http.StatusOK, "Subscription cancelled successfully", nil)
-}
-
-// @Summary		Renew subscription
-// @Description	Manually renew a subscription for the next billing period
-// @Tags			subscriptions
-// @Accept			json
-// @Produce		json
-// @Security		Bearer
-// @Param			id	path		int					true	"Subscription ID"
-// @Success		200	{object}	utils.APIResponse	"Subscription renewed successfully"
-// @Failure		400	{object}	utils.APIResponse	"Invalid subscription ID"
-// @Failure		401	{object}	utils.APIResponse	"Unauthorized"
-// @Failure		403	{object}	utils.APIResponse	"Access denied"
-// @Failure		404	{object}	utils.APIResponse	"Subscription not found"
-// @Failure		500	{object}	utils.APIResponse	"Internal server error"
-// @Router			/subscriptions/{id}/renew [post]
-func (h *SubscriptionHandler) RenewSubscription(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
-		return
-	}
-
-	subscriptionID, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID")
-		return
-	}
-
-	query := usecases.GetSubscriptionQuery{
-		SubscriptionID: uint(subscriptionID),
-	}
-
-	subscription, err := h.getUseCase.Execute(c.Request.Context(), query)
-	if err != nil {
-		h.logger.Errorw("failed to get subscription", "error", err, "subscription_id", subscriptionID)
-		utils.ErrorResponseWithError(c, err)
-		return
-	}
-
-	if subscription.UserID != userID.(uint) {
-		utils.ErrorResponse(c, http.StatusForbidden, "access denied")
-		return
-	}
-
-	cmd := usecases.RenewSubscriptionCommand{
-		SubscriptionID: uint(subscriptionID),
-		IsAutoRenew:    false,
-	}
-
-	if err := h.renewUseCase.Execute(c.Request.Context(), cmd); err != nil {
-		h.logger.Errorw("failed to renew subscription", "error", err, "subscription_id", subscriptionID)
-		utils.ErrorResponseWithError(c, err)
-		return
-	}
-
-	utils.SuccessResponse(c, http.StatusOK, "Subscription renewed successfully", nil)
-}
-
 // @Summary		Change subscription plan
 // @Description	Change the plan of an existing subscription (upgrade or downgrade)
 // @Tags			subscriptions
@@ -420,7 +299,7 @@ func (h *SubscriptionHandler) RenewSubscription(c *gin.Context) {
 // @Failure		403		{object}	utils.APIResponse	"Access denied"
 // @Failure		404		{object}	utils.APIResponse	"Subscription or plan not found"
 // @Failure		500		{object}	utils.APIResponse	"Internal server error"
-// @Router			/subscriptions/{id}/change-plan [post]
+// @Router			/subscriptions/{id}/plan [patch]
 func (h *SubscriptionHandler) ChangePlan(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -473,21 +352,22 @@ func (h *SubscriptionHandler) ChangePlan(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "Plan changed successfully", nil)
 }
 
-// @Summary		Activate subscription
-// @Description	Activate an inactive subscription to make it active
+// @Summary		Update subscription status
+// @Description	Update subscription status (activate, cancel, or renew)
 // @Tags			subscriptions
 // @Accept			json
 // @Produce		json
 // @Security		Bearer
-// @Param			id	path		int					true	"Subscription ID"
-// @Success		200	{object}	utils.APIResponse	"Subscription activated successfully"
-// @Failure		400	{object}	utils.APIResponse	"Invalid subscription ID"
-// @Failure		401	{object}	utils.APIResponse	"Unauthorized"
-// @Failure		403	{object}	utils.APIResponse	"Access denied"
-// @Failure		404	{object}	utils.APIResponse	"Subscription not found"
-// @Failure		500	{object}	utils.APIResponse	"Internal server error"
-// @Router			/subscriptions/{id}/activate [post]
-func (h *SubscriptionHandler) ActivateSubscription(c *gin.Context) {
+// @Param			id		path		int									true	"Subscription ID"
+// @Param			status	body		UpdateSubscriptionStatusRequest		true	"Status update details"
+// @Success		200		{object}	utils.APIResponse					"Subscription status updated successfully"
+// @Failure		400		{object}	utils.APIResponse					"Bad request"
+// @Failure		401		{object}	utils.APIResponse					"Unauthorized"
+// @Failure		403		{object}	utils.APIResponse					"Access denied"
+// @Failure		404		{object}	utils.APIResponse					"Subscription not found"
+// @Failure		500		{object}	utils.APIResponse					"Internal server error"
+// @Router			/subscriptions/{id}/status [patch]
+func (h *SubscriptionHandler) UpdateSubscriptionStatus(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
 		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
@@ -500,6 +380,14 @@ func (h *SubscriptionHandler) ActivateSubscription(c *gin.Context) {
 		return
 	}
 
+	var req UpdateSubscriptionStatusRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid request body for update subscription status", "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	// Verify ownership
 	query := usecases.GetSubscriptionQuery{
 		SubscriptionID: uint(subscriptionID),
 	}
@@ -516,15 +404,53 @@ func (h *SubscriptionHandler) ActivateSubscription(c *gin.Context) {
 		return
 	}
 
-	cmd := usecases.ActivateSubscriptionCommand{
-		SubscriptionID: uint(subscriptionID),
-	}
+	// Execute the appropriate action based on status
+	switch req.Status {
+	case "active":
+		cmd := usecases.ActivateSubscriptionCommand{
+			SubscriptionID: uint(subscriptionID),
+		}
+		if err := h.activateUseCase.Execute(c.Request.Context(), cmd); err != nil {
+			h.logger.Errorw("failed to activate subscription", "error", err, "subscription_id", subscriptionID)
+			utils.ErrorResponseWithError(c, err)
+			return
+		}
+		utils.SuccessResponse(c, http.StatusOK, "Subscription activated successfully", nil)
 
-	if err := h.activateUseCase.Execute(c.Request.Context(), cmd); err != nil {
-		h.logger.Errorw("failed to activate subscription", "error", err, "subscription_id", subscriptionID)
-		utils.ErrorResponseWithError(c, err)
-		return
-	}
+	case "cancelled":
+		if req.Reason == nil || *req.Reason == "" {
+			utils.ErrorResponse(c, http.StatusBadRequest, "reason is required for cancellation")
+			return
+		}
+		immediate := false
+		if req.Immediate != nil {
+			immediate = *req.Immediate
+		}
+		cmd := usecases.CancelSubscriptionCommand{
+			SubscriptionID: uint(subscriptionID),
+			Reason:         *req.Reason,
+			Immediate:      immediate,
+		}
+		if err := h.cancelUseCase.Execute(c.Request.Context(), cmd); err != nil {
+			h.logger.Errorw("failed to cancel subscription", "error", err, "subscription_id", subscriptionID)
+			utils.ErrorResponseWithError(c, err)
+			return
+		}
+		utils.SuccessResponse(c, http.StatusOK, "Subscription cancelled successfully", nil)
 
-	utils.SuccessResponse(c, http.StatusOK, "Subscription activated successfully", nil)
+	case "renewed":
+		cmd := usecases.RenewSubscriptionCommand{
+			SubscriptionID: uint(subscriptionID),
+			IsAutoRenew:    false,
+		}
+		if err := h.renewUseCase.Execute(c.Request.Context(), cmd); err != nil {
+			h.logger.Errorw("failed to renew subscription", "error", err, "subscription_id", subscriptionID)
+			utils.ErrorResponseWithError(c, err)
+			return
+		}
+		utils.SuccessResponse(c, http.StatusOK, "Subscription renewed successfully", nil)
+
+	default:
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid status value")
+	}
 }

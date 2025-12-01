@@ -77,6 +77,11 @@ type UpdatePlanRequest struct {
 	SortOrder    *int                    `json:"sort_order"`
 }
 
+// UpdatePlanStatusRequest represents a unified request for plan status changes
+type UpdatePlanStatusRequest struct {
+	Status string `json:"status" binding:"required,oneof=active inactive"`
+}
+
 // @Summary		Create subscription plan
 // @Description	Create a new subscription plan with pricing and features
 // @Tags			subscription-plans
@@ -256,60 +261,52 @@ func (h *SubscriptionPlanHandler) GetPublicPlans(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "", result)
 }
 
-// @Summary		Activate subscription plan
-// @Description	Activate a subscription plan to make it available for new subscriptions
+// @Summary		Update subscription plan status
+// @Description	Update subscription plan status (activate or deactivate)
 // @Tags			subscription-plans
 // @Accept			json
 // @Produce		json
 // @Security		Bearer
-// @Param			id	path		int					true	"Plan ID"
-// @Success		200	{object}	utils.APIResponse	"Subscription plan activated successfully"
-// @Failure		400	{object}	utils.APIResponse	"Invalid plan ID"
-// @Failure		401	{object}	utils.APIResponse	"Unauthorized"
-// @Failure		404	{object}	utils.APIResponse	"Plan not found"
-// @Failure		500	{object}	utils.APIResponse	"Internal server error"
-// @Router			/subscription-plans/{id}/activate [post]
-func (h *SubscriptionPlanHandler) ActivatePlan(c *gin.Context) {
+// @Param			id		path		int							true	"Plan ID"
+// @Param			status	body		UpdatePlanStatusRequest		true	"Status update details"
+// @Success		200		{object}	utils.APIResponse			"Subscription plan status updated successfully"
+// @Failure		400		{object}	utils.APIResponse			"Bad request"
+// @Failure		401		{object}	utils.APIResponse			"Unauthorized"
+// @Failure		404		{object}	utils.APIResponse			"Plan not found"
+// @Failure		500		{object}	utils.APIResponse			"Internal server error"
+// @Router			/subscription-plans/{id}/status [patch]
+func (h *SubscriptionPlanHandler) UpdatePlanStatus(c *gin.Context) {
 	planID, err := parsePlanID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	if err := h.activatePlanUC.Execute(c.Request.Context(), planID); err != nil {
+	var req UpdatePlanStatusRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid request body for update plan status", "error", err)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "Subscription plan activated successfully", nil)
-}
+	switch req.Status {
+	case "active":
+		if err := h.activatePlanUC.Execute(c.Request.Context(), planID); err != nil {
+			utils.ErrorResponseWithError(c, err)
+			return
+		}
+		utils.SuccessResponse(c, http.StatusOK, "Subscription plan activated successfully", nil)
 
-// @Summary		Deactivate subscription plan
-// @Description	Deactivate a subscription plan to prevent new subscriptions
-// @Tags			subscription-plans
-// @Accept			json
-// @Produce		json
-// @Security		Bearer
-// @Param			id	path		int					true	"Plan ID"
-// @Success		200	{object}	utils.APIResponse	"Subscription plan deactivated successfully"
-// @Failure		400	{object}	utils.APIResponse	"Invalid plan ID"
-// @Failure		401	{object}	utils.APIResponse	"Unauthorized"
-// @Failure		404	{object}	utils.APIResponse	"Plan not found"
-// @Failure		500	{object}	utils.APIResponse	"Internal server error"
-// @Router			/subscription-plans/{id}/deactivate [post]
-func (h *SubscriptionPlanHandler) DeactivatePlan(c *gin.Context) {
-	planID, err := parsePlanID(c)
-	if err != nil {
-		utils.ErrorResponseWithError(c, err)
-		return
+	case "inactive":
+		if err := h.deactivatePlanUC.Execute(c.Request.Context(), planID); err != nil {
+			utils.ErrorResponseWithError(c, err)
+			return
+		}
+		utils.SuccessResponse(c, http.StatusOK, "Subscription plan deactivated successfully", nil)
+
+	default:
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid status value")
 	}
-
-	if err := h.deactivatePlanUC.Execute(c.Request.Context(), planID); err != nil {
-		utils.ErrorResponseWithError(c, err)
-		return
-	}
-
-	utils.SuccessResponse(c, http.StatusOK, "Subscription plan deactivated successfully", nil)
 }
 
 // @Summary		Get pricing options for a specific plan

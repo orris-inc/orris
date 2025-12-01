@@ -356,7 +356,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	profileHandler := handlers.NewProfileHandler(userService)
 
 	// TODO: Implement real payment gateway (Alipay/WeChat/Stripe)
-	// Currently mock gateway is removed as per CLAUDE.md rule: "不允许mock数据"
+	// Currently mock gateway is removed as per CLAUDE.md rule: "no mock data allowed"
 	var gateway paymentGateway.PaymentGateway = nil // Temporary placeholder until real implementation
 	paymentConfig := paymentUsecases.PaymentConfig{
 		NotifyURL: cfg.Server.GetBaseURL() + "/payments/callback",
@@ -479,10 +479,9 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		subscriptions.GET("", r.subscriptionHandler.ListUserSubscriptions)
 
 		// Specific action endpoints and sub-resources (must come BEFORE /:id to avoid conflicts)
-		subscriptions.POST("/:id/activate", r.subscriptionHandler.ActivateSubscription)
-		subscriptions.POST("/:id/cancel", r.subscriptionHandler.CancelSubscription)
-		subscriptions.POST("/:id/renew", r.subscriptionHandler.RenewSubscription)
-		subscriptions.POST("/:id/change-plan", r.subscriptionHandler.ChangePlan)
+		// Using PATCH for state changes as per RESTful best practices
+		subscriptions.PATCH("/:id/status", r.subscriptionHandler.UpdateSubscriptionStatus)
+		subscriptions.PATCH("/:id/plan", r.subscriptionHandler.ChangePlan)
 
 		// Token sub-resource endpoints - most specific paths first
 		subscriptions.POST("/:id/tokens/:token_id/refresh", r.subscriptionTokenHandler.RefreshToken)
@@ -522,9 +521,8 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 			plansProtected.GET("", r.subscriptionPlanHandler.ListPlans)
 
 			// Specific action endpoints (must come BEFORE /:id to avoid conflicts)
-			// These handle paths like /:id/activate, /:id/deactivate, /:id/pricings
-			plansProtected.POST("/:id/activate", r.subscriptionPlanHandler.ActivatePlan)
-			plansProtected.POST("/:id/deactivate", r.subscriptionPlanHandler.DeactivatePlan)
+			// Using PATCH for state changes as per RESTful best practices
+			plansProtected.PATCH("/:id/status", r.subscriptionPlanHandler.UpdatePlanStatus)
 			plansProtected.GET("/:id/pricings", r.subscriptionPlanHandler.GetPlanPricings)
 
 			// Generic parameterized routes (must come LAST)

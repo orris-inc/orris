@@ -221,7 +221,7 @@ func (h *NodeHandler) ListNodes(c *gin.Context) {
 	utils.ListSuccessResponse(c, result.Nodes, int64(result.TotalCount), req.Page, req.PageSize)
 }
 
-// GenerateToken handles POST /nodes/:id/token
+// GenerateToken handles POST /nodes/:id/tokens
 //
 //	@Summary		Generate new API token for node
 //	@Description	Generate a new API token for node authentication
@@ -236,7 +236,7 @@ func (h *NodeHandler) ListNodes(c *gin.Context) {
 //	@Failure		403	{object}	utils.APIResponse	"Forbidden - Requires admin role"
 //	@Failure		404	{object}	utils.APIResponse	"Node not found"
 //	@Failure		500	{object}	utils.APIResponse	"Internal server error"
-//	@Router			/nodes/{id}/token [post]
+//	@Router			/nodes/{id}/tokens [post]
 func (h *NodeHandler) GenerateToken(c *gin.Context) {
 	nodeID, err := parseNodeID(c)
 	if err != nil {
@@ -254,70 +254,45 @@ func (h *NodeHandler) GenerateToken(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "Token generated successfully", result)
 }
 
-// ActivateNode handles POST /nodes/:id/activate
-//
-//	@Summary		Activate node
-//	@Description	Activate a node by ID
-//	@Tags			nodes
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			id	path		int					true	"Node ID"
-//	@Success		200	{object}	utils.APIResponse	"Node activated successfully"
-//	@Failure		400	{object}	utils.APIResponse	"Invalid node ID"
-//	@Failure		401	{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403	{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		404	{object}	utils.APIResponse	"Node not found"
-//	@Failure		500	{object}	utils.APIResponse	"Internal server error"
-//	@Router			/nodes/{id}/activate [post]
-func (h *NodeHandler) ActivateNode(c *gin.Context) {
-	nodeID, err := parseNodeID(c)
-	if err != nil {
-		utils.ErrorResponseWithError(c, err)
-		return
-	}
-
-	status := "active"
-	cmd := usecases.UpdateNodeCommand{
-		NodeID: nodeID,
-		Status: &status,
-	}
-	result, err := h.updateNodeUC.Execute(c.Request.Context(), cmd)
-	if err != nil {
-		utils.ErrorResponseWithError(c, err)
-		return
-	}
-
-	utils.SuccessResponse(c, http.StatusOK, "Node activated successfully", result)
+// UpdateNodeStatusRequest represents a request for node status changes
+type UpdateNodeStatusRequest struct {
+	Status string `json:"status" binding:"required,oneof=active inactive maintenance"`
 }
 
-// DeactivateNode handles POST /nodes/:id/deactivate
+// UpdateNodeStatus handles PATCH /nodes/:id/status
 //
-//	@Summary		Deactivate node
-//	@Description	Deactivate a node by ID
+//	@Summary		Update node status
+//	@Description	Update node status (activate, deactivate, or set to maintenance)
 //	@Tags			nodes
 //	@Accept			json
 //	@Produce		json
 //	@Security		Bearer
-//	@Param			id	path		int					true	"Node ID"
-//	@Success		200	{object}	utils.APIResponse	"Node deactivated successfully"
-//	@Failure		400	{object}	utils.APIResponse	"Invalid node ID"
-//	@Failure		401	{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403	{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		404	{object}	utils.APIResponse	"Node not found"
-//	@Failure		500	{object}	utils.APIResponse	"Internal server error"
-//	@Router			/nodes/{id}/deactivate [post]
-func (h *NodeHandler) DeactivateNode(c *gin.Context) {
+//	@Param			id		path		int							true	"Node ID"
+//	@Param			status	body		UpdateNodeStatusRequest		true	"Status update details"
+//	@Success		200		{object}	utils.APIResponse			"Node status updated successfully"
+//	@Failure		400		{object}	utils.APIResponse			"Bad request"
+//	@Failure		401		{object}	utils.APIResponse			"Unauthorized"
+//	@Failure		403		{object}	utils.APIResponse			"Forbidden - Requires admin role"
+//	@Failure		404		{object}	utils.APIResponse			"Node not found"
+//	@Failure		500		{object}	utils.APIResponse			"Internal server error"
+//	@Router			/nodes/{id}/status [patch]
+func (h *NodeHandler) UpdateNodeStatus(c *gin.Context) {
 	nodeID, err := parseNodeID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	status := "inactive"
+	var req UpdateNodeStatusRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid request body for update node status", "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
 	cmd := usecases.UpdateNodeCommand{
 		NodeID: nodeID,
-		Status: &status,
+		Status: &req.Status,
 	}
 	result, err := h.updateNodeUC.Execute(c.Request.Context(), cmd)
 	if err != nil {
@@ -325,7 +300,7 @@ func (h *NodeHandler) DeactivateNode(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "Node deactivated successfully", result)
+	utils.SuccessResponse(c, http.StatusOK, "Node status updated successfully", result)
 }
 
 func parseNodeID(c *gin.Context) (uint, error) {

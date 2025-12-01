@@ -29,11 +29,12 @@ func SetupNotificationRoutes(engine *gin.Engine, config *NotificationRouteConfig
 
 		// Specific named endpoints (must come BEFORE /:id to avoid conflicts)
 		notifications.GET("/unread-count", config.NotificationHandler.GetUnreadCount)
-		notifications.PUT("/read-all", config.NotificationHandler.MarkAllAsRead)
+		// Using PATCH for batch state changes as per RESTful best practices
+		notifications.PATCH("/status", config.NotificationHandler.UpdateAllNotificationsStatus)
 
 		// Specific action endpoints for individual notifications
-		notifications.PUT("/:id/read", config.NotificationHandler.MarkAsRead)
-		notifications.POST("/:id/archive", config.NotificationHandler.ArchiveNotification)
+		// Using PATCH for state changes as per RESTful best practices
+		notifications.PATCH("/:id/status", config.NotificationHandler.UpdateNotificationStatus)
 
 		// Generic parameterized route (must come LAST)
 		notifications.DELETE("/:id", config.NotificationHandler.DeleteNotification)
@@ -51,9 +52,10 @@ func SetupNotificationRoutes(engine *gin.Engine, config *NotificationRouteConfig
 			config.NotificationHandler.CreateAnnouncement)
 
 		// Specific action endpoints (must come BEFORE /:id to avoid conflicts)
-		announcements.POST("/:id/publish",
+		// Using PATCH for state changes as per RESTful best practices
+		announcements.PATCH("/:id/status",
 			authorization.RequireAdmin(),
-			config.NotificationHandler.PublishAnnouncement)
+			config.NotificationHandler.UpdateAnnouncementStatus)
 
 		// Generic parameterized routes (must come LAST)
 		announcements.GET("/:id", config.NotificationHandler.GetAnnouncement)
