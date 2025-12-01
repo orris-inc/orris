@@ -61,6 +61,19 @@ func (r *SessionRepository) GetByTokenHash(tokenHash string) (*user.Session, err
 	return &session, nil
 }
 
+func (r *SessionRepository) GetByRefreshTokenHash(refreshTokenHash string) (*user.Session, error) {
+	var session user.Session
+	err := r.db.Where("refresh_token_hash = ? AND expires_at > ?", refreshTokenHash, time.Now()).
+		First(&session).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.NewNotFoundError("session not found")
+		}
+		return nil, fmt.Errorf("failed to get session by refresh token hash: %w", err)
+	}
+	return &session, nil
+}
+
 func (r *SessionRepository) Update(session *user.Session) error {
 	result := r.db.Save(session)
 	if result.Error != nil {

@@ -16,3 +16,5 @@
 - 不允许mock数据
 - 遵循少即是多的原则
 - 禁止数据库外键
+- commit信息不能携带claude
+- commit 前调用 go-style skill 检查变更文件

@@ -66,6 +66,7 @@ type SessionRepository interface {
 	GetByID(sessionID string) (*Session, error)
 	GetByUserID(userID uint) ([]*Session, error)
 	GetByTokenHash(tokenHash string) (*Session, error)
+	GetByRefreshTokenHash(refreshTokenHash string) (*Session, error)
 	Update(session *Session) error
 	Delete(sessionID string) error
 	DeleteByUserID(userID uint) error

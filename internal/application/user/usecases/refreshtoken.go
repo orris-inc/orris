@@ -41,7 +41,7 @@ func NewRefreshTokenUseCase(
 func (uc *RefreshTokenUseCase) Execute(cmd RefreshTokenCommand) (*RefreshTokenResult, error) {
 	refreshTokenHash := uc.authHelper.HashToken(cmd.RefreshToken)
 
-	session, err := uc.sessionRepo.GetByTokenHash(refreshTokenHash)
+	session, err := uc.sessionRepo.GetByRefreshTokenHash(refreshTokenHash)
 	if err != nil {
 		uc.logger.Errorw("failed to get session", "error", err)
 		return nil, fmt.Errorf("invalid or expired refresh token")
