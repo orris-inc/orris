@@ -10,6 +10,7 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/gorm"
 
+	forwardUsecases "orris/internal/application/forward/usecases"
 	nodeUsecases "orris/internal/application/node/usecases"
 	notificationApp "orris/internal/application/notification"
 	paymentGateway "orris/internal/application/payment/payment_gateway"
@@ -26,6 +27,8 @@ import (
 	"orris/internal/infrastructure/repository"
 	"orris/internal/infrastructure/token"
 	"orris/internal/interfaces/http/handlers"
+	adminHandlers "orris/internal/interfaces/http/handlers/admin"
+	forwardHandlers "orris/internal/interfaces/http/handlers/forward"
 	nodeHandlers "orris/internal/interfaces/http/handlers/node"
 	ticketHandlers "orris/internal/interfaces/http/handlers/ticket"
 	"orris/internal/interfaces/http/middleware"
@@ -39,23 +42,29 @@ import (
 
 // Router represents the HTTP router configuration
 type Router struct {
-	engine                   *gin.Engine
-	userHandler              *handlers.UserHandler
-	authHandler              *handlers.AuthHandler
-	profileHandler           *handlers.ProfileHandler
-	subscriptionHandler      *handlers.SubscriptionHandler
-	subscriptionPlanHandler  *handlers.SubscriptionPlanHandler
-	subscriptionTokenHandler *handlers.SubscriptionTokenHandler
-	paymentHandler           *handlers.PaymentHandler
-	nodeHandler              *handlers.NodeHandler
-	nodeGroupHandler         *handlers.NodeGroupHandler
-	nodeSubscriptionHandler  *handlers.NodeSubscriptionHandler
-	agentHandler             *nodeHandlers.AgentHandler
-	ticketHandler            *ticketHandlers.TicketHandler
-	notificationHandler      *handlers.NotificationHandler
-	authMiddleware           *middleware.AuthMiddleware
-	nodeTokenMiddleware      *middleware.NodeTokenMiddleware
-	rateLimiter              *middleware.RateLimiter
+	engine                      *gin.Engine
+	userHandler                 *handlers.UserHandler
+	authHandler                 *handlers.AuthHandler
+	profileHandler              *handlers.ProfileHandler
+	subscriptionHandler         *handlers.SubscriptionHandler
+	adminSubscriptionHandler    *adminHandlers.SubscriptionHandler
+	subscriptionPlanHandler     *handlers.SubscriptionPlanHandler
+	subscriptionTokenHandler    *handlers.SubscriptionTokenHandler
+	paymentHandler              *handlers.PaymentHandler
+	nodeHandler                 *handlers.NodeHandler
+	nodeGroupHandler            *handlers.NodeGroupHandler
+	nodeSubscriptionHandler     *handlers.NodeSubscriptionHandler
+	agentHandler                *nodeHandlers.AgentHandler
+	ticketHandler               *ticketHandlers.TicketHandler
+	notificationHandler         *handlers.NotificationHandler
+	forwardRuleHandler          *forwardHandlers.ForwardHandler
+	forwardAgentHandler         *forwardHandlers.ForwardAgentHandler
+	forwardAgentAPIHandler      *forwardHandlers.AgentHandler
+	authMiddleware              *middleware.AuthMiddleware
+	subscriptionOwnerMiddleware *middleware.SubscriptionOwnerMiddleware
+	nodeTokenMiddleware         *middleware.NodeTokenMiddleware
+	forwardAgentTokenMiddleware *middleware.ForwardAgentTokenMiddleware
+	rateLimiter                 *middleware.RateLimiter
 }
 
 type jwtServiceAdapter struct {
@@ -256,9 +265,14 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	subscriptionHandler := handlers.NewSubscriptionHandler(
 		createSubscriptionUC, getSubscriptionUC, listUserSubscriptionsUC,
+		cancelSubscriptionUC, changePlanUC, log,
+	)
+	adminSubscriptionHandler := adminHandlers.NewSubscriptionHandler(
+		createSubscriptionUC, getSubscriptionUC, listUserSubscriptionsUC,
 		cancelSubscriptionUC, renewSubscriptionUC, changePlanUC,
 		activateSubscriptionUC, log,
 	)
+	subscriptionOwnerMiddleware := middleware.NewSubscriptionOwnerMiddleware(subscriptionRepo, log)
 	subscriptionPlanHandler := handlers.NewSubscriptionPlanHandler(
 		createPlanUC, updatePlanUC, getPlanUC, listPlansUC,
 		getPublicPlansUC, activatePlanUC, deactivatePlanUC, getPlanPricingsUC,
@@ -401,24 +415,83 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		log,
 	)
 
+	// Initialize forward rule components
+	forwardRuleRepo := repository.NewForwardRuleRepository(db, log)
+
+	createForwardRuleUC := forwardUsecases.NewCreateForwardRuleUseCase(forwardRuleRepo, log)
+	getForwardRuleUC := forwardUsecases.NewGetForwardRuleUseCase(forwardRuleRepo, log)
+	updateForwardRuleUC := forwardUsecases.NewUpdateForwardRuleUseCase(forwardRuleRepo, log)
+	deleteForwardRuleUC := forwardUsecases.NewDeleteForwardRuleUseCase(forwardRuleRepo, log)
+	listForwardRulesUC := forwardUsecases.NewListForwardRulesUseCase(forwardRuleRepo, log)
+	enableForwardRuleUC := forwardUsecases.NewEnableForwardRuleUseCase(forwardRuleRepo, log)
+	disableForwardRuleUC := forwardUsecases.NewDisableForwardRuleUseCase(forwardRuleRepo, log)
+	resetForwardTrafficUC := forwardUsecases.NewResetForwardRuleTrafficUseCase(forwardRuleRepo, log)
+
+	forwardRuleHandler := forwardHandlers.NewForwardHandler(
+		createForwardRuleUC,
+		getForwardRuleUC,
+		updateForwardRuleUC,
+		deleteForwardRuleUC,
+		listForwardRulesUC,
+		enableForwardRuleUC,
+		disableForwardRuleUC,
+		resetForwardTrafficUC,
+	)
+
+	// Initialize forward agent components
+	forwardAgentRepo := repository.NewForwardAgentRepository(db, log)
+
+	createForwardAgentUC := forwardUsecases.NewCreateForwardAgentUseCase(forwardAgentRepo, log)
+	getForwardAgentUC := forwardUsecases.NewGetForwardAgentUseCase(forwardAgentRepo, log)
+	updateForwardAgentUC := forwardUsecases.NewUpdateForwardAgentUseCase(forwardAgentRepo, log)
+	deleteForwardAgentUC := forwardUsecases.NewDeleteForwardAgentUseCase(forwardAgentRepo, log)
+	listForwardAgentsUC := forwardUsecases.NewListForwardAgentsUseCase(forwardAgentRepo, log)
+	enableForwardAgentUC := forwardUsecases.NewEnableForwardAgentUseCase(forwardAgentRepo, log)
+	disableForwardAgentUC := forwardUsecases.NewDisableForwardAgentUseCase(forwardAgentRepo, log)
+	regenerateForwardAgentTokenUC := forwardUsecases.NewRegenerateForwardAgentTokenUseCase(forwardAgentRepo, log)
+	validateForwardAgentTokenUC := forwardUsecases.NewValidateForwardAgentTokenUseCase(forwardAgentRepo, log)
+
+	forwardAgentHandler := forwardHandlers.NewForwardAgentHandler(
+		createForwardAgentUC,
+		getForwardAgentUC,
+		listForwardAgentsUC,
+		updateForwardAgentUC,
+		deleteForwardAgentUC,
+		enableForwardAgentUC,
+		disableForwardAgentUC,
+		regenerateForwardAgentTokenUC,
+	)
+
+	// Initialize forward agent API handler for client to fetch rules and report traffic
+	forwardAgentAPIHandler := forwardHandlers.NewAgentHandler(forwardRuleRepo, log)
+
+	// Initialize forward agent token middleware
+	forwardAgentTokenMiddleware := middleware.NewForwardAgentTokenMiddleware(validateForwardAgentTokenUC, log)
+
 	return &Router{
-		engine:                   engine,
-		userHandler:              userHandler,
-		authHandler:              authHandler,
-		profileHandler:           profileHandler,
-		subscriptionHandler:      subscriptionHandler,
-		subscriptionPlanHandler:  subscriptionPlanHandler,
-		subscriptionTokenHandler: subscriptionTokenHandler,
-		paymentHandler:           paymentHandler,
-		nodeHandler:              nodeHandler,
-		nodeGroupHandler:         nodeGroupHandler,
-		nodeSubscriptionHandler:  nodeSubscriptionHandler,
-		agentHandler:             agentHandler,
-		ticketHandler:            ticketHandler,
-		notificationHandler:      notificationHandler,
-		authMiddleware:           authMiddleware,
-		nodeTokenMiddleware:      nodeTokenMiddleware,
-		rateLimiter:              rateLimiter,
+		engine:                      engine,
+		userHandler:                 userHandler,
+		authHandler:                 authHandler,
+		profileHandler:              profileHandler,
+		subscriptionHandler:         subscriptionHandler,
+		adminSubscriptionHandler:    adminSubscriptionHandler,
+		subscriptionPlanHandler:     subscriptionPlanHandler,
+		subscriptionTokenHandler:    subscriptionTokenHandler,
+		paymentHandler:              paymentHandler,
+		nodeHandler:                 nodeHandler,
+		nodeGroupHandler:            nodeGroupHandler,
+		nodeSubscriptionHandler:     nodeSubscriptionHandler,
+		agentHandler:                agentHandler,
+		ticketHandler:               ticketHandler,
+		notificationHandler:         notificationHandler,
+		forwardRuleHandler:          forwardRuleHandler,
+		forwardAgentHandler:         forwardAgentHandler,
+		forwardAgentAPIHandler:      forwardAgentAPIHandler,
+		authMiddleware:              authMiddleware,
+		subscriptionOwnerMiddleware: subscriptionOwnerMiddleware,
+		nodeTokenMiddleware:         nodeTokenMiddleware,
+		forwardAgentTokenMiddleware: forwardAgentTokenMiddleware,
+		rateLimiter:                 rateLimiter,
 	}
 }
 
@@ -469,28 +542,39 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		users.DELETE("/:id", authorization.RequireAdmin(), r.userHandler.DeleteUser)
 	}
 
+	// Admin subscription routes - full CRUD for all subscriptions
+	adminSubscriptions := r.engine.Group("/admin/subscriptions")
+	adminSubscriptions.Use(r.authMiddleware.RequireAuth(), authorization.RequireAdmin())
+	{
+		adminSubscriptions.POST("", r.adminSubscriptionHandler.Create)
+		adminSubscriptions.GET("", r.adminSubscriptionHandler.List)
+		adminSubscriptions.GET("/:id", r.adminSubscriptionHandler.Get)
+		adminSubscriptions.PATCH("/:id/status", r.adminSubscriptionHandler.UpdateStatus)
+		adminSubscriptions.PATCH("/:id/plan", r.adminSubscriptionHandler.ChangePlan)
+	}
+
+	// User subscription routes - only own subscriptions
 	subscriptions := r.engine.Group("/subscriptions")
 	subscriptions.Use(r.authMiddleware.RequireAuth())
 	{
-		// IMPORTANT: Register specific paths BEFORE parameterized paths to avoid route conflicts
-
-		// Collection operations (no ID parameter)
+		// Collection operations (no ownership check needed)
 		subscriptions.POST("", r.subscriptionHandler.CreateSubscription)
 		subscriptions.GET("", r.subscriptionHandler.ListUserSubscriptions)
 
-		// Specific action endpoints and sub-resources (must come BEFORE /:id to avoid conflicts)
-		// Using PATCH for state changes as per RESTful best practices
-		subscriptions.PATCH("/:id/status", r.subscriptionHandler.UpdateSubscriptionStatus)
-		subscriptions.PATCH("/:id/plan", r.subscriptionHandler.ChangePlan)
+		// Operations on specific subscription (ownership verified by middleware)
+		subscriptionWithOwnership := subscriptions.Group("/:id")
+		subscriptionWithOwnership.Use(r.subscriptionOwnerMiddleware.RequireOwnership())
+		{
+			subscriptionWithOwnership.GET("", r.subscriptionHandler.GetSubscription)
+			subscriptionWithOwnership.POST("/cancel", r.subscriptionHandler.CancelSubscription)
+			subscriptionWithOwnership.PATCH("/plan", r.subscriptionHandler.ChangePlan)
 
-		// Token sub-resource endpoints - most specific paths first
-		subscriptions.POST("/:id/tokens/:token_id/refresh", r.subscriptionTokenHandler.RefreshToken)
-		subscriptions.DELETE("/:id/tokens/:token_id", r.subscriptionTokenHandler.RevokeToken)
-		subscriptions.POST("/:id/tokens", r.subscriptionTokenHandler.GenerateToken)
-		subscriptions.GET("/:id/tokens", r.subscriptionTokenHandler.ListTokens)
-
-		// Generic parameterized route (must come LAST)
-		subscriptions.GET("/:id", r.subscriptionHandler.GetSubscription)
+			// Token sub-resource endpoints
+			subscriptionWithOwnership.POST("/tokens/:token_id/refresh", r.subscriptionTokenHandler.RefreshToken)
+			subscriptionWithOwnership.DELETE("/tokens/:token_id", r.subscriptionTokenHandler.RevokeToken)
+			subscriptionWithOwnership.POST("/tokens", r.subscriptionTokenHandler.GenerateToken)
+			subscriptionWithOwnership.GET("/tokens", r.subscriptionTokenHandler.ListTokens)
+		}
 	}
 
 	payments := r.engine.Group("/payments")
@@ -569,6 +653,14 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		NotificationHandler: r.notificationHandler,
 		AuthMiddleware:      r.authMiddleware,
 	})
+
+	routes.SetupForwardRoutes(r.engine, &routes.ForwardRouteConfig{
+		ForwardRuleHandler:          r.forwardRuleHandler,
+		ForwardAgentHandler:         r.forwardAgentHandler,
+		ForwardAgentAPIHandler:      r.forwardAgentAPIHandler,
+		AuthMiddleware:              r.authMiddleware,
+		ForwardAgentTokenMiddleware: r.forwardAgentTokenMiddleware,
+	})
 }
 
 // GetEngine returns the Gin engine
@@ -579,4 +671,9 @@ func (r *Router) GetEngine() *gin.Engine {
 // Run starts the HTTP server
 func (r *Router) Run(addr string) error {
 	return r.engine.Run(addr)
+}
+
+// Shutdown gracefully shuts down the router
+func (r *Router) Shutdown() {
+	// Reserved for future cleanup tasks
 }

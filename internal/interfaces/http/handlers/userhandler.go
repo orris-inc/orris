@@ -37,13 +37,13 @@ func NewUserHandler(userService *user.ServiceDDD) *UserHandler {
 //	@Accept			json
 //	@Produce		json
 //	@Security		Bearer
-//	@Param			user	body		internal_application_user_dto.CreateUserRequest	true	"User data"
-//	@Success		201		{object}	utils.APIResponse								"User created successfully"
-//	@Failure		400		{object}	utils.APIResponse								"Bad request"
-//	@Failure		401		{object}	utils.APIResponse								"Unauthorized"
-//	@Failure		403		{object}	utils.APIResponse								"Forbidden - Requires admin role"
-//	@Failure		409		{object}	utils.APIResponse								"Email already exists"
-//	@Failure		500		{object}	utils.APIResponse								"Internal server error"
+//	@Param			user	body		userdto.CreateUserRequest							true	"User data"
+//	@Success		201		{object}	utils.APIResponse{data=userdto.UserResponse}	"User created successfully"
+//	@Failure		400		{object}	utils.APIResponse									"Bad request"
+//	@Failure		401		{object}	utils.APIResponse									"Unauthorized"
+//	@Failure		403		{object}	utils.APIResponse									"Forbidden - Requires admin role"
+//	@Failure		409		{object}	utils.APIResponse									"Email already exists"
+//	@Failure		500		{object}	utils.APIResponse									"Internal server error"
 //	@Router			/users [post]
 func (h *UserHandler) CreateUser(c *gin.Context) {
 	var req dto.CreateUserRequest
@@ -74,13 +74,13 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Security		Bearer
-//	@Param			id	path		int					true	"User ID"
-//	@Success		200	{object}	utils.APIResponse	"User details"
-//	@Failure		400	{object}	utils.APIResponse	"Invalid user ID"
-//	@Failure		401	{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403	{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		404	{object}	utils.APIResponse	"User not found"
-//	@Failure		500	{object}	utils.APIResponse	"Internal server error"
+//	@Param			id	path		int											true	"User ID"
+//	@Success		200	{object}	utils.APIResponse{data=userdto.UserResponse}	"User details"
+//	@Failure		400	{object}	utils.APIResponse								"Invalid user ID"
+//	@Failure		401	{object}	utils.APIResponse								"Unauthorized"
+//	@Failure		403	{object}	utils.APIResponse								"Forbidden - Requires admin role"
+//	@Failure		404	{object}	utils.APIResponse								"User not found"
+//	@Failure		500	{object}	utils.APIResponse								"Internal server error"
 //	@Router			/users/{id} [get]
 func (h *UserHandler) GetUser(c *gin.Context) {
 	// Parse user ID
@@ -109,8 +109,8 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 //	@Produce		json
 //	@Security		Bearer
 //	@Param			id		path		int												true	"User ID"
-//	@Param			user	body		internal_application_user_dto.UpdateUserRequest	true	"User update data (all fields optional)"
-//	@Success		200		{object}	utils.APIResponse								"User updated successfully"
+//	@Param			user	body		userdto.UpdateUserRequest						true	"User update data (all fields optional)"
+//	@Success		200		{object}	utils.APIResponse{data=userdto.UserResponse}	"User updated successfully"
 //	@Failure		400		{object}	utils.APIResponse								"Bad request"
 //	@Failure		401		{object}	utils.APIResponse								"Unauthorized"
 //	@Failure		403		{object}	utils.APIResponse								"Forbidden - Requires admin role"
@@ -198,15 +198,15 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Security		Bearer
-//	@Param			page		query		int											false	"Page number"			default(1)
-//	@Param			page_size	query		int											false	"Page size"				default(20)
-//	@Param			status		query		string										false	"User status filter"	Enums(active,inactive,pending,suspended)
-//	@Param			role		query		string										false	"User role filter"		Enums(user,admin)
-//	@Success		200			{object}	utils.APIResponse{data=utils.ListResponse}	"Users list"
-//	@Failure		400			{object}	utils.APIResponse							"Invalid query parameters"
-//	@Failure		401			{object}	utils.APIResponse							"Unauthorized"
-//	@Failure		403			{object}	utils.APIResponse							"Forbidden - Requires admin role"
-//	@Failure		500			{object}	utils.APIResponse							"Internal server error"
+//	@Param			page		query		int																		false	"Page number"			default(1)
+//	@Param			page_size	query		int																		false	"Page size"				default(20)
+//	@Param			status		query		string																	false	"User status filter"	Enums(active,inactive,pending,suspended)
+//	@Param			role		query		string																	false	"User role filter"		Enums(user,admin)
+//	@Success		200			{object}	utils.APIResponse{data=utils.ListResponse{items=[]userdto.UserResponse}}	"Users list"
+//	@Failure		400			{object}	utils.APIResponse															"Invalid query parameters"
+//	@Failure		401			{object}	utils.APIResponse															"Unauthorized"
+//	@Failure		403			{object}	utils.APIResponse															"Forbidden - Requires admin role"
+//	@Failure		500			{object}	utils.APIResponse															"Internal server error"
 //	@Router			/users [get]
 func (h *UserHandler) ListUsers(c *gin.Context) {
 	// Parse query parameters
@@ -234,13 +234,13 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Security		Bearer
-//	@Param			email	path		string				true	"User email address"
-//	@Success		200		{object}	utils.APIResponse	"User details"
-//	@Failure		400		{object}	utils.APIResponse	"Invalid email"
-//	@Failure		401		{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403		{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		404		{object}	utils.APIResponse	"User not found"
-//	@Failure		500		{object}	utils.APIResponse	"Internal server error"
+//	@Param			email	path		string											true	"User email address"
+//	@Success		200		{object}	utils.APIResponse{data=userdto.UserResponse}	"User details"
+//	@Failure		400		{object}	utils.APIResponse								"Invalid email"
+//	@Failure		401		{object}	utils.APIResponse								"Unauthorized"
+//	@Failure		403		{object}	utils.APIResponse								"Forbidden - Requires admin role"
+//	@Failure		404		{object}	utils.APIResponse								"User not found"
+//	@Failure		500		{object}	utils.APIResponse								"Internal server error"
 //	@Router			/users/email/{email} [get]
 func (h *UserHandler) GetUserByEmail(c *gin.Context) {
 	email := c.Param("email")

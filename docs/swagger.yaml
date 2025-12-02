@@ -14,18 +14,6 @@ definitions:
     - new_password
     - old_password
     type: object
-  internal_application_user_dto.CreateUserRequest:
-    properties:
-      email:
-        type: string
-      name:
-        maxLength: 100
-        minLength: 2
-        type: string
-    required:
-    - email
-    - name
-    type: object
   internal_application_user_dto.UpdateProfileRequest:
     properties:
       email:
@@ -33,27 +21,6 @@ definitions:
       name:
         maxLength: 100
         minLength: 2
-        type: string
-    type: object
-  internal_application_user_dto.UpdateUserRequest:
-    properties:
-      email:
-        type: string
-      name:
-        maxLength: 100
-        minLength: 2
-        type: string
-      role:
-        enum:
-        - user
-        - admin
-        type: string
-      status:
-        enum:
-        - active
-        - inactive
-        - pending
-        - suspended
         type: string
     type: object
   internal_interfaces_dto.AnnouncementResponse:
@@ -234,6 +201,15 @@ definitions:
         - promotion
         type: string
     type: object
+  internal_interfaces_http_handlers.CancelSubscriptionRequest:
+    properties:
+      immediate:
+        type: boolean
+      reason:
+        type: string
+    required:
+    - reason
+    type: object
   internal_interfaces_http_handlers.ChangePlanRequest:
     properties:
       change_type:
@@ -342,12 +318,16 @@ definitions:
         type: integer
       start_date:
         type: string
-      user_id:
-        description: 'Optional: Admin can specify target user ID'
-        type: integer
     required:
     - billing_cycle
     - plan_id
+    type: object
+  internal_interfaces_http_handlers.CreateSubscriptionResponse:
+    properties:
+      subscription:
+        $ref: '#/definitions/orris_internal_application_subscription_dto.SubscriptionDTO'
+      token:
+        $ref: '#/definitions/orris_internal_application_subscription_dto.SubscriptionTokenDTO'
     type: object
   internal_interfaces_http_handlers.ForgotPasswordRequest:
     properties:
@@ -412,44 +392,6 @@ definitions:
     required:
     - password
     - token
-    type: object
-  internal_interfaces_http_handlers.SubscriptionCreateResult:
-    properties:
-      subscription: {}
-      token: {}
-    type: object
-  internal_interfaces_http_handlers.SubscriptionResponse:
-    properties:
-      auto_renew:
-        type: boolean
-      cancel_reason:
-        type: string
-      cancelled_at:
-        type: string
-      created_at:
-        type: string
-      current_period_end:
-        type: string
-      current_period_start:
-        type: string
-      end_date:
-        type: string
-      id:
-        type: integer
-      is_active:
-        type: boolean
-      is_expired:
-        type: boolean
-      plan_id:
-        type: integer
-      start_date:
-        type: string
-      status:
-        type: string
-      updated_at:
-        type: string
-      user_id:
-        type: integer
     type: object
   internal_interfaces_http_handlers.UpdateAllNotificationsStatusRequest:
     properties:
@@ -520,13 +462,64 @@ definitions:
     required:
     - status
     type: object
-  internal_interfaces_http_handlers.UpdateSubscriptionStatusRequest:
+  internal_interfaces_http_handlers.VerifyEmailRequest:
+    properties:
+      token:
+        type: string
+    required:
+    - token
+    type: object
+  internal_interfaces_http_handlers_admin.ChangePlanRequest:
+    properties:
+      change_type:
+        enum:
+        - upgrade
+        - downgrade
+        type: string
+      effective_date:
+        enum:
+        - immediate
+        - period_end
+        type: string
+      new_plan_id:
+        type: integer
+    required:
+    - change_type
+    - effective_date
+    - new_plan_id
+    type: object
+  internal_interfaces_http_handlers_admin.CreateSubscriptionRequest:
+    properties:
+      auto_renew:
+        type: boolean
+      billing_cycle:
+        enum:
+        - weekly
+        - monthly
+        - quarterly
+        - semi_annual
+        - yearly
+        - lifetime
+        type: string
+      payment_info:
+        additionalProperties: true
+        type: object
+      plan_id:
+        type: integer
+      start_date:
+        type: string
+      user_id:
+        type: integer
+    required:
+    - billing_cycle
+    - plan_id
+    - user_id
+    type: object
+  internal_interfaces_http_handlers_admin.UpdateStatusRequest:
     properties:
       immediate:
-        description: Optional for cancellation
         type: boolean
       reason:
-        description: Required when status is "cancelled"
         type: string
       status:
         enum:
@@ -537,12 +530,125 @@ definitions:
     required:
     - status
     type: object
-  internal_interfaces_http_handlers.VerifyEmailRequest:
+  internal_interfaces_http_handlers_forward.CreateForwardAgentRequest:
     properties:
-      token:
+      name:
+        example: Production Agent
+        type: string
+      remark:
+        example: Forward agent for production environment
         type: string
     required:
-    - token
+    - name
+    type: object
+  internal_interfaces_http_handlers_forward.CreateForwardRuleRequest:
+    properties:
+      listen_port:
+        example: 13306
+        type: integer
+      name:
+        example: MySQL-Forward
+        type: string
+      protocol:
+        enum:
+        - tcp
+        - udp
+        - both
+        example: tcp
+        type: string
+      remark:
+        example: Forward to internal MySQL server
+        type: string
+      target_address:
+        example: 192.168.1.100
+        type: string
+      target_port:
+        example: 3306
+        type: integer
+    required:
+    - listen_port
+    - name
+    - protocol
+    - target_address
+    - target_port
+    type: object
+  internal_interfaces_http_handlers_forward.ForwardRuleTrafficItem:
+    properties:
+      download_bytes:
+        minimum: 0
+        type: integer
+      rule_id:
+        type: integer
+      upload_bytes:
+        minimum: 0
+        type: integer
+    required:
+    - rule_id
+    type: object
+  internal_interfaces_http_handlers_forward.ReportTrafficRequest:
+    properties:
+      rules:
+        items:
+          $ref: '#/definitions/internal_interfaces_http_handlers_forward.ForwardRuleTrafficItem'
+        type: array
+    required:
+    - rules
+    type: object
+  internal_interfaces_http_handlers_forward.UpdateAgentStatusRequest:
+    properties:
+      status:
+        enum:
+        - enabled
+        - disabled
+        example: enabled
+        type: string
+    required:
+    - status
+    type: object
+  internal_interfaces_http_handlers_forward.UpdateForwardAgentRequest:
+    properties:
+      name:
+        example: Updated Agent Name
+        type: string
+      remark:
+        example: Updated remark
+        type: string
+    type: object
+  internal_interfaces_http_handlers_forward.UpdateForwardRuleRequest:
+    properties:
+      listen_port:
+        example: 13307
+        type: integer
+      name:
+        example: MySQL-Forward-Updated
+        type: string
+      protocol:
+        enum:
+        - tcp
+        - udp
+        - both
+        example: tcp
+        type: string
+      remark:
+        example: Updated remark
+        type: string
+      target_address:
+        example: 192.168.1.101
+        type: string
+      target_port:
+        example: 3307
+        type: integer
+    type: object
+  internal_interfaces_http_handlers_forward.UpdateStatusRequest:
+    properties:
+      status:
+        enum:
+        - enabled
+        - disabled
+        example: enabled
+        type: string
+    required:
+    - status
     type: object
   internal_interfaces_http_handlers_node.AddNodeToGroupRequest:
     properties:
@@ -777,6 +883,136 @@ definitions:
     required:
     - status
     type: object
+  orris_internal_application_node_dto.NodeDTO:
+    properties:
+      created_at:
+        example: "2024-01-15T10:30:00Z"
+        type: string
+      custom_fields:
+        additionalProperties: true
+        type: object
+      encryption_method:
+        enum:
+        - aes-256-gcm
+        - aes-128-gcm
+        - chacha20-ietf-poly1305
+        example: aes-256-gcm
+        type: string
+      id:
+        example: 1
+        type: integer
+      is_available:
+        example: true
+        type: boolean
+      maintenance_reason:
+        example: Scheduled maintenance
+        type: string
+      name:
+        example: US-Node-01
+        type: string
+      plugin:
+        example: obfs-local
+        type: string
+      plugin_opts:
+        additionalProperties:
+          type: string
+        example:
+          obfs: http
+          obfs-host: example.com
+        type: object
+      protocol:
+        enum:
+        - shadowsocks
+        - trojan
+        example: shadowsocks
+        type: string
+      region:
+        example: us-west
+        type: string
+      server_address:
+        example: proxy.example.com
+        type: string
+      server_port:
+        example: 8388
+        type: integer
+      sort_order:
+        example: 100
+        type: integer
+      status:
+        enum:
+        - active
+        - inactive
+        - maintenance
+        example: active
+        type: string
+      system_status:
+        allOf:
+        - $ref: '#/definitions/orris_internal_application_node_dto.NodeSystemStatusDTO'
+        description: System status fields (from Redis)
+      tags:
+        example:
+        - premium
+        - fast
+        items:
+          type: string
+        type: array
+      updated_at:
+        example: "2024-01-15T14:20:00Z"
+        type: string
+      version:
+        example: 1
+        type: integer
+    type: object
+  orris_internal_application_node_dto.NodeGroupDTO:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      is_public:
+        type: boolean
+      metadata:
+        additionalProperties: true
+        type: object
+      name:
+        type: string
+      node_count:
+        type: integer
+      node_ids:
+        items:
+          type: integer
+        type: array
+      sort_order:
+        type: integer
+      subscription_plan_ids:
+        items:
+          type: integer
+        type: array
+      updated_at:
+        type: string
+      version:
+        type: integer
+    type: object
+  orris_internal_application_node_dto.NodeSystemStatusDTO:
+    properties:
+      cpu:
+        example: "45.50"
+        type: string
+      disk:
+        example: "80.20"
+        type: string
+      memory:
+        example: "65.30"
+        type: string
+      updated_at:
+        example: 1705324800
+        type: integer
+      uptime:
+        example: 86400
+        type: integer
+    type: object
   orris_internal_application_node_dto.OnlineSubscriptionItem:
     properties:
       ip:
@@ -835,6 +1071,195 @@ definitions:
     required:
     - subscription_id
     type: object
+  orris_internal_application_subscription_dto.PricingOptionDTO:
+    properties:
+      billing_cycle:
+        description: weekly, monthly, quarterly, semi_annual, yearly, lifetime
+        type: string
+      currency:
+        description: 'Currency code: CNY, USD, EUR, GBP, JPY'
+        type: string
+      is_active:
+        description: Whether this pricing option is currently available
+        type: boolean
+      price:
+        description: Price in smallest currency unit (cents)
+        type: integer
+    type: object
+  orris_internal_application_subscription_dto.SubscriptionDTO:
+    properties:
+      autoRenew:
+        type: boolean
+      cancelReason:
+        type: string
+      cancelledAt:
+        type: string
+      createdAt:
+        type: string
+      currentPeriodEnd:
+        type: string
+      currentPeriodStart:
+        type: string
+      endDate:
+        type: string
+      id:
+        type: integer
+      isActive:
+        type: boolean
+      isExpired:
+        type: boolean
+      plan:
+        $ref: '#/definitions/orris_internal_application_subscription_dto.SubscriptionPlanDTO'
+      startDate:
+        type: string
+      status:
+        type: string
+      updatedAt:
+        type: string
+      userID:
+        type: integer
+    type: object
+  orris_internal_application_subscription_dto.SubscriptionPlanDTO:
+    properties:
+      apirateLimit:
+        type: integer
+      billingCycle:
+        description: 'Deprecated: use Pricings array, kept for backward compatibility'
+        type: string
+      createdAt:
+        type: string
+      currency:
+        type: string
+      description:
+        type: string
+      features:
+        items:
+          type: string
+        type: array
+      id:
+        type: integer
+      isPublic:
+        type: boolean
+      limits:
+        additionalProperties: true
+        type: object
+      maxProjects:
+        type: integer
+      maxUsers:
+        type: integer
+      name:
+        type: string
+      price:
+        description: 'Deprecated: use Pricings array, kept for backward compatibility'
+        format: int64
+        type: integer
+      pricings:
+        description: Multiple pricing options for different billing cycles
+        items:
+          $ref: '#/definitions/orris_internal_application_subscription_dto.PricingOptionDTO'
+        type: array
+      slug:
+        type: string
+      sortOrder:
+        type: integer
+      status:
+        type: string
+      trialDays:
+        type: integer
+      updatedAt:
+        type: string
+    type: object
+  orris_internal_application_subscription_dto.SubscriptionTokenDTO:
+    properties:
+      createdAt:
+        type: string
+      expiresAt:
+        type: string
+      id:
+        type: integer
+      isActive:
+        type: boolean
+      lastUsedAt:
+        type: string
+      name:
+        type: string
+      prefix:
+        type: string
+      scope:
+        type: string
+      subscriptionID:
+        type: integer
+      usageCount:
+        format: int64
+        type: integer
+    type: object
+  orris_internal_application_user_dto.CreateUserRequest:
+    properties:
+      email:
+        type: string
+      name:
+        maxLength: 100
+        minLength: 2
+        type: string
+    required:
+    - email
+    - name
+    type: object
+  orris_internal_application_user_dto.UpdateUserRequest:
+    properties:
+      email:
+        type: string
+      name:
+        maxLength: 100
+        minLength: 2
+        type: string
+      role:
+        enum:
+        - user
+        - admin
+        type: string
+      status:
+        enum:
+        - active
+        - inactive
+        - pending
+        - suspended
+        type: string
+    type: object
+  orris_internal_application_user_dto.UserMetadata:
+    properties:
+      can_perform_actions:
+        type: boolean
+      email_domain:
+        type: string
+      is_business_email:
+        type: boolean
+      requires_verification:
+        type: boolean
+    type: object
+  orris_internal_application_user_dto.UserResponse:
+    properties:
+      created_at:
+        type: string
+      display_name:
+        type: string
+      email:
+        type: string
+      id:
+        type: integer
+      initials:
+        type: string
+      metadata:
+        $ref: '#/definitions/orris_internal_application_user_dto.UserMetadata'
+      name:
+        type: string
+      role:
+        type: string
+      status:
+        type: string
+      updated_at:
+        type: string
+    type: object
   orris_internal_shared_utils.APIResponse:
     properties:
       data: {}
@@ -878,6 +1303,253 @@ info:
   title: Orris API
   version: "1.0"
 paths:
+  /admin/subscriptions:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of all subscriptions with optional filters
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      - description: Subscription status filter
+        enum:
+        - active
+        - inactive
+        - cancelled
+        - expired
+        - pending
+        in: query
+        name: status
+        type: string
+      - description: Filter by user ID
+        in: query
+        name: user_id
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Subscriptions list
+          schema:
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_shared_utils.ListResponse'
+              type: object
+        "400":
+          description: Invalid query parameters
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - admin only
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: List all subscriptions (Admin)
+      tags:
+      - admin-subscriptions
+    post:
+      consumes:
+      - application/json
+      description: Admin creates a subscription for any user
+      parameters:
+      - description: Subscription data
+        in: body
+        name: subscription
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers_admin.CreateSubscriptionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Subscription created successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - admin only
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: User or plan not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Create subscription for user (Admin)
+      tags:
+      - admin-subscriptions
+  /admin/subscriptions/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get details of any subscription
+      parameters:
+      - description: Subscription ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Subscription details
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid subscription ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - admin only
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Subscription not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Get subscription by ID (Admin)
+      tags:
+      - admin-subscriptions
+  /admin/subscriptions/{id}/plan:
+    patch:
+      consumes:
+      - application/json
+      description: Change the plan of any subscription
+      parameters:
+      - description: Subscription ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Plan change details
+        in: body
+        name: plan
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers_admin.ChangePlanRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Plan changed successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - admin only
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Subscription or plan not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Change subscription plan (Admin)
+      tags:
+      - admin-subscriptions
+  /admin/subscriptions/{id}/status:
+    patch:
+      consumes:
+      - application/json
+      description: Update subscription status (activate, cancel, or renew)
+      parameters:
+      - description: Subscription ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Status update details
+        in: body
+        name: status
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers_admin.UpdateStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Subscription status updated successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - admin only
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Subscription not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Update subscription status (Admin)
+      tags:
+      - admin-subscriptions
   /agents/{id}/config:
     get:
       consumes:
@@ -1631,6 +2303,924 @@ paths:
       summary: Verify email address
       tags:
       - auth
+  /forward-agent-api/rules:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve all enabled forward rules for client configuration synchronization
+      parameters:
+      - default: Bearer fwd_xxx
+        description: Agent token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Enabled forward rules retrieved successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      summary: Get enabled forward rules for client
+      tags:
+      - forward-agent-api
+  /forward-agent-api/traffic:
+    post:
+      consumes:
+      - application/json
+      description: Submit forward rule traffic statistics from client
+      parameters:
+      - default: Bearer fwd_xxx
+        description: Agent token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Forward rule traffic data
+        in: body
+        name: traffic
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers_forward.ReportTrafficRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Traffic reported successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid request body
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      summary: Report forward rule traffic data
+      tags:
+      - forward-agent-api
+  /forward-agents:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of forward agents
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      - description: Name filter
+        in: query
+        name: name
+        type: string
+      - description: Status filter
+        enum:
+        - enabled
+        - disabled
+        in: query
+        name: status
+        type: string
+      - default: created_at
+        description: Sort field
+        in: query
+        name: order_by
+        type: string
+      - default: desc
+        description: Sort direction
+        enum:
+        - asc
+        - desc
+        in: query
+        name: order
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Forward agents list
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid query parameters
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: List forward agents
+      tags:
+      - forward-agents
+    post:
+      consumes:
+      - application/json
+      description: Create a new forward agent with authentication token
+      parameters:
+      - description: Forward agent data
+        in: body
+        name: agent
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers_forward.CreateForwardAgentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Forward agent created successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Create a new forward agent
+      tags:
+      - forward-agents
+  /forward-agents/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a forward agent by ID
+      parameters:
+      - description: Forward agent ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Forward agent deleted successfully
+        "400":
+          description: Invalid agent ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Forward agent not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Delete forward agent
+      tags:
+      - forward-agents
+    get:
+      consumes:
+      - application/json
+      description: Get details of a forward agent by its ID
+      parameters:
+      - description: Forward agent ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Forward agent details
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid agent ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Forward agent not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Get forward agent by ID
+      tags:
+      - forward-agents
+    put:
+      consumes:
+      - application/json
+      description: Update forward agent information by ID
+      parameters:
+      - description: Forward agent ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Forward agent update data
+        in: body
+        name: agent
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers_forward.UpdateForwardAgentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Forward agent updated successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Forward agent not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Update forward agent
+      tags:
+      - forward-agents
+  /forward-agents/{id}/disable:
+    post:
+      consumes:
+      - application/json
+      description: Disable a forward agent to prevent client access
+      parameters:
+      - description: Forward agent ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Forward agent disabled successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid agent ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Forward agent not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Disable forward agent
+      tags:
+      - forward-agents
+  /forward-agents/{id}/enable:
+    post:
+      consumes:
+      - application/json
+      description: Enable a forward agent to allow client access
+      parameters:
+      - description: Forward agent ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Forward agent enabled successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid agent ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Forward agent not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Enable forward agent
+      tags:
+      - forward-agents
+  /forward-agents/{id}/regenerate-token:
+    post:
+      consumes:
+      - application/json
+      description: Regenerate authentication token for a forward agent
+      parameters:
+      - description: Forward agent ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Token regenerated successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid agent ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Forward agent not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Regenerate forward agent token
+      tags:
+      - forward-agents
+  /forward-agents/{id}/status:
+    patch:
+      consumes:
+      - application/json
+      description: Update forward agent status (enable or disable)
+      parameters:
+      - description: Forward agent ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Status update data
+        in: body
+        name: status
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers_forward.UpdateAgentStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Status updated successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Forward agent not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Update forward agent status
+      tags:
+      - forward-agents
+  /forward-rules:
+    get:
+      consumes:
+      - application/json
+      description: Get a paginated list of forward rules
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Page size
+        in: query
+        name: page_size
+        type: integer
+      - description: Name filter
+        in: query
+        name: name
+        type: string
+      - description: Protocol filter
+        enum:
+        - tcp
+        - udp
+        - both
+        in: query
+        name: protocol
+        type: string
+      - description: Status filter
+        enum:
+        - enabled
+        - disabled
+        in: query
+        name: status
+        type: string
+      - default: created_at
+        description: Sort field
+        in: query
+        name: order_by
+        type: string
+      - default: desc
+        description: Sort direction
+        enum:
+        - asc
+        - desc
+        in: query
+        name: order
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Forward rules list
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid query parameters
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: List forward rules
+      tags:
+      - forward-rules
+    post:
+      consumes:
+      - application/json
+      description: Create a new TCP/UDP forward rule configuration
+      parameters:
+      - description: Forward rule data
+        in: body
+        name: rule
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers_forward.CreateForwardRuleRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Forward rule created successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "409":
+          description: Conflict - Listen port already in use
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Create a new forward rule
+      tags:
+      - forward-rules
+  /forward-rules/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a forward rule configuration by ID
+      parameters:
+      - description: Forward rule ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: Forward rule deleted successfully
+        "400":
+          description: Invalid rule ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Forward rule not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Delete forward rule
+      tags:
+      - forward-rules
+    get:
+      consumes:
+      - application/json
+      description: Get details of a forward rule by its ID
+      parameters:
+      - description: Forward rule ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Forward rule details
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid rule ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Forward rule not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Get forward rule by ID
+      tags:
+      - forward-rules
+    put:
+      consumes:
+      - application/json
+      description: Update forward rule configuration by ID
+      parameters:
+      - description: Forward rule ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Forward rule update data
+        in: body
+        name: rule
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers_forward.UpdateForwardRuleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Forward rule updated successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Forward rule not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "409":
+          description: Conflict - Listen port already in use
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Update forward rule
+      tags:
+      - forward-rules
+  /forward-rules/{id}/disable:
+    post:
+      consumes:
+      - application/json
+      description: Disable a forward rule (client will stop forwarding)
+      parameters:
+      - description: Forward rule ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Forward rule disabled successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid rule ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Forward rule not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Disable forward rule
+      tags:
+      - forward-rules
+  /forward-rules/{id}/enable:
+    post:
+      consumes:
+      - application/json
+      description: Enable a forward rule (client will pick up and start forwarding)
+      parameters:
+      - description: Forward rule ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Forward rule enabled successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid rule ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Forward rule not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Enable forward rule
+      tags:
+      - forward-rules
+  /forward-rules/{id}/reset-traffic:
+    post:
+      consumes:
+      - application/json
+      description: Reset the upload and download byte counters for a forward rule
+      parameters:
+      - description: Forward rule ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Traffic counters reset successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Invalid rule ID
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Forward rule not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Reset forward rule traffic counters
+      tags:
+      - forward-rules
+  /forward-rules/{id}/status:
+    patch:
+      consumes:
+      - application/json
+      description: Update forward rule status (enable or disable)
+      parameters:
+      - description: Forward rule ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Status update data
+        in: body
+        name: status
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers_forward.UpdateStatusRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Status updated successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Forbidden - Requires admin role
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Forward rule not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Update forward rule status
+      tags:
+      - forward-rules
   /health:
     get:
       consumes:
@@ -1673,7 +3263,19 @@ paths:
         "200":
           description: Node groups list
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  allOf:
+                  - $ref: '#/definitions/orris_internal_shared_utils.ListResponse'
+                  - properties:
+                      items:
+                        items:
+                          $ref: '#/definitions/orris_internal_application_node_dto.NodeGroupDTO'
+                        type: array
+                    type: object
+              type: object
         "400":
           description: Invalid query parameters
           schema:
@@ -1712,7 +3314,12 @@ paths:
         "201":
           description: Node group created successfully
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_application_node_dto.NodeGroupDTO'
+              type: object
         "400":
           description: Bad request
           schema:
@@ -1791,7 +3398,12 @@ paths:
         "200":
           description: Node group details
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_application_node_dto.NodeGroupDTO'
+              type: object
         "400":
           description: Invalid node group ID
           schema:
@@ -1839,7 +3451,12 @@ paths:
         "200":
           description: Node group updated successfully
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_application_node_dto.NodeGroupDTO'
+              type: object
         "400":
           description: Bad request
           schema:
@@ -1882,7 +3499,14 @@ paths:
         "200":
           description: List of nodes in group
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/orris_internal_application_node_dto.NodeDTO'
+                  type: array
+              type: object
         "400":
           description: Invalid node group ID
           schema:
@@ -2249,7 +3873,19 @@ paths:
         "200":
           description: Nodes list
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  allOf:
+                  - $ref: '#/definitions/orris_internal_shared_utils.ListResponse'
+                  - properties:
+                      items:
+                        items:
+                          $ref: '#/definitions/orris_internal_application_node_dto.NodeDTO'
+                        type: array
+                    type: object
+              type: object
         "400":
           description: Invalid query parameters
           schema:
@@ -2288,7 +3924,12 @@ paths:
         "201":
           description: Node created successfully
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_application_node_dto.NodeDTO'
+              type: object
         "400":
           description: Bad request
           schema:
@@ -2367,7 +4008,12 @@ paths:
         "200":
           description: Node details
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_application_node_dto.NodeDTO'
+              type: object
         "400":
           description: Invalid node ID
           schema:
@@ -2415,7 +4061,12 @@ paths:
         "200":
           description: Node updated successfully
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_application_node_dto.NodeDTO'
+              type: object
         "400":
           description: Bad request
           schema:
@@ -2464,7 +4115,12 @@ paths:
         "200":
           description: Node status updated successfully
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_application_node_dto.NodeDTO'
+              type: object
         "400":
           description: Bad request
           schema:
@@ -3197,7 +4853,19 @@ paths:
         "200":
           description: Subscription plans list
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  allOf:
+                  - $ref: '#/definitions/orris_internal_shared_utils.ListResponse'
+                  - properties:
+                      items:
+                        items:
+                          $ref: '#/definitions/orris_internal_application_subscription_dto.SubscriptionPlanDTO'
+                        type: array
+                    type: object
+              type: object
         "400":
           description: Invalid query parameters
           schema:
@@ -3232,7 +4900,12 @@ paths:
         "201":
           description: Subscription plan created successfully
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_application_subscription_dto.SubscriptionPlanDTO'
+              type: object
         "400":
           description: Bad request
           schema:
@@ -3271,7 +4944,12 @@ paths:
         "200":
           description: Subscription plan details
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_application_subscription_dto.SubscriptionPlanDTO'
+              type: object
         "400":
           description: Invalid plan ID
           schema:
@@ -3315,7 +4993,12 @@ paths:
         "200":
           description: Subscription plan updated successfully
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_application_subscription_dto.SubscriptionPlanDTO'
+              type: object
         "400":
           description: Bad request
           schema:
@@ -3352,7 +5035,14 @@ paths:
         "200":
           description: Pricing options for the plan
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/orris_internal_application_subscription_dto.PricingOptionDTO'
+                  type: array
+              type: object
         "400":
           description: Invalid plan ID
           schema:
@@ -3425,7 +5115,14 @@ paths:
         "200":
           description: Public subscription plans
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/orris_internal_application_subscription_dto.SubscriptionPlanDTO'
+                  type: array
+              type: object
         "500":
           description: Internal server error
           schema:
@@ -3437,7 +5134,7 @@ paths:
     get:
       consumes:
       - application/json
-      description: Get a paginated list of subscriptions for the authenticated user
+      description: Get a paginated list of current user's subscriptions
       parameters:
       - default: 1
         description: Page number
@@ -3469,7 +5166,14 @@ paths:
             - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/orris_internal_shared_utils.ListResponse'
+                  allOf:
+                  - $ref: '#/definitions/orris_internal_shared_utils.ListResponse'
+                  - properties:
+                      items:
+                        items:
+                          $ref: '#/definitions/orris_internal_application_subscription_dto.SubscriptionDTO'
+                        type: array
+                    type: object
               type: object
         "400":
           description: Invalid query parameters
@@ -3485,19 +5189,15 @@ paths:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
       security:
       - Bearer: []
-      summary: List user subscriptions
+      summary: List my subscriptions
       tags:
       - subscriptions
     post:
       consumes:
       - application/json
-      description: Create a new subscription for the authenticated user with the specified
-        plan and billing cycle. Admin users can optionally specify a user_id to create
-        subscription for any user.
+      description: Create a new subscription for the authenticated user
       parameters:
-      - description: 'Subscription data with billing cycle (weekly/monthly/quarterly/semi_annual/yearly/lifetime).
-          For admin: optionally specify user_id to create subscription for another
-          user.'
+      - description: Subscription data
         in: body
         name: subscription
         required: true
@@ -3513,7 +5213,7 @@ paths:
             - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/internal_interfaces_http_handlers.SubscriptionCreateResult'
+                  $ref: '#/definitions/internal_interfaces_http_handlers.CreateSubscriptionResponse'
               type: object
         "400":
           description: Bad request
@@ -3523,12 +5223,8 @@ paths:
           description: Unauthorized
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
-        "403":
-          description: Forbidden - only admin can create subscription for other users
-          schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "404":
-          description: Plan not found or user not found
+          description: Plan not found
           schema:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
         "500":
@@ -3537,14 +5233,14 @@ paths:
             $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
       security:
       - Bearer: []
-      summary: Create a new subscription with billing cycle selection
+      summary: Create subscription for self
       tags:
       - subscriptions
   /subscriptions/{id}:
     get:
       consumes:
       - application/json
-      description: Get details of a specific subscription by its ID
+      description: Get details of own subscription by ID
       parameters:
       - description: Subscription ID
         in: path
@@ -3561,7 +5257,7 @@ paths:
             - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/internal_interfaces_http_handlers.SubscriptionResponse'
+                  $ref: '#/definitions/orris_internal_application_subscription_dto.SubscriptionDTO'
               type: object
         "400":
           description: Invalid subscription ID
@@ -3588,11 +5284,60 @@ paths:
       summary: Get subscription by ID
       tags:
       - subscriptions
+  /subscriptions/{id}/cancel:
+    post:
+      consumes:
+      - application/json
+      description: Cancel own subscription
+      parameters:
+      - description: Subscription ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Cancellation details
+        in: body
+        name: cancel
+        required: true
+        schema:
+          $ref: '#/definitions/internal_interfaces_http_handlers.CancelSubscriptionRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Subscription cancelled successfully
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "403":
+          description: Access denied
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "404":
+          description: Subscription not found
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+      security:
+      - Bearer: []
+      summary: Cancel subscription
+      tags:
+      - subscriptions
   /subscriptions/{id}/plan:
     patch:
       consumes:
       - application/json
-      description: Change the plan of an existing subscription (upgrade or downgrade)
+      description: Change the plan of own subscription (upgrade or downgrade)
       parameters:
       - description: Subscription ID
         in: path
@@ -3635,55 +5380,6 @@ paths:
       security:
       - Bearer: []
       summary: Change subscription plan
-      tags:
-      - subscriptions
-  /subscriptions/{id}/status:
-    patch:
-      consumes:
-      - application/json
-      description: Update subscription status (activate, cancel, or renew)
-      parameters:
-      - description: Subscription ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      - description: Status update details
-        in: body
-        name: status
-        required: true
-        schema:
-          $ref: '#/definitions/internal_interfaces_http_handlers.UpdateSubscriptionStatusRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Subscription status updated successfully
-          schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
-        "400":
-          description: Bad request
-          schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
-        "403":
-          description: Access denied
-          schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
-        "404":
-          description: Subscription not found
-          schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
-      security:
-      - Bearer: []
-      summary: Update subscription status
       tags:
       - subscriptions
   /subscriptions/{id}/tokens:
@@ -4229,7 +5925,14 @@ paths:
             - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
             - properties:
                 data:
-                  $ref: '#/definitions/orris_internal_shared_utils.ListResponse'
+                  allOf:
+                  - $ref: '#/definitions/orris_internal_shared_utils.ListResponse'
+                  - properties:
+                      items:
+                        items:
+                          $ref: '#/definitions/orris_internal_application_user_dto.UserResponse'
+                        type: array
+                    type: object
               type: object
         "400":
           description: Invalid query parameters
@@ -4262,14 +5965,19 @@ paths:
         name: user
         required: true
         schema:
-          $ref: '#/definitions/internal_application_user_dto.CreateUserRequest'
+          $ref: '#/definitions/orris_internal_application_user_dto.CreateUserRequest'
       produces:
       - application/json
       responses:
         "201":
           description: User created successfully
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_application_user_dto.UserResponse'
+              type: object
         "400":
           description: Bad request
           schema:
@@ -4352,7 +6060,12 @@ paths:
         "200":
           description: User details
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_application_user_dto.UserResponse'
+              type: object
         "400":
           description: Invalid user ID
           schema:
@@ -4395,14 +6108,19 @@ paths:
         name: user
         required: true
         schema:
-          $ref: '#/definitions/internal_application_user_dto.UpdateUserRequest'
+          $ref: '#/definitions/orris_internal_application_user_dto.UpdateUserRequest'
       produces:
       - application/json
       responses:
         "200":
           description: User updated successfully
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_application_user_dto.UserResponse'
+              type: object
         "400":
           description: Bad request
           schema:
@@ -4449,7 +6167,12 @@ paths:
         "200":
           description: User details
           schema:
-            $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            allOf:
+            - $ref: '#/definitions/orris_internal_shared_utils.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/orris_internal_application_user_dto.UserResponse'
+              type: object
         "400":
           description: Invalid email
           schema:

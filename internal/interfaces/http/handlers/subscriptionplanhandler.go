@@ -6,11 +6,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	subdto "orris/internal/application/subscription/dto"
 	"orris/internal/application/subscription/usecases"
 	"orris/internal/shared/errors"
 	"orris/internal/shared/logger"
 	"orris/internal/shared/utils"
 )
+
+// Ensure subdto is used to avoid unused import error
+var _ = subdto.SubscriptionPlanDTO{}
 
 type SubscriptionPlanHandler struct {
 	createPlanUC      *usecases.CreateSubscriptionPlanUseCase
@@ -88,12 +92,12 @@ type UpdatePlanStatusRequest struct {
 // @Accept			json
 // @Produce		json
 // @Security		Bearer
-// @Param			plan	body		CreatePlanRequest	true	"Subscription plan data"
-// @Success		201		{object}	utils.APIResponse	"Subscription plan created successfully"
-// @Failure		400		{object}	utils.APIResponse	"Bad request"
-// @Failure		401		{object}	utils.APIResponse	"Unauthorized"
-// @Failure		409		{object}	utils.APIResponse	"Plan slug already exists"
-// @Failure		500		{object}	utils.APIResponse	"Internal server error"
+// @Param			plan	body		CreatePlanRequest										true	"Subscription plan data"
+// @Success		201		{object}	utils.APIResponse{data=subdto.SubscriptionPlanDTO}	"Subscription plan created successfully"
+// @Failure		400		{object}	utils.APIResponse										"Bad request"
+// @Failure		401		{object}	utils.APIResponse										"Unauthorized"
+// @Failure		409		{object}	utils.APIResponse										"Plan slug already exists"
+// @Failure		500		{object}	utils.APIResponse										"Internal server error"
 // @Router			/subscription-plans [post]
 func (h *SubscriptionPlanHandler) CreatePlan(c *gin.Context) {
 	var req CreatePlanRequest
@@ -135,13 +139,13 @@ func (h *SubscriptionPlanHandler) CreatePlan(c *gin.Context) {
 // @Accept			json
 // @Produce		json
 // @Security		Bearer
-// @Param			id		path		int					true	"Plan ID"
-// @Param			plan	body		UpdatePlanRequest	true	"Plan update data"
-// @Success		200		{object}	utils.APIResponse	"Subscription plan updated successfully"
-// @Failure		400		{object}	utils.APIResponse	"Bad request"
-// @Failure		401		{object}	utils.APIResponse	"Unauthorized"
-// @Failure		404		{object}	utils.APIResponse	"Plan not found"
-// @Failure		500		{object}	utils.APIResponse	"Internal server error"
+// @Param			id		path		int													true	"Plan ID"
+// @Param			plan	body		UpdatePlanRequest									true	"Plan update data"
+// @Success		200		{object}	utils.APIResponse{data=subdto.SubscriptionPlanDTO}	"Subscription plan updated successfully"
+// @Failure		400		{object}	utils.APIResponse									"Bad request"
+// @Failure		401		{object}	utils.APIResponse									"Unauthorized"
+// @Failure		404		{object}	utils.APIResponse									"Plan not found"
+// @Failure		500		{object}	utils.APIResponse									"Internal server error"
 // @Router			/subscription-plans/{id} [put]
 func (h *SubscriptionPlanHandler) UpdatePlan(c *gin.Context) {
 	planID, err := parsePlanID(c)
@@ -188,12 +192,12 @@ func (h *SubscriptionPlanHandler) UpdatePlan(c *gin.Context) {
 // @Accept			json
 // @Produce		json
 // @Security		Bearer
-// @Param			id	path		int					true	"Plan ID"
-// @Success		200	{object}	utils.APIResponse	"Subscription plan details"
-// @Failure		400	{object}	utils.APIResponse	"Invalid plan ID"
-// @Failure		401	{object}	utils.APIResponse	"Unauthorized"
-// @Failure		404	{object}	utils.APIResponse	"Plan not found"
-// @Failure		500	{object}	utils.APIResponse	"Internal server error"
+// @Param			id	path		int													true	"Plan ID"
+// @Success		200	{object}	utils.APIResponse{data=subdto.SubscriptionPlanDTO}	"Subscription plan details"
+// @Failure		400	{object}	utils.APIResponse									"Invalid plan ID"
+// @Failure		401	{object}	utils.APIResponse									"Unauthorized"
+// @Failure		404	{object}	utils.APIResponse									"Plan not found"
+// @Failure		500	{object}	utils.APIResponse									"Internal server error"
 // @Router			/subscription-plans/{id} [get]
 func (h *SubscriptionPlanHandler) GetPlan(c *gin.Context) {
 	planID, err := parsePlanID(c)
@@ -217,15 +221,15 @@ func (h *SubscriptionPlanHandler) GetPlan(c *gin.Context) {
 // @Accept			json
 // @Produce		json
 // @Security		Bearer
-// @Param			page			query		int					false	"Page number"			default(1)
-// @Param			page_size		query		int					false	"Page size"				default(20)
-// @Param			status			query		string				false	"Plan status filter"	Enums(active,inactive,archived)
-// @Param			is_public		query		bool				false	"Filter by public/private plans"
-// @Param			billing_cycle	query		string				false	"Filter by billing cycle"	Enums(monthly,quarterly,semi_annual,annual,lifetime)
-// @Success		200				{object}	utils.APIResponse	"Subscription plans list"
-// @Failure		400				{object}	utils.APIResponse	"Invalid query parameters"
-// @Failure		401				{object}	utils.APIResponse	"Unauthorized"
-// @Failure		500				{object}	utils.APIResponse	"Internal server error"
+// @Param			page			query		int																		false	"Page number"			default(1)
+// @Param			page_size		query		int																		false	"Page size"				default(20)
+// @Param			status			query		string																	false	"Plan status filter"	Enums(active,inactive,archived)
+// @Param			is_public		query		bool																	false	"Filter by public/private plans"
+// @Param			billing_cycle	query		string																	false	"Filter by billing cycle"	Enums(monthly,quarterly,semi_annual,annual,lifetime)
+// @Success		200				{object}	utils.APIResponse{data=utils.ListResponse{items=[]subdto.SubscriptionPlanDTO}}	"Subscription plans list"
+// @Failure		400				{object}	utils.APIResponse															"Invalid query parameters"
+// @Failure		401				{object}	utils.APIResponse															"Unauthorized"
+// @Failure		500				{object}	utils.APIResponse															"Internal server error"
 // @Router			/subscription-plans [get]
 func (h *SubscriptionPlanHandler) ListPlans(c *gin.Context) {
 	query, err := parseListPlansQuery(c)
@@ -248,8 +252,8 @@ func (h *SubscriptionPlanHandler) ListPlans(c *gin.Context) {
 // @Tags			subscription-plans
 // @Accept			json
 // @Produce		json
-// @Success		200	{object}	utils.APIResponse	"Public subscription plans"
-// @Failure		500	{object}	utils.APIResponse	"Internal server error"
+// @Success		200	{object}	utils.APIResponse{data=[]subdto.SubscriptionPlanDTO}	"Public subscription plans"
+// @Failure		500	{object}	utils.APIResponse										"Internal server error"
 // @Router			/subscription-plans/public [get]
 func (h *SubscriptionPlanHandler) GetPublicPlans(c *gin.Context) {
 	result, err := h.getPublicPlansUC.Execute(c.Request.Context())
@@ -313,11 +317,11 @@ func (h *SubscriptionPlanHandler) UpdatePlanStatus(c *gin.Context) {
 // @Description	Returns all available billing cycles and prices for a plan
 // @Tags			subscription-plans
 // @Produce		json
-// @Param			id	path		int					true	"Plan ID"
-// @Success		200	{object}	utils.APIResponse	"Pricing options for the plan"
-// @Failure		400	{object}	utils.APIResponse	"Invalid plan ID"
-// @Failure		404	{object}	utils.APIResponse	"Plan not found"
-// @Failure		500	{object}	utils.APIResponse	"Internal server error"
+// @Param			id	path		int													true	"Plan ID"
+// @Success		200	{object}	utils.APIResponse{data=[]subdto.PricingOptionDTO}	"Pricing options for the plan"
+// @Failure		400	{object}	utils.APIResponse									"Invalid plan ID"
+// @Failure		404	{object}	utils.APIResponse									"Plan not found"
+// @Failure		500	{object}	utils.APIResponse									"Internal server error"
 // @Router			/subscription-plans/{id}/pricings [get]
 func (h *SubscriptionPlanHandler) GetPlanPricings(c *gin.Context) {
 	planID, err := parsePlanID(c)

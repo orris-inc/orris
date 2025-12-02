@@ -16,6 +16,391 @@
     },
     "basePath": "/",
     "paths": {
+        "/admin/subscriptions": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get a paginated list of all subscriptions with optional filters",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-subscriptions"
+                ],
+                "summary": "List all subscriptions (Admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Page size",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "active",
+                            "inactive",
+                            "cancelled",
+                            "expired",
+                            "pending"
+                        ],
+                        "type": "string",
+                        "description": "Subscription status filter",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Filter by user ID",
+                        "name": "user_id",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Subscriptions list",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/orris_internal_shared_utils.ListResponse"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid query parameters",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - admin only",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Admin creates a subscription for any user",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-subscriptions"
+                ],
+                "summary": "Create subscription for user (Admin)",
+                "parameters": [
+                    {
+                        "description": "Subscription data",
+                        "name": "subscription",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_interfaces_http_handlers_admin.CreateSubscriptionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Subscription created successfully",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - admin only",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "User or plan not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/subscriptions/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get details of any subscription",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-subscriptions"
+                ],
+                "summary": "Get subscription by ID (Admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Subscription ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Subscription details",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid subscription ID",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - admin only",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Subscription not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/subscriptions/{id}/plan": {
+            "patch": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Change the plan of any subscription",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-subscriptions"
+                ],
+                "summary": "Change subscription plan (Admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Subscription ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Plan change details",
+                        "name": "plan",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_interfaces_http_handlers_admin.ChangePlanRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Plan changed successfully",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - admin only",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Subscription or plan not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/subscriptions/{id}/status": {
+            "patch": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Update subscription status (activate, cancel, or renew)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-subscriptions"
+                ],
+                "summary": "Update subscription status (Admin)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Subscription ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Status update details",
+                        "name": "status",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_interfaces_http_handlers_admin.UpdateStatusRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Subscription status updated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - admin only",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Subscription not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/agents/{id}/config": {
             "get": {
                 "security": [
@@ -1195,6 +1580,1420 @@
                 }
             }
         },
+        "/forward-agent-api/rules": {
+            "get": {
+                "description": "Retrieve all enabled forward rules for client configuration synchronization",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-agent-api"
+                ],
+                "summary": "Get enabled forward rules for client",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "default": "Bearer fwd_xxx",
+                        "description": "Agent token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Enabled forward rules retrieved successfully",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/forward-agent-api/traffic": {
+            "post": {
+                "description": "Submit forward rule traffic statistics from client",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-agent-api"
+                ],
+                "summary": "Report forward rule traffic data",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "default": "Bearer fwd_xxx",
+                        "description": "Agent token",
+                        "name": "Authorization",
+                        "in": "header",
+                        "required": true
+                    },
+                    {
+                        "description": "Forward rule traffic data",
+                        "name": "traffic",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_interfaces_http_handlers_forward.ReportTrafficRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Traffic reported successfully",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request body",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/forward-agents": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get a paginated list of forward agents",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-agents"
+                ],
+                "summary": "List forward agents",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Page size",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name filter",
+                        "name": "name",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "enabled",
+                            "disabled"
+                        ],
+                        "type": "string",
+                        "description": "Status filter",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "default": "created_at",
+                        "description": "Sort field",
+                        "name": "order_by",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "desc",
+                        "description": "Sort direction",
+                        "name": "order",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Forward agents list",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid query parameters",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Create a new forward agent with authentication token",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-agents"
+                ],
+                "summary": "Create a new forward agent",
+                "parameters": [
+                    {
+                        "description": "Forward agent data",
+                        "name": "agent",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_interfaces_http_handlers_forward.CreateForwardAgentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Forward agent created successfully",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/forward-agents/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get details of a forward agent by its ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-agents"
+                ],
+                "summary": "Get forward agent by ID",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Forward agent ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Forward agent details",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid agent ID",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Forward agent not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Update forward agent information by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-agents"
+                ],
+                "summary": "Update forward agent",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Forward agent ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Forward agent update data",
+                        "name": "agent",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_interfaces_http_handlers_forward.UpdateForwardAgentRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Forward agent updated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Forward agent not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Delete a forward agent by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-agents"
+                ],
+                "summary": "Delete forward agent",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Forward agent ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Forward agent deleted successfully"
+                    },
+                    "400": {
+                        "description": "Invalid agent ID",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Forward agent not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/forward-agents/{id}/disable": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Disable a forward agent to prevent client access",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-agents"
+                ],
+                "summary": "Disable forward agent",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Forward agent ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Forward agent disabled successfully",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid agent ID",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Forward agent not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/forward-agents/{id}/enable": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Enable a forward agent to allow client access",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-agents"
+                ],
+                "summary": "Enable forward agent",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Forward agent ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Forward agent enabled successfully",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid agent ID",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Forward agent not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/forward-agents/{id}/regenerate-token": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Regenerate authentication token for a forward agent",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-agents"
+                ],
+                "summary": "Regenerate forward agent token",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Forward agent ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Token regenerated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid agent ID",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Forward agent not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/forward-agents/{id}/status": {
+            "patch": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Update forward agent status (enable or disable)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-agents"
+                ],
+                "summary": "Update forward agent status",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Forward agent ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Status update data",
+                        "name": "status",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_interfaces_http_handlers_forward.UpdateAgentStatusRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Status updated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Forward agent not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/forward-rules": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get a paginated list of forward rules",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-rules"
+                ],
+                "summary": "List forward rules",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Page number",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Page size",
+                        "name": "page_size",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Name filter",
+                        "name": "name",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "tcp",
+                            "udp",
+                            "both"
+                        ],
+                        "type": "string",
+                        "description": "Protocol filter",
+                        "name": "protocol",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "enabled",
+                            "disabled"
+                        ],
+                        "type": "string",
+                        "description": "Status filter",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "default": "created_at",
+                        "description": "Sort field",
+                        "name": "order_by",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "default": "desc",
+                        "description": "Sort direction",
+                        "name": "order",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Forward rules list",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid query parameters",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Create a new TCP/UDP forward rule configuration",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-rules"
+                ],
+                "summary": "Create a new forward rule",
+                "parameters": [
+                    {
+                        "description": "Forward rule data",
+                        "name": "rule",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_interfaces_http_handlers_forward.CreateForwardRuleRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Forward rule created successfully",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict - Listen port already in use",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/forward-rules/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Get details of a forward rule by its ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-rules"
+                ],
+                "summary": "Get forward rule by ID",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Forward rule ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Forward rule details",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid rule ID",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Forward rule not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Update forward rule configuration by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-rules"
+                ],
+                "summary": "Update forward rule",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Forward rule ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Forward rule update data",
+                        "name": "rule",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_interfaces_http_handlers_forward.UpdateForwardRuleRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Forward rule updated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Forward rule not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict - Listen port already in use",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Delete a forward rule configuration by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-rules"
+                ],
+                "summary": "Delete forward rule",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Forward rule ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Forward rule deleted successfully"
+                    },
+                    "400": {
+                        "description": "Invalid rule ID",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Forward rule not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/forward-rules/{id}/disable": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Disable a forward rule (client will stop forwarding)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-rules"
+                ],
+                "summary": "Disable forward rule",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Forward rule ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Forward rule disabled successfully",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid rule ID",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Forward rule not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/forward-rules/{id}/enable": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Enable a forward rule (client will pick up and start forwarding)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-rules"
+                ],
+                "summary": "Enable forward rule",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Forward rule ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Forward rule enabled successfully",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid rule ID",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Forward rule not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/forward-rules/{id}/reset-traffic": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Reset the upload and download byte counters for a forward rule",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-rules"
+                ],
+                "summary": "Reset forward rule traffic counters",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Forward rule ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Traffic counters reset successfully",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid rule ID",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Forward rule not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/forward-rules/{id}/status": {
+            "patch": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Update forward rule status (enable or disable)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "forward-rules"
+                ],
+                "summary": "Update forward rule status",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Forward rule ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Status update data",
+                        "name": "status",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_interfaces_http_handlers_forward.UpdateStatusRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Status updated successfully",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden - Requires admin role",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Forward rule not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/health": {
             "get": {
                 "description": "Check if the service is healthy",
@@ -1263,7 +3062,34 @@
                     "200": {
                         "description": "Node groups list",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "allOf": [
+                                                {
+                                                    "$ref": "#/definitions/orris_internal_shared_utils.ListResponse"
+                                                },
+                                                {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "items": {
+                                                            "type": "array",
+                                                            "items": {
+                                                                "$ref": "#/definitions/orris_internal_application_node_dto.NodeGroupDTO"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -1324,7 +3150,19 @@
                     "201": {
                         "description": "Node group created successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/orris_internal_application_node_dto.NodeGroupDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -1385,7 +3223,19 @@
                     "200": {
                         "description": "Node group details",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/orris_internal_application_node_dto.NodeGroupDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -1459,7 +3309,19 @@
                     "200": {
                         "description": "Node group updated successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/orris_internal_application_node_dto.NodeGroupDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -1588,7 +3450,22 @@
                     "200": {
                         "description": "List of nodes in group",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/orris_internal_application_node_dto.NodeDTO"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -2150,7 +4027,34 @@
                     "200": {
                         "description": "Nodes list",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "allOf": [
+                                                {
+                                                    "$ref": "#/definitions/orris_internal_shared_utils.ListResponse"
+                                                },
+                                                {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "items": {
+                                                            "type": "array",
+                                                            "items": {
+                                                                "$ref": "#/definitions/orris_internal_application_node_dto.NodeDTO"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -2211,7 +4115,19 @@
                     "201": {
                         "description": "Node created successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/orris_internal_application_node_dto.NodeDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -2272,7 +4188,19 @@
                     "200": {
                         "description": "Node details",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/orris_internal_application_node_dto.NodeDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -2346,7 +4274,19 @@
                     "200": {
                         "description": "Node updated successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/orris_internal_application_node_dto.NodeDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -2484,7 +4424,19 @@
                     "200": {
                         "description": "Node status updated successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/orris_internal_application_node_dto.NodeDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -3636,7 +5588,34 @@
                     "200": {
                         "description": "Subscription plans list",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "allOf": [
+                                                {
+                                                    "$ref": "#/definitions/orris_internal_shared_utils.ListResponse"
+                                                },
+                                                {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "items": {
+                                                            "type": "array",
+                                                            "items": {
+                                                                "$ref": "#/definitions/orris_internal_application_subscription_dto.SubscriptionPlanDTO"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -3691,7 +5670,19 @@
                     "201": {
                         "description": "Subscription plan created successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/orris_internal_application_subscription_dto.SubscriptionPlanDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -3738,7 +5729,22 @@
                     "200": {
                         "description": "Public subscription plans",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/orris_internal_application_subscription_dto.SubscriptionPlanDTO"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "500": {
@@ -3781,7 +5787,19 @@
                     "200": {
                         "description": "Subscription plan details",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/orris_internal_application_subscription_dto.SubscriptionPlanDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -3849,7 +5867,19 @@
                     "200": {
                         "description": "Subscription plan updated successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/orris_internal_application_subscription_dto.SubscriptionPlanDTO"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -3902,7 +5932,22 @@
                     "200": {
                         "description": "Pricing options for the plan",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/orris_internal_application_subscription_dto.PricingOptionDTO"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -4003,7 +6048,7 @@
                         "Bearer": []
                     }
                 ],
-                "description": "Get a paginated list of subscriptions for the authenticated user",
+                "description": "Get a paginated list of current user's subscriptions",
                 "consumes": [
                     "application/json"
                 ],
@@ -4013,7 +6058,7 @@
                 "tags": [
                     "subscriptions"
                 ],
-                "summary": "List user subscriptions",
+                "summary": "List my subscriptions",
                 "parameters": [
                     {
                         "type": "integer",
@@ -4055,7 +6100,22 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/orris_internal_shared_utils.ListResponse"
+                                            "allOf": [
+                                                {
+                                                    "$ref": "#/definitions/orris_internal_shared_utils.ListResponse"
+                                                },
+                                                {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "items": {
+                                                            "type": "array",
+                                                            "items": {
+                                                                "$ref": "#/definitions/orris_internal_application_subscription_dto.SubscriptionDTO"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            ]
                                         }
                                     }
                                 }
@@ -4088,7 +6148,7 @@
                         "Bearer": []
                     }
                 ],
-                "description": "Create a new subscription for the authenticated user with the specified plan and billing cycle. Admin users can optionally specify a user_id to create subscription for any user.",
+                "description": "Create a new subscription for the authenticated user",
                 "consumes": [
                     "application/json"
                 ],
@@ -4098,10 +6158,10 @@
                 "tags": [
                     "subscriptions"
                 ],
-                "summary": "Create a new subscription with billing cycle selection",
+                "summary": "Create subscription for self",
                 "parameters": [
                     {
-                        "description": "Subscription data with billing cycle (weekly/monthly/quarterly/semi_annual/yearly/lifetime). For admin: optionally specify user_id to create subscription for another user.",
+                        "description": "Subscription data",
                         "name": "subscription",
                         "in": "body",
                         "required": true,
@@ -4122,7 +6182,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/internal_interfaces_http_handlers.SubscriptionCreateResult"
+                                            "$ref": "#/definitions/internal_interfaces_http_handlers.CreateSubscriptionResponse"
                                         }
                                     }
                                 }
@@ -4141,14 +6201,8 @@
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
                     },
-                    "403": {
-                        "description": "Forbidden - only admin can create subscription for other users",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                        }
-                    },
                     "404": {
-                        "description": "Plan not found or user not found",
+                        "description": "Plan not found",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -4169,7 +6223,7 @@
                         "Bearer": []
                     }
                 ],
-                "description": "Get details of a specific subscription by its ID",
+                "description": "Get details of own subscription by ID",
                 "consumes": [
                     "application/json"
                 ],
@@ -4201,7 +6255,7 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/internal_interfaces_http_handlers.SubscriptionResponse"
+                                            "$ref": "#/definitions/orris_internal_application_subscription_dto.SubscriptionDTO"
                                         }
                                     }
                                 }
@@ -4241,6 +6295,82 @@
                 }
             }
         },
+        "/subscriptions/{id}/cancel": {
+            "post": {
+                "security": [
+                    {
+                        "Bearer": []
+                    }
+                ],
+                "description": "Cancel own subscription",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "subscriptions"
+                ],
+                "summary": "Cancel subscription",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Subscription ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Cancellation details",
+                        "name": "cancel",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_interfaces_http_handlers.CancelSubscriptionRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Subscription cancelled successfully",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Access denied",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Subscription not found",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/subscriptions/{id}/plan": {
             "patch": {
                 "security": [
@@ -4248,7 +6378,7 @@
                         "Bearer": []
                     }
                 ],
-                "description": "Change the plan of an existing subscription (upgrade or downgrade)",
+                "description": "Change the plan of own subscription (upgrade or downgrade)",
                 "consumes": [
                     "application/json"
                 ],
@@ -4304,82 +6434,6 @@
                     },
                     "404": {
                         "description": "Subscription or plan not found",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal server error",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/subscriptions/{id}/status": {
-            "patch": {
-                "security": [
-                    {
-                        "Bearer": []
-                    }
-                ],
-                "description": "Update subscription status (activate, cancel, or renew)",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "subscriptions"
-                ],
-                "summary": "Update subscription status",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Subscription ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    },
-                    {
-                        "description": "Status update details",
-                        "name": "status",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/internal_interfaces_http_handlers.UpdateSubscriptionStatusRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "Subscription status updated successfully",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad request",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                        }
-                    },
-                    "403": {
-                        "description": "Access denied",
-                        "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
-                        }
-                    },
-                    "404": {
-                        "description": "Subscription not found",
                         "schema": {
                             "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
                         }
@@ -5229,7 +7283,22 @@
                                     "type": "object",
                                     "properties": {
                                         "data": {
-                                            "$ref": "#/definitions/orris_internal_shared_utils.ListResponse"
+                                            "allOf": [
+                                                {
+                                                    "$ref": "#/definitions/orris_internal_shared_utils.ListResponse"
+                                                },
+                                                {
+                                                    "type": "object",
+                                                    "properties": {
+                                                        "items": {
+                                                            "type": "array",
+                                                            "items": {
+                                                                "$ref": "#/definitions/orris_internal_application_user_dto.UserResponse"
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            ]
                                         }
                                     }
                                 }
@@ -5286,7 +7355,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_application_user_dto.CreateUserRequest"
+                            "$ref": "#/definitions/orris_internal_application_user_dto.CreateUserRequest"
                         }
                     }
                 ],
@@ -5294,7 +7363,19 @@
                     "201": {
                         "description": "User created successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/orris_internal_application_user_dto.UserResponse"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -5361,7 +7442,19 @@
                     "200": {
                         "description": "User details",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/orris_internal_application_user_dto.UserResponse"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -5554,7 +7647,19 @@
                     "200": {
                         "description": "User details",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/orris_internal_application_user_dto.UserResponse"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -5682,7 +7787,7 @@
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "$ref": "#/definitions/internal_application_user_dto.UpdateUserRequest"
+                            "$ref": "#/definitions/orris_internal_application_user_dto.UpdateUserRequest"
                         }
                     }
                 ],
@@ -5690,7 +7795,19 @@
                     "200": {
                         "description": "User updated successfully",
                         "schema": {
-                            "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/orris_internal_shared_utils.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/orris_internal_application_user_dto.UserResponse"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -5754,23 +7871,6 @@
                 }
             }
         },
-        "internal_application_user_dto.CreateUserRequest": {
-            "type": "object",
-            "required": [
-                "email",
-                "name"
-            ],
-            "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 100,
-                    "minLength": 2
-                }
-            }
-        },
         "internal_application_user_dto.UpdateProfileRequest": {
             "type": "object",
             "properties": {
@@ -5781,35 +7881,6 @@
                     "type": "string",
                     "maxLength": 100,
                     "minLength": 2
-                }
-            }
-        },
-        "internal_application_user_dto.UpdateUserRequest": {
-            "type": "object",
-            "properties": {
-                "email": {
-                    "type": "string"
-                },
-                "name": {
-                    "type": "string",
-                    "maxLength": 100,
-                    "minLength": 2
-                },
-                "role": {
-                    "type": "string",
-                    "enum": [
-                        "user",
-                        "admin"
-                    ]
-                },
-                "status": {
-                    "type": "string",
-                    "enum": [
-                        "active",
-                        "inactive",
-                        "pending",
-                        "suspended"
-                    ]
                 }
             }
         },
@@ -6070,6 +8141,20 @@
                 }
             }
         },
+        "internal_interfaces_http_handlers.CancelSubscriptionRequest": {
+            "type": "object",
+            "required": [
+                "reason"
+            ],
+            "properties": {
+                "immediate": {
+                    "type": "boolean"
+                },
+                "reason": {
+                    "type": "string"
+                }
+            }
+        },
         "internal_interfaces_http_handlers.ChangePlanRequest": {
             "type": "object",
             "required": [
@@ -6228,10 +8313,17 @@
                 },
                 "start_date": {
                     "type": "string"
+                }
+            }
+        },
+        "internal_interfaces_http_handlers.CreateSubscriptionResponse": {
+            "type": "object",
+            "properties": {
+                "subscription": {
+                    "$ref": "#/definitions/orris_internal_application_subscription_dto.SubscriptionDTO"
                 },
-                "user_id": {
-                    "description": "Optional: Admin can specify target user ID",
-                    "type": "integer"
+                "token": {
+                    "$ref": "#/definitions/orris_internal_application_subscription_dto.SubscriptionTokenDTO"
                 }
             }
         },
@@ -6326,63 +8418,6 @@
                 },
                 "token": {
                     "type": "string"
-                }
-            }
-        },
-        "internal_interfaces_http_handlers.SubscriptionCreateResult": {
-            "type": "object",
-            "properties": {
-                "subscription": {},
-                "token": {}
-            }
-        },
-        "internal_interfaces_http_handlers.SubscriptionResponse": {
-            "type": "object",
-            "properties": {
-                "auto_renew": {
-                    "type": "boolean"
-                },
-                "cancel_reason": {
-                    "type": "string"
-                },
-                "cancelled_at": {
-                    "type": "string"
-                },
-                "created_at": {
-                    "type": "string"
-                },
-                "current_period_end": {
-                    "type": "string"
-                },
-                "current_period_start": {
-                    "type": "string"
-                },
-                "end_date": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "is_active": {
-                    "type": "boolean"
-                },
-                "is_expired": {
-                    "type": "boolean"
-                },
-                "plan_id": {
-                    "type": "integer"
-                },
-                "start_date": {
-                    "type": "string"
-                },
-                "status": {
-                    "type": "string"
-                },
-                "updated_at": {
-                    "type": "string"
-                },
-                "user_id": {
-                    "type": "integer"
                 }
             }
         },
@@ -6489,18 +8524,91 @@
                 }
             }
         },
-        "internal_interfaces_http_handlers.UpdateSubscriptionStatusRequest": {
+        "internal_interfaces_http_handlers.VerifyEmailRequest": {
+            "type": "object",
+            "required": [
+                "token"
+            ],
+            "properties": {
+                "token": {
+                    "type": "string"
+                }
+            }
+        },
+        "internal_interfaces_http_handlers_admin.ChangePlanRequest": {
+            "type": "object",
+            "required": [
+                "change_type",
+                "effective_date",
+                "new_plan_id"
+            ],
+            "properties": {
+                "change_type": {
+                    "type": "string",
+                    "enum": [
+                        "upgrade",
+                        "downgrade"
+                    ]
+                },
+                "effective_date": {
+                    "type": "string",
+                    "enum": [
+                        "immediate",
+                        "period_end"
+                    ]
+                },
+                "new_plan_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_interfaces_http_handlers_admin.CreateSubscriptionRequest": {
+            "type": "object",
+            "required": [
+                "billing_cycle",
+                "plan_id",
+                "user_id"
+            ],
+            "properties": {
+                "auto_renew": {
+                    "type": "boolean"
+                },
+                "billing_cycle": {
+                    "type": "string",
+                    "enum": [
+                        "weekly",
+                        "monthly",
+                        "quarterly",
+                        "semi_annual",
+                        "yearly",
+                        "lifetime"
+                    ]
+                },
+                "payment_info": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "plan_id": {
+                    "type": "integer"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "user_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "internal_interfaces_http_handlers_admin.UpdateStatusRequest": {
             "type": "object",
             "required": [
                 "status"
             ],
             "properties": {
                 "immediate": {
-                    "description": "Optional for cancellation",
                     "type": "boolean"
                 },
                 "reason": {
-                    "description": "Required when status is \"cancelled\"",
                     "type": "string"
                 },
                 "status": {
@@ -6513,14 +8621,172 @@
                 }
             }
         },
-        "internal_interfaces_http_handlers.VerifyEmailRequest": {
+        "internal_interfaces_http_handlers_forward.CreateForwardAgentRequest": {
             "type": "object",
             "required": [
-                "token"
+                "name"
             ],
             "properties": {
-                "token": {
-                    "type": "string"
+                "name": {
+                    "type": "string",
+                    "example": "Production Agent"
+                },
+                "remark": {
+                    "type": "string",
+                    "example": "Forward agent for production environment"
+                }
+            }
+        },
+        "internal_interfaces_http_handlers_forward.CreateForwardRuleRequest": {
+            "type": "object",
+            "required": [
+                "listen_port",
+                "name",
+                "protocol",
+                "target_address",
+                "target_port"
+            ],
+            "properties": {
+                "listen_port": {
+                    "type": "integer",
+                    "example": 13306
+                },
+                "name": {
+                    "type": "string",
+                    "example": "MySQL-Forward"
+                },
+                "protocol": {
+                    "type": "string",
+                    "enum": [
+                        "tcp",
+                        "udp",
+                        "both"
+                    ],
+                    "example": "tcp"
+                },
+                "remark": {
+                    "type": "string",
+                    "example": "Forward to internal MySQL server"
+                },
+                "target_address": {
+                    "type": "string",
+                    "example": "192.168.1.100"
+                },
+                "target_port": {
+                    "type": "integer",
+                    "example": 3306
+                }
+            }
+        },
+        "internal_interfaces_http_handlers_forward.ForwardRuleTrafficItem": {
+            "type": "object",
+            "required": [
+                "rule_id"
+            ],
+            "properties": {
+                "download_bytes": {
+                    "type": "integer",
+                    "minimum": 0
+                },
+                "rule_id": {
+                    "type": "integer"
+                },
+                "upload_bytes": {
+                    "type": "integer",
+                    "minimum": 0
+                }
+            }
+        },
+        "internal_interfaces_http_handlers_forward.ReportTrafficRequest": {
+            "type": "object",
+            "required": [
+                "rules"
+            ],
+            "properties": {
+                "rules": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_interfaces_http_handlers_forward.ForwardRuleTrafficItem"
+                    }
+                }
+            }
+        },
+        "internal_interfaces_http_handlers_forward.UpdateAgentStatusRequest": {
+            "type": "object",
+            "required": [
+                "status"
+            ],
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "enabled",
+                        "disabled"
+                    ],
+                    "example": "enabled"
+                }
+            }
+        },
+        "internal_interfaces_http_handlers_forward.UpdateForwardAgentRequest": {
+            "type": "object",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "example": "Updated Agent Name"
+                },
+                "remark": {
+                    "type": "string",
+                    "example": "Updated remark"
+                }
+            }
+        },
+        "internal_interfaces_http_handlers_forward.UpdateForwardRuleRequest": {
+            "type": "object",
+            "properties": {
+                "listen_port": {
+                    "type": "integer",
+                    "example": 13307
+                },
+                "name": {
+                    "type": "string",
+                    "example": "MySQL-Forward-Updated"
+                },
+                "protocol": {
+                    "type": "string",
+                    "enum": [
+                        "tcp",
+                        "udp",
+                        "both"
+                    ],
+                    "example": "tcp"
+                },
+                "remark": {
+                    "type": "string",
+                    "example": "Updated remark"
+                },
+                "target_address": {
+                    "type": "string",
+                    "example": "192.168.1.101"
+                },
+                "target_port": {
+                    "type": "integer",
+                    "example": 3307
+                }
+            }
+        },
+        "internal_interfaces_http_handlers_forward.UpdateStatusRequest": {
+            "type": "object",
+            "required": [
+                "status"
+            ],
+            "properties": {
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "enabled",
+                        "disabled"
+                    ],
+                    "example": "enabled"
                 }
             }
         },
@@ -6854,6 +9120,190 @@
                 }
             }
         },
+        "orris_internal_application_node_dto.NodeDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string",
+                    "example": "2024-01-15T10:30:00Z"
+                },
+                "custom_fields": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "encryption_method": {
+                    "type": "string",
+                    "enum": [
+                        "aes-256-gcm",
+                        "aes-128-gcm",
+                        "chacha20-ietf-poly1305"
+                    ],
+                    "example": "aes-256-gcm"
+                },
+                "id": {
+                    "type": "integer",
+                    "example": 1
+                },
+                "is_available": {
+                    "type": "boolean",
+                    "example": true
+                },
+                "maintenance_reason": {
+                    "type": "string",
+                    "example": "Scheduled maintenance"
+                },
+                "name": {
+                    "type": "string",
+                    "example": "US-Node-01"
+                },
+                "plugin": {
+                    "type": "string",
+                    "example": "obfs-local"
+                },
+                "plugin_opts": {
+                    "type": "object",
+                    "additionalProperties": {
+                        "type": "string"
+                    },
+                    "example": {
+                        "obfs": "http",
+                        "obfs-host": "example.com"
+                    }
+                },
+                "protocol": {
+                    "type": "string",
+                    "enum": [
+                        "shadowsocks",
+                        "trojan"
+                    ],
+                    "example": "shadowsocks"
+                },
+                "region": {
+                    "type": "string",
+                    "example": "us-west"
+                },
+                "server_address": {
+                    "type": "string",
+                    "example": "proxy.example.com"
+                },
+                "server_port": {
+                    "type": "integer",
+                    "example": 8388
+                },
+                "sort_order": {
+                    "type": "integer",
+                    "example": 100
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "active",
+                        "inactive",
+                        "maintenance"
+                    ],
+                    "example": "active"
+                },
+                "system_status": {
+                    "description": "System status fields (from Redis)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/orris_internal_application_node_dto.NodeSystemStatusDTO"
+                        }
+                    ]
+                },
+                "tags": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "premium",
+                        "fast"
+                    ]
+                },
+                "updated_at": {
+                    "type": "string",
+                    "example": "2024-01-15T14:20:00Z"
+                },
+                "version": {
+                    "type": "integer",
+                    "example": 1
+                }
+            }
+        },
+        "orris_internal_application_node_dto.NodeGroupDTO": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_public": {
+                    "type": "boolean"
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "name": {
+                    "type": "string"
+                },
+                "node_count": {
+                    "type": "integer"
+                },
+                "node_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "sort_order": {
+                    "type": "integer"
+                },
+                "subscription_plan_ids": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "updated_at": {
+                    "type": "string"
+                },
+                "version": {
+                    "type": "integer"
+                }
+            }
+        },
+        "orris_internal_application_node_dto.NodeSystemStatusDTO": {
+            "type": "object",
+            "properties": {
+                "cpu": {
+                    "type": "string",
+                    "example": "45.50"
+                },
+                "disk": {
+                    "type": "string",
+                    "example": "80.20"
+                },
+                "memory": {
+                    "type": "string",
+                    "example": "65.30"
+                },
+                "updated_at": {
+                    "type": "integer",
+                    "example": 1705324800
+                },
+                "uptime": {
+                    "type": "integer",
+                    "example": 86400
+                }
+            }
+        },
         "orris_internal_application_node_dto.OnlineSubscriptionItem": {
             "type": "object",
             "required": [
@@ -6932,6 +9382,284 @@
                     "description": "Upload traffic in bytes",
                     "type": "integer",
                     "minimum": 0
+                }
+            }
+        },
+        "orris_internal_application_subscription_dto.PricingOptionDTO": {
+            "type": "object",
+            "properties": {
+                "billing_cycle": {
+                    "description": "weekly, monthly, quarterly, semi_annual, yearly, lifetime",
+                    "type": "string"
+                },
+                "currency": {
+                    "description": "Currency code: CNY, USD, EUR, GBP, JPY",
+                    "type": "string"
+                },
+                "is_active": {
+                    "description": "Whether this pricing option is currently available",
+                    "type": "boolean"
+                },
+                "price": {
+                    "description": "Price in smallest currency unit (cents)",
+                    "type": "integer"
+                }
+            }
+        },
+        "orris_internal_application_subscription_dto.SubscriptionDTO": {
+            "type": "object",
+            "properties": {
+                "autoRenew": {
+                    "type": "boolean"
+                },
+                "cancelReason": {
+                    "type": "string"
+                },
+                "cancelledAt": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "currentPeriodEnd": {
+                    "type": "string"
+                },
+                "currentPeriodStart": {
+                    "type": "string"
+                },
+                "endDate": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "isActive": {
+                    "type": "boolean"
+                },
+                "isExpired": {
+                    "type": "boolean"
+                },
+                "plan": {
+                    "$ref": "#/definitions/orris_internal_application_subscription_dto.SubscriptionPlanDTO"
+                },
+                "startDate": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "updatedAt": {
+                    "type": "string"
+                },
+                "userID": {
+                    "type": "integer"
+                }
+            }
+        },
+        "orris_internal_application_subscription_dto.SubscriptionPlanDTO": {
+            "type": "object",
+            "properties": {
+                "apirateLimit": {
+                    "type": "integer"
+                },
+                "billingCycle": {
+                    "description": "Deprecated: use Pricings array, kept for backward compatibility",
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "features": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "isPublic": {
+                    "type": "boolean"
+                },
+                "limits": {
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "maxProjects": {
+                    "type": "integer"
+                },
+                "maxUsers": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "price": {
+                    "description": "Deprecated: use Pricings array, kept for backward compatibility",
+                    "type": "integer",
+                    "format": "int64"
+                },
+                "pricings": {
+                    "description": "Multiple pricing options for different billing cycles",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/orris_internal_application_subscription_dto.PricingOptionDTO"
+                    }
+                },
+                "slug": {
+                    "type": "string"
+                },
+                "sortOrder": {
+                    "type": "integer"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "trialDays": {
+                    "type": "integer"
+                },
+                "updatedAt": {
+                    "type": "string"
+                }
+            }
+        },
+        "orris_internal_application_subscription_dto.SubscriptionTokenDTO": {
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "type": "string"
+                },
+                "expiresAt": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "isActive": {
+                    "type": "boolean"
+                },
+                "lastUsedAt": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "prefix": {
+                    "type": "string"
+                },
+                "scope": {
+                    "type": "string"
+                },
+                "subscriptionID": {
+                    "type": "integer"
+                },
+                "usageCount": {
+                    "type": "integer",
+                    "format": "int64"
+                }
+            }
+        },
+        "orris_internal_application_user_dto.CreateUserRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "name"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 2
+                }
+            }
+        },
+        "orris_internal_application_user_dto.UpdateUserRequest": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 100,
+                    "minLength": 2
+                },
+                "role": {
+                    "type": "string",
+                    "enum": [
+                        "user",
+                        "admin"
+                    ]
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "active",
+                        "inactive",
+                        "pending",
+                        "suspended"
+                    ]
+                }
+            }
+        },
+        "orris_internal_application_user_dto.UserMetadata": {
+            "type": "object",
+            "properties": {
+                "can_perform_actions": {
+                    "type": "boolean"
+                },
+                "email_domain": {
+                    "type": "string"
+                },
+                "is_business_email": {
+                    "type": "boolean"
+                },
+                "requires_verification": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "orris_internal_application_user_dto.UserResponse": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "display_name": {
+                    "type": "string"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "initials": {
+                    "type": "string"
+                },
+                "metadata": {
+                    "$ref": "#/definitions/orris_internal_application_user_dto.UserMetadata"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "role": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
                 }
             }
         },

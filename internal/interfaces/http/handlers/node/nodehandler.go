@@ -6,11 +6,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	nodedto "orris/internal/application/node/dto"
 	"orris/internal/application/node/usecases"
 	"orris/internal/shared/errors"
 	"orris/internal/shared/logger"
 	"orris/internal/shared/utils"
 )
+
+// Ensure nodedto is used to avoid unused import error
+var _ = nodedto.NodeDTO{}
 
 type NodeHandler struct {
 	createNodeUC    usecases.CreateNodeExecutor
@@ -49,12 +53,12 @@ func NewNodeHandler(
 //	@Accept			json
 //	@Produce		json
 //	@Security		Bearer
-//	@Param			node	body		CreateNodeRequest	true	"Node data"
-//	@Success		201		{object}	utils.APIResponse	"Node created successfully"
-//	@Failure		400		{object}	utils.APIResponse	"Bad request"
-//	@Failure		401		{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403		{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		500		{object}	utils.APIResponse	"Internal server error"
+//	@Param			node	body		CreateNodeRequest								true	"Node data"
+//	@Success		201		{object}	utils.APIResponse{data=nodedto.NodeDTO}	"Node created successfully"
+//	@Failure		400		{object}	utils.APIResponse								"Bad request"
+//	@Failure		401		{object}	utils.APIResponse								"Unauthorized"
+//	@Failure		403		{object}	utils.APIResponse								"Forbidden - Requires admin role"
+//	@Failure		500		{object}	utils.APIResponse								"Internal server error"
 //	@Router			/nodes [post]
 func (h *NodeHandler) CreateNode(c *gin.Context) {
 	var req CreateNodeRequest
@@ -82,13 +86,13 @@ func (h *NodeHandler) CreateNode(c *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Security		Bearer
-//	@Param			id	path		int					true	"Node ID"
-//	@Success		200	{object}	utils.APIResponse	"Node details"
-//	@Failure		400	{object}	utils.APIResponse	"Invalid node ID"
-//	@Failure		401	{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403	{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		404	{object}	utils.APIResponse	"Node not found"
-//	@Failure		500	{object}	utils.APIResponse	"Internal server error"
+//	@Param			id	path		int										true	"Node ID"
+//	@Success		200	{object}	utils.APIResponse{data=nodedto.NodeDTO}	"Node details"
+//	@Failure		400	{object}	utils.APIResponse						"Invalid node ID"
+//	@Failure		401	{object}	utils.APIResponse						"Unauthorized"
+//	@Failure		403	{object}	utils.APIResponse						"Forbidden - Requires admin role"
+//	@Failure		404	{object}	utils.APIResponse						"Node not found"
+//	@Failure		500	{object}	utils.APIResponse						"Internal server error"
 //	@Router			/nodes/{id} [get]
 func (h *NodeHandler) GetNode(c *gin.Context) {
 	nodeID, err := parseNodeID(c)
@@ -115,14 +119,14 @@ func (h *NodeHandler) GetNode(c *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Security		Bearer
-//	@Param			id		path		int					true	"Node ID"
-//	@Param			node	body		UpdateNodeRequest	true	"Node update data"
-//	@Success		200		{object}	utils.APIResponse	"Node updated successfully"
-//	@Failure		400		{object}	utils.APIResponse	"Bad request"
-//	@Failure		401		{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403		{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		404		{object}	utils.APIResponse	"Node not found"
-//	@Failure		500		{object}	utils.APIResponse	"Internal server error"
+//	@Param			id		path		int											true	"Node ID"
+//	@Param			node	body		UpdateNodeRequest							true	"Node update data"
+//	@Success		200		{object}	utils.APIResponse{data=nodedto.NodeDTO}	"Node updated successfully"
+//	@Failure		400		{object}	utils.APIResponse							"Bad request"
+//	@Failure		401		{object}	utils.APIResponse							"Unauthorized"
+//	@Failure		403		{object}	utils.APIResponse							"Forbidden - Requires admin role"
+//	@Failure		404		{object}	utils.APIResponse							"Node not found"
+//	@Failure		500		{object}	utils.APIResponse							"Internal server error"
 //	@Router			/nodes/{id} [put]
 func (h *NodeHandler) UpdateNode(c *gin.Context) {
 	nodeID, err := parseNodeID(c)
@@ -191,18 +195,18 @@ func (h *NodeHandler) DeleteNode(c *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Security		Bearer
-//	@Param			page		query		int					false	"Page number"			default(1)
-//	@Param			page_size	query		int					false	"Page size"				default(20)
-//	@Param			status		query		string				false	"Node status filter"	Enums(active,inactive,maintenance,error)
-//	@Param			region		query		string				false	"Region filter"
-//	@Param			tags		query		[]string			false	"Tags filter"
-//	@Param			order_by	query		string				false	"Sort field"		default(sort_order)
-//	@Param			order		query		string				false	"Sort direction"	Enums(asc,desc)	default(asc)
-//	@Success		200			{object}	utils.APIResponse	"Nodes list"
-//	@Failure		400			{object}	utils.APIResponse	"Invalid query parameters"
-//	@Failure		401			{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403			{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		500			{object}	utils.APIResponse	"Internal server error"
+//	@Param			page		query		int																	false	"Page number"			default(1)
+//	@Param			page_size	query		int																	false	"Page size"				default(20)
+//	@Param			status		query		string																false	"Node status filter"	Enums(active,inactive,maintenance,error)
+//	@Param			region		query		string																false	"Region filter"
+//	@Param			tags		query		[]string															false	"Tags filter"
+//	@Param			order_by	query		string																false	"Sort field"		default(sort_order)
+//	@Param			order		query		string																false	"Sort direction"	Enums(asc,desc)	default(asc)
+//	@Success		200			{object}	utils.APIResponse{data=utils.ListResponse{items=[]nodedto.NodeDTO}}	"Nodes list"
+//	@Failure		400			{object}	utils.APIResponse													"Invalid query parameters"
+//	@Failure		401			{object}	utils.APIResponse													"Unauthorized"
+//	@Failure		403			{object}	utils.APIResponse													"Forbidden - Requires admin role"
+//	@Failure		500			{object}	utils.APIResponse													"Internal server error"
 //	@Router			/nodes [get]
 func (h *NodeHandler) ListNodes(c *gin.Context) {
 	req, err := parseListNodesRequest(c)
@@ -267,14 +271,14 @@ type UpdateNodeStatusRequest struct {
 //	@Accept			json
 //	@Produce		json
 //	@Security		Bearer
-//	@Param			id		path		int							true	"Node ID"
-//	@Param			status	body		UpdateNodeStatusRequest		true	"Status update details"
-//	@Success		200		{object}	utils.APIResponse			"Node status updated successfully"
-//	@Failure		400		{object}	utils.APIResponse			"Bad request"
-//	@Failure		401		{object}	utils.APIResponse			"Unauthorized"
-//	@Failure		403		{object}	utils.APIResponse			"Forbidden - Requires admin role"
-//	@Failure		404		{object}	utils.APIResponse			"Node not found"
-//	@Failure		500		{object}	utils.APIResponse			"Internal server error"
+//	@Param			id		path		int											true	"Node ID"
+//	@Param			status	body		UpdateNodeStatusRequest						true	"Status update details"
+//	@Success		200		{object}	utils.APIResponse{data=nodedto.NodeDTO}	"Node status updated successfully"
+//	@Failure		400		{object}	utils.APIResponse							"Bad request"
+//	@Failure		401		{object}	utils.APIResponse							"Unauthorized"
+//	@Failure		403		{object}	utils.APIResponse							"Forbidden - Requires admin role"
+//	@Failure		404		{object}	utils.APIResponse							"Node not found"
+//	@Failure		500		{object}	utils.APIResponse							"Internal server error"
 //	@Router			/nodes/{id}/status [patch]
 func (h *NodeHandler) UpdateNodeStatus(c *gin.Context) {
 	nodeID, err := parseNodeID(c)

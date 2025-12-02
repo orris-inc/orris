@@ -10,7 +10,7 @@ import (
 )
 
 type ListUserSubscriptionsQuery struct {
-	UserID   uint
+	UserID   *uint // nil means all users (admin only)
 	Status   *string
 	Page     int
 	PageSize int
@@ -53,7 +53,7 @@ func (uc *ListUserSubscriptionsUseCase) Execute(ctx context.Context, query ListU
 	}
 
 	filter := subscription.SubscriptionFilter{
-		UserID:   &query.UserID,
+		UserID:   query.UserID,
 		Status:   query.Status,
 		Page:     query.Page,
 		PageSize: query.PageSize,

@@ -6,11 +6,15 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	nodedto "orris/internal/application/node/dto"
 	"orris/internal/application/node/usecases"
 	"orris/internal/shared/errors"
 	"orris/internal/shared/logger"
 	"orris/internal/shared/utils"
 )
+
+// Ensure nodedto is used for swagger
+var _ = nodedto.NodeGroupDTO{}
 
 type NodeGroupHandler struct {
 	createNodeGroupUC           usecases.CreateNodeGroupExecutor
@@ -67,12 +71,12 @@ func NewNodeGroupHandler(
 //	@Accept			json
 //	@Produce		json
 //	@Security		Bearer
-//	@Param			group	body		CreateNodeGroupRequest	true	"Node group data"
-//	@Success		201		{object}	utils.APIResponse		"Node group created successfully"
-//	@Failure		400		{object}	utils.APIResponse		"Bad request"
-//	@Failure		401		{object}	utils.APIResponse		"Unauthorized"
-//	@Failure		403		{object}	utils.APIResponse		"Forbidden - Requires admin role"
-//	@Failure		500		{object}	utils.APIResponse		"Internal server error"
+//	@Param			group	body		CreateNodeGroupRequest									true	"Node group data"
+//	@Success		201		{object}	utils.APIResponse{data=nodedto.NodeGroupDTO}	"Node group created successfully"
+//	@Failure		400		{object}	utils.APIResponse										"Bad request"
+//	@Failure		401		{object}	utils.APIResponse										"Unauthorized"
+//	@Failure		403		{object}	utils.APIResponse										"Forbidden - Requires admin role"
+//	@Failure		500		{object}	utils.APIResponse										"Internal server error"
 //	@Router			/node-groups [post]
 func (h *NodeGroupHandler) CreateNodeGroup(c *gin.Context) {
 	var req CreateNodeGroupRequest
@@ -106,13 +110,13 @@ func (h *NodeGroupHandler) CreateNodeGroup(c *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Security		Bearer
-//	@Param			id	path		int					true	"Node group ID"
-//	@Success		200	{object}	utils.APIResponse	"Node group details"
-//	@Failure		400	{object}	utils.APIResponse	"Invalid node group ID"
-//	@Failure		401	{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403	{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		404	{object}	utils.APIResponse	"Node group not found"
-//	@Failure		500	{object}	utils.APIResponse	"Internal server error"
+//	@Param			id	path		int												true	"Node group ID"
+//	@Success		200	{object}	utils.APIResponse{data=nodedto.NodeGroupDTO}	"Node group details"
+//	@Failure		400	{object}	utils.APIResponse								"Invalid node group ID"
+//	@Failure		401	{object}	utils.APIResponse								"Unauthorized"
+//	@Failure		403	{object}	utils.APIResponse								"Forbidden - Requires admin role"
+//	@Failure		404	{object}	utils.APIResponse								"Node group not found"
+//	@Failure		500	{object}	utils.APIResponse								"Internal server error"
 //	@Router			/node-groups/{id} [get]
 func (h *NodeGroupHandler) GetNodeGroup(c *gin.Context) {
 	groupID, err := parseNodeGroupID(c)
@@ -142,14 +146,14 @@ func (h *NodeGroupHandler) GetNodeGroup(c *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Security		Bearer
-//	@Param			id		path		int						true	"Node group ID"
-//	@Param			group	body		UpdateNodeGroupRequest	true	"Node group update data"
-//	@Success		200		{object}	utils.APIResponse		"Node group updated successfully"
-//	@Failure		400		{object}	utils.APIResponse		"Bad request"
-//	@Failure		401		{object}	utils.APIResponse		"Unauthorized"
-//	@Failure		403		{object}	utils.APIResponse		"Forbidden - Requires admin role"
-//	@Failure		404		{object}	utils.APIResponse		"Node group not found"
-//	@Failure		500		{object}	utils.APIResponse		"Internal server error"
+//	@Param			id		path		int												true	"Node group ID"
+//	@Param			group	body		UpdateNodeGroupRequest							true	"Node group update data"
+//	@Success		200		{object}	utils.APIResponse{data=nodedto.NodeGroupDTO}	"Node group updated successfully"
+//	@Failure		400		{object}	utils.APIResponse								"Bad request"
+//	@Failure		401		{object}	utils.APIResponse								"Unauthorized"
+//	@Failure		403		{object}	utils.APIResponse								"Forbidden - Requires admin role"
+//	@Failure		404		{object}	utils.APIResponse								"Node group not found"
+//	@Failure		500		{object}	utils.APIResponse								"Internal server error"
 //	@Router			/node-groups/{id} [put]
 func (h *NodeGroupHandler) UpdateNodeGroup(c *gin.Context) {
 	groupID, err := parseNodeGroupID(c)
@@ -235,14 +239,14 @@ func (h *NodeGroupHandler) DeleteNodeGroup(c *gin.Context) {
 //	@Accept			json
 //	@Produce		json
 //	@Security		Bearer
-//	@Param			page		query		int					false	"Page number"	default(1)
-//	@Param			page_size	query		int					false	"Page size"		default(20)
-//	@Param			is_public	query		bool				false	"Public visibility filter"
-//	@Success		200			{object}	utils.APIResponse	"Node groups list"
-//	@Failure		400			{object}	utils.APIResponse	"Invalid query parameters"
-//	@Failure		401			{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403			{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		500			{object}	utils.APIResponse	"Internal server error"
+//	@Param			page		query		int																		false	"Page number"	default(1)
+//	@Param			page_size	query		int																		false	"Page size"		default(20)
+//	@Param			is_public	query		bool																	false	"Public visibility filter"
+//	@Success		200			{object}	utils.APIResponse{data=utils.ListResponse{items=[]nodedto.NodeGroupDTO}}	"Node groups list"
+//	@Failure		400			{object}	utils.APIResponse															"Invalid query parameters"
+//	@Failure		401			{object}	utils.APIResponse															"Unauthorized"
+//	@Failure		403			{object}	utils.APIResponse															"Forbidden - Requires admin role"
+//	@Failure		500			{object}	utils.APIResponse															"Internal server error"
 //	@Router			/node-groups [get]
 func (h *NodeGroupHandler) ListNodeGroups(c *gin.Context) {
 	req, err := parseListNodeGroupsRequest(c)
@@ -509,13 +513,13 @@ type ListNodeGroupsRequest struct {
 //	@Accept			json
 //	@Produce		json
 //	@Security		Bearer
-//	@Param			id	path		int					true	"Node group ID"
-//	@Success		200	{object}	utils.APIResponse	"List of nodes in group"
-//	@Failure		400	{object}	utils.APIResponse	"Invalid node group ID"
-//	@Failure		401	{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403	{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		404	{object}	utils.APIResponse	"Node group not found"
-//	@Failure		500	{object}	utils.APIResponse	"Internal server error"
+//	@Param			id	path		int											true	"Node group ID"
+//	@Success		200	{object}	utils.APIResponse{data=[]nodedto.NodeDTO}	"List of nodes in group"
+//	@Failure		400	{object}	utils.APIResponse							"Invalid node group ID"
+//	@Failure		401	{object}	utils.APIResponse							"Unauthorized"
+//	@Failure		403	{object}	utils.APIResponse							"Forbidden - Requires admin role"
+//	@Failure		404	{object}	utils.APIResponse							"Node group not found"
+//	@Failure		500	{object}	utils.APIResponse							"Internal server error"
 //	@Router			/node-groups/{id}/nodes [get]
 func (h *NodeGroupHandler) ListGroupNodes(c *gin.Context) {
 	groupID, err := parseNodeGroupID(c)
