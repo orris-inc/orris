@@ -2,8 +2,12 @@ package usecases
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 
+	"github.com/orris-inc/orris/internal/infrastructure/config"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -89,8 +93,12 @@ func (uc *GenerateSubscriptionUseCase) Execute(ctx context.Context, cmd Generate
 		return nil, fmt.Errorf("unsupported format: %s", cmd.Format)
 	}
 
-	// Pass subscription UUID as password for node authentication
-	content, err := formatter.FormatWithPassword(nodes, subscriptionUUID)
+	// Generate HMAC password from subscription UUID (must match agent password generation)
+	hmacSecret := config.Get().Auth.JWT.Secret
+	password := generateHMACPassword(subscriptionUUID, hmacSecret)
+
+	// Pass HMAC password for node authentication
+	content, err := formatter.FormatWithPassword(nodes, password)
 	if err != nil {
 		uc.logger.Errorw("failed to format subscription", "error", err, "format", cmd.Format)
 		return nil, fmt.Errorf("failed to format subscription: %w", err)
@@ -118,4 +126,17 @@ type Node struct {
 	Password         string
 	Plugin           string
 	PluginOpts       map[string]string
+}
+
+// generateHMACPassword generates HMAC-SHA256 password from subscription UUID
+// This must match the password generation in agentdto.go for agent authentication
+func generateHMACPassword(subscriptionUUID, secret string) string {
+	if subscriptionUUID == "" || secret == "" {
+		return ""
+	}
+
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(subscriptionUUID))
+
+	return hex.EncodeToString(mac.Sum(nil))
 }

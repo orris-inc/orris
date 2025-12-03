@@ -14,9 +14,9 @@ type RefreshSubscriptionTokenCommand struct {
 }
 
 type RefreshSubscriptionTokenResult struct {
-	NewToken  string
-	TokenID   uint
-	ExpiresAt *time.Time
+	NewToken  string     `json:"new_token"`
+	TokenID   uint       `json:"token_id"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 }
 
 type RefreshSubscriptionTokenUseCase struct {

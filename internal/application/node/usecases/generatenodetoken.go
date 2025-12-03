@@ -16,11 +16,11 @@ type GenerateNodeTokenCommand struct {
 }
 
 type GenerateNodeTokenResult struct {
-	NodeID      uint
-	Token       string
-	TokenPrefix string
-	ExpiresAt   *time.Time
-	CreatedAt   time.Time
+	NodeID      uint       `json:"node_id"`
+	Token       string     `json:"token"`
+	TokenPrefix string     `json:"token_prefix"`
+	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	CreatedAt   time.Time  `json:"created_at"`
 }
 
 type GenerateNodeTokenUseCase struct {

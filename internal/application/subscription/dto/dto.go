@@ -8,43 +8,43 @@ import (
 )
 
 type SubscriptionDTO struct {
-	ID                 uint
-	UserID             uint
-	Plan               *SubscriptionPlanDTO
-	Status             string
-	StartDate          time.Time
-	EndDate            time.Time
-	AutoRenew          bool
-	CurrentPeriodStart time.Time
-	CurrentPeriodEnd   time.Time
-	IsExpired          bool
-	IsActive           bool
-	CancelledAt        *time.Time
-	CancelReason       *string
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
+	ID                 uint                 `json:"id"`
+	UserID             uint                 `json:"user_id"`
+	Plan               *SubscriptionPlanDTO `json:"plan,omitempty"`
+	Status             string               `json:"status"`
+	StartDate          time.Time            `json:"start_date"`
+	EndDate            time.Time            `json:"end_date"`
+	AutoRenew          bool                 `json:"auto_renew"`
+	CurrentPeriodStart time.Time            `json:"current_period_start"`
+	CurrentPeriodEnd   time.Time            `json:"current_period_end"`
+	IsExpired          bool                 `json:"is_expired"`
+	IsActive           bool                 `json:"is_active"`
+	CancelledAt        *time.Time           `json:"cancelled_at,omitempty"`
+	CancelReason       *string              `json:"cancel_reason,omitempty"`
+	CreatedAt          time.Time            `json:"created_at"`
+	UpdatedAt          time.Time            `json:"updated_at"`
 }
 
 type SubscriptionPlanDTO struct {
-	ID           uint
-	Name         string
-	Slug         string
-	Description  string
-	Price        uint64 // Deprecated: use Pricings array, kept for backward compatibility
-	Currency     string
-	BillingCycle string // Deprecated: use Pricings array, kept for backward compatibility
-	TrialDays    int
-	Status       string
-	Features     []string
-	Limits       map[string]interface{}
-	APIRateLimit uint
-	MaxUsers     uint
-	MaxProjects  uint
-	IsPublic     bool
-	SortOrder    int
-	Pricings     []*PricingOptionDTO `json:"pricings,omitempty"` // Multiple pricing options for different billing cycles
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	ID           uint                   `json:"id"`
+	Name         string                 `json:"name"`
+	Slug         string                 `json:"slug"`
+	Description  string                 `json:"description"`
+	Price        uint64                 `json:"price"`        // Deprecated: use Pricings array, kept for backward compatibility
+	Currency     string                 `json:"currency"`     // Deprecated: use Pricings array, kept for backward compatibility
+	BillingCycle string                 `json:"billing_cycle"` // Deprecated: use Pricings array, kept for backward compatibility
+	TrialDays    int                    `json:"trial_days"`
+	Status       string                 `json:"status"`
+	Features     []string               `json:"features"`
+	Limits       map[string]interface{} `json:"limits"`
+	APIRateLimit uint                   `json:"api_rate_limit"`
+	MaxUsers     uint                   `json:"max_users"`
+	MaxProjects  uint                   `json:"max_projects"`
+	IsPublic     bool                   `json:"is_public"`
+	SortOrder    int                    `json:"sort_order"`
+	Pricings     []*PricingOptionDTO    `json:"pricings,omitempty"` // Multiple pricing options for different billing cycles
+	CreatedAt    time.Time              `json:"created_at"`
+	UpdatedAt    time.Time              `json:"updated_at"`
 }
 
 // PricingOptionDTO represents a single pricing option for a specific billing cycle
@@ -56,16 +56,16 @@ type PricingOptionDTO struct {
 }
 
 type SubscriptionTokenDTO struct {
-	ID             uint
-	SubscriptionID uint
-	Name           string
-	Prefix         string
-	Scope          string
-	ExpiresAt      *time.Time
-	LastUsedAt     *time.Time
-	UsageCount     uint64
-	IsActive       bool
-	CreatedAt      time.Time
+	ID             uint       `json:"id"`
+	SubscriptionID uint       `json:"subscription_id"`
+	Name           string     `json:"name"`
+	Prefix         string     `json:"prefix"`
+	Scope          string     `json:"scope"`
+	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
+	LastUsedAt     *time.Time `json:"last_used_at,omitempty"`
+	UsageCount     uint64     `json:"usage_count"`
+	IsActive       bool       `json:"is_active"`
+	CreatedAt      time.Time  `json:"created_at"`
 }
 
 var (

@@ -56,10 +56,11 @@ type CreateSubscriptionRequest struct {
 	PaymentInfo  map[string]interface{} `json:"payment_info"`
 }
 
-// CancelSubscriptionRequest represents the request to cancel a subscription
-type CancelSubscriptionRequest struct {
-	Reason    string `json:"reason" binding:"required"`
-	Immediate *bool  `json:"immediate"`
+// UpdateStatusRequest represents the request to update subscription status
+type UpdateStatusRequest struct {
+	Status    string  `json:"status" binding:"required,oneof=cancelled"`
+	Reason    *string `json:"reason"`
+	Immediate *bool   `json:"immediate"`
 }
 
 // ChangePlanRequest represents the request to change subscription plan
@@ -191,7 +192,7 @@ func (h *SubscriptionHandler) ListUserSubscriptions(c *gin.Context) {
 	utils.ListSuccessResponse(c, result.Subscriptions, result.Total, result.Page, result.PageSize)
 }
 
-func (h *SubscriptionHandler) CancelSubscription(c *gin.Context) {
+func (h *SubscriptionHandler) UpdateStatus(c *gin.Context) {
 	// Ownership already verified by middleware
 	subscriptionID, exists := c.Get("subscription_id")
 	if !exists {
@@ -203,31 +204,45 @@ func (h *SubscriptionHandler) CancelSubscription(c *gin.Context) {
 		subscriptionID = uint(subscriptionID64)
 	}
 
-	var req CancelSubscriptionRequest
+	var req UpdateStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Warnw("invalid request body for cancel subscription", "error", err)
+		h.logger.Warnw("invalid request body for update subscription status", "error", err)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	immediate := false
-	if req.Immediate != nil {
-		immediate = *req.Immediate
-	}
+	switch req.Status {
+	case "cancelled":
+		reason := ""
+		if req.Reason != nil {
+			reason = *req.Reason
+		}
+		if reason == "" {
+			utils.ErrorResponse(c, http.StatusBadRequest, "reason is required for cancellation")
+			return
+		}
 
-	cmd := usecases.CancelSubscriptionCommand{
-		SubscriptionID: subscriptionID.(uint),
-		Reason:         req.Reason,
-		Immediate:      immediate,
-	}
+		immediate := false
+		if req.Immediate != nil {
+			immediate = *req.Immediate
+		}
 
-	if err := h.cancelUseCase.Execute(c.Request.Context(), cmd); err != nil {
-		h.logger.Errorw("failed to cancel subscription", "error", err, "subscription_id", subscriptionID)
-		utils.ErrorResponseWithError(c, err)
-		return
-	}
+		cmd := usecases.CancelSubscriptionCommand{
+			SubscriptionID: subscriptionID.(uint),
+			Reason:         reason,
+			Immediate:      immediate,
+		}
 
-	utils.SuccessResponse(c, http.StatusOK, "Subscription cancelled successfully", nil)
+		if err := h.cancelUseCase.Execute(c.Request.Context(), cmd); err != nil {
+			h.logger.Errorw("failed to cancel subscription", "error", err, "subscription_id", subscriptionID)
+			utils.ErrorResponseWithError(c, err)
+			return
+		}
+		utils.SuccessResponse(c, http.StatusOK, "Subscription cancelled successfully", nil)
+
+	default:
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid status value")
+	}
 }
 
 func (h *SubscriptionHandler) ChangePlan(c *gin.Context) {

@@ -18,11 +18,11 @@ type GenerateSubscriptionTokenCommand struct {
 }
 
 type GenerateSubscriptionTokenResult struct {
-	Token     string
-	TokenID   uint
-	Prefix    string
-	ExpiresAt *time.Time
-	CreatedAt time.Time
+	Token     string     `json:"token"`
+	TokenID   uint       `json:"token_id"`
+	Prefix    string     `json:"prefix"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
 }
 
 type GenerateSubscriptionTokenUseCase struct {

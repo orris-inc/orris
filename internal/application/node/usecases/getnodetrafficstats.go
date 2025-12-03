@@ -33,12 +33,12 @@ type NodeTrafficStatsResult struct {
 }
 
 type GetNodeTrafficStatsUseCase struct {
-	trafficRepo node.NodeTrafficRepository
+	trafficRepo node.SubscriptionTrafficRepository
 	logger      logger.Interface
 }
 
 func NewGetNodeTrafficStatsUseCase(
-	trafficRepo node.NodeTrafficRepository,
+	trafficRepo node.SubscriptionTrafficRepository,
 	logger logger.Interface,
 ) *GetNodeTrafficStatsUseCase {
 	return &GetNodeTrafficStatsUseCase{

@@ -22,10 +22,10 @@ type ListForwardRulesQuery struct {
 
 // ListForwardRulesResult represents the output of listing forward rules.
 type ListForwardRulesResult struct {
-	Rules []*dto.ForwardRuleDTO
-	Total int64
-	Page  int
-	Pages int
+	Rules []*dto.ForwardRuleDTO `json:"rules"`
+	Total int64                 `json:"total"`
+	Page  int                   `json:"page"`
+	Pages int                   `json:"pages"`
 }
 
 // ListForwardRulesUseCase handles listing forward rules.

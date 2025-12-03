@@ -297,8 +297,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	listNodesUC := nodeUsecases.NewListNodesUseCase(nodeRepoImpl, log)
 	generateNodeTokenUC := nodeUsecases.NewGenerateNodeTokenUseCase(nodeRepoImpl, log)
 
-	// Initialize node traffic repository (used by agent report adapter)
-	nodeTrafficRepo := repository.NewNodeTrafficRepository(db, log)
+	// Initialize subscription traffic repository (used by agent report adapter)
+	subscriptionTrafficRepo := repository.NewSubscriptionTrafficRepository(db, log)
 
 	// Initialize node authentication middleware using the same node repository adapter
 	validateNodeTokenUC := nodeUsecases.NewValidateNodeTokenUseCase(nodeRepo, log)
@@ -394,7 +394,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	getNodeSubscriptionsUC := nodeUsecases.NewGetNodeSubscriptionsUseCase(subscriptionRepo, log)
 
 	// Initialize agent report use cases with adapters
-	subscriptionTrafficRecorder := adapters.NewSubscriptionTrafficRecorderAdapter(nodeTrafficRepo, log)
+	subscriptionTrafficRecorder := adapters.NewSubscriptionTrafficRecorderAdapter(subscriptionTrafficRepo, log)
 	systemStatusUpdater := adapters.NewNodeSystemStatusUpdaterAdapter(redisClient, log)
 	onlineSubscriptionTracker := adapters.NewOnlineSubscriptionTrackerAdapter(log)
 	reportSubscriptionTrafficUC := nodeUsecases.NewReportSubscriptionTrafficUseCase(subscriptionTrafficRecorder, log)
@@ -580,10 +580,10 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		subscriptionWithOwnership.Use(r.subscriptionOwnerMiddleware.RequireOwnership())
 		{
 			subscriptionWithOwnership.GET("", r.subscriptionHandler.GetSubscription)
-			subscriptionWithOwnership.POST("/cancel", r.subscriptionHandler.CancelSubscription)
+			subscriptionWithOwnership.PATCH("/status", r.subscriptionHandler.UpdateStatus)
 			subscriptionWithOwnership.PATCH("/plan", r.subscriptionHandler.ChangePlan)
 
-			// Token sub-resource endpoints
+			// Token sub-resource endpoints (using /action path due to Gin framework limitation with colon format)
 			subscriptionWithOwnership.POST("/tokens/:token_id/refresh", r.subscriptionTokenHandler.RefreshToken)
 			subscriptionWithOwnership.DELETE("/tokens/:token_id", r.subscriptionTokenHandler.RevokeToken)
 			subscriptionWithOwnership.POST("/tokens", r.subscriptionTokenHandler.GenerateToken)

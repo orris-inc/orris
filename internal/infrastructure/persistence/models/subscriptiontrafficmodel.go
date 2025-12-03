@@ -8,9 +8,9 @@ import (
 	"github.com/orris-inc/orris/internal/shared/constants"
 )
 
-// NodeTrafficModel represents the database persistence model for node traffic statistics
+// SubscriptionTrafficModel represents the database persistence model for subscription traffic statistics
 // This is the anti-corruption layer between domain and database
-type NodeTrafficModel struct {
+type SubscriptionTrafficModel struct {
 	ID             uint      `gorm:"primarykey"`
 	NodeID         uint      `gorm:"not null;index:idx_node_period"`
 	UserID         *uint     `gorm:"index:idx_user_period"`
@@ -27,12 +27,12 @@ type NodeTrafficModel struct {
 }
 
 // TableName specifies the table name for GORM
-func (NodeTrafficModel) TableName() string {
-	return constants.TableNodeTraffic
+func (SubscriptionTrafficModel) TableName() string {
+	return constants.TableSubscriptionTraffic
 }
 
 // BeforeCreate hook for GORM
-func (t *NodeTrafficModel) BeforeCreate(tx *gorm.DB) error {
+func (t *SubscriptionTrafficModel) BeforeCreate(tx *gorm.DB) error {
 	// Automatically calculate total if not set
 	if t.Total == 0 {
 		t.Total = t.Upload + t.Download
@@ -41,7 +41,7 @@ func (t *NodeTrafficModel) BeforeCreate(tx *gorm.DB) error {
 }
 
 // BeforeUpdate hook for GORM
-func (t *NodeTrafficModel) BeforeUpdate(tx *gorm.DB) error {
+func (t *SubscriptionTrafficModel) BeforeUpdate(tx *gorm.DB) error {
 	// Automatically update total
 	t.Total = t.Upload + t.Download
 	return nil

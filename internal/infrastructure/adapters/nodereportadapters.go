@@ -17,19 +17,19 @@ import (
 //
 // Architecture: Agent → Adapter → MySQL
 type SubscriptionTrafficRecorderAdapter struct {
-	nodeTrafficRepo node.NodeTrafficRepository
-	logger          logger.Interface
+	subscriptionTrafficRepo node.SubscriptionTrafficRepository
+	logger                  logger.Interface
 }
 
 // NewSubscriptionTrafficRecorderAdapter creates a new subscription traffic recorder adapter
 // Note: Directly writes to database for simplicity and reliability
 func NewSubscriptionTrafficRecorderAdapter(
-	nodeTrafficRepo node.NodeTrafficRepository,
+	subscriptionTrafficRepo node.SubscriptionTrafficRepository,
 	logger logger.Interface,
 ) nodeUsecases.SubscriptionTrafficRecorder {
 	return &SubscriptionTrafficRecorderAdapter{
-		nodeTrafficRepo: nodeTrafficRepo,
-		logger:          logger,
+		subscriptionTrafficRepo: subscriptionTrafficRepo,
+		logger:                  logger,
 	}
 }
 
@@ -51,9 +51,9 @@ func (a *SubscriptionTrafficRecorderAdapter) RecordSubscriptionTraffic(ctx conte
 
 	// Create domain entity
 	subIDUint := uint(subscriptionID)
-	traffic, err := node.NewNodeTraffic(nodeID, &subIDUint, nil, period)
+	traffic, err := node.NewSubscriptionTraffic(nodeID, &subIDUint, nil, period)
 	if err != nil {
-		a.logger.Errorw("failed to create node traffic entity",
+		a.logger.Errorw("failed to create subscription traffic entity",
 			"error", err,
 			"node_id", nodeID,
 			"subscription_id", subscriptionID,
@@ -72,7 +72,7 @@ func (a *SubscriptionTrafficRecorderAdapter) RecordSubscriptionTraffic(ctx conte
 	}
 
 	// Record in repository
-	if err := a.nodeTrafficRepo.RecordTraffic(ctx, traffic); err != nil {
+	if err := a.subscriptionTrafficRepo.RecordTraffic(ctx, traffic); err != nil {
 		a.logger.Errorw("failed to record subscription traffic",
 			"error", err,
 			"subscription_id", subscriptionID,
@@ -121,9 +121,9 @@ func (a *SubscriptionTrafficRecorderAdapter) BatchRecordSubscriptionTraffic(ctx 
 
 		// Create domain entity
 		subIDUint := uint(item.SubscriptionID)
-		traffic, err := node.NewNodeTraffic(nodeID, &subIDUint, nil, period)
+		traffic, err := node.NewSubscriptionTraffic(nodeID, &subIDUint, nil, period)
 		if err != nil {
-			a.logger.Errorw("failed to create node traffic entity in batch",
+			a.logger.Errorw("failed to create subscription traffic entity in batch",
 				"error", err,
 				"node_id", nodeID,
 				"subscription_id", item.SubscriptionID,
@@ -144,7 +144,7 @@ func (a *SubscriptionTrafficRecorderAdapter) BatchRecordSubscriptionTraffic(ctx 
 		}
 
 		// Record in repository
-		if err := a.nodeTrafficRepo.RecordTraffic(ctx, traffic); err != nil {
+		if err := a.subscriptionTrafficRepo.RecordTraffic(ctx, traffic); err != nil {
 			a.logger.Errorw("failed to record subscription traffic in batch",
 				"error", err,
 				"node_id", nodeID,

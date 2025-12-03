@@ -25,14 +25,14 @@ type TrafficLimitResult struct {
 }
 
 type CheckTrafficLimitUseCase struct {
-	trafficRepo      node.NodeTrafficRepository
+	trafficRepo      node.SubscriptionTrafficRepository
 	subscriptionRepo subscription.SubscriptionRepository
 	planRepo         subscription.SubscriptionPlanRepository
 	logger           logger.Interface
 }
 
 func NewCheckTrafficLimitUseCase(
-	trafficRepo node.NodeTrafficRepository,
+	trafficRepo node.SubscriptionTrafficRepository,
 	subscriptionRepo subscription.SubscriptionRepository,
 	planRepo subscription.SubscriptionPlanRepository,
 	logger logger.Interface,

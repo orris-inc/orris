@@ -13,47 +13,47 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
-// NodeTrafficRepositoryImpl implements the node.NodeTrafficRepository interface
-type NodeTrafficRepositoryImpl struct {
+// SubscriptionTrafficRepositoryImpl implements the node.SubscriptionTrafficRepository interface
+type SubscriptionTrafficRepositoryImpl struct {
 	db     *gorm.DB
-	mapper mappers.NodeTrafficMapper
+	mapper mappers.SubscriptionTrafficMapper
 	logger logger.Interface
 }
 
-// NewNodeTrafficRepository creates a new node traffic repository instance
-func NewNodeTrafficRepository(db *gorm.DB, logger logger.Interface) node.NodeTrafficRepository {
-	return &NodeTrafficRepositoryImpl{
+// NewSubscriptionTrafficRepository creates a new subscription traffic repository instance
+func NewSubscriptionTrafficRepository(db *gorm.DB, logger logger.Interface) node.SubscriptionTrafficRepository {
+	return &SubscriptionTrafficRepositoryImpl{
 		db:     db,
-		mapper: mappers.NewNodeTrafficMapper(),
+		mapper: mappers.NewSubscriptionTrafficMapper(),
 		logger: logger,
 	}
 }
 
 // RecordTraffic records a new traffic entry
-func (r *NodeTrafficRepositoryImpl) RecordTraffic(ctx context.Context, traffic *node.NodeTraffic) error {
+func (r *SubscriptionTrafficRepositoryImpl) RecordTraffic(ctx context.Context, traffic *node.SubscriptionTraffic) error {
 	model, err := r.mapper.ToModel(traffic)
 	if err != nil {
-		r.logger.Errorw("failed to map node traffic entity to model", "error", err)
-		return fmt.Errorf("failed to map node traffic entity: %w", err)
+		r.logger.Errorw("failed to map subscription traffic entity to model", "error", err)
+		return fmt.Errorf("failed to map subscription traffic entity: %w", err)
 	}
 
 	if err := r.db.WithContext(ctx).Create(model).Error; err != nil {
-		r.logger.Errorw("failed to record node traffic", "node_id", model.NodeID, "error", err)
-		return fmt.Errorf("failed to record node traffic: %w", err)
+		r.logger.Errorw("failed to record subscription traffic", "node_id", model.NodeID, "error", err)
+		return fmt.Errorf("failed to record subscription traffic: %w", err)
 	}
 
 	if err := traffic.SetID(model.ID); err != nil {
-		r.logger.Errorw("failed to set node traffic ID", "error", err)
-		return fmt.Errorf("failed to set node traffic ID: %w", err)
+		r.logger.Errorw("failed to set subscription traffic ID", "error", err)
+		return fmt.Errorf("failed to set subscription traffic ID: %w", err)
 	}
 
-	r.logger.Infow("node traffic recorded successfully", "id", model.ID, "node_id", model.NodeID)
+	r.logger.Infow("subscription traffic recorded successfully", "id", model.ID, "node_id", model.NodeID)
 	return nil
 }
 
 // GetTrafficStats retrieves traffic statistics based on filter criteria
-func (r *NodeTrafficRepositoryImpl) GetTrafficStats(ctx context.Context, filter node.TrafficStatsFilter) ([]*node.NodeTraffic, error) {
-	query := r.db.WithContext(ctx).Model(&models.NodeTrafficModel{})
+func (r *SubscriptionTrafficRepositoryImpl) GetTrafficStats(ctx context.Context, filter node.TrafficStatsFilter) ([]*node.SubscriptionTraffic, error) {
+	query := r.db.WithContext(ctx).Model(&models.SubscriptionTrafficModel{})
 
 	// Apply filters
 	if filter.NodeID != nil {
@@ -82,7 +82,7 @@ func (r *NodeTrafficRepositoryImpl) GetTrafficStats(ctx context.Context, filter 
 	query = query.Offset(offset).Limit(limit)
 
 	// Execute query
-	var trafficModels []*models.NodeTrafficModel
+	var trafficModels []*models.SubscriptionTrafficModel
 	if err := query.Order("period DESC").Find(&trafficModels).Error; err != nil {
 		r.logger.Errorw("failed to get traffic stats", "error", err)
 		return nil, fmt.Errorf("failed to get traffic stats: %w", err)
@@ -91,22 +91,22 @@ func (r *NodeTrafficRepositoryImpl) GetTrafficStats(ctx context.Context, filter 
 	// Convert models to entities
 	entities, err := r.mapper.ToEntities(trafficModels)
 	if err != nil {
-		r.logger.Errorw("failed to map node traffic models to entities", "error", err)
-		return nil, fmt.Errorf("failed to map node traffic: %w", err)
+		r.logger.Errorw("failed to map subscription traffic models to entities", "error", err)
+		return nil, fmt.Errorf("failed to map subscription traffic: %w", err)
 	}
 
 	return entities, nil
 }
 
 // GetTotalTraffic retrieves the total traffic for a node within a time range
-func (r *NodeTrafficRepositoryImpl) GetTotalTraffic(ctx context.Context, nodeID uint, from, to time.Time) (*node.TrafficSummary, error) {
+func (r *SubscriptionTrafficRepositoryImpl) GetTotalTraffic(ctx context.Context, nodeID uint, from, to time.Time) (*node.TrafficSummary, error) {
 	var result struct {
 		TotalUpload   uint64
 		TotalDownload uint64
 		TotalTraffic  uint64
 	}
 
-	query := r.db.WithContext(ctx).Model(&models.NodeTrafficModel{}).
+	query := r.db.WithContext(ctx).Model(&models.SubscriptionTrafficModel{}).
 		Select("COALESCE(SUM(upload), 0) as total_upload, COALESCE(SUM(download), 0) as total_download, COALESCE(SUM(total), 0) as total_traffic").
 		Where("node_id = ?", nodeID)
 
@@ -135,7 +135,7 @@ func (r *NodeTrafficRepositoryImpl) GetTotalTraffic(ctx context.Context, nodeID 
 }
 
 // AggregateDaily aggregates hourly traffic into daily statistics
-func (r *NodeTrafficRepositoryImpl) AggregateDaily(ctx context.Context, date time.Time) error {
+func (r *SubscriptionTrafficRepositoryImpl) AggregateDaily(ctx context.Context, date time.Time) error {
 	// Start a transaction for atomicity
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Calculate start and end of the day
@@ -152,7 +152,7 @@ func (r *NodeTrafficRepositoryImpl) AggregateDaily(ctx context.Context, date tim
 			TotalTraffic   uint64
 		}
 
-		err := tx.Model(&models.NodeTrafficModel{}).
+		err := tx.Model(&models.SubscriptionTrafficModel{}).
 			Select("node_id, user_id, subscription_id, SUM(upload) as total_upload, SUM(download) as total_download, SUM(total) as total_traffic").
 			Where("period >= ? AND period < ?", startOfDay, endOfDay).
 			Group("node_id, user_id, subscription_id").
@@ -165,7 +165,7 @@ func (r *NodeTrafficRepositoryImpl) AggregateDaily(ctx context.Context, date tim
 
 		// Create or update daily records
 		for _, record := range aggregatedRecords {
-			dailyRecord := &models.NodeTrafficModel{
+			dailyRecord := &models.SubscriptionTrafficModel{
 				NodeID:         record.NodeID,
 				UserID:         record.UserID,
 				SubscriptionID: record.SubscriptionID,
@@ -195,7 +195,7 @@ func (r *NodeTrafficRepositoryImpl) AggregateDaily(ctx context.Context, date tim
 }
 
 // AggregateMonthly aggregates daily traffic into monthly statistics
-func (r *NodeTrafficRepositoryImpl) AggregateMonthly(ctx context.Context, year int, month int) error {
+func (r *SubscriptionTrafficRepositoryImpl) AggregateMonthly(ctx context.Context, year int, month int) error {
 	// Start a transaction for atomicity
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Calculate start and end of the month
@@ -212,7 +212,7 @@ func (r *NodeTrafficRepositoryImpl) AggregateMonthly(ctx context.Context, year i
 			TotalTraffic   uint64
 		}
 
-		err := tx.Model(&models.NodeTrafficModel{}).
+		err := tx.Model(&models.SubscriptionTrafficModel{}).
 			Select("node_id, user_id, subscription_id, SUM(upload) as total_upload, SUM(download) as total_download, SUM(total) as total_traffic").
 			Where("period >= ? AND period < ?", startOfMonth, endOfMonth).
 			Group("node_id, user_id, subscription_id").
@@ -225,7 +225,7 @@ func (r *NodeTrafficRepositoryImpl) AggregateMonthly(ctx context.Context, year i
 
 		// Create or update monthly records
 		for _, record := range aggregatedRecords {
-			monthlyRecord := &models.NodeTrafficModel{
+			monthlyRecord := &models.SubscriptionTrafficModel{
 				NodeID:         record.NodeID,
 				UserID:         record.UserID,
 				SubscriptionID: record.SubscriptionID,
@@ -255,8 +255,8 @@ func (r *NodeTrafficRepositoryImpl) AggregateMonthly(ctx context.Context, year i
 }
 
 // GetDailyStats retrieves daily traffic statistics for a node
-func (r *NodeTrafficRepositoryImpl) GetDailyStats(ctx context.Context, nodeID uint, from, to time.Time) ([]*node.NodeTraffic, error) {
-	query := r.db.WithContext(ctx).Model(&models.NodeTrafficModel{}).
+func (r *SubscriptionTrafficRepositoryImpl) GetDailyStats(ctx context.Context, nodeID uint, from, to time.Time) ([]*node.SubscriptionTraffic, error) {
+	query := r.db.WithContext(ctx).Model(&models.SubscriptionTrafficModel{}).
 		Where("node_id = ?", nodeID)
 
 	if !from.IsZero() {
@@ -266,7 +266,7 @@ func (r *NodeTrafficRepositoryImpl) GetDailyStats(ctx context.Context, nodeID ui
 		query = query.Where("period <= ?", to)
 	}
 
-	var trafficModels []*models.NodeTrafficModel
+	var trafficModels []*models.SubscriptionTrafficModel
 	if err := query.Order("period ASC").Find(&trafficModels).Error; err != nil {
 		r.logger.Errorw("failed to get daily stats", "node_id", nodeID, "error", err)
 		return nil, fmt.Errorf("failed to get daily stats: %w", err)
@@ -275,20 +275,20 @@ func (r *NodeTrafficRepositoryImpl) GetDailyStats(ctx context.Context, nodeID ui
 	// Convert models to entities
 	entities, err := r.mapper.ToEntities(trafficModels)
 	if err != nil {
-		r.logger.Errorw("failed to map node traffic models to entities", "error", err)
-		return nil, fmt.Errorf("failed to map node traffic: %w", err)
+		r.logger.Errorw("failed to map subscription traffic models to entities", "error", err)
+		return nil, fmt.Errorf("failed to map subscription traffic: %w", err)
 	}
 
 	return entities, nil
 }
 
 // GetMonthlyStats retrieves monthly traffic statistics for a node
-func (r *NodeTrafficRepositoryImpl) GetMonthlyStats(ctx context.Context, nodeID uint, year int) ([]*node.NodeTraffic, error) {
+func (r *SubscriptionTrafficRepositoryImpl) GetMonthlyStats(ctx context.Context, nodeID uint, year int) ([]*node.SubscriptionTraffic, error) {
 	startOfYear := time.Date(year, 1, 1, 0, 0, 0, 0, time.UTC)
 	endOfYear := startOfYear.AddDate(1, 0, 0)
 
-	var trafficModels []*models.NodeTrafficModel
-	if err := r.db.WithContext(ctx).Model(&models.NodeTrafficModel{}).
+	var trafficModels []*models.SubscriptionTrafficModel
+	if err := r.db.WithContext(ctx).Model(&models.SubscriptionTrafficModel{}).
 		Where("node_id = ? AND period >= ? AND period < ?", nodeID, startOfYear, endOfYear).
 		Order("period ASC").
 		Find(&trafficModels).Error; err != nil {
@@ -299,16 +299,16 @@ func (r *NodeTrafficRepositoryImpl) GetMonthlyStats(ctx context.Context, nodeID 
 	// Convert models to entities
 	entities, err := r.mapper.ToEntities(trafficModels)
 	if err != nil {
-		r.logger.Errorw("failed to map node traffic models to entities", "error", err)
-		return nil, fmt.Errorf("failed to map node traffic: %w", err)
+		r.logger.Errorw("failed to map subscription traffic models to entities", "error", err)
+		return nil, fmt.Errorf("failed to map subscription traffic: %w", err)
 	}
 
 	return entities, nil
 }
 
 // DeleteOldRecords deletes traffic records older than the specified time
-func (r *NodeTrafficRepositoryImpl) DeleteOldRecords(ctx context.Context, before time.Time) error {
-	result := r.db.WithContext(ctx).Where("period < ?", before).Delete(&models.NodeTrafficModel{})
+func (r *SubscriptionTrafficRepositoryImpl) DeleteOldRecords(ctx context.Context, before time.Time) error {
+	result := r.db.WithContext(ctx).Where("period < ?", before).Delete(&models.SubscriptionTrafficModel{})
 	if result.Error != nil {
 		r.logger.Errorw("failed to delete old traffic records", "before", before, "error", result.Error)
 		return fmt.Errorf("failed to delete old traffic records: %w", result.Error)
