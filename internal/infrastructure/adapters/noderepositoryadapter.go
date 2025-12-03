@@ -140,16 +140,49 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, toke
 			plugin = *nodeModel.Plugin
 		}
 
-		nodeMap[nodeModel.ID] = &usecases.Node{
+		// Default protocol to shadowsocks if not specified
+		protocol := nodeModel.Protocol
+		if protocol == "" {
+			protocol = "shadowsocks"
+		}
+
+		ucNode := &usecases.Node{
 			ID:               nodeModel.ID,
 			Name:             nodeModel.Name,
 			ServerAddress:    nodeModel.ServerAddress,
 			ServerPort:       nodeModel.ServerPort,
+			Protocol:         protocol,
 			EncryptionMethod: nodeModel.EncryptionMethod,
 			Password:         "", // Password is not stored at node level; will be filled with subscription UUID
 			Plugin:           plugin,
 			PluginOpts:       pluginOpts,
 		}
+
+		// Parse Trojan config from CustomFields if protocol is trojan
+		if protocol == "trojan" && len(nodeModel.CustomFields) > 0 {
+			var customFields map[string]interface{}
+			if err := json.Unmarshal(nodeModel.CustomFields, &customFields); err == nil {
+				if trojanData, ok := customFields["trojan_config"].(map[string]interface{}); ok {
+					if tp, ok := trojanData["transport_protocol"].(string); ok {
+						ucNode.TransportProtocol = tp
+					}
+					if host, ok := trojanData["host"].(string); ok {
+						ucNode.Host = host
+					}
+					if path, ok := trojanData["path"].(string); ok {
+						ucNode.Path = path
+					}
+					if sni, ok := trojanData["sni"].(string); ok {
+						ucNode.SNI = sni
+					}
+					if allowInsecure, ok := trojanData["allow_insecure"].(bool); ok {
+						ucNode.AllowInsecure = allowInsecure
+					}
+				}
+			}
+		}
+
+		nodeMap[nodeModel.ID] = ucNode
 	}
 
 	// Convert map to slice

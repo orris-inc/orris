@@ -122,10 +122,17 @@ type Node struct {
 	Name             string
 	ServerAddress    string
 	ServerPort       uint16
-	EncryptionMethod string
+	Protocol         string // shadowsocks, trojan
+	EncryptionMethod string // for shadowsocks
 	Password         string
 	Plugin           string
 	PluginOpts       map[string]string
+	// Trojan specific fields
+	TransportProtocol string // tcp, ws, grpc
+	Host              string // WebSocket host / gRPC service name
+	Path              string // WebSocket path
+	SNI               string // TLS Server Name Indication
+	AllowInsecure     bool   // Allow insecure TLS connection
 }
 
 // generateHMACPassword generates HMAC-SHA256 password from subscription UUID

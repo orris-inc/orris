@@ -2,21 +2,35 @@
 package agent
 
 // NodeConfig represents the node configuration returned by the API.
+// Compatible with sing-box inbound configuration.
 type NodeConfig struct {
 	NodeID            int    `json:"node_id"`
-	Protocol          string `json:"protocol"`
-	ServerHost        string `json:"server_host"`
-	ServerPort        int    `json:"server_port"`
-	EncryptionMethod  string `json:"encryption_method,omitempty"`
-	ServerKey         string `json:"server_key,omitempty"`
-	TransportProtocol string `json:"transport_protocol"`
-	Host              string `json:"host,omitempty"`
-	Path              string `json:"path,omitempty"`
+	Protocol          string `json:"protocol"`                    // shadowsocks or trojan
+	ServerHost        string `json:"server_host"`                 // Server hostname or IP address
+	ServerPort        int    `json:"server_port"`                 // Server port number
+	EncryptionMethod  string `json:"encryption_method,omitempty"` // Encryption method for Shadowsocks
+	ServerKey         string `json:"server_key,omitempty"`        // Server password for SS
+	TransportProtocol string `json:"transport_protocol"`          // Transport protocol (tcp, ws, grpc)
+	Host              string `json:"host,omitempty"`              // WebSocket host header
+	Path              string `json:"path,omitempty"`              // WebSocket path
+	ServiceName       string `json:"service_name,omitempty"`      // gRPC service name
+	SNI               string `json:"sni,omitempty"`               // TLS Server Name Indication
+	AllowInsecure     bool   `json:"allow_insecure"`              // Allow insecure TLS connection
 	EnableVless       bool   `json:"enable_vless"`
 	EnableXTLS        bool   `json:"enable_xtls"`
 	SpeedLimit        uint64 `json:"speed_limit"`
 	DeviceLimit       int    `json:"device_limit"`
 	RuleListPath      string `json:"rule_list_path,omitempty"`
+}
+
+// IsTrojan returns true if the node is configured for Trojan protocol.
+func (c *NodeConfig) IsTrojan() bool {
+	return c.Protocol == "trojan"
+}
+
+// IsShadowsocks returns true if the node is configured for Shadowsocks protocol.
+func (c *NodeConfig) IsShadowsocks() bool {
+	return c.Protocol == "shadowsocks"
 }
 
 // Subscription represents an individual subscription authorized for the node.

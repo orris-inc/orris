@@ -18,21 +18,25 @@ type AgentResponse struct {
 }
 
 // NodeConfigResponse represents node configuration data for node agents
+// Compatible with sing-box inbound configuration
 type NodeConfigResponse struct {
-	NodeID            int    `json:"node_id" binding:"required"`                           // Node unique identifier
-	Protocol          string `json:"protocol" binding:"required,oneof=shadowsocks trojan"` // Protocol type
-	ServerHost        string `json:"server_host" binding:"required"`                       // Server hostname or IP address
-	ServerPort        int    `json:"server_port" binding:"required,min=1,max=65535"`       // Server port number
-	EncryptionMethod  string `json:"encryption_method,omitempty"`                          // Encryption method for Shadowsocks
-	ServerKey         string `json:"server_key,omitempty"`                                 // Server password for SS
-	TransportProtocol string `json:"transport_protocol" binding:"required,oneof=tcp ws"`   // Transport protocol
-	Host              string `json:"host,omitempty"`                                       // WebSocket host header
-	Path              string `json:"path,omitempty"`                                       // WebSocket path
-	EnableVless       bool   `json:"enable_vless"`                                         // Enable VLESS protocol
-	EnableXTLS        bool   `json:"enable_xtls"`                                          // Enable XTLS
-	SpeedLimit        uint64 `json:"speed_limit"`                                          // Speed limit in Mbps, 0 = unlimited
-	DeviceLimit       int    `json:"device_limit"`                                         // Device connection limit, 0 = unlimited
-	RuleListPath      string `json:"rule_list_path,omitempty"`                             // Path to routing rule list file
+	NodeID            int    `json:"node_id" binding:"required"`                              // Node unique identifier
+	Protocol          string `json:"protocol" binding:"required,oneof=shadowsocks trojan"`    // Protocol type
+	ServerHost        string `json:"server_host" binding:"required"`                          // Server hostname or IP address
+	ServerPort        int    `json:"server_port" binding:"required,min=1,max=65535"`          // Server port number
+	EncryptionMethod  string `json:"encryption_method,omitempty"`                             // Encryption method for Shadowsocks
+	ServerKey         string `json:"server_key,omitempty"`                                    // Server password for SS
+	TransportProtocol string `json:"transport_protocol" binding:"required,oneof=tcp ws grpc"` // Transport protocol (tcp, ws, grpc)
+	Host              string `json:"host,omitempty"`                                          // WebSocket host header
+	Path              string `json:"path,omitempty"`                                          // WebSocket path
+	ServiceName       string `json:"service_name,omitempty"`                                  // gRPC service name
+	SNI               string `json:"sni,omitempty"`                                           // TLS Server Name Indication
+	AllowInsecure     bool   `json:"allow_insecure"`                                          // Allow insecure TLS connection
+	EnableVless       bool   `json:"enable_vless"`                                            // Enable VLESS protocol
+	EnableXTLS        bool   `json:"enable_xtls"`                                             // Enable XTLS
+	SpeedLimit        uint64 `json:"speed_limit"`                                             // Speed limit in Mbps, 0 = unlimited
+	DeviceLimit       int    `json:"device_limit"`                                            // Device connection limit, 0 = unlimited
+	RuleListPath      string `json:"rule_list_path,omitempty"`                                // Path to routing rule list file
 }
 
 // NodeSubscriptionInfo represents individual subscription information for node access
@@ -82,6 +86,7 @@ type ReportOnlineSubscriptionsRequest struct {
 }
 
 // ToNodeConfigResponse converts a domain node entity to agent node config response
+// Supports both Shadowsocks and Trojan protocols with sing-box compatible configuration
 func ToNodeConfigResponse(n *node.Node) *NodeConfigResponse {
 	if n == nil {
 		return nil
@@ -91,39 +96,55 @@ func ToNodeConfigResponse(n *node.Node) *NodeConfigResponse {
 		NodeID:            int(n.ID()),
 		ServerHost:        n.ServerAddress().Value(),
 		ServerPort:        int(n.ServerPort()),
-		EncryptionMethod:  n.EncryptionConfig().Method(),
-		ServerKey:         "",    // Server key is not stored at node level; each user has their own subscription UUID
-		TransportProtocol: "tcp", // Default to TCP, can be enhanced based on plugin config
+		TransportProtocol: "tcp", // Default to TCP
 		EnableVless:       false,
 		EnableXTLS:        false,
+		AllowInsecure:     false,
 		SpeedLimit:        0, // 0 = unlimited, can be set from node metadata
 		DeviceLimit:       0, // 0 = unlimited, can be set from node metadata
 		RuleListPath:      "",
 	}
 
-	// Determine protocol type based on encryption method or plugin
-	// Shadowsocks methods: aes-128-gcm, aes-256-gcm, chacha20-ietf-poly1305, etc.
-	if isSSMethod(config.EncryptionMethod) {
+	// Determine protocol type from node's protocol field
+	if n.Protocol().IsShadowsocks() {
 		config.Protocol = "shadowsocks"
-	} else {
+		config.EncryptionMethod = n.EncryptionConfig().Method()
+
+		// Handle plugin configuration for Shadowsocks transport
+		if n.PluginConfig() != nil {
+			plugin := n.PluginConfig().Plugin()
+			opts := n.PluginConfig().Opts()
+
+			// Check if using obfs or v2ray-plugin with websocket
+			if plugin == "v2ray-plugin" || plugin == "obfs" {
+				if mode, ok := opts["mode"]; ok && mode == "websocket" {
+					config.TransportProtocol = "ws"
+				}
+				if host, ok := opts["host"]; ok {
+					config.Host = host
+				}
+				if path, ok := opts["path"]; ok {
+					config.Path = path
+				}
+			}
+		}
+	} else if n.Protocol().IsTrojan() {
 		config.Protocol = "trojan"
-	}
 
-	// Handle plugin configuration for transport protocol
-	if n.PluginConfig() != nil {
-		plugin := n.PluginConfig().Plugin()
-		opts := n.PluginConfig().Opts()
+		// Extract Trojan-specific configuration
+		if n.TrojanConfig() != nil {
+			tc := n.TrojanConfig()
+			config.TransportProtocol = tc.TransportProtocol()
+			config.SNI = tc.SNI()
+			config.AllowInsecure = tc.AllowInsecure()
 
-		// Check if using obfs or v2ray-plugin with websocket
-		if plugin == "v2ray-plugin" || plugin == "obfs" {
-			if mode, ok := opts["mode"]; ok && mode == "websocket" {
-				config.TransportProtocol = "ws"
-			}
-			if host, ok := opts["host"]; ok {
-				config.Host = host
-			}
-			if path, ok := opts["path"]; ok {
-				config.Path = path
+			// Handle transport-specific fields
+			switch tc.TransportProtocol() {
+			case "ws":
+				config.Host = tc.Host()
+				config.Path = tc.Path()
+			case "grpc":
+				config.ServiceName = tc.Host() // In TrojanConfig, host is used as service name for gRPC
 			}
 		}
 	}
@@ -187,25 +208,6 @@ func NewErrorResponse(msg string) *AgentResponse {
 }
 
 // Helper functions
-
-// isSSMethod checks if the encryption method is a Shadowsocks method
-func isSSMethod(method string) bool {
-	ssMethods := map[string]bool{
-		"aes-128-gcm":             true,
-		"aes-256-gcm":             true,
-		"aes-128-cfb":             true,
-		"aes-192-cfb":             true,
-		"aes-256-cfb":             true,
-		"aes-128-ctr":             true,
-		"aes-192-ctr":             true,
-		"aes-256-ctr":             true,
-		"chacha20-ietf":           true,
-		"chacha20-ietf-poly1305":  true,
-		"xchacha20-ietf-poly1305": true,
-		"rc4-md5":                 true,
-	}
-	return ssMethods[method]
-}
 
 // generateSubscriptionPassword generates HMAC-signed password for subscription
 // Uses HMAC-SHA256 to sign the subscription UUID with a secret key

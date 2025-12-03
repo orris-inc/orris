@@ -24,23 +24,70 @@ func (f *Base64Formatter) FormatWithPassword(nodes []*Node, password string) (st
 	var links []string
 
 	for _, node := range nodes {
-		auth := fmt.Sprintf("%s:%s", node.EncryptionMethod, password)
-		authEncoded := base64.StdEncoding.EncodeToString([]byte(auth))
+		var link string
 
-		link := fmt.Sprintf("ss://%s@%s:%d",
-			authEncoded,
-			node.ServerAddress,
-			node.ServerPort)
+		if node.Protocol == "trojan" {
+			// Trojan URI format: trojan://password@host:port?params#remarks
+			link = fmt.Sprintf("trojan://%s@%s:%d",
+				password,
+				node.ServerAddress,
+				node.ServerPort)
 
-		if node.Name != "" {
-			link += "#" + url.QueryEscape(node.Name)
-		}
+			// Build query parameters
+			params := url.Values{}
+			if node.AllowInsecure {
+				params.Add("allowInsecure", "1")
+			}
+			if node.SNI != "" {
+				params.Add("sni", node.SNI)
+			}
 
-		if node.Plugin != "" {
-			pluginOpts := formatPluginOpts(node.PluginOpts)
-			link += fmt.Sprintf("?plugin=%s;%s",
-				url.QueryEscape(node.Plugin),
-				url.QueryEscape(pluginOpts))
+			// Transport-specific parameters
+			switch node.TransportProtocol {
+			case "ws":
+				params.Add("type", "ws")
+				if node.Host != "" {
+					params.Add("host", node.Host)
+				}
+				if node.Path != "" {
+					params.Add("path", node.Path)
+				}
+			case "grpc":
+				params.Add("type", "grpc")
+				if node.Host != "" {
+					params.Add("serviceName", node.Host)
+				}
+			default:
+				params.Add("type", "tcp")
+			}
+
+			if len(params) > 0 {
+				link += "?" + params.Encode()
+			}
+
+			if node.Name != "" {
+				link += "#" + url.QueryEscape(node.Name)
+			}
+		} else {
+			// Shadowsocks URI format: ss://base64(method:password)@host:port#remarks
+			auth := fmt.Sprintf("%s:%s", node.EncryptionMethod, password)
+			authEncoded := base64.StdEncoding.EncodeToString([]byte(auth))
+
+			link = fmt.Sprintf("ss://%s@%s:%d",
+				authEncoded,
+				node.ServerAddress,
+				node.ServerPort)
+
+			if node.Plugin != "" {
+				pluginOpts := formatPluginOpts(node.PluginOpts)
+				link += fmt.Sprintf("?plugin=%s;%s",
+					url.QueryEscape(node.Plugin),
+					url.QueryEscape(pluginOpts))
+			}
+
+			if node.Name != "" {
+				link += "#" + url.QueryEscape(node.Name)
+			}
 		}
 
 		links = append(links, link)
@@ -61,15 +108,29 @@ func NewClashFormatter() *ClashFormatter {
 }
 
 type clashProxy struct {
-	Name       string            `yaml:"name"`
-	Type       string            `yaml:"type"`
-	Server     string            `yaml:"server"`
-	Port       uint16            `yaml:"port"`
-	Cipher     string            `yaml:"cipher"`
-	Password   string            `yaml:"password"`
-	UDP        bool              `yaml:"udp"`
-	Plugin     string            `yaml:"plugin,omitempty"`
-	PluginOpts map[string]string `yaml:"plugin-opts,omitempty"`
+	Name           string            `yaml:"name"`
+	Type           string            `yaml:"type"`
+	Server         string            `yaml:"server"`
+	Port           uint16            `yaml:"port"`
+	Cipher         string            `yaml:"cipher,omitempty"`
+	Password       string            `yaml:"password"`
+	UDP            bool              `yaml:"udp"`
+	Plugin         string            `yaml:"plugin,omitempty"`
+	PluginOpts     map[string]string `yaml:"plugin-opts,omitempty"`
+	SNI            string            `yaml:"sni,omitempty"`
+	SkipCertVerify bool              `yaml:"skip-cert-verify,omitempty"`
+	Network        string            `yaml:"network,omitempty"`
+	WSOpts         *clashWSOpts      `yaml:"ws-opts,omitempty"`
+	GRPCOpts       *clashGRPCOpts    `yaml:"grpc-opts,omitempty"`
+}
+
+type clashWSOpts struct {
+	Path    string            `yaml:"path,omitempty"`
+	Headers map[string]string `yaml:"headers,omitempty"`
+}
+
+type clashGRPCOpts struct {
+	GRPCServiceName string `yaml:"grpc-service-name,omitempty"`
 }
 
 type clashConfig struct {
@@ -86,19 +147,53 @@ func (f *ClashFormatter) FormatWithPassword(nodes []*Node, password string) (str
 	}
 
 	for _, node := range nodes {
-		proxy := clashProxy{
-			Name:     node.Name,
-			Type:     "ss",
-			Server:   node.ServerAddress,
-			Port:     node.ServerPort,
-			Cipher:   node.EncryptionMethod,
-			Password: password,
-			UDP:      true,
-		}
+		var proxy clashProxy
 
-		if node.Plugin != "" {
-			proxy.Plugin = node.Plugin
-			proxy.PluginOpts = node.PluginOpts
+		if node.Protocol == "trojan" {
+			proxy = clashProxy{
+				Name:           node.Name,
+				Type:           "trojan",
+				Server:         node.ServerAddress,
+				Port:           node.ServerPort,
+				Password:       password,
+				UDP:            true,
+				SNI:            node.SNI,
+				SkipCertVerify: node.AllowInsecure,
+			}
+
+			// Handle transport
+			switch node.TransportProtocol {
+			case "ws":
+				proxy.Network = "ws"
+				proxy.WSOpts = &clashWSOpts{
+					Path: node.Path,
+				}
+				if node.Host != "" {
+					proxy.WSOpts.Headers = map[string]string{
+						"Host": node.Host,
+					}
+				}
+			case "grpc":
+				proxy.Network = "grpc"
+				proxy.GRPCOpts = &clashGRPCOpts{
+					GRPCServiceName: node.Host,
+				}
+			}
+		} else {
+			proxy = clashProxy{
+				Name:     node.Name,
+				Type:     "ss",
+				Server:   node.ServerAddress,
+				Port:     node.ServerPort,
+				Cipher:   node.EncryptionMethod,
+				Password: password,
+				UDP:      true,
+			}
+
+			if node.Plugin != "" {
+				proxy.Plugin = node.Plugin
+				proxy.PluginOpts = node.PluginOpts
+			}
 		}
 
 		config.Proxies = append(config.Proxies, proxy)
@@ -140,6 +235,11 @@ func (f *V2RayFormatter) FormatWithPassword(nodes []*Node, password string) (str
 	v2rayNodes := make([]v2rayNode, 0, len(nodes))
 
 	for _, node := range nodes {
+		// V2Ray format only supports Shadowsocks, skip Trojan nodes
+		if node.Protocol == "trojan" {
+			continue
+		}
+
 		v2rayNode := v2rayNode{
 			Remarks:    node.Name,
 			Server:     node.ServerAddress,
@@ -201,6 +301,11 @@ func (f *SIP008Formatter) FormatWithPassword(nodes []*Node, password string) (st
 	}
 
 	for _, node := range nodes {
+		// SIP008 format only supports Shadowsocks, skip Trojan nodes
+		if node.Protocol == "trojan" {
+			continue
+		}
+
 		server := sip008Server{
 			ID:         fmt.Sprintf("node_%d", node.ID),
 			Remarks:    node.Name,
@@ -246,19 +351,49 @@ func (f *SurgeFormatter) FormatWithPassword(nodes []*Node, password string) (str
 
 	for _, node := range nodes {
 		nodeName := strings.ReplaceAll(node.Name, " ", "_")
+		var line string
 
-		line := fmt.Sprintf("%s = ss, %s, %d, encrypt-method=%s, password=%s, udp-relay=true",
-			nodeName,
-			node.ServerAddress,
-			node.ServerPort,
-			node.EncryptionMethod,
-			password)
+		if node.Protocol == "trojan" {
+			// Surge Trojan format
+			line = fmt.Sprintf("%s = trojan, %s, %d, password=%s",
+				nodeName,
+				node.ServerAddress,
+				node.ServerPort,
+				password)
 
-		if node.Plugin == "obfs-local" && len(node.PluginOpts) > 0 {
-			if obfsMode, ok := node.PluginOpts["obfs"]; ok {
-				line += fmt.Sprintf(", obfs=%s", obfsMode)
-				if obfsHost, ok := node.PluginOpts["obfs-host"]; ok {
-					line += fmt.Sprintf(", obfs-host=%s", obfsHost)
+			if node.SNI != "" {
+				line += fmt.Sprintf(", sni=%s", node.SNI)
+			}
+			if node.AllowInsecure {
+				line += ", skip-cert-verify=true"
+			}
+
+			// Handle transport
+			switch node.TransportProtocol {
+			case "ws":
+				line += ", ws=true"
+				if node.Path != "" {
+					line += fmt.Sprintf(", ws-path=%s", node.Path)
+				}
+				if node.Host != "" {
+					line += fmt.Sprintf(", ws-headers=Host:%s", node.Host)
+				}
+			}
+		} else {
+			// Shadowsocks format
+			line = fmt.Sprintf("%s = ss, %s, %d, encrypt-method=%s, password=%s, udp-relay=true",
+				nodeName,
+				node.ServerAddress,
+				node.ServerPort,
+				node.EncryptionMethod,
+				password)
+
+			if node.Plugin == "obfs-local" && len(node.PluginOpts) > 0 {
+				if obfsMode, ok := node.PluginOpts["obfs"]; ok {
+					line += fmt.Sprintf(", obfs=%s", obfsMode)
+					if obfsHost, ok := node.PluginOpts["obfs-host"]; ok {
+						line += fmt.Sprintf(", obfs-host=%s", obfsHost)
+					}
 				}
 			}
 		}
