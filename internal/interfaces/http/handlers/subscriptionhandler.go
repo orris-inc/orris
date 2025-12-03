@@ -20,12 +20,13 @@ var (
 
 // SubscriptionHandler handles user subscription operations
 type SubscriptionHandler struct {
-	createUseCase     *usecases.CreateSubscriptionUseCase
-	getUseCase        *usecases.GetSubscriptionUseCase
-	listUserUseCase   *usecases.ListUserSubscriptionsUseCase
-	cancelUseCase     *usecases.CancelSubscriptionUseCase
-	changePlanUseCase *usecases.ChangePlanUseCase
-	logger            logger.Interface
+	createUseCase          *usecases.CreateSubscriptionUseCase
+	getUseCase             *usecases.GetSubscriptionUseCase
+	listUserUseCase        *usecases.ListUserSubscriptionsUseCase
+	cancelUseCase          *usecases.CancelSubscriptionUseCase
+	changePlanUseCase      *usecases.ChangePlanUseCase
+	getTrafficStatsUseCase *usecases.GetSubscriptionTrafficStatsUseCase
+	logger                 logger.Interface
 }
 
 // NewSubscriptionHandler creates a new user subscription handler
@@ -35,15 +36,17 @@ func NewSubscriptionHandler(
 	listUserUC *usecases.ListUserSubscriptionsUseCase,
 	cancelUC *usecases.CancelSubscriptionUseCase,
 	changePlanUC *usecases.ChangePlanUseCase,
+	getTrafficStatsUC *usecases.GetSubscriptionTrafficStatsUseCase,
 	logger logger.Interface,
 ) *SubscriptionHandler {
 	return &SubscriptionHandler{
-		createUseCase:     createUC,
-		getUseCase:        getUC,
-		listUserUseCase:   listUserUC,
-		cancelUseCase:     cancelUC,
-		changePlanUseCase: changePlanUC,
-		logger:            logger,
+		createUseCase:          createUC,
+		getUseCase:             getUC,
+		listUserUseCase:        listUserUC,
+		cancelUseCase:          cancelUC,
+		changePlanUseCase:      changePlanUC,
+		getTrafficStatsUseCase: getTrafficStatsUC,
+		logger:                 logger,
 	}
 }
 
@@ -278,4 +281,73 @@ func (h *SubscriptionHandler) ChangePlan(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "Plan changed successfully", nil)
+}
+
+// GetTrafficStats handles GET /subscriptions/:id/traffic-stats
+func (h *SubscriptionHandler) GetTrafficStats(c *gin.Context) {
+	// Ownership already verified by middleware
+	subscriptionID, exists := c.Get("subscription_id")
+	if !exists {
+		subscriptionID64, err := strconv.ParseUint(c.Param("id"), 10, 64)
+		if err != nil {
+			utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID")
+			return
+		}
+		subscriptionID = uint(subscriptionID64)
+	}
+
+	// Parse query parameters
+	fromStr := c.Query("from")
+	toStr := c.Query("to")
+
+	if fromStr == "" || toStr == "" {
+		utils.ErrorResponse(c, http.StatusBadRequest, "from and to query parameters are required")
+		return
+	}
+
+	from, err := time.Parse(time.RFC3339, fromStr)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid from time format, use RFC3339")
+		return
+	}
+
+	to, err := time.Parse(time.RFC3339, toStr)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid to time format, use RFC3339")
+		return
+	}
+
+	granularity := c.Query("granularity")
+
+	page := 1
+	if pageStr := c.Query("page"); pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+
+	pageSize := 100
+	if pageSizeStr := c.Query("page_size"); pageSizeStr != "" {
+		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 && ps <= 1000 {
+			pageSize = ps
+		}
+	}
+
+	query := usecases.GetSubscriptionTrafficStatsQuery{
+		SubscriptionID: subscriptionID.(uint),
+		From:           from,
+		To:             to,
+		Granularity:    granularity,
+		Page:           page,
+		PageSize:       pageSize,
+	}
+
+	result, err := h.getTrafficStatsUseCase.Execute(c.Request.Context(), query)
+	if err != nil {
+		h.logger.Errorw("failed to get subscription traffic stats", "error", err, "subscription_id", subscriptionID)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "", result)
 }

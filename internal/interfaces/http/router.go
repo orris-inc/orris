@@ -195,6 +195,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	subscriptionRepo := repository.NewSubscriptionRepository(db, log)
 	subscriptionPlanRepo := repository.NewSubscriptionPlanRepository(db, log)
 	subscriptionTokenRepo := repository.NewSubscriptionTokenRepository(db, log)
+	subscriptionTrafficRepo := repository.NewSubscriptionTrafficRepository(db, log)
 	planPricingRepo := repository.NewPlanPricingRepository(db, log)
 	paymentRepo := repository.NewPaymentRepository(db)
 
@@ -220,6 +221,9 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	)
 	changePlanUC := subscriptionUsecases.NewChangePlanUseCase(
 		subscriptionRepo, subscriptionPlanRepo, log,
+	)
+	getSubscriptionTrafficStatsUC := subscriptionUsecases.NewGetSubscriptionTrafficStatsUseCase(
+		subscriptionTrafficRepo, log,
 	)
 
 	createPlanUC := subscriptionUsecases.NewCreateSubscriptionPlanUseCase(
@@ -262,7 +266,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	subscriptionHandler := handlers.NewSubscriptionHandler(
 		createSubscriptionUC, getSubscriptionUC, listUserSubscriptionsUC,
-		cancelSubscriptionUC, changePlanUC, log,
+		cancelSubscriptionUC, changePlanUC, getSubscriptionTrafficStatsUC, log,
 	)
 	adminSubscriptionHandler := adminHandlers.NewSubscriptionHandler(
 		createSubscriptionUC, getSubscriptionUC, listUserSubscriptionsUC,
@@ -296,9 +300,6 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	deleteNodeUC := nodeUsecases.NewDeleteNodeUseCase(nodeRepoImpl, nodeGroupRepoImpl, log)
 	listNodesUC := nodeUsecases.NewListNodesUseCase(nodeRepoImpl, log)
 	generateNodeTokenUC := nodeUsecases.NewGenerateNodeTokenUseCase(nodeRepoImpl, log)
-
-	// Initialize subscription traffic repository (used by agent report adapter)
-	subscriptionTrafficRepo := repository.NewSubscriptionTrafficRepository(db, log)
 
 	// Initialize node authentication middleware using the same node repository adapter
 	validateNodeTokenUC := nodeUsecases.NewValidateNodeTokenUseCase(nodeRepo, log)
@@ -588,6 +589,9 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 			subscriptionWithOwnership.DELETE("/tokens/:token_id", r.subscriptionTokenHandler.RevokeToken)
 			subscriptionWithOwnership.POST("/tokens", r.subscriptionTokenHandler.GenerateToken)
 			subscriptionWithOwnership.GET("/tokens", r.subscriptionTokenHandler.ListTokens)
+
+			// Traffic statistics endpoint
+			subscriptionWithOwnership.GET("/traffic-stats", r.subscriptionHandler.GetTrafficStats)
 		}
 	}
 
