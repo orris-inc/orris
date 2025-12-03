@@ -71,21 +71,6 @@ type UpdateForwardRuleRequest struct {
 }
 
 // CreateRule handles POST /forward-rules
-//
-//	@Summary		Create a new forward rule
-//	@Description	Create a new TCP/UDP forward rule configuration
-//	@Tags			forward-rules
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			rule	body		CreateForwardRuleRequest	true	"Forward rule data"
-//	@Success		201		{object}	utils.APIResponse			"Forward rule created successfully"
-//	@Failure		400		{object}	utils.APIResponse			"Bad request"
-//	@Failure		401		{object}	utils.APIResponse			"Unauthorized"
-//	@Failure		403		{object}	utils.APIResponse			"Forbidden - Requires admin role"
-//	@Failure		409		{object}	utils.APIResponse			"Conflict - Listen port already in use"
-//	@Failure		500		{object}	utils.APIResponse			"Internal server error"
-//	@Router			/forward-rules [post]
 func (h *ForwardHandler) CreateRule(c *gin.Context) {
 	var req CreateForwardRuleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -113,21 +98,6 @@ func (h *ForwardHandler) CreateRule(c *gin.Context) {
 }
 
 // GetRule handles GET /forward-rules/:id
-//
-//	@Summary		Get forward rule by ID
-//	@Description	Get details of a forward rule by its ID
-//	@Tags			forward-rules
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			id	path		int					true	"Forward rule ID"
-//	@Success		200	{object}	utils.APIResponse	"Forward rule details"
-//	@Failure		400	{object}	utils.APIResponse	"Invalid rule ID"
-//	@Failure		401	{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403	{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		404	{object}	utils.APIResponse	"Forward rule not found"
-//	@Failure		500	{object}	utils.APIResponse	"Internal server error"
-//	@Router			/forward-rules/{id} [get]
 func (h *ForwardHandler) GetRule(c *gin.Context) {
 	ruleID, err := parseRuleID(c)
 	if err != nil {
@@ -146,23 +116,6 @@ func (h *ForwardHandler) GetRule(c *gin.Context) {
 }
 
 // UpdateRule handles PUT /forward-rules/:id
-//
-//	@Summary		Update forward rule
-//	@Description	Update forward rule configuration by ID
-//	@Tags			forward-rules
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			id		path		int							true	"Forward rule ID"
-//	@Param			rule	body		UpdateForwardRuleRequest	true	"Forward rule update data"
-//	@Success		200		{object}	utils.APIResponse			"Forward rule updated successfully"
-//	@Failure		400		{object}	utils.APIResponse			"Bad request"
-//	@Failure		401		{object}	utils.APIResponse			"Unauthorized"
-//	@Failure		403		{object}	utils.APIResponse			"Forbidden - Requires admin role"
-//	@Failure		404		{object}	utils.APIResponse			"Forward rule not found"
-//	@Failure		409		{object}	utils.APIResponse			"Conflict - Listen port already in use"
-//	@Failure		500		{object}	utils.APIResponse			"Internal server error"
-//	@Router			/forward-rules/{id} [put]
 func (h *ForwardHandler) UpdateRule(c *gin.Context) {
 	ruleID, err := parseRuleID(c)
 	if err != nil {
@@ -196,21 +149,6 @@ func (h *ForwardHandler) UpdateRule(c *gin.Context) {
 }
 
 // DeleteRule handles DELETE /forward-rules/:id
-//
-//	@Summary		Delete forward rule
-//	@Description	Delete a forward rule configuration by ID
-//	@Tags			forward-rules
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			id	path	int	true	"Forward rule ID"
-//	@Success		204	"Forward rule deleted successfully"
-//	@Failure		400	{object}	utils.APIResponse	"Invalid rule ID"
-//	@Failure		401	{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403	{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		404	{object}	utils.APIResponse	"Forward rule not found"
-//	@Failure		500	{object}	utils.APIResponse	"Internal server error"
-//	@Router			/forward-rules/{id} [delete]
 func (h *ForwardHandler) DeleteRule(c *gin.Context) {
 	ruleID, err := parseRuleID(c)
 	if err != nil {
@@ -228,26 +166,6 @@ func (h *ForwardHandler) DeleteRule(c *gin.Context) {
 }
 
 // ListRules handles GET /forward-rules
-//
-//	@Summary		List forward rules
-//	@Description	Get a paginated list of forward rules
-//	@Tags			forward-rules
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			page		query		int					false	"Page number"			default(1)
-//	@Param			page_size	query		int					false	"Page size"				default(20)
-//	@Param			name		query		string				false	"Name filter"
-//	@Param			protocol	query		string				false	"Protocol filter"		Enums(tcp,udp,both)
-//	@Param			status		query		string				false	"Status filter"			Enums(enabled,disabled)
-//	@Param			order_by	query		string				false	"Sort field"			default(created_at)
-//	@Param			order		query		string				false	"Sort direction"		Enums(asc,desc)	default(desc)
-//	@Success		200			{object}	utils.APIResponse	"Forward rules list"
-//	@Failure		400			{object}	utils.APIResponse	"Invalid query parameters"
-//	@Failure		401			{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403			{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		500			{object}	utils.APIResponse	"Internal server error"
-//	@Router			/forward-rules [get]
 func (h *ForwardHandler) ListRules(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	if page < 1 {
@@ -279,21 +197,6 @@ func (h *ForwardHandler) ListRules(c *gin.Context) {
 }
 
 // EnableRule handles POST /forward-rules/:id/enable
-//
-//	@Summary		Enable forward rule
-//	@Description	Enable a forward rule (client will pick up and start forwarding)
-//	@Tags			forward-rules
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			id	path		int					true	"Forward rule ID"
-//	@Success		200	{object}	utils.APIResponse	"Forward rule enabled successfully"
-//	@Failure		400	{object}	utils.APIResponse	"Invalid rule ID"
-//	@Failure		401	{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403	{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		404	{object}	utils.APIResponse	"Forward rule not found"
-//	@Failure		500	{object}	utils.APIResponse	"Internal server error"
-//	@Router			/forward-rules/{id}/enable [post]
 func (h *ForwardHandler) EnableRule(c *gin.Context) {
 	ruleID, err := parseRuleID(c)
 	if err != nil {
@@ -311,21 +214,6 @@ func (h *ForwardHandler) EnableRule(c *gin.Context) {
 }
 
 // DisableRule handles POST /forward-rules/:id/disable
-//
-//	@Summary		Disable forward rule
-//	@Description	Disable a forward rule (client will stop forwarding)
-//	@Tags			forward-rules
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			id	path		int					true	"Forward rule ID"
-//	@Success		200	{object}	utils.APIResponse	"Forward rule disabled successfully"
-//	@Failure		400	{object}	utils.APIResponse	"Invalid rule ID"
-//	@Failure		401	{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403	{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		404	{object}	utils.APIResponse	"Forward rule not found"
-//	@Failure		500	{object}	utils.APIResponse	"Internal server error"
-//	@Router			/forward-rules/{id}/disable [post]
 func (h *ForwardHandler) DisableRule(c *gin.Context) {
 	ruleID, err := parseRuleID(c)
 	if err != nil {
@@ -348,22 +236,6 @@ type UpdateStatusRequest struct {
 }
 
 // UpdateStatus handles PATCH /forward-rules/:id/status
-//
-//	@Summary		Update forward rule status
-//	@Description	Update forward rule status (enable or disable)
-//	@Tags			forward-rules
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			id		path		int					true	"Forward rule ID"
-//	@Param			status	body		UpdateStatusRequest	true	"Status update data"
-//	@Success		200		{object}	utils.APIResponse	"Status updated successfully"
-//	@Failure		400		{object}	utils.APIResponse	"Bad request"
-//	@Failure		401		{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403		{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		404		{object}	utils.APIResponse	"Forward rule not found"
-//	@Failure		500		{object}	utils.APIResponse	"Internal server error"
-//	@Router			/forward-rules/{id}/status [patch]
 func (h *ForwardHandler) UpdateStatus(c *gin.Context) {
 	var req UpdateStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -380,21 +252,6 @@ func (h *ForwardHandler) UpdateStatus(c *gin.Context) {
 }
 
 // ResetTraffic handles POST /forward-rules/:id/reset-traffic
-//
-//	@Summary		Reset forward rule traffic counters
-//	@Description	Reset the upload and download byte counters for a forward rule
-//	@Tags			forward-rules
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			id	path		int					true	"Forward rule ID"
-//	@Success		200	{object}	utils.APIResponse	"Traffic counters reset successfully"
-//	@Failure		400	{object}	utils.APIResponse	"Invalid rule ID"
-//	@Failure		401	{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403	{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		404	{object}	utils.APIResponse	"Forward rule not found"
-//	@Failure		500	{object}	utils.APIResponse	"Internal server error"
-//	@Router			/forward-rules/{id}/reset-traffic [post]
 func (h *ForwardHandler) ResetTraffic(c *gin.Context) {
 	ruleID, err := parseRuleID(c)
 	if err != nil {

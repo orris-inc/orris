@@ -72,20 +72,6 @@ type ChangePlanRequest struct {
 	EffectiveDate string `json:"effective_date" binding:"required,oneof=immediate period_end"`
 }
 
-// @Summary		Create subscription for user (Admin)
-// @Description	Admin creates a subscription for any user
-// @Tags			admin-subscriptions
-// @Accept			json
-// @Produce		json
-// @Security		Bearer
-// @Param			subscription	body		CreateSubscriptionRequest	true	"Subscription data"
-// @Success		201				{object}	utils.APIResponse			"Subscription created successfully"
-// @Failure		400				{object}	utils.APIResponse			"Bad request"
-// @Failure		401				{object}	utils.APIResponse			"Unauthorized"
-// @Failure		403				{object}	utils.APIResponse			"Forbidden - admin only"
-// @Failure		404				{object}	utils.APIResponse			"User or plan not found"
-// @Failure		500				{object}	utils.APIResponse			"Internal server error"
-// @Router			/admin/subscriptions [post]
 func (h *SubscriptionHandler) Create(c *gin.Context) {
 	var req CreateSubscriptionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -126,22 +112,6 @@ func (h *SubscriptionHandler) Create(c *gin.Context) {
 	}, "Subscription created successfully")
 }
 
-// @Summary		List all subscriptions (Admin)
-// @Description	Get a paginated list of all subscriptions with optional filters
-// @Tags			admin-subscriptions
-// @Accept			json
-// @Produce		json
-// @Security		Bearer
-// @Param			page		query		int											false	"Page number"				default(1)
-// @Param			page_size	query		int											false	"Page size"					default(20)
-// @Param			status		query		string										false	"Subscription status filter"	Enums(active,inactive,cancelled,expired,pending)
-// @Param			user_id		query		int											false	"Filter by user ID"
-// @Success		200			{object}	utils.APIResponse{data=utils.ListResponse}	"Subscriptions list"
-// @Failure		400			{object}	utils.APIResponse							"Invalid query parameters"
-// @Failure		401			{object}	utils.APIResponse							"Unauthorized"
-// @Failure		403			{object}	utils.APIResponse							"Forbidden - admin only"
-// @Failure		500			{object}	utils.APIResponse							"Internal server error"
-// @Router			/admin/subscriptions [get]
 func (h *SubscriptionHandler) List(c *gin.Context) {
 	page := 1
 	if pageStr := c.Query("page"); pageStr != "" {
@@ -187,20 +157,6 @@ func (h *SubscriptionHandler) List(c *gin.Context) {
 	utils.ListSuccessResponse(c, result.Subscriptions, result.Total, result.Page, result.PageSize)
 }
 
-// @Summary		Get subscription by ID (Admin)
-// @Description	Get details of any subscription
-// @Tags			admin-subscriptions
-// @Accept			json
-// @Produce		json
-// @Security		Bearer
-// @Param			id	path		int					true	"Subscription ID"
-// @Success		200	{object}	utils.APIResponse	"Subscription details"
-// @Failure		400	{object}	utils.APIResponse	"Invalid subscription ID"
-// @Failure		401	{object}	utils.APIResponse	"Unauthorized"
-// @Failure		403	{object}	utils.APIResponse	"Forbidden - admin only"
-// @Failure		404	{object}	utils.APIResponse	"Subscription not found"
-// @Failure		500	{object}	utils.APIResponse	"Internal server error"
-// @Router			/admin/subscriptions/{id} [get]
 func (h *SubscriptionHandler) Get(c *gin.Context) {
 	subscriptionID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
@@ -222,21 +178,6 @@ func (h *SubscriptionHandler) Get(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "", subscription)
 }
 
-// @Summary		Update subscription status (Admin)
-// @Description	Update subscription status (activate, cancel, or renew)
-// @Tags			admin-subscriptions
-// @Accept			json
-// @Produce		json
-// @Security		Bearer
-// @Param			id		path		int					true	"Subscription ID"
-// @Param			status	body		UpdateStatusRequest	true	"Status update details"
-// @Success		200		{object}	utils.APIResponse	"Subscription status updated successfully"
-// @Failure		400		{object}	utils.APIResponse	"Bad request"
-// @Failure		401		{object}	utils.APIResponse	"Unauthorized"
-// @Failure		403		{object}	utils.APIResponse	"Forbidden - admin only"
-// @Failure		404		{object}	utils.APIResponse	"Subscription not found"
-// @Failure		500		{object}	utils.APIResponse	"Internal server error"
-// @Router			/admin/subscriptions/{id}/status [patch]
 func (h *SubscriptionHandler) UpdateStatus(c *gin.Context) {
 	subscriptionID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {
@@ -301,21 +242,6 @@ func (h *SubscriptionHandler) UpdateStatus(c *gin.Context) {
 	}
 }
 
-// @Summary		Change subscription plan (Admin)
-// @Description	Change the plan of any subscription
-// @Tags			admin-subscriptions
-// @Accept			json
-// @Produce		json
-// @Security		Bearer
-// @Param			id		path		int					true	"Subscription ID"
-// @Param			plan	body		ChangePlanRequest	true	"Plan change details"
-// @Success		200		{object}	utils.APIResponse	"Plan changed successfully"
-// @Failure		400		{object}	utils.APIResponse	"Bad request"
-// @Failure		401		{object}	utils.APIResponse	"Unauthorized"
-// @Failure		403		{object}	utils.APIResponse	"Forbidden - admin only"
-// @Failure		404		{object}	utils.APIResponse	"Subscription or plan not found"
-// @Failure		500		{object}	utils.APIResponse	"Internal server error"
-// @Router			/admin/subscriptions/{id}/plan [patch]
 func (h *SubscriptionHandler) ChangePlan(c *gin.Context) {
 	subscriptionID, err := strconv.ParseUint(c.Param("id"), 10, 64)
 	if err != nil {

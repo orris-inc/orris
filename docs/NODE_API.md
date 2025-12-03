@@ -1086,7 +1086,7 @@ node_<base64_encoded_random_bytes>
 Authorization: Bearer node_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-**2. Query Parameter (XrayR Compatible)**
+**2. Query Parameter**
 ```
 GET /endpoint?token=node_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
@@ -1297,7 +1297,7 @@ func main() {
 
 ## 8. Notes
 
-1. **Password Handling**: For Shadowsocks nodes, the subscription UUID is used as the password when generating subscription URIs
+1. **Password Handling**: For Shadowsocks nodes, an HMAC-SHA256 signed password (derived from subscription UUID) is used when generating subscription URIs. The original UUID is never exposed to agents.
 2. **Rate Limiting**: Subscription endpoints have rate limiting enabled to prevent abuse
 3. **Optimistic Locking**: Use `version` parameter when updating to prevent concurrent modification conflicts
 4. **Token Security**: Node API tokens should be treated like passwords and stored securely

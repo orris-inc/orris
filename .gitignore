@@ -81,3 +81,6 @@ CLAUDE.md
 # Build artifacts
 bin/
 release/
+
+# Generated SDK
+generated/

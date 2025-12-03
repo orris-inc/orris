@@ -68,20 +68,6 @@ type UpdateAgentStatusRequest struct {
 }
 
 // CreateAgent handles POST /forward-agents
-//
-//	@Summary		Create a new forward agent
-//	@Description	Create a new forward agent with authentication token
-//	@Tags			forward-agents
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			agent	body		CreateForwardAgentRequest	true	"Forward agent data"
-//	@Success		201		{object}	utils.APIResponse			"Forward agent created successfully"
-//	@Failure		400		{object}	utils.APIResponse			"Bad request"
-//	@Failure		401		{object}	utils.APIResponse			"Unauthorized"
-//	@Failure		403		{object}	utils.APIResponse			"Forbidden - Requires admin role"
-//	@Failure		500		{object}	utils.APIResponse			"Internal server error"
-//	@Router			/forward-agents [post]
 func (h *ForwardAgentHandler) CreateAgent(c *gin.Context) {
 	var req CreateForwardAgentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -105,21 +91,6 @@ func (h *ForwardAgentHandler) CreateAgent(c *gin.Context) {
 }
 
 // GetAgent handles GET /forward-agents/:id
-//
-//	@Summary		Get forward agent by ID
-//	@Description	Get details of a forward agent by its ID
-//	@Tags			forward-agents
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			id	path		int					true	"Forward agent ID"
-//	@Success		200	{object}	utils.APIResponse	"Forward agent details"
-//	@Failure		400	{object}	utils.APIResponse	"Invalid agent ID"
-//	@Failure		401	{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403	{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		404	{object}	utils.APIResponse	"Forward agent not found"
-//	@Failure		500	{object}	utils.APIResponse	"Internal server error"
-//	@Router			/forward-agents/{id} [get]
 func (h *ForwardAgentHandler) GetAgent(c *gin.Context) {
 	agentID, err := parseAgentID(c)
 	if err != nil {
@@ -138,25 +109,6 @@ func (h *ForwardAgentHandler) GetAgent(c *gin.Context) {
 }
 
 // ListAgents handles GET /forward-agents
-//
-//	@Summary		List forward agents
-//	@Description	Get a paginated list of forward agents
-//	@Tags			forward-agents
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			page		query		int					false	"Page number"			default(1)
-//	@Param			page_size	query		int					false	"Page size"				default(20)
-//	@Param			name		query		string				false	"Name filter"
-//	@Param			status		query		string				false	"Status filter"			Enums(enabled,disabled)
-//	@Param			order_by	query		string				false	"Sort field"			default(created_at)
-//	@Param			order		query		string				false	"Sort direction"		Enums(asc,desc)	default(desc)
-//	@Success		200			{object}	utils.APIResponse	"Forward agents list"
-//	@Failure		400			{object}	utils.APIResponse	"Invalid query parameters"
-//	@Failure		401			{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403			{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		500			{object}	utils.APIResponse	"Internal server error"
-//	@Router			/forward-agents [get]
 func (h *ForwardAgentHandler) ListAgents(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	if page < 1 {
@@ -187,22 +139,6 @@ func (h *ForwardAgentHandler) ListAgents(c *gin.Context) {
 }
 
 // UpdateAgent handles PUT /forward-agents/:id
-//
-//	@Summary		Update forward agent
-//	@Description	Update forward agent information by ID
-//	@Tags			forward-agents
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			id		path		int							true	"Forward agent ID"
-//	@Param			agent	body		UpdateForwardAgentRequest	true	"Forward agent update data"
-//	@Success		200		{object}	utils.APIResponse			"Forward agent updated successfully"
-//	@Failure		400		{object}	utils.APIResponse			"Bad request"
-//	@Failure		401		{object}	utils.APIResponse			"Unauthorized"
-//	@Failure		403		{object}	utils.APIResponse			"Forbidden - Requires admin role"
-//	@Failure		404		{object}	utils.APIResponse			"Forward agent not found"
-//	@Failure		500		{object}	utils.APIResponse			"Internal server error"
-//	@Router			/forward-agents/{id} [put]
 func (h *ForwardAgentHandler) UpdateAgent(c *gin.Context) {
 	agentID, err := parseAgentID(c)
 	if err != nil {
@@ -232,21 +168,6 @@ func (h *ForwardAgentHandler) UpdateAgent(c *gin.Context) {
 }
 
 // DeleteAgent handles DELETE /forward-agents/:id
-//
-//	@Summary		Delete forward agent
-//	@Description	Delete a forward agent by ID
-//	@Tags			forward-agents
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			id	path	int	true	"Forward agent ID"
-//	@Success		204	"Forward agent deleted successfully"
-//	@Failure		400	{object}	utils.APIResponse	"Invalid agent ID"
-//	@Failure		401	{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403	{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		404	{object}	utils.APIResponse	"Forward agent not found"
-//	@Failure		500	{object}	utils.APIResponse	"Internal server error"
-//	@Router			/forward-agents/{id} [delete]
 func (h *ForwardAgentHandler) DeleteAgent(c *gin.Context) {
 	agentID, err := parseAgentID(c)
 	if err != nil {
@@ -264,21 +185,6 @@ func (h *ForwardAgentHandler) DeleteAgent(c *gin.Context) {
 }
 
 // EnableAgent handles POST /forward-agents/:id/enable
-//
-//	@Summary		Enable forward agent
-//	@Description	Enable a forward agent to allow client access
-//	@Tags			forward-agents
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			id	path		int					true	"Forward agent ID"
-//	@Success		200	{object}	utils.APIResponse	"Forward agent enabled successfully"
-//	@Failure		400	{object}	utils.APIResponse	"Invalid agent ID"
-//	@Failure		401	{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403	{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		404	{object}	utils.APIResponse	"Forward agent not found"
-//	@Failure		500	{object}	utils.APIResponse	"Internal server error"
-//	@Router			/forward-agents/{id}/enable [post]
 func (h *ForwardAgentHandler) EnableAgent(c *gin.Context) {
 	agentID, err := parseAgentID(c)
 	if err != nil {
@@ -296,21 +202,6 @@ func (h *ForwardAgentHandler) EnableAgent(c *gin.Context) {
 }
 
 // DisableAgent handles POST /forward-agents/:id/disable
-//
-//	@Summary		Disable forward agent
-//	@Description	Disable a forward agent to prevent client access
-//	@Tags			forward-agents
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			id	path		int					true	"Forward agent ID"
-//	@Success		200	{object}	utils.APIResponse	"Forward agent disabled successfully"
-//	@Failure		400	{object}	utils.APIResponse	"Invalid agent ID"
-//	@Failure		401	{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403	{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		404	{object}	utils.APIResponse	"Forward agent not found"
-//	@Failure		500	{object}	utils.APIResponse	"Internal server error"
-//	@Router			/forward-agents/{id}/disable [post]
 func (h *ForwardAgentHandler) DisableAgent(c *gin.Context) {
 	agentID, err := parseAgentID(c)
 	if err != nil {
@@ -328,22 +219,6 @@ func (h *ForwardAgentHandler) DisableAgent(c *gin.Context) {
 }
 
 // UpdateStatus handles PATCH /forward-agents/:id/status
-//
-//	@Summary		Update forward agent status
-//	@Description	Update forward agent status (enable or disable)
-//	@Tags			forward-agents
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			id		path		int						true	"Forward agent ID"
-//	@Param			status	body		UpdateAgentStatusRequest	true	"Status update data"
-//	@Success		200		{object}	utils.APIResponse		"Status updated successfully"
-//	@Failure		400		{object}	utils.APIResponse		"Bad request"
-//	@Failure		401		{object}	utils.APIResponse		"Unauthorized"
-//	@Failure		403		{object}	utils.APIResponse		"Forbidden - Requires admin role"
-//	@Failure		404		{object}	utils.APIResponse		"Forward agent not found"
-//	@Failure		500		{object}	utils.APIResponse		"Internal server error"
-//	@Router			/forward-agents/{id}/status [patch]
 func (h *ForwardAgentHandler) UpdateStatus(c *gin.Context) {
 	var req UpdateAgentStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -360,21 +235,6 @@ func (h *ForwardAgentHandler) UpdateStatus(c *gin.Context) {
 }
 
 // RegenerateToken handles POST /forward-agents/:id/regenerate-token
-//
-//	@Summary		Regenerate forward agent token
-//	@Description	Regenerate authentication token for a forward agent
-//	@Tags			forward-agents
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			id	path		int					true	"Forward agent ID"
-//	@Success		200	{object}	utils.APIResponse	"Token regenerated successfully"
-//	@Failure		400	{object}	utils.APIResponse	"Invalid agent ID"
-//	@Failure		401	{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403	{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		404	{object}	utils.APIResponse	"Forward agent not found"
-//	@Failure		500	{object}	utils.APIResponse	"Internal server error"
-//	@Router			/forward-agents/{id}/regenerate-token [post]
 func (h *ForwardAgentHandler) RegenerateToken(c *gin.Context) {
 	agentID, err := parseAgentID(c)
 	if err != nil {

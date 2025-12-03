@@ -33,7 +33,7 @@ type SubscriptionTrafficRecorder interface {
 	BatchRecordSubscriptionTraffic(ctx context.Context, nodeID uint, items []SubscriptionTrafficItem) error
 }
 
-// ReportSubscriptionTrafficUseCase handles reporting subscription traffic from XrayR clients
+// ReportSubscriptionTrafficUseCase handles reporting subscription traffic from node agents
 type ReportSubscriptionTrafficUseCase struct {
 	trafficRecorder SubscriptionTrafficRecorder
 	logger          logger.Interface
@@ -50,7 +50,7 @@ func NewReportSubscriptionTrafficUseCase(
 	}
 }
 
-// Execute processes subscription traffic report from XrayR backend
+// Execute processes subscription traffic report from node agent
 func (uc *ReportSubscriptionTrafficUseCase) Execute(ctx context.Context, cmd ReportSubscriptionTrafficCommand) (*ReportSubscriptionTrafficResult, error) {
 	if cmd.NodeID == 0 {
 		return nil, fmt.Errorf("node_id is required")

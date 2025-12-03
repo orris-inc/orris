@@ -6,15 +6,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	nodedto "orris/internal/application/node/dto"
 	"orris/internal/application/node/usecases"
 	"orris/internal/shared/errors"
 	"orris/internal/shared/logger"
 	"orris/internal/shared/utils"
 )
-
-// Ensure nodedto is used to avoid unused import error
-var _ = nodedto.NodeDTO{}
 
 type NodeHandler struct {
 	createNodeUC    usecases.CreateNodeExecutor
@@ -46,20 +42,6 @@ func NewNodeHandler(
 }
 
 // CreateNode handles POST /nodes
-//
-//	@Summary		Create a new node
-//	@Description	Create a new proxy node
-//	@Tags			nodes
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			node	body		CreateNodeRequest								true	"Node data"
-//	@Success		201		{object}	utils.APIResponse{data=nodedto.NodeDTO}	"Node created successfully"
-//	@Failure		400		{object}	utils.APIResponse								"Bad request"
-//	@Failure		401		{object}	utils.APIResponse								"Unauthorized"
-//	@Failure		403		{object}	utils.APIResponse								"Forbidden - Requires admin role"
-//	@Failure		500		{object}	utils.APIResponse								"Internal server error"
-//	@Router			/nodes [post]
 func (h *NodeHandler) CreateNode(c *gin.Context) {
 	var req CreateNodeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -79,21 +61,6 @@ func (h *NodeHandler) CreateNode(c *gin.Context) {
 }
 
 // GetNode handles GET /nodes/:id
-//
-//	@Summary		Get node by ID
-//	@Description	Get details of a node by its ID
-//	@Tags			nodes
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			id	path		int										true	"Node ID"
-//	@Success		200	{object}	utils.APIResponse{data=nodedto.NodeDTO}	"Node details"
-//	@Failure		400	{object}	utils.APIResponse						"Invalid node ID"
-//	@Failure		401	{object}	utils.APIResponse						"Unauthorized"
-//	@Failure		403	{object}	utils.APIResponse						"Forbidden - Requires admin role"
-//	@Failure		404	{object}	utils.APIResponse						"Node not found"
-//	@Failure		500	{object}	utils.APIResponse						"Internal server error"
-//	@Router			/nodes/{id} [get]
 func (h *NodeHandler) GetNode(c *gin.Context) {
 	nodeID, err := parseNodeID(c)
 	if err != nil {
@@ -112,22 +79,6 @@ func (h *NodeHandler) GetNode(c *gin.Context) {
 }
 
 // UpdateNode handles PUT /nodes/:id
-//
-//	@Summary		Update node
-//	@Description	Update node information by ID
-//	@Tags			nodes
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			id		path		int											true	"Node ID"
-//	@Param			node	body		UpdateNodeRequest							true	"Node update data"
-//	@Success		200		{object}	utils.APIResponse{data=nodedto.NodeDTO}	"Node updated successfully"
-//	@Failure		400		{object}	utils.APIResponse							"Bad request"
-//	@Failure		401		{object}	utils.APIResponse							"Unauthorized"
-//	@Failure		403		{object}	utils.APIResponse							"Forbidden - Requires admin role"
-//	@Failure		404		{object}	utils.APIResponse							"Node not found"
-//	@Failure		500		{object}	utils.APIResponse							"Internal server error"
-//	@Router			/nodes/{id} [put]
 func (h *NodeHandler) UpdateNode(c *gin.Context) {
 	nodeID, err := parseNodeID(c)
 	if err != nil {
@@ -155,21 +106,6 @@ func (h *NodeHandler) UpdateNode(c *gin.Context) {
 }
 
 // DeleteNode handles DELETE /nodes/:id
-//
-//	@Summary		Delete node
-//	@Description	Delete a node by ID
-//	@Tags			nodes
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			id	path	int	true	"Node ID"
-//	@Success		204	"Node deleted successfully"
-//	@Failure		400	{object}	utils.APIResponse	"Invalid node ID"
-//	@Failure		401	{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403	{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		404	{object}	utils.APIResponse	"Node not found"
-//	@Failure		500	{object}	utils.APIResponse	"Internal server error"
-//	@Router			/nodes/{id} [delete]
 func (h *NodeHandler) DeleteNode(c *gin.Context) {
 	nodeID, err := parseNodeID(c)
 	if err != nil {
@@ -188,26 +124,6 @@ func (h *NodeHandler) DeleteNode(c *gin.Context) {
 }
 
 // ListNodes handles GET /nodes
-//
-//	@Summary		List nodes
-//	@Description	Get a paginated list of nodes
-//	@Tags			nodes
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			page		query		int																	false	"Page number"			default(1)
-//	@Param			page_size	query		int																	false	"Page size"				default(20)
-//	@Param			status		query		string																false	"Node status filter"	Enums(active,inactive,maintenance,error)
-//	@Param			region		query		string																false	"Region filter"
-//	@Param			tags		query		[]string															false	"Tags filter"
-//	@Param			order_by	query		string																false	"Sort field"		default(sort_order)
-//	@Param			order		query		string																false	"Sort direction"	Enums(asc,desc)	default(asc)
-//	@Success		200			{object}	utils.APIResponse{data=utils.ListResponse{items=[]nodedto.NodeDTO}}	"Nodes list"
-//	@Failure		400			{object}	utils.APIResponse													"Invalid query parameters"
-//	@Failure		401			{object}	utils.APIResponse													"Unauthorized"
-//	@Failure		403			{object}	utils.APIResponse													"Forbidden - Requires admin role"
-//	@Failure		500			{object}	utils.APIResponse													"Internal server error"
-//	@Router			/nodes [get]
 func (h *NodeHandler) ListNodes(c *gin.Context) {
 	req, err := parseListNodesRequest(c)
 	if err != nil {
@@ -226,21 +142,6 @@ func (h *NodeHandler) ListNodes(c *gin.Context) {
 }
 
 // GenerateToken handles POST /nodes/:id/tokens
-//
-//	@Summary		Generate new API token for node
-//	@Description	Generate a new API token for node authentication
-//	@Tags			nodes
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			id	path		int					true	"Node ID"
-//	@Success		200	{object}	utils.APIResponse	"Token generated successfully"
-//	@Failure		400	{object}	utils.APIResponse	"Invalid node ID"
-//	@Failure		401	{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403	{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		404	{object}	utils.APIResponse	"Node not found"
-//	@Failure		500	{object}	utils.APIResponse	"Internal server error"
-//	@Router			/nodes/{id}/tokens [post]
 func (h *NodeHandler) GenerateToken(c *gin.Context) {
 	nodeID, err := parseNodeID(c)
 	if err != nil {
@@ -264,22 +165,6 @@ type UpdateNodeStatusRequest struct {
 }
 
 // UpdateNodeStatus handles PATCH /nodes/:id/status
-//
-//	@Summary		Update node status
-//	@Description	Update node status (activate, deactivate, or set to maintenance)
-//	@Tags			nodes
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			id		path		int											true	"Node ID"
-//	@Param			status	body		UpdateNodeStatusRequest						true	"Status update details"
-//	@Success		200		{object}	utils.APIResponse{data=nodedto.NodeDTO}	"Node status updated successfully"
-//	@Failure		400		{object}	utils.APIResponse							"Bad request"
-//	@Failure		401		{object}	utils.APIResponse							"Unauthorized"
-//	@Failure		403		{object}	utils.APIResponse							"Forbidden - Requires admin role"
-//	@Failure		404		{object}	utils.APIResponse							"Node not found"
-//	@Failure		500		{object}	utils.APIResponse							"Internal server error"
-//	@Router			/nodes/{id}/status [patch]
 func (h *NodeHandler) UpdateNodeStatus(c *gin.Context) {
 	nodeID, err := parseNodeID(c)
 	if err != nil {

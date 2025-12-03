@@ -31,18 +31,6 @@ func NewSubscriptionHandler(
 }
 
 // GetSubscription handles GET /sub/:token
-//
-//	@Summary		Get subscription
-//	@Description	Get base64 encoded subscription by token
-//	@Tags			subscriptions
-//	@Accept			json
-//	@Produce		text/plain
-//	@Param			token	path		string				true	"Subscription token"
-//	@Success		200		{string}	string				"Base64 encoded subscription"
-//	@Failure		400		{object}	utils.APIResponse	"Invalid token"
-//	@Failure		404		{object}	utils.APIResponse	"Subscription not found"
-//	@Failure		500		{object}	utils.APIResponse	"Internal server error"
-//	@Router			/sub/{token} [get]
 func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 	token := c.Param("token")
 	if token == "" {
@@ -67,18 +55,6 @@ func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 }
 
 // GetClashSubscription handles GET /sub/:token/clash
-//
-//	@Summary		Get Clash subscription
-//	@Description	Get Clash format subscription by token
-//	@Tags			subscriptions
-//	@Accept			json
-//	@Produce		application/yaml
-//	@Param			token	path		string				true	"Subscription token"
-//	@Success		200		{string}	string				"Clash YAML configuration"
-//	@Failure		400		{object}	utils.APIResponse	"Invalid token"
-//	@Failure		404		{object}	utils.APIResponse	"Subscription not found"
-//	@Failure		500		{object}	utils.APIResponse	"Internal server error"
-//	@Router			/sub/{token}/clash [get]
 func (h *SubscriptionHandler) GetClashSubscription(c *gin.Context) {
 	token := c.Param("token")
 	if token == "" {
@@ -103,18 +79,6 @@ func (h *SubscriptionHandler) GetClashSubscription(c *gin.Context) {
 }
 
 // GetV2RaySubscription handles GET /sub/:token/v2ray
-//
-//	@Summary		Get V2Ray subscription
-//	@Description	Get V2Ray format subscription by token
-//	@Tags			subscriptions
-//	@Accept			json
-//	@Produce		application/json
-//	@Param			token	path		string				true	"Subscription token"
-//	@Success		200		{string}	string				"V2Ray JSON configuration"
-//	@Failure		400		{object}	utils.APIResponse	"Invalid token"
-//	@Failure		404		{object}	utils.APIResponse	"Subscription not found"
-//	@Failure		500		{object}	utils.APIResponse	"Internal server error"
-//	@Router			/sub/{token}/v2ray [get]
 func (h *SubscriptionHandler) GetV2RaySubscription(c *gin.Context) {
 	token := c.Param("token")
 	if token == "" {
@@ -138,18 +102,6 @@ func (h *SubscriptionHandler) GetV2RaySubscription(c *gin.Context) {
 }
 
 // GetSIP008Subscription handles GET /sub/:token/sip008
-//
-//	@Summary		Get SIP008 subscription
-//	@Description	Get SIP008 format subscription by token (Shadowsocks)
-//	@Tags			subscriptions
-//	@Accept			json
-//	@Produce		application/json
-//	@Param			token	path		string				true	"Subscription token"
-//	@Success		200		{string}	string				"SIP008 JSON configuration"
-//	@Failure		400		{object}	utils.APIResponse	"Invalid token"
-//	@Failure		404		{object}	utils.APIResponse	"Subscription not found"
-//	@Failure		500		{object}	utils.APIResponse	"Internal server error"
-//	@Router			/sub/{token}/sip008 [get]
 func (h *SubscriptionHandler) GetSIP008Subscription(c *gin.Context) {
 	token := c.Param("token")
 	if token == "" {
@@ -173,18 +125,6 @@ func (h *SubscriptionHandler) GetSIP008Subscription(c *gin.Context) {
 }
 
 // GetSurgeSubscription handles GET /sub/:token/surge
-//
-//	@Summary		Get Surge subscription
-//	@Description	Get Surge format subscription by token
-//	@Tags			subscriptions
-//	@Accept			json
-//	@Produce		text/plain
-//	@Param			token	path		string				true	"Subscription token"
-//	@Success		200		{string}	string				"Surge configuration"
-//	@Failure		400		{object}	utils.APIResponse	"Invalid token"
-//	@Failure		404		{object}	utils.APIResponse	"Subscription not found"
-//	@Failure		500		{object}	utils.APIResponse	"Internal server error"
-//	@Router			/sub/{token}/surge [get]
 func (h *SubscriptionHandler) GetSurgeSubscription(c *gin.Context) {
 	token := c.Param("token")
 	if token == "" {

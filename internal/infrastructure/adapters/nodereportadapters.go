@@ -15,7 +15,7 @@ import (
 // SubscriptionTrafficRecorderAdapter adapts to record subscription-based traffic
 // This adapter records traffic by subscription_id for proper traffic tracking
 //
-// Architecture: XrayR → Adapter → MySQL
+// Architecture: Agent → Adapter → MySQL
 type SubscriptionTrafficRecorderAdapter struct {
 	nodeTrafficRepo node.NodeTrafficRepository
 	logger          logger.Interface

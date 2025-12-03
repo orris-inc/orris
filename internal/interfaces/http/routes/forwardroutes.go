@@ -13,6 +13,7 @@ import (
 type ForwardRouteConfig struct {
 	ForwardRuleHandler          *forwardHandlers.ForwardHandler
 	ForwardAgentHandler         *forwardHandlers.ForwardAgentHandler
+	ForwardChainHandler         *forwardHandlers.ForwardChainHandler
 	ForwardAgentAPIHandler      *forwardHandlers.AgentHandler
 	AuthMiddleware              *middleware.AuthMiddleware
 	ForwardAgentTokenMiddleware *middleware.ForwardAgentTokenMiddleware
@@ -64,6 +65,25 @@ func SetupForwardRoutes(engine *gin.Engine, cfg *ForwardRouteConfig) {
 
 		// Token operations
 		forwardAgents.POST("/:id/regenerate-token", cfg.ForwardAgentHandler.RegenerateToken)
+	}
+
+	// Forward chains management (admin only)
+	forwardChains := engine.Group("/forward-chains")
+	forwardChains.Use(cfg.AuthMiddleware.RequireAuth())
+	forwardChains.Use(authorization.RequireAdmin())
+	{
+		// Collection operations
+		forwardChains.POST("", cfg.ForwardChainHandler.CreateChain)
+		forwardChains.GET("", cfg.ForwardChainHandler.ListChains)
+
+		// Resource operations
+		forwardChains.GET("/:id", cfg.ForwardChainHandler.GetChain)
+		forwardChains.DELETE("/:id", cfg.ForwardChainHandler.DeleteChain)
+
+		// Status operations
+		forwardChains.PATCH("/:id/status", cfg.ForwardChainHandler.UpdateStatus)
+		forwardChains.POST("/:id/enable", cfg.ForwardChainHandler.EnableChain)
+		forwardChains.POST("/:id/disable", cfg.ForwardChainHandler.DisableChain)
 	}
 
 	// Forward agent API for clients to fetch rules and report traffic

@@ -9,28 +9,6 @@ import (
 	"orris/internal/interfaces/cli/server"
 )
 
-//	@title			Orris API
-//	@version		1.0
-//	@description	A modern Go application with RESTful API
-//	@termsOfService	http://swagger.io/terms/
-
-//	@contact.name	API Support
-//	@contact.email	support@orris.io
-
-//	@license.name	MIT
-//	@license.url	https://opensource.org/licenses/MIT
-
-//	@BasePath	/
-
-//	@securityDefinitions.apikey	Bearer
-//	@in							header
-//	@name						Authorization
-//	@description				Type "Bearer" followed by a space and JWT token.
-
-// @securityDefinitions.apikey	NodeToken
-// @in							header
-// @name						X-Node-Token
-// @description				Node authentication token for reporting endpoints
 func main() {
 	rootCmd := &cobra.Command{
 		Use:   "orris",

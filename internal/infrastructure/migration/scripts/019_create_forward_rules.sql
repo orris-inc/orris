@@ -1,5 +1,4 @@
 -- +goose Up
--- +goose StatementBegin
 
 -- Create forward_rules table for TCP/UDP port forwarding configuration
 CREATE TABLE forward_rules (
@@ -28,11 +27,6 @@ CREATE TABLE forward_rules (
     INDEX idx_deleted_at (deleted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- +goose StatementEnd
-
 -- +goose Down
--- +goose StatementBegin
 
 DROP TABLE IF EXISTS forward_rules;
-
--- +goose StatementEnd

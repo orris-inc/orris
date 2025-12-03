@@ -31,7 +31,7 @@ type OnlineSubscriptionInfo struct {
 	IP             string
 }
 
-// ReportOnlineSubscriptionsUseCase handles reporting online subscriptions from XrayR clients
+// ReportOnlineSubscriptionsUseCase handles reporting online subscriptions from node agents
 type ReportOnlineSubscriptionsUseCase struct {
 	subscriptionTracker OnlineSubscriptionTracker
 	logger              logger.Interface
@@ -48,7 +48,7 @@ func NewReportOnlineSubscriptionsUseCase(
 	}
 }
 
-// Execute processes online subscriptions report from XrayR backend
+// Execute processes online subscriptions report from node agent
 func (uc *ReportOnlineSubscriptionsUseCase) Execute(ctx context.Context, cmd ReportOnlineSubscriptionsCommand) (*ReportOnlineSubscriptionsResult, error) {
 	if cmd.NodeID == 0 {
 		return nil, fmt.Errorf("node_id is required")

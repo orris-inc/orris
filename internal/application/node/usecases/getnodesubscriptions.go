@@ -6,6 +6,7 @@ import (
 
 	"orris/internal/application/node/dto"
 	"orris/internal/domain/subscription"
+	"orris/internal/infrastructure/config"
 	"orris/internal/shared/logger"
 )
 
@@ -19,7 +20,7 @@ type GetNodeSubscriptionsResult struct {
 	Subscriptions *dto.NodeSubscriptionsResponse
 }
 
-// GetNodeSubscriptionsUseCase handles fetching subscription list for XrayR clients
+// GetNodeSubscriptionsUseCase handles fetching subscription list for node agents
 type GetNodeSubscriptionsUseCase struct {
 	subscriptionRepo subscription.SubscriptionRepository
 	logger           logger.Interface
@@ -52,8 +53,11 @@ func (uc *GetNodeSubscriptionsUseCase) Execute(ctx context.Context, cmd GetNodeS
 		return nil, fmt.Errorf("failed to retrieve subscriptions for node")
 	}
 
-	// Convert subscriptions to XrayR subscriptions response
-	subscriptionInfos := dto.ToNodeSubscriptionsResponse(subscriptions)
+	// Get HMAC secret from config for password generation
+	hmacSecret := config.Get().Auth.JWT.Secret
+
+	// Convert subscriptions to agent subscriptions response
+	subscriptionInfos := dto.ToNodeSubscriptionsResponse(subscriptions, hmacSecret)
 
 	uc.logger.Infow("node subscriptions retrieved successfully",
 		"node_id", cmd.NodeID,

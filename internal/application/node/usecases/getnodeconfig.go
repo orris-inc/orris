@@ -9,7 +9,7 @@ import (
 	"orris/internal/shared/logger"
 )
 
-// GetNodeConfigCommand represents the command to get node configuration for XrayR
+// GetNodeConfigCommand represents the command to get node configuration for node agent
 type GetNodeConfigCommand struct {
 	NodeID   uint
 	NodeType string // shadowsocks or trojan
@@ -25,7 +25,7 @@ type NodeConfigRepository interface {
 	GetByID(ctx context.Context, id uint) (*node.Node, error)
 }
 
-// GetNodeConfigUseCase handles fetching node configuration for XrayR clients
+// GetNodeConfigUseCase handles fetching node configuration for node agents
 type GetNodeConfigUseCase struct {
 	nodeRepo node.NodeRepository
 	logger   logger.Interface
@@ -42,7 +42,7 @@ func NewGetNodeConfigUseCase(
 	}
 }
 
-// Execute retrieves the node configuration for XrayR backend
+// Execute retrieves the node configuration for node agent
 func (uc *GetNodeConfigUseCase) Execute(ctx context.Context, cmd GetNodeConfigCommand) (*GetNodeConfigResult, error) {
 	if cmd.NodeID == 0 {
 		return nil, fmt.Errorf("node_id is required")
@@ -67,7 +67,7 @@ func (uc *GetNodeConfigUseCase) Execute(ctx context.Context, cmd GetNodeConfigCo
 		return nil, fmt.Errorf("node is not active")
 	}
 
-	// Convert domain node to XrayR config response
+	// Convert domain node to agent config response
 	config := dto.ToNodeConfigResponse(n)
 	if config == nil {
 		uc.logger.Errorw("failed to convert node to config response",

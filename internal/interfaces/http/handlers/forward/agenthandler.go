@@ -41,18 +41,6 @@ type ReportTrafficRequest struct {
 	Rules []ForwardRuleTrafficItem `json:"rules" binding:"required,dive"`
 }
 
-// GetEnabledRules godoc
-//
-//	@Summary		Get enabled forward rules for client
-//	@Description	Retrieve all enabled forward rules for client configuration synchronization
-//	@Tags			forward-agent-api
-//	@Accept			json
-//	@Produce		json
-//	@Param			Authorization	header		string				true	"Agent token"	default(Bearer fwd_xxx)
-//	@Success		200				{object}	utils.APIResponse	"Enabled forward rules retrieved successfully"
-//	@Failure		401				{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		500				{object}	utils.APIResponse	"Internal server error"
-//	@Router			/forward-agent-api/rules [get]
 func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -83,20 +71,6 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "enabled forward rules retrieved successfully", ruleDTOs)
 }
 
-// ReportTraffic godoc
-//
-//	@Summary		Report forward rule traffic data
-//	@Description	Submit forward rule traffic statistics from client
-//	@Tags			forward-agent-api
-//	@Accept			json
-//	@Produce		json
-//	@Param			Authorization	header		string					true	"Agent token"	default(Bearer fwd_xxx)
-//	@Param			traffic			body		ReportTrafficRequest	true	"Forward rule traffic data"
-//	@Success		200				{object}	utils.APIResponse		"Traffic reported successfully"
-//	@Failure		400				{object}	utils.APIResponse		"Invalid request body"
-//	@Failure		401				{object}	utils.APIResponse		"Unauthorized"
-//	@Failure		500				{object}	utils.APIResponse		"Internal server error"
-//	@Router			/forward-agent-api/traffic [post]
 func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 	ctx := c.Request.Context()
 

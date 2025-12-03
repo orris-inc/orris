@@ -6,8 +6,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
-	swaggerFiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/gorm"
 
 	forwardUsecases "orris/internal/application/forward/usecases"
@@ -36,8 +34,6 @@ import (
 	"orris/internal/shared/authorization"
 	"orris/internal/shared/logger"
 	"orris/internal/shared/services/markdown"
-
-	_ "orris/docs"
 )
 
 // Router represents the HTTP router configuration
@@ -59,6 +55,7 @@ type Router struct {
 	notificationHandler         *handlers.NotificationHandler
 	forwardRuleHandler          *forwardHandlers.ForwardHandler
 	forwardAgentHandler         *forwardHandlers.ForwardAgentHandler
+	forwardChainHandler         *forwardHandlers.ForwardChainHandler
 	forwardAgentAPIHandler      *forwardHandlers.AgentHandler
 	authMiddleware              *middleware.AuthMiddleware
 	subscriptionOwnerMiddleware *middleware.SubscriptionOwnerMiddleware
@@ -392,12 +389,11 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	paymentHandler := handlers.NewPaymentHandler(createPaymentUC, handleCallbackUC, log)
 
-	// XrayR API handlers - v2raysocks compatible backend
+	// Agent API handlers
 	getNodeConfigUC := nodeUsecases.NewGetNodeConfigUseCase(nodeRepoImpl, log)
 	getNodeSubscriptionsUC := nodeUsecases.NewGetNodeSubscriptionsUseCase(subscriptionRepo, log)
 
-	// Initialize XrayR report use cases with adapters
-	// Note: SubscriptionTrafficRecorderAdapter directly writes to database for simplicity
+	// Initialize agent report use cases with adapters
 	subscriptionTrafficRecorder := adapters.NewSubscriptionTrafficRecorderAdapter(nodeTrafficRepo, log)
 	systemStatusUpdater := adapters.NewNodeSystemStatusUpdaterAdapter(redisClient, log)
 	onlineSubscriptionTracker := adapters.NewOnlineSubscriptionTrackerAdapter(log)
@@ -468,6 +464,25 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Initialize forward agent token middleware
 	forwardAgentTokenMiddleware := middleware.NewForwardAgentTokenMiddleware(validateForwardAgentTokenUC, log)
 
+	// Initialize forward chain components
+	forwardChainRepo := repository.NewForwardChainRepository(db, log)
+
+	createForwardChainUC := forwardUsecases.NewCreateForwardChainUseCase(forwardChainRepo, forwardRuleRepo, forwardAgentRepo, log)
+	getForwardChainUC := forwardUsecases.NewGetForwardChainUseCase(forwardChainRepo, log)
+	listForwardChainsUC := forwardUsecases.NewListForwardChainsUseCase(forwardChainRepo, log)
+	enableForwardChainUC := forwardUsecases.NewEnableForwardChainUseCase(forwardChainRepo, forwardRuleRepo, log)
+	disableForwardChainUC := forwardUsecases.NewDisableForwardChainUseCase(forwardChainRepo, forwardRuleRepo, log)
+	deleteForwardChainUC := forwardUsecases.NewDeleteForwardChainUseCase(forwardChainRepo, forwardRuleRepo, log)
+
+	forwardChainHandler := forwardHandlers.NewForwardChainHandler(
+		createForwardChainUC,
+		getForwardChainUC,
+		listForwardChainsUC,
+		enableForwardChainUC,
+		disableForwardChainUC,
+		deleteForwardChainUC,
+	)
+
 	return &Router{
 		engine:                      engine,
 		userHandler:                 userHandler,
@@ -486,6 +501,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		notificationHandler:         notificationHandler,
 		forwardRuleHandler:          forwardRuleHandler,
 		forwardAgentHandler:         forwardAgentHandler,
+		forwardChainHandler:         forwardChainHandler,
 		forwardAgentAPIHandler:      forwardAgentAPIHandler,
 		authMiddleware:              authMiddleware,
 		subscriptionOwnerMiddleware: subscriptionOwnerMiddleware,
@@ -500,8 +516,6 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 	r.engine.Use(middleware.Logger())
 	r.engine.Use(middleware.Recovery())
 	r.engine.Use(middleware.CORS(cfg.Server.AllowedOrigins))
-
-	r.engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	r.engine.GET("/health", r.userHandler.HealthCheck)
 
@@ -657,6 +671,7 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 	routes.SetupForwardRoutes(r.engine, &routes.ForwardRouteConfig{
 		ForwardRuleHandler:          r.forwardRuleHandler,
 		ForwardAgentHandler:         r.forwardAgentHandler,
+		ForwardChainHandler:         r.forwardChainHandler,
 		ForwardAgentAPIHandler:      r.forwardAgentAPIHandler,
 		AuthMiddleware:              r.authMiddleware,
 		ForwardAgentTokenMiddleware: r.forwardAgentTokenMiddleware,

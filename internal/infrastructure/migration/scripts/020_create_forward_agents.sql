@@ -1,5 +1,4 @@
 -- +goose Up
--- +goose StatementBegin
 
 -- Create forward_agents table for managing forwarding agents
 CREATE TABLE forward_agents (
@@ -18,11 +17,6 @@ CREATE TABLE forward_agents (
     INDEX idx_deleted_at (deleted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- +goose StatementEnd
-
 -- +goose Down
--- +goose StatementBegin
 
 DROP TABLE IF EXISTS forward_agents;
-
--- +goose StatementEnd

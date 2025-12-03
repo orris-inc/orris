@@ -11,33 +11,33 @@ import (
 	"orris/internal/shared/logger"
 )
 
-// V2RaySocksResponse represents the standard v2raysocks API response structure
-type V2RaySocksResponse struct {
+// AgentAPIResponse represents the standard agent API response structure
+type AgentAPIResponse struct {
 	Data interface{} `json:"data"`
 	Ret  *int        `json:"ret,omitempty"`
 }
 
-// V2RaySocksErrorResponse represents the error response structure for v2raysocks API
-type V2RaySocksErrorResponse struct {
+// AgentAPIErrorResponse represents the error response structure for agent API
+type AgentAPIErrorResponse struct {
 	Ret     int    `json:"ret"`
 	Message string `json:"msg"`
 }
 
-// V2RaySocksSuccess sends a successful response with data
+// AgentAPISuccess sends a successful response with data
 // Returns HTTP 200 with format: {"data": data}
-func V2RaySocksSuccess(c *gin.Context, data interface{}) {
-	response := V2RaySocksResponse{
+func AgentAPISuccess(c *gin.Context, data interface{}) {
+	response := AgentAPIResponse{
 		Data: data,
 	}
 
 	c.JSON(http.StatusOK, response)
 }
 
-// V2RaySocksSuccessWithRet sends a successful response with data and return code
+// AgentAPISuccessWithRet sends a successful response with data and return code
 // Returns HTTP 200 with format: {"data": data, "ret": ret}
 // The ret parameter typically indicates success (1) or different success states
-func V2RaySocksSuccessWithRet(c *gin.Context, data interface{}, ret int) {
-	response := V2RaySocksResponse{
+func AgentAPISuccessWithRet(c *gin.Context, data interface{}, ret int) {
+	response := AgentAPIResponse{
 		Data: data,
 		Ret:  &ret,
 	}
@@ -45,17 +45,17 @@ func V2RaySocksSuccessWithRet(c *gin.Context, data interface{}, ret int) {
 	c.JSON(http.StatusOK, response)
 }
 
-// V2RaySocksError sends an error response with status code and message
+// AgentAPIError sends an error response with status code and message
 // Returns the specified HTTP status code with format: {"ret": 0, "msg": message}
 // The ret value is always 0 for errors
-func V2RaySocksError(c *gin.Context, statusCode int, message string) {
-	errorResponse := V2RaySocksErrorResponse{
+func AgentAPIError(c *gin.Context, statusCode int, message string) {
+	errorResponse := AgentAPIErrorResponse{
 		Ret:     0,
 		Message: message,
 	}
 
 	// Log error for monitoring and debugging
-	logger.Error("v2raysocks API error",
+	logger.Error("agent API error",
 		"status_code", statusCode,
 		"message", message,
 		"path", c.Request.URL.Path,
@@ -65,10 +65,10 @@ func V2RaySocksError(c *gin.Context, statusCode int, message string) {
 	c.JSON(statusCode, errorResponse)
 }
 
-// V2RaySocksNotModified sends a 304 Not Modified response
+// AgentAPINotModified sends a 304 Not Modified response
 // Used when the client's cached version (identified by ETag) is still valid
 // This helps reduce bandwidth and server load by avoiding unnecessary data transfer
-func V2RaySocksNotModified(c *gin.Context) {
+func AgentAPINotModified(c *gin.Context) {
 	c.Status(http.StatusNotModified)
 }
 
@@ -86,7 +86,7 @@ func SetETag(c *gin.Context, etag string) {
 // Usage:
 //
 //	if CheckETag(c, currentETag) {
-//	    V2RaySocksNotModified(c)
+//	    AgentAPINotModified(c)
 //	    return
 //	}
 func CheckETag(c *gin.Context, etag string) bool {
@@ -114,15 +114,15 @@ func GenerateETag(data interface{}) (string, error) {
 	return etag, nil
 }
 
-// V2RaySocksSuccessWithETag sends a successful response with ETag support
+// AgentAPISuccessWithETag sends a successful response with ETag support
 // Automatically generates and sets ETag based on the response data
 // If client's ETag matches, returns 304 Not Modified
 // Otherwise, returns 200 OK with the data and new ETag
 //
 // Usage:
 //
-//	V2RaySocksSuccessWithETag(c, nodeData)
-func V2RaySocksSuccessWithETag(c *gin.Context, data interface{}) {
+//	AgentAPISuccessWithETag(c, nodeData)
+func AgentAPISuccessWithETag(c *gin.Context, data interface{}) {
 	// Generate ETag from data
 	etag, err := GenerateETag(data)
 	if err != nil {
@@ -130,13 +130,13 @@ func V2RaySocksSuccessWithETag(c *gin.Context, data interface{}) {
 			"error", err,
 			"path", c.Request.URL.Path,
 		)
-		V2RaySocksSuccess(c, data)
+		AgentAPISuccess(c, data)
 		return
 	}
 
 	// Check if client's cached version is still valid
 	if CheckETag(c, etag) {
-		V2RaySocksNotModified(c)
+		AgentAPINotModified(c)
 		return
 	}
 
@@ -144,5 +144,5 @@ func V2RaySocksSuccessWithETag(c *gin.Context, data interface{}) {
 	SetETag(c, etag)
 
 	// Return the response data
-	V2RaySocksSuccess(c, data)
+	AgentAPISuccess(c, data)
 }

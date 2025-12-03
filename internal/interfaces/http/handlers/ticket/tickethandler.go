@@ -52,19 +52,6 @@ func NewTicketHandler(
 }
 
 // CreateTicket handles POST /tickets
-//
-//	@Summary		Create a new ticket
-//	@Description	Create a new support ticket
-//	@Tags			tickets
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			ticket	body		CreateTicketRequest	true	"Ticket data"
-//	@Success		201		{object}	utils.APIResponse	"Ticket created successfully"
-//	@Failure		400		{object}	utils.APIResponse
-//	@Failure		401		{object}	utils.APIResponse
-//	@Failure		500		{object}	utils.APIResponse	"Internal server error"
-//	@Router			/tickets [post]
 func (h *TicketHandler) CreateTicket(c *gin.Context) {
 	var req CreateTicketRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -86,19 +73,6 @@ func (h *TicketHandler) CreateTicket(c *gin.Context) {
 }
 
 // GetTicket handles GET /tickets/:id
-//
-//	@Summary		Get ticket by ID
-//	@Description	Get details of a ticket
-//	@Tags			tickets
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			id	path		int					true	"Ticket ID"
-//	@Success		200	{object}	utils.APIResponse	"Ticket details"
-//	@Failure		400	{object}	utils.APIResponse
-//	@Failure		404	{object}	utils.APIResponse
-//	@Failure		500	{object}	utils.APIResponse	"Internal server error"
-//	@Router			/tickets/{id} [get]
 func (h *TicketHandler) GetTicket(c *gin.Context) {
 	ticketID, err := parseTicketID(c)
 	if err != nil {
@@ -122,22 +96,6 @@ func (h *TicketHandler) GetTicket(c *gin.Context) {
 }
 
 // ListTickets handles GET /tickets
-//
-//	@Summary		List tickets
-//	@Description	Get a paginated list of tickets
-//	@Tags			tickets
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			page		query		int					false	"Page number"		default(1)
-//	@Param			page_size	query		int					false	"Page size"			default(20)
-//	@Param			status		query		string				false	"Status filter"		Enums(open,in_progress,resolved,closed,reopened)
-//	@Param			priority	query		string				false	"Priority filter"	Enums(low,normal,high,urgent,critical)
-//	@Param			category	query		string				false	"Category filter"	Enums(technical,billing,account,general,feature_request,bug_report)
-//	@Success		200			{object}	utils.APIResponse	"Tickets list"
-//	@Failure		400			{object}	utils.APIResponse
-//	@Failure		500			{object}	utils.APIResponse	"Internal server error"
-//	@Router			/tickets [get]
 func (h *TicketHandler) ListTickets(c *gin.Context) {
 	req, err := parseListTicketsRequest(c)
 	if err != nil {
@@ -158,22 +116,6 @@ func (h *TicketHandler) ListTickets(c *gin.Context) {
 }
 
 // AssignTicket handles POST /tickets/:id/assign
-//
-//	@Summary		Assign ticket
-//	@Description	Assign a ticket to an agent
-//	@Tags			tickets
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			id		path		int					true	"Ticket ID"
-//	@Param			body	body		AssignTicketRequest	true	"Assignment data"
-//	@Success		200		{object}	utils.APIResponse	"Ticket assigned successfully"
-//	@Failure		400		{object}	utils.APIResponse	"Bad request"
-//	@Failure		401		{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403		{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		404		{object}	utils.APIResponse	"Ticket not found"
-//	@Failure		500		{object}	utils.APIResponse	"Internal server error"
-//	@Router			/tickets/{id}/assign [post]
 func (h *TicketHandler) AssignTicket(c *gin.Context) {
 	ticketID, err := parseTicketID(c)
 	if err != nil {
@@ -204,19 +146,6 @@ func (h *TicketHandler) AssignTicket(c *gin.Context) {
 }
 
 // AddComment handles POST /tickets/:id/comments
-//
-//	@Summary		Add comment
-//	@Description	Add a comment to a ticket
-//	@Tags			tickets
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			id		path		int					true	"Ticket ID"
-//	@Param			body	body		AddCommentRequest	true	"Comment data"
-//	@Success		201		{object}	utils.APIResponse	"Comment added successfully"
-//	@Failure		400		{object}	utils.APIResponse
-//	@Failure		500		{object}	utils.APIResponse	"Internal server error"
-//	@Router			/tickets/{id}/comments [post]
 func (h *TicketHandler) AddComment(c *gin.Context) {
 	ticketID, err := parseTicketID(c)
 	if err != nil {
@@ -253,21 +182,6 @@ type UpdateTicketStatusRequest struct {
 }
 
 // UpdateTicketStatus handles PATCH /tickets/:id/status
-//
-//	@Summary		Update ticket status
-//	@Description	Update ticket status (open, in_progress, resolved, closed, or reopened)
-//	@Tags			tickets
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			id		path		int							true	"Ticket ID"
-//	@Param			status	body		UpdateTicketStatusRequest	true	"Status update details"
-//	@Success		200		{object}	utils.APIResponse			"Ticket status updated successfully"
-//	@Failure		400		{object}	utils.APIResponse			"Bad request"
-//	@Failure		401		{object}	utils.APIResponse			"Unauthorized"
-//	@Failure		404		{object}	utils.APIResponse			"Ticket not found"
-//	@Failure		500		{object}	utils.APIResponse			"Internal server error"
-//	@Router			/tickets/{id}/status [patch]
 func (h *TicketHandler) UpdateTicketStatus(c *gin.Context) {
 	ticketID, err := parseTicketID(c)
 	if err != nil {
@@ -318,21 +232,6 @@ func (h *TicketHandler) UpdateTicketStatus(c *gin.Context) {
 }
 
 // DeleteTicket handles DELETE /tickets/:id
-//
-//	@Summary		Delete ticket
-//	@Description	Delete a ticket (admin only)
-//	@Tags			tickets
-//	@Accept			json
-//	@Produce		json
-//	@Security		Bearer
-//	@Param			id	path	int	true	"Ticket ID"
-//	@Success		204
-//	@Failure		400	{object}	utils.APIResponse	"Bad request"
-//	@Failure		401	{object}	utils.APIResponse	"Unauthorized"
-//	@Failure		403	{object}	utils.APIResponse	"Forbidden - Requires admin role"
-//	@Failure		404	{object}	utils.APIResponse	"Ticket not found"
-//	@Failure		500	{object}	utils.APIResponse	"Internal server error"
-//	@Router			/tickets/{id} [delete]
 func (h *TicketHandler) DeleteTicket(c *gin.Context) {
 	ticketID, err := parseTicketID(c)
 	if err != nil {

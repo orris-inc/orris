@@ -44,7 +44,7 @@ func (m *NodeTokenMiddleware) RequireNodeToken() gin.HandlerFunc {
 			}
 		}
 
-		// If no token in header, try query parameter (for XrayR compatibility)
+		// If no token in header, try query parameter
 		if token == "" {
 			token = c.Query("token")
 		}
@@ -73,16 +73,15 @@ func (m *NodeTokenMiddleware) RequireNodeToken() gin.HandlerFunc {
 	}
 }
 
-// RequireNodeTokenXrayR is a middleware for XrayR API that validates node token
-// Returns v2raysocks-formatted error responses for compatibility
-func (m *NodeTokenMiddleware) RequireNodeTokenXrayR() gin.HandlerFunc {
+// RequireNodeTokenQuery is a middleware that validates node token from query parameter
+func (m *NodeTokenMiddleware) RequireNodeTokenQuery() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// XrayR sends token as query parameter
+		// Get token from query parameter
 		token := c.Query("token")
 
 		if token == "" {
-			m.logger.Warnw("XrayR request without token", "ip", c.ClientIP())
-			utils.V2RaySocksError(c, http.StatusUnauthorized, "unauthorized")
+			m.logger.Warnw("agent request without token", "ip", c.ClientIP())
+			utils.AgentAPIError(c, http.StatusUnauthorized, "unauthorized")
 			c.Abort()
 			return
 		}
@@ -93,8 +92,8 @@ func (m *NodeTokenMiddleware) RequireNodeTokenXrayR() gin.HandlerFunc {
 
 		result, err := m.validateTokenUC.Execute(c.Request.Context(), cmd)
 		if err != nil {
-			m.logger.Warnw("XrayR node token validation failed", "error", err, "ip", c.ClientIP())
-			utils.V2RaySocksError(c, http.StatusUnauthorized, "unauthorized")
+			m.logger.Warnw("agent node token validation failed", "error", err, "ip", c.ClientIP())
+			utils.AgentAPIError(c, http.StatusUnauthorized, "unauthorized")
 			c.Abort()
 			return
 		}
@@ -103,7 +102,7 @@ func (m *NodeTokenMiddleware) RequireNodeTokenXrayR() gin.HandlerFunc {
 		c.Set("node_id", result.NodeID)
 		c.Set("node_name", result.Name)
 
-		m.logger.Infow("XrayR node authenticated",
+		m.logger.Infow("agent node authenticated",
 			"node_id", result.NodeID,
 			"node_name", result.Name,
 			"ip", c.ClientIP(),
@@ -114,7 +113,6 @@ func (m *NodeTokenMiddleware) RequireNodeTokenXrayR() gin.HandlerFunc {
 }
 
 // RequireNodeTokenHeader is a middleware for RESTful API that validates X-Node-Token header
-// Returns v2raysocks-formatted error responses for compatibility
 func (m *NodeTokenMiddleware) RequireNodeTokenHeader() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// RESTful API uses X-Node-Token header
@@ -122,7 +120,7 @@ func (m *NodeTokenMiddleware) RequireNodeTokenHeader() gin.HandlerFunc {
 
 		if token == "" {
 			m.logger.Warnw("RESTful API request without X-Node-Token header", "ip", c.ClientIP())
-			utils.V2RaySocksError(c, http.StatusUnauthorized, "unauthorized")
+			utils.AgentAPIError(c, http.StatusUnauthorized, "unauthorized")
 			c.Abort()
 			return
 		}
@@ -134,7 +132,7 @@ func (m *NodeTokenMiddleware) RequireNodeTokenHeader() gin.HandlerFunc {
 		result, err := m.validateTokenUC.Execute(c.Request.Context(), cmd)
 		if err != nil {
 			m.logger.Warnw("node token validation failed", "error", err, "ip", c.ClientIP())
-			utils.V2RaySocksError(c, http.StatusUnauthorized, "unauthorized")
+			utils.AgentAPIError(c, http.StatusUnauthorized, "unauthorized")
 			c.Abort()
 			return
 		}

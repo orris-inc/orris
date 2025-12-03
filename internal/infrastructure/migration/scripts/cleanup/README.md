@@ -98,13 +98,10 @@ go test ./internal/infrastructure/repository/... -v
 go test ./internal/application/... -v
 go test ./internal/interfaces/... -v
 
-# 3. Regenerate Swagger docs
-swag init
-
-# 4. Start application and verify
+# 3. Start application and verify
 go run cmd/api/main.go
 
-# 5. Test critical APIs
+# 4. Test critical APIs
 # - User login (OAuth)
 # - Subscription creation
 # - Node management
@@ -138,7 +135,6 @@ mysql -u root -p orris < backup_20251112_xxxxx.sql
 
 After migration:
 - [ ] Update API documentation
-- [ ] Update Swagger annotations
 - [ ] Update database schema diagram
 - [ ] Update README if needed
 

@@ -26,7 +26,7 @@ type NodeSystemStatusUpdater interface {
 	UpdateSystemStatus(ctx context.Context, nodeID uint, cpu, memory, disk float64, uptime int) error
 }
 
-// ReportNodeStatusUseCase handles reporting node system status from XrayR clients
+// ReportNodeStatusUseCase handles reporting node system status from node agents
 type ReportNodeStatusUseCase struct {
 	statusUpdater NodeSystemStatusUpdater
 	logger        logger.Interface
@@ -43,7 +43,7 @@ func NewReportNodeStatusUseCase(
 	}
 }
 
-// Execute processes node status report from XrayR backend
+// Execute processes node status report from node agent
 func (uc *ReportNodeStatusUseCase) Execute(ctx context.Context, cmd ReportNodeStatusCommand) (*ReportNodeStatusResult, error) {
 	if cmd.NodeID == 0 {
 		return nil, fmt.Errorf("node_id is required")

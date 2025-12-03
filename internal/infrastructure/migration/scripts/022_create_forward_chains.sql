@@ -1,5 +1,4 @@
 -- +goose Up
--- +goose StatementBegin
 
 -- Create forward_chains table for managing multi-hop forwarding chains
 CREATE TABLE forward_chains (
@@ -46,13 +45,10 @@ CREATE TABLE forward_chain_rules (
     UNIQUE INDEX idx_chain_rule_unique (chain_id, rule_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
--- +goose StatementEnd
-
 -- +goose Down
--- +goose StatementBegin
 
 DROP TABLE IF EXISTS forward_chain_rules;
-DROP TABLE IF EXISTS forward_chain_nodes;
-DROP TABLE IF EXISTS forward_chains;
 
--- +goose StatementEnd
+DROP TABLE IF EXISTS forward_chain_nodes;
+
+DROP TABLE IF EXISTS forward_chains;

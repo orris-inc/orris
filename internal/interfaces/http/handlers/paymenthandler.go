@@ -42,18 +42,6 @@ type CreatePaymentResponse struct {
 	ExpiredAt  string `json:"expired_at"`
 }
 
-// @Summary		Create payment
-// @Description	Create a payment for subscription
-// @Tags			payments
-// @Accept			json
-// @Produce		json
-// @Security		Bearer
-// @Param			payment	body		CreatePaymentRequest							true	"Payment data"
-// @Success		200		{object}	utils.APIResponse{data=CreatePaymentResponse}	"Payment created successfully"
-// @Failure		400		{object}	utils.APIResponse								"Bad request"
-// @Failure		401		{object}	utils.APIResponse								"Unauthorized"
-// @Failure		500		{object}	utils.APIResponse								"Internal server error"
-// @Router			/payments [post]
 func (h *PaymentHandler) CreatePayment(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -93,15 +81,6 @@ func (h *PaymentHandler) CreatePayment(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "payment created successfully", response)
 }
 
-// @Summary		Handle payment callback
-// @Description	Handle payment gateway callback notification
-// @Tags			payments
-// @Accept			json
-// @Produce		json
-// @Success		200	{object}	utils.APIResponse	"Callback processed successfully"
-// @Failure		400	{object}	utils.APIResponse	"Bad request"
-// @Failure		500	{object}	utils.APIResponse	"Internal server error"
-// @Router			/payments/callback [post]
 func (h *PaymentHandler) HandleCallback(c *gin.Context) {
 	if err := h.handleCallbackUC.Execute(c.Request.Context(), c.Request); err != nil {
 		h.logger.Errorw("failed to handle payment callback", "error", err)

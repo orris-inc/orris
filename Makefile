@@ -86,12 +86,6 @@ release: build-all compress ## Build all platforms and compress with UPX
 	@echo "✅ Release artifacts created in release/"
 	@ls -lh release/
 
-.PHONY: swagger
-swagger: ## Generate Swagger documentation
-	@echo "Generating Swagger docs..."
-	@~/go/bin/swag init -g cmd/orris/main.go --output docs --parseDependency --parseInternal
-	@echo "✅ Swagger docs generated"
-
 .PHONY: run
 run: build ## Run the server
 	@./bin/orris server
