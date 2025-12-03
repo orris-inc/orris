@@ -6,10 +6,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	appDto "orris/internal/application/notification/dto"
-	"orris/internal/shared/constants"
-	"orris/internal/shared/errors"
-	"orris/internal/shared/utils"
+	appDto "github.com/orris-inc/orris/internal/application/notification/dto"
+	"github.com/orris-inc/orris/internal/shared/constants"
+	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 type CreateAnnouncementRequest struct {

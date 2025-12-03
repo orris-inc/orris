@@ -3,7 +3,7 @@ package dto
 import (
 	"time"
 
-	"orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/domain/node"
 )
 
 type NodeGroupDTO struct {

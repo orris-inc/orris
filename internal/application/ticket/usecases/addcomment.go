@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"orris/internal/domain/ticket"
-	"orris/internal/shared/auth"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/domain/ticket"
+	"github.com/orris-inc/orris/internal/shared/auth"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type AddCommentCommand struct {

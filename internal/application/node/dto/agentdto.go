@@ -6,8 +6,8 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"orris/internal/domain/node"
-	"orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/domain/subscription"
 )
 
 // AgentResponse represents the standard response format for agent API

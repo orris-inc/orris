@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	paymentUsecases "orris/internal/application/payment/usecases"
-	"orris/internal/shared/logger"
+	paymentUsecases "github.com/orris-inc/orris/internal/application/payment/usecases"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type PaymentScheduler struct {

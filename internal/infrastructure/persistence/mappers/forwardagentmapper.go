@@ -3,8 +3,8 @@ package mappers
 import (
 	"fmt"
 
-	"orris/internal/domain/forward"
-	"orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 )
 
 // ForwardAgentMapper handles the conversion between domain entities and persistence models.

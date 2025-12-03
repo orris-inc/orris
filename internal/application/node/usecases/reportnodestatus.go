@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"orris/internal/application/node/dto"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/application/node/dto"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // ReportNodeStatusCommand represents the command to report node system status

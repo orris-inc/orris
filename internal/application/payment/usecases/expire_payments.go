@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"orris/internal/domain/payment"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/domain/payment"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type ExpirePaymentsUseCase struct {

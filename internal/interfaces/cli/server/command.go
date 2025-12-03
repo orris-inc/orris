@@ -14,14 +14,14 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
 
-	userApp "orris/internal/application/user"
-	"orris/internal/infrastructure/auth"
-	"orris/internal/infrastructure/config"
-	"orris/internal/infrastructure/database"
-	"orris/internal/infrastructure/migration"
-	"orris/internal/infrastructure/repository"
-	httpRouter "orris/internal/interfaces/http"
-	"orris/internal/shared/logger"
+	userApp "github.com/orris-inc/orris/internal/application/user"
+	"github.com/orris-inc/orris/internal/infrastructure/auth"
+	"github.com/orris-inc/orris/internal/infrastructure/config"
+	"github.com/orris-inc/orris/internal/infrastructure/database"
+	"github.com/orris-inc/orris/internal/infrastructure/migration"
+	"github.com/orris-inc/orris/internal/infrastructure/repository"
+	httpRouter "github.com/orris-inc/orris/internal/interfaces/http"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 var (

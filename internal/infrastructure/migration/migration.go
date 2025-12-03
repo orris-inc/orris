@@ -6,7 +6,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // Manager handles database migrations with different strategies

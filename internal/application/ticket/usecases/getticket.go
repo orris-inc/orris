@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"orris/internal/application/ticket/dto"
-	"orris/internal/domain/ticket"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/application/ticket/dto"
+	"github.com/orris-inc/orris/internal/domain/ticket"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type GetTicketQuery struct {

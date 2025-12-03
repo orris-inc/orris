@@ -6,10 +6,10 @@ import (
 
 	"gorm.io/gorm"
 
-	"orris/internal/domain/user"
-	"orris/internal/infrastructure/persistence/mappers"
-	"orris/internal/infrastructure/persistence/models"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/domain/user"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // UserRepositoryDDD implements the user repository interface with DDD patterns

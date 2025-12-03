@@ -5,8 +5,8 @@ import (
 
 	"gorm.io/gorm"
 
-	"orris/internal/domain/user"
-	"orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/domain/user"
+	"github.com/orris-inc/orris/internal/shared/errors"
 )
 
 type OAuthAccountRepository struct {

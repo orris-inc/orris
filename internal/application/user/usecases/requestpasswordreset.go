@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"orris/internal/domain/user"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/domain/user"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type RequestPasswordResetCommand struct {

@@ -6,12 +6,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"orris/internal/application/user/usecases"
-	"orris/internal/domain/user"
-	"orris/internal/shared/config"
-	"orris/internal/shared/constants"
-	"orris/internal/shared/logger"
-	"orris/internal/shared/utils"
+	"github.com/orris-inc/orris/internal/application/user/usecases"
+	"github.com/orris-inc/orris/internal/domain/user"
+	"github.com/orris-inc/orris/internal/shared/config"
+	"github.com/orris-inc/orris/internal/shared/constants"
+	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 type AuthHandler struct {

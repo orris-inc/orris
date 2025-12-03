@@ -6,10 +6,10 @@ import (
 
 	"gorm.io/gorm"
 
-	"orris/internal/domain/payment"
-	vo "orris/internal/domain/payment/value_objects"
-	"orris/internal/infrastructure/persistence/mappers"
-	"orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/domain/payment"
+	vo "github.com/orris-inc/orris/internal/domain/payment/value_objects"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 )
 
 type PaymentRepository struct {

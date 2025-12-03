@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
-	"orris/internal/domain/ticket"
-	vo "orris/internal/domain/ticket/value_objects"
-	"orris/internal/shared/auth"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/domain/ticket"
+	vo "github.com/orris-inc/orris/internal/domain/ticket/value_objects"
+	"github.com/orris-inc/orris/internal/shared/auth"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type GetTicketStatsQuery struct {

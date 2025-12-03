@@ -1,4 +1,4 @@
-module orris
+module github.com/orris-inc/orris
 
 go 1.24.3
 

@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"orris/internal/domain/forward"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // ForwardAgentDTO represents the data transfer object for forward agents.

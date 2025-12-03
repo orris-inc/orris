@@ -6,10 +6,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"orris/internal/application/forward/dto"
-	"orris/internal/domain/forward"
-	"orris/internal/shared/logger"
-	"orris/internal/shared/utils"
+	"github.com/orris-inc/orris/internal/application/forward/dto"
+	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 // AgentHandler handles RESTful agent API requests for forward client

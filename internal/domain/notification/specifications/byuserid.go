@@ -1,6 +1,6 @@
 package specifications
 
-import "orris/internal/domain/notification"
+import "github.com/orris-inc/orris/internal/domain/notification"
 
 type ByUserID struct {
 	UserID uint

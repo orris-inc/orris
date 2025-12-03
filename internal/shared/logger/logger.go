@@ -10,7 +10,7 @@ import (
 	"github.com/lmittmann/tint"
 	"golang.org/x/term"
 
-	"orris/internal/shared/config"
+	"github.com/orris-inc/orris/internal/shared/config"
 )
 
 var (

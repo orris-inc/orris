@@ -3,10 +3,10 @@ package usecases
 import (
 	"context"
 
-	"orris/internal/domain/ticket"
-	"orris/internal/domain/user"
-	"orris/internal/shared/errors"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/domain/ticket"
+	"github.com/orris-inc/orris/internal/domain/user"
+	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type AssignTicketCommand struct {

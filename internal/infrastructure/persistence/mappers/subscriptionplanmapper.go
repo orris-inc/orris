@@ -6,9 +6,9 @@ import (
 
 	"gorm.io/datatypes"
 
-	"orris/internal/domain/subscription"
-	vo "orris/internal/domain/subscription/value_objects"
-	"orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/domain/subscription"
+	vo "github.com/orris-inc/orris/internal/domain/subscription/value_objects"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 )
 
 // SubscriptionPlanMapper handles the conversion between domain entities and persistence models

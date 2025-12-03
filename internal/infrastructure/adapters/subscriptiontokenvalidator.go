@@ -8,10 +8,10 @@ import (
 
 	"gorm.io/gorm"
 
-	nodeusecases "orris/internal/application/node/usecases"
-	"orris/internal/infrastructure/persistence/models"
-	"orris/internal/shared/errors"
-	"orris/internal/shared/logger"
+	nodeusecases "github.com/orris-inc/orris/internal/application/node/usecases"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type SubscriptionTokenValidatorAdapter struct {

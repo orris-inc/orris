@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/viper"
 
-	sharedConfig "orris/internal/shared/config"
+	sharedConfig "github.com/orris-inc/orris/internal/shared/config"
 )
 
 type Config struct {

@@ -3,10 +3,10 @@ package adapters
 import (
 	"context"
 
-	"orris/internal/application/notification/usecases"
-	"orris/internal/domain/notification"
-	vo "orris/internal/domain/notification/value_objects"
-	"orris/internal/domain/user"
+	"github.com/orris-inc/orris/internal/application/notification/usecases"
+	"github.com/orris-inc/orris/internal/domain/notification"
+	vo "github.com/orris-inc/orris/internal/domain/notification/value_objects"
+	"github.com/orris-inc/orris/internal/domain/user"
 )
 
 type announcementAdapter struct {

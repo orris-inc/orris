@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"orris/internal/domain/subscription"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type CancelSubscriptionCommand struct {

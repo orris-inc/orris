@@ -3,9 +3,9 @@ package usecases
 import (
 	"fmt"
 
-	"orris/internal/application/user/helpers"
-	"orris/internal/domain/user"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/application/user/helpers"
+	"github.com/orris-inc/orris/internal/domain/user"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type RefreshTokenCommand struct {

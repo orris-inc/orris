@@ -6,11 +6,11 @@ import (
 
 	"gorm.io/gorm"
 
-	"orris/internal/domain/subscription"
-	vo "orris/internal/domain/subscription/value_objects"
-	"orris/internal/infrastructure/persistence/mappers"
-	"orris/internal/infrastructure/persistence/models"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/domain/subscription"
+	vo "github.com/orris-inc/orris/internal/domain/subscription/value_objects"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // PlanPricingRepositoryImpl implements PlanPricingRepository interface

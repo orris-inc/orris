@@ -6,7 +6,7 @@ import (
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
-	"orris/internal/shared/constants"
+	"github.com/orris-inc/orris/internal/shared/constants"
 )
 
 // NodeGroupModel represents the database persistence model for node groups

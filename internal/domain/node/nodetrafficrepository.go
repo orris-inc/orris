@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"orris/internal/shared/query"
+	"github.com/orris-inc/orris/internal/shared/query"
 )
 
 type NodeTrafficRepository interface {

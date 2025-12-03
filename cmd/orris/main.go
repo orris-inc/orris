@@ -5,8 +5,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"orris/internal/interfaces/cli/migrate"
-	"orris/internal/interfaces/cli/server"
+	"github.com/orris-inc/orris/internal/interfaces/cli/migrate"
+	"github.com/orris-inc/orris/internal/interfaces/cli/server"
 )
 
 func main() {

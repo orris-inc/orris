@@ -6,10 +6,10 @@ import (
 
 	"gorm.io/gorm"
 
-	"orris/internal/domain/notification"
-	"orris/internal/infrastructure/persistence/mappers"
-	"orris/internal/infrastructure/persistence/models"
-	"orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/domain/notification"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/errors"
 )
 
 type NotificationRepositoryImpl struct {

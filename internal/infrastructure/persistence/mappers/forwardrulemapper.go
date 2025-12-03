@@ -3,9 +3,9 @@ package mappers
 import (
 	"fmt"
 
-	"orris/internal/domain/forward"
-	vo "orris/internal/domain/forward/value_objects"
-	"orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/domain/forward"
+	vo "github.com/orris-inc/orris/internal/domain/forward/value_objects"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 )
 
 // ForwardRuleMapper handles the conversion between domain entities and persistence models.

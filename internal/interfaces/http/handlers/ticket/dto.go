@@ -5,8 +5,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"orris/internal/application/ticket/usecases"
-	"orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/application/ticket/usecases"
+	"github.com/orris-inc/orris/internal/shared/errors"
 )
 
 type CreateTicketRequest struct {

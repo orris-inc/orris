@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"orris/internal/domain/ticket"
-	vo "orris/internal/domain/ticket/value_objects"
-	"orris/internal/shared/errors"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/domain/ticket"
+	vo "github.com/orris-inc/orris/internal/domain/ticket/value_objects"
+	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type ChangeStatusCommand struct {

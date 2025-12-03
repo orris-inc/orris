@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"orris/internal/domain/shared/services"
+	"github.com/orris-inc/orris/internal/domain/shared/services"
 )
 
 // AgentStatus represents the status of a forward agent

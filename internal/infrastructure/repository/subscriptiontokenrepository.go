@@ -7,11 +7,11 @@ import (
 
 	"gorm.io/gorm"
 
-	"orris/internal/domain/subscription"
-	vo "orris/internal/domain/subscription/value_objects"
-	"orris/internal/infrastructure/persistence/models"
-	"orris/internal/shared/errors"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/domain/subscription"
+	vo "github.com/orris-inc/orris/internal/domain/subscription/value_objects"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type SubscriptionTokenRepositoryImpl struct {

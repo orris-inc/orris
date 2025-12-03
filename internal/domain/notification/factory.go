@@ -3,7 +3,7 @@ package notification
 import (
 	"time"
 
-	vo "orris/internal/domain/notification/value_objects"
+	vo "github.com/orris-inc/orris/internal/domain/notification/value_objects"
 )
 
 func CreateAnnouncement(

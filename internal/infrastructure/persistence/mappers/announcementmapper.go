@@ -5,9 +5,9 @@ import (
 
 	"gorm.io/gorm"
 
-	"orris/internal/domain/notification"
-	vo "orris/internal/domain/notification/value_objects"
-	"orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/domain/notification"
+	vo "github.com/orris-inc/orris/internal/domain/notification/value_objects"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 )
 
 type AnnouncementMapper interface {

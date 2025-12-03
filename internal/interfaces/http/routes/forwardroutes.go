@@ -4,9 +4,9 @@ package routes
 import (
 	"github.com/gin-gonic/gin"
 
-	forwardHandlers "orris/internal/interfaces/http/handlers/forward"
-	"orris/internal/interfaces/http/middleware"
-	"orris/internal/shared/authorization"
+	forwardHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward"
+	"github.com/orris-inc/orris/internal/interfaces/http/middleware"
+	"github.com/orris-inc/orris/internal/shared/authorization"
 )
 
 // ForwardRouteConfig contains dependencies for forward routes.

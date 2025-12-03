@@ -3,7 +3,7 @@ package usecases
 import (
 	"context"
 
-	"orris/internal/application/ticket/dto"
+	"github.com/orris-inc/orris/internal/application/ticket/dto"
 )
 
 type CreateTicketExecutor interface {

@@ -8,9 +8,9 @@ import (
 
 	"gorm.io/gorm"
 
-	"orris/internal/domain/ticket"
-	vo "orris/internal/domain/ticket/value_objects"
-	"orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/domain/ticket"
+	vo "github.com/orris-inc/orris/internal/domain/ticket/value_objects"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 )
 
 type TicketRepository struct {

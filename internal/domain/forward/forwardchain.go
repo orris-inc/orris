@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	vo "orris/internal/domain/forward/value_objects"
+	vo "github.com/orris-inc/orris/internal/domain/forward/value_objects"
 )
 
 // ChainNode represents a node in the forward chain.

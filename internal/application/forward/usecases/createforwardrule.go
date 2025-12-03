@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"orris/internal/domain/forward"
-	vo "orris/internal/domain/forward/value_objects"
-	"orris/internal/shared/errors"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/domain/forward"
+	vo "github.com/orris-inc/orris/internal/domain/forward/value_objects"
+	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // CreateForwardRuleCommand represents the input for creating a forward rule.

@@ -3,9 +3,9 @@ package notification
 import (
 	"context"
 
-	"orris/internal/application/notification/dto"
-	"orris/internal/application/notification/usecases"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/application/notification/dto"
+	"github.com/orris-inc/orris/internal/application/notification/usecases"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type ServiceDDD struct {

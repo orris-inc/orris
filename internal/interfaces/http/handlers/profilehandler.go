@@ -5,10 +5,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"orris/internal/application/user"
-	"orris/internal/interfaces/dto"
-	"orris/internal/shared/logger"
-	"orris/internal/shared/utils"
+	"github.com/orris-inc/orris/internal/application/user"
+	"github.com/orris-inc/orris/internal/interfaces/dto"
+	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 // ProfileHandler handles user profile-related HTTP requests

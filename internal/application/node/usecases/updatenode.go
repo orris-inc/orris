@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
-	"orris/internal/domain/node"
-	vo "orris/internal/domain/node/value_objects"
-	"orris/internal/shared/errors"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/domain/node"
+	vo "github.com/orris-inc/orris/internal/domain/node/value_objects"
+	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type UpdateNodeCommand struct {

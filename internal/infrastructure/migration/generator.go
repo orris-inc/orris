@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // Generator handles creation of new migration files

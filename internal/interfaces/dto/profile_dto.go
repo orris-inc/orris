@@ -1,7 +1,7 @@
 package dto
 
 import (
-	"orris/internal/application/user/dto"
+	"github.com/orris-inc/orris/internal/application/user/dto"
 )
 
 // UpdateProfileRequest represents HTTP request to update profile

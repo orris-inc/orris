@@ -7,10 +7,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"orris/internal/application/node/dto"
-	"orris/internal/application/node/usecases"
-	"orris/internal/shared/logger"
-	"orris/internal/shared/utils"
+	"github.com/orris-inc/orris/internal/application/node/dto"
+	"github.com/orris-inc/orris/internal/application/node/usecases"
+	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 // GetNodeConfigExecutor defines the interface for executing GetNodeConfig use case

@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	"orris/internal/domain/subscription"
-	vo "orris/internal/domain/subscription/value_objects"
-	"orris/internal/domain/user"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/domain/subscription"
+	vo "github.com/orris-inc/orris/internal/domain/subscription/value_objects"
+	"github.com/orris-inc/orris/internal/domain/user"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type CreateSubscriptionCommand struct {

@@ -3,9 +3,9 @@ package routes
 import (
 	"github.com/gin-gonic/gin"
 
-	tickethandlers "orris/internal/interfaces/http/handlers/ticket"
-	"orris/internal/interfaces/http/middleware"
-	"orris/internal/shared/authorization"
+	tickethandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/ticket"
+	"github.com/orris-inc/orris/internal/interfaces/http/middleware"
+	"github.com/orris-inc/orris/internal/shared/authorization"
 )
 
 type TicketRouteConfig struct {

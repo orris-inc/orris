@@ -3,7 +3,7 @@ package migrations
 import (
 	"fmt"
 
-	"orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"

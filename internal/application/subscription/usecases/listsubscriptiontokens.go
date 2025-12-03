@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"orris/internal/application/subscription/dto"
-	"orris/internal/domain/subscription"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/application/subscription/dto"
+	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type ListSubscriptionTokensQuery struct {

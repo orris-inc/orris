@@ -3,10 +3,10 @@ package user
 import (
 	"context"
 
-	"orris/internal/application/user/dto"
-	"orris/internal/application/user/usecases"
-	domainUser "orris/internal/domain/user"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/application/user/dto"
+	"github.com/orris-inc/orris/internal/application/user/usecases"
+	domainUser "github.com/orris-inc/orris/internal/domain/user"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // ServiceDDD is the application service that orchestrates use cases

@@ -7,9 +7,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"orris/internal/application/forward/usecases"
-	"orris/internal/shared/logger"
-	"orris/internal/shared/utils"
+	"github.com/orris-inc/orris/internal/application/forward/usecases"
+	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 // ValidateForwardAgentTokenExecutor defines the interface for validating forward agent tokens.

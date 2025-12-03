@@ -1,7 +1,7 @@
 package user
 
 import (
-	"orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/errors"
 )
 
 // DomainError represents a user domain-specific error

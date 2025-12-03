@@ -5,9 +5,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	paymentUsecases "orris/internal/application/payment/usecases"
-	"orris/internal/shared/logger"
-	"orris/internal/shared/utils"
+	paymentUsecases "github.com/orris-inc/orris/internal/application/payment/usecases"
+	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 type PaymentHandler struct {

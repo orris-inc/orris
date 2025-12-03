@@ -8,10 +8,10 @@ import (
 
 	"gorm.io/gorm"
 
-	"orris/internal/application/node/usecases"
-	"orris/internal/domain/node"
-	"orris/internal/infrastructure/persistence/models"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/application/node/usecases"
+	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // NodeRepository defines the interface for node persistence operations

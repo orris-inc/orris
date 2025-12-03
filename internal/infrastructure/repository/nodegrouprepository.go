@@ -7,11 +7,11 @@ import (
 
 	"gorm.io/gorm"
 
-	"orris/internal/domain/node"
-	"orris/internal/infrastructure/persistence/mappers"
-	"orris/internal/infrastructure/persistence/models"
-	"orris/internal/shared/errors"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // NodeGroupRepositoryImpl implements the node.NodeGroupRepository interface

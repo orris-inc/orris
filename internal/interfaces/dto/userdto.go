@@ -5,10 +5,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"orris/internal/application/user/dto"
-	"orris/internal/shared/constants"
-	"orris/internal/shared/errors"
-	"orris/internal/shared/utils"
+	"github.com/orris-inc/orris/internal/application/user/dto"
+	"github.com/orris-inc/orris/internal/shared/constants"
+	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 // CreateUserRequest represents HTTP request to create a user

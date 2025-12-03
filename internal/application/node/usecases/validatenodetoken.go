@@ -7,7 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type ValidateNodeTokenCommand struct {

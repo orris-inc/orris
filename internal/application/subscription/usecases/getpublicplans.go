@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"orris/internal/application/subscription/dto"
-	"orris/internal/domain/subscription"
-	vo "orris/internal/domain/subscription/value_objects"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/application/subscription/dto"
+	"github.com/orris-inc/orris/internal/domain/subscription"
+	vo "github.com/orris-inc/orris/internal/domain/subscription/value_objects"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type GetPublicPlansUseCase struct {

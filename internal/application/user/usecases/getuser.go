@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"orris/internal/application/user/dto"
-	domainUser "orris/internal/domain/user"
-	"orris/internal/shared/errors"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/application/user/dto"
+	domainUser "github.com/orris-inc/orris/internal/domain/user"
+	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // GetUserUseCase handles the business logic for retrieving a user

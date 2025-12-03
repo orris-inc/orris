@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"orris/internal/domain/node"
-	"orris/internal/shared/errors"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type GetNodeTrafficStatsQuery struct {

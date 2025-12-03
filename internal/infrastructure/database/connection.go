@@ -10,8 +10,8 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	"orris/internal/shared/config"
-	appLogger "orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/config"
+	appLogger "github.com/orris-inc/orris/internal/shared/logger"
 )
 
 var (

@@ -6,11 +6,11 @@ import (
 
 	"gorm.io/gorm"
 
-	"orris/internal/domain/notification"
-	vo "orris/internal/domain/notification/value_objects"
-	"orris/internal/infrastructure/persistence/mappers"
-	"orris/internal/infrastructure/persistence/models"
-	"orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/domain/notification"
+	vo "github.com/orris-inc/orris/internal/domain/notification/value_objects"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/errors"
 )
 
 type AnnouncementRepositoryImpl struct {

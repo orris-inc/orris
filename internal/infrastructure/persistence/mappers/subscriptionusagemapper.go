@@ -3,8 +3,8 @@ package mappers
 import (
 	"fmt"
 
-	"orris/internal/domain/subscription"
-	"orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 )
 
 // SubscriptionUsageMapper handles the conversion between domain entities and persistence models

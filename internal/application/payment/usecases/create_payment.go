@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 
-	"orris/internal/application/payment/payment_gateway"
-	"orris/internal/domain/payment"
-	vo "orris/internal/domain/payment/value_objects"
-	"orris/internal/domain/subscription"
-	subscriptionVO "orris/internal/domain/subscription/value_objects"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/application/payment/payment_gateway"
+	"github.com/orris-inc/orris/internal/domain/payment"
+	vo "github.com/orris-inc/orris/internal/domain/payment/value_objects"
+	"github.com/orris-inc/orris/internal/domain/subscription"
+	subscriptionVO "github.com/orris-inc/orris/internal/domain/subscription/value_objects"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type CreatePaymentCommand struct {

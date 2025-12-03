@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	vo "orris/internal/domain/subscription/value_objects"
+	vo "github.com/orris-inc/orris/internal/domain/subscription/value_objects"
 )
 
 // ValidateBillingCycle validates the billing cycle string and returns an error if invalid

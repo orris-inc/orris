@@ -3,10 +3,10 @@ package usecases
 import (
 	"context"
 
-	"orris/internal/application/forward/dto"
-	"orris/internal/domain/forward"
-	"orris/internal/shared/errors"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/application/forward/dto"
+	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // GetForwardChainUseCase handles retrieving a forward chain by ID.

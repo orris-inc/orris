@@ -3,10 +3,10 @@ package usecases
 import (
 	"context"
 
-	"orris/internal/application/node/dto"
-	"orris/internal/domain/node"
-	"orris/internal/shared/logger"
-	sharedquery "orris/internal/shared/query"
+	"github.com/orris-inc/orris/internal/application/node/dto"
+	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/shared/logger"
+	sharedquery "github.com/orris-inc/orris/internal/shared/query"
 )
 
 type ListNodesQuery struct {

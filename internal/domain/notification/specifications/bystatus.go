@@ -1,8 +1,8 @@
 package specifications
 
 import (
-	"orris/internal/domain/notification"
-	vo "orris/internal/domain/notification/value_objects"
+	"github.com/orris-inc/orris/internal/domain/notification"
+	vo "github.com/orris-inc/orris/internal/domain/notification/value_objects"
 )
 
 type ByStatus struct {

@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	vo "orris/internal/domain/node/value_objects"
-	"orris/internal/domain/shared/services"
+	vo "github.com/orris-inc/orris/internal/domain/node/value_objects"
+	"github.com/orris-inc/orris/internal/domain/shared/services"
 )
 
 // Node represents the node aggregate root

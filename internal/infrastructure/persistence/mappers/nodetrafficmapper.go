@@ -3,8 +3,8 @@ package mappers
 import (
 	"fmt"
 
-	"orris/internal/domain/node"
-	"orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 )
 
 // NodeTrafficMapper handles the conversion between domain entities and persistence models

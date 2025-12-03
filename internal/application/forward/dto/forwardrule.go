@@ -2,7 +2,7 @@
 package dto
 
 import (
-	"orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/domain/forward"
 )
 
 // ForwardRuleDTO represents the data transfer object for forward rules.

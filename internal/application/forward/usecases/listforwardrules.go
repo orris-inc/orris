@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"orris/internal/application/forward/dto"
-	"orris/internal/domain/forward"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/application/forward/dto"
+	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // ListForwardRulesQuery represents the input for listing forward rules.

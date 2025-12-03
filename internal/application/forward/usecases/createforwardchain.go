@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"orris/internal/application/forward/dto"
-	"orris/internal/domain/forward"
-	vo "orris/internal/domain/forward/value_objects"
-	"orris/internal/shared/errors"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/application/forward/dto"
+	"github.com/orris-inc/orris/internal/domain/forward"
+	vo "github.com/orris-inc/orris/internal/domain/forward/value_objects"
+	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // CreateForwardChainNodeInput represents a node in the chain creation request.

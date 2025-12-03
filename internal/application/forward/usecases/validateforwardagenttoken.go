@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"orris/internal/domain/forward"
-	"orris/internal/domain/shared/services"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/domain/shared/services"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // ValidateForwardAgentTokenCommand contains the data needed to validate a forward agent token.

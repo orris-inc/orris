@@ -6,11 +6,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"orris/internal/application/ticket/usecases"
-	vo "orris/internal/domain/ticket/value_objects"
-	"orris/internal/shared/errors"
-	"orris/internal/shared/logger"
-	"orris/internal/shared/utils"
+	"github.com/orris-inc/orris/internal/application/ticket/usecases"
+	vo "github.com/orris-inc/orris/internal/domain/ticket/value_objects"
+	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 type TicketHandler struct {

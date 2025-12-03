@@ -3,8 +3,8 @@ package dto
 import (
 	"time"
 
-	"orris/internal/domain/subscription"
-	"orris/internal/shared/mapper"
+	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/shared/mapper"
 )
 
 type SubscriptionDTO struct {

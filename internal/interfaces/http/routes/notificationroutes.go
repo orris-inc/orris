@@ -3,9 +3,9 @@ package routes
 import (
 	"github.com/gin-gonic/gin"
 
-	"orris/internal/interfaces/http/handlers"
-	"orris/internal/interfaces/http/middleware"
-	"orris/internal/shared/authorization"
+	"github.com/orris-inc/orris/internal/interfaces/http/handlers"
+	"github.com/orris-inc/orris/internal/interfaces/http/middleware"
+	"github.com/orris-inc/orris/internal/shared/authorization"
 )
 
 type NotificationRouteConfig struct {

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	vo "orris/internal/domain/user/value_objects"
-	"orris/internal/shared/authorization"
+	vo "github.com/orris-inc/orris/internal/domain/user/value_objects"
+	"github.com/orris-inc/orris/internal/shared/authorization"
 )
 
 // User represents the user aggregate root (pure domain model without persistence concerns)

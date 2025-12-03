@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	forwardHandlers "orris/internal/interfaces/http/handlers/forward"
+	forwardHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward"
 )
 
 type ForwardHandler = forwardHandlers.ForwardHandler

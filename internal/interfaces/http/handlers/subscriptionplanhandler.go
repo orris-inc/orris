@@ -6,11 +6,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	subdto "orris/internal/application/subscription/dto"
-	"orris/internal/application/subscription/usecases"
-	"orris/internal/shared/errors"
-	"orris/internal/shared/logger"
-	"orris/internal/shared/utils"
+	subdto "github.com/orris-inc/orris/internal/application/subscription/dto"
+	"github.com/orris-inc/orris/internal/application/subscription/usecases"
+	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 var (

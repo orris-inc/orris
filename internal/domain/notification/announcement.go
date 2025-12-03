@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	vo "orris/internal/domain/notification/value_objects"
+	vo "github.com/orris-inc/orris/internal/domain/notification/value_objects"
 )
 
 type Announcement struct {

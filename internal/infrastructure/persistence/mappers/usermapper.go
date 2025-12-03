@@ -5,10 +5,10 @@ import (
 
 	"gorm.io/gorm"
 
-	"orris/internal/domain/user"
-	vo "orris/internal/domain/user/value_objects"
-	"orris/internal/infrastructure/persistence/models"
-	"orris/internal/shared/authorization"
+	"github.com/orris-inc/orris/internal/domain/user"
+	vo "github.com/orris-inc/orris/internal/domain/user/value_objects"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/authorization"
 )
 
 // UserMapper handles the conversion between domain entities and persistence models

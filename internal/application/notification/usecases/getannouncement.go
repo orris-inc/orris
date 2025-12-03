@@ -3,9 +3,9 @@ package usecases
 import (
 	"context"
 
-	"orris/internal/application/notification/dto"
-	"orris/internal/shared/errors"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/application/notification/dto"
+	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type GetAnnouncementUseCase struct {

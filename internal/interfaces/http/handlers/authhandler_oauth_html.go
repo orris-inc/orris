@@ -8,7 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"orris/internal/application/user/usecases"
+	"github.com/orris-inc/orris/internal/application/user/usecases"
 )
 
 // detectDeviceType detects device type from User-Agent

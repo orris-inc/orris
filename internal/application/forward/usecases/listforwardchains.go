@@ -3,9 +3,9 @@ package usecases
 import (
 	"context"
 
-	"orris/internal/application/forward/dto"
-	"orris/internal/domain/forward"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/application/forward/dto"
+	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // ListForwardChainsQuery represents the input for listing forward chains.

@@ -3,8 +3,8 @@ package usecases
 import (
 	"context"
 
-	"orris/internal/infrastructure/cache"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/infrastructure/cache"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type GetNodeTrafficQuery struct {

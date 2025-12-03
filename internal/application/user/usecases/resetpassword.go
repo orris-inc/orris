@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"orris/internal/domain/user"
-	vo "orris/internal/domain/user/value_objects"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/domain/user"
+	vo "github.com/orris-inc/orris/internal/domain/user/value_objects"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type ResetPasswordCommand struct {

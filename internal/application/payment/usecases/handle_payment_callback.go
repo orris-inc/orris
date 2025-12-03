@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"net/http"
 
-	"orris/internal/application/payment/payment_gateway"
-	subscriptionUsecases "orris/internal/application/subscription/usecases"
-	"orris/internal/domain/payment"
-	vo "orris/internal/domain/payment/value_objects"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/application/payment/payment_gateway"
+	subscriptionUsecases "github.com/orris-inc/orris/internal/application/subscription/usecases"
+	"github.com/orris-inc/orris/internal/domain/payment"
+	vo "github.com/orris-inc/orris/internal/domain/payment/value_objects"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type HandlePaymentCallbackUseCase struct {

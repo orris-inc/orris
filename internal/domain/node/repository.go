@@ -3,7 +3,7 @@ package node
 import (
 	"context"
 
-	"orris/internal/shared/query"
+	"github.com/orris-inc/orris/internal/shared/query"
 )
 
 type NodeRepository interface {

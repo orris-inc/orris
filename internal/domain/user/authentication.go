@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	vo "orris/internal/domain/user/value_objects"
+	vo "github.com/orris-inc/orris/internal/domain/user/value_objects"
 )
 
 type PasswordHasher interface {

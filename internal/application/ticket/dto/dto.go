@@ -3,7 +3,7 @@ package dto
 import (
 	"time"
 
-	"orris/internal/domain/ticket"
+	"github.com/orris-inc/orris/internal/domain/ticket"
 )
 
 type TicketDTO struct {

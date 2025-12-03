@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"orris/internal/application/user/dto"
-	domainUser "orris/internal/domain/user"
-	vo "orris/internal/domain/user/value_objects"
-	"orris/internal/shared/errors"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/application/user/dto"
+	domainUser "github.com/orris-inc/orris/internal/domain/user"
+	vo "github.com/orris-inc/orris/internal/domain/user/value_objects"
+	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // CreateUserUseCase handles the business logic for creating a user

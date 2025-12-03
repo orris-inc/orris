@@ -3,12 +3,12 @@ package usecases
 import (
 	"context"
 
-	"orris/internal/application/ticket/dto"
-	"orris/internal/domain/ticket"
-	vo "orris/internal/domain/ticket/value_objects"
-	"orris/internal/shared/auth"
-	"orris/internal/shared/errors"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/application/ticket/dto"
+	"github.com/orris-inc/orris/internal/domain/ticket"
+	vo "github.com/orris-inc/orris/internal/domain/ticket/value_objects"
+	"github.com/orris-inc/orris/internal/shared/auth"
+	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type ListTicketsQuery struct {

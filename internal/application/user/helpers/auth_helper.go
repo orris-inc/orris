@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"time"
 
-	"orris/internal/domain/user"
-	"orris/internal/shared/authorization"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/domain/user"
+	"github.com/orris-inc/orris/internal/shared/authorization"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // DeviceInfo encapsulates device-related information for session creation

@@ -10,7 +10,7 @@ import (
 	"github.com/pressly/goose/v3"
 	"gorm.io/gorm"
 
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // Strategy defines the interface for different migration strategies

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	vo "orris/internal/domain/payment/value_objects"
-	"orris/internal/domain/shared/services"
+	vo "github.com/orris-inc/orris/internal/domain/payment/value_objects"
+	"github.com/orris-inc/orris/internal/domain/shared/services"
 )
 
 type Payment struct {

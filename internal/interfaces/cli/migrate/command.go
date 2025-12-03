@@ -6,10 +6,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"orris/internal/infrastructure/config"
-	"orris/internal/infrastructure/database"
-	"orris/internal/infrastructure/migration"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/infrastructure/config"
+	"github.com/orris-inc/orris/internal/infrastructure/database"
+	"github.com/orris-inc/orris/internal/infrastructure/migration"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 var (

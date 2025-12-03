@@ -8,9 +8,9 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"orris/internal/domain/subscription"
-	"orris/internal/infrastructure/persistence/models"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type SubscriptionUsageRepositoryImpl struct {

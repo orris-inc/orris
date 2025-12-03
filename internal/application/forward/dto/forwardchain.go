@@ -2,7 +2,7 @@
 package dto
 
 import (
-	"orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/domain/forward"
 )
 
 // ChainNodeDTO represents a node in the forward chain.

@@ -7,9 +7,9 @@ import (
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
-	"orris/internal/domain/subscription"
-	vo "orris/internal/domain/subscription/value_objects"
-	"orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/domain/subscription"
+	vo "github.com/orris-inc/orris/internal/domain/subscription/value_objects"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 )
 
 type SubscriptionMapper interface {

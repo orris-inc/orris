@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"orris/internal/application/node/dto"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/application/node/dto"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // ReportSubscriptionTrafficCommand represents the command to report subscription traffic data

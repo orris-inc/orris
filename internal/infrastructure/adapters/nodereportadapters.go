@@ -7,9 +7,9 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	nodeUsecases "orris/internal/application/node/usecases"
-	"orris/internal/domain/node"
-	"orris/internal/shared/logger"
+	nodeUsecases "github.com/orris-inc/orris/internal/application/node/usecases"
+	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // SubscriptionTrafficRecorderAdapter adapts to record subscription-based traffic

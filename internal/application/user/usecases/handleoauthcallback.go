@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	"orris/internal/application/user/helpers"
-	"orris/internal/domain/user"
-	vo "orris/internal/domain/user/value_objects"
-	"orris/internal/shared/config"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/application/user/helpers"
+	"github.com/orris-inc/orris/internal/domain/user"
+	vo "github.com/orris-inc/orris/internal/domain/user/value_objects"
+	"github.com/orris-inc/orris/internal/shared/config"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type OAuthUserInfo struct {

@@ -3,8 +3,8 @@ package specifications
 import (
 	"time"
 
-	"orris/internal/domain/notification"
-	vo "orris/internal/domain/notification/value_objects"
+	"github.com/orris-inc/orris/internal/domain/notification"
+	vo "github.com/orris-inc/orris/internal/domain/notification/value_objects"
 )
 
 type ActiveAnnouncements struct{}

@@ -7,9 +7,9 @@ import (
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
-	"orris/internal/domain/node"
-	vo "orris/internal/domain/node/value_objects"
-	"orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/domain/node"
+	vo "github.com/orris-inc/orris/internal/domain/node/value_objects"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 )
 
 // NodeMapper handles the conversion between domain entities and persistence models

@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"orris/internal/application/node/dto"
-	"orris/internal/domain/subscription"
-	"orris/internal/infrastructure/config"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/application/node/dto"
+	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/infrastructure/config"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // GetNodeSubscriptionsCommand represents the command to get subscriptions authorized for a node

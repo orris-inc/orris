@@ -5,7 +5,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"orris/internal/shared/constants"
+	"github.com/orris-inc/orris/internal/shared/constants"
 )
 
 // UserModel represents the database persistence model for users

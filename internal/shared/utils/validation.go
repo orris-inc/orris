@@ -7,7 +7,7 @@ import (
 
 	"github.com/go-playground/validator/v10"
 
-	"orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/errors"
 )
 
 var validate *validator.Validate

@@ -5,7 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/errors"
 )
 
 // APIResponse represents a standard API response structure

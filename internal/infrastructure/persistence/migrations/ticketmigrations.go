@@ -1,7 +1,7 @@
 package migrations
 
 import (
-	"orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 
 	"gorm.io/gorm"
 )

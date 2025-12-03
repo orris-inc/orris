@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"orris/internal/shared/errors"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type MarkNotificationAsReadUseCase struct {

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"orris/internal/shared/authorization"
+	"github.com/orris-inc/orris/internal/shared/authorization"
 
 	"github.com/golang-jwt/jwt/v5"
 )

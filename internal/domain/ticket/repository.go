@@ -3,8 +3,8 @@ package ticket
 import (
 	"context"
 
-	vo "orris/internal/domain/ticket/value_objects"
-	"orris/internal/shared/query"
+	vo "github.com/orris-inc/orris/internal/domain/ticket/value_objects"
+	"github.com/orris-inc/orris/internal/shared/query"
 )
 
 type TicketRepository interface {

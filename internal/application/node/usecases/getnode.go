@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"orris/internal/application/node/dto"
-	domainNode "orris/internal/domain/node"
-	"orris/internal/shared/errors"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/application/node/dto"
+	domainNode "github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // GetNodeQuery represents the query for getting a node

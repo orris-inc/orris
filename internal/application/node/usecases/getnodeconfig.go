@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"orris/internal/application/node/dto"
-	"orris/internal/domain/node"
-	"orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/application/node/dto"
+	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // GetNodeConfigCommand represents the command to get node configuration for node agent

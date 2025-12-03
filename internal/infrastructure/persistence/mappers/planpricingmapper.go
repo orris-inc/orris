@@ -3,8 +3,8 @@ package mappers
 import (
 	"fmt"
 
-	"orris/internal/domain/subscription/value_objects"
-	"orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/domain/subscription/value_objects"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 )
 
 // PlanPricingMapper handles mapping between PlanPricing domain object and database model

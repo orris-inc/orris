@@ -1,7 +1,7 @@
 package handlers
 
 import (
-	nodeHandlers "orris/internal/interfaces/http/handlers/node"
+	nodeHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/node"
 )
 
 type NodeHandler = nodeHandlers.NodeHandler
