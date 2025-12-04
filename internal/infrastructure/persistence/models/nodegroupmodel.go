@@ -37,13 +37,6 @@ func (g *NodeGroupModel) BeforeCreate(tx *gorm.DB) error {
 	return nil
 }
 
-// BeforeUpdate implements optimistic locking
-func (g *NodeGroupModel) BeforeUpdate(tx *gorm.DB) error {
-	// Increment version for optimistic locking
-	tx.Statement.SetColumn("version", g.Version+1)
-	return nil
-}
-
 // NodeGroupNodeModel represents the many-to-many relationship between node groups and nodes
 type NodeGroupNodeModel struct {
 	ID          uint `gorm:"primarykey"`

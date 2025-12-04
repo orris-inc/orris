@@ -186,41 +186,31 @@ func (r *SubscriptionRepositoryImpl) Update(ctx context.Context, subscriptionEnt
 		return fmt.Errorf("failed to map subscription entity: %w", err)
 	}
 
-	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// The domain entity has already incremented the version, so we need to check against the previous version
-		previousVersion := model.Version - 1
-		result := tx.Model(model).
-			Where("id = ? AND version = ?", model.ID, previousVersion).
-			Updates(map[string]interface{}{
-				"user_id":              model.UserID,
-				"plan_id":              model.PlanID,
-				"status":               model.Status,
-				"start_date":           model.StartDate,
-				"end_date":             model.EndDate,
-				"auto_renew":           model.AutoRenew,
-				"current_period_start": model.CurrentPeriodStart,
-				"current_period_end":   model.CurrentPeriodEnd,
-				"cancelled_at":         model.CancelledAt,
-				"cancel_reason":        model.CancelReason,
-				"metadata":             model.Metadata,
-				"version":              model.Version,
-				"updated_at":           model.UpdatedAt,
-			})
+	result := r.db.WithContext(ctx).Model(model).
+		Where("id = ?", model.ID).
+		Updates(map[string]interface{}{
+			"user_id":              model.UserID,
+			"plan_id":              model.PlanID,
+			"status":               model.Status,
+			"start_date":           model.StartDate,
+			"end_date":             model.EndDate,
+			"auto_renew":           model.AutoRenew,
+			"current_period_start": model.CurrentPeriodStart,
+			"current_period_end":   model.CurrentPeriodEnd,
+			"cancelled_at":         model.CancelledAt,
+			"cancel_reason":        model.CancelReason,
+			"metadata":             model.Metadata,
+			"version":              model.Version,
+			"updated_at":           model.UpdatedAt,
+		})
 
-		if result.Error != nil {
-			r.logger.Errorw("failed to update subscription", "id", model.ID, "error", result.Error)
-			return fmt.Errorf("failed to update subscription: %w", result.Error)
-		}
+	if result.Error != nil {
+		r.logger.Errorw("failed to update subscription", "id", model.ID, "error", result.Error)
+		return fmt.Errorf("failed to update subscription: %w", result.Error)
+	}
 
-		if result.RowsAffected == 0 {
-			return fmt.Errorf("subscription not found or version mismatch (optimistic lock failed)")
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		return err
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("subscription not found")
 	}
 
 	r.logger.Infow("subscription updated successfully", "id", model.ID)

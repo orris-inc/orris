@@ -80,24 +80,8 @@ func (r *SubscriptionPlanRepositoryImpl) Update(ctx context.Context, plan *subsc
 		return fmt.Errorf("failed to convert plan to model: %w", err)
 	}
 
-	// Save the current version (after domain modifications)
-	newVersion := model.Version
-	// Calculate the original version (before domain modifications)
-	// Since each domain setter increments version, we need to find the original version
-	// by checking against database
-	var existingPlan models.SubscriptionPlanModel
-	if err := r.db.WithContext(ctx).Select("version").First(&existingPlan, plan.ID()).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return errors.NewNotFoundError("subscription plan not found")
-		}
-		r.logger.Errorw("failed to get current plan version", "error", err, "plan_id", plan.ID())
-		return fmt.Errorf("failed to get current plan version: %w", err)
-	}
-	originalVersion := existingPlan.Version
-
-	// Optimistic locking: check version before update
 	result := r.db.WithContext(ctx).Model(&models.SubscriptionPlanModel{}).
-		Where("id = ? AND version = ?", plan.ID(), originalVersion).
+		Where("id = ?", plan.ID()).
 		Updates(map[string]interface{}{
 			"name":           model.Name,
 			"description":    model.Description,
@@ -114,7 +98,7 @@ func (r *SubscriptionPlanRepositoryImpl) Update(ctx context.Context, plan *subsc
 			"is_public":      model.IsPublic,
 			"sort_order":     model.SortOrder,
 			"metadata":       model.Metadata,
-			"version":        newVersion,
+			"version":        model.Version,
 			"updated_at":     model.UpdatedAt,
 		})
 
@@ -124,24 +108,10 @@ func (r *SubscriptionPlanRepositoryImpl) Update(ctx context.Context, plan *subsc
 	}
 
 	if result.RowsAffected == 0 {
-		// Version mismatch - someone else modified the record
-		var currentPlan models.SubscriptionPlanModel
-		if err := r.db.WithContext(ctx).Select("version").First(&currentPlan, plan.ID()).Error; err != nil {
-			r.logger.Errorw("failed to check plan existence after update failure", "error", err, "plan_id", plan.ID())
-			return fmt.Errorf("failed to check plan existence: %w", err)
-		}
-
-		// Plan exists but version doesn't match - optimistic lock failure
-		r.logger.Warnw("optimistic lock failure on subscription plan update",
-			"plan_id", plan.ID(),
-			"expected_version", originalVersion,
-			"actual_version", currentPlan.Version)
-		return errors.NewConflictError("subscription plan has been modified by another process",
-			"optimistic lock failure: please retry the operation")
+		return errors.NewNotFoundError("subscription plan not found")
 	}
 
-	r.logger.Infow("subscription plan updated successfully", "plan_id", plan.ID(),
-		"version", fmt.Sprintf("%d -> %d", originalVersion, newVersion))
+	r.logger.Infow("subscription plan updated successfully", "plan_id", plan.ID())
 	return nil
 }
 

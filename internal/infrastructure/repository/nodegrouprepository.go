@@ -119,7 +119,7 @@ func (r *NodeGroupRepositoryImpl) GetByID(ctx context.Context, id uint) (*node.N
 	return entity, nil
 }
 
-// Update updates an existing node group with optimistic locking
+// Update updates an existing node group
 func (r *NodeGroupRepositoryImpl) Update(ctx context.Context, group *node.NodeGroup) error {
 	model, err := r.mapper.ToModel(group)
 	if err != nil {
@@ -129,11 +129,8 @@ func (r *NodeGroupRepositoryImpl) Update(ctx context.Context, group *node.NodeGr
 
 	// Use transaction to ensure atomicity of updates including associations
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Use optimistic locking by checking version
-		// The domain entity has already incremented the version, so we need to check against the previous version
-		previousVersion := model.Version - 1
 		result := tx.Model(&models.NodeGroupModel{}).
-			Where("id = ? AND version = ?", model.ID, previousVersion).
+			Where("id = ?", model.ID).
 			Updates(map[string]interface{}{
 				"name":        model.Name,
 				"description": model.Description,
@@ -156,7 +153,7 @@ func (r *NodeGroupRepositoryImpl) Update(ctx context.Context, group *node.NodeGr
 		}
 
 		if result.RowsAffected == 0 {
-			return errors.NewConflictError("node group has been modified by another transaction or not found")
+			return errors.NewNotFoundError("node group not found")
 		}
 
 		// Synchronize node associations

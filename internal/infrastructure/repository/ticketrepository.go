@@ -40,7 +40,7 @@ func (r *TicketRepository) Update(ctx context.Context, t *ticket.Ticket) error {
 
 	result := r.db.WithContext(ctx).
 		Model(&models.TicketModel{}).
-		Where("id = ? AND version = ?", model.ID, model.Version-1).
+		Where("id = ?", model.ID).
 		Updates(model)
 
 	if result.Error != nil {
@@ -48,7 +48,7 @@ func (r *TicketRepository) Update(ctx context.Context, t *ticket.Ticket) error {
 	}
 
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("ticket not found or version mismatch (optimistic locking)")
+		return fmt.Errorf("ticket not found")
 	}
 
 	return nil

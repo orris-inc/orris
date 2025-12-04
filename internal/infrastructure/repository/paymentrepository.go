@@ -35,7 +35,7 @@ func (r *PaymentRepository) Update(ctx context.Context, p *payment.Payment) erro
 
 	result := r.db.WithContext(ctx).
 		Model(&models.PaymentModel{}).
-		Where("id = ? AND version = ?", model.ID, model.Version-1).
+		Where("id = ?", model.ID).
 		Updates(map[string]interface{}{
 			"payment_status":   model.PaymentStatus,
 			"transaction_id":   model.TransactionID,
@@ -53,7 +53,7 @@ func (r *PaymentRepository) Update(ctx context.Context, p *payment.Payment) erro
 	}
 
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("payment not found or version mismatch (optimistic locking)")
+		return fmt.Errorf("payment not found")
 	}
 
 	return nil

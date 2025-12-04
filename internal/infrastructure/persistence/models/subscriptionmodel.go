@@ -41,10 +41,3 @@ func (s *SubscriptionModel) BeforeCreate(tx *gorm.DB) error {
 	}
 	return nil
 }
-
-// BeforeUpdate implements optimistic locking
-func (s *SubscriptionModel) BeforeUpdate(tx *gorm.DB) error {
-	// Increment version for optimistic locking
-	tx.Statement.SetColumn("version", s.Version+1)
-	return nil
-}

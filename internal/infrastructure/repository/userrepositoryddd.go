@@ -106,58 +106,24 @@ func (r *UserRepositoryDDD) Update(ctx context.Context, userEntity *user.User) e
 		return fmt.Errorf("failed to map user entity: %w", err)
 	}
 
-	// Log current version for debugging
-	r.logger.Infow("updating user", "id", model.ID, "current_version", model.Version)
+	result := r.db.WithContext(ctx).Model(&models.UserModel{}).
+		Where("id = ?", model.ID).
+		Updates(map[string]interface{}{
+			"email":      model.Email,
+			"name":       model.Name,
+			"role":       model.Role,
+			"status":     model.Status,
+			"version":    model.Version,
+			"updated_at": model.UpdatedAt,
+		})
 
-	// Wrap update and event publishing in a transaction
-	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// First, verify the record exists and get current version
-		var currentModel models.UserModel
-		if err := tx.Where("id = ?", model.ID).First(&currentModel).Error; err != nil {
-			r.logger.Errorw("failed to find user for update", "id", model.ID, "error", err)
-			return fmt.Errorf("user not found: %w", err)
-		}
+	if result.Error != nil {
+		r.logger.Errorw("failed to update user", "id", model.ID, "error", result.Error)
+		return fmt.Errorf("failed to update user: %w", result.Error)
+	}
 
-		r.logger.Infow("found user in database",
-			"id", currentModel.ID,
-			"db_version", currentModel.Version,
-			"entity_version", model.Version,
-		)
-
-		// Update with optimistic locking
-		// Use currentModel.Version (from DB) as WHERE condition
-		// Set model.Version (from entity) as new version value
-		result := tx.Model(&currentModel).
-			Where("id = ? AND version = ?", model.ID, currentModel.Version).
-			Updates(map[string]interface{}{
-				"email":      model.Email,
-				"name":       model.Name,
-				"role":       model.Role,
-				"status":     model.Status,
-				"version":    model.Version,
-				"updated_at": model.UpdatedAt,
-			})
-
-		if result.Error != nil {
-			r.logger.Errorw("failed to update user", "id", model.ID, "error", result.Error)
-			return fmt.Errorf("failed to update user: %w", result.Error)
-		}
-
-		if result.RowsAffected == 0 {
-			r.logger.Errorw("optimistic lock failed",
-				"id", model.ID,
-				"expected_version", model.Version,
-				"db_version", currentModel.Version,
-			)
-			return fmt.Errorf("user not found or version mismatch (optimistic lock failed)")
-		}
-
-		r.logger.Infow("user updated in database", "id", model.ID, "rows_affected", result.RowsAffected)
-		return nil
-	})
-
-	if err != nil {
-		return err
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("user not found")
 	}
 
 	r.logger.Infow("user updated successfully", "id", model.ID)

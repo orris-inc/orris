@@ -52,10 +52,3 @@ func (n *NodeModel) BeforeCreate(tx *gorm.DB) error {
 	}
 	return nil
 }
-
-// BeforeUpdate implements optimistic locking
-func (n *NodeModel) BeforeUpdate(tx *gorm.DB) error {
-	// Increment version for optimistic locking
-	tx.Statement.SetColumn("version", n.Version+1)
-	return nil
-}
