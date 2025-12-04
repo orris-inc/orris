@@ -36,6 +36,12 @@ type Repository interface {
 
 	// UpdateTraffic updates the traffic counters for a rule.
 	UpdateTraffic(ctx context.Context, id uint, upload, download int64) error
+
+	// ListByExitAgentID returns all entrance rules for a specific exit agent.
+	ListByExitAgentID(ctx context.Context, exitAgentID uint) ([]*ForwardRule, error)
+
+	// GetExitRuleByAgentID retrieves the exit rule for a specific agent.
+	GetExitRuleByAgentID(ctx context.Context, agentID uint) (*ForwardRule, error)
 }
 
 // ListFilter defines the filtering options for listing forward rules.
@@ -79,40 +85,6 @@ type AgentRepository interface {
 
 // AgentListFilter defines the filtering options for listing forward agents.
 type AgentListFilter struct {
-	Page     int
-	PageSize int
-	Name     string
-	Status   string
-	OrderBy  string
-	Order    string
-}
-
-// ChainRepository defines the interface for forward chain persistence.
-type ChainRepository interface {
-	// Create persists a new forward chain.
-	Create(ctx context.Context, chain *ForwardChain) error
-
-	// GetByID retrieves a forward chain by ID.
-	GetByID(ctx context.Context, id uint) (*ForwardChain, error)
-
-	// Update updates an existing forward chain.
-	Update(ctx context.Context, chain *ForwardChain) error
-
-	// Delete removes a forward chain.
-	Delete(ctx context.Context, id uint) error
-
-	// List returns all forward chains with optional filtering.
-	List(ctx context.Context, filter ChainListFilter) ([]*ForwardChain, int64, error)
-
-	// GetRuleIDsByChainID returns all rule IDs associated with a chain.
-	GetRuleIDsByChainID(ctx context.Context, chainID uint) ([]uint, error)
-
-	// AssociateRules associates rules with a chain.
-	AssociateRules(ctx context.Context, chainID uint, ruleIDs []uint) error
-}
-
-// ChainListFilter defines the filtering options for listing forward chains.
-type ChainListFilter struct {
 	Page     int
 	PageSize int
 	Name     string

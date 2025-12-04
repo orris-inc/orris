@@ -16,12 +16,13 @@ type GetForwardAgentQuery struct {
 
 // GetForwardAgentResult represents the output of getting a forward agent.
 type GetForwardAgentResult struct {
-	ID        uint   `json:"id"`
-	Name      string `json:"name"`
-	Status    string `json:"status"`
-	Remark    string `json:"remark"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
+	ID            uint   `json:"id"`
+	Name          string `json:"name"`
+	PublicAddress string `json:"public_address"`
+	Status        string `json:"status"`
+	Remark        string `json:"remark"`
+	CreatedAt     string `json:"created_at"`
+	UpdatedAt     string `json:"updated_at"`
 }
 
 // GetForwardAgentUseCase handles retrieving a single forward agent.
@@ -59,12 +60,13 @@ func (uc *GetForwardAgentUseCase) Execute(ctx context.Context, query GetForwardA
 	}
 
 	result := &GetForwardAgentResult{
-		ID:        agent.ID(),
-		Name:      agent.Name(),
-		Status:    string(agent.Status()),
-		Remark:    agent.Remark(),
-		CreatedAt: agent.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt: agent.UpdatedAt().Format("2006-01-02T15:04:05Z07:00"),
+		ID:            agent.ID(),
+		Name:          agent.Name(),
+		PublicAddress: agent.PublicAddress(),
+		Status:        string(agent.Status()),
+		Remark:        agent.Remark(),
+		CreatedAt:     agent.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:     agent.UpdatedAt().Format("2006-01-02T15:04:05Z07:00"),
 	}
 
 	uc.logger.Infow("forward agent retrieved successfully", "id", query.ID)

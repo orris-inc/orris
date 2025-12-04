@@ -43,6 +43,7 @@ func (m *ForwardAgentMapperImpl) ToEntity(model *models.ForwardAgentModel) (*for
 		model.Name,
 		model.TokenHash,
 		status,
+		model.PublicAddress,
 		model.Remark,
 		model.CreatedAt,
 		model.UpdatedAt,
@@ -61,13 +62,14 @@ func (m *ForwardAgentMapperImpl) ToModel(entity *forward.ForwardAgent) (*models.
 	}
 
 	return &models.ForwardAgentModel{
-		ID:        entity.ID(),
-		Name:      entity.Name(),
-		TokenHash: entity.TokenHash(),
-		Status:    string(entity.Status()),
-		Remark:    entity.Remark(),
-		CreatedAt: entity.CreatedAt(),
-		UpdatedAt: entity.UpdatedAt(),
+		ID:            entity.ID(),
+		Name:          entity.Name(),
+		TokenHash:     entity.TokenHash(),
+		PublicAddress: entity.PublicAddress(),
+		Status:        string(entity.Status()),
+		Remark:        entity.Remark(),
+		CreatedAt:     entity.CreatedAt(),
+		UpdatedAt:     entity.UpdatedAt(),
 	}, nil
 }
 

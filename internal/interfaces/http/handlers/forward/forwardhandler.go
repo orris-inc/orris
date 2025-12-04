@@ -52,10 +52,14 @@ func NewForwardHandler(
 
 // CreateForwardRuleRequest represents a request to create a forward rule.
 type CreateForwardRuleRequest struct {
+	AgentID       uint   `json:"agent_id" binding:"required" example:"1"`
+	RuleType      string `json:"rule_type" binding:"required,oneof=direct entry exit" example:"direct"`
+	ExitAgentID   uint   `json:"exit_agent_id,omitempty" example:"2"`
+	WsListenPort  uint16 `json:"ws_listen_port,omitempty" example:"9090"`
 	Name          string `json:"name" binding:"required" example:"MySQL-Forward"`
-	ListenPort    uint16 `json:"listen_port" binding:"required" example:"13306"`
-	TargetAddress string `json:"target_address" binding:"required" example:"192.168.1.100"`
-	TargetPort    uint16 `json:"target_port" binding:"required" example:"3306"`
+	ListenPort    uint16 `json:"listen_port,omitempty" example:"13306"`
+	TargetAddress string `json:"target_address,omitempty" example:"192.168.1.100"`
+	TargetPort    uint16 `json:"target_port,omitempty" example:"3306"`
 	Protocol      string `json:"protocol" binding:"required,oneof=tcp udp both" example:"tcp"`
 	Remark        string `json:"remark,omitempty" example:"Forward to internal MySQL server"`
 }
@@ -80,6 +84,10 @@ func (h *ForwardHandler) CreateRule(c *gin.Context) {
 	}
 
 	cmd := usecases.CreateForwardRuleCommand{
+		AgentID:       req.AgentID,
+		RuleType:      req.RuleType,
+		ExitAgentID:   req.ExitAgentID,
+		WsListenPort:  req.WsListenPort,
 		Name:          req.Name,
 		ListenPort:    req.ListenPort,
 		TargetAddress: req.TargetAddress,

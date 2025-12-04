@@ -79,6 +79,18 @@ func (c *Client) ReportTraffic(ctx context.Context, items []TrafficItem) (*Traff
 	return &result, nil
 }
 
+// GetExitEndpoint retrieves the connection information for an exit agent.
+// This is used by entry agents to establish WS tunnel connections to exit agents.
+func (c *Client) GetExitEndpoint(ctx context.Context, exitAgentID uint) (*ExitEndpoint, error) {
+	url := fmt.Sprintf("%s/forward-agent-api/exit-endpoint/%d", c.baseURL, exitAgentID)
+
+	var endpoint ExitEndpoint
+	if err := c.doRequest(ctx, http.MethodGet, url, nil, &endpoint); err != nil {
+		return nil, fmt.Errorf("get exit endpoint: %w", err)
+	}
+	return &endpoint, nil
+}
+
 // doRequest performs an HTTP request and decodes the response.
 func (c *Client) doRequest(ctx context.Context, method, url string, body any, result any) error {
 	var reqBody io.Reader

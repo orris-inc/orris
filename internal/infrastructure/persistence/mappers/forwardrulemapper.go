@@ -44,10 +44,28 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 		return nil, fmt.Errorf("invalid status: %s", model.Status)
 	}
 
+	ruleType := vo.ForwardRuleType(model.RuleType)
+	if !ruleType.IsValid() {
+		return nil, fmt.Errorf("invalid rule type: %s", model.RuleType)
+	}
+
+	// Handle nullable fields
+	var exitAgentID uint
+	if model.ExitAgentID != nil {
+		exitAgentID = *model.ExitAgentID
+	}
+
+	var wsListenPort uint16
+	if model.WsListenPort != nil {
+		wsListenPort = *model.WsListenPort
+	}
+
 	entity, err := forward.ReconstructForwardRule(
 		model.ID,
 		model.AgentID,
-		model.NextAgentID,
+		ruleType,
+		exitAgentID,
+		wsListenPort,
 		model.Name,
 		model.ListenPort,
 		model.TargetAddress,
@@ -73,10 +91,25 @@ func (m *ForwardRuleMapperImpl) ToModel(entity *forward.ForwardRule) (*models.Fo
 		return nil, nil
 	}
 
+	// Handle nullable fields
+	var exitAgentID *uint
+	if entity.ExitAgentID() != 0 {
+		val := entity.ExitAgentID()
+		exitAgentID = &val
+	}
+
+	var wsListenPort *uint16
+	if entity.WsListenPort() != 0 {
+		val := entity.WsListenPort()
+		wsListenPort = &val
+	}
+
 	return &models.ForwardRuleModel{
 		ID:            entity.ID(),
 		AgentID:       entity.AgentID(),
-		NextAgentID:   entity.NextAgentID(),
+		RuleType:      entity.RuleType().String(),
+		ExitAgentID:   exitAgentID,
+		WsListenPort:  wsListenPort,
 		Name:          entity.Name(),
 		ListenPort:    entity.ListenPort(),
 		TargetAddress: entity.TargetAddress(),

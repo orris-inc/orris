@@ -11,9 +11,10 @@ import (
 
 // UpdateForwardAgentCommand represents the input for updating a forward agent.
 type UpdateForwardAgentCommand struct {
-	ID     uint
-	Name   *string
-	Remark *string
+	ID            uint
+	Name          *string
+	PublicAddress *string
+	Remark        *string
 }
 
 // UpdateForwardAgentUseCase handles forward agent updates.
@@ -54,6 +55,12 @@ func (uc *UpdateForwardAgentUseCase) Execute(ctx context.Context, cmd UpdateForw
 	// Update fields
 	if cmd.Name != nil {
 		if err := agent.UpdateName(*cmd.Name); err != nil {
+			return errors.NewValidationError(err.Error())
+		}
+	}
+
+	if cmd.PublicAddress != nil {
+		if err := agent.UpdatePublicAddress(*cmd.PublicAddress); err != nil {
 			return errors.NewValidationError(err.Error())
 		}
 	}

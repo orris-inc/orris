@@ -15,11 +15,13 @@ import (
 type ForwardRule struct {
 	id            uint
 	agentID       uint
-	nextAgentID   uint // 0 means direct forward to target, >0 means chain forward to next agent
+	ruleType      vo.ForwardRuleType
+	exitAgentID   uint   // exit agent ID (required for entry type)
+	wsListenPort  uint16 // WebSocket listen port (required for exit type)
 	name          string
 	listenPort    uint16
-	targetAddress string // final target address (used when nextAgentID=0)
-	targetPort    uint16 // final target port (used when nextAgentID=0)
+	targetAddress string // final target address (required for direct and exit types)
+	targetPort    uint16 // final target port (required for direct and exit types)
 	protocol      vo.ForwardProtocol
 	status        vo.ForwardStatus
 	remark        string
@@ -30,11 +32,15 @@ type ForwardRule struct {
 }
 
 // NewForwardRule creates a new forward rule aggregate.
-// If nextAgentID > 0, it's a chain forward to next agent; targetAddress and targetPort are ignored.
-// If nextAgentID = 0, it's a direct forward to targetAddress:targetPort.
+// Parameters depend on ruleType:
+// - direct: requires agentID, listenPort, targetAddress, targetPort
+// - entry: requires agentID, listenPort, exitAgentID
+// - exit: requires agentID, wsListenPort, targetAddress, targetPort
 func NewForwardRule(
 	agentID uint,
-	nextAgentID uint,
+	ruleType vo.ForwardRuleType,
+	exitAgentID uint,
+	wsListenPort uint16,
 	name string,
 	listenPort uint16,
 	targetAddress string,
@@ -45,18 +51,22 @@ func NewForwardRule(
 	if agentID == 0 {
 		return nil, fmt.Errorf("agent ID is required")
 	}
+	if !ruleType.IsValid() {
+		return nil, fmt.Errorf("invalid rule type: %s", ruleType)
+	}
 	if name == "" {
 		return nil, fmt.Errorf("forward rule name is required")
-	}
-	if listenPort == 0 {
-		return nil, fmt.Errorf("listen port is required")
 	}
 	if !protocol.IsValid() {
 		return nil, fmt.Errorf("invalid protocol: %s", protocol)
 	}
 
-	// For direct forward (nextAgentID=0), target is required
-	if nextAgentID == 0 {
+	// Validate required fields based on rule type
+	switch ruleType {
+	case vo.ForwardRuleTypeDirect:
+		if listenPort == 0 {
+			return nil, fmt.Errorf("listen port is required for direct forward")
+		}
 		if targetAddress == "" {
 			return nil, fmt.Errorf("target address is required for direct forward")
 		}
@@ -66,12 +76,34 @@ func NewForwardRule(
 		if err := validateAddress(targetAddress); err != nil {
 			return nil, fmt.Errorf("invalid target address: %w", err)
 		}
+	case vo.ForwardRuleTypeEntry:
+		if listenPort == 0 {
+			return nil, fmt.Errorf("listen port is required for entry forward")
+		}
+		if exitAgentID == 0 {
+			return nil, fmt.Errorf("exit agent ID is required for entry forward")
+		}
+	case vo.ForwardRuleTypeExit:
+		if wsListenPort == 0 {
+			return nil, fmt.Errorf("WebSocket listen port is required for exit forward")
+		}
+		if targetAddress == "" {
+			return nil, fmt.Errorf("target address is required for exit forward")
+		}
+		if targetPort == 0 {
+			return nil, fmt.Errorf("target port is required for exit forward")
+		}
+		if err := validateAddress(targetAddress); err != nil {
+			return nil, fmt.Errorf("invalid target address: %w", err)
+		}
 	}
 
 	now := time.Now()
 	return &ForwardRule{
 		agentID:       agentID,
-		nextAgentID:   nextAgentID,
+		ruleType:      ruleType,
+		exitAgentID:   exitAgentID,
+		wsListenPort:  wsListenPort,
 		name:          name,
 		listenPort:    listenPort,
 		targetAddress: targetAddress,
@@ -90,7 +122,9 @@ func NewForwardRule(
 func ReconstructForwardRule(
 	id uint,
 	agentID uint,
-	nextAgentID uint,
+	ruleType vo.ForwardRuleType,
+	exitAgentID uint,
+	wsListenPort uint16,
 	name string,
 	listenPort uint16,
 	targetAddress string,
@@ -108,11 +142,11 @@ func ReconstructForwardRule(
 	if agentID == 0 {
 		return nil, fmt.Errorf("agent ID is required")
 	}
+	if !ruleType.IsValid() {
+		return nil, fmt.Errorf("invalid rule type: %s", ruleType)
+	}
 	if name == "" {
 		return nil, fmt.Errorf("forward rule name is required")
-	}
-	if listenPort == 0 {
-		return nil, fmt.Errorf("listen port is required")
 	}
 	if !protocol.IsValid() {
 		return nil, fmt.Errorf("invalid protocol: %s", protocol)
@@ -124,7 +158,9 @@ func ReconstructForwardRule(
 	return &ForwardRule{
 		id:            id,
 		agentID:       agentID,
-		nextAgentID:   nextAgentID,
+		ruleType:      ruleType,
+		exitAgentID:   exitAgentID,
+		wsListenPort:  wsListenPort,
 		name:          name,
 		listenPort:    listenPort,
 		targetAddress: targetAddress,
@@ -175,15 +211,19 @@ func (r *ForwardRule) AgentID() uint {
 	return r.agentID
 }
 
-// NextAgentID returns the next agent ID in the forward chain.
-// Returns 0 if this is a direct forward to target.
-func (r *ForwardRule) NextAgentID() uint {
-	return r.nextAgentID
+// RuleType returns the rule type.
+func (r *ForwardRule) RuleType() vo.ForwardRuleType {
+	return r.ruleType
 }
 
-// IsChainForward returns true if this rule forwards to another agent.
-func (r *ForwardRule) IsChainForward() bool {
-	return r.nextAgentID > 0
+// ExitAgentID returns the exit agent ID (for entry type rules).
+func (r *ForwardRule) ExitAgentID() uint {
+	return r.exitAgentID
+}
+
+// WsListenPort returns the WebSocket listen port (for exit type rules).
+func (r *ForwardRule) WsListenPort() uint16 {
+	return r.wsListenPort
 }
 
 // Name returns the forward rule name.
@@ -356,13 +396,36 @@ func (r *ForwardRule) UpdateRemark(remark string) error {
 	return nil
 }
 
-// UpdateNextAgentID updates the next agent ID for chain forwarding.
-func (r *ForwardRule) UpdateNextAgentID(nextAgentID uint) {
-	if r.nextAgentID == nextAgentID {
-		return
+// UpdateExitAgentID updates the exit agent ID for entry type rules.
+func (r *ForwardRule) UpdateExitAgentID(exitAgentID uint) error {
+	if !r.ruleType.IsEntry() {
+		return fmt.Errorf("exit agent ID can only be updated for entry type rules")
 	}
-	r.nextAgentID = nextAgentID
+	if exitAgentID == 0 {
+		return fmt.Errorf("exit agent ID cannot be zero")
+	}
+	if r.exitAgentID == exitAgentID {
+		return nil
+	}
+	r.exitAgentID = exitAgentID
 	r.updatedAt = time.Now()
+	return nil
+}
+
+// UpdateWsListenPort updates the WebSocket listen port for exit type rules.
+func (r *ForwardRule) UpdateWsListenPort(port uint16) error {
+	if !r.ruleType.IsExit() {
+		return fmt.Errorf("WebSocket listen port can only be updated for exit type rules")
+	}
+	if port == 0 {
+		return fmt.Errorf("WebSocket listen port cannot be zero")
+	}
+	if r.wsListenPort == port {
+		return nil
+	}
+	r.wsListenPort = port
+	r.updatedAt = time.Now()
+	return nil
 }
 
 // RecordTraffic records traffic bytes.
@@ -389,20 +452,11 @@ func (r *ForwardRule) Validate() error {
 	if r.agentID == 0 {
 		return fmt.Errorf("agent ID is required")
 	}
+	if !r.ruleType.IsValid() {
+		return fmt.Errorf("invalid rule type: %s", r.ruleType)
+	}
 	if r.name == "" {
 		return fmt.Errorf("forward rule name is required")
-	}
-	if r.listenPort == 0 {
-		return fmt.Errorf("listen port is required")
-	}
-	// For direct forward (nextAgentID=0), target is required
-	if r.nextAgentID == 0 {
-		if r.targetAddress == "" {
-			return fmt.Errorf("target address is required for direct forward")
-		}
-		if r.targetPort == 0 {
-			return fmt.Errorf("target port is required for direct forward")
-		}
 	}
 	if !r.protocol.IsValid() {
 		return fmt.Errorf("invalid protocol: %s", r.protocol)
@@ -410,5 +464,37 @@ func (r *ForwardRule) Validate() error {
 	if !r.status.IsValid() {
 		return fmt.Errorf("invalid status: %s", r.status)
 	}
+
+	// Validate required fields based on rule type
+	switch r.ruleType {
+	case vo.ForwardRuleTypeDirect:
+		if r.listenPort == 0 {
+			return fmt.Errorf("listen port is required for direct forward")
+		}
+		if r.targetAddress == "" {
+			return fmt.Errorf("target address is required for direct forward")
+		}
+		if r.targetPort == 0 {
+			return fmt.Errorf("target port is required for direct forward")
+		}
+	case vo.ForwardRuleTypeEntry:
+		if r.listenPort == 0 {
+			return fmt.Errorf("listen port is required for entry forward")
+		}
+		if r.exitAgentID == 0 {
+			return fmt.Errorf("exit agent ID is required for entry forward")
+		}
+	case vo.ForwardRuleTypeExit:
+		if r.wsListenPort == 0 {
+			return fmt.Errorf("WebSocket listen port is required for exit forward")
+		}
+		if r.targetAddress == "" {
+			return fmt.Errorf("target address is required for exit forward")
+		}
+		if r.targetPort == 0 {
+			return fmt.Errorf("target port is required for exit forward")
+		}
+	}
+
 	return nil
 }

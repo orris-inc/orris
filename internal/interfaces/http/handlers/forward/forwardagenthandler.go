@@ -52,14 +52,16 @@ func NewForwardAgentHandler(
 
 // CreateForwardAgentRequest represents a request to create a forward agent.
 type CreateForwardAgentRequest struct {
-	Name   string `json:"name" binding:"required" example:"Production Agent"`
-	Remark string `json:"remark,omitempty" example:"Forward agent for production environment"`
+	Name          string `json:"name" binding:"required" example:"Production Agent"`
+	PublicAddress string `json:"public_address,omitempty" example:"203.0.113.1"`
+	Remark        string `json:"remark,omitempty" example:"Forward agent for production environment"`
 }
 
 // UpdateForwardAgentRequest represents a request to update a forward agent.
 type UpdateForwardAgentRequest struct {
-	Name   *string `json:"name,omitempty" example:"Updated Agent Name"`
-	Remark *string `json:"remark,omitempty" example:"Updated remark"`
+	Name          *string `json:"name,omitempty" example:"Updated Agent Name"`
+	PublicAddress *string `json:"public_address,omitempty" example:"203.0.113.2"`
+	Remark        *string `json:"remark,omitempty" example:"Updated remark"`
 }
 
 // UpdateAgentStatusRequest represents a request to update forward agent status.
@@ -77,8 +79,9 @@ func (h *ForwardAgentHandler) CreateAgent(c *gin.Context) {
 	}
 
 	cmd := usecases.CreateForwardAgentCommand{
-		Name:   req.Name,
-		Remark: req.Remark,
+		Name:          req.Name,
+		PublicAddress: req.PublicAddress,
+		Remark:        req.Remark,
 	}
 
 	result, err := h.createAgentUC.Execute(c.Request.Context(), cmd)
@@ -154,9 +157,10 @@ func (h *ForwardAgentHandler) UpdateAgent(c *gin.Context) {
 	}
 
 	cmd := usecases.UpdateForwardAgentCommand{
-		ID:     agentID,
-		Name:   req.Name,
-		Remark: req.Remark,
+		ID:            agentID,
+		Name:          req.Name,
+		PublicAddress: req.PublicAddress,
+		Remark:        req.Remark,
 	}
 
 	if err := h.updateAgentUC.Execute(c.Request.Context(), cmd); err != nil {

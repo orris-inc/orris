@@ -1,21 +1,58 @@
 // Package forward provides a Go SDK for interacting with the Orris Forward Agent API.
 package forward
 
+// RuleType represents the type of forward rule.
+type RuleType string
+
+const (
+	// RuleTypeDirect forwards traffic directly to the target.
+	RuleTypeDirect RuleType = "direct"
+	// RuleTypeEntry is the entry point that forwards traffic to exit agent via WS tunnel.
+	RuleTypeEntry RuleType = "entry"
+	// RuleTypeExit receives traffic from entry agent and forwards to the target.
+	RuleTypeExit RuleType = "exit"
+)
+
 // Rule represents a forward rule returned by the API.
 type Rule struct {
-	ID            uint   `json:"id"`
-	Name          string `json:"name"`
-	ListenPort    uint16 `json:"listen_port"`
-	TargetAddress string `json:"target_address"`
-	TargetPort    uint16 `json:"target_port"`
-	Protocol      string `json:"protocol"`
-	Status        string `json:"status"`
-	Remark        string `json:"remark,omitempty"`
-	UploadBytes   int64  `json:"upload_bytes"`
-	DownloadBytes int64  `json:"download_bytes"`
-	TotalBytes    int64  `json:"total_bytes"`
-	CreatedAt     string `json:"created_at"`
-	UpdatedAt     string `json:"updated_at"`
+	ID            uint     `json:"id"`
+	AgentID       uint     `json:"agent_id"`
+	RuleType      RuleType `json:"rule_type"`
+	ExitAgentID   uint     `json:"exit_agent_id,omitempty"`
+	WsListenPort  uint16   `json:"ws_listen_port,omitempty"`
+	Name          string   `json:"name"`
+	ListenPort    uint16   `json:"listen_port"`
+	TargetAddress string   `json:"target_address,omitempty"`
+	TargetPort    uint16   `json:"target_port,omitempty"`
+	Protocol      string   `json:"protocol"`
+	Status        string   `json:"status"`
+	Remark        string   `json:"remark,omitempty"`
+	UploadBytes   int64    `json:"upload_bytes"`
+	DownloadBytes int64    `json:"download_bytes"`
+	TotalBytes    int64    `json:"total_bytes"`
+	CreatedAt     string   `json:"created_at"`
+	UpdatedAt     string   `json:"updated_at"`
+}
+
+// IsDirect returns true if this is a direct forward rule.
+func (r *Rule) IsDirect() bool {
+	return r.RuleType == RuleTypeDirect
+}
+
+// IsEntry returns true if this is an entry rule.
+func (r *Rule) IsEntry() bool {
+	return r.RuleType == RuleTypeEntry
+}
+
+// IsExit returns true if this is an exit rule.
+func (r *Rule) IsExit() bool {
+	return r.RuleType == RuleTypeExit
+}
+
+// ExitEndpoint represents the connection information for an exit agent.
+type ExitEndpoint struct {
+	Address string `json:"address"`
+	WsPort  uint16 `json:"ws_port"`
 }
 
 // TrafficItem represents traffic data for a single rule.

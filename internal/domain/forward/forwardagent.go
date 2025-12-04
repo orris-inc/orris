@@ -4,6 +4,8 @@ package forward
 import (
 	"crypto/subtle"
 	"fmt"
+	"net"
+	"regexp"
 	"time"
 
 	"github.com/orris-inc/orris/internal/domain/shared/services"
@@ -24,6 +26,9 @@ func (s AgentStatus) IsValid() bool {
 	return s == AgentStatusEnabled || s == AgentStatusDisabled
 }
 
+// domainNameRegex is a pre-compiled regex for validating RFC 1123 hostnames
+var domainNameRegex = regexp.MustCompile(`^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$`)
+
 // ForwardAgent represents the forward agent aggregate root
 type ForwardAgent struct {
 	id             uint
@@ -31,6 +36,7 @@ type ForwardAgent struct {
 	tokenHash      string
 	apiToken       string // transient field, only available after creation or regeneration
 	status         AgentStatus
+	publicAddress  string // optional public address for Entry to obtain Exit connection information
 	remark         string
 	createdAt      time.Time
 	updatedAt      time.Time
@@ -38,9 +44,16 @@ type ForwardAgent struct {
 }
 
 // NewForwardAgent creates a new forward agent with auto-generated token
-func NewForwardAgent(name string, remark string) (*ForwardAgent, error) {
+func NewForwardAgent(name string, publicAddress string, remark string) (*ForwardAgent, error) {
 	if name == "" {
 		return nil, fmt.Errorf("agent name is required")
+	}
+
+	// Validate public address if provided
+	if publicAddress != "" {
+		if err := validatePublicAddress(publicAddress); err != nil {
+			return nil, err
+		}
 	}
 
 	tokenGen := services.NewTokenGenerator()
@@ -55,6 +68,7 @@ func NewForwardAgent(name string, remark string) (*ForwardAgent, error) {
 		tokenHash:      tokenHash,
 		apiToken:       plainToken,
 		status:         AgentStatusEnabled,
+		publicAddress:  publicAddress,
 		remark:         remark,
 		createdAt:      now,
 		updatedAt:      now,
@@ -70,6 +84,7 @@ func ReconstructForwardAgent(
 	name string,
 	tokenHash string,
 	status AgentStatus,
+	publicAddress string,
 	remark string,
 	createdAt, updatedAt time.Time,
 ) (*ForwardAgent, error) {
@@ -86,11 +101,19 @@ func ReconstructForwardAgent(
 		return nil, fmt.Errorf("invalid agent status: %s", status)
 	}
 
+	// Validate public address if provided
+	if publicAddress != "" {
+		if err := validatePublicAddress(publicAddress); err != nil {
+			return nil, err
+		}
+	}
+
 	return &ForwardAgent{
 		id:             id,
 		name:           name,
 		tokenHash:      tokenHash,
 		status:         status,
+		publicAddress:  publicAddress,
 		remark:         remark,
 		createdAt:      createdAt,
 		updatedAt:      updatedAt,
@@ -121,6 +144,11 @@ func (a *ForwardAgent) Status() AgentStatus {
 // Remark returns the agent remark
 func (a *ForwardAgent) Remark() string {
 	return a.remark
+}
+
+// PublicAddress returns the agent's public address
+func (a *ForwardAgent) PublicAddress() string {
+	return a.publicAddress
 }
 
 // CreatedAt returns when the agent was created
@@ -234,6 +262,25 @@ func (a *ForwardAgent) UpdateRemark(remark string) error {
 	return nil
 }
 
+// UpdatePublicAddress updates the agent's public address
+func (a *ForwardAgent) UpdatePublicAddress(address string) error {
+	// Validate address if not empty
+	if address != "" {
+		if err := validatePublicAddress(address); err != nil {
+			return err
+		}
+	}
+
+	if a.publicAddress == address {
+		return nil
+	}
+
+	a.publicAddress = address
+	a.updatedAt = time.Now()
+
+	return nil
+}
+
 // IsEnabled checks if the agent is enabled
 func (a *ForwardAgent) IsEnabled() bool {
 	return a.status == AgentStatusEnabled
@@ -250,5 +297,29 @@ func (a *ForwardAgent) Validate() error {
 	if !a.status.IsValid() {
 		return fmt.Errorf("invalid agent status: %s", a.status)
 	}
+	if a.publicAddress != "" {
+		if err := validatePublicAddress(a.publicAddress); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+// validatePublicAddress validates if the address is a valid IP or domain name
+func validatePublicAddress(address string) error {
+	if address == "" {
+		return nil
+	}
+
+	// Try parsing as IP address
+	if ip := net.ParseIP(address); ip != nil {
+		return nil
+	}
+
+	// Validate as domain name (basic RFC 1123 hostname validation)
+	if domainNameRegex.MatchString(address) {
+		return nil
+	}
+
+	return fmt.Errorf("invalid public address format: must be a valid IP address or domain name")
 }

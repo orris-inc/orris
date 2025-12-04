@@ -11,18 +11,20 @@ import (
 
 // CreateForwardAgentCommand represents the input for creating a forward agent.
 type CreateForwardAgentCommand struct {
-	Name   string
-	Remark string
+	Name          string
+	PublicAddress string
+	Remark        string
 }
 
 // CreateForwardAgentResult represents the output of creating a forward agent.
 type CreateForwardAgentResult struct {
-	ID        uint   `json:"id"`
-	Name      string `json:"name"`
-	Token     string `json:"token"`
-	Status    string `json:"status"`
-	Remark    string `json:"remark"`
-	CreatedAt string `json:"created_at"`
+	ID            uint   `json:"id"`
+	Name          string `json:"name"`
+	PublicAddress string `json:"public_address"`
+	Token         string `json:"token"`
+	Status        string `json:"status"`
+	Remark        string `json:"remark"`
+	CreatedAt     string `json:"created_at"`
 }
 
 // CreateForwardAgentUseCase handles forward agent creation.
@@ -63,7 +65,7 @@ func (uc *CreateForwardAgentUseCase) Execute(ctx context.Context, cmd CreateForw
 	}
 
 	// Create domain entity
-	agent, err := forward.NewForwardAgent(cmd.Name, cmd.Remark)
+	agent, err := forward.NewForwardAgent(cmd.Name, cmd.PublicAddress, cmd.Remark)
 	if err != nil {
 		uc.logger.Errorw("failed to create forward agent entity", "error", err)
 		return nil, fmt.Errorf("failed to create forward agent: %w", err)
@@ -79,12 +81,13 @@ func (uc *CreateForwardAgentUseCase) Execute(ctx context.Context, cmd CreateForw
 	plainToken := agent.GetAPIToken()
 
 	result := &CreateForwardAgentResult{
-		ID:        agent.ID(),
-		Name:      agent.Name(),
-		Token:     plainToken,
-		Status:    string(agent.Status()),
-		Remark:    agent.Remark(),
-		CreatedAt: agent.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
+		ID:            agent.ID(),
+		Name:          agent.Name(),
+		PublicAddress: agent.PublicAddress(),
+		Token:         plainToken,
+		Status:        string(agent.Status()),
+		Remark:        agent.Remark(),
+		CreatedAt:     agent.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
 	}
 
 	uc.logger.Infow("forward agent created successfully", "id", result.ID, "name", cmd.Name)

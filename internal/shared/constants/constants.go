@@ -49,9 +49,6 @@ const (
 	TableSubscriptionTraffic = "subscription_traffic"
 	TableForwardRules        = "forward_rules"
 	TableForwardAgents       = "forward_agents"
-	TableForwardChains       = "forward_chains"
-	TableForwardChainNodes   = "forward_chain_nodes"
-	TableForwardChainRules   = "forward_chain_rules"
 	// TableUserTraffic removed - traffic is now tracked via subscription_traffic with subscription_id
 
 	// Default values

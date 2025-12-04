@@ -3,6 +3,7 @@ package forward
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -14,18 +15,21 @@ import (
 
 // AgentHandler handles RESTful agent API requests for forward client
 type AgentHandler struct {
-	repo   forward.Repository
-	logger logger.Interface
+	repo      forward.Repository
+	agentRepo forward.AgentRepository
+	logger    logger.Interface
 }
 
 // NewAgentHandler creates a new AgentHandler instance
 func NewAgentHandler(
 	repo forward.Repository,
+	agentRepo forward.AgentRepository,
 	logger logger.Interface,
 ) *AgentHandler {
 	return &AgentHandler{
-		repo:   repo,
-		logger: logger,
+		repo:      repo,
+		agentRepo: agentRepo,
+		logger:    logger,
 	}
 }
 
@@ -136,5 +140,103 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "traffic reported successfully", map[string]any{
 		"rules_updated": successCount,
 		"rules_failed":  errorCount,
+	})
+}
+
+// GetExitEndpoint handles GET /forward-agent-api/exit-endpoint/:agent_id
+func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	// Parse agent ID from path
+	agentIDStr := c.Param("agent_id")
+	id, err := strconv.ParseUint(agentIDStr, 10, 32)
+	if err != nil {
+		h.logger.Warnw("invalid agent_id parameter",
+			"agent_id", agentIDStr,
+			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid agent_id parameter")
+		return
+	}
+	if id == 0 {
+		h.logger.Warnw("invalid agent_id parameter",
+			"agent_id", agentIDStr,
+			"error", "agent ID must be greater than 0",
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusBadRequest, "agent ID must be greater than 0")
+		return
+	}
+	agentID := uint(id)
+
+	h.logger.Infow("forward client requesting exit endpoint information",
+		"agent_id", agentID,
+		"ip", c.ClientIP(),
+	)
+
+	// Get agent by ID from agent repository
+	agent, err := h.agentRepo.GetByID(ctx, agentID)
+	if err != nil {
+		h.logger.Errorw("failed to get forward agent",
+			"agent_id", agentID,
+			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to retrieve agent information")
+		return
+	}
+
+	if agent == nil {
+		h.logger.Warnw("forward agent not found",
+			"agent_id", agentID,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusNotFound, "forward agent not found")
+		return
+	}
+
+	// Check if agent has a public address
+	if agent.PublicAddress() == "" {
+		h.logger.Warnw("agent has no public address configured",
+			"agent_id", agentID,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusNotFound, "agent has no public address configured")
+		return
+	}
+
+	// Get exit rules for this agent
+	exitRule, err := h.repo.GetExitRuleByAgentID(ctx, agentID)
+	if err != nil {
+		h.logger.Errorw("failed to get exit rule for agent",
+			"agent_id", agentID,
+			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to retrieve exit rule")
+		return
+	}
+
+	if exitRule == nil {
+		h.logger.Warnw("no exit rule found for agent",
+			"agent_id", agentID,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusNotFound, "no exit rule found for this agent")
+		return
+	}
+
+	h.logger.Infow("exit endpoint information retrieved successfully",
+		"agent_id", agentID,
+		"address", agent.PublicAddress(),
+		"ws_port", exitRule.WsListenPort(),
+		"ip", c.ClientIP(),
+	)
+
+	// Return the connection information
+	utils.SuccessResponse(c, http.StatusOK, "exit endpoint information retrieved successfully", map[string]any{
+		"address": agent.PublicAddress(),
+		"ws_port": exitRule.WsListenPort(),
 	})
 }

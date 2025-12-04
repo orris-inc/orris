@@ -9,12 +9,13 @@ import (
 type ForwardRuleDTO struct {
 	ID            uint   `json:"id"`
 	AgentID       uint   `json:"agent_id"`
-	NextAgentID   uint   `json:"next_agent_id"` // 0=direct forward, >0=chain forward to next agent
-	IsChain       bool   `json:"is_chain"`      // convenience field
+	RuleType      string `json:"rule_type"`                // direct, entry, exit
+	ExitAgentID   uint   `json:"exit_agent_id,omitempty"`  // for entry type
+	WsListenPort  uint16 `json:"ws_listen_port,omitempty"` // for exit type
 	Name          string `json:"name"`
 	ListenPort    uint16 `json:"listen_port"`
-	TargetAddress string `json:"target_address,omitempty"` // used when next_agent_id=0
-	TargetPort    uint16 `json:"target_port,omitempty"`    // used when next_agent_id=0
+	TargetAddress string `json:"target_address,omitempty"` // for direct and exit types
+	TargetPort    uint16 `json:"target_port,omitempty"`    // for direct and exit types
 	Protocol      string `json:"protocol"`
 	Status        string `json:"status"`
 	Remark        string `json:"remark"`
@@ -34,8 +35,9 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 	return &ForwardRuleDTO{
 		ID:            rule.ID(),
 		AgentID:       rule.AgentID(),
-		NextAgentID:   rule.NextAgentID(),
-		IsChain:       rule.IsChainForward(),
+		RuleType:      rule.RuleType().String(),
+		ExitAgentID:   rule.ExitAgentID(),
+		WsListenPort:  rule.WsListenPort(),
 		Name:          rule.Name(),
 		ListenPort:    rule.ListenPort(),
 		TargetAddress: rule.TargetAddress(),

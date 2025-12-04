@@ -108,11 +108,12 @@ func (r *ForwardAgentRepositoryImpl) Update(ctx context.Context, agent *forward.
 	result := r.db.WithContext(ctx).Model(&models.ForwardAgentModel{}).
 		Where("id = ?", model.ID).
 		Updates(map[string]interface{}{
-			"name":       model.Name,
-			"token_hash": model.TokenHash,
-			"status":     model.Status,
-			"remark":     model.Remark,
-			"updated_at": model.UpdatedAt,
+			"name":           model.Name,
+			"token_hash":     model.TokenHash,
+			"status":         model.Status,
+			"public_address": model.PublicAddress,
+			"remark":         model.Remark,
+			"updated_at":     model.UpdatedAt,
 		})
 
 	if result.Error != nil {
@@ -225,4 +226,43 @@ func (r *ForwardAgentRepositoryImpl) ExistsByName(ctx context.Context, name stri
 		return false, fmt.Errorf("failed to check forward agent existence: %w", err)
 	}
 	return count > 0, nil
+}
+
+// GetEndpointInfo retrieves the agent's public address and the WebSocket listen port from its exit rule.
+// Returns the public address and WebSocket port. If the agent doesn't have a public address or exit rule, returns empty/zero values.
+func (r *ForwardAgentRepositoryImpl) GetEndpointInfo(ctx context.Context, agentID uint) (address string, wsPort uint16, err error) {
+	// Get agent's public address
+	var agent models.ForwardAgentModel
+	if err := r.db.WithContext(ctx).Select("public_address").Where("id = ?", agentID).First(&agent).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return "", 0, errors.NewNotFoundError("forward agent", fmt.Sprintf("%d", agentID))
+		}
+		r.logger.Errorw("failed to get forward agent public address", "agent_id", agentID, "error", err)
+		return "", 0, fmt.Errorf("failed to get forward agent: %w", err)
+	}
+
+	// Get the exit rule (websocket type) for this agent to find the WS listen port
+	var rule models.ForwardRuleModel
+	err = r.db.WithContext(ctx).
+		Select("ws_listen_port").
+		Where("agent_id = ? AND rule_type = ?", agentID, "websocket").
+		First(&rule).Error
+
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			// Agent exists but has no exit rule (websocket type), return only the public address
+			r.logger.Infow("forward agent has no websocket exit rule", "agent_id", agentID)
+			return agent.PublicAddress, 0, nil
+		}
+		r.logger.Errorw("failed to get forward agent exit rule", "agent_id", agentID, "error", err)
+		return "", 0, fmt.Errorf("failed to get forward agent exit rule: %w", err)
+	}
+
+	// Return both public address and ws_listen_port
+	var port uint16
+	if rule.WsListenPort != nil {
+		port = *rule.WsListenPort
+	}
+
+	return agent.PublicAddress, port, nil
 }

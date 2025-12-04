@@ -13,11 +13,13 @@ import (
 // CreateForwardRuleCommand represents the input for creating a forward rule.
 type CreateForwardRuleCommand struct {
 	AgentID       uint
-	NextAgentID   uint // 0=direct forward, >0=chain forward to next agent
+	RuleType      string // direct, entry, exit
+	ExitAgentID   uint   // required for entry type
+	WsListenPort  uint16 // required for exit type
 	Name          string
-	ListenPort    uint16
-	TargetAddress string // required when NextAgentID=0
-	TargetPort    uint16 // required when NextAgentID=0
+	ListenPort    uint16 // required for direct and entry types
+	TargetAddress string // required for direct and exit types
+	TargetPort    uint16 // required for direct and exit types
 	Protocol      string
 	Remark        string
 }
@@ -26,8 +28,9 @@ type CreateForwardRuleCommand struct {
 type CreateForwardRuleResult struct {
 	ID            uint   `json:"id"`
 	AgentID       uint   `json:"agent_id"`
-	NextAgentID   uint   `json:"next_agent_id"`
-	IsChain       bool   `json:"is_chain"`
+	RuleType      string `json:"rule_type"`
+	ExitAgentID   uint   `json:"exit_agent_id,omitempty"`
+	WsListenPort  uint16 `json:"ws_listen_port,omitempty"`
 	Name          string `json:"name"`
 	ListenPort    uint16 `json:"listen_port"`
 	TargetAddress string `json:"target_address,omitempty"`
@@ -76,9 +79,12 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 
 	// Create domain entity
 	protocol := vo.ForwardProtocol(cmd.Protocol)
+	ruleType := vo.ForwardRuleType(cmd.RuleType)
 	rule, err := forward.NewForwardRule(
 		cmd.AgentID,
-		cmd.NextAgentID,
+		ruleType,
+		cmd.ExitAgentID,
+		cmd.WsListenPort,
 		cmd.Name,
 		cmd.ListenPort,
 		cmd.TargetAddress,
@@ -100,8 +106,9 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	result := &CreateForwardRuleResult{
 		ID:            rule.ID(),
 		AgentID:       rule.AgentID(),
-		NextAgentID:   rule.NextAgentID(),
-		IsChain:       rule.IsChainForward(),
+		RuleType:      rule.RuleType().String(),
+		ExitAgentID:   rule.ExitAgentID(),
+		WsListenPort:  rule.WsListenPort(),
 		Name:          rule.Name(),
 		ListenPort:    rule.ListenPort(),
 		TargetAddress: rule.TargetAddress(),
@@ -122,25 +129,54 @@ func (uc *CreateForwardRuleUseCase) validateCommand(cmd CreateForwardRuleCommand
 	if cmd.Name == "" {
 		return errors.NewValidationError("name is required")
 	}
-	if cmd.ListenPort == 0 {
-		return errors.NewValidationError("listen port is required")
+	if cmd.RuleType == "" {
+		return errors.NewValidationError("rule_type is required")
 	}
-	// For direct forward (NextAgentID=0), target is required
-	if cmd.NextAgentID == 0 {
+	if cmd.Protocol == "" {
+		return errors.NewValidationError("protocol is required")
+	}
+
+	// Validate rule type
+	ruleType := vo.ForwardRuleType(cmd.RuleType)
+	if !ruleType.IsValid() {
+		return errors.NewValidationError(fmt.Sprintf("invalid rule_type: %s, must be direct, entry or exit", cmd.RuleType))
+	}
+
+	// Validate protocol
+	protocol := vo.ForwardProtocol(cmd.Protocol)
+	if !protocol.IsValid() {
+		return errors.NewValidationError(fmt.Sprintf("invalid protocol: %s, must be tcp, udp or both", cmd.Protocol))
+	}
+
+	// Type-specific validation
+	switch ruleType {
+	case vo.ForwardRuleTypeDirect:
+		if cmd.ListenPort == 0 {
+			return errors.NewValidationError("listen_port is required for direct forward")
+		}
 		if cmd.TargetAddress == "" {
 			return errors.NewValidationError("target_address is required for direct forward")
 		}
 		if cmd.TargetPort == 0 {
 			return errors.NewValidationError("target_port is required for direct forward")
 		}
-	}
-	if cmd.Protocol == "" {
-		return errors.NewValidationError("protocol is required")
-	}
-
-	protocol := vo.ForwardProtocol(cmd.Protocol)
-	if !protocol.IsValid() {
-		return errors.NewValidationError(fmt.Sprintf("invalid protocol: %s, must be tcp, udp or both", cmd.Protocol))
+	case vo.ForwardRuleTypeEntry:
+		if cmd.ListenPort == 0 {
+			return errors.NewValidationError("listen_port is required for entry forward")
+		}
+		if cmd.ExitAgentID == 0 {
+			return errors.NewValidationError("exit_agent_id is required for entry forward")
+		}
+	case vo.ForwardRuleTypeExit:
+		if cmd.WsListenPort == 0 {
+			return errors.NewValidationError("ws_listen_port is required for exit forward")
+		}
+		if cmd.TargetAddress == "" {
+			return errors.NewValidationError("target_address is required for exit forward")
+		}
+		if cmd.TargetPort == 0 {
+			return errors.NewValidationError("target_port is required for exit forward")
+		}
 	}
 
 	return nil

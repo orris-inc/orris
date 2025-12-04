@@ -4,19 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
-
-// ForwardAgentDTO represents the data transfer object for forward agents.
-type ForwardAgentDTO struct {
-	ID        uint   `json:"id"`
-	Name      string `json:"name"`
-	Status    string `json:"status"`
-	Remark    string `json:"remark"`
-	CreatedAt string `json:"created_at"`
-	UpdatedAt string `json:"updated_at"`
-}
 
 // ListForwardAgentsQuery represents the input for listing forward agents.
 type ListForwardAgentsQuery struct {
@@ -30,10 +21,10 @@ type ListForwardAgentsQuery struct {
 
 // ListForwardAgentsResult represents the output of listing forward agents.
 type ListForwardAgentsResult struct {
-	Agents []*ForwardAgentDTO
-	Total  int64
-	Page   int
-	Pages  int
+	Agents []*dto.ForwardAgentDTO `json:"agents"`
+	Total  int64                  `json:"total"`
+	Page   int                    `json:"page"`
+	Pages  int                    `json:"pages"`
 }
 
 // ListForwardAgentsUseCase handles listing forward agents.
@@ -89,17 +80,7 @@ func (uc *ListForwardAgentsUseCase) Execute(ctx context.Context, query ListForwa
 		pages++
 	}
 
-	dtos := make([]*ForwardAgentDTO, len(agents))
-	for i, agent := range agents {
-		dtos[i] = &ForwardAgentDTO{
-			ID:        agent.ID(),
-			Name:      agent.Name(),
-			Status:    string(agent.Status()),
-			Remark:    agent.Remark(),
-			CreatedAt: agent.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
-			UpdatedAt: agent.UpdatedAt().Format("2006-01-02T15:04:05Z07:00"),
-		}
-	}
+	dtos := dto.ToForwardAgentDTOs(agents)
 
 	return &ListForwardAgentsResult{
 		Agents: dtos,

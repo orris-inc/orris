@@ -125,6 +125,9 @@ func (r *ForwardRuleRepositoryImpl) Update(ctx context.Context, rule *forward.Fo
 			"remark":         model.Remark,
 			"upload_bytes":   model.UploadBytes,
 			"download_bytes": model.DownloadBytes,
+			"rule_type":      model.RuleType,
+			"exit_agent_id":  model.ExitAgentID,
+			"ws_listen_port": model.WsListenPort,
 			"updated_at":     model.UpdatedAt,
 		})
 
@@ -311,4 +314,45 @@ func (r *ForwardRuleRepositoryImpl) UpdateTraffic(ctx context.Context, id uint, 
 	}
 
 	return nil
+}
+
+// ListByExitAgentID returns all entrance rules for a specific exit agent.
+func (r *ForwardRuleRepositoryImpl) ListByExitAgentID(ctx context.Context, exitAgentID uint) ([]*forward.ForwardRule, error) {
+	var ruleModels []*models.ForwardRuleModel
+
+	tx := db.GetTxFromContext(ctx, r.db)
+	if err := tx.Where("exit_agent_id = ?", exitAgentID).Find(&ruleModels).Error; err != nil {
+		r.logger.Errorw("failed to list forward rules by exit agent ID", "exit_agent_id", exitAgentID, "error", err)
+		return nil, fmt.Errorf("failed to list forward rules by exit agent ID: %w", err)
+	}
+
+	entities, err := r.mapper.ToEntities(ruleModels)
+	if err != nil {
+		r.logger.Errorw("failed to map forward rule models to entities", "error", err)
+		return nil, fmt.Errorf("failed to map forward rules: %w", err)
+	}
+
+	return entities, nil
+}
+
+// GetExitRuleByAgentID retrieves the exit rule for a specific agent.
+func (r *ForwardRuleRepositoryImpl) GetExitRuleByAgentID(ctx context.Context, agentID uint) (*forward.ForwardRule, error) {
+	var model models.ForwardRuleModel
+
+	tx := db.GetTxFromContext(ctx, r.db)
+	if err := tx.Where("agent_id = ? AND rule_type = ?", agentID, "exit").First(&model).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		r.logger.Errorw("failed to get exit rule by agent ID", "agent_id", agentID, "error", err)
+		return nil, fmt.Errorf("failed to get exit rule: %w", err)
+	}
+
+	entity, err := r.mapper.ToEntity(&model)
+	if err != nil {
+		r.logger.Errorw("failed to map forward rule model to entity", "agent_id", agentID, "error", err)
+		return nil, fmt.Errorf("failed to map forward rule: %w", err)
+	}
+
+	return entity, nil
 }

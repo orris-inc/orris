@@ -32,7 +32,6 @@ import (
 	"github.com/orris-inc/orris/internal/interfaces/http/middleware"
 	"github.com/orris-inc/orris/internal/interfaces/http/routes"
 	"github.com/orris-inc/orris/internal/shared/authorization"
-	sharedDB "github.com/orris-inc/orris/internal/shared/db"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/services/markdown"
 )
@@ -56,7 +55,6 @@ type Router struct {
 	notificationHandler         *handlers.NotificationHandler
 	forwardRuleHandler          *forwardHandlers.ForwardHandler
 	forwardAgentHandler         *forwardHandlers.ForwardAgentHandler
-	forwardChainHandler         *forwardHandlers.ForwardChainHandler
 	forwardAgentAPIHandler      *forwardHandlers.AgentHandler
 	authMiddleware              *middleware.AuthMiddleware
 	subscriptionOwnerMiddleware *middleware.SubscriptionOwnerMiddleware
@@ -461,30 +459,10 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	)
 
 	// Initialize forward agent API handler for client to fetch rules and report traffic
-	forwardAgentAPIHandler := forwardHandlers.NewAgentHandler(forwardRuleRepo, log)
+	forwardAgentAPIHandler := forwardHandlers.NewAgentHandler(forwardRuleRepo, forwardAgentRepo, log)
 
 	// Initialize forward agent token middleware
 	forwardAgentTokenMiddleware := middleware.NewForwardAgentTokenMiddleware(validateForwardAgentTokenUC, log)
-
-	// Initialize forward chain components
-	forwardChainRepo := repository.NewForwardChainRepository(db, log)
-	forwardTxManager := sharedDB.NewTransactionManager(db)
-
-	createForwardChainUC := forwardUsecases.NewCreateForwardChainUseCase(forwardChainRepo, forwardRuleRepo, forwardAgentRepo, forwardTxManager, log)
-	getForwardChainUC := forwardUsecases.NewGetForwardChainUseCase(forwardChainRepo, log)
-	listForwardChainsUC := forwardUsecases.NewListForwardChainsUseCase(forwardChainRepo, log)
-	enableForwardChainUC := forwardUsecases.NewEnableForwardChainUseCase(forwardChainRepo, forwardRuleRepo, forwardTxManager, log)
-	disableForwardChainUC := forwardUsecases.NewDisableForwardChainUseCase(forwardChainRepo, forwardRuleRepo, forwardTxManager, log)
-	deleteForwardChainUC := forwardUsecases.NewDeleteForwardChainUseCase(forwardChainRepo, forwardRuleRepo, forwardTxManager, log)
-
-	forwardChainHandler := forwardHandlers.NewForwardChainHandler(
-		createForwardChainUC,
-		getForwardChainUC,
-		listForwardChainsUC,
-		enableForwardChainUC,
-		disableForwardChainUC,
-		deleteForwardChainUC,
-	)
 
 	return &Router{
 		engine:                      engine,
@@ -504,7 +482,6 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		notificationHandler:         notificationHandler,
 		forwardRuleHandler:          forwardRuleHandler,
 		forwardAgentHandler:         forwardAgentHandler,
-		forwardChainHandler:         forwardChainHandler,
 		forwardAgentAPIHandler:      forwardAgentAPIHandler,
 		authMiddleware:              authMiddleware,
 		subscriptionOwnerMiddleware: subscriptionOwnerMiddleware,
@@ -677,7 +654,6 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 	routes.SetupForwardRoutes(r.engine, &routes.ForwardRouteConfig{
 		ForwardRuleHandler:          r.forwardRuleHandler,
 		ForwardAgentHandler:         r.forwardAgentHandler,
-		ForwardChainHandler:         r.forwardChainHandler,
 		ForwardAgentAPIHandler:      r.forwardAgentAPIHandler,
 		AuthMiddleware:              r.authMiddleware,
 		ForwardAgentTokenMiddleware: r.forwardAgentTokenMiddleware,
