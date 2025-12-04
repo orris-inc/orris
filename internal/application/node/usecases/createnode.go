@@ -22,6 +22,12 @@ type CreateNodeCommand struct {
 	Tags          []string
 	Description   string
 	SortOrder     int
+	// Trojan specific fields
+	TransportProtocol string
+	Host              string
+	Path              string
+	SNI               string
+	AllowInsecure     bool
 }
 
 type CreateNodeResult struct {
@@ -120,11 +126,30 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 				return nil, fmt.Errorf("invalid plugin config: %w", err)
 			}
 		}
-	}
+	} else if protocol.IsTrojan() {
+		// Create Trojan config
+		// Default transport protocol to tcp if not specified
+		transportProtocol := cmd.TransportProtocol
+		if transportProtocol == "" {
+			transportProtocol = "tcp"
+		}
 
-	// For Trojan protocol, we would need trojan config parameters in the command
-	// Currently the command doesn't have those fields, so we skip it for now
-	// This should be added when Trojan support is needed
+		// For self-signed certificates, we use a placeholder password
+		// The actual password will be derived from subscription UUID
+		tc, err := vo.NewTrojanConfig(
+			"placeholder", // Password will be replaced by subscription UUID
+			transportProtocol,
+			cmd.Host,
+			cmd.Path,
+			cmd.AllowInsecure,
+			cmd.SNI,
+		)
+		if err != nil {
+			uc.logger.Errorw("invalid trojan config", "error", err)
+			return nil, fmt.Errorf("invalid trojan config: %w", err)
+		}
+		trojanConfig = &tc
+	}
 
 	// Create metadata
 	metadata := vo.NewNodeMetadata(cmd.Region, cmd.Tags, cmd.Description)
@@ -193,8 +218,35 @@ func (uc *CreateNodeUseCase) validateCommand(cmd CreateNodeCommand) error {
 		return errors.NewValidationError("protocol is required")
 	}
 
-	if cmd.Method == "" {
-		return errors.NewValidationError("encryption method is required")
+	// Encryption method is required only for Shadowsocks
+	if cmd.Protocol == "shadowsocks" && cmd.Method == "" {
+		return errors.NewValidationError("encryption method is required for Shadowsocks protocol")
+	}
+
+	// Validate Trojan-specific requirements
+	if cmd.Protocol == "trojan" {
+		// Validate transport protocol if specified
+		if cmd.TransportProtocol != "" &&
+			cmd.TransportProtocol != "tcp" &&
+			cmd.TransportProtocol != "ws" &&
+			cmd.TransportProtocol != "grpc" {
+			return errors.NewValidationError("invalid transport protocol for Trojan (must be tcp, ws, or grpc)")
+		}
+
+		// WebSocket requires host and path
+		if cmd.TransportProtocol == "ws" {
+			if cmd.Host == "" {
+				return errors.NewValidationError("host is required for WebSocket transport")
+			}
+			if cmd.Path == "" {
+				return errors.NewValidationError("path is required for WebSocket transport")
+			}
+		}
+
+		// gRPC requires host (service name)
+		if cmd.TransportProtocol == "grpc" && cmd.Host == "" {
+			return errors.NewValidationError("host (service name) is required for gRPC transport")
+		}
 	}
 
 	return nil
@@ -222,12 +274,8 @@ func (uc *CreateNodeUseCase) validateProtocolMethodCompatibility(protocol vo.Pro
 		if !ssMethods[method] {
 			return errors.NewValidationError(fmt.Sprintf("encryption method '%s' is not compatible with Shadowsocks protocol", method))
 		}
-	} else if protocol.IsTrojan() {
-		// Trojan doesn't use these encryption methods, it uses TLS
-		if ssMethods[method] {
-			return errors.NewValidationError(fmt.Sprintf("encryption method '%s' is not compatible with Trojan protocol", method))
-		}
 	}
+	// Trojan doesn't require encryption method validation - it uses TLS
 
 	return nil
 }

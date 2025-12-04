@@ -8,7 +8,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	nodeUsecases "github.com/orris-inc/orris/internal/application/node/usecases"
-	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -17,14 +17,14 @@ import (
 //
 // Architecture: Agent → Adapter → MySQL
 type SubscriptionTrafficRecorderAdapter struct {
-	subscriptionTrafficRepo node.SubscriptionTrafficRepository
+	subscriptionTrafficRepo subscription.SubscriptionTrafficRepository
 	logger                  logger.Interface
 }
 
 // NewSubscriptionTrafficRecorderAdapter creates a new subscription traffic recorder adapter
 // Note: Directly writes to database for simplicity and reliability
 func NewSubscriptionTrafficRecorderAdapter(
-	subscriptionTrafficRepo node.SubscriptionTrafficRepository,
+	subscriptionTrafficRepo subscription.SubscriptionTrafficRepository,
 	logger logger.Interface,
 ) nodeUsecases.SubscriptionTrafficRecorder {
 	return &SubscriptionTrafficRecorderAdapter{
@@ -51,7 +51,7 @@ func (a *SubscriptionTrafficRecorderAdapter) RecordSubscriptionTraffic(ctx conte
 
 	// Create domain entity
 	subIDUint := uint(subscriptionID)
-	traffic, err := node.NewSubscriptionTraffic(nodeID, &subIDUint, nil, period)
+	traffic, err := subscription.NewSubscriptionTraffic(nodeID, &subIDUint, nil, period)
 	if err != nil {
 		a.logger.Errorw("failed to create subscription traffic entity",
 			"error", err,
@@ -121,7 +121,7 @@ func (a *SubscriptionTrafficRecorderAdapter) BatchRecordSubscriptionTraffic(ctx 
 
 		// Create domain entity
 		subIDUint := uint(item.SubscriptionID)
-		traffic, err := node.NewSubscriptionTraffic(nodeID, &subIDUint, nil, period)
+		traffic, err := subscription.NewSubscriptionTraffic(nodeID, &subIDUint, nil, period)
 		if err != nil {
 			a.logger.Errorw("failed to create subscription traffic entity in batch",
 				"error", err,

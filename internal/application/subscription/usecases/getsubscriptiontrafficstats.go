@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -46,13 +46,13 @@ type GetSubscriptionTrafficStatsResponse struct {
 
 // GetSubscriptionTrafficStatsUseCase handles retrieving traffic statistics for a subscription
 type GetSubscriptionTrafficStatsUseCase struct {
-	trafficRepo node.SubscriptionTrafficRepository
+	trafficRepo subscription.SubscriptionTrafficRepository
 	logger      logger.Interface
 }
 
 // NewGetSubscriptionTrafficStatsUseCase creates a new GetSubscriptionTrafficStatsUseCase
 func NewGetSubscriptionTrafficStatsUseCase(
-	trafficRepo node.SubscriptionTrafficRepository,
+	trafficRepo subscription.SubscriptionTrafficRepository,
 	logger logger.Interface,
 ) *GetSubscriptionTrafficStatsUseCase {
 	return &GetSubscriptionTrafficStatsUseCase{
@@ -154,7 +154,7 @@ func (uc *GetSubscriptionTrafficStatsUseCase) validateQuery(query GetSubscriptio
 	return nil
 }
 
-func (uc *GetSubscriptionTrafficStatsUseCase) buildFilter(query GetSubscriptionTrafficStatsQuery) node.TrafficStatsFilter {
+func (uc *GetSubscriptionTrafficStatsUseCase) buildFilter(query GetSubscriptionTrafficStatsQuery) subscription.TrafficStatsFilter {
 	page := query.Page
 	if page == 0 {
 		page = 1
@@ -165,7 +165,7 @@ func (uc *GetSubscriptionTrafficStatsUseCase) buildFilter(query GetSubscriptionT
 		pageSize = 100
 	}
 
-	filter := node.TrafficStatsFilter{
+	filter := subscription.TrafficStatsFilter{
 		SubscriptionID: &query.SubscriptionID,
 		From:           query.From,
 		To:             query.To,

@@ -3,23 +3,23 @@ package mappers
 import (
 	"fmt"
 
-	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 )
 
 // SubscriptionTrafficMapper handles the conversion between domain entities and persistence models
 type SubscriptionTrafficMapper interface {
 	// ToEntity converts a persistence model to a domain entity
-	ToEntity(model *models.SubscriptionTrafficModel) (*node.SubscriptionTraffic, error)
+	ToEntity(model *models.SubscriptionTrafficModel) (*subscription.SubscriptionTraffic, error)
 
 	// ToModel converts a domain entity to a persistence model
-	ToModel(entity *node.SubscriptionTraffic) (*models.SubscriptionTrafficModel, error)
+	ToModel(entity *subscription.SubscriptionTraffic) (*models.SubscriptionTrafficModel, error)
 
 	// ToEntities converts multiple persistence models to domain entities
-	ToEntities(models []*models.SubscriptionTrafficModel) ([]*node.SubscriptionTraffic, error)
+	ToEntities(models []*models.SubscriptionTrafficModel) ([]*subscription.SubscriptionTraffic, error)
 
 	// ToModels converts multiple domain entities to persistence models
-	ToModels(entities []*node.SubscriptionTraffic) ([]*models.SubscriptionTrafficModel, error)
+	ToModels(entities []*subscription.SubscriptionTraffic) ([]*models.SubscriptionTrafficModel, error)
 }
 
 // SubscriptionTrafficMapperImpl is the concrete implementation of SubscriptionTrafficMapper
@@ -31,13 +31,13 @@ func NewSubscriptionTrafficMapper() SubscriptionTrafficMapper {
 }
 
 // ToEntity converts a persistence model to a domain entity
-func (m *SubscriptionTrafficMapperImpl) ToEntity(model *models.SubscriptionTrafficModel) (*node.SubscriptionTraffic, error) {
+func (m *SubscriptionTrafficMapperImpl) ToEntity(model *models.SubscriptionTrafficModel) (*subscription.SubscriptionTraffic, error) {
 	if model == nil {
 		return nil, nil
 	}
 
 	// Reconstruct the domain entity
-	trafficEntity, err := node.ReconstructSubscriptionTraffic(
+	trafficEntity, err := subscription.ReconstructSubscriptionTraffic(
 		model.ID,
 		model.NodeID,
 		model.UserID,
@@ -57,7 +57,7 @@ func (m *SubscriptionTrafficMapperImpl) ToEntity(model *models.SubscriptionTraff
 }
 
 // ToModel converts a domain entity to a persistence model
-func (m *SubscriptionTrafficMapperImpl) ToModel(entity *node.SubscriptionTraffic) (*models.SubscriptionTrafficModel, error) {
+func (m *SubscriptionTrafficMapperImpl) ToModel(entity *subscription.SubscriptionTraffic) (*models.SubscriptionTrafficModel, error) {
 	if entity == nil {
 		return nil, nil
 	}
@@ -79,8 +79,8 @@ func (m *SubscriptionTrafficMapperImpl) ToModel(entity *node.SubscriptionTraffic
 }
 
 // ToEntities converts multiple persistence models to domain entities
-func (m *SubscriptionTrafficMapperImpl) ToEntities(models []*models.SubscriptionTrafficModel) ([]*node.SubscriptionTraffic, error) {
-	entities := make([]*node.SubscriptionTraffic, 0, len(models))
+func (m *SubscriptionTrafficMapperImpl) ToEntities(models []*models.SubscriptionTrafficModel) ([]*subscription.SubscriptionTraffic, error) {
+	entities := make([]*subscription.SubscriptionTraffic, 0, len(models))
 
 	for _, model := range models {
 		entity, err := m.ToEntity(model)
@@ -96,7 +96,7 @@ func (m *SubscriptionTrafficMapperImpl) ToEntities(models []*models.Subscription
 }
 
 // ToModels converts multiple domain entities to persistence models
-func (m *SubscriptionTrafficMapperImpl) ToModels(entities []*node.SubscriptionTraffic) ([]*models.SubscriptionTrafficModel, error) {
+func (m *SubscriptionTrafficMapperImpl) ToModels(entities []*subscription.SubscriptionTraffic) ([]*models.SubscriptionTrafficModel, error) {
 	models := make([]*models.SubscriptionTrafficModel, 0, len(entities))
 
 	for _, entity := range entities {

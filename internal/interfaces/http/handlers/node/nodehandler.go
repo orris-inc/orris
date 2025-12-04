@@ -209,28 +209,39 @@ type CreateNodeRequest struct {
 	ServerAddress    string            `json:"server_address" binding:"required" example:"1.2.3.4"`
 	ServerPort       uint16            `json:"server_port" binding:"required" example:"8388"`
 	Protocol         string            `json:"protocol" binding:"required,oneof=shadowsocks trojan" example:"shadowsocks" comment:"Protocol type: shadowsocks or trojan"`
-	EncryptionMethod string            `json:"encryption_method" binding:"required" example:"aes-256-gcm" comment:"Encryption method (for Shadowsocks), password is subscription UUID"`
+	EncryptionMethod string            `json:"encryption_method,omitempty" example:"aes-256-gcm" comment:"Encryption method (for Shadowsocks)"`
 	Plugin           *string           `json:"plugin,omitempty" example:"obfs-local"`
 	PluginOpts       map[string]string `json:"plugin_opts,omitempty"`
 	Region           string            `json:"region,omitempty" example:"West Coast"`
 	Tags             []string          `json:"tags,omitempty" example:"premium,fast"`
 	Description      string            `json:"description,omitempty" example:"High-speed US server"`
 	SortOrder        int               `json:"sort_order,omitempty" example:"1"`
+	// Trojan specific fields
+	TransportProtocol string `json:"transport_protocol,omitempty" binding:"omitempty,oneof=tcp ws grpc" example:"tcp" comment:"Transport protocol for Trojan (tcp, ws, grpc)"`
+	Host              string `json:"host,omitempty" example:"cdn.example.com" comment:"WebSocket host header or gRPC service name"`
+	Path              string `json:"path,omitempty" example:"/trojan" comment:"WebSocket path"`
+	SNI               string `json:"sni,omitempty" example:"example.com" comment:"TLS Server Name Indication"`
+	AllowInsecure     bool   `json:"allow_insecure,omitempty" example:"true" comment:"Allow insecure TLS connection (for self-signed certs)"`
 }
 
 func (r *CreateNodeRequest) ToCommand() usecases.CreateNodeCommand {
 	return usecases.CreateNodeCommand{
-		Name:          r.Name,
-		ServerAddress: r.ServerAddress,
-		ServerPort:    r.ServerPort,
-		Protocol:      r.Protocol,
-		Method:        r.EncryptionMethod,
-		Plugin:        r.Plugin,
-		PluginOpts:    r.PluginOpts,
-		Region:        r.Region,
-		Tags:          r.Tags,
-		Description:   r.Description,
-		SortOrder:     r.SortOrder,
+		Name:              r.Name,
+		ServerAddress:     r.ServerAddress,
+		ServerPort:        r.ServerPort,
+		Protocol:          r.Protocol,
+		Method:            r.EncryptionMethod,
+		Plugin:            r.Plugin,
+		PluginOpts:        r.PluginOpts,
+		Region:            r.Region,
+		Tags:              r.Tags,
+		Description:       r.Description,
+		SortOrder:         r.SortOrder,
+		TransportProtocol: r.TransportProtocol,
+		Host:              r.Host,
+		Path:              r.Path,
+		SNI:               r.SNI,
+		AllowInsecure:     r.AllowInsecure,
 	}
 }
 
@@ -246,22 +257,33 @@ type UpdateNodeRequest struct {
 	Tags             []string          `json:"tags,omitempty" example:"premium,low-latency"`
 	Description      *string           `json:"description,omitempty" example:"Updated description"`
 	SortOrder        *int              `json:"sort_order,omitempty" example:"2"`
+	// Trojan specific fields
+	TransportProtocol *string `json:"transport_protocol,omitempty" binding:"omitempty,oneof=tcp ws grpc" example:"ws" comment:"Transport protocol for Trojan (tcp, ws, grpc)"`
+	Host              *string `json:"host,omitempty" example:"cdn.example.com" comment:"WebSocket host header or gRPC service name"`
+	Path              *string `json:"path,omitempty" example:"/trojan" comment:"WebSocket path"`
+	SNI               *string `json:"sni,omitempty" example:"example.com" comment:"TLS Server Name Indication"`
+	AllowInsecure     *bool   `json:"allow_insecure,omitempty" example:"false" comment:"Allow insecure TLS connection"`
 }
 
 func (r *UpdateNodeRequest) ToCommand(nodeID uint) usecases.UpdateNodeCommand {
 	return usecases.UpdateNodeCommand{
-		NodeID:        nodeID,
-		Name:          r.Name,
-		ServerAddress: r.ServerAddress,
-		ServerPort:    r.ServerPort,
-		Method:        r.EncryptionMethod,
-		Plugin:        r.Plugin,
-		PluginOpts:    r.PluginOpts,
-		Status:        r.Status,
-		Region:        r.Region,
-		Tags:          r.Tags,
-		Description:   r.Description,
-		SortOrder:     r.SortOrder,
+		NodeID:                  nodeID,
+		Name:                    r.Name,
+		ServerAddress:           r.ServerAddress,
+		ServerPort:              r.ServerPort,
+		Method:                  r.EncryptionMethod,
+		Plugin:                  r.Plugin,
+		PluginOpts:              r.PluginOpts,
+		Status:                  r.Status,
+		Region:                  r.Region,
+		Tags:                    r.Tags,
+		Description:             r.Description,
+		SortOrder:               r.SortOrder,
+		TrojanTransportProtocol: r.TransportProtocol,
+		TrojanHost:              r.Host,
+		TrojanPath:              r.Path,
+		TrojanSNI:               r.SNI,
+		TrojanAllowInsecure:     r.AllowInsecure,
 	}
 }
 

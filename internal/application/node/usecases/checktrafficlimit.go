@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -25,14 +24,14 @@ type TrafficLimitResult struct {
 }
 
 type CheckTrafficLimitUseCase struct {
-	trafficRepo      node.SubscriptionTrafficRepository
+	trafficRepo      subscription.SubscriptionTrafficRepository
 	subscriptionRepo subscription.SubscriptionRepository
 	planRepo         subscription.SubscriptionPlanRepository
 	logger           logger.Interface
 }
 
 func NewCheckTrafficLimitUseCase(
-	trafficRepo node.SubscriptionTrafficRepository,
+	trafficRepo subscription.SubscriptionTrafficRepository,
 	subscriptionRepo subscription.SubscriptionRepository,
 	planRepo subscription.SubscriptionPlanRepository,
 	logger logger.Interface,

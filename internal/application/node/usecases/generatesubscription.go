@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/orris-inc/orris/internal/domain/node/value_objects"
 	"github.com/orris-inc/orris/internal/infrastructure/config"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -133,6 +134,26 @@ type Node struct {
 	Path              string // WebSocket path
 	SNI               string // TLS Server Name Indication
 	AllowInsecure     bool   // Allow insecure TLS connection
+}
+
+// ToTrojanURI generates a Trojan URI string for subscription
+// Delegates to domain layer TrojanConfig.ToURI for consistent URI generation
+func (n *Node) ToTrojanURI(password string) string {
+	// Create TrojanConfig from Node fields (validation already done at node creation)
+	config, err := value_objects.NewTrojanConfig(
+		password,
+		n.TransportProtocol,
+		n.Host,
+		n.Path,
+		n.AllowInsecure,
+		n.SNI,
+	)
+	if err != nil {
+		// Fallback: should not happen as node was already validated
+		return fmt.Sprintf("trojan://%s@%s:%d#%s", password, n.ServerAddress, n.ServerPort, n.Name)
+	}
+
+	return config.ToURI(n.ServerAddress, n.ServerPort, n.Name)
 }
 
 // generateHMACPassword generates HMAC-SHA256 password from subscription UUID

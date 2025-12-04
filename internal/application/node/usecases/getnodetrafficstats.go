@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -33,12 +33,12 @@ type NodeTrafficStatsResult struct {
 }
 
 type GetNodeTrafficStatsUseCase struct {
-	trafficRepo node.SubscriptionTrafficRepository
+	trafficRepo subscription.SubscriptionTrafficRepository
 	logger      logger.Interface
 }
 
 func NewGetNodeTrafficStatsUseCase(
-	trafficRepo node.SubscriptionTrafficRepository,
+	trafficRepo subscription.SubscriptionTrafficRepository,
 	logger logger.Interface,
 ) *GetNodeTrafficStatsUseCase {
 	return &GetNodeTrafficStatsUseCase{
@@ -124,7 +124,7 @@ func (uc *GetNodeTrafficStatsUseCase) validateQuery(query GetNodeTrafficStatsQue
 	return nil
 }
 
-func (uc *GetNodeTrafficStatsUseCase) buildFilter(query GetNodeTrafficStatsQuery) node.TrafficStatsFilter {
+func (uc *GetNodeTrafficStatsUseCase) buildFilter(query GetNodeTrafficStatsQuery) subscription.TrafficStatsFilter {
 	page := query.Page
 	if page == 0 {
 		page = 1
@@ -135,7 +135,7 @@ func (uc *GetNodeTrafficStatsUseCase) buildFilter(query GetNodeTrafficStatsQuery
 		pageSize = 100
 	}
 
-	filter := node.TrafficStatsFilter{
+	filter := subscription.TrafficStatsFilter{
 		NodeID:         query.NodeID,
 		UserID:         query.UserID,
 		SubscriptionID: query.SubscriptionID,

@@ -53,10 +53,14 @@ func (m *NodeMapperImpl) ToEntity(model *models.NodeModel) (*node.Node, error) {
 		return nil, fmt.Errorf("invalid protocol: %s", model.Protocol)
 	}
 
-	// Convert EncryptionConfig value object
-	encryptionConfig, err := vo.NewEncryptionConfig(model.EncryptionMethod)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create encryption config value object: %w", err)
+	// Convert EncryptionConfig value object (only for non-Trojan protocols)
+	var encryptionConfig vo.EncryptionConfig
+	if !protocol.IsTrojan() {
+		var err error
+		encryptionConfig, err = vo.NewEncryptionConfig(model.EncryptionMethod)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create encryption config value object: %w", err)
+		}
 	}
 
 	// Convert PluginConfig value object (nullable)

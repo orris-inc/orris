@@ -27,47 +27,7 @@ func (f *Base64Formatter) FormatWithPassword(nodes []*Node, password string) (st
 		var link string
 
 		if node.Protocol == "trojan" {
-			// Trojan URI format: trojan://password@host:port?params#remarks
-			link = fmt.Sprintf("trojan://%s@%s:%d",
-				password,
-				node.ServerAddress,
-				node.ServerPort)
-
-			// Build query parameters
-			params := url.Values{}
-			if node.AllowInsecure {
-				params.Add("allowInsecure", "1")
-			}
-			if node.SNI != "" {
-				params.Add("sni", node.SNI)
-			}
-
-			// Transport-specific parameters
-			switch node.TransportProtocol {
-			case "ws":
-				params.Add("type", "ws")
-				if node.Host != "" {
-					params.Add("host", node.Host)
-				}
-				if node.Path != "" {
-					params.Add("path", node.Path)
-				}
-			case "grpc":
-				params.Add("type", "grpc")
-				if node.Host != "" {
-					params.Add("serviceName", node.Host)
-				}
-			default:
-				params.Add("type", "tcp")
-			}
-
-			if len(params) > 0 {
-				link += "?" + params.Encode()
-			}
-
-			if node.Name != "" {
-				link += "#" + url.QueryEscape(node.Name)
-			}
+			link = node.ToTrojanURI(password)
 		} else {
 			// Shadowsocks URI format: ss://base64(method:password)@host:port#remarks
 			auth := fmt.Sprintf("%s:%s", node.EncryptionMethod, password)

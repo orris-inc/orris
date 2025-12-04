@@ -7,13 +7,13 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
-// SubscriptionTrafficRepositoryImpl implements the node.SubscriptionTrafficRepository interface
+// SubscriptionTrafficRepositoryImpl implements the subscription.SubscriptionTrafficRepository interface
 type SubscriptionTrafficRepositoryImpl struct {
 	db     *gorm.DB
 	mapper mappers.SubscriptionTrafficMapper
@@ -21,7 +21,7 @@ type SubscriptionTrafficRepositoryImpl struct {
 }
 
 // NewSubscriptionTrafficRepository creates a new subscription traffic repository instance
-func NewSubscriptionTrafficRepository(db *gorm.DB, logger logger.Interface) node.SubscriptionTrafficRepository {
+func NewSubscriptionTrafficRepository(db *gorm.DB, logger logger.Interface) subscription.SubscriptionTrafficRepository {
 	return &SubscriptionTrafficRepositoryImpl{
 		db:     db,
 		mapper: mappers.NewSubscriptionTrafficMapper(),
@@ -30,7 +30,7 @@ func NewSubscriptionTrafficRepository(db *gorm.DB, logger logger.Interface) node
 }
 
 // RecordTraffic records a new traffic entry
-func (r *SubscriptionTrafficRepositoryImpl) RecordTraffic(ctx context.Context, traffic *node.SubscriptionTraffic) error {
+func (r *SubscriptionTrafficRepositoryImpl) RecordTraffic(ctx context.Context, traffic *subscription.SubscriptionTraffic) error {
 	model, err := r.mapper.ToModel(traffic)
 	if err != nil {
 		r.logger.Errorw("failed to map subscription traffic entity to model", "error", err)
@@ -52,7 +52,7 @@ func (r *SubscriptionTrafficRepositoryImpl) RecordTraffic(ctx context.Context, t
 }
 
 // GetTrafficStats retrieves traffic statistics based on filter criteria
-func (r *SubscriptionTrafficRepositoryImpl) GetTrafficStats(ctx context.Context, filter node.TrafficStatsFilter) ([]*node.SubscriptionTraffic, error) {
+func (r *SubscriptionTrafficRepositoryImpl) GetTrafficStats(ctx context.Context, filter subscription.TrafficStatsFilter) ([]*subscription.SubscriptionTraffic, error) {
 	query := r.db.WithContext(ctx).Model(&models.SubscriptionTrafficModel{})
 
 	// Apply filters
@@ -99,7 +99,7 @@ func (r *SubscriptionTrafficRepositoryImpl) GetTrafficStats(ctx context.Context,
 }
 
 // GetTotalTraffic retrieves the total traffic for a node within a time range
-func (r *SubscriptionTrafficRepositoryImpl) GetTotalTraffic(ctx context.Context, nodeID uint, from, to time.Time) (*node.TrafficSummary, error) {
+func (r *SubscriptionTrafficRepositoryImpl) GetTotalTraffic(ctx context.Context, nodeID uint, from, to time.Time) (*subscription.TrafficSummary, error) {
 	var result struct {
 		TotalUpload   uint64
 		TotalDownload uint64
@@ -122,7 +122,7 @@ func (r *SubscriptionTrafficRepositoryImpl) GetTotalTraffic(ctx context.Context,
 		return nil, fmt.Errorf("failed to get total traffic: %w", err)
 	}
 
-	summary := &node.TrafficSummary{
+	summary := &subscription.TrafficSummary{
 		NodeID:   nodeID,
 		Upload:   result.TotalUpload,
 		Download: result.TotalDownload,
@@ -255,7 +255,7 @@ func (r *SubscriptionTrafficRepositoryImpl) AggregateMonthly(ctx context.Context
 }
 
 // GetDailyStats retrieves daily traffic statistics for a node
-func (r *SubscriptionTrafficRepositoryImpl) GetDailyStats(ctx context.Context, nodeID uint, from, to time.Time) ([]*node.SubscriptionTraffic, error) {
+func (r *SubscriptionTrafficRepositoryImpl) GetDailyStats(ctx context.Context, nodeID uint, from, to time.Time) ([]*subscription.SubscriptionTraffic, error) {
 	query := r.db.WithContext(ctx).Model(&models.SubscriptionTrafficModel{}).
 		Where("node_id = ?", nodeID)
 
@@ -283,7 +283,7 @@ func (r *SubscriptionTrafficRepositoryImpl) GetDailyStats(ctx context.Context, n
 }
 
 // GetMonthlyStats retrieves monthly traffic statistics for a node
-func (r *SubscriptionTrafficRepositoryImpl) GetMonthlyStats(ctx context.Context, nodeID uint, year int) ([]*node.SubscriptionTraffic, error) {
+func (r *SubscriptionTrafficRepositoryImpl) GetMonthlyStats(ctx context.Context, nodeID uint, year int) ([]*subscription.SubscriptionTraffic, error) {
 	startOfYear := time.Date(year, 1, 1, 0, 0, 0, 0, time.UTC)
 	endOfYear := startOfYear.AddDate(1, 0, 0)
 

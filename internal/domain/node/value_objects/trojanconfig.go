@@ -109,48 +109,55 @@ func (tc TrojanConfig) SNI() string {
 }
 
 // ToURI generates a Trojan URI string for subscription
-// Format: trojan://password@host:port?parameters#remarks
+// Format: trojan://password@host:port?type=<transport>&security=tls[&params]#remarks
 func (tc TrojanConfig) ToURI(serverAddr string, serverPort uint16, remarks string) string {
 	// Build base URI
 	uri := fmt.Sprintf("trojan://%s@%s:%d", tc.password, serverAddr, serverPort)
 
-	// Build query parameters
-	params := url.Values{}
+	// Build query parameters in specific order: type, security, allowInsecure, sni, host, path
+	var params []string
 
-	// Add security parameter
+	// Add transport type
+	switch tc.transportProtocol {
+	case TransportWS:
+		params = append(params, "type=ws")
+	case TransportGRPC:
+		params = append(params, "type=grpc")
+	case TransportTCP:
+		params = append(params, "type=tcp")
+	}
+
+	// Add security parameter (Trojan requires TLS)
+	params = append(params, "security=tls")
+
+	// Add allowInsecure parameter
 	if tc.allowInsecure {
-		params.Add("allowInsecure", "1")
-	} else {
-		params.Add("allowInsecure", "0")
+		params = append(params, "allowInsecure=1")
 	}
 
 	// Add SNI if provided
 	if tc.sni != "" {
-		params.Add("sni", tc.sni)
+		params = append(params, "sni="+url.QueryEscape(tc.sni))
 	}
 
 	// Add transport-specific parameters
 	switch tc.transportProtocol {
 	case TransportWS:
-		params.Add("type", "ws")
 		if tc.host != "" {
-			params.Add("host", tc.host)
+			params = append(params, "host="+url.QueryEscape(tc.host))
 		}
 		if tc.path != "" {
-			params.Add("path", tc.path)
+			params = append(params, "path="+url.QueryEscape(tc.path))
 		}
 	case TransportGRPC:
-		params.Add("type", "grpc")
 		if tc.host != "" {
-			params.Add("serviceName", tc.host)
+			params = append(params, "serviceName="+url.QueryEscape(tc.host))
 		}
-	case TransportTCP:
-		params.Add("type", "tcp")
 	}
 
-	// Append query parameters if any
+	// Append query parameters
 	if len(params) > 0 {
-		uri += "?" + params.Encode()
+		uri += "?" + strings.Join(params, "&")
 	}
 
 	// Add remarks if provided

@@ -23,6 +23,12 @@ type UpdateNodeCommand struct {
 	Description   *string
 	SortOrder     *int
 	Status        *string
+	// Trojan specific fields
+	TrojanTransportProtocol *string
+	TrojanHost              *string
+	TrojanPath              *string
+	TrojanSNI               *string
+	TrojanAllowInsecure     *bool
 }
 
 type UpdateNodeResult struct {
@@ -212,6 +218,11 @@ func (uc *UpdateNodeUseCase) applyUpdates(n *node.Node, cmd UpdateNodeCommand) e
 		}
 	}
 
+	// Update Trojan config (only for Trojan protocol nodes)
+	if err := uc.applyTrojanUpdates(n, cmd); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -240,6 +251,74 @@ func (uc *UpdateNodeUseCase) validateCommand(cmd UpdateNodeCommand) error {
 
 	if cmd.Method != nil && *cmd.Method == "" {
 		return errors.NewValidationError("encryption method cannot be empty")
+	}
+
+	return nil
+}
+
+// applyTrojanUpdates applies Trojan-specific configuration updates
+func (uc *UpdateNodeUseCase) applyTrojanUpdates(n *node.Node, cmd UpdateNodeCommand) error {
+	// Check if any Trojan fields need updating
+	hasTrojanUpdate := cmd.TrojanTransportProtocol != nil ||
+		cmd.TrojanHost != nil ||
+		cmd.TrojanPath != nil ||
+		cmd.TrojanSNI != nil ||
+		cmd.TrojanAllowInsecure != nil
+
+	if !hasTrojanUpdate {
+		return nil
+	}
+
+	// Validate protocol is Trojan
+	if !n.Protocol().IsTrojan() {
+		return errors.NewValidationError("cannot update Trojan config for non-Trojan protocol node")
+	}
+
+	// Get current Trojan config
+	currentConfig := n.TrojanConfig()
+	if currentConfig == nil {
+		return errors.NewValidationError("node has no Trojan configuration")
+	}
+
+	// Build new config with updated values
+	transportProtocol := currentConfig.TransportProtocol()
+	host := currentConfig.Host()
+	path := currentConfig.Path()
+	sni := currentConfig.SNI()
+	allowInsecure := currentConfig.AllowInsecure()
+
+	if cmd.TrojanTransportProtocol != nil {
+		transportProtocol = *cmd.TrojanTransportProtocol
+	}
+	if cmd.TrojanHost != nil {
+		host = *cmd.TrojanHost
+	}
+	if cmd.TrojanPath != nil {
+		path = *cmd.TrojanPath
+	}
+	if cmd.TrojanSNI != nil {
+		sni = *cmd.TrojanSNI
+	}
+	if cmd.TrojanAllowInsecure != nil {
+		allowInsecure = *cmd.TrojanAllowInsecure
+	}
+
+	// Create new Trojan config (password remains unchanged)
+	newConfig, err := vo.NewTrojanConfig(
+		currentConfig.Password(),
+		transportProtocol,
+		host,
+		path,
+		allowInsecure,
+		sni,
+	)
+	if err != nil {
+		return errors.NewValidationError("invalid Trojan configuration: " + err.Error())
+	}
+
+	// Update the node with new config
+	if err := n.UpdateTrojanConfig(&newConfig); err != nil {
+		return errors.NewValidationError("failed to update Trojan config: " + err.Error())
 	}
 
 	return nil

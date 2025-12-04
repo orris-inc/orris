@@ -1,4 +1,4 @@
-package node
+package subscription
 
 import (
 	"fmt"
