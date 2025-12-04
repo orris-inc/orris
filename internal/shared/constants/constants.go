@@ -37,19 +37,21 @@ const (
 	UserStatusPending  = "pending"
 
 	// Database table names
-	TableUsers          = "users"
-	TableRoles          = "roles"
-	TableUserRoles      = "user_roles"
-	TableNodes          = "nodes"
-	TableNodeGroups     = "node_groups"
-	TableNodeGroupNodes = "node_group_nodes"
-	TableNodeGroupPlans = "node_group_plans"
+	TableUsers               = "users"
+	TableRoles               = "roles"
+	TableUserRoles           = "user_roles"
+	TableNodes               = "nodes"
+	TableShadowsocksConfigs  = "shadowsocks_configs"
+	TableTrojanConfigs       = "trojan_configs"
+	TableNodeGroups          = "node_groups"
+	TableNodeGroupNodes      = "node_group_nodes"
+	TableNodeGroupPlans      = "node_group_plans"
 	TableSubscriptionTraffic = "subscription_traffic"
-	TableForwardRules      = "forward_rules"
-	TableForwardAgents     = "forward_agents"
-	TableForwardChains     = "forward_chains"
-	TableForwardChainNodes = "forward_chain_nodes"
-	TableForwardChainRules = "forward_chain_rules"
+	TableForwardRules        = "forward_rules"
+	TableForwardAgents       = "forward_agents"
+	TableForwardChains       = "forward_chains"
+	TableForwardChainNodes   = "forward_chain_nodes"
+	TableForwardChainRules   = "forward_chain_rules"
 	// TableUserTraffic removed - traffic is now tracked via subscription_traffic with subscription_id
 
 	// Default values

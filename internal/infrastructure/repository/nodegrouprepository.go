@@ -16,19 +16,23 @@ import (
 
 // NodeGroupRepositoryImpl implements the node.NodeGroupRepository interface
 type NodeGroupRepositoryImpl struct {
-	db         *gorm.DB
-	mapper     mappers.NodeGroupMapper
-	nodeMapper mappers.NodeMapper
-	logger     logger.Interface
+	db                    *gorm.DB
+	mapper                mappers.NodeGroupMapper
+	nodeMapper            mappers.NodeMapper
+	trojanConfigRepo      *TrojanConfigRepository
+	shadowsocksConfigRepo *ShadowsocksConfigRepository
+	logger                logger.Interface
 }
 
 // NewNodeGroupRepository creates a new node group repository instance
 func NewNodeGroupRepository(db *gorm.DB, logger logger.Interface) node.NodeGroupRepository {
 	return &NodeGroupRepositoryImpl{
-		db:         db,
-		mapper:     mappers.NewNodeGroupMapper(),
-		nodeMapper: mappers.NewNodeMapper(),
-		logger:     logger,
+		db:                    db,
+		mapper:                mappers.NewNodeGroupMapper(),
+		nodeMapper:            mappers.NewNodeMapper(),
+		trojanConfigRepo:      NewTrojanConfigRepository(db, logger),
+		shadowsocksConfigRepo: NewShadowsocksConfigRepository(db, logger),
+		logger:                logger,
 	}
 }
 
@@ -308,8 +312,41 @@ func (r *NodeGroupRepositoryImpl) GetNodesByGroupID(ctx context.Context, groupID
 		return nil, fmt.Errorf("failed to get nodes: %w", err)
 	}
 
+	// Collect node IDs by protocol
+	var ssNodeIDs, trojanNodeIDs []uint
+	for _, m := range nodeModels {
+		switch m.Protocol {
+		case "shadowsocks":
+			ssNodeIDs = append(ssNodeIDs, m.ID)
+		case "trojan":
+			trojanNodeIDs = append(trojanNodeIDs, m.ID)
+		}
+	}
+
+	// Load protocol-specific configs
+	ssConfigsRaw, err := r.shadowsocksConfigRepo.GetByNodeIDs(ctx, ssNodeIDs)
+	if err != nil {
+		r.logger.Errorw("failed to get shadowsocks configs", "error", err)
+		return nil, fmt.Errorf("failed to get shadowsocks configs: %w", err)
+	}
+
+	// Convert to mapper format
+	ssConfigs := make(map[uint]*mappers.ShadowsocksConfigData)
+	for nodeID, data := range ssConfigsRaw {
+		ssConfigs[nodeID] = &mappers.ShadowsocksConfigData{
+			EncryptionConfig: data.EncryptionConfig,
+			PluginConfig:     data.PluginConfig,
+		}
+	}
+
+	trojanConfigs, err := r.trojanConfigRepo.GetByNodeIDs(ctx, trojanNodeIDs)
+	if err != nil {
+		r.logger.Errorw("failed to get trojan configs", "error", err)
+		return nil, fmt.Errorf("failed to get trojan configs: %w", err)
+	}
+
 	// Convert models to entities
-	entities, err := r.nodeMapper.ToEntities(nodeModels)
+	entities, err := r.nodeMapper.ToEntities(nodeModels, ssConfigs, trojanConfigs)
 	if err != nil {
 		r.logger.Errorw("failed to map node models to entities", "error", err)
 		return nil, fmt.Errorf("failed to map nodes: %w", err)

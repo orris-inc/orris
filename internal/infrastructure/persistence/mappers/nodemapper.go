@@ -12,19 +12,34 @@ import (
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 )
 
+// Note: Protocol-specific configs are now stored in separate tables:
+// - shadowsocks_configs for Shadowsocks protocol
+// - trojan_configs for Trojan protocol
+// NodeMapper receives these configs as parameters rather than reading from NodeModel.
+
 // NodeMapper handles the conversion between domain entities and persistence models
 type NodeMapper interface {
 	// ToEntity converts a persistence model to a domain entity
-	ToEntity(model *models.NodeModel) (*node.Node, error)
+	// Protocol-specific configs are loaded separately from their respective tables
+	ToEntity(model *models.NodeModel, encryptionConfig vo.EncryptionConfig, pluginConfig *vo.PluginConfig, trojanConfig *vo.TrojanConfig) (*node.Node, error)
 
 	// ToModel converts a domain entity to a persistence model
+	// Note: Protocol-specific configs are handled separately via their respective mappers
 	ToModel(entity *node.Node) (*models.NodeModel, error)
 
 	// ToEntities converts multiple persistence models to domain entities
-	ToEntities(models []*models.NodeModel) ([]*node.Node, error)
+	// ssConfigs is a map of nodeID -> ShadowsocksConfigData
+	// trojanConfigs is a map of nodeID -> TrojanConfig
+	ToEntities(models []*models.NodeModel, ssConfigs map[uint]*ShadowsocksConfigData, trojanConfigs map[uint]*vo.TrojanConfig) ([]*node.Node, error)
 
 	// ToModels converts multiple domain entities to persistence models
 	ToModels(entities []*node.Node) ([]*models.NodeModel, error)
+}
+
+// ShadowsocksConfigData holds encryption and plugin config data
+type ShadowsocksConfigData struct {
+	EncryptionConfig vo.EncryptionConfig
+	PluginConfig     *vo.PluginConfig
 }
 
 // NodeMapperImpl is the concrete implementation of NodeMapper
@@ -36,7 +51,8 @@ func NewNodeMapper() NodeMapper {
 }
 
 // ToEntity converts a persistence model to a domain entity
-func (m *NodeMapperImpl) ToEntity(model *models.NodeModel) (*node.Node, error) {
+// Protocol-specific configs are loaded separately and passed in
+func (m *NodeMapperImpl) ToEntity(model *models.NodeModel, encryptionConfig vo.EncryptionConfig, pluginConfig *vo.PluginConfig, trojanConfig *vo.TrojanConfig) (*node.Node, error) {
 	if model == nil {
 		return nil, nil
 	}
@@ -51,73 +67,6 @@ func (m *NodeMapperImpl) ToEntity(model *models.NodeModel) (*node.Node, error) {
 	protocol := vo.Protocol(model.Protocol)
 	if !protocol.IsValid() {
 		return nil, fmt.Errorf("invalid protocol: %s", model.Protocol)
-	}
-
-	// Convert EncryptionConfig value object (only for non-Trojan protocols)
-	var encryptionConfig vo.EncryptionConfig
-	if !protocol.IsTrojan() {
-		var err error
-		encryptionConfig, err = vo.NewEncryptionConfig(model.EncryptionMethod)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create encryption config value object: %w", err)
-		}
-	}
-
-	// Convert PluginConfig value object (nullable)
-	var pluginConfig *vo.PluginConfig
-	if model.Plugin != nil && *model.Plugin != "" {
-		var opts map[string]string
-		if model.PluginOpts != nil {
-			if err := json.Unmarshal(model.PluginOpts, &opts); err != nil {
-				return nil, fmt.Errorf("failed to unmarshal plugin opts: %w", err)
-			}
-		}
-		pluginConfig, err = vo.NewPluginConfig(*model.Plugin, opts)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create plugin config value object: %w", err)
-		}
-	}
-
-	// Convert TrojanConfig value object (nullable, stored in CustomFields)
-	var trojanConfig *vo.TrojanConfig
-	if protocol.IsTrojan() && model.CustomFields != nil {
-		var customFields map[string]interface{}
-		if err := json.Unmarshal(model.CustomFields, &customFields); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal custom fields: %w", err)
-		}
-
-		if trojanData, ok := customFields["trojan_config"].(map[string]interface{}); ok {
-			password := ""
-			if p, ok := trojanData["password"].(string); ok {
-				password = p
-			}
-			transportProtocol := ""
-			if t, ok := trojanData["transport_protocol"].(string); ok {
-				transportProtocol = t
-			}
-			host := ""
-			if h, ok := trojanData["host"].(string); ok {
-				host = h
-			}
-			path := ""
-			if p, ok := trojanData["path"].(string); ok {
-				path = p
-			}
-			allowInsecure := false
-			if a, ok := trojanData["allow_insecure"].(bool); ok {
-				allowInsecure = a
-			}
-			sni := ""
-			if s, ok := trojanData["sni"].(string); ok {
-				sni = s
-			}
-
-			tc, err := vo.NewTrojanConfig(password, transportProtocol, host, path, allowInsecure, sni)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create trojan config value object: %w", err)
-			}
-			trojanConfig = &tc
-		}
 	}
 
 	// Convert NodeStatus value object
@@ -144,6 +93,7 @@ func (m *NodeMapperImpl) ToEntity(model *models.NodeModel) (*node.Node, error) {
 	metadata := vo.NewNodeMetadata(region, tags, "")
 
 	// Reconstruct the domain entity
+	// Protocol-specific configs are passed from caller
 	nodeEntity, err := node.ReconstructNode(
 		model.ID,
 		model.Name,
@@ -170,46 +120,10 @@ func (m *NodeMapperImpl) ToEntity(model *models.NodeModel) (*node.Node, error) {
 }
 
 // ToModel converts a domain entity to a persistence model
+// Note: Protocol-specific configs are handled separately via their respective mappers
 func (m *NodeMapperImpl) ToModel(entity *node.Node) (*models.NodeModel, error) {
 	if entity == nil {
 		return nil, nil
-	}
-
-	// Prepare plugin name and opts
-	var plugin *string
-	var pluginOptsJSON datatypes.JSON
-	if entity.PluginConfig() != nil {
-		pluginName := entity.PluginConfig().Plugin()
-		plugin = &pluginName
-
-		opts := entity.PluginConfig().Opts()
-		if len(opts) > 0 {
-			optsBytes, err := json.Marshal(opts)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal plugin opts: %w", err)
-			}
-			pluginOptsJSON = optsBytes
-		}
-	}
-
-	// Prepare custom fields JSON with TrojanConfig if present
-	var customFieldsJSON datatypes.JSON
-	if entity.TrojanConfig() != nil {
-		customFields := map[string]interface{}{
-			"trojan_config": map[string]interface{}{
-				"password":           entity.TrojanConfig().Password(),
-				"transport_protocol": entity.TrojanConfig().TransportProtocol(),
-				"host":               entity.TrojanConfig().Host(),
-				"path":               entity.TrojanConfig().Path(),
-				"allow_insecure":     entity.TrojanConfig().AllowInsecure(),
-				"sni":                entity.TrojanConfig().SNI(),
-			},
-		}
-		customFieldsBytes, err := json.Marshal(customFields)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal custom fields: %w", err)
-		}
-		customFieldsJSON = customFieldsBytes
 	}
 
 	// Prepare tags JSON
@@ -235,14 +149,10 @@ func (m *NodeMapperImpl) ToModel(entity *node.Node) (*models.NodeModel, error) {
 		Name:              entity.Name(),
 		ServerAddress:     entity.ServerAddress().Value(),
 		ServerPort:        entity.ServerPort(),
-		EncryptionMethod:  entity.EncryptionConfig().Method(),
-		Plugin:            plugin,
-		PluginOpts:        pluginOptsJSON,
 		Protocol:          entity.Protocol().String(),
 		Status:            entity.Status().String(),
 		Region:            region,
 		Tags:              tagsJSON,
-		CustomFields:      customFieldsJSON,
 		SortOrder:         entity.SortOrder(),
 		MaintenanceReason: entity.MaintenanceReason(),
 		TokenHash:         entity.TokenHash(),
@@ -264,11 +174,32 @@ func (m *NodeMapperImpl) ToModel(entity *node.Node) (*models.NodeModel, error) {
 }
 
 // ToEntities converts multiple persistence models to domain entities
-func (m *NodeMapperImpl) ToEntities(models []*models.NodeModel) ([]*node.Node, error) {
-	entities := make([]*node.Node, 0, len(models))
+// ssConfigs is a map of nodeID -> ShadowsocksConfigData
+// trojanConfigs is a map of nodeID -> TrojanConfig
+func (m *NodeMapperImpl) ToEntities(nodeModels []*models.NodeModel, ssConfigs map[uint]*ShadowsocksConfigData, trojanConfigs map[uint]*vo.TrojanConfig) ([]*node.Node, error) {
+	entities := make([]*node.Node, 0, len(nodeModels))
 
-	for _, model := range models {
-		entity, err := m.ToEntity(model)
+	for _, model := range nodeModels {
+		// Get protocol-specific configs for this node
+		var encryptionConfig vo.EncryptionConfig
+		var pluginConfig *vo.PluginConfig
+		var trojanConfig *vo.TrojanConfig
+
+		switch model.Protocol {
+		case "shadowsocks":
+			if ssConfigs != nil {
+				if ssData := ssConfigs[model.ID]; ssData != nil {
+					encryptionConfig = ssData.EncryptionConfig
+					pluginConfig = ssData.PluginConfig
+				}
+			}
+		case "trojan":
+			if trojanConfigs != nil {
+				trojanConfig = trojanConfigs[model.ID]
+			}
+		}
+
+		entity, err := m.ToEntity(model, encryptionConfig, pluginConfig, trojanConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to map model ID %d: %w", model.ID, err)
 		}

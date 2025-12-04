@@ -20,6 +20,12 @@ type NodeDTO struct {
 	Tags              []string               `json:"tags,omitempty" example:"premium,fast" description:"Custom tags for categorization"`
 	CustomFields      map[string]interface{} `json:"custom_fields,omitempty" description:"Additional custom metadata fields"`
 	SortOrder         int                    `json:"sort_order" example:"100" description:"Display order for sorting nodes"`
+	// Trojan specific fields
+	TransportProtocol string `json:"transport_protocol,omitempty" example:"tcp" enums:"tcp,ws,grpc" description:"Transport protocol for Trojan (tcp, ws, grpc)"`
+	Host              string `json:"host,omitempty" example:"cdn.example.com" description:"WebSocket host header or gRPC service name"`
+	Path              string `json:"path,omitempty" example:"/trojan" description:"WebSocket path"`
+	SNI               string `json:"sni,omitempty" example:"example.com" description:"TLS Server Name Indication"`
+	AllowInsecure     bool   `json:"allow_insecure,omitempty" example:"true" description:"Allow insecure TLS connection"`
 	MaintenanceReason *string                `json:"maintenance_reason,omitempty" example:"Scheduled maintenance" description:"Reason for maintenance status (only when status is maintenance)"`
 	IsAvailable       bool                   `json:"is_available" example:"true" description:"Indicates if the node is currently available for use"`
 	Version           int                    `json:"version" example:"1" description:"Version number for optimistic locking"`
@@ -112,6 +118,15 @@ func ToNodeDTO(n *node.Node) *NodeDTO {
 	if n.PluginConfig() != nil {
 		dto.Plugin = n.PluginConfig().Plugin()
 		dto.PluginOpts = n.PluginConfig().Opts()
+	}
+
+	// Map Trojan specific fields
+	if n.TrojanConfig() != nil {
+		dto.TransportProtocol = n.TrojanConfig().TransportProtocol()
+		dto.Host = n.TrojanConfig().Host()
+		dto.Path = n.TrojanConfig().Path()
+		dto.SNI = n.TrojanConfig().SNI()
+		dto.AllowInsecure = n.TrojanConfig().AllowInsecure()
 	}
 
 	metadata := n.Metadata()

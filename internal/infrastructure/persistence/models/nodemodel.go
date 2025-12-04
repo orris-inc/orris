@@ -11,19 +11,18 @@ import (
 
 // NodeModel represents the database persistence model for nodes
 // This is the anti-corruption layer between domain and database
+// Note: Protocol-specific configs are now stored in separate tables:
+// - shadowsocks_configs for Shadowsocks protocol (encryption_method, plugin, plugin_opts)
+// - trojan_configs for Trojan protocol
 type NodeModel struct {
-	ID                uint   `gorm:"primarykey"`
-	Name              string `gorm:"uniqueIndex;not null;size:100"`
-	ServerAddress     string `gorm:"not null;size:255;index:idx_server"`
-	ServerPort        uint16 `gorm:"not null;index:idx_server"`
-	EncryptionMethod  string `gorm:"not null;size:50;comment:encryption method only, password is subscription UUID"`
-	Plugin            *string
-	PluginOpts        datatypes.JSON
+	ID                uint    `gorm:"primarykey"`
+	Name              string  `gorm:"uniqueIndex;not null;size:100"`
+	ServerAddress     string  `gorm:"not null;size:255;index:idx_server"`
+	ServerPort        uint16  `gorm:"not null;index:idx_server"`
 	Protocol          string  `gorm:"not null;default:shadowsocks;size:20;index:idx_protocol"` // shadowsocks, trojan
 	Status            string  `gorm:"not null;default:inactive;size:20;index:idx_status"`      // active, inactive, maintenance
 	Region            *string `gorm:"size:100"`
 	Tags              datatypes.JSON
-	CustomFields      datatypes.JSON
 	SortOrder         int     `gorm:"not null;default:0"`
 	MaintenanceReason *string `gorm:"size:500"`
 	TokenHash         string  `gorm:"not null;uniqueIndex:idx_token_hash;size:255"` // hashed API token for node authentication

@@ -36,6 +36,7 @@ type CreateNodeResult struct {
 	TokenPrefix   string
 	ServerAddress string
 	ServerPort    uint16
+	Protocol      string
 	Status        string
 	CreatedAt     string
 }
@@ -193,6 +194,7 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 		TokenPrefix:   tokenPrefix,
 		ServerAddress: nodeEntity.ServerAddress().Value(),
 		ServerPort:    nodeEntity.ServerPort(),
+		Protocol:      nodeEntity.Protocol().String(),
 		Status:        nodeEntity.Status().String(),
 		CreatedAt:     nodeEntity.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
 	}

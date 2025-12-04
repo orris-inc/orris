@@ -36,6 +36,7 @@ type UpdateNodeResult struct {
 	Name          string
 	ServerAddress string
 	ServerPort    uint16
+	Protocol      string
 	Status        string
 	UpdatedAt     string
 }
@@ -95,6 +96,7 @@ func (uc *UpdateNodeUseCase) Execute(ctx context.Context, cmd UpdateNodeCommand)
 		Name:          existingNode.Name(),
 		ServerAddress: existingNode.ServerAddress().Value(),
 		ServerPort:    existingNode.ServerPort(),
+		Protocol:      existingNode.Protocol().String(),
 		Status:        existingNode.Status().String(),
 		UpdatedAt:     existingNode.UpdatedAt().Format(time.RFC3339),
 	}, nil
@@ -232,8 +234,11 @@ func (uc *UpdateNodeUseCase) validateCommand(cmd UpdateNodeCommand) error {
 	}
 
 	if cmd.Name == nil && cmd.ServerAddress == nil && cmd.ServerPort == nil &&
-		cmd.Method == nil && cmd.Region == nil && cmd.Tags == nil && cmd.Description == nil &&
-		cmd.SortOrder == nil && cmd.Status == nil {
+		cmd.Method == nil && cmd.Plugin == nil && cmd.PluginOpts == nil &&
+		cmd.Region == nil && cmd.Tags == nil && cmd.Description == nil &&
+		cmd.SortOrder == nil && cmd.Status == nil &&
+		cmd.TrojanTransportProtocol == nil && cmd.TrojanHost == nil &&
+		cmd.TrojanPath == nil && cmd.TrojanSNI == nil && cmd.TrojanAllowInsecure == nil {
 		return errors.NewValidationError("at least one field must be provided for update")
 	}
 
@@ -274,18 +279,28 @@ func (uc *UpdateNodeUseCase) applyTrojanUpdates(n *node.Node, cmd UpdateNodeComm
 		return errors.NewValidationError("cannot update Trojan config for non-Trojan protocol node")
 	}
 
-	// Get current Trojan config
+	// Get current Trojan config or use defaults for legacy nodes
 	currentConfig := n.TrojanConfig()
-	if currentConfig == nil {
-		return errors.NewValidationError("node has no Trojan configuration")
-	}
 
-	// Build new config with updated values
-	transportProtocol := currentConfig.TransportProtocol()
-	host := currentConfig.Host()
-	path := currentConfig.Path()
-	sni := currentConfig.SNI()
-	allowInsecure := currentConfig.AllowInsecure()
+	// Build new config with updated values (use defaults if no existing config)
+	var password, transportProtocol, host, path, sni string
+	var allowInsecure bool
+
+	if currentConfig != nil {
+		password = currentConfig.Password()
+		transportProtocol = currentConfig.TransportProtocol()
+		host = currentConfig.Host()
+		path = currentConfig.Path()
+		sni = currentConfig.SNI()
+		allowInsecure = currentConfig.AllowInsecure()
+	} else {
+		// Default values for legacy Trojan nodes without config
+		// For Trojan protocol, actual password is subscription UUID (passed at runtime)
+		// Use placeholder for config storage
+		password = "placeholder"
+		transportProtocol = "tcp"
+		allowInsecure = true // Default true for self-signed certs
+	}
 
 	if cmd.TrojanTransportProtocol != nil {
 		transportProtocol = *cmd.TrojanTransportProtocol
@@ -305,7 +320,7 @@ func (uc *UpdateNodeUseCase) applyTrojanUpdates(n *node.Node, cmd UpdateNodeComm
 
 	// Create new Trojan config (password remains unchanged)
 	newConfig, err := vo.NewTrojanConfig(
-		currentConfig.Password(),
+		password,
 		transportProtocol,
 		host,
 		path,

@@ -118,28 +118,55 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, toke
 		return nil, err
 	}
 
+	// Collect trojan node IDs for batch loading
+	var trojanNodeIDs []uint
+	for _, nodeModel := range nodeModels {
+		if nodeModel.Protocol == "trojan" {
+			trojanNodeIDs = append(trojanNodeIDs, nodeModel.ID)
+		}
+	}
+
+	// Load trojan configs from trojan_configs table
+	trojanConfigMap := make(map[uint]*models.TrojanConfigModel)
+	if len(trojanNodeIDs) > 0 {
+		var trojanConfigs []models.TrojanConfigModel
+		if err := r.db.WithContext(ctx).
+			Where("node_id IN ?", trojanNodeIDs).
+			Find(&trojanConfigs).Error; err != nil {
+			r.logger.Errorw("failed to query trojan configs", "error", err)
+			return nil, err
+		}
+		for i := range trojanConfigs {
+			trojanConfigMap[trojanConfigs[i].NodeID] = &trojanConfigs[i]
+		}
+	}
+
+	// Collect shadowsocks node IDs for batch loading
+	var ssNodeIDs []uint
+	for _, nodeModel := range nodeModels {
+		if nodeModel.Protocol == "shadowsocks" || nodeModel.Protocol == "" {
+			ssNodeIDs = append(ssNodeIDs, nodeModel.ID)
+		}
+	}
+
+	// Load shadowsocks configs from shadowsocks_configs table
+	ssConfigMap := make(map[uint]*models.ShadowsocksConfigModel)
+	if len(ssNodeIDs) > 0 {
+		var ssConfigs []models.ShadowsocksConfigModel
+		if err := r.db.WithContext(ctx).
+			Where("node_id IN ?", ssNodeIDs).
+			Find(&ssConfigs).Error; err != nil {
+			r.logger.Errorw("failed to query shadowsocks configs", "error", err)
+			return nil, err
+		}
+		for i := range ssConfigs {
+			ssConfigMap[ssConfigs[i].NodeID] = &ssConfigs[i]
+		}
+	}
+
 	// Convert to use case Node structure
 	nodeMap := make(map[uint]*usecases.Node)
 	for _, nodeModel := range nodeModels {
-		// Parse plugin opts from JSON
-		pluginOpts := make(map[string]string)
-		if len(nodeModel.PluginOpts) > 0 {
-			var optsMap map[string]interface{}
-			if err := json.Unmarshal(nodeModel.PluginOpts, &optsMap); err == nil {
-				for key, val := range optsMap {
-					if strVal, ok := val.(string); ok {
-						pluginOpts[key] = strVal
-					}
-				}
-			}
-		}
-
-		// Handle nil plugin
-		plugin := ""
-		if nodeModel.Plugin != nil {
-			plugin = *nodeModel.Plugin
-		}
-
 		// Default protocol to shadowsocks if not specified
 		protocol := nodeModel.Protocol
 		if protocol == "" {
@@ -147,38 +174,48 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, toke
 		}
 
 		ucNode := &usecases.Node{
-			ID:               nodeModel.ID,
-			Name:             nodeModel.Name,
-			ServerAddress:    nodeModel.ServerAddress,
-			ServerPort:       nodeModel.ServerPort,
-			Protocol:         protocol,
-			EncryptionMethod: nodeModel.EncryptionMethod,
-			Password:         "", // Password is not stored at node level; will be filled with subscription UUID
-			Plugin:           plugin,
-			PluginOpts:       pluginOpts,
+			ID:            nodeModel.ID,
+			Name:          nodeModel.Name,
+			ServerAddress: nodeModel.ServerAddress,
+			ServerPort:    nodeModel.ServerPort,
+			Protocol:      protocol,
+			Password:      "", // Password is not stored at node level; will be filled with subscription UUID
 		}
 
-		// Parse Trojan config from CustomFields if protocol is trojan
-		if protocol == "trojan" && len(nodeModel.CustomFields) > 0 {
-			var customFields map[string]interface{}
-			if err := json.Unmarshal(nodeModel.CustomFields, &customFields); err == nil {
-				if trojanData, ok := customFields["trojan_config"].(map[string]interface{}); ok {
-					if tp, ok := trojanData["transport_protocol"].(string); ok {
-						ucNode.TransportProtocol = tp
-					}
-					if host, ok := trojanData["host"].(string); ok {
-						ucNode.Host = host
-					}
-					if path, ok := trojanData["path"].(string); ok {
-						ucNode.Path = path
-					}
-					if sni, ok := trojanData["sni"].(string); ok {
-						ucNode.SNI = sni
-					}
-					if allowInsecure, ok := trojanData["allow_insecure"].(bool); ok {
-						ucNode.AllowInsecure = allowInsecure
-					}
+		// Load Shadowsocks config from shadowsocks_configs table
+		if protocol == "shadowsocks" {
+			if sc, ok := ssConfigMap[nodeModel.ID]; ok {
+				ucNode.EncryptionMethod = sc.EncryptionMethod
+				if sc.Plugin != nil {
+					ucNode.Plugin = *sc.Plugin
 				}
+				// Parse plugin opts from JSON
+				if len(sc.PluginOpts) > 0 {
+					pluginOpts := make(map[string]string)
+					var optsMap map[string]interface{}
+					if err := json.Unmarshal(sc.PluginOpts, &optsMap); err == nil {
+						for key, val := range optsMap {
+							if strVal, ok := val.(string); ok {
+								pluginOpts[key] = strVal
+							}
+						}
+					}
+					ucNode.PluginOpts = pluginOpts
+				}
+			}
+		}
+
+		// Load Trojan config from trojan_configs table
+		if protocol == "trojan" {
+			if tc, ok := trojanConfigMap[nodeModel.ID]; ok {
+				ucNode.TransportProtocol = tc.TransportProtocol
+				ucNode.Host = tc.Host
+				ucNode.Path = tc.Path
+				ucNode.SNI = tc.SNI
+				ucNode.AllowInsecure = tc.AllowInsecure
+			} else {
+				// Default transport protocol if no config found
+				ucNode.TransportProtocol = "tcp"
 			}
 		}
 

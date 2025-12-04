@@ -139,10 +139,16 @@ type Node struct {
 // ToTrojanURI generates a Trojan URI string for subscription
 // Delegates to domain layer TrojanConfig.ToURI for consistent URI generation
 func (n *Node) ToTrojanURI(password string) string {
+	// Default transport protocol to tcp if not specified
+	transportProtocol := n.TransportProtocol
+	if transportProtocol == "" {
+		transportProtocol = "tcp"
+	}
+
 	// Create TrojanConfig from Node fields (validation already done at node creation)
 	config, err := value_objects.NewTrojanConfig(
 		password,
-		n.TransportProtocol,
+		transportProtocol,
 		n.Host,
 		n.Path,
 		n.AllowInsecure,
