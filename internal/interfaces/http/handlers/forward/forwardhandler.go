@@ -60,6 +60,7 @@ type CreateForwardRuleRequest struct {
 	ListenPort    uint16 `json:"listen_port,omitempty" example:"13306"`
 	TargetAddress string `json:"target_address,omitempty" example:"192.168.1.100"`
 	TargetPort    uint16 `json:"target_port,omitempty" example:"3306"`
+	TargetNodeID  *uint  `json:"target_node_id,omitempty" example:"1"`
 	Protocol      string `json:"protocol" binding:"required,oneof=tcp udp both" example:"tcp"`
 	Remark        string `json:"remark,omitempty" example:"Forward to internal MySQL server"`
 }
@@ -70,6 +71,7 @@ type UpdateForwardRuleRequest struct {
 	ListenPort    *uint16 `json:"listen_port,omitempty" example:"13307"`
 	TargetAddress *string `json:"target_address,omitempty" example:"192.168.1.101"`
 	TargetPort    *uint16 `json:"target_port,omitempty" example:"3307"`
+	TargetNodeID  *uint   `json:"target_node_id,omitempty" example:"1"`
 	Protocol      *string `json:"protocol,omitempty" binding:"omitempty,oneof=tcp udp both" example:"tcp"`
 	Remark        *string `json:"remark,omitempty" example:"Updated remark"`
 }
@@ -92,6 +94,7 @@ func (h *ForwardHandler) CreateRule(c *gin.Context) {
 		ListenPort:    req.ListenPort,
 		TargetAddress: req.TargetAddress,
 		TargetPort:    req.TargetPort,
+		TargetNodeID:  req.TargetNodeID,
 		Protocol:      req.Protocol,
 		Remark:        req.Remark,
 	}
@@ -144,6 +147,7 @@ func (h *ForwardHandler) UpdateRule(c *gin.Context) {
 		ListenPort:    req.ListenPort,
 		TargetAddress: req.TargetAddress,
 		TargetPort:    req.TargetPort,
+		TargetNodeID:  req.TargetNodeID,
 		Protocol:      req.Protocol,
 		Remark:        req.Remark,
 	}

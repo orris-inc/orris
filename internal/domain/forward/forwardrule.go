@@ -20,8 +20,9 @@ type ForwardRule struct {
 	wsListenPort  uint16 // WebSocket listen port (required for exit type)
 	name          string
 	listenPort    uint16
-	targetAddress string // final target address (required for direct and exit types)
-	targetPort    uint16 // final target port (required for direct and exit types)
+	targetAddress string // final target address (required for direct and exit types if targetNodeID is not set)
+	targetPort    uint16 // final target port (required for direct and exit types if targetNodeID is not set)
+	targetNodeID  *uint  // target node ID for dynamic address resolution (mutually exclusive with targetAddress/targetPort)
 	protocol      vo.ForwardProtocol
 	status        vo.ForwardStatus
 	remark        string
@@ -33,9 +34,9 @@ type ForwardRule struct {
 
 // NewForwardRule creates a new forward rule aggregate.
 // Parameters depend on ruleType:
-// - direct: requires agentID, listenPort, targetAddress, targetPort
+// - direct: requires agentID, listenPort, (targetAddress+targetPort OR targetNodeID)
 // - entry: requires agentID, listenPort, exitAgentID
-// - exit: requires agentID, wsListenPort, targetAddress, targetPort
+// - exit: requires agentID, wsListenPort, (targetAddress+targetPort OR targetNodeID)
 func NewForwardRule(
 	agentID uint,
 	ruleType vo.ForwardRuleType,
@@ -45,6 +46,7 @@ func NewForwardRule(
 	listenPort uint16,
 	targetAddress string,
 	targetPort uint16,
+	targetNodeID *uint,
 	protocol vo.ForwardProtocol,
 	remark string,
 ) (*ForwardRule, error) {
@@ -67,14 +69,19 @@ func NewForwardRule(
 		if listenPort == 0 {
 			return nil, fmt.Errorf("listen port is required for direct forward")
 		}
-		if targetAddress == "" {
-			return nil, fmt.Errorf("target address is required for direct forward")
+		// Either targetAddress+targetPort OR targetNodeID must be set
+		hasTarget := targetAddress != "" && targetPort != 0
+		hasTargetNode := targetNodeID != nil && *targetNodeID != 0
+		if !hasTarget && !hasTargetNode {
+			return nil, fmt.Errorf("either target address+port or target node ID is required for direct forward")
 		}
-		if targetPort == 0 {
-			return nil, fmt.Errorf("target port is required for direct forward")
+		if hasTarget && hasTargetNode {
+			return nil, fmt.Errorf("target address+port and target node ID are mutually exclusive for direct forward")
 		}
-		if err := validateAddress(targetAddress); err != nil {
-			return nil, fmt.Errorf("invalid target address: %w", err)
+		if hasTarget {
+			if err := validateAddress(targetAddress); err != nil {
+				return nil, fmt.Errorf("invalid target address: %w", err)
+			}
 		}
 	case vo.ForwardRuleTypeEntry:
 		if listenPort == 0 {
@@ -87,14 +94,19 @@ func NewForwardRule(
 		if wsListenPort == 0 {
 			return nil, fmt.Errorf("WebSocket listen port is required for exit forward")
 		}
-		if targetAddress == "" {
-			return nil, fmt.Errorf("target address is required for exit forward")
+		// Either targetAddress+targetPort OR targetNodeID must be set
+		hasTarget := targetAddress != "" && targetPort != 0
+		hasTargetNode := targetNodeID != nil && *targetNodeID != 0
+		if !hasTarget && !hasTargetNode {
+			return nil, fmt.Errorf("either target address+port or target node ID is required for exit forward")
 		}
-		if targetPort == 0 {
-			return nil, fmt.Errorf("target port is required for exit forward")
+		if hasTarget && hasTargetNode {
+			return nil, fmt.Errorf("target address+port and target node ID are mutually exclusive for exit forward")
 		}
-		if err := validateAddress(targetAddress); err != nil {
-			return nil, fmt.Errorf("invalid target address: %w", err)
+		if hasTarget {
+			if err := validateAddress(targetAddress); err != nil {
+				return nil, fmt.Errorf("invalid target address: %w", err)
+			}
 		}
 	}
 
@@ -108,6 +120,7 @@ func NewForwardRule(
 		listenPort:    listenPort,
 		targetAddress: targetAddress,
 		targetPort:    targetPort,
+		targetNodeID:  targetNodeID,
 		protocol:      protocol,
 		status:        vo.ForwardStatusDisabled,
 		remark:        remark,
@@ -129,6 +142,7 @@ func ReconstructForwardRule(
 	listenPort uint16,
 	targetAddress string,
 	targetPort uint16,
+	targetNodeID *uint,
 	protocol vo.ForwardProtocol,
 	status vo.ForwardStatus,
 	remark string,
@@ -165,6 +179,7 @@ func ReconstructForwardRule(
 		listenPort:    listenPort,
 		targetAddress: targetAddress,
 		targetPort:    targetPort,
+		targetNodeID:  targetNodeID,
 		protocol:      protocol,
 		status:        status,
 		remark:        remark,
@@ -244,6 +259,16 @@ func (r *ForwardRule) TargetAddress() string {
 // TargetPort returns the target port.
 func (r *ForwardRule) TargetPort() uint16 {
 	return r.targetPort
+}
+
+// TargetNodeID returns the target node ID.
+func (r *ForwardRule) TargetNodeID() *uint {
+	return r.targetNodeID
+}
+
+// HasTargetNode returns true if targetNodeID is set.
+func (r *ForwardRule) HasTargetNode() bool {
+	return r.targetNodeID != nil && *r.targetNodeID != 0
 }
 
 // Target returns the full target address with port.
@@ -352,6 +377,7 @@ func (r *ForwardRule) UpdateListenPort(port uint16) error {
 }
 
 // UpdateTarget updates the target address and port.
+// This will clear the targetNodeID when setting static address.
 func (r *ForwardRule) UpdateTarget(address string, port uint16) error {
 	if address == "" {
 		return fmt.Errorf("target address cannot be empty")
@@ -363,12 +389,40 @@ func (r *ForwardRule) UpdateTarget(address string, port uint16) error {
 		return fmt.Errorf("invalid target address: %w", err)
 	}
 
-	if r.targetAddress == address && r.targetPort == port {
+	if r.targetAddress == address && r.targetPort == port && r.targetNodeID == nil {
 		return nil
 	}
 
 	r.targetAddress = address
 	r.targetPort = port
+	r.targetNodeID = nil // clear targetNodeID when setting static address
+	r.updatedAt = time.Now()
+	return nil
+}
+
+// UpdateTargetNodeID updates the target node ID for dynamic address resolution.
+// This will clear the targetAddress and targetPort when setting node ID.
+func (r *ForwardRule) UpdateTargetNodeID(nodeID *uint) error {
+	// Only direct and exit types support targetNodeID
+	if !r.ruleType.IsDirect() && !r.ruleType.IsExit() {
+		return fmt.Errorf("target node ID can only be set for direct or exit type rules")
+	}
+
+	// If nodeID is nil or 0, clear the targetNodeID
+	if nodeID == nil || *nodeID == 0 {
+		r.targetNodeID = nil
+		r.updatedAt = time.Now()
+		return nil
+	}
+
+	// Check if already set to the same value
+	if r.targetNodeID != nil && *r.targetNodeID == *nodeID && r.targetAddress == "" && r.targetPort == 0 {
+		return nil
+	}
+
+	r.targetNodeID = nodeID
+	r.targetAddress = "" // clear static address when setting node ID
+	r.targetPort = 0
 	r.updatedAt = time.Now()
 	return nil
 }
@@ -471,11 +525,14 @@ func (r *ForwardRule) Validate() error {
 		if r.listenPort == 0 {
 			return fmt.Errorf("listen port is required for direct forward")
 		}
-		if r.targetAddress == "" {
-			return fmt.Errorf("target address is required for direct forward")
+		// Either targetAddress+targetPort OR targetNodeID must be set
+		hasTarget := r.targetAddress != "" && r.targetPort != 0
+		hasTargetNode := r.targetNodeID != nil && *r.targetNodeID != 0
+		if !hasTarget && !hasTargetNode {
+			return fmt.Errorf("either target address+port or target node ID is required for direct forward")
 		}
-		if r.targetPort == 0 {
-			return fmt.Errorf("target port is required for direct forward")
+		if hasTarget && hasTargetNode {
+			return fmt.Errorf("target address+port and target node ID are mutually exclusive for direct forward")
 		}
 	case vo.ForwardRuleTypeEntry:
 		if r.listenPort == 0 {
@@ -488,11 +545,14 @@ func (r *ForwardRule) Validate() error {
 		if r.wsListenPort == 0 {
 			return fmt.Errorf("WebSocket listen port is required for exit forward")
 		}
-		if r.targetAddress == "" {
-			return fmt.Errorf("target address is required for exit forward")
+		// Either targetAddress+targetPort OR targetNodeID must be set
+		hasTarget := r.targetAddress != "" && r.targetPort != 0
+		hasTargetNode := r.targetNodeID != nil && *r.targetNodeID != 0
+		if !hasTarget && !hasTargetNode {
+			return fmt.Errorf("either target address+port or target node ID is required for exit forward")
 		}
-		if r.targetPort == 0 {
-			return fmt.Errorf("target port is required for exit forward")
+		if hasTarget && hasTargetNode {
+			return fmt.Errorf("target address+port and target node ID are mutually exclusive for exit forward")
 		}
 	}
 

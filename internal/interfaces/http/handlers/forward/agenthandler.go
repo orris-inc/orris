@@ -9,6 +9,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
@@ -17,6 +18,7 @@ import (
 type AgentHandler struct {
 	repo      forward.Repository
 	agentRepo forward.AgentRepository
+	nodeRepo  node.NodeRepository
 	logger    logger.Interface
 }
 
@@ -24,11 +26,13 @@ type AgentHandler struct {
 func NewAgentHandler(
 	repo forward.Repository,
 	agentRepo forward.AgentRepository,
+	nodeRepo node.NodeRepository,
 	logger logger.Interface,
 ) *AgentHandler {
 	return &AgentHandler{
 		repo:      repo,
 		agentRepo: agentRepo,
+		nodeRepo:  nodeRepo,
 		logger:    logger,
 	}
 }
@@ -68,8 +72,44 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 		"ip", c.ClientIP(),
 	)
 
-	// Convert to DTOs
+	// Convert to DTOs and resolve dynamic node addresses
 	ruleDTOs := dto.ToForwardRuleDTOs(rules)
+
+	// Resolve node addresses for rules with targetNodeID
+	for _, ruleDTO := range ruleDTOs {
+		if ruleDTO.TargetNodeID != nil && *ruleDTO.TargetNodeID != 0 {
+			// Fetch node information
+			node, err := h.nodeRepo.GetByID(ctx, *ruleDTO.TargetNodeID)
+			if err != nil {
+				h.logger.Warnw("failed to get target node for rule",
+					"rule_id", ruleDTO.ID,
+					"node_id", *ruleDTO.TargetNodeID,
+					"error", err,
+				)
+				// Keep original values if node fetch fails
+				continue
+			}
+			if node == nil {
+				h.logger.Warnw("target node not found for rule",
+					"rule_id", ruleDTO.ID,
+					"node_id", *ruleDTO.TargetNodeID,
+				)
+				// Keep original values if node not found
+				continue
+			}
+
+			// Dynamically populate target address and port from node
+			ruleDTO.TargetAddress = node.ServerAddress().Value()
+			ruleDTO.TargetPort = node.AgentPort()
+
+			h.logger.Debugw("resolved target node address for rule",
+				"rule_id", ruleDTO.ID,
+				"node_id", *ruleDTO.TargetNodeID,
+				"target_address", ruleDTO.TargetAddress,
+				"target_port", ruleDTO.TargetPort,
+			)
+		}
+	}
 
 	// Return success response
 	utils.SuccessResponse(c, http.StatusOK, "enabled forward rules retrieved successfully", ruleDTOs)

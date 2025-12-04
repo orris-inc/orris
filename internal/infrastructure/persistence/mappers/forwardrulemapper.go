@@ -60,6 +60,11 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 		wsListenPort = *model.WsListenPort
 	}
 
+	var targetNodeID *uint
+	if model.TargetNodeID != nil {
+		targetNodeID = model.TargetNodeID
+	}
+
 	entity, err := forward.ReconstructForwardRule(
 		model.ID,
 		model.AgentID,
@@ -70,6 +75,7 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 		model.ListenPort,
 		model.TargetAddress,
 		model.TargetPort,
+		targetNodeID,
 		protocol,
 		status,
 		model.Remark,
@@ -104,6 +110,11 @@ func (m *ForwardRuleMapperImpl) ToModel(entity *forward.ForwardRule) (*models.Fo
 		wsListenPort = &val
 	}
 
+	var targetNodeID *uint
+	if entity.TargetNodeID() != nil {
+		targetNodeID = entity.TargetNodeID()
+	}
+
 	return &models.ForwardRuleModel{
 		ID:            entity.ID(),
 		AgentID:       entity.AgentID(),
@@ -114,6 +125,7 @@ func (m *ForwardRuleMapperImpl) ToModel(entity *forward.ForwardRule) (*models.Fo
 		ListenPort:    entity.ListenPort(),
 		TargetAddress: entity.TargetAddress(),
 		TargetPort:    entity.TargetPort(),
+		TargetNodeID:  targetNodeID,
 		Protocol:      entity.Protocol().String(),
 		Status:        entity.Status().String(),
 		Remark:        entity.Remark(),

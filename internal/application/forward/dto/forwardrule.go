@@ -16,6 +16,7 @@ type ForwardRuleDTO struct {
 	ListenPort    uint16 `json:"listen_port"`
 	TargetAddress string `json:"target_address,omitempty"` // for direct and exit types
 	TargetPort    uint16 `json:"target_port,omitempty"`    // for direct and exit types
+	TargetNodeID  *uint  `json:"target_node_id,omitempty"` // for dynamic node address resolution
 	Protocol      string `json:"protocol"`
 	Status        string `json:"status"`
 	Remark        string `json:"remark"`
@@ -42,6 +43,7 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 		ListenPort:    rule.ListenPort(),
 		TargetAddress: rule.TargetAddress(),
 		TargetPort:    rule.TargetPort(),
+		TargetNodeID:  rule.TargetNodeID(),
 		Protocol:      rule.Protocol().String(),
 		Status:        rule.Status().String(),
 		Remark:        rule.Remark(),

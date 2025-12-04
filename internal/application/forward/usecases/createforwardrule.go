@@ -6,6 +6,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/forward"
 	vo "github.com/orris-inc/orris/internal/domain/forward/value_objects"
+	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -18,8 +19,9 @@ type CreateForwardRuleCommand struct {
 	WsListenPort  uint16 // required for exit type
 	Name          string
 	ListenPort    uint16 // required for direct and entry types
-	TargetAddress string // required for direct and exit types
-	TargetPort    uint16 // required for direct and exit types
+	TargetAddress string // required for direct and exit types (mutually exclusive with TargetNodeID)
+	TargetPort    uint16 // required for direct and exit types (mutually exclusive with TargetNodeID)
+	TargetNodeID  *uint  // optional for direct and exit types (mutually exclusive with TargetAddress/TargetPort)
 	Protocol      string
 	Remark        string
 }
@@ -42,18 +44,21 @@ type CreateForwardRuleResult struct {
 
 // CreateForwardRuleUseCase handles forward rule creation.
 type CreateForwardRuleUseCase struct {
-	repo   forward.Repository
-	logger logger.Interface
+	repo     forward.Repository
+	nodeRepo node.NodeRepository
+	logger   logger.Interface
 }
 
 // NewCreateForwardRuleUseCase creates a new CreateForwardRuleUseCase.
 func NewCreateForwardRuleUseCase(
 	repo forward.Repository,
+	nodeRepo node.NodeRepository,
 	logger logger.Interface,
 ) *CreateForwardRuleUseCase {
 	return &CreateForwardRuleUseCase{
-		repo:   repo,
-		logger: logger,
+		repo:     repo,
+		nodeRepo: nodeRepo,
+		logger:   logger,
 	}
 }
 
@@ -61,7 +66,7 @@ func NewCreateForwardRuleUseCase(
 func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwardRuleCommand) (*CreateForwardRuleResult, error) {
 	uc.logger.Infow("executing create forward rule use case", "name", cmd.Name, "listen_port", cmd.ListenPort)
 
-	if err := uc.validateCommand(cmd); err != nil {
+	if err := uc.validateCommand(ctx, cmd); err != nil {
 		uc.logger.Errorw("invalid create forward rule command", "error", err)
 		return nil, err
 	}
@@ -89,6 +94,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		cmd.ListenPort,
 		cmd.TargetAddress,
 		cmd.TargetPort,
+		cmd.TargetNodeID,
 		protocol,
 		cmd.Remark,
 	)
@@ -122,7 +128,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	return result, nil
 }
 
-func (uc *CreateForwardRuleUseCase) validateCommand(cmd CreateForwardRuleCommand) error {
+func (uc *CreateForwardRuleUseCase) validateCommand(ctx context.Context, cmd CreateForwardRuleCommand) error {
 	if cmd.AgentID == 0 {
 		return errors.NewValidationError("agent_id is required")
 	}
@@ -154,11 +160,20 @@ func (uc *CreateForwardRuleUseCase) validateCommand(cmd CreateForwardRuleCommand
 		if cmd.ListenPort == 0 {
 			return errors.NewValidationError("listen_port is required for direct forward")
 		}
-		if cmd.TargetAddress == "" {
-			return errors.NewValidationError("target_address is required for direct forward")
+		// Either targetAddress+targetPort OR targetNodeID must be provided
+		hasTarget := cmd.TargetAddress != "" && cmd.TargetPort != 0
+		hasTargetNode := cmd.TargetNodeID != nil && *cmd.TargetNodeID != 0
+		if !hasTarget && !hasTargetNode {
+			return errors.NewValidationError("either target_address+target_port or target_node_id is required for direct forward")
 		}
-		if cmd.TargetPort == 0 {
-			return errors.NewValidationError("target_port is required for direct forward")
+		if hasTarget && hasTargetNode {
+			return errors.NewValidationError("target_address+target_port and target_node_id are mutually exclusive for direct forward")
+		}
+		// Validate node existence if targetNodeID is provided
+		if hasTargetNode {
+			if err := uc.validateNodeExists(ctx, *cmd.TargetNodeID); err != nil {
+				return err
+			}
 		}
 	case vo.ForwardRuleTypeEntry:
 		if cmd.ListenPort == 0 {
@@ -171,13 +186,36 @@ func (uc *CreateForwardRuleUseCase) validateCommand(cmd CreateForwardRuleCommand
 		if cmd.WsListenPort == 0 {
 			return errors.NewValidationError("ws_listen_port is required for exit forward")
 		}
-		if cmd.TargetAddress == "" {
-			return errors.NewValidationError("target_address is required for exit forward")
+		// Either targetAddress+targetPort OR targetNodeID must be provided
+		hasTarget := cmd.TargetAddress != "" && cmd.TargetPort != 0
+		hasTargetNode := cmd.TargetNodeID != nil && *cmd.TargetNodeID != 0
+		if !hasTarget && !hasTargetNode {
+			return errors.NewValidationError("either target_address+target_port or target_node_id is required for exit forward")
 		}
-		if cmd.TargetPort == 0 {
-			return errors.NewValidationError("target_port is required for exit forward")
+		if hasTarget && hasTargetNode {
+			return errors.NewValidationError("target_address+target_port and target_node_id are mutually exclusive for exit forward")
+		}
+		// Validate node existence if targetNodeID is provided
+		if hasTargetNode {
+			if err := uc.validateNodeExists(ctx, *cmd.TargetNodeID); err != nil {
+				return err
+			}
 		}
 	}
 
+	return nil
+}
+
+// validateNodeExists checks if a node exists with the given ID
+func (uc *CreateForwardRuleUseCase) validateNodeExists(ctx context.Context, nodeID uint) error {
+	node, err := uc.nodeRepo.GetByID(ctx, nodeID)
+	if err != nil {
+		uc.logger.Errorw("failed to get node", "node_id", nodeID, "error", err)
+		return fmt.Errorf("failed to validate node: %w", err)
+	}
+	if node == nil {
+		uc.logger.Warnw("target node not found", "node_id", nodeID)
+		return errors.NewNotFoundError("node", fmt.Sprintf("%d", nodeID))
+	}
 	return nil
 }

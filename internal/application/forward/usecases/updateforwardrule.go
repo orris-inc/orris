@@ -6,6 +6,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/forward"
 	vo "github.com/orris-inc/orris/internal/domain/forward/value_objects"
+	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -17,24 +18,28 @@ type UpdateForwardRuleCommand struct {
 	ListenPort    *uint16
 	TargetAddress *string
 	TargetPort    *uint16
+	TargetNodeID  *uint // nil means no update, set to pointer to 0 to clear
 	Protocol      *string
 	Remark        *string
 }
 
 // UpdateForwardRuleUseCase handles forward rule updates.
 type UpdateForwardRuleUseCase struct {
-	repo   forward.Repository
-	logger logger.Interface
+	repo     forward.Repository
+	nodeRepo node.NodeRepository
+	logger   logger.Interface
 }
 
 // NewUpdateForwardRuleUseCase creates a new UpdateForwardRuleUseCase.
 func NewUpdateForwardRuleUseCase(
 	repo forward.Repository,
+	nodeRepo node.NodeRepository,
 	logger logger.Interface,
 ) *UpdateForwardRuleUseCase {
 	return &UpdateForwardRuleUseCase{
-		repo:   repo,
-		logger: logger,
+		repo:     repo,
+		nodeRepo: nodeRepo,
+		logger:   logger,
 	}
 }
 
@@ -80,7 +85,27 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 		}
 	}
 
-	if cmd.TargetAddress != nil || cmd.TargetPort != nil {
+	// Handle target updates
+	// Priority: if TargetNodeID is provided, use it; otherwise use TargetAddress/TargetPort
+	if cmd.TargetNodeID != nil {
+		// Validate node exists if TargetNodeID is not zero
+		if *cmd.TargetNodeID != 0 {
+			node, err := uc.nodeRepo.GetByID(ctx, *cmd.TargetNodeID)
+			if err != nil {
+				uc.logger.Errorw("failed to get target node", "node_id", *cmd.TargetNodeID, "error", err)
+				return fmt.Errorf("failed to validate target node: %w", err)
+			}
+			if node == nil {
+				uc.logger.Warnw("target node not found", "node_id", *cmd.TargetNodeID)
+				return errors.NewNotFoundError("node", fmt.Sprintf("%d", *cmd.TargetNodeID))
+			}
+		}
+		// Update targetNodeID (will clear targetAddress and targetPort)
+		if err := rule.UpdateTargetNodeID(cmd.TargetNodeID); err != nil {
+			return errors.NewValidationError(err.Error())
+		}
+	} else if cmd.TargetAddress != nil || cmd.TargetPort != nil {
+		// Update static target address/port (will clear targetNodeID)
 		targetAddr := rule.TargetAddress()
 		targetPort := rule.TargetPort()
 		if cmd.TargetAddress != nil {

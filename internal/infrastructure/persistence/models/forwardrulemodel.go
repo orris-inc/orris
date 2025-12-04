@@ -10,20 +10,21 @@ import (
 
 // ForwardRuleModel represents the database persistence model for forward rules.
 type ForwardRuleModel struct {
-	ID            uint   `gorm:"primarykey"`
-	AgentID       uint   `gorm:"not null;index:idx_forward_agent_id;uniqueIndex:idx_listen_port_agent"`
-	RuleType      string `gorm:"not null;default:direct;size:20"` // direct, chain, websocket
-	ExitAgentID   *uint  `gorm:"index:idx_forward_exit_agent_id"` // exit agent ID for chain/websocket forward (nullable)
+	ID            uint    `gorm:"primarykey"`
+	AgentID       uint    `gorm:"not null;index:idx_forward_agent_id;uniqueIndex:idx_listen_port_agent"`
+	RuleType      string  `gorm:"not null;default:direct;size:20"` // direct, chain, websocket
+	ExitAgentID   *uint   `gorm:"index:idx_forward_exit_agent_id"` // exit agent ID for chain/websocket forward (nullable)
 	WsListenPort  *uint16 `gorm:"default:null"`                    // websocket listen port (nullable, used for websocket type)
-	Name          string `gorm:"not null;size:100;index:idx_forward_name"`
-	ListenPort    uint16 `gorm:"not null;uniqueIndex:idx_listen_port_agent"`
-	TargetAddress string `gorm:"size:255"`                                    // required when RuleType=direct
-	TargetPort    uint16 `gorm:"default:0"`                                   // required when RuleType=direct
-	Protocol      string `gorm:"not null;size:10;index:idx_forward_protocol"` // tcp, udp, both
-	Status        string `gorm:"not null;default:disabled;size:20;index:idx_forward_status"`
-	Remark        string `gorm:"size:500"`
-	UploadBytes   int64  `gorm:"not null;default:0"`
-	DownloadBytes int64  `gorm:"not null;default:0"`
+	Name          string  `gorm:"not null;size:100;index:idx_forward_name"`
+	ListenPort    uint16  `gorm:"not null;uniqueIndex:idx_listen_port_agent"`
+	TargetAddress string  `gorm:"size:255"`                                    // required when RuleType=direct (if TargetNodeID is not set)
+	TargetPort    uint16  `gorm:"default:0"`                                   // required when RuleType=direct (if TargetNodeID is not set)
+	TargetNodeID  *uint   `gorm:"index:idx_forward_target_node_id"`            // target node ID for dynamic address resolution (mutually exclusive with TargetAddress/TargetPort)
+	Protocol      string  `gorm:"not null;size:10;index:idx_forward_protocol"` // tcp, udp, both
+	Status        string  `gorm:"not null;default:disabled;size:20;index:idx_forward_status"`
+	Remark        string  `gorm:"size:500"`
+	UploadBytes   int64   `gorm:"not null;default:0"`
+	DownloadBytes int64   `gorm:"not null;default:0"`
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 	DeletedAt     gorm.DeletedAt `gorm:"index"`
