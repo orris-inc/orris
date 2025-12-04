@@ -37,6 +37,7 @@ type CreateForwardRuleResult struct {
 	ListenPort    uint16 `json:"listen_port"`
 	TargetAddress string `json:"target_address,omitempty"`
 	TargetPort    uint16 `json:"target_port,omitempty"`
+	TargetNodeID  *uint  `json:"target_node_id,omitempty"`
 	Protocol      string `json:"protocol"`
 	Status        string `json:"status"`
 	CreatedAt     string `json:"created_at"`
@@ -119,6 +120,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		ListenPort:    rule.ListenPort(),
 		TargetAddress: rule.TargetAddress(),
 		TargetPort:    rule.TargetPort(),
+		TargetNodeID:  rule.TargetNodeID(),
 		Protocol:      rule.Protocol().String(),
 		Status:        rule.Status().String(),
 		CreatedAt:     rule.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
