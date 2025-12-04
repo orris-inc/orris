@@ -9,6 +9,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/db"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -37,45 +38,40 @@ func (r *ForwardChainRepositoryImpl) Create(ctx context.Context, chain *forward.
 		return fmt.Errorf("failed to map forward chain entity: %w", err)
 	}
 
-	// Use transaction to create chain and nodes
-	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Create chain first (without nodes)
-		chainModel := &models.ForwardChainModel{
-			Name:          model.Name,
-			Protocol:      model.Protocol,
-			Status:        model.Status,
-			TargetAddress: model.TargetAddress,
-			TargetPort:    model.TargetPort,
-			Remark:        model.Remark,
-		}
+	tx := db.GetTxFromContext(ctx, r.db)
 
-		if err := tx.Create(chainModel).Error; err != nil {
-			return fmt.Errorf("failed to create chain: %w", err)
-		}
+	// Create chain first (without nodes)
+	chainModel := &models.ForwardChainModel{
+		Name:          model.Name,
+		Protocol:      model.Protocol,
+		Status:        model.Status,
+		TargetAddress: model.TargetAddress,
+		TargetPort:    model.TargetPort,
+		Remark:        model.Remark,
+	}
 
-		// Set chain ID for nodes
-		for i := range model.Nodes {
-			model.Nodes[i].ChainID = chainModel.ID
-		}
-
-		// Create nodes
-		if len(model.Nodes) > 0 {
-			if err := tx.Create(&model.Nodes).Error; err != nil {
-				return fmt.Errorf("failed to create chain nodes: %w", err)
-			}
-		}
-
-		// Set ID back to domain entity
-		if err := chain.SetID(chainModel.ID); err != nil {
-			return fmt.Errorf("failed to set chain ID: %w", err)
-		}
-
-		return nil
-	})
-
-	if err != nil {
+	if err := tx.Create(chainModel).Error; err != nil {
 		r.logger.Errorw("failed to create forward chain", "error", err)
-		return err
+		return fmt.Errorf("failed to create chain: %w", err)
+	}
+
+	// Set chain ID for nodes
+	for i := range model.Nodes {
+		model.Nodes[i].ChainID = chainModel.ID
+	}
+
+	// Create nodes
+	if len(model.Nodes) > 0 {
+		if err := tx.Create(&model.Nodes).Error; err != nil {
+			r.logger.Errorw("failed to create chain nodes", "error", err)
+			return fmt.Errorf("failed to create chain nodes: %w", err)
+		}
+	}
+
+	// Set ID back to domain entity
+	if err := chain.SetID(chainModel.ID); err != nil {
+		r.logger.Errorw("failed to set chain ID", "error", err)
+		return fmt.Errorf("failed to set chain ID: %w", err)
 	}
 
 	r.logger.Infow("forward chain created successfully", "id", chain.ID(), "name", chain.Name())
@@ -86,7 +82,8 @@ func (r *ForwardChainRepositoryImpl) Create(ctx context.Context, chain *forward.
 func (r *ForwardChainRepositoryImpl) GetByID(ctx context.Context, id uint) (*forward.ForwardChain, error) {
 	var model models.ForwardChainModel
 
-	if err := r.db.WithContext(ctx).Preload("Nodes", func(db *gorm.DB) *gorm.DB {
+	tx := db.GetTxFromContext(ctx, r.db)
+	if err := tx.Preload("Nodes", func(db *gorm.DB) *gorm.DB {
 		return db.Order("sequence ASC")
 	}).First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -113,49 +110,45 @@ func (r *ForwardChainRepositoryImpl) Update(ctx context.Context, chain *forward.
 		return fmt.Errorf("failed to map forward chain entity: %w", err)
 	}
 
-	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Update chain
-		result := tx.Model(&models.ForwardChainModel{}).
-			Where("id = ?", model.ID).
-			Updates(map[string]interface{}{
-				"name":           model.Name,
-				"protocol":       model.Protocol,
-				"status":         model.Status,
-				"target_address": model.TargetAddress,
-				"target_port":    model.TargetPort,
-				"remark":         model.Remark,
-				"updated_at":     model.UpdatedAt,
-			})
+	tx := db.GetTxFromContext(ctx, r.db)
 
-		if result.Error != nil {
-			return fmt.Errorf("failed to update chain: %w", result.Error)
+	// Update chain
+	result := tx.Model(&models.ForwardChainModel{}).
+		Where("id = ?", model.ID).
+		Updates(map[string]interface{}{
+			"name":           model.Name,
+			"protocol":       model.Protocol,
+			"status":         model.Status,
+			"target_address": model.TargetAddress,
+			"target_port":    model.TargetPort,
+			"remark":         model.Remark,
+			"updated_at":     model.UpdatedAt,
+		})
+
+	if result.Error != nil {
+		r.logger.Errorw("failed to update forward chain", "id", model.ID, "error", result.Error)
+		return fmt.Errorf("failed to update chain: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return errors.NewNotFoundError("forward chain", fmt.Sprintf("%d", model.ID))
+	}
+
+	// Delete old nodes and create new ones
+	if err := tx.Where("chain_id = ?", model.ID).Delete(&models.ForwardChainNodeModel{}).Error; err != nil {
+		r.logger.Errorw("failed to delete old nodes", "id", model.ID, "error", err)
+		return fmt.Errorf("failed to delete old nodes: %w", err)
+	}
+
+	if len(model.Nodes) > 0 {
+		for i := range model.Nodes {
+			model.Nodes[i].ChainID = model.ID
+			model.Nodes[i].ID = 0 // Reset ID for new creation
 		}
-
-		if result.RowsAffected == 0 {
-			return errors.NewNotFoundError("forward chain", fmt.Sprintf("%d", model.ID))
+		if err := tx.Create(&model.Nodes).Error; err != nil {
+			r.logger.Errorw("failed to create new nodes", "id", model.ID, "error", err)
+			return fmt.Errorf("failed to create new nodes: %w", err)
 		}
-
-		// Delete old nodes and create new ones
-		if err := tx.Where("chain_id = ?", model.ID).Delete(&models.ForwardChainNodeModel{}).Error; err != nil {
-			return fmt.Errorf("failed to delete old nodes: %w", err)
-		}
-
-		if len(model.Nodes) > 0 {
-			for i := range model.Nodes {
-				model.Nodes[i].ChainID = model.ID
-				model.Nodes[i].ID = 0 // Reset ID for new creation
-			}
-			if err := tx.Create(&model.Nodes).Error; err != nil {
-				return fmt.Errorf("failed to create new nodes: %w", err)
-			}
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		r.logger.Errorw("failed to update forward chain", "id", model.ID, "error", err)
-		return err
 	}
 
 	r.logger.Infow("forward chain updated successfully", "id", model.ID, "name", model.Name)
@@ -164,33 +157,29 @@ func (r *ForwardChainRepositoryImpl) Update(ctx context.Context, chain *forward.
 
 // Delete soft deletes a forward chain.
 func (r *ForwardChainRepositoryImpl) Delete(ctx context.Context, id uint) error {
-	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Delete chain rules association
-		if err := tx.Where("chain_id = ?", id).Delete(&models.ForwardChainRuleModel{}).Error; err != nil {
-			return fmt.Errorf("failed to delete chain rules: %w", err)
-		}
+	tx := db.GetTxFromContext(ctx, r.db)
 
-		// Delete nodes (hard delete since chain is soft deleted)
-		if err := tx.Where("chain_id = ?", id).Delete(&models.ForwardChainNodeModel{}).Error; err != nil {
-			return fmt.Errorf("failed to delete chain nodes: %w", err)
-		}
+	// Delete chain rules association
+	if err := tx.Where("chain_id = ?", id).Delete(&models.ForwardChainRuleModel{}).Error; err != nil {
+		r.logger.Errorw("failed to delete chain rules association", "id", id, "error", err)
+		return fmt.Errorf("failed to delete chain rules: %w", err)
+	}
 
-		// Soft delete chain
-		result := tx.Delete(&models.ForwardChainModel{}, id)
-		if result.Error != nil {
-			return fmt.Errorf("failed to delete chain: %w", result.Error)
-		}
+	// Delete nodes (hard delete since chain is soft deleted)
+	if err := tx.Where("chain_id = ?", id).Delete(&models.ForwardChainNodeModel{}).Error; err != nil {
+		r.logger.Errorw("failed to delete chain nodes", "id", id, "error", err)
+		return fmt.Errorf("failed to delete chain nodes: %w", err)
+	}
 
-		if result.RowsAffected == 0 {
-			return errors.NewNotFoundError("forward chain", fmt.Sprintf("%d", id))
-		}
+	// Soft delete chain
+	result := tx.Delete(&models.ForwardChainModel{}, id)
+	if result.Error != nil {
+		r.logger.Errorw("failed to delete forward chain", "id", id, "error", result.Error)
+		return fmt.Errorf("failed to delete chain: %w", result.Error)
+	}
 
-		return nil
-	})
-
-	if err != nil {
-		r.logger.Errorw("failed to delete forward chain", "id", id, "error", err)
-		return err
+	if result.RowsAffected == 0 {
+		return errors.NewNotFoundError("forward chain", fmt.Sprintf("%d", id))
 	}
 
 	r.logger.Infow("forward chain deleted successfully", "id", id)
@@ -199,7 +188,8 @@ func (r *ForwardChainRepositoryImpl) Delete(ctx context.Context, id uint) error 
 
 // List retrieves a paginated list of forward chains with filtering.
 func (r *ForwardChainRepositoryImpl) List(ctx context.Context, filter forward.ChainListFilter) ([]*forward.ForwardChain, int64, error) {
-	query := r.db.WithContext(ctx).Model(&models.ForwardChainModel{})
+	tx := db.GetTxFromContext(ctx, r.db)
+	query := tx.Model(&models.ForwardChainModel{})
 
 	// Apply filters
 	if filter.Name != "" {
@@ -254,7 +244,8 @@ func (r *ForwardChainRepositoryImpl) List(ctx context.Context, filter forward.Ch
 func (r *ForwardChainRepositoryImpl) GetRuleIDsByChainID(ctx context.Context, chainID uint) ([]uint, error) {
 	var ruleAssocs []models.ForwardChainRuleModel
 
-	if err := r.db.WithContext(ctx).Where("chain_id = ?", chainID).Find(&ruleAssocs).Error; err != nil {
+	tx := db.GetTxFromContext(ctx, r.db)
+	if err := tx.Where("chain_id = ?", chainID).Find(&ruleAssocs).Error; err != nil {
 		r.logger.Errorw("failed to get rule IDs by chain ID", "chain_id", chainID, "error", err)
 		return nil, fmt.Errorf("failed to get rule IDs: %w", err)
 	}
@@ -281,7 +272,8 @@ func (r *ForwardChainRepositoryImpl) AssociateRules(ctx context.Context, chainID
 		}
 	}
 
-	if err := r.db.WithContext(ctx).Create(&assocs).Error; err != nil {
+	tx := db.GetTxFromContext(ctx, r.db)
+	if err := tx.Create(&assocs).Error; err != nil {
 		r.logger.Errorw("failed to associate rules with chain", "chain_id", chainID, "error", err)
 		return fmt.Errorf("failed to associate rules: %w", err)
 	}

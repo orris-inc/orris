@@ -7,6 +7,7 @@ import (
 	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	vo "github.com/orris-inc/orris/internal/domain/forward/value_objects"
+	"github.com/orris-inc/orris/internal/shared/db"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -32,6 +33,7 @@ type CreateForwardChainUseCase struct {
 	chainRepo forward.ChainRepository
 	ruleRepo  forward.Repository
 	agentRepo forward.AgentRepository
+	txManager *db.TransactionManager
 	logger    logger.Interface
 }
 
@@ -40,12 +42,14 @@ func NewCreateForwardChainUseCase(
 	chainRepo forward.ChainRepository,
 	ruleRepo forward.Repository,
 	agentRepo forward.AgentRepository,
+	txManager *db.TransactionManager,
 	logger logger.Interface,
 ) *CreateForwardChainUseCase {
 	return &CreateForwardChainUseCase{
 		chainRepo: chainRepo,
 		ruleRepo:  ruleRepo,
 		agentRepo: agentRepo,
+		txManager: txManager,
 		logger:    logger,
 	}
 }
@@ -83,35 +87,44 @@ func (uc *CreateForwardChainUseCase) Execute(ctx context.Context, cmd CreateForw
 		return nil, fmt.Errorf("failed to create forward chain: %w", err)
 	}
 
-	// Persist chain
-	if err := uc.chainRepo.Create(ctx, chain); err != nil {
-		uc.logger.Errorw("failed to persist forward chain", "error", err)
-		return nil, fmt.Errorf("failed to save forward chain: %w", err)
-	}
-
-	// Generate and persist rules
-	rules, err := chain.GenerateRules()
-	if err != nil {
-		uc.logger.Errorw("failed to generate rules for chain", "chain_id", chain.ID(), "error", err)
-		return nil, fmt.Errorf("failed to generate rules: %w", err)
-	}
-
-	ruleIDs := make([]uint, len(rules))
-	for i, rule := range rules {
-		if err := uc.ruleRepo.Create(ctx, rule); err != nil {
-			uc.logger.Errorw("failed to create rule", "chain_id", chain.ID(), "node_seq", i+1, "error", err)
-			return nil, fmt.Errorf("failed to create rule for node %d: %w", i+1, err)
+	// Execute all operations within a transaction
+	err = uc.txManager.RunInTransaction(ctx, func(txCtx context.Context) error {
+		// Persist chain
+		if err := uc.chainRepo.Create(txCtx, chain); err != nil {
+			uc.logger.Errorw("failed to persist forward chain", "error", err)
+			return fmt.Errorf("failed to save forward chain: %w", err)
 		}
-		ruleIDs[i] = rule.ID()
+
+		// Generate and persist rules
+		rules, err := chain.GenerateRules()
+		if err != nil {
+			uc.logger.Errorw("failed to generate rules for chain", "chain_id", chain.ID(), "error", err)
+			return fmt.Errorf("failed to generate rules: %w", err)
+		}
+
+		ruleIDs := make([]uint, len(rules))
+		for i, rule := range rules {
+			if err := uc.ruleRepo.Create(txCtx, rule); err != nil {
+				uc.logger.Errorw("failed to create rule", "chain_id", chain.ID(), "node_seq", i+1, "error", err)
+				return fmt.Errorf("failed to create rule for node %d: %w", i+1, err)
+			}
+			ruleIDs[i] = rule.ID()
+		}
+
+		// Associate rules with chain
+		if err := uc.chainRepo.AssociateRules(txCtx, chain.ID(), ruleIDs); err != nil {
+			uc.logger.Errorw("failed to associate rules with chain", "chain_id", chain.ID(), "error", err)
+			return fmt.Errorf("failed to associate rules: %w", err)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
 	}
 
-	// Associate rules with chain
-	if err := uc.chainRepo.AssociateRules(ctx, chain.ID(), ruleIDs); err != nil {
-		uc.logger.Errorw("failed to associate rules with chain", "chain_id", chain.ID(), "error", err)
-		return nil, fmt.Errorf("failed to associate rules: %w", err)
-	}
-
-	uc.logger.Infow("forward chain created successfully", "id", chain.ID(), "name", cmd.Name, "rules_created", len(rules))
+	uc.logger.Infow("forward chain created successfully", "id", chain.ID(), "name", cmd.Name)
 	return dto.ToForwardChainDTO(chain), nil
 }
 

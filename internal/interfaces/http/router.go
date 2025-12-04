@@ -32,6 +32,7 @@ import (
 	"github.com/orris-inc/orris/internal/interfaces/http/middleware"
 	"github.com/orris-inc/orris/internal/interfaces/http/routes"
 	"github.com/orris-inc/orris/internal/shared/authorization"
+	sharedDB "github.com/orris-inc/orris/internal/shared/db"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/services/markdown"
 )
@@ -467,13 +468,14 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	// Initialize forward chain components
 	forwardChainRepo := repository.NewForwardChainRepository(db, log)
+	forwardTxManager := sharedDB.NewTransactionManager(db)
 
-	createForwardChainUC := forwardUsecases.NewCreateForwardChainUseCase(forwardChainRepo, forwardRuleRepo, forwardAgentRepo, log)
+	createForwardChainUC := forwardUsecases.NewCreateForwardChainUseCase(forwardChainRepo, forwardRuleRepo, forwardAgentRepo, forwardTxManager, log)
 	getForwardChainUC := forwardUsecases.NewGetForwardChainUseCase(forwardChainRepo, log)
 	listForwardChainsUC := forwardUsecases.NewListForwardChainsUseCase(forwardChainRepo, log)
-	enableForwardChainUC := forwardUsecases.NewEnableForwardChainUseCase(forwardChainRepo, forwardRuleRepo, log)
-	disableForwardChainUC := forwardUsecases.NewDisableForwardChainUseCase(forwardChainRepo, forwardRuleRepo, log)
-	deleteForwardChainUC := forwardUsecases.NewDeleteForwardChainUseCase(forwardChainRepo, forwardRuleRepo, log)
+	enableForwardChainUC := forwardUsecases.NewEnableForwardChainUseCase(forwardChainRepo, forwardRuleRepo, forwardTxManager, log)
+	disableForwardChainUC := forwardUsecases.NewDisableForwardChainUseCase(forwardChainRepo, forwardRuleRepo, forwardTxManager, log)
+	deleteForwardChainUC := forwardUsecases.NewDeleteForwardChainUseCase(forwardChainRepo, forwardRuleRepo, forwardTxManager, log)
 
 	forwardChainHandler := forwardHandlers.NewForwardChainHandler(
 		createForwardChainUC,

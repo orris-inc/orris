@@ -10,6 +10,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/db"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -38,7 +39,8 @@ func (r *ForwardRuleRepositoryImpl) Create(ctx context.Context, rule *forward.Fo
 		return fmt.Errorf("failed to map forward rule entity: %w", err)
 	}
 
-	if err := r.db.WithContext(ctx).Create(model).Error; err != nil {
+	tx := db.GetTxFromContext(ctx, r.db)
+	if err := tx.Create(model).Error; err != nil {
 		if strings.Contains(err.Error(), "Duplicate entry") || strings.Contains(err.Error(), "duplicate key") {
 			if strings.Contains(err.Error(), "listen_port") {
 				return errors.NewConflictError("listen port is already in use")
@@ -62,7 +64,8 @@ func (r *ForwardRuleRepositoryImpl) Create(ctx context.Context, rule *forward.Fo
 func (r *ForwardRuleRepositoryImpl) GetByID(ctx context.Context, id uint) (*forward.ForwardRule, error) {
 	var model models.ForwardRuleModel
 
-	if err := r.db.WithContext(ctx).First(&model, id).Error; err != nil {
+	tx := db.GetTxFromContext(ctx, r.db)
+	if err := tx.First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
 		}
@@ -83,7 +86,8 @@ func (r *ForwardRuleRepositoryImpl) GetByID(ctx context.Context, id uint) (*forw
 func (r *ForwardRuleRepositoryImpl) GetByListenPort(ctx context.Context, port uint16) (*forward.ForwardRule, error) {
 	var model models.ForwardRuleModel
 
-	if err := r.db.WithContext(ctx).Where("listen_port = ?", port).First(&model).Error; err != nil {
+	tx := db.GetTxFromContext(ctx, r.db)
+	if err := tx.Where("listen_port = ?", port).First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
 		}
@@ -108,7 +112,8 @@ func (r *ForwardRuleRepositoryImpl) Update(ctx context.Context, rule *forward.Fo
 		return fmt.Errorf("failed to map forward rule entity: %w", err)
 	}
 
-	result := r.db.WithContext(ctx).Model(&models.ForwardRuleModel{}).
+	tx := db.GetTxFromContext(ctx, r.db)
+	result := tx.Model(&models.ForwardRuleModel{}).
 		Where("id = ?", model.ID).
 		Updates(map[string]interface{}{
 			"name":           model.Name,
@@ -144,7 +149,8 @@ func (r *ForwardRuleRepositoryImpl) Update(ctx context.Context, rule *forward.Fo
 
 // Delete soft deletes a forward rule.
 func (r *ForwardRuleRepositoryImpl) Delete(ctx context.Context, id uint) error {
-	result := r.db.WithContext(ctx).Delete(&models.ForwardRuleModel{}, id)
+	tx := db.GetTxFromContext(ctx, r.db)
+	result := tx.Delete(&models.ForwardRuleModel{}, id)
 	if result.Error != nil {
 		r.logger.Errorw("failed to delete forward rule", "id", id, "error", result.Error)
 		return fmt.Errorf("failed to delete forward rule: %w", result.Error)
@@ -160,7 +166,8 @@ func (r *ForwardRuleRepositoryImpl) Delete(ctx context.Context, id uint) error {
 
 // List retrieves a paginated list of forward rules with filtering.
 func (r *ForwardRuleRepositoryImpl) List(ctx context.Context, filter forward.ListFilter) ([]*forward.ForwardRule, int64, error) {
-	query := r.db.WithContext(ctx).Model(&models.ForwardRuleModel{})
+	tx := db.GetTxFromContext(ctx, r.db)
+	query := tx.Model(&models.ForwardRuleModel{})
 
 	// Apply filters
 	if filter.AgentID != 0 {
@@ -219,7 +226,8 @@ func (r *ForwardRuleRepositoryImpl) List(ctx context.Context, filter forward.Lis
 func (r *ForwardRuleRepositoryImpl) ListEnabled(ctx context.Context) ([]*forward.ForwardRule, error) {
 	var ruleModels []*models.ForwardRuleModel
 
-	if err := r.db.WithContext(ctx).Where("status = ?", "enabled").Find(&ruleModels).Error; err != nil {
+	tx := db.GetTxFromContext(ctx, r.db)
+	if err := tx.Where("status = ?", "enabled").Find(&ruleModels).Error; err != nil {
 		r.logger.Errorw("failed to list enabled forward rules", "error", err)
 		return nil, fmt.Errorf("failed to list enabled forward rules: %w", err)
 	}
@@ -237,7 +245,8 @@ func (r *ForwardRuleRepositoryImpl) ListEnabled(ctx context.Context) ([]*forward
 func (r *ForwardRuleRepositoryImpl) ListByAgentID(ctx context.Context, agentID uint) ([]*forward.ForwardRule, error) {
 	var ruleModels []*models.ForwardRuleModel
 
-	if err := r.db.WithContext(ctx).Where("agent_id = ?", agentID).Find(&ruleModels).Error; err != nil {
+	tx := db.GetTxFromContext(ctx, r.db)
+	if err := tx.Where("agent_id = ?", agentID).Find(&ruleModels).Error; err != nil {
 		r.logger.Errorw("failed to list forward rules by agent ID", "agent_id", agentID, "error", err)
 		return nil, fmt.Errorf("failed to list forward rules by agent ID: %w", err)
 	}
@@ -255,7 +264,8 @@ func (r *ForwardRuleRepositoryImpl) ListByAgentID(ctx context.Context, agentID u
 func (r *ForwardRuleRepositoryImpl) ListEnabledByAgentID(ctx context.Context, agentID uint) ([]*forward.ForwardRule, error) {
 	var ruleModels []*models.ForwardRuleModel
 
-	if err := r.db.WithContext(ctx).Where("agent_id = ? AND status = ?", agentID, "enabled").Find(&ruleModels).Error; err != nil {
+	tx := db.GetTxFromContext(ctx, r.db)
+	if err := tx.Where("agent_id = ? AND status = ?", agentID, "enabled").Find(&ruleModels).Error; err != nil {
 		r.logger.Errorw("failed to list enabled forward rules by agent ID", "agent_id", agentID, "error", err)
 		return nil, fmt.Errorf("failed to list enabled forward rules by agent ID: %w", err)
 	}
@@ -272,7 +282,8 @@ func (r *ForwardRuleRepositoryImpl) ListEnabledByAgentID(ctx context.Context, ag
 // ExistsByListenPort checks if a rule with the given listen port exists.
 func (r *ForwardRuleRepositoryImpl) ExistsByListenPort(ctx context.Context, port uint16) (bool, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Model(&models.ForwardRuleModel{}).Where("listen_port = ?", port).Count(&count).Error
+	tx := db.GetTxFromContext(ctx, r.db)
+	err := tx.Model(&models.ForwardRuleModel{}).Where("listen_port = ?", port).Count(&count).Error
 	if err != nil {
 		r.logger.Errorw("failed to check forward rule existence by listen port", "port", port, "error", err)
 		return false, fmt.Errorf("failed to check forward rule existence: %w", err)
@@ -282,7 +293,8 @@ func (r *ForwardRuleRepositoryImpl) ExistsByListenPort(ctx context.Context, port
 
 // UpdateTraffic updates the traffic counters for a rule.
 func (r *ForwardRuleRepositoryImpl) UpdateTraffic(ctx context.Context, id uint, upload, download int64) error {
-	result := r.db.WithContext(ctx).Model(&models.ForwardRuleModel{}).
+	tx := db.GetTxFromContext(ctx, r.db)
+	result := tx.Model(&models.ForwardRuleModel{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
 			"upload_bytes":   gorm.Expr("upload_bytes + ?", upload),
