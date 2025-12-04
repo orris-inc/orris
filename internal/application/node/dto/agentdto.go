@@ -95,7 +95,7 @@ func ToNodeConfigResponse(n *node.Node) *NodeConfigResponse {
 	config := &NodeConfigResponse{
 		NodeID:            int(n.ID()),
 		ServerHost:        n.ServerAddress().Value(),
-		ServerPort:        int(n.ServerPort()),
+		ServerPort:        int(n.AgentPort()),
 		TransportProtocol: "tcp", // Default to TCP
 		EnableVless:       false,
 		EnableXTLS:        false,

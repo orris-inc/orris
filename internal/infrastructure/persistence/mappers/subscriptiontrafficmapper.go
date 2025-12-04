@@ -40,7 +40,6 @@ func (m *SubscriptionTrafficMapperImpl) ToEntity(model *models.SubscriptionTraff
 	trafficEntity, err := subscription.ReconstructSubscriptionTraffic(
 		model.ID,
 		model.NodeID,
-		model.UserID,
 		model.SubscriptionID,
 		model.Upload,
 		model.Download,
@@ -65,7 +64,6 @@ func (m *SubscriptionTrafficMapperImpl) ToModel(entity *subscription.Subscriptio
 	model := &models.SubscriptionTrafficModel{
 		ID:             entity.ID(),
 		NodeID:         entity.NodeID(),
-		UserID:         entity.UserID(),
 		SubscriptionID: entity.SubscriptionID(),
 		Upload:         entity.Upload(),
 		Download:       entity.Download(),

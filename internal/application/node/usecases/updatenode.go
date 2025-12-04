@@ -11,18 +11,19 @@ import (
 )
 
 type UpdateNodeCommand struct {
-	NodeID        uint
-	Name          *string
-	ServerAddress *string
-	ServerPort    *uint16
-	Method        *string
-	Plugin        *string
-	PluginOpts    map[string]string
-	Region        *string
-	Tags          []string
-	Description   *string
-	SortOrder     *int
-	Status        *string
+	NodeID           uint
+	Name             *string
+	ServerAddress    *string
+	AgentPort        *uint16
+	SubscriptionPort *uint16
+	Method           *string
+	Plugin           *string
+	PluginOpts       map[string]string
+	Region           *string
+	Tags             []string
+	Description      *string
+	SortOrder        *int
+	Status           *string
 	// Trojan specific fields
 	TrojanTransportProtocol *string
 	TrojanHost              *string
@@ -32,13 +33,14 @@ type UpdateNodeCommand struct {
 }
 
 type UpdateNodeResult struct {
-	NodeID        uint
-	Name          string
-	ServerAddress string
-	ServerPort    uint16
-	Protocol      string
-	Status        string
-	UpdatedAt     string
+	NodeID           uint
+	Name             string
+	ServerAddress    string
+	AgentPort        uint16
+	SubscriptionPort *uint16
+	Protocol         string
+	Status           string
+	UpdatedAt        string
 }
 
 type UpdateNodeUseCase struct {
@@ -92,13 +94,14 @@ func (uc *UpdateNodeUseCase) Execute(ctx context.Context, cmd UpdateNodeCommand)
 
 	// Build and return result
 	return &UpdateNodeResult{
-		NodeID:        existingNode.ID(),
-		Name:          existingNode.Name(),
-		ServerAddress: existingNode.ServerAddress().Value(),
-		ServerPort:    existingNode.ServerPort(),
-		Protocol:      existingNode.Protocol().String(),
-		Status:        existingNode.Status().String(),
-		UpdatedAt:     existingNode.UpdatedAt().Format(time.RFC3339),
+		NodeID:           existingNode.ID(),
+		Name:             existingNode.Name(),
+		ServerAddress:    existingNode.ServerAddress().Value(),
+		AgentPort:        existingNode.AgentPort(),
+		SubscriptionPort: existingNode.SubscriptionPort(),
+		Protocol:         existingNode.Protocol().String(),
+		Status:           existingNode.Status().String(),
+		UpdatedAt:        existingNode.UpdatedAt().Format(time.RFC3339),
 	}, nil
 }
 
@@ -122,10 +125,17 @@ func (uc *UpdateNodeUseCase) applyUpdates(n *node.Node, cmd UpdateNodeCommand) e
 		}
 	}
 
-	// Update server port
-	if cmd.ServerPort != nil {
-		if err := n.UpdateServerPort(*cmd.ServerPort); err != nil {
-			return errors.NewValidationError("invalid server port: " + err.Error())
+	// Update agent port
+	if cmd.AgentPort != nil {
+		if err := n.UpdateAgentPort(*cmd.AgentPort); err != nil {
+			return errors.NewValidationError("invalid agent port: " + err.Error())
+		}
+	}
+
+	// Update subscription port
+	if cmd.SubscriptionPort != nil {
+		if err := n.UpdateSubscriptionPort(cmd.SubscriptionPort); err != nil {
+			return errors.NewValidationError("invalid subscription port: " + err.Error())
 		}
 	}
 
@@ -233,10 +243,10 @@ func (uc *UpdateNodeUseCase) validateCommand(cmd UpdateNodeCommand) error {
 		return errors.NewValidationError("node id is required")
 	}
 
-	if cmd.Name == nil && cmd.ServerAddress == nil && cmd.ServerPort == nil &&
-		cmd.Method == nil && cmd.Plugin == nil && cmd.PluginOpts == nil &&
-		cmd.Region == nil && cmd.Tags == nil && cmd.Description == nil &&
-		cmd.SortOrder == nil && cmd.Status == nil &&
+	if cmd.Name == nil && cmd.ServerAddress == nil && cmd.AgentPort == nil &&
+		cmd.SubscriptionPort == nil && cmd.Method == nil && cmd.Plugin == nil &&
+		cmd.PluginOpts == nil && cmd.Region == nil && cmd.Tags == nil &&
+		cmd.Description == nil && cmd.SortOrder == nil && cmd.Status == nil &&
 		cmd.TrojanTransportProtocol == nil && cmd.TrojanHost == nil &&
 		cmd.TrojanPath == nil && cmd.TrojanSNI == nil && cmd.TrojanAllowInsecure == nil {
 		return errors.NewValidationError("at least one field must be provided for update")
@@ -250,8 +260,8 @@ func (uc *UpdateNodeUseCase) validateCommand(cmd UpdateNodeCommand) error {
 		return errors.NewValidationError("server address cannot be empty")
 	}
 
-	if cmd.ServerPort != nil && *cmd.ServerPort == 0 {
-		return errors.NewValidationError("server port cannot be zero")
+	if cmd.AgentPort != nil && *cmd.AgentPort == 0 {
+		return errors.NewValidationError("agent port cannot be zero")
 	}
 
 	if cmd.Method != nil && *cmd.Method == "" {

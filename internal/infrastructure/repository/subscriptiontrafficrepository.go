@@ -59,9 +59,6 @@ func (r *SubscriptionTrafficRepositoryImpl) GetTrafficStats(ctx context.Context,
 	if filter.NodeID != nil {
 		query = query.Where("node_id = ?", *filter.NodeID)
 	}
-	if filter.UserID != nil {
-		query = query.Where("user_id = ?", *filter.UserID)
-	}
 	if filter.SubscriptionID != nil {
 		query = query.Where("subscription_id = ?", *filter.SubscriptionID)
 	}
@@ -145,7 +142,6 @@ func (r *SubscriptionTrafficRepositoryImpl) AggregateDaily(ctx context.Context, 
 		// Aggregate traffic by node_id for the day
 		var aggregatedRecords []struct {
 			NodeID         uint
-			UserID         *uint
 			SubscriptionID *uint
 			TotalUpload    uint64
 			TotalDownload  uint64
@@ -153,9 +149,9 @@ func (r *SubscriptionTrafficRepositoryImpl) AggregateDaily(ctx context.Context, 
 		}
 
 		err := tx.Model(&models.SubscriptionTrafficModel{}).
-			Select("node_id, user_id, subscription_id, SUM(upload) as total_upload, SUM(download) as total_download, SUM(total) as total_traffic").
+			Select("node_id, subscription_id, SUM(upload) as total_upload, SUM(download) as total_download, SUM(total) as total_traffic").
 			Where("period >= ? AND period < ?", startOfDay, endOfDay).
-			Group("node_id, user_id, subscription_id").
+			Group("node_id, subscription_id").
 			Scan(&aggregatedRecords).Error
 
 		if err != nil {
@@ -167,7 +163,6 @@ func (r *SubscriptionTrafficRepositoryImpl) AggregateDaily(ctx context.Context, 
 		for _, record := range aggregatedRecords {
 			dailyRecord := &models.SubscriptionTrafficModel{
 				NodeID:         record.NodeID,
-				UserID:         record.UserID,
 				SubscriptionID: record.SubscriptionID,
 				Upload:         record.TotalUpload,
 				Download:       record.TotalDownload,
@@ -176,8 +171,8 @@ func (r *SubscriptionTrafficRepositoryImpl) AggregateDaily(ctx context.Context, 
 			}
 
 			// Upsert: create or update if exists
-			if err := tx.Where("node_id = ? AND period = ? AND user_id <=> ? AND subscription_id <=> ?",
-				record.NodeID, startOfDay, record.UserID, record.SubscriptionID).
+			if err := tx.Where("node_id = ? AND period = ? AND subscription_id <=> ?",
+				record.NodeID, startOfDay, record.SubscriptionID).
 				Assign(map[string]interface{}{
 					"upload":   record.TotalUpload,
 					"download": record.TotalDownload,
@@ -205,7 +200,6 @@ func (r *SubscriptionTrafficRepositoryImpl) AggregateMonthly(ctx context.Context
 		// Aggregate traffic by node_id for the month
 		var aggregatedRecords []struct {
 			NodeID         uint
-			UserID         *uint
 			SubscriptionID *uint
 			TotalUpload    uint64
 			TotalDownload  uint64
@@ -213,9 +207,9 @@ func (r *SubscriptionTrafficRepositoryImpl) AggregateMonthly(ctx context.Context
 		}
 
 		err := tx.Model(&models.SubscriptionTrafficModel{}).
-			Select("node_id, user_id, subscription_id, SUM(upload) as total_upload, SUM(download) as total_download, SUM(total) as total_traffic").
+			Select("node_id, subscription_id, SUM(upload) as total_upload, SUM(download) as total_download, SUM(total) as total_traffic").
 			Where("period >= ? AND period < ?", startOfMonth, endOfMonth).
-			Group("node_id, user_id, subscription_id").
+			Group("node_id, subscription_id").
 			Scan(&aggregatedRecords).Error
 
 		if err != nil {
@@ -227,7 +221,6 @@ func (r *SubscriptionTrafficRepositoryImpl) AggregateMonthly(ctx context.Context
 		for _, record := range aggregatedRecords {
 			monthlyRecord := &models.SubscriptionTrafficModel{
 				NodeID:         record.NodeID,
-				UserID:         record.UserID,
 				SubscriptionID: record.SubscriptionID,
 				Upload:         record.TotalUpload,
 				Download:       record.TotalDownload,
@@ -236,8 +229,8 @@ func (r *SubscriptionTrafficRepositoryImpl) AggregateMonthly(ctx context.Context
 			}
 
 			// Upsert: create or update if exists
-			if err := tx.Where("node_id = ? AND period = ? AND user_id <=> ? AND subscription_id <=> ?",
-				record.NodeID, startOfMonth, record.UserID, record.SubscriptionID).
+			if err := tx.Where("node_id = ? AND period = ? AND subscription_id <=> ?",
+				record.NodeID, startOfMonth, record.SubscriptionID).
 				Assign(map[string]interface{}{
 					"upload":   record.TotalUpload,
 					"download": record.TotalDownload,

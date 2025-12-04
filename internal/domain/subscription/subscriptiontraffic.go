@@ -9,7 +9,6 @@ import (
 type SubscriptionTraffic struct {
 	id             uint
 	nodeID         uint
-	userID         *uint
 	subscriptionID *uint
 	upload         uint64
 	download       uint64
@@ -20,7 +19,7 @@ type SubscriptionTraffic struct {
 }
 
 // NewSubscriptionTraffic creates a new subscription traffic record
-func NewSubscriptionTraffic(nodeID uint, subscriptionID, userID *uint, period time.Time) (*SubscriptionTraffic, error) {
+func NewSubscriptionTraffic(nodeID uint, subscriptionID *uint, period time.Time) (*SubscriptionTraffic, error) {
 	if nodeID == 0 {
 		return nil, fmt.Errorf("node ID is required")
 	}
@@ -28,7 +27,6 @@ func NewSubscriptionTraffic(nodeID uint, subscriptionID, userID *uint, period ti
 	now := time.Now()
 	return &SubscriptionTraffic{
 		nodeID:         nodeID,
-		userID:         userID,
 		subscriptionID: subscriptionID,
 		upload:         0,
 		download:       0,
@@ -42,7 +40,7 @@ func NewSubscriptionTraffic(nodeID uint, subscriptionID, userID *uint, period ti
 // ReconstructSubscriptionTraffic reconstructs a subscription traffic entity from persistence
 func ReconstructSubscriptionTraffic(
 	id, nodeID uint,
-	userID, subscriptionID *uint,
+	subscriptionID *uint,
 	upload, download, total uint64,
 	period, createdAt, updatedAt time.Time,
 ) (*SubscriptionTraffic, error) {
@@ -56,7 +54,6 @@ func ReconstructSubscriptionTraffic(
 	return &SubscriptionTraffic{
 		id:             id,
 		nodeID:         nodeID,
-		userID:         userID,
 		subscriptionID: subscriptionID,
 		upload:         upload,
 		download:       download,
@@ -75,11 +72,6 @@ func (st *SubscriptionTraffic) ID() uint {
 // NodeID returns the node ID
 func (st *SubscriptionTraffic) NodeID() uint {
 	return st.nodeID
-}
-
-// UserID returns the user ID
-func (st *SubscriptionTraffic) UserID() *uint {
-	return st.userID
 }
 
 // SubscriptionID returns the subscription ID

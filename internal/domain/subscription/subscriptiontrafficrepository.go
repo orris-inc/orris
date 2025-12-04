@@ -21,7 +21,6 @@ type SubscriptionTrafficRepository interface {
 type TrafficStatsFilter struct {
 	query.PageFilter
 	NodeID         *uint
-	UserID         *uint
 	SubscriptionID *uint
 	From           time.Time
 	To             time.Time

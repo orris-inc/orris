@@ -17,8 +17,9 @@ import (
 type NodeModel struct {
 	ID                uint    `gorm:"primarykey"`
 	Name              string  `gorm:"uniqueIndex;not null;size:100"`
-	ServerAddress     string  `gorm:"not null;size:255;index:idx_server"`
-	ServerPort        uint16  `gorm:"not null;index:idx_server"`
+	ServerAddress     string  `gorm:"not null;size:255;index:idx_agent_address"`
+	AgentPort         uint16  `gorm:"not null;index:idx_agent_address"`                        // port for agent connections
+	SubscriptionPort  *uint16 `gorm:"default:null"`                                            // port for client subscriptions (if nil, use AgentPort)
 	Protocol          string  `gorm:"not null;default:shadowsocks;size:20;index:idx_protocol"` // shadowsocks, trojan
 	Status            string  `gorm:"not null;default:inactive;size:20;index:idx_status"`      // active, inactive, maintenance
 	Region            *string `gorm:"size:100"`

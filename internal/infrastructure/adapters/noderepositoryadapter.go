@@ -173,13 +173,19 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, toke
 			protocol = "shadowsocks"
 		}
 
+		// Calculate effective subscription port (use SubscriptionPort if set, otherwise AgentPort)
+		subscriptionPort := nodeModel.AgentPort
+		if nodeModel.SubscriptionPort != nil {
+			subscriptionPort = *nodeModel.SubscriptionPort
+		}
+
 		ucNode := &usecases.Node{
-			ID:            nodeModel.ID,
-			Name:          nodeModel.Name,
-			ServerAddress: nodeModel.ServerAddress,
-			ServerPort:    nodeModel.ServerPort,
-			Protocol:      protocol,
-			Password:      "", // Password is not stored at node level; will be filled with subscription UUID
+			ID:               nodeModel.ID,
+			Name:             nodeModel.Name,
+			ServerAddress:    nodeModel.ServerAddress,
+			SubscriptionPort: subscriptionPort,
+			Protocol:         protocol,
+			Password:         "", // Password is not stored at node level; will be filled with subscription UUID
 		}
 
 		// Load Shadowsocks config from shadowsocks_configs table

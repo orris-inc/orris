@@ -16,7 +16,8 @@ type Node struct {
 	id                uint
 	name              string
 	serverAddress     vo.ServerAddress
-	serverPort        uint16
+	agentPort         uint16  // port for agent connections (required)
+	subscriptionPort  *uint16 // port for client subscriptions (if nil, use agentPort)
 	protocol          vo.Protocol
 	encryptionConfig  vo.EncryptionConfig
 	pluginConfig      *vo.PluginConfig
@@ -38,7 +39,8 @@ type Node struct {
 func NewNode(
 	name string,
 	serverAddress vo.ServerAddress,
-	serverPort uint16,
+	agentPort uint16,
+	subscriptionPort *uint16,
 	protocol vo.Protocol,
 	encryptionConfig vo.EncryptionConfig,
 	pluginConfig *vo.PluginConfig,
@@ -49,8 +51,8 @@ func NewNode(
 	if name == "" {
 		return nil, fmt.Errorf("node name is required")
 	}
-	if serverPort == 0 {
-		return nil, fmt.Errorf("server port is required")
+	if agentPort == 0 {
+		return nil, fmt.Errorf("agent port is required")
 	}
 	if !protocol.IsValid() {
 		return nil, fmt.Errorf("invalid protocol: %s", protocol)
@@ -74,7 +76,8 @@ func NewNode(
 	n := &Node{
 		name:             name,
 		serverAddress:    serverAddress,
-		serverPort:       serverPort,
+		agentPort:        agentPort,
+		subscriptionPort: subscriptionPort,
 		protocol:         protocol,
 		encryptionConfig: encryptionConfig,
 		pluginConfig:     pluginConfig,
@@ -98,7 +101,8 @@ func ReconstructNode(
 	id uint,
 	name string,
 	serverAddress vo.ServerAddress,
-	serverPort uint16,
+	agentPort uint16,
+	subscriptionPort *uint16,
 	protocol vo.Protocol,
 	encryptionConfig vo.EncryptionConfig,
 	pluginConfig *vo.PluginConfig,
@@ -118,8 +122,8 @@ func ReconstructNode(
 	if name == "" {
 		return nil, fmt.Errorf("node name is required")
 	}
-	if serverPort == 0 {
-		return nil, fmt.Errorf("server port is required")
+	if agentPort == 0 {
+		return nil, fmt.Errorf("agent port is required")
 	}
 	if tokenHash == "" {
 		return nil, fmt.Errorf("token hash is required")
@@ -132,7 +136,8 @@ func ReconstructNode(
 		id:                id,
 		name:              name,
 		serverAddress:     serverAddress,
-		serverPort:        serverPort,
+		agentPort:         agentPort,
+		subscriptionPort:  subscriptionPort,
 		protocol:          protocol,
 		encryptionConfig:  encryptionConfig,
 		pluginConfig:      pluginConfig,
@@ -165,9 +170,23 @@ func (n *Node) ServerAddress() vo.ServerAddress {
 	return n.serverAddress
 }
 
-// ServerPort returns the server port
-func (n *Node) ServerPort() uint16 {
-	return n.serverPort
+// AgentPort returns the agent connection port
+func (n *Node) AgentPort() uint16 {
+	return n.agentPort
+}
+
+// SubscriptionPort returns the subscription port (may be nil)
+func (n *Node) SubscriptionPort() *uint16 {
+	return n.subscriptionPort
+}
+
+// EffectiveSubscriptionPort returns the port to use for subscriptions
+// If subscriptionPort is nil, returns agentPort
+func (n *Node) EffectiveSubscriptionPort() uint16 {
+	if n.subscriptionPort != nil {
+		return *n.subscriptionPort
+	}
+	return n.agentPort
 }
 
 // Protocol returns the protocol type
@@ -325,17 +344,38 @@ func (n *Node) UpdateServerAddress(address vo.ServerAddress) error {
 	return nil
 }
 
-// UpdateServerPort updates the server port
-func (n *Node) UpdateServerPort(port uint16) error {
+// UpdateAgentPort updates the agent connection port
+func (n *Node) UpdateAgentPort(port uint16) error {
 	if port == 0 {
-		return fmt.Errorf("server port cannot be zero")
+		return fmt.Errorf("agent port cannot be zero")
 	}
 
-	if n.serverPort == port {
+	if n.agentPort == port {
 		return nil
 	}
 
-	n.serverPort = port
+	n.agentPort = port
+	n.updatedAt = time.Now()
+	n.version++
+
+	return nil
+}
+
+// UpdateSubscriptionPort updates the subscription port
+func (n *Node) UpdateSubscriptionPort(port *uint16) error {
+	if port != nil && *port == 0 {
+		return fmt.Errorf("subscription port cannot be zero")
+	}
+
+	// Check if values are equal
+	if n.subscriptionPort == nil && port == nil {
+		return nil
+	}
+	if n.subscriptionPort != nil && port != nil && *n.subscriptionPort == *port {
+		return nil
+	}
+
+	n.subscriptionPort = port
 	n.updatedAt = time.Now()
 	n.version++
 
@@ -467,8 +507,8 @@ func (n *Node) Validate() error {
 	if n.name == "" {
 		return fmt.Errorf("node name is required")
 	}
-	if n.serverPort == 0 {
-		return fmt.Errorf("server port is required")
+	if n.agentPort == 0 {
+		return fmt.Errorf("agent port is required")
 	}
 	if n.tokenHash == "" {
 		return fmt.Errorf("token hash is required")
@@ -490,21 +530,23 @@ func (n *Node) Validate() error {
 
 // GenerateSubscriptionURI generates a subscription URI for this node
 // The password parameter should be the subscription UUID
+// Uses EffectiveSubscriptionPort() for the port (subscriptionPort if set, otherwise agentPort)
 func (n *Node) GenerateSubscriptionURI(password string, remarks string) (string, error) {
 	factory := vo.NewProtocolConfigFactory()
 	serverAddr := n.serverAddress.Value()
+	port := n.EffectiveSubscriptionPort()
 
 	switch n.protocol {
 	case vo.ProtocolShadowsocks:
 		ssConfig := vo.NewShadowsocksProtocolConfig(n.encryptionConfig, n.pluginConfig)
-		return factory.GenerateSubscriptionURI(n.protocol, ssConfig, serverAddr, n.serverPort, password, remarks)
+		return factory.GenerateSubscriptionURI(n.protocol, ssConfig, serverAddr, port, password, remarks)
 
 	case vo.ProtocolTrojan:
 		if n.trojanConfig == nil {
 			return "", fmt.Errorf("trojan config is required for Trojan protocol")
 		}
 		trojanConfig := vo.NewTrojanProtocolConfig(*n.trojanConfig)
-		return factory.GenerateSubscriptionURI(n.protocol, trojanConfig, serverAddr, n.serverPort, password, remarks)
+		return factory.GenerateSubscriptionURI(n.protocol, trojanConfig, serverAddr, port, password, remarks)
 
 	default:
 		return "", fmt.Errorf("unsupported protocol: %s", n.protocol)

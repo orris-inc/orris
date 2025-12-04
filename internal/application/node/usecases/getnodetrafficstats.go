@@ -11,7 +11,6 @@ import (
 
 type GetNodeTrafficStatsQuery struct {
 	NodeID         *uint
-	UserID         *uint
 	SubscriptionID *uint
 	From           time.Time
 	To             time.Time
@@ -22,7 +21,6 @@ type GetNodeTrafficStatsQuery struct {
 
 type NodeTrafficStatsResult struct {
 	NodeID         uint      `json:"node_id"`
-	UserID         *uint     `json:"user_id,omitempty"`
 	SubscriptionID *uint     `json:"subscription_id,omitempty"`
 	Upload         uint64    `json:"upload"`
 	Download       uint64    `json:"download"`
@@ -75,7 +73,6 @@ func (uc *GetNodeTrafficStatsUseCase) Execute(
 	for _, record := range trafficRecords {
 		results = append(results, &NodeTrafficStatsResult{
 			NodeID:         record.NodeID(),
-			UserID:         record.UserID(),
 			SubscriptionID: record.SubscriptionID(),
 			Upload:         record.Upload(),
 			Download:       record.Download(),
@@ -137,7 +134,6 @@ func (uc *GetNodeTrafficStatsUseCase) buildFilter(query GetNodeTrafficStatsQuery
 
 	filter := subscription.TrafficStatsFilter{
 		NodeID:         query.NodeID,
-		UserID:         query.UserID,
 		SubscriptionID: query.SubscriptionID,
 		From:           query.From,
 		To:             query.To,

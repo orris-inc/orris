@@ -14,12 +14,13 @@ type ListGroupNodesQuery struct {
 }
 
 type GroupNodeDTO struct {
-	ID            uint   `json:"id"`
-	Name          string `json:"name"`
-	ServerAddress string `json:"server_address"`
-	ServerPort    uint16 `json:"server_port"`
-	Region        string `json:"region"`
-	Status        string `json:"status"`
+	ID               uint    `json:"id"`
+	Name             string  `json:"name"`
+	ServerAddress    string  `json:"server_address"`
+	AgentPort        uint16  `json:"agent_port"`
+	SubscriptionPort *uint16 `json:"subscription_port,omitempty"`
+	Region           string  `json:"region"`
+	Status           string  `json:"status"`
 }
 
 type ListGroupNodesResult struct {
@@ -83,12 +84,13 @@ func (uc *ListGroupNodesUseCase) Execute(ctx context.Context, query ListGroupNod
 	nodeDTOs := make([]*GroupNodeDTO, 0, len(nodes))
 	for _, n := range nodes {
 		nodeDTOs = append(nodeDTOs, &GroupNodeDTO{
-			ID:            n.ID(),
-			Name:          n.Name(),
-			ServerAddress: n.ServerAddress().Value(),
-			ServerPort:    n.ServerPort(),
-			Region:        n.Metadata().Region(),
-			Status:        string(n.Status()),
+			ID:               n.ID(),
+			Name:             n.Name(),
+			ServerAddress:    n.ServerAddress().Value(),
+			AgentPort:        n.AgentPort(),
+			SubscriptionPort: n.SubscriptionPort(),
+			Region:           n.Metadata().Region(),
+			Status:           string(n.Status()),
 		})
 	}
 

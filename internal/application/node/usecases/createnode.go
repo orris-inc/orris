@@ -11,17 +11,18 @@ import (
 )
 
 type CreateNodeCommand struct {
-	Name          string
-	ServerAddress string
-	ServerPort    uint16
-	Protocol      string
-	Method        string
-	Plugin        *string
-	PluginOpts    map[string]string
-	Region        string
-	Tags          []string
-	Description   string
-	SortOrder     int
+	Name             string
+	ServerAddress    string
+	AgentPort        uint16  // port for agent connections (required)
+	SubscriptionPort *uint16 // port for client subscriptions (optional, defaults to AgentPort)
+	Protocol         string
+	Method           string
+	Plugin           *string
+	PluginOpts       map[string]string
+	Region           string
+	Tags             []string
+	Description      string
+	SortOrder        int
 	// Trojan specific fields
 	TransportProtocol string
 	Host              string
@@ -31,14 +32,15 @@ type CreateNodeCommand struct {
 }
 
 type CreateNodeResult struct {
-	NodeID        uint
-	APIToken      string
-	TokenPrefix   string
-	ServerAddress string
-	ServerPort    uint16
-	Protocol      string
-	Status        string
-	CreatedAt     string
+	NodeID           uint
+	APIToken         string
+	TokenPrefix      string
+	ServerAddress    string
+	AgentPort        uint16
+	SubscriptionPort *uint16
+	Protocol         string
+	Status           string
+	CreatedAt        string
 }
 
 type CreateNodeUseCase struct {
@@ -76,15 +78,15 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 		return nil, errors.NewConflictError("node with this name already exists", cmd.Name)
 	}
 
-	// Check for duplicate server address and port
-	exists, err = uc.nodeRepo.ExistsByAddress(ctx, cmd.ServerAddress, int(cmd.ServerPort))
+	// Check for duplicate server address and agent port
+	exists, err = uc.nodeRepo.ExistsByAddress(ctx, cmd.ServerAddress, int(cmd.AgentPort))
 	if err != nil {
-		uc.logger.Errorw("failed to check existing node by address", "address", cmd.ServerAddress, "port", cmd.ServerPort, "error", err)
+		uc.logger.Errorw("failed to check existing node by address", "address", cmd.ServerAddress, "port", cmd.AgentPort, "error", err)
 		return nil, fmt.Errorf("failed to check existing node: %w", err)
 	}
 	if exists {
-		uc.logger.Warnw("node with address and port already exists", "address", cmd.ServerAddress, "port", cmd.ServerPort)
-		return nil, errors.NewConflictError("node with this server address and port already exists", fmt.Sprintf("%s:%d", cmd.ServerAddress, cmd.ServerPort))
+		uc.logger.Warnw("node with address and port already exists", "address", cmd.ServerAddress, "port", cmd.AgentPort)
+		return nil, errors.NewConflictError("node with this server address and port already exists", fmt.Sprintf("%s:%d", cmd.ServerAddress, cmd.AgentPort))
 	}
 
 	// Create value objects
@@ -159,7 +161,8 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 	nodeEntity, err := node.NewNode(
 		cmd.Name,
 		serverAddress,
-		cmd.ServerPort,
+		cmd.AgentPort,
+		cmd.SubscriptionPort,
 		protocol,
 		encryptionConfig,
 		pluginConfig,
@@ -189,14 +192,15 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 
 	// Map to result
 	result := &CreateNodeResult{
-		NodeID:        nodeEntity.ID(),
-		APIToken:      apiToken,
-		TokenPrefix:   tokenPrefix,
-		ServerAddress: nodeEntity.ServerAddress().Value(),
-		ServerPort:    nodeEntity.ServerPort(),
-		Protocol:      nodeEntity.Protocol().String(),
-		Status:        nodeEntity.Status().String(),
-		CreatedAt:     nodeEntity.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
+		NodeID:           nodeEntity.ID(),
+		APIToken:         apiToken,
+		TokenPrefix:      tokenPrefix,
+		ServerAddress:    nodeEntity.ServerAddress().Value(),
+		AgentPort:        nodeEntity.AgentPort(),
+		SubscriptionPort: nodeEntity.SubscriptionPort(),
+		Protocol:         nodeEntity.Protocol().String(),
+		Status:           nodeEntity.Status().String(),
+		CreatedAt:        nodeEntity.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
 	}
 
 	uc.logger.Infow("node created successfully", "id", result.NodeID, "name", cmd.Name)
@@ -212,8 +216,8 @@ func (uc *CreateNodeUseCase) validateCommand(cmd CreateNodeCommand) error {
 		return errors.NewValidationError("server address is required")
 	}
 
-	if cmd.ServerPort == 0 {
-		return errors.NewValidationError("server port is required")
+	if cmd.AgentPort == 0 {
+		return errors.NewValidationError("agent port is required")
 	}
 
 	if cmd.Protocol == "" {

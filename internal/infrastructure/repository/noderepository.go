@@ -196,7 +196,8 @@ func (r *NodeRepositoryImpl) Update(ctx context.Context, nodeEntity *node.Node) 
 			Updates(map[string]interface{}{
 				"name":               model.Name,
 				"server_address":     model.ServerAddress,
-				"server_port":        model.ServerPort,
+				"agent_port":         model.AgentPort,
+				"subscription_port":  model.SubscriptionPort,
 				"protocol":           model.Protocol,
 				"status":             model.Status,
 				"region":             model.Region,
@@ -462,7 +463,8 @@ func (r *NodeRepositoryImpl) GetLastSeenAt(ctx context.Context, nodeID uint) (*n
 		model.ID,
 		"",
 		serverAddr,
-		0,
+		1,   // agentPort (placeholder, just needs to be non-zero)
+		nil, // subscriptionPort
 		vo.Protocol("shadowsocks"),
 		vo.EncryptionConfig{},
 		nil,

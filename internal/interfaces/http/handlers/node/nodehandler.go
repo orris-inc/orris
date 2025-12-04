@@ -207,7 +207,8 @@ func parseNodeID(c *gin.Context) (uint, error) {
 type CreateNodeRequest struct {
 	Name             string            `json:"name" binding:"required" example:"US-Node-01"`
 	ServerAddress    string            `json:"server_address" binding:"required" example:"1.2.3.4"`
-	ServerPort       uint16            `json:"server_port" binding:"required" example:"8388"`
+	AgentPort        uint16            `json:"agent_port" binding:"required" example:"8388" comment:"Port for agent connections"`
+	SubscriptionPort *uint16           `json:"subscription_port,omitempty" example:"8389" comment:"Port for client subscriptions (if null, uses agent_port)"`
 	Protocol         string            `json:"protocol" binding:"required,oneof=shadowsocks trojan" example:"shadowsocks" comment:"Protocol type: shadowsocks or trojan"`
 	EncryptionMethod string            `json:"encryption_method,omitempty" example:"aes-256-gcm" comment:"Encryption method (for Shadowsocks)"`
 	Plugin           *string           `json:"plugin,omitempty" example:"obfs-local"`
@@ -228,7 +229,8 @@ func (r *CreateNodeRequest) ToCommand() usecases.CreateNodeCommand {
 	return usecases.CreateNodeCommand{
 		Name:              r.Name,
 		ServerAddress:     r.ServerAddress,
-		ServerPort:        r.ServerPort,
+		AgentPort:         r.AgentPort,
+		SubscriptionPort:  r.SubscriptionPort,
 		Protocol:          r.Protocol,
 		Method:            r.EncryptionMethod,
 		Plugin:            r.Plugin,
@@ -248,7 +250,8 @@ func (r *CreateNodeRequest) ToCommand() usecases.CreateNodeCommand {
 type UpdateNodeRequest struct {
 	Name             *string           `json:"name,omitempty" example:"US-Node-01-Updated"`
 	ServerAddress    *string           `json:"server_address,omitempty" example:"2.3.4.5"`
-	ServerPort       *uint16           `json:"server_port,omitempty" example:"8389"`
+	AgentPort        *uint16           `json:"agent_port,omitempty" example:"8388" comment:"Port for agent connections"`
+	SubscriptionPort *uint16           `json:"subscription_port,omitempty" example:"8389" comment:"Port for client subscriptions"`
 	EncryptionMethod *string           `json:"encryption_method,omitempty" example:"chacha20-ietf-poly1305" comment:"Encryption method (for Shadowsocks)"`
 	Plugin           *string           `json:"plugin,omitempty" example:"v2ray-plugin"`
 	PluginOpts       map[string]string `json:"plugin_opts,omitempty"`
@@ -270,7 +273,8 @@ func (r *UpdateNodeRequest) ToCommand(nodeID uint) usecases.UpdateNodeCommand {
 		NodeID:                  nodeID,
 		Name:                    r.Name,
 		ServerAddress:           r.ServerAddress,
-		ServerPort:              r.ServerPort,
+		AgentPort:               r.AgentPort,
+		SubscriptionPort:        r.SubscriptionPort,
 		Method:                  r.EncryptionMethod,
 		Plugin:                  r.Plugin,
 		PluginOpts:              r.PluginOpts,

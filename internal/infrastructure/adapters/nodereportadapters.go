@@ -51,7 +51,7 @@ func (a *SubscriptionTrafficRecorderAdapter) RecordSubscriptionTraffic(ctx conte
 
 	// Create domain entity
 	subIDUint := uint(subscriptionID)
-	traffic, err := subscription.NewSubscriptionTraffic(nodeID, &subIDUint, nil, period)
+	traffic, err := subscription.NewSubscriptionTraffic(nodeID, &subIDUint, period)
 	if err != nil {
 		a.logger.Errorw("failed to create subscription traffic entity",
 			"error", err,
@@ -121,7 +121,7 @@ func (a *SubscriptionTrafficRecorderAdapter) BatchRecordSubscriptionTraffic(ctx 
 
 		// Create domain entity
 		subIDUint := uint(item.SubscriptionID)
-		traffic, err := subscription.NewSubscriptionTraffic(nodeID, &subIDUint, nil, period)
+		traffic, err := subscription.NewSubscriptionTraffic(nodeID, &subIDUint, period)
 		if err != nil {
 			a.logger.Errorw("failed to create subscription traffic entity in batch",
 				"error", err,

@@ -36,7 +36,7 @@ func (f *Base64Formatter) FormatWithPassword(nodes []*Node, password string) (st
 			link = fmt.Sprintf("ss://%s@%s:%d",
 				authEncoded,
 				node.ServerAddress,
-				node.ServerPort)
+				node.SubscriptionPort)
 
 			if node.Plugin != "" {
 				pluginOpts := formatPluginOpts(node.PluginOpts)
@@ -114,7 +114,7 @@ func (f *ClashFormatter) FormatWithPassword(nodes []*Node, password string) (str
 				Name:           node.Name,
 				Type:           "trojan",
 				Server:         node.ServerAddress,
-				Port:           node.ServerPort,
+				Port:           node.SubscriptionPort,
 				Password:       password,
 				UDP:            true,
 				SNI:            node.SNI,
@@ -144,7 +144,7 @@ func (f *ClashFormatter) FormatWithPassword(nodes []*Node, password string) (str
 				Name:     node.Name,
 				Type:     "ss",
 				Server:   node.ServerAddress,
-				Port:     node.ServerPort,
+				Port:     node.SubscriptionPort,
 				Cipher:   node.EncryptionMethod,
 				Password: password,
 				UDP:      true,
@@ -203,7 +203,7 @@ func (f *V2RayFormatter) FormatWithPassword(nodes []*Node, password string) (str
 		v2rayNode := v2rayNode{
 			Remarks:    node.Name,
 			Server:     node.ServerAddress,
-			ServerPort: node.ServerPort,
+			ServerPort: node.SubscriptionPort,
 			Password:   password,
 			Method:     node.EncryptionMethod,
 		}
@@ -270,7 +270,7 @@ func (f *SIP008Formatter) FormatWithPassword(nodes []*Node, password string) (st
 			ID:         fmt.Sprintf("node_%d", node.ID),
 			Remarks:    node.Name,
 			Server:     node.ServerAddress,
-			ServerPort: node.ServerPort,
+			ServerPort: node.SubscriptionPort,
 			Password:   password,
 			Method:     node.EncryptionMethod,
 		}
@@ -318,7 +318,7 @@ func (f *SurgeFormatter) FormatWithPassword(nodes []*Node, password string) (str
 			line = fmt.Sprintf("%s = trojan, %s, %d, password=%s",
 				nodeName,
 				node.ServerAddress,
-				node.ServerPort,
+				node.SubscriptionPort,
 				password)
 
 			if node.SNI != "" {
@@ -344,7 +344,7 @@ func (f *SurgeFormatter) FormatWithPassword(nodes []*Node, password string) (str
 			line = fmt.Sprintf("%s = ss, %s, %d, encrypt-method=%s, password=%s, udp-relay=true",
 				nodeName,
 				node.ServerAddress,
-				node.ServerPort,
+				node.SubscriptionPort,
 				node.EncryptionMethod,
 				password)
 

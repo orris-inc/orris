@@ -10,7 +10,8 @@ type NodeDTO struct {
 	ID               uint                   `json:"id" example:"1" description:"Unique identifier for the node"`
 	Name             string                 `json:"name" example:"US-Node-01" description:"Display name of the node"`
 	ServerAddress    string                 `json:"server_address" example:"proxy.example.com" description:"Server hostname or IP address"`
-	ServerPort       uint16                 `json:"server_port" example:"8388" description:"Server port number"`
+	AgentPort        uint16                 `json:"agent_port" example:"8388" description:"Port for agent connections"`
+	SubscriptionPort *uint16                `json:"subscription_port,omitempty" example:"8389" description:"Port for client subscriptions (if null, uses agent_port)"`
 	Protocol         string                 `json:"protocol" example:"shadowsocks" enums:"shadowsocks,trojan" description:"Proxy protocol type"`
 	EncryptionMethod string                 `json:"encryption_method" example:"aes-256-gcm" enums:"aes-256-gcm,aes-128-gcm,chacha20-ietf-poly1305" description:"Encryption method for the proxy connection"`
 	Plugin           string                 `json:"plugin,omitempty" example:"obfs-local" description:"Optional plugin name"`
@@ -48,7 +49,8 @@ type NodeSystemStatusDTO struct {
 type CreateNodeDTO struct {
 	Name             string                 `json:"name" binding:"required,min=2,max=100" example:"US-Node-01" description:"Display name of the node (2-100 characters)"`
 	ServerAddress    string                 `json:"server_address" binding:"required" example:"proxy.example.com" description:"Server hostname or IP address"`
-	ServerPort       uint16                 `json:"server_port" binding:"required,min=1,max=65535" example:"8388" description:"Server port number (1-65535)"`
+	AgentPort        uint16                 `json:"agent_port" binding:"required,min=1,max=65535" example:"8388" description:"Port for agent connections (1-65535)"`
+	SubscriptionPort *uint16                `json:"subscription_port,omitempty" binding:"omitempty,min=1,max=65535" example:"8389" description:"Port for client subscriptions (if null, uses agent_port)"`
 	EncryptionMethod string                 `json:"encryption_method" binding:"required" example:"aes-256-gcm" enums:"aes-256-gcm,aes-128-gcm,chacha20-ietf-poly1305" description:"Encryption method for the proxy connection"`
 	Password         string                 `json:"password" binding:"required" example:"mySecurePassword123" description:"Authentication password"`
 	Plugin           string                 `json:"plugin,omitempty" example:"obfs-local" description:"Optional plugin name"`
@@ -62,7 +64,8 @@ type CreateNodeDTO struct {
 type UpdateNodeDTO struct {
 	Name             *string                `json:"name,omitempty" binding:"omitempty,min=2,max=100" example:"US-Node-01" description:"Display name of the node (2-100 characters)"`
 	ServerAddress    *string                `json:"server_address,omitempty" example:"proxy.example.com" description:"Server hostname or IP address"`
-	ServerPort       *uint16                `json:"server_port,omitempty" binding:"omitempty,min=1,max=65535" example:"8388" description:"Server port number (1-65535)"`
+	AgentPort        *uint16                `json:"agent_port,omitempty" binding:"omitempty,min=1,max=65535" example:"8388" description:"Port for agent connections (1-65535)"`
+	SubscriptionPort *uint16                `json:"subscription_port,omitempty" binding:"omitempty,min=1,max=65535" example:"8389" description:"Port for client subscriptions"`
 	EncryptionMethod *string                `json:"encryption_method,omitempty" example:"aes-256-gcm" enums:"aes-256-gcm,aes-128-gcm,chacha20-ietf-poly1305" description:"Encryption method for the proxy connection"`
 	Password         *string                `json:"password,omitempty" example:"mySecurePassword123" description:"Authentication password"`
 	Plugin           *string                `json:"plugin,omitempty" example:"obfs-local" description:"Optional plugin name"`
@@ -104,7 +107,8 @@ func ToNodeDTO(n *node.Node) *NodeDTO {
 		ID:                n.ID(),
 		Name:              n.Name(),
 		ServerAddress:     n.ServerAddress().Value(),
-		ServerPort:        n.ServerPort(),
+		AgentPort:         n.AgentPort(),
+		SubscriptionPort:  n.SubscriptionPort(),
 		Protocol:          n.Protocol().String(),
 		EncryptionMethod:  n.EncryptionConfig().Method(),
 		Status:            n.Status().String(),

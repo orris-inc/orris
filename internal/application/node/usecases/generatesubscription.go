@@ -122,7 +122,7 @@ type Node struct {
 	ID               uint
 	Name             string
 	ServerAddress    string
-	ServerPort       uint16
+	SubscriptionPort uint16 // port for client subscriptions (effective port)
 	Protocol         string // shadowsocks, trojan
 	EncryptionMethod string // for shadowsocks
 	Password         string
@@ -156,10 +156,10 @@ func (n *Node) ToTrojanURI(password string) string {
 	)
 	if err != nil {
 		// Fallback: should not happen as node was already validated
-		return fmt.Sprintf("trojan://%s@%s:%d#%s", password, n.ServerAddress, n.ServerPort, n.Name)
+		return fmt.Sprintf("trojan://%s@%s:%d#%s", password, n.ServerAddress, n.SubscriptionPort, n.Name)
 	}
 
-	return config.ToURI(n.ServerAddress, n.ServerPort, n.Name)
+	return config.ToURI(n.ServerAddress, n.SubscriptionPort, n.Name)
 }
 
 // generateHMACPassword generates HMAC-SHA256 password from subscription UUID
