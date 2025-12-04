@@ -419,3 +419,64 @@ func (r *NodeRepositoryImpl) IncrementTraffic(ctx context.Context, nodeID uint, 
 	r.logger.Debugw("traffic incremented successfully", "node_id", nodeID, "amount", amount)
 	return nil
 }
+
+// UpdateLastSeenAt updates the last_seen_at timestamp for a node
+func (r *NodeRepositoryImpl) UpdateLastSeenAt(ctx context.Context, nodeID uint) error {
+	result := r.db.WithContext(ctx).Model(&models.NodeModel{}).
+		Where("id = ?", nodeID).
+		UpdateColumn("last_seen_at", gorm.Expr("NOW()"))
+
+	if result.Error != nil {
+		r.logger.Errorw("failed to update last_seen_at", "node_id", nodeID, "error", result.Error)
+		return fmt.Errorf("failed to update last_seen_at: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return errors.NewNotFoundError("node not found")
+	}
+
+	r.logger.Debugw("last_seen_at updated successfully", "node_id", nodeID)
+	return nil
+}
+
+// GetLastSeenAt retrieves just the last_seen_at timestamp for a node (lightweight query)
+func (r *NodeRepositoryImpl) GetLastSeenAt(ctx context.Context, nodeID uint) (*node.Node, error) {
+	var model models.NodeModel
+	err := r.db.WithContext(ctx).
+		Select("id", "last_seen_at").
+		Where("id = ?", nodeID).
+		First(&model).Error
+
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		r.logger.Errorw("failed to get last_seen_at", "node_id", nodeID, "error", err)
+		return nil, fmt.Errorf("failed to get last_seen_at: %w", err)
+	}
+
+	// Create a minimal node entity with just the lastSeenAt field
+	// We use empty/default values for other fields since we only need lastSeenAt
+	serverAddr, _ := vo.NewServerAddress("0.0.0.0")
+	nodeEntity, _ := node.ReconstructNode(
+		model.ID,
+		"",
+		serverAddr,
+		0,
+		vo.Protocol("shadowsocks"),
+		vo.EncryptionConfig{},
+		nil,
+		nil,
+		vo.NodeStatusInactive,
+		vo.NewNodeMetadata("", nil, ""),
+		"placeholder",
+		0,
+		nil,
+		model.LastSeenAt,
+		0,
+		model.CreatedAt,
+		model.UpdatedAt,
+	)
+
+	return nodeEntity, nil
+}

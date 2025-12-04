@@ -23,10 +23,11 @@ type NodeModel struct {
 	Status            string  `gorm:"not null;default:inactive;size:20;index:idx_status"`      // active, inactive, maintenance
 	Region            *string `gorm:"size:100"`
 	Tags              datatypes.JSON
-	SortOrder         int     `gorm:"not null;default:0"`
-	MaintenanceReason *string `gorm:"size:500"`
-	TokenHash         string  `gorm:"not null;uniqueIndex:idx_token_hash;size:255"` // hashed API token for node authentication
-	Version           int     `gorm:"not null;default:1"`
+	SortOrder         int        `gorm:"not null;default:0"`
+	MaintenanceReason *string    `gorm:"size:500"`
+	TokenHash         string     `gorm:"not null;uniqueIndex:idx_token_hash;size:255"` // hashed API token for node authentication
+	LastSeenAt        *time.Time `gorm:"index:idx_nodes_last_seen_at"`                 // last time the node agent reported status
+	Version           int        `gorm:"not null;default:1"`
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 	DeletedAt         gorm.DeletedAt `gorm:"index"`

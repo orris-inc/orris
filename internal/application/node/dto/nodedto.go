@@ -7,30 +7,31 @@ import (
 )
 
 type NodeDTO struct {
-	ID                uint                   `json:"id" example:"1" description:"Unique identifier for the node"`
-	Name              string                 `json:"name" example:"US-Node-01" description:"Display name of the node"`
-	ServerAddress     string                 `json:"server_address" example:"proxy.example.com" description:"Server hostname or IP address"`
-	ServerPort        uint16                 `json:"server_port" example:"8388" description:"Server port number"`
-	Protocol          string                 `json:"protocol" example:"shadowsocks" enums:"shadowsocks,trojan" description:"Proxy protocol type"`
-	EncryptionMethod  string                 `json:"encryption_method" example:"aes-256-gcm" enums:"aes-256-gcm,aes-128-gcm,chacha20-ietf-poly1305" description:"Encryption method for the proxy connection"`
-	Plugin            string                 `json:"plugin,omitempty" example:"obfs-local" description:"Optional plugin name"`
-	PluginOpts        map[string]string      `json:"plugin_opts,omitempty" example:"obfs:http,obfs-host:example.com" description:"Plugin configuration options"`
-	Status            string                 `json:"status" example:"active" enums:"active,inactive,maintenance" description:"Current operational status of the node"`
-	Region            string                 `json:"region,omitempty" example:"us-west" description:"Geographic region or location identifier"`
-	Tags              []string               `json:"tags,omitempty" example:"premium,fast" description:"Custom tags for categorization"`
-	CustomFields      map[string]interface{} `json:"custom_fields,omitempty" description:"Additional custom metadata fields"`
-	SortOrder         int                    `json:"sort_order" example:"100" description:"Display order for sorting nodes"`
+	ID               uint                   `json:"id" example:"1" description:"Unique identifier for the node"`
+	Name             string                 `json:"name" example:"US-Node-01" description:"Display name of the node"`
+	ServerAddress    string                 `json:"server_address" example:"proxy.example.com" description:"Server hostname or IP address"`
+	ServerPort       uint16                 `json:"server_port" example:"8388" description:"Server port number"`
+	Protocol         string                 `json:"protocol" example:"shadowsocks" enums:"shadowsocks,trojan" description:"Proxy protocol type"`
+	EncryptionMethod string                 `json:"encryption_method" example:"aes-256-gcm" enums:"aes-256-gcm,aes-128-gcm,chacha20-ietf-poly1305" description:"Encryption method for the proxy connection"`
+	Plugin           string                 `json:"plugin,omitempty" example:"obfs-local" description:"Optional plugin name"`
+	PluginOpts       map[string]string      `json:"plugin_opts,omitempty" example:"obfs:http,obfs-host:example.com" description:"Plugin configuration options"`
+	Status           string                 `json:"status" example:"active" enums:"active,inactive,maintenance" description:"Current operational status of the node"`
+	Region           string                 `json:"region,omitempty" example:"us-west" description:"Geographic region or location identifier"`
+	Tags             []string               `json:"tags,omitempty" example:"premium,fast" description:"Custom tags for categorization"`
+	CustomFields     map[string]interface{} `json:"custom_fields,omitempty" description:"Additional custom metadata fields"`
+	SortOrder        int                    `json:"sort_order" example:"100" description:"Display order for sorting nodes"`
 	// Trojan specific fields
-	TransportProtocol string `json:"transport_protocol,omitempty" example:"tcp" enums:"tcp,ws,grpc" description:"Transport protocol for Trojan (tcp, ws, grpc)"`
-	Host              string `json:"host,omitempty" example:"cdn.example.com" description:"WebSocket host header or gRPC service name"`
-	Path              string `json:"path,omitempty" example:"/trojan" description:"WebSocket path"`
-	SNI               string `json:"sni,omitempty" example:"example.com" description:"TLS Server Name Indication"`
-	AllowInsecure     bool   `json:"allow_insecure,omitempty" example:"true" description:"Allow insecure TLS connection"`
-	MaintenanceReason *string                `json:"maintenance_reason,omitempty" example:"Scheduled maintenance" description:"Reason for maintenance status (only when status is maintenance)"`
-	IsAvailable       bool                   `json:"is_available" example:"true" description:"Indicates if the node is currently available for use"`
-	Version           int                    `json:"version" example:"1" description:"Version number for optimistic locking"`
-	CreatedAt         time.Time              `json:"created_at" example:"2024-01-15T10:30:00Z" description:"Timestamp when the node was created"`
-	UpdatedAt         time.Time              `json:"updated_at" example:"2024-01-15T14:20:00Z" description:"Timestamp when the node was last updated"`
+	TransportProtocol string     `json:"transport_protocol,omitempty" example:"tcp" enums:"tcp,ws,grpc" description:"Transport protocol for Trojan (tcp, ws, grpc)"`
+	Host              string     `json:"host,omitempty" example:"cdn.example.com" description:"WebSocket host header or gRPC service name"`
+	Path              string     `json:"path,omitempty" example:"/trojan" description:"WebSocket path"`
+	SNI               string     `json:"sni,omitempty" example:"example.com" description:"TLS Server Name Indication"`
+	AllowInsecure     bool       `json:"allow_insecure,omitempty" example:"true" description:"Allow insecure TLS connection"`
+	MaintenanceReason *string    `json:"maintenance_reason,omitempty" example:"Scheduled maintenance" description:"Reason for maintenance status (only when status is maintenance)"`
+	IsOnline          bool       `json:"is_online" example:"true" description:"Indicates if the node agent is online (reported within 5 minutes)"`
+	LastSeenAt        *time.Time `json:"last_seen_at,omitempty" example:"2024-01-15T14:20:00Z" description:"Last time the node agent reported status"`
+	Version           int        `json:"version" example:"1" description:"Version number for optimistic locking"`
+	CreatedAt         time.Time  `json:"created_at" example:"2024-01-15T10:30:00Z" description:"Timestamp when the node was created"`
+	UpdatedAt         time.Time  `json:"updated_at" example:"2024-01-15T14:20:00Z" description:"Timestamp when the node was last updated"`
 	// System status fields (from Redis)
 	SystemStatus *NodeSystemStatusDTO `json:"system_status,omitempty" description:"Real-time system metrics from monitoring"`
 }
@@ -109,7 +110,8 @@ func ToNodeDTO(n *node.Node) *NodeDTO {
 		Status:            n.Status().String(),
 		SortOrder:         n.SortOrder(),
 		MaintenanceReason: n.MaintenanceReason(),
-		IsAvailable:       n.IsAvailable(),
+		IsOnline:          n.IsOnline(),
+		LastSeenAt:        n.LastSeenAt(),
 		Version:           n.Version(),
 		CreatedAt:         n.CreatedAt(),
 		UpdatedAt:         n.UpdatedAt(),

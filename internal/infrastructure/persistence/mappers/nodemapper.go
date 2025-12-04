@@ -108,6 +108,7 @@ func (m *NodeMapperImpl) ToEntity(model *models.NodeModel, encryptionConfig vo.E
 		model.TokenHash,
 		model.SortOrder,
 		model.MaintenanceReason,
+		model.LastSeenAt,
 		model.Version,
 		model.CreatedAt,
 		model.UpdatedAt,

@@ -27,6 +27,7 @@ type Node struct {
 	tokenHash         string
 	sortOrder         int
 	maintenanceReason *string
+	lastSeenAt        *time.Time // last time the node agent reported status
 	version           int
 	createdAt         time.Time
 	updatedAt         time.Time
@@ -107,6 +108,7 @@ func ReconstructNode(
 	tokenHash string,
 	sortOrder int,
 	maintenanceReason *string,
+	lastSeenAt *time.Time,
 	version int,
 	createdAt, updatedAt time.Time,
 ) (*Node, error) {
@@ -140,6 +142,7 @@ func ReconstructNode(
 		tokenHash:         tokenHash,
 		sortOrder:         sortOrder,
 		maintenanceReason: maintenanceReason,
+		lastSeenAt:        lastSeenAt,
 		version:           version,
 		createdAt:         createdAt,
 		updatedAt:         updatedAt,
@@ -434,6 +437,19 @@ func (n *Node) VerifyAPIToken(plainToken string) bool {
 // IsAvailable checks if node is available for use
 func (n *Node) IsAvailable() bool {
 	return n.status == vo.NodeStatusActive
+}
+
+// LastSeenAt returns the last time the node agent reported status
+func (n *Node) LastSeenAt() *time.Time {
+	return n.lastSeenAt
+}
+
+// IsOnline checks if node agent is online (reported within 5 minutes)
+func (n *Node) IsOnline() bool {
+	if n.lastSeenAt == nil {
+		return false
+	}
+	return time.Since(*n.lastSeenAt) < 5*time.Minute
 }
 
 // GetAPIToken returns the plain API token (only available after creation)

@@ -39,18 +39,26 @@ type ListNodesResult struct {
 	Offset     int
 }
 
+// MultipleNodeSystemStatusQuerier defines the interface for querying multiple nodes' system status
+type MultipleNodeSystemStatusQuerier interface {
+	GetMultipleNodeSystemStatus(ctx context.Context, nodeIDs []uint) (map[uint]*NodeSystemStatus, error)
+}
+
 type ListNodesUseCase struct {
-	nodeRepo node.NodeRepository
-	logger   logger.Interface
+	nodeRepo      node.NodeRepository
+	statusQuerier MultipleNodeSystemStatusQuerier
+	logger        logger.Interface
 }
 
 func NewListNodesUseCase(
 	nodeRepo node.NodeRepository,
+	statusQuerier MultipleNodeSystemStatusQuerier,
 	logger logger.Interface,
 ) *ListNodesUseCase {
 	return &ListNodesUseCase{
-		nodeRepo: nodeRepo,
-		logger:   logger,
+		nodeRepo:      nodeRepo,
+		statusQuerier: statusQuerier,
+		logger:        logger,
 	}
 }
 
@@ -108,6 +116,35 @@ func (uc *ListNodesUseCase) Execute(ctx context.Context, query ListNodesQuery) (
 
 	// Convert domain entities to DTOs
 	nodeDTOs := dto.ToNodeDTOList(nodes)
+
+	// Collect node IDs for batch status query
+	nodeIDs := make([]uint, 0, len(nodes))
+	for _, n := range nodes {
+		nodeIDs = append(nodeIDs, n.ID())
+	}
+
+	// Query system status for all nodes from Redis
+	if len(nodeIDs) > 0 && uc.statusQuerier != nil {
+		statusMap, err := uc.statusQuerier.GetMultipleNodeSystemStatus(ctx, nodeIDs)
+		if err != nil {
+			uc.logger.Warnw("failed to get nodes system status, continuing without it",
+				"error", err,
+			)
+		} else {
+			// Attach system status to each node DTO
+			for _, nodeDTO := range nodeDTOs {
+				if status, ok := statusMap[nodeDTO.ID]; ok && status != nil {
+					nodeDTO.SystemStatus = &dto.NodeSystemStatusDTO{
+						CPU:       status.CPU,
+						Memory:    status.Memory,
+						Disk:      status.Disk,
+						Uptime:    status.Uptime,
+						UpdatedAt: status.UpdatedAt,
+					}
+				}
+			}
+		}
+	}
 
 	uc.logger.Infow("nodes listed successfully",
 		"count", len(nodeDTOs),

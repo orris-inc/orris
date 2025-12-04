@@ -22,7 +22,8 @@ var (
 // Init initializes the database connection with minimal configuration
 func Init(cfg *config.DatabaseConfig) error {
 	// Build DSN with essential parameters
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=true&loc=UTC",
+	// Use loc=Local to parse time in server's local timezone
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=true&loc=Local",
 		cfg.Username, cfg.Password, cfg.Host, cfg.Port, cfg.Database)
 
 	// Create custom logger to filter schema queries

@@ -5,10 +5,16 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/orris-inc/orris/internal/application/node/dto"
+	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
+
+// LastSeenUpdateThreshold defines how often we update last_seen_at in database
+// This is used to throttle database writes when agents report frequently
+const LastSeenUpdateThreshold = 2 * time.Minute
 
 // ReportNodeStatusCommand represents the command to report node system status
 type ReportNodeStatusCommand struct {
@@ -26,20 +32,29 @@ type NodeSystemStatusUpdater interface {
 	UpdateSystemStatus(ctx context.Context, nodeID uint, cpu, memory, disk float64, uptime int) error
 }
 
+// NodeLastSeenUpdater defines the interface for updating node last_seen_at
+type NodeLastSeenUpdater interface {
+	GetLastSeenAt(ctx context.Context, nodeID uint) (*node.Node, error)
+	UpdateLastSeenAt(ctx context.Context, nodeID uint) error
+}
+
 // ReportNodeStatusUseCase handles reporting node system status from node agents
 type ReportNodeStatusUseCase struct {
-	statusUpdater NodeSystemStatusUpdater
-	logger        logger.Interface
+	statusUpdater   NodeSystemStatusUpdater
+	lastSeenUpdater NodeLastSeenUpdater
+	logger          logger.Interface
 }
 
 // NewReportNodeStatusUseCase creates a new instance of ReportNodeStatusUseCase
 func NewReportNodeStatusUseCase(
 	statusUpdater NodeSystemStatusUpdater,
+	lastSeenUpdater NodeLastSeenUpdater,
 	logger logger.Interface,
 ) *ReportNodeStatusUseCase {
 	return &ReportNodeStatusUseCase{
-		statusUpdater: statusUpdater,
-		logger:        logger,
+		statusUpdater:   statusUpdater,
+		lastSeenUpdater: lastSeenUpdater,
+		logger:          logger,
 	}
 }
 
@@ -54,7 +69,7 @@ func (uc *ReportNodeStatusUseCase) Execute(ctx context.Context, cmd ReportNodeSt
 	memory := parsePercentage(cmd.Status.Mem)
 	disk := parsePercentage(cmd.Status.Disk)
 
-	// Update node system status
+	// Update node system status in Redis (always)
 	if err := uc.statusUpdater.UpdateSystemStatus(
 		ctx,
 		cmd.NodeID,
@@ -70,6 +85,9 @@ func (uc *ReportNodeStatusUseCase) Execute(ctx context.Context, cmd ReportNodeSt
 		return nil, fmt.Errorf("failed to update node status")
 	}
 
+	// Update last_seen_at in database (throttled to reduce DB writes)
+	uc.updateLastSeenAtThrottled(ctx, cmd.NodeID)
+
 	uc.logger.Infow("node status reported successfully",
 		"node_id", cmd.NodeID,
 		"cpu", cmd.Status.CPU,
@@ -81,6 +99,49 @@ func (uc *ReportNodeStatusUseCase) Execute(ctx context.Context, cmd ReportNodeSt
 	return &ReportNodeStatusResult{
 		Success: true,
 	}, nil
+}
+
+// updateLastSeenAtThrottled updates last_seen_at only if it hasn't been updated recently
+// This reduces database writes when agents report frequently (e.g., every 30 seconds)
+func (uc *ReportNodeStatusUseCase) updateLastSeenAtThrottled(ctx context.Context, nodeID uint) {
+	if uc.lastSeenUpdater == nil {
+		return
+	}
+
+	// Get current last_seen_at value
+	nodeEntity, err := uc.lastSeenUpdater.GetLastSeenAt(ctx, nodeID)
+	if err != nil {
+		uc.logger.Warnw("failed to get last_seen_at for throttle check",
+			"error", err,
+			"node_id", nodeID,
+		)
+		// On error, try to update anyway
+		if updateErr := uc.lastSeenUpdater.UpdateLastSeenAt(ctx, nodeID); updateErr != nil {
+			uc.logger.Warnw("failed to update last_seen_at",
+				"error", updateErr,
+				"node_id", nodeID,
+			)
+		}
+		return
+	}
+
+	// Check if we need to update (first time or exceeded threshold)
+	shouldUpdate := nodeEntity == nil ||
+		nodeEntity.LastSeenAt() == nil ||
+		time.Since(*nodeEntity.LastSeenAt()) > LastSeenUpdateThreshold
+
+	if shouldUpdate {
+		if err := uc.lastSeenUpdater.UpdateLastSeenAt(ctx, nodeID); err != nil {
+			uc.logger.Warnw("failed to update last_seen_at",
+				"error", err,
+				"node_id", nodeID,
+			)
+		} else {
+			uc.logger.Debugw("last_seen_at updated",
+				"node_id", nodeID,
+			)
+		}
+	}
 }
 
 // parsePercentage converts a percentage string (e.g., "45%") to a float64 (e.g., 0.45)

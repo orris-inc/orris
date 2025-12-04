@@ -16,6 +16,11 @@ type NodeRepository interface {
 	ExistsByName(ctx context.Context, name string) (bool, error)
 	ExistsByAddress(ctx context.Context, address string, port int) (bool, error)
 	IncrementTraffic(ctx context.Context, nodeID uint, amount uint64) error
+	// UpdateLastSeenAt updates the last_seen_at timestamp for a node
+	// Returns the previous last_seen_at value for throttling check
+	UpdateLastSeenAt(ctx context.Context, nodeID uint) error
+	// GetLastSeenAt retrieves the last_seen_at timestamp for a node
+	GetLastSeenAt(ctx context.Context, nodeID uint) (*Node, error)
 }
 
 type NodeFilter struct {
