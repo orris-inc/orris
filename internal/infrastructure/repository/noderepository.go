@@ -188,11 +188,8 @@ func (r *NodeRepositoryImpl) Update(ctx context.Context, nodeEntity *node.Node) 
 
 	// Use transaction to update node and protocol config atomically
 	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Use optimistic locking by checking version
-		// The domain entity has already incremented the version, so we need to check against the previous version
-		previousVersion := model.Version - 1
 		result := tx.Model(&models.NodeModel{}).
-			Where("id = ? AND version = ?", model.ID, previousVersion).
+			Where("id = ?", model.ID).
 			Updates(map[string]interface{}{
 				"name":               model.Name,
 				"server_address":     model.ServerAddress,
@@ -206,7 +203,6 @@ func (r *NodeRepositoryImpl) Update(ctx context.Context, nodeEntity *node.Node) 
 				"maintenance_reason": model.MaintenanceReason,
 				"token_hash":         model.TokenHash,
 				"updated_at":         model.UpdatedAt,
-				"version":            model.Version,
 			})
 
 		if result.Error != nil {
@@ -220,7 +216,7 @@ func (r *NodeRepositoryImpl) Update(ctx context.Context, nodeEntity *node.Node) 
 		}
 
 		if result.RowsAffected == 0 {
-			return errors.NewConflictError("node has been modified by another transaction or not found")
+			return errors.NewNotFoundError("node not found", fmt.Sprintf("id=%d", model.ID))
 		}
 
 		// Update protocol-specific config based on protocol type

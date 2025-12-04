@@ -80,14 +80,10 @@ func (uc *UpdateNodeUseCase) Execute(ctx context.Context, cmd UpdateNodeCommand)
 		return nil, err
 	}
 
-	// Save updated node with optimistic locking
+	// Save updated node
 	if err := uc.nodeRepo.Update(ctx, existingNode); err != nil {
 		uc.logger.Errorw("failed to update node", "error", err, "node_id", cmd.NodeID)
-		// Check if it's an optimistic lock error
-		if errors.IsConflictError(err) {
-			return nil, errors.NewConflictError("node was modified by another process, please retry")
-		}
-		return nil, errors.NewInternalError("failed to update node")
+		return nil, err
 	}
 
 	uc.logger.Infow("node updated successfully", "node_id", cmd.NodeID)
