@@ -1,6 +1,19 @@
 version: '3.8'
 
 services:
+  frontend:
+    image: ghcr.io/orris-inc/orris-frontend:latest
+    container_name: orris_frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - orris
+    networks:
+      - orris_network
+
   orris:
     image: ghcr.io/orris-inc/orris:latest
     container_name: orris_app
