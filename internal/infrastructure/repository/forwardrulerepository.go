@@ -143,9 +143,7 @@ func (r *ForwardRuleRepositoryImpl) Update(ctx context.Context, rule *forward.Fo
 		return fmt.Errorf("failed to update forward rule: %w", result.Error)
 	}
 
-	if result.RowsAffected == 0 {
-		return errors.NewNotFoundError("forward rule", fmt.Sprintf("%d", model.ID))
-	}
+	// Note: RowsAffected may be 0 when updated values are identical to existing values.
 
 	r.logger.Infow("forward rule updated successfully", "id", model.ID, "name", model.Name)
 	return nil

@@ -97,9 +97,7 @@ func (r *SubscriptionTokenRepositoryImpl) Update(ctx context.Context, token *sub
 		return fmt.Errorf("failed to update subscription token: %w", result.Error)
 	}
 
-	if result.RowsAffected == 0 {
-		return errors.NewNotFoundError("subscription token not found")
-	}
+	// Note: RowsAffected may be 0 when updated values are identical to existing values.
 
 	r.logger.Infow("subscription token updated successfully", "token_id", token.ID())
 	return nil

@@ -41,6 +41,9 @@ func SetupForwardRoutes(engine *gin.Engine, cfg *ForwardRouteConfig) {
 
 		// Traffic operations
 		forwardRules.POST("/:id/reset-traffic", cfg.ForwardRuleHandler.ResetTraffic)
+
+		// Probe operations
+		forwardRules.POST("/:id/probe", cfg.ForwardRuleHandler.ProbeRule)
 	}
 
 	// Forward agents management (admin only)

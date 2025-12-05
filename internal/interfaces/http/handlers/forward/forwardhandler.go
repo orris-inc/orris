@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/orris-inc/orris/internal/application/forward/services"
 	"github.com/orris-inc/orris/internal/application/forward/usecases"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -23,6 +24,7 @@ type ForwardHandler struct {
 	enableRuleUC   *usecases.EnableForwardRuleUseCase
 	disableRuleUC  *usecases.DisableForwardRuleUseCase
 	resetTrafficUC *usecases.ResetForwardRuleTrafficUseCase
+	probeService   *services.ProbeService
 	logger         logger.Interface
 }
 
@@ -36,6 +38,7 @@ func NewForwardHandler(
 	enableRuleUC *usecases.EnableForwardRuleUseCase,
 	disableRuleUC *usecases.DisableForwardRuleUseCase,
 	resetTrafficUC *usecases.ResetForwardRuleTrafficUseCase,
+	probeService *services.ProbeService,
 ) *ForwardHandler {
 	return &ForwardHandler{
 		createRuleUC:   createRuleUC,
@@ -46,6 +49,7 @@ func NewForwardHandler(
 		enableRuleUC:   enableRuleUC,
 		disableRuleUC:  disableRuleUC,
 		resetTrafficUC: resetTrafficUC,
+		probeService:   probeService,
 		logger:         logger.NewLogger(),
 	}
 }
@@ -278,6 +282,28 @@ func (h *ForwardHandler) ResetTraffic(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "Traffic counters reset successfully", nil)
+}
+
+// ProbeRule handles POST /forward-rules/:id/probe
+func (h *ForwardHandler) ProbeRule(c *gin.Context) {
+	ruleID, err := parseRuleID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	if h.probeService == nil {
+		utils.ErrorResponse(c, http.StatusServiceUnavailable, "Probe service not available")
+		return
+	}
+
+	result, err := h.probeService.ProbeRule(c.Request.Context(), ruleID)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Probe completed", result)
 }
 
 func parseRuleID(c *gin.Context) (uint, error) {

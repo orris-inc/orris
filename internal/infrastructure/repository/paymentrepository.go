@@ -52,9 +52,7 @@ func (r *PaymentRepository) Update(ctx context.Context, p *payment.Payment) erro
 		return fmt.Errorf("failed to update payment: %w", result.Error)
 	}
 
-	if result.RowsAffected == 0 {
-		return fmt.Errorf("payment not found")
-	}
+	// Note: RowsAffected may be 0 when updated values are identical to existing values.
 
 	return nil
 }

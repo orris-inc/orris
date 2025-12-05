@@ -209,9 +209,7 @@ func (r *SubscriptionRepositoryImpl) Update(ctx context.Context, subscriptionEnt
 		return fmt.Errorf("failed to update subscription: %w", result.Error)
 	}
 
-	if result.RowsAffected == 0 {
-		return fmt.Errorf("subscription not found")
-	}
+	// Note: RowsAffected may be 0 when updated values are identical to existing values.
 
 	r.logger.Infow("subscription updated successfully", "id", model.ID)
 	return nil

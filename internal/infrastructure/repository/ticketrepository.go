@@ -47,9 +47,7 @@ func (r *TicketRepository) Update(ctx context.Context, t *ticket.Ticket) error {
 		return fmt.Errorf("failed to update ticket: %w", result.Error)
 	}
 
-	if result.RowsAffected == 0 {
-		return fmt.Errorf("ticket not found")
-	}
+	// Note: RowsAffected may be 0 when updated values are identical to existing values.
 
 	return nil
 }

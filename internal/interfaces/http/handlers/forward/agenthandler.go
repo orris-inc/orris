@@ -307,9 +307,9 @@ func (h *AgentHandler) ReportStatus(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	// Get agent ID from context (set by auth middleware)
-	agentID, exists := c.Get("agent_id")
+	agentID, exists := c.Get("forward_agent_id")
 	if !exists {
-		h.logger.Warnw("agent_id not found in context",
+		h.logger.Warnw("forward_agent_id not found in context",
 			"ip", c.ClientIP(),
 		)
 		utils.ErrorResponse(c, http.StatusUnauthorized, "unauthorized")

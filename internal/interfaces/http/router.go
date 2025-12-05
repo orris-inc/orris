@@ -8,6 +8,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
+	forwardServices "github.com/orris-inc/orris/internal/application/forward/services"
 	forwardUsecases "github.com/orris-inc/orris/internal/application/forward/usecases"
 	nodeUsecases "github.com/orris-inc/orris/internal/application/node/usecases"
 	notificationApp "github.com/orris-inc/orris/internal/application/notification"
@@ -23,9 +24,11 @@ import (
 	"github.com/orris-inc/orris/internal/infrastructure/config"
 	"github.com/orris-inc/orris/internal/infrastructure/email"
 	"github.com/orris-inc/orris/internal/infrastructure/repository"
+	"github.com/orris-inc/orris/internal/infrastructure/services"
 	"github.com/orris-inc/orris/internal/infrastructure/token"
 	"github.com/orris-inc/orris/internal/interfaces/http/handlers"
 	adminHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/admin"
+	agentHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/agent"
 	forwardHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward"
 	nodeHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/node"
 	ticketHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/ticket"
@@ -56,6 +59,8 @@ type Router struct {
 	forwardRuleHandler          *forwardHandlers.ForwardHandler
 	forwardAgentHandler         *forwardHandlers.ForwardAgentHandler
 	forwardAgentAPIHandler      *forwardHandlers.AgentHandler
+	agentHub                    *services.AgentHub
+	agentHubHandler             *agentHandlers.HubHandler
 	authMiddleware              *middleware.AuthMiddleware
 	subscriptionOwnerMiddleware *middleware.SubscriptionOwnerMiddleware
 	nodeTokenMiddleware         *middleware.NodeTokenMiddleware
@@ -423,16 +428,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	disableForwardRuleUC := forwardUsecases.NewDisableForwardRuleUseCase(forwardRuleRepo, log)
 	resetForwardTrafficUC := forwardUsecases.NewResetForwardRuleTrafficUseCase(forwardRuleRepo, log)
 
-	forwardRuleHandler := forwardHandlers.NewForwardHandler(
-		createForwardRuleUC,
-		getForwardRuleUC,
-		updateForwardRuleUC,
-		deleteForwardRuleUC,
-		listForwardRulesUC,
-		enableForwardRuleUC,
-		disableForwardRuleUC,
-		resetForwardTrafficUC,
-	)
+	// forwardRuleHandler will be initialized later after probeService is available
 
 	// Initialize forward agent components
 	forwardAgentRepo := repository.NewForwardAgentRepository(db, log)
@@ -476,6 +472,33 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Initialize forward agent token middleware
 	forwardAgentTokenMiddleware := middleware.NewForwardAgentTokenMiddleware(validateForwardAgentTokenUC, log)
 
+	// Initialize agent hub for forward agent WebSocket connections (probe functionality)
+	agentHub := services.NewAgentHub(log)
+
+	// Register forward status handler to process forward agent status updates
+	forwardStatusHandler := adapters.NewForwardStatusHandler(forwardAgentStatusAdapter, log)
+	agentHub.RegisterStatusHandler(forwardStatusHandler)
+
+	// Initialize and register probe service for forward domain
+	probeService := forwardServices.NewProbeService(forwardRuleRepo, forwardAgentRepo, agentHub, log)
+	agentHub.RegisterMessageHandler(probeService)
+
+	// Initialize forward rule handler (after probeService is available)
+	forwardRuleHandler := forwardHandlers.NewForwardHandler(
+		createForwardRuleUC,
+		getForwardRuleUC,
+		updateForwardRuleUC,
+		deleteForwardRuleUC,
+		listForwardRulesUC,
+		enableForwardRuleUC,
+		disableForwardRuleUC,
+		resetForwardTrafficUC,
+		probeService,
+	)
+
+	// Initialize agent hub handler
+	agentHubHandler := agentHandlers.NewHubHandler(agentHub, log)
+
 	return &Router{
 		engine:                      engine,
 		userHandler:                 userHandler,
@@ -495,6 +518,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		forwardRuleHandler:          forwardRuleHandler,
 		forwardAgentHandler:         forwardAgentHandler,
 		forwardAgentAPIHandler:      forwardAgentAPIHandler,
+		agentHub:                    agentHub,
+		agentHubHandler:             agentHubHandler,
 		authMiddleware:              authMiddleware,
 		subscriptionOwnerMiddleware: subscriptionOwnerMiddleware,
 		nodeTokenMiddleware:         nodeTokenMiddleware,
@@ -668,6 +693,11 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		ForwardAgentHandler:         r.forwardAgentHandler,
 		ForwardAgentAPIHandler:      r.forwardAgentAPIHandler,
 		AuthMiddleware:              r.authMiddleware,
+		ForwardAgentTokenMiddleware: r.forwardAgentTokenMiddleware,
+	})
+
+	routes.SetupAgentHubRoutes(r.engine, &routes.AgentHubRouteConfig{
+		HubHandler:                  r.agentHubHandler,
 		ForwardAgentTokenMiddleware: r.forwardAgentTokenMiddleware,
 	})
 }

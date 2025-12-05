@@ -124,9 +124,7 @@ func (r *ForwardAgentRepositoryImpl) Update(ctx context.Context, agent *forward.
 		return fmt.Errorf("failed to update forward agent: %w", result.Error)
 	}
 
-	if result.RowsAffected == 0 {
-		return errors.NewNotFoundError("forward agent", fmt.Sprintf("%d", model.ID))
-	}
+	// Note: RowsAffected may be 0 when updated values are identical to existing values.
 
 	r.logger.Infow("forward agent updated successfully", "id", model.ID, "name", model.Name)
 	return nil

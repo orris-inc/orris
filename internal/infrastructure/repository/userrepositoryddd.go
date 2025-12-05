@@ -122,9 +122,8 @@ func (r *UserRepositoryDDD) Update(ctx context.Context, userEntity *user.User) e
 		return fmt.Errorf("failed to update user: %w", result.Error)
 	}
 
-	if result.RowsAffected == 0 {
-		return fmt.Errorf("user not found")
-	}
+	// Note: RowsAffected may be 0 when updated values are identical to existing values.
+	// This is expected MySQL behavior and should not be treated as "user not found".
 
 	r.logger.Infow("user updated successfully", "id", model.ID)
 	return nil

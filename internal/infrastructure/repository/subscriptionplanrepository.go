@@ -107,9 +107,7 @@ func (r *SubscriptionPlanRepositoryImpl) Update(ctx context.Context, plan *subsc
 		return fmt.Errorf("failed to update subscription plan: %w", result.Error)
 	}
 
-	if result.RowsAffected == 0 {
-		return errors.NewNotFoundError("subscription plan not found")
-	}
+	// Note: RowsAffected may be 0 when updated values are identical to existing values.
 
 	r.logger.Infow("subscription plan updated successfully", "plan_id", plan.ID())
 	return nil

@@ -105,3 +105,52 @@ const (
 	TunnelStateConnecting   TunnelState = "connecting"
 	TunnelStateDisconnected TunnelState = "disconnected"
 )
+
+// ProbeType represents the type of probe.
+type ProbeType string
+
+const (
+	// ProbeTypeRule probes rule target reachability.
+	ProbeTypeRule ProbeType = "rule"
+	// ProbeTypeTunnel probes tunnel connectivity.
+	ProbeTypeTunnel ProbeType = "tunnel"
+)
+
+// ProbeTask represents a probe task to be executed by the agent.
+type ProbeTask struct {
+	ID          string    `json:"id"`
+	Type        ProbeType `json:"type"`
+	RuleID      uint      `json:"rule_id,omitempty"`
+	ExitAgentID uint      `json:"exit_agent_id,omitempty"`
+	Target      string    `json:"target"`
+	Port        uint16    `json:"port"`
+	Protocol    string    `json:"protocol"`
+	Timeout     int       `json:"timeout"`
+}
+
+// ProbeResult represents the result of a probe execution.
+type ProbeResult struct {
+	TaskID      string    `json:"task_id"`
+	Type        ProbeType `json:"type"`
+	RuleID      uint      `json:"rule_id,omitempty"`
+	ExitAgentID uint      `json:"exit_agent_id,omitempty"`
+	Target      string    `json:"target"`
+	Port        uint16    `json:"port"`
+	Protocol    string    `json:"protocol"`
+	Success     bool      `json:"success"`
+	LatencyMs   int64     `json:"latency_ms"`
+	Error       string    `json:"error,omitempty"`
+	ProbeTime   string    `json:"probe_time"`
+}
+
+// ProbeMessage is the WebSocket message envelope for probe communication.
+type ProbeMessage struct {
+	Type string `json:"type"`
+	Data any    `json:"data"`
+}
+
+// ProbeMessageType constants for WebSocket message types.
+const (
+	ProbeMessageTypeTask   = "task"
+	ProbeMessageTypeResult = "result"
+)

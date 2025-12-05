@@ -20,4 +20,13 @@ var (
 
 	// ErrInvalidTargetAddress is returned when the target address is invalid.
 	ErrInvalidTargetAddress = errors.New("invalid target address")
+
+	// ErrAgentNotConnected is returned when the agent is not connected.
+	ErrAgentNotConnected = errors.New("agent not connected")
+
+	// ErrProbeInProgress is returned when a probe session is already in progress.
+	ErrProbeInProgress = errors.New("probe session already in progress")
+
+	// ErrNoProbeTargets is returned when there are no targets to probe.
+	ErrNoProbeTargets = errors.New("no probe targets available")
 )
