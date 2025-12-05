@@ -34,7 +34,7 @@ type ForwardAgent struct {
 	id             uint
 	name           string
 	tokenHash      string
-	apiToken       string // transient field, only available after creation or regeneration
+	apiToken       string // stored token for retrieval
 	status         AgentStatus
 	publicAddress  string // optional public address for Entry to obtain Exit connection information
 	remark         string
@@ -83,6 +83,7 @@ func ReconstructForwardAgent(
 	id uint,
 	name string,
 	tokenHash string,
+	apiToken string,
 	status AgentStatus,
 	publicAddress string,
 	remark string,
@@ -112,6 +113,7 @@ func ReconstructForwardAgent(
 		id:             id,
 		name:           name,
 		tokenHash:      tokenHash,
+		apiToken:       apiToken,
 		status:         status,
 		publicAddress:  publicAddress,
 		remark:         remark,
@@ -200,14 +202,14 @@ func (a *ForwardAgent) VerifyAPIToken(plainToken string) bool {
 	return subtle.ConstantTimeCompare([]byte(a.tokenHash), []byte(computedHash)) == 1
 }
 
-// GetAPIToken returns the plain API token (only available after creation or regeneration)
+// GetAPIToken returns the plain API token
 func (a *ForwardAgent) GetAPIToken() string {
 	return a.apiToken
 }
 
-// ClearAPIToken clears the plain API token from memory
-func (a *ForwardAgent) ClearAPIToken() {
-	a.apiToken = ""
+// HasToken returns true if the agent has a stored token
+func (a *ForwardAgent) HasToken() bool {
+	return a.apiToken != ""
 }
 
 // Enable enables the forward agent

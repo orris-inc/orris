@@ -69,7 +69,11 @@ func SetupForwardRoutes(engine *gin.Engine, cfg *ForwardRouteConfig) {
 		forwardAgents.GET("/:id/runtime-status", cfg.ForwardAgentHandler.GetAgentStatus)
 
 		// Token operations
+		forwardAgents.GET("/:id/token", cfg.ForwardAgentHandler.GetToken)
 		forwardAgents.POST("/:id/regenerate-token", cfg.ForwardAgentHandler.RegenerateToken)
+
+		// Install script
+		forwardAgents.GET("/:id/install-script", cfg.ForwardAgentHandler.GetInstallScript)
 	}
 
 	// Forward agent API for clients to fetch rules and report traffic

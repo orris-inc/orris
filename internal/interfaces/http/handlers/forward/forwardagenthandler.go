@@ -15,16 +15,19 @@ import (
 
 // ForwardAgentHandler handles HTTP requests for forward agent management.
 type ForwardAgentHandler struct {
-	createAgentUC     *usecases.CreateForwardAgentUseCase
-	getAgentUC        *usecases.GetForwardAgentUseCase
-	listAgentsUC      *usecases.ListForwardAgentsUseCase
-	updateAgentUC     *usecases.UpdateForwardAgentUseCase
-	deleteAgentUC     *usecases.DeleteForwardAgentUseCase
-	enableAgentUC     *usecases.EnableForwardAgentUseCase
-	disableAgentUC    *usecases.DisableForwardAgentUseCase
-	regenerateTokenUC *usecases.RegenerateForwardAgentTokenUseCase
-	getAgentStatusUC  *usecases.GetAgentStatusUseCase
-	logger            logger.Interface
+	createAgentUC           *usecases.CreateForwardAgentUseCase
+	getAgentUC              *usecases.GetForwardAgentUseCase
+	listAgentsUC            *usecases.ListForwardAgentsUseCase
+	updateAgentUC           *usecases.UpdateForwardAgentUseCase
+	deleteAgentUC           *usecases.DeleteForwardAgentUseCase
+	enableAgentUC           *usecases.EnableForwardAgentUseCase
+	disableAgentUC          *usecases.DisableForwardAgentUseCase
+	regenerateTokenUC       *usecases.RegenerateForwardAgentTokenUseCase
+	getAgentTokenUC         *usecases.GetForwardAgentTokenUseCase
+	getAgentStatusUC        *usecases.GetAgentStatusUseCase
+	generateInstallScriptUC *usecases.GenerateInstallScriptUseCase
+	serverURL               string
+	logger                  logger.Interface
 }
 
 // NewForwardAgentHandler creates a new ForwardAgentHandler.
@@ -37,19 +40,25 @@ func NewForwardAgentHandler(
 	enableAgentUC *usecases.EnableForwardAgentUseCase,
 	disableAgentUC *usecases.DisableForwardAgentUseCase,
 	regenerateTokenUC *usecases.RegenerateForwardAgentTokenUseCase,
+	getAgentTokenUC *usecases.GetForwardAgentTokenUseCase,
 	getAgentStatusUC *usecases.GetAgentStatusUseCase,
+	generateInstallScriptUC *usecases.GenerateInstallScriptUseCase,
+	serverURL string,
 ) *ForwardAgentHandler {
 	return &ForwardAgentHandler{
-		createAgentUC:     createAgentUC,
-		getAgentUC:        getAgentUC,
-		listAgentsUC:      listAgentsUC,
-		updateAgentUC:     updateAgentUC,
-		deleteAgentUC:     deleteAgentUC,
-		enableAgentUC:     enableAgentUC,
-		disableAgentUC:    disableAgentUC,
-		regenerateTokenUC: regenerateTokenUC,
-		getAgentStatusUC:  getAgentStatusUC,
-		logger:            logger.NewLogger(),
+		createAgentUC:           createAgentUC,
+		getAgentUC:              getAgentUC,
+		listAgentsUC:            listAgentsUC,
+		updateAgentUC:           updateAgentUC,
+		deleteAgentUC:           deleteAgentUC,
+		enableAgentUC:           enableAgentUC,
+		disableAgentUC:          disableAgentUC,
+		regenerateTokenUC:       regenerateTokenUC,
+		getAgentTokenUC:         getAgentTokenUC,
+		getAgentStatusUC:        getAgentStatusUC,
+		generateInstallScriptUC: generateInstallScriptUC,
+		serverURL:               serverURL,
+		logger:                  logger.NewLogger(),
 	}
 }
 
@@ -259,6 +268,24 @@ func (h *ForwardAgentHandler) RegenerateToken(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "Token regenerated successfully", result)
 }
 
+// GetToken handles GET /forward-agents/:id/token
+func (h *ForwardAgentHandler) GetToken(c *gin.Context) {
+	agentID, err := parseAgentID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	query := usecases.GetForwardAgentTokenQuery{ID: agentID}
+	result, err := h.getAgentTokenUC.Execute(c.Request.Context(), query)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "", result)
+}
+
 // GetAgentStatus handles GET /forward-agents/:id/status
 func (h *ForwardAgentHandler) GetAgentStatus(c *gin.Context) {
 	agentID, err := parseAgentID(c)
@@ -275,6 +302,41 @@ func (h *ForwardAgentHandler) GetAgentStatus(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "", result)
+}
+
+// GetInstallScript handles GET /forward-agents/:id/install-script
+// Query params:
+//   - token (optional): API token. If not provided, uses agent's current stored token
+//   - server_url (optional): Override the default server URL
+func (h *ForwardAgentHandler) GetInstallScript(c *gin.Context) {
+	agentID, err := parseAgentID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	// Token is optional - if not provided, will use agent's stored token
+	token := c.Query("token")
+
+	// Use query param to override server URL if provided
+	serverURL := c.Query("server_url")
+	if serverURL == "" {
+		serverURL = h.serverURL
+	}
+
+	query := usecases.GenerateInstallScriptQuery{
+		AgentID:   agentID,
+		ServerURL: serverURL,
+		Token:     token,
+	}
+
+	result, err := h.generateInstallScriptUC.Execute(c.Request.Context(), query)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Install command generated successfully", result)
 }
 
 func parseAgentID(c *gin.Context) (uint, error) {

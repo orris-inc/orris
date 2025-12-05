@@ -447,6 +447,11 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	forwardAgentStatusAdapter := adapters.NewForwardAgentStatusAdapter(redisClient, log)
 	agentLastSeenUpdater := adapters.NewAgentLastSeenUpdaterAdapter(forwardAgentRepo)
 	getAgentStatusUC := forwardUsecases.NewGetAgentStatusUseCase(forwardAgentRepo, forwardAgentStatusAdapter, log)
+	getForwardAgentTokenUC := forwardUsecases.NewGetForwardAgentTokenUseCase(forwardAgentRepo, log)
+	generateInstallScriptUC := forwardUsecases.NewGenerateInstallScriptUseCase(forwardAgentRepo, log)
+
+	// Server base URL for forward agent install script
+	serverBaseURL := cfg.Server.GetBaseURL()
 
 	forwardAgentHandler := forwardHandlers.NewForwardAgentHandler(
 		createForwardAgentUC,
@@ -457,7 +462,10 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		enableForwardAgentUC,
 		disableForwardAgentUC,
 		regenerateForwardAgentTokenUC,
+		getForwardAgentTokenUC,
 		getAgentStatusUC,
+		generateInstallScriptUC,
+		serverBaseURL,
 	)
 	reportAgentStatusUC := forwardUsecases.NewReportAgentStatusUseCase(
 		forwardAgentRepo,

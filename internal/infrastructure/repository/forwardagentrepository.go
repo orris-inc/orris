@@ -110,6 +110,7 @@ func (r *ForwardAgentRepositoryImpl) Update(ctx context.Context, agent *forward.
 		Updates(map[string]interface{}{
 			"name":           model.Name,
 			"token_hash":     model.TokenHash,
+			"api_token":      model.APIToken,
 			"status":         model.Status,
 			"public_address": model.PublicAddress,
 			"remark":         model.Remark,

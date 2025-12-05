@@ -13,7 +13,8 @@ type ForwardAgentModel struct {
 	ID            uint   `gorm:"primarykey"`
 	Name          string `gorm:"not null;size:100;index:idx_forward_agent_name"`
 	TokenHash     string `gorm:"not null;size:64;index:idx_forward_agent_token_hash"`
-	PublicAddress string `gorm:"size:255"` // public address for agent access (nullable)
+	APIToken      string `gorm:"column:api_token;size:255"` // stored token for retrieval
+	PublicAddress string `gorm:"size:255"`                  // public address for agent access (nullable)
 	Status        string `gorm:"not null;default:enabled;size:20;index:idx_forward_agent_status"`
 	Remark        string `gorm:"size:500"`
 	LastSeenAt    *time.Time
