@@ -65,6 +65,7 @@ configs/config.json
 
 # Docker
 .dockerignore
+data/
 
 # Air live reload tool
 tmp/

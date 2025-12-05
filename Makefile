@@ -164,8 +164,20 @@ dev: ## Run server in development mode with auto-reload (requires air)
 .PHONY: docker-build
 docker-build: ## Build Docker image
 	@echo "Building Docker image..."
-	@docker build -t orris:latest .
-	@echo "✅ Docker image built: orris:latest"
+	@docker build -t ghcr.io/orris-inc/orris:latest .
+	@echo "✅ Docker image built: ghcr.io/orris-inc/orris:latest"
+
+.PHONY: docker-build-multi
+docker-build-multi: ## Build Docker image for multiple platforms
+	@echo "Building Docker image for multiple platforms..."
+	@docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/orris-inc/orris:latest .
+	@echo "✅ Multi-platform Docker image built"
+
+.PHONY: docker-push
+docker-push: docker-build ## Build and push Docker image to ghcr.io
+	@echo "Pushing Docker image to ghcr.io..."
+	@docker push ghcr.io/orris-inc/orris:latest
+	@echo "✅ Docker image pushed: ghcr.io/orris-inc/orris:latest"
 
 .PHONY: docker-up
 docker-up: ## Start services with docker-compose

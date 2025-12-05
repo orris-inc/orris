@@ -1,20 +1,42 @@
 version: '3.8'
 
 services:
+  orris:
+    image: ghcr.io/orris-inc/orris:latest
+    container_name: orris_app
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      - APP_ENV=production
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_USER=orris
+      - DB_PASSWORD=orris_password
+      - DB_NAME=orris
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - orris_network
+
   mysql:
     image: mysql:8.0
     container_name: orris_mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: password
-      MYSQL_DATABASE: orris_dev
-      MYSQL_USER: orris
-      MYSQL_PASSWORD: orris_password
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-password}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-orris}
+      MYSQL_USER: ${MYSQL_USER:-orris}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-orris_password}
     ports:
       - "3306:3306"
     volumes:
-      - mysql_data:/var/lib/mysql
-      - ./scripts/init_local.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./data/mysql:/var/lib/mysql
     networks:
       - orris_network
     healthcheck:
@@ -22,45 +44,22 @@ services:
       timeout: 20s
       retries: 10
 
-  mysql_test:
-    image: mysql:8.0
-    container_name: orris_mysql_test
+  redis:
+    image: redis:7-alpine
+    container_name: orris_redis
     restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: password
-      MYSQL_DATABASE: orris_test
-      MYSQL_USER: orris
-      MYSQL_PASSWORD: orris_password
     ports:
-      - "3307:3306"
+      - "6379:6379"
     volumes:
-      - mysql_test_data:/var/lib/mysql
+      - ./data/redis:/data
     networks:
       - orris_network
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      timeout: 20s
-      retries: 10
-
-  phpmyadmin:
-    image: phpmyadmin/phpmyadmin
-    container_name: orris_phpmyadmin
-    restart: unless-stopped
-    environment:
-      PMA_HOST: mysql
-      PMA_PORT: 3306
-      PMA_USER: root
-      PMA_PASSWORD: password
-    ports:
-      - "8081:80"
-    depends_on:
-      - mysql
-    networks:
-      - orris_network
-
-volumes:
-  mysql_data:
-  mysql_test_data:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: redis-server --appendonly yes
 
 networks:
   orris_network:
