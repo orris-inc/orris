@@ -11,6 +11,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -24,6 +25,7 @@ const (
 type ProbeService struct {
 	repo      forward.Repository
 	agentRepo forward.AgentRepository
+	nodeRepo  node.NodeRepository
 
 	// Hub interface for sending messages
 	hub ProbeHub
@@ -45,12 +47,14 @@ type ProbeHub interface {
 func NewProbeService(
 	repo forward.Repository,
 	agentRepo forward.AgentRepository,
+	nodeRepo node.NodeRepository,
 	hub ProbeHub,
 	log logger.Interface,
 ) *ProbeService {
 	return &ProbeService{
 		repo:          repo,
 		agentRepo:     agentRepo,
+		nodeRepo:      nodeRepo,
 		hub:           hub,
 		pendingProbes: make(map[string]chan *dto.ProbeTaskResult),
 		logger:        log,
@@ -105,11 +109,34 @@ func (s *ProbeService) ProbeRule(ctx context.Context, ruleID uint) (*dto.RulePro
 func (s *ProbeService) probeDirectRule(ctx context.Context, rule *forward.ForwardRule, response *dto.RuleProbeResponse) (*dto.RuleProbeResponse, error) {
 	agentID := rule.AgentID()
 
+	// Resolve target address and port
+	targetAddress := rule.TargetAddress()
+	targetPort := rule.TargetPort()
+
+	// If rule has target node, get address from node
+	if rule.HasTargetNode() {
+		targetNode, err := s.nodeRepo.GetByID(ctx, *rule.TargetNodeID())
+		if err != nil {
+			response.Error = "failed to get target node: " + err.Error()
+			return response, nil
+		}
+		if targetNode == nil {
+			response.Error = "target node not found"
+			return response, nil
+		}
+		targetAddress = targetNode.ServerAddress().Value()
+		// Use node's agent port if rule's target port is not set
+		if targetPort == 0 {
+			targetPort = targetNode.AgentPort()
+		}
+	}
+
 	s.logger.Infow("probing direct rule",
 		"rule_id", rule.ID(),
 		"agent_id", agentID,
-		"target", rule.TargetAddress(),
-		"port", rule.TargetPort(),
+		"target", targetAddress,
+		"port", targetPort,
+		"has_target_node", rule.HasTargetNode(),
 	)
 
 	// Check if agent is online
@@ -124,7 +151,7 @@ func (s *ProbeService) probeDirectRule(ctx context.Context, rule *forward.Forwar
 
 	// Probe target using TCP for reliable connectivity check
 	targetLatency, err := s.sendProbeTask(ctx, agentID, rule.ID(), dto.ProbeTaskTypeTarget,
-		rule.TargetAddress(), rule.TargetPort(), "tcp")
+		targetAddress, targetPort, "tcp")
 	if err != nil {
 		response.Error = err.Error()
 		return response, nil
