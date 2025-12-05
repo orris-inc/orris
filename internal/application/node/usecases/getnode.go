@@ -27,11 +27,13 @@ type NodeSystemStatusQuerier interface {
 
 // NodeSystemStatus represents node system status metrics
 type NodeSystemStatus struct {
-	CPU       string
-	Memory    string
-	Disk      string
-	Uptime    int
-	UpdatedAt int64
+	CPU        string
+	Memory     string
+	Disk       string
+	Uptime     int
+	UpdatedAt  int64
+	PublicIPv4 string
+	PublicIPv6 string
 }
 
 // GetNodeUseCase handles the business logic for retrieving a node
@@ -89,11 +91,13 @@ func (uc *GetNodeUseCase) Execute(ctx context.Context, query GetNodeQuery) (*Get
 	} else if systemStatus != nil {
 		// Add system status to DTO
 		nodeDTO.SystemStatus = &dto.NodeSystemStatusDTO{
-			CPU:       systemStatus.CPU,
-			Memory:    systemStatus.Memory,
-			Disk:      systemStatus.Disk,
-			Uptime:    systemStatus.Uptime,
-			UpdatedAt: systemStatus.UpdatedAt,
+			CPU:        systemStatus.CPU,
+			Memory:     systemStatus.Memory,
+			Disk:       systemStatus.Disk,
+			Uptime:     systemStatus.Uptime,
+			UpdatedAt:  systemStatus.UpdatedAt,
+			PublicIPv4: systemStatus.PublicIPv4,
+			PublicIPv6: systemStatus.PublicIPv6,
 		}
 	}
 

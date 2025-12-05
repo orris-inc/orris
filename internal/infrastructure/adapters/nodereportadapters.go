@@ -222,18 +222,28 @@ func NewNodeSystemStatusUpdaterAdapter(
 }
 
 // UpdateSystemStatus updates node system status metrics in Redis
-func (a *NodeSystemStatusUpdaterAdapter) UpdateSystemStatus(ctx context.Context, nodeID uint, cpu, memory, disk float64, uptime int) error {
+func (a *NodeSystemStatusUpdaterAdapter) UpdateSystemStatus(ctx context.Context, nodeID uint, cpu, memory, disk float64, uptime int, publicIPv4, publicIPv6 string) error {
 	key := fmt.Sprintf("node:%d:status", nodeID)
 
 	// Store status in Redis hash with 5 minutes TTL
-	pipe := a.redisClient.Pipeline()
-	pipe.HSet(ctx, key, map[string]interface{}{
+	data := map[string]interface{}{
 		"cpu":        fmt.Sprintf("%.2f", cpu*100),    // Store as percentage string
 		"memory":     fmt.Sprintf("%.2f", memory*100), // Store as percentage string
 		"disk":       fmt.Sprintf("%.2f", disk*100),   // Store as percentage string
 		"uptime":     uptime,
 		"updated_at": time.Now().Unix(),
-	})
+	}
+
+	// Only store public IPs if provided
+	if publicIPv4 != "" {
+		data["public_ipv4"] = publicIPv4
+	}
+	if publicIPv6 != "" {
+		data["public_ipv6"] = publicIPv6
+	}
+
+	pipe := a.redisClient.Pipeline()
+	pipe.HSet(ctx, key, data)
 	pipe.Expire(ctx, key, 5*time.Minute)
 
 	_, err := pipe.Exec(ctx)
@@ -251,6 +261,8 @@ func (a *NodeSystemStatusUpdaterAdapter) UpdateSystemStatus(ctx context.Context,
 		"memory", memory,
 		"disk", disk,
 		"uptime", uptime,
+		"public_ipv4", publicIPv4,
+		"public_ipv6", publicIPv6,
 	)
 
 	return nil
@@ -294,9 +306,11 @@ func (a *NodeSystemStatusQuerierAdapter) GetNodeSystemStatus(ctx context.Context
 
 	// Parse values
 	status := &nodeUsecases.NodeSystemStatus{
-		CPU:    values["cpu"],
-		Memory: values["memory"],
-		Disk:   values["disk"],
+		CPU:        values["cpu"],
+		Memory:     values["memory"],
+		Disk:       values["disk"],
+		PublicIPv4: values["public_ipv4"],
+		PublicIPv6: values["public_ipv6"],
 	}
 
 	// Parse uptime
@@ -346,9 +360,11 @@ func (a *NodeSystemStatusQuerierAdapter) GetMultipleNodeSystemStatus(ctx context
 		}
 
 		status := &nodeUsecases.NodeSystemStatus{
-			CPU:    values["cpu"],
-			Memory: values["memory"],
-			Disk:   values["disk"],
+			CPU:        values["cpu"],
+			Memory:     values["memory"],
+			Disk:       values["disk"],
+			PublicIPv4: values["public_ipv4"],
+			PublicIPv6: values["public_ipv6"],
 		}
 
 		// Parse uptime

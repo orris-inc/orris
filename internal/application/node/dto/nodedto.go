@@ -39,11 +39,13 @@ type NodeDTO struct {
 
 // NodeSystemStatusDTO represents real-time system status metrics
 type NodeSystemStatusDTO struct {
-	CPU       string `json:"cpu" example:"45.50" description:"CPU usage percentage"`
-	Memory    string `json:"memory" example:"65.30" description:"Memory usage percentage"`
-	Disk      string `json:"disk" example:"80.20" description:"Disk usage percentage"`
-	Uptime    int    `json:"uptime" example:"86400" description:"Uptime in seconds"`
-	UpdatedAt int64  `json:"updated_at" example:"1705324800" description:"Last update timestamp (Unix)"`
+	CPU        string `json:"cpu" example:"45.50" description:"CPU usage percentage"`
+	Memory     string `json:"memory" example:"65.30" description:"Memory usage percentage"`
+	Disk       string `json:"disk" example:"80.20" description:"Disk usage percentage"`
+	Uptime     int    `json:"uptime" example:"86400" description:"Uptime in seconds"`
+	UpdatedAt  int64  `json:"updated_at" example:"1705324800" description:"Last update timestamp (Unix)"`
+	PublicIPv4 string `json:"public_ipv4,omitempty" example:"203.0.113.1" description:"Public IPv4 address reported by agent"`
+	PublicIPv6 string `json:"public_ipv6,omitempty" example:"2001:db8::1" description:"Public IPv6 address reported by agent"`
 }
 
 type CreateNodeDTO struct {

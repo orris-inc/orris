@@ -28,6 +28,8 @@ type NodeModel struct {
 	MaintenanceReason *string    `gorm:"size:500"`
 	TokenHash         string     `gorm:"not null;uniqueIndex:idx_token_hash;size:255"` // hashed API token for node authentication
 	LastSeenAt        *time.Time `gorm:"index:idx_nodes_last_seen_at"`                 // last time the node agent reported status
+	PublicIPv4        *string    `gorm:"size:15"`                                      // public IPv4 address reported by agent
+	PublicIPv6        *string    `gorm:"size:45"`                                      // public IPv6 address reported by agent
 	Version           int        `gorm:"not null;default:1"`
 	CreatedAt         time.Time
 	UpdatedAt         time.Time

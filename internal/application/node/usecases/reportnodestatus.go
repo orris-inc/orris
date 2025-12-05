@@ -29,7 +29,7 @@ type ReportNodeStatusResult struct {
 
 // NodeSystemStatusUpdater defines the interface for updating node system status
 type NodeSystemStatusUpdater interface {
-	UpdateSystemStatus(ctx context.Context, nodeID uint, cpu, memory, disk float64, uptime int) error
+	UpdateSystemStatus(ctx context.Context, nodeID uint, cpu, memory, disk float64, uptime int, publicIPv4, publicIPv6 string) error
 }
 
 // NodeLastSeenUpdater defines the interface for updating node last_seen_at
@@ -77,6 +77,8 @@ func (uc *ReportNodeStatusUseCase) Execute(ctx context.Context, cmd ReportNodeSt
 		memory,
 		disk,
 		cmd.Status.Uptime,
+		cmd.Status.PublicIPv4,
+		cmd.Status.PublicIPv6,
 	); err != nil {
 		uc.logger.Errorw("failed to update node system status",
 			"error", err,
@@ -94,6 +96,8 @@ func (uc *ReportNodeStatusUseCase) Execute(ctx context.Context, cmd ReportNodeSt
 		"memory", cmd.Status.Mem,
 		"disk", cmd.Status.Disk,
 		"uptime", cmd.Status.Uptime,
+		"public_ipv4", cmd.Status.PublicIPv4,
+		"public_ipv6", cmd.Status.PublicIPv6,
 	)
 
 	return &ReportNodeStatusResult{

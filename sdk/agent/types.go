@@ -52,10 +52,12 @@ type TrafficReport struct {
 
 // NodeStatus represents the system status of a node.
 type NodeStatus struct {
-	CPU    string `json:"CPU"`
-	Mem    string `json:"Mem"`
-	Disk   string `json:"Disk"`
-	Uptime int    `json:"Uptime"`
+	CPU        string `json:"CPU"`
+	Mem        string `json:"Mem"`
+	Disk       string `json:"Disk"`
+	Uptime     int    `json:"Uptime"`
+	PublicIPv4 string `json:"public_ipv4,omitempty"` // Public IPv4 address
+	PublicIPv6 string `json:"public_ipv6,omitempty"` // Public IPv6 address
 }
 
 // OnlineSubscription represents an online subscription connection.

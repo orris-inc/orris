@@ -68,10 +68,12 @@ type ReportSubscriptionTrafficRequest struct {
 
 // ReportNodeStatusRequest represents node status report request
 type ReportNodeStatusRequest struct {
-	CPU    string `json:"CPU" binding:"required"`  // CPU usage percentage (format: "XX%")
-	Mem    string `json:"Mem" binding:"required"`  // Memory usage percentage (format: "XX%")
-	Disk   string `json:"Disk" binding:"required"` // Disk usage percentage (format: "XX%")
-	Uptime int    `json:"Uptime" binding:"min=0"`  // System uptime in seconds
+	CPU        string `json:"CPU" binding:"required"`  // CPU usage percentage (format: "XX%")
+	Mem        string `json:"Mem" binding:"required"`  // Memory usage percentage (format: "XX%")
+	Disk       string `json:"Disk" binding:"required"` // Disk usage percentage (format: "XX%")
+	Uptime     int    `json:"Uptime" binding:"min=0"`  // System uptime in seconds
+	PublicIPv4 string `json:"public_ipv4,omitempty"`   // Public IPv4 address reported by agent
+	PublicIPv6 string `json:"public_ipv6,omitempty"`   // Public IPv6 address reported by agent
 }
 
 // OnlineSubscriptionItem represents a single online subscription connection
