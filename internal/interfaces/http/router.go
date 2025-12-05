@@ -447,6 +447,11 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	regenerateForwardAgentTokenUC := forwardUsecases.NewRegenerateForwardAgentTokenUseCase(forwardAgentRepo, log)
 	validateForwardAgentTokenUC := forwardUsecases.NewValidateForwardAgentTokenUseCase(forwardAgentRepo, log)
 
+	// Initialize forward agent status adapter (shared for queries and updates)
+	forwardAgentStatusAdapter := adapters.NewForwardAgentStatusAdapter(redisClient, log)
+	agentLastSeenUpdater := adapters.NewAgentLastSeenUpdaterAdapter(forwardAgentRepo)
+	getAgentStatusUC := forwardUsecases.NewGetAgentStatusUseCase(forwardAgentRepo, forwardAgentStatusAdapter, log)
+
 	forwardAgentHandler := forwardHandlers.NewForwardAgentHandler(
 		createForwardAgentUC,
 		getForwardAgentUC,
@@ -456,10 +461,17 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		enableForwardAgentUC,
 		disableForwardAgentUC,
 		regenerateForwardAgentTokenUC,
+		getAgentStatusUC,
+	)
+	reportAgentStatusUC := forwardUsecases.NewReportAgentStatusUseCase(
+		forwardAgentRepo,
+		forwardAgentStatusAdapter,
+		agentLastSeenUpdater,
+		log,
 	)
 
 	// Initialize forward agent API handler for client to fetch rules and report traffic
-	forwardAgentAPIHandler := forwardHandlers.NewAgentHandler(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, log)
+	forwardAgentAPIHandler := forwardHandlers.NewAgentHandler(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, reportAgentStatusUC, log)
 
 	// Initialize forward agent token middleware
 	forwardAgentTokenMiddleware := middleware.NewForwardAgentTokenMiddleware(validateForwardAgentTokenUC, log)

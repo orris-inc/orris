@@ -234,10 +234,17 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, toke
 		nodes = append(nodes, node)
 	}
 
+	// Query forward rules that target these nodes to generate additional subscription entries
+	forwardedNodes := r.getForwardedNodes(ctx, nodeIDs, nodeMap)
+	if len(forwardedNodes) > 0 {
+		nodes = append(nodes, forwardedNodes...)
+	}
+
 	r.logger.Infow("retrieved nodes for subscription token",
 		"subscription_id", subscriptionModel.ID,
 		"plan_id", subscriptionModel.PlanID,
-		"node_count", len(nodes),
+		"node_count", len(nodes)-len(forwardedNodes),
+		"forwarded_count", len(forwardedNodes),
 	)
 
 	return nodes, nil
@@ -265,4 +272,95 @@ func (r *NodeRepositoryAdapter) GetByTokenHash(ctx context.Context, tokenHash st
 		TokenHash: nodeEntity.TokenHash(),
 		Status:    string(nodeEntity.Status()),
 	}, nil
+}
+
+// getForwardedNodes queries forward rules that target the given nodes and generates
+// additional subscription entries using the forward agent's public address.
+func (r *NodeRepositoryAdapter) getForwardedNodes(ctx context.Context, nodeIDs []uint, nodeMap map[uint]*usecases.Node) []*usecases.Node {
+	if len(nodeIDs) == 0 {
+		return nil
+	}
+
+	// Query forward rules that target these nodes (direct and entry types, enabled status)
+	var forwardRules []models.ForwardRuleModel
+	if err := r.db.WithContext(ctx).
+		Where("target_node_id IN ?", nodeIDs).
+		Where("status = ?", "enabled").
+		Where("rule_type IN ?", []string{"direct", "entry"}).
+		Find(&forwardRules).Error; err != nil {
+		r.logger.Warnw("failed to query forward rules for nodes", "error", err)
+		return nil
+	}
+
+	if len(forwardRules) == 0 {
+		return nil
+	}
+
+	// Collect agent IDs
+	agentIDSet := make(map[uint]bool)
+	for _, rule := range forwardRules {
+		agentIDSet[rule.AgentID] = true
+	}
+
+	agentIDs := make([]uint, 0, len(agentIDSet))
+	for agentID := range agentIDSet {
+		agentIDs = append(agentIDs, agentID)
+	}
+
+	// Query forward agents
+	var agents []models.ForwardAgentModel
+	if err := r.db.WithContext(ctx).
+		Where("id IN ?", agentIDs).
+		Where("status = ?", "enabled").
+		Find(&agents).Error; err != nil {
+		r.logger.Warnw("failed to query forward agents", "error", err)
+		return nil
+	}
+
+	// Build agent map
+	agentMap := make(map[uint]*models.ForwardAgentModel)
+	for i := range agents {
+		agentMap[agents[i].ID] = &agents[i]
+	}
+
+	// Generate forwarded node entries
+	var forwardedNodes []*usecases.Node
+	for _, rule := range forwardRules {
+		agent, ok := agentMap[rule.AgentID]
+		if !ok || agent.PublicAddress == "" {
+			// Skip if agent not found or has no public address
+			continue
+		}
+
+		if rule.TargetNodeID == nil {
+			continue
+		}
+
+		originalNode, ok := nodeMap[*rule.TargetNodeID]
+		if !ok {
+			continue
+		}
+
+		// Create a forwarded node entry with agent's public address
+		forwardedNode := &usecases.Node{
+			ID:                originalNode.ID,
+			Name:              rule.Name, // Use forward rule name
+			ServerAddress:     agent.PublicAddress,
+			SubscriptionPort:  rule.ListenPort,
+			Protocol:          originalNode.Protocol,
+			EncryptionMethod:  originalNode.EncryptionMethod,
+			Password:          originalNode.Password,
+			Plugin:            originalNode.Plugin,
+			PluginOpts:        originalNode.PluginOpts,
+			TransportProtocol: originalNode.TransportProtocol,
+			Host:              originalNode.Host,
+			Path:              originalNode.Path,
+			SNI:               originalNode.SNI,
+			AllowInsecure:     originalNode.AllowInsecure,
+		}
+
+		forwardedNodes = append(forwardedNodes, forwardedNode)
+	}
+
+	return forwardedNodes
 }

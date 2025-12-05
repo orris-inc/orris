@@ -23,6 +23,7 @@ type ForwardAgentHandler struct {
 	enableAgentUC     *usecases.EnableForwardAgentUseCase
 	disableAgentUC    *usecases.DisableForwardAgentUseCase
 	regenerateTokenUC *usecases.RegenerateForwardAgentTokenUseCase
+	getAgentStatusUC  *usecases.GetAgentStatusUseCase
 	logger            logger.Interface
 }
 
@@ -36,6 +37,7 @@ func NewForwardAgentHandler(
 	enableAgentUC *usecases.EnableForwardAgentUseCase,
 	disableAgentUC *usecases.DisableForwardAgentUseCase,
 	regenerateTokenUC *usecases.RegenerateForwardAgentTokenUseCase,
+	getAgentStatusUC *usecases.GetAgentStatusUseCase,
 ) *ForwardAgentHandler {
 	return &ForwardAgentHandler{
 		createAgentUC:     createAgentUC,
@@ -46,6 +48,7 @@ func NewForwardAgentHandler(
 		enableAgentUC:     enableAgentUC,
 		disableAgentUC:    disableAgentUC,
 		regenerateTokenUC: regenerateTokenUC,
+		getAgentStatusUC:  getAgentStatusUC,
 		logger:            logger.NewLogger(),
 	}
 }
@@ -254,6 +257,24 @@ func (h *ForwardAgentHandler) RegenerateToken(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "Token regenerated successfully", result)
+}
+
+// GetAgentStatus handles GET /forward-agents/:id/status
+func (h *ForwardAgentHandler) GetAgentStatus(c *gin.Context) {
+	agentID, err := parseAgentID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	query := usecases.GetAgentStatusQuery{AgentID: agentID}
+	result, err := h.getAgentStatusUC.Execute(c.Request.Context(), query)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "", result)
 }
 
 func parseAgentID(c *gin.Context) (uint, error) {

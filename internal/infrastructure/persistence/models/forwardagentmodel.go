@@ -16,6 +16,7 @@ type ForwardAgentModel struct {
 	PublicAddress string `gorm:"size:255"` // public address for agent access (nullable)
 	Status        string `gorm:"not null;default:enabled;size:20;index:idx_forward_agent_status"`
 	Remark        string `gorm:"size:500"`
+	LastSeenAt    *time.Time
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 	DeletedAt     gorm.DeletedAt `gorm:"index"`

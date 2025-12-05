@@ -62,6 +62,9 @@ func SetupForwardRoutes(engine *gin.Engine, cfg *ForwardRouteConfig) {
 		forwardAgents.POST("/:id/enable", cfg.ForwardAgentHandler.EnableAgent)
 		forwardAgents.POST("/:id/disable", cfg.ForwardAgentHandler.DisableAgent)
 
+		// Runtime status (from agent reports)
+		forwardAgents.GET("/:id/runtime-status", cfg.ForwardAgentHandler.GetAgentStatus)
+
 		// Token operations
 		forwardAgents.POST("/:id/regenerate-token", cfg.ForwardAgentHandler.RegenerateToken)
 	}
@@ -72,6 +75,7 @@ func SetupForwardRoutes(engine *gin.Engine, cfg *ForwardRouteConfig) {
 	{
 		forwardAgentAPI.GET("/rules", cfg.ForwardAgentAPIHandler.GetEnabledRules)
 		forwardAgentAPI.POST("/traffic", cfg.ForwardAgentAPIHandler.ReportTraffic)
+		forwardAgentAPI.POST("/status", cfg.ForwardAgentAPIHandler.ReportStatus)
 		forwardAgentAPI.GET("/exit-endpoint/:agent_id", cfg.ForwardAgentAPIHandler.GetExitEndpoint)
 	}
 }

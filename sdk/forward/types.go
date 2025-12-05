@@ -74,3 +74,34 @@ type apiResponse struct {
 	Message string `json:"message,omitempty"`
 	Data    any    `json:"data,omitempty"`
 }
+
+// AgentStatus represents the status data reported by a forward agent.
+type AgentStatus struct {
+	// System resources
+	CPUPercent    float64 `json:"cpu_percent"`
+	MemoryPercent float64 `json:"memory_percent"`
+	MemoryUsed    uint64  `json:"memory_used"`
+	MemoryTotal   uint64  `json:"memory_total"`
+	DiskPercent   float64 `json:"disk_percent"`
+	DiskUsed      uint64  `json:"disk_used"`
+	DiskTotal     uint64  `json:"disk_total"`
+	UptimeSeconds int64   `json:"uptime_seconds"`
+
+	// Network connections
+	TCPConnections int `json:"tcp_connections"`
+	UDPConnections int `json:"udp_connections"`
+
+	// Forward status
+	ActiveRules       int                  `json:"active_rules"`
+	ActiveConnections int                  `json:"active_connections"`
+	TunnelStatus      map[uint]TunnelState `json:"tunnel_status,omitempty"`
+}
+
+// TunnelState represents the connection state of a tunnel.
+type TunnelState string
+
+const (
+	TunnelStateConnected    TunnelState = "connected"
+	TunnelStateConnecting   TunnelState = "connecting"
+	TunnelStateDisconnected TunnelState = "disconnected"
+)

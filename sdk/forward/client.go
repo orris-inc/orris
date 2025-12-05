@@ -91,6 +91,16 @@ func (c *Client) GetExitEndpoint(ctx context.Context, exitAgentID uint) (*ExitEn
 	return &endpoint, nil
 }
 
+// ReportStatus reports the agent status to the server.
+func (c *Client) ReportStatus(ctx context.Context, status *AgentStatus) error {
+	url := fmt.Sprintf("%s/forward-agent-api/status", c.baseURL)
+
+	if err := c.doRequest(ctx, http.MethodPost, url, status, nil); err != nil {
+		return fmt.Errorf("report status: %w", err)
+	}
+	return nil
+}
+
 // doRequest performs an HTTP request and decodes the response.
 func (c *Client) doRequest(ctx context.Context, method, url string, body any, result any) error {
 	var reqBody io.Reader

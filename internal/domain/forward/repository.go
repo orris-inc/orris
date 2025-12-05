@@ -81,6 +81,9 @@ type AgentRepository interface {
 
 	// ExistsByName checks if an agent with the given name exists.
 	ExistsByName(ctx context.Context, name string) (bool, error)
+
+	// UpdateLastSeen updates the last_seen_at timestamp for an agent.
+	UpdateLastSeen(ctx context.Context, id uint) error
 }
 
 // AgentListFilter defines the filtering options for listing forward agents.

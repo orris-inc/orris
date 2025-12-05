@@ -228,6 +228,25 @@ func (r *ForwardAgentRepositoryImpl) ExistsByName(ctx context.Context, name stri
 	return count > 0, nil
 }
 
+// UpdateLastSeen updates the last_seen_at timestamp for an agent.
+func (r *ForwardAgentRepositoryImpl) UpdateLastSeen(ctx context.Context, id uint) error {
+	result := r.db.WithContext(ctx).Model(&models.ForwardAgentModel{}).
+		Where("id = ?", id).
+		Update("last_seen_at", gorm.Expr("NOW()"))
+
+	if result.Error != nil {
+		r.logger.Errorw("failed to update forward agent last_seen_at", "id", id, "error", result.Error)
+		return fmt.Errorf("failed to update last_seen_at: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return errors.NewNotFoundError("forward agent", fmt.Sprintf("%d", id))
+	}
+
+	r.logger.Debugw("forward agent last_seen_at updated", "id", id)
+	return nil
+}
+
 // GetEndpointInfo retrieves the agent's public address and the WebSocket listen port from its exit rule.
 // Returns the public address and WebSocket port. If the agent doesn't have a public address or exit rule, returns empty/zero values.
 func (r *ForwardAgentRepositoryImpl) GetEndpointInfo(ctx context.Context, agentID uint) (address string, wsPort uint16, err error) {

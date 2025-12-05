@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/orris-inc/orris/internal/application/forward/dto"
+	"github.com/orris-inc/orris/internal/application/forward/usecases"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -16,10 +17,11 @@ import (
 
 // AgentHandler handles RESTful agent API requests for forward client
 type AgentHandler struct {
-	repo      forward.Repository
-	agentRepo forward.AgentRepository
-	nodeRepo  node.NodeRepository
-	logger    logger.Interface
+	repo           forward.Repository
+	agentRepo      forward.AgentRepository
+	nodeRepo       node.NodeRepository
+	reportStatusUC *usecases.ReportAgentStatusUseCase
+	logger         logger.Interface
 }
 
 // NewAgentHandler creates a new AgentHandler instance
@@ -27,13 +29,15 @@ func NewAgentHandler(
 	repo forward.Repository,
 	agentRepo forward.AgentRepository,
 	nodeRepo node.NodeRepository,
+	reportStatusUC *usecases.ReportAgentStatusUseCase,
 	logger logger.Interface,
 ) *AgentHandler {
 	return &AgentHandler{
-		repo:      repo,
-		agentRepo: agentRepo,
-		nodeRepo:  nodeRepo,
-		logger:    logger,
+		repo:           repo,
+		agentRepo:      agentRepo,
+		nodeRepo:       nodeRepo,
+		reportStatusUC: reportStatusUC,
+		logger:         logger,
 	}
 }
 
@@ -279,4 +283,91 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 		"address": agent.PublicAddress(),
 		"ws_port": exitRule.WsListenPort(),
 	})
+}
+
+// ReportStatusRequest represents status report request from forward client
+type ReportStatusRequest struct {
+	CPUPercent        float64         `json:"cpu_percent"`
+	MemoryPercent     float64         `json:"memory_percent"`
+	MemoryUsed        uint64          `json:"memory_used"`
+	MemoryTotal       uint64          `json:"memory_total"`
+	DiskPercent       float64         `json:"disk_percent"`
+	DiskUsed          uint64          `json:"disk_used"`
+	DiskTotal         uint64          `json:"disk_total"`
+	UptimeSeconds     int64           `json:"uptime_seconds"`
+	TCPConnections    int             `json:"tcp_connections"`
+	UDPConnections    int             `json:"udp_connections"`
+	ActiveRules       int             `json:"active_rules"`
+	ActiveConnections int             `json:"active_connections"`
+	TunnelStatus      map[uint]string `json:"tunnel_status,omitempty"`
+}
+
+// ReportStatus handles POST /forward-agent-api/status
+func (h *AgentHandler) ReportStatus(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	// Get agent ID from context (set by auth middleware)
+	agentID, exists := c.Get("agent_id")
+	if !exists {
+		h.logger.Warnw("agent_id not found in context",
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	// Parse request body
+	var req ReportStatusRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid status report request body",
+			"error", err,
+			"agent_id", agentID,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	h.logger.Debugw("forward agent status report received",
+		"agent_id", agentID,
+		"cpu", req.CPUPercent,
+		"memory", req.MemoryPercent,
+		"active_rules", req.ActiveRules,
+		"ip", c.ClientIP(),
+	)
+
+	// Convert request to DTO
+	statusDTO := &dto.AgentStatusDTO{
+		CPUPercent:        req.CPUPercent,
+		MemoryPercent:     req.MemoryPercent,
+		MemoryUsed:        req.MemoryUsed,
+		MemoryTotal:       req.MemoryTotal,
+		DiskPercent:       req.DiskPercent,
+		DiskUsed:          req.DiskUsed,
+		DiskTotal:         req.DiskTotal,
+		UptimeSeconds:     req.UptimeSeconds,
+		TCPConnections:    req.TCPConnections,
+		UDPConnections:    req.UDPConnections,
+		ActiveRules:       req.ActiveRules,
+		ActiveConnections: req.ActiveConnections,
+		TunnelStatus:      req.TunnelStatus,
+	}
+
+	// Execute use case
+	input := &dto.ReportAgentStatusInput{
+		AgentID: agentID.(uint),
+		Status:  statusDTO,
+	}
+
+	if err := h.reportStatusUC.Execute(ctx, input); err != nil {
+		h.logger.Errorw("failed to report agent status",
+			"error", err,
+			"agent_id", agentID,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to report status")
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "status reported successfully", nil)
 }
