@@ -142,7 +142,7 @@ func (hc *HubConn) SendStatus(status *AgentStatus) error {
 }
 
 // SendProbeResult sends a probe result to the server.
-func (hc *HubConn) SendProbeResult(result *ProbeResult) error {
+func (hc *HubConn) SendProbeResult(result *ProbeTaskResult) error {
 	msg := &HubMessage{
 		Type:      MsgTypeProbeResult,
 		Timestamp: time.Now().Unix(),
@@ -278,7 +278,7 @@ type HubMessageHandler func(msg *HubMessage)
 
 // ProbeTaskHandler is a callback function for handling probe tasks.
 // Returns the probe result to be sent back to the server.
-type ProbeTaskHandler func(task *ProbeTask) *ProbeResult
+type ProbeTaskHandler func(task *ProbeTask) *ProbeTaskResult
 
 // RunHubLoop connects to the hub and handles messages.
 // This is a convenience method that manages the connection lifecycle.

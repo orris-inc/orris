@@ -106,41 +106,35 @@ const (
 	TunnelStateDisconnected TunnelState = "disconnected"
 )
 
-// ProbeType represents the type of probe.
-type ProbeType string
+// ProbeTaskType represents the type of probe task.
+type ProbeTaskType string
 
 const (
-	// ProbeTypeTarget probes target reachability from agent.
-	ProbeTypeTarget ProbeType = "target"
-	// ProbeTypeTunnel probes tunnel connectivity (entry to exit).
-	ProbeTypeTunnel ProbeType = "tunnel"
+	// ProbeTaskTypeTarget probes target reachability from agent.
+	ProbeTaskTypeTarget ProbeTaskType = "target"
+	// ProbeTaskTypeTunnel probes tunnel connectivity (entry to exit).
+	ProbeTaskTypeTunnel ProbeTaskType = "tunnel"
 )
 
 // ProbeTask represents a probe task to be executed by the agent.
 type ProbeTask struct {
-	ID          string    `json:"id"`
-	Type        ProbeType `json:"type"`
-	RuleID      uint      `json:"rule_id,omitempty"`
-	ExitAgentID uint      `json:"exit_agent_id,omitempty"`
-	Target      string    `json:"target"`
-	Port        uint16    `json:"port"`
-	Protocol    string    `json:"protocol"`
-	Timeout     int       `json:"timeout"`
+	ID       string        `json:"id"`
+	Type     ProbeTaskType `json:"type"`
+	RuleID   uint          `json:"rule_id"`
+	Target   string        `json:"target"`
+	Port     uint16        `json:"port"`
+	Protocol string        `json:"protocol"` // always "tcp"
+	Timeout  int           `json:"timeout"`  // milliseconds
 }
 
-// ProbeResult represents the result of a probe execution.
-type ProbeResult struct {
-	TaskID      string    `json:"task_id"`
-	Type        ProbeType `json:"type"`
-	RuleID      uint      `json:"rule_id,omitempty"`
-	ExitAgentID uint      `json:"exit_agent_id,omitempty"`
-	Target      string    `json:"target"`
-	Port        uint16    `json:"port"`
-	Protocol    string    `json:"protocol"`
-	Success     bool      `json:"success"`
-	LatencyMs   int64     `json:"latency_ms"`
-	Error       string    `json:"error,omitempty"`
-	ProbeTime   string    `json:"probe_time"`
+// ProbeTaskResult represents the result of a probe task execution.
+type ProbeTaskResult struct {
+	TaskID    string        `json:"task_id"`
+	Type      ProbeTaskType `json:"type"`
+	RuleID    uint          `json:"rule_id"`
+	Success   bool          `json:"success"`
+	LatencyMs int64         `json:"latency_ms"`
+	Error     string        `json:"error,omitempty"`
 }
 
 // ProbeMessage is the WebSocket message envelope for probe communication.

@@ -122,7 +122,7 @@ func (pc *ProbeConn) ReadTask() (*ProbeTask, error) {
 }
 
 // WriteResult sends a probe result to the server.
-func (pc *ProbeConn) WriteResult(result *ProbeResult) error {
+func (pc *ProbeConn) WriteResult(result *ProbeTaskResult) error {
 	pc.mu.Lock()
 	defer pc.mu.Unlock()
 
@@ -192,7 +192,7 @@ func (pc *ProbeConn) IsClosed() bool {
 }
 
 // ProbeHandler is a callback function for handling probe tasks.
-type ProbeHandler func(task *ProbeTask) *ProbeResult
+type ProbeHandler func(task *ProbeTask) *ProbeTaskResult
 
 // RunProbeLoop runs a loop that reads probe tasks and sends results.
 // This is a convenience method that handles the read/write loop.

@@ -122,9 +122,9 @@ func (s *ProbeService) probeDirectRule(ctx context.Context, rule *forward.Forwar
 		return response, nil
 	}
 
-	// Probe target
+	// Probe target using TCP for reliable connectivity check
 	targetLatency, err := s.sendProbeTask(ctx, agentID, rule.ID(), dto.ProbeTaskTypeTarget,
-		rule.TargetAddress(), rule.TargetPort(), rule.Protocol().String())
+		rule.TargetAddress(), rule.TargetPort(), "tcp")
 	if err != nil {
 		response.Error = err.Error()
 		return response, nil
@@ -187,8 +187,9 @@ func (s *ProbeService) probeEntryRule(ctx context.Context, rule *forward.Forward
 		return response, nil
 	}
 
+	// Probe target using TCP for reliable connectivity check
 	targetLatency, err := s.sendProbeTask(ctx, exitAgentID, rule.ID(), dto.ProbeTaskTypeTarget,
-		exitRule.TargetAddress(), exitRule.TargetPort(), exitRule.Protocol().String())
+		exitRule.TargetAddress(), exitRule.TargetPort(), "tcp")
 	if err != nil {
 		response.Error = "target probe failed: " + err.Error()
 		return response, nil
