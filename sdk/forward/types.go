@@ -110,9 +110,9 @@ const (
 type ProbeType string
 
 const (
-	// ProbeTypeRule probes rule target reachability.
-	ProbeTypeRule ProbeType = "rule"
-	// ProbeTypeTunnel probes tunnel connectivity.
+	// ProbeTypeTarget probes target reachability from agent.
+	ProbeTypeTarget ProbeType = "target"
+	// ProbeTypeTunnel probes tunnel connectivity (entry to exit).
 	ProbeTypeTunnel ProbeType = "tunnel"
 )
 
