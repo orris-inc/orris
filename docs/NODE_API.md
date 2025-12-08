@@ -7,7 +7,7 @@ Node management API for proxy node configuration, node group management, and sub
 ```
 /nodes          - Node management
 /node-groups    - Node group management
-/sub            - Subscription endpoints
+/s              - Subscription endpoints
 ```
 
 ## Authentication
@@ -25,7 +25,7 @@ Authorization: Bearer <jwt_token>
 
 Subscription endpoints use token-based authentication via URL path parameter.
 
-**Format**: `GET /sub/{subscription_uuid}`
+**Format**: `GET /s/{subscription_uuid}`
 
 ---
 
@@ -831,7 +831,7 @@ Get subscription in Base64-encoded format.
 **Request**
 
 ```
-GET /sub/{token}
+GET /s/{token}
 ```
 
 **Response**
@@ -859,7 +859,7 @@ Get subscription in Clash YAML format.
 **Request**
 
 ```
-GET /sub/{token}/clash
+GET /s/{token}/clash
 ```
 
 **Response**
@@ -897,7 +897,7 @@ Get subscription in V2Ray JSON format.
 **Request**
 
 ```
-GET /sub/{token}/v2ray
+GET /s/{token}/v2ray
 ```
 
 **Response**
@@ -936,7 +936,7 @@ Get subscription in Shadowsocks SIP008 format.
 **Request**
 
 ```
-GET /sub/{token}/sip008
+GET /s/{token}/sip008
 ```
 
 **Response**
@@ -974,7 +974,7 @@ Get subscription in Surge configuration format.
 **Request**
 
 ```
-GET /sub/{token}/surge
+GET /s/{token}/surge
 ```
 
 **Response**

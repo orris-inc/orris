@@ -121,6 +121,15 @@ auth:
                           # Env override: ORRIS_AUTH_COOKIE_SAME_SITE=Strict
 
 # ------------------------------------------------------------
+# Subscription Configuration
+# ------------------------------------------------------------
+subscription:
+  base_url: ""           # Custom subscription link base URL (e.g., "https://sub.yourdomain.com")
+                         # If empty, falls back to server.base_url
+                         # Env override: ORRIS_SUBSCRIPTION_BASE_URL=https://sub.yourdomain.com
+                         # Production example: "https://sub.yourdomain.com"
+
+# ------------------------------------------------------------
 # OAuth2 Configuration
 # ------------------------------------------------------------
 # Setup instructions:

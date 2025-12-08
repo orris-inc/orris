@@ -137,3 +137,18 @@ type RedisConfig struct {
 func (r *RedisConfig) GetAddr() string {
 	return fmt.Sprintf("%s:%d", r.Host, r.Port)
 }
+
+// SubscriptionConfig holds subscription-related configuration
+type SubscriptionConfig struct {
+	// BaseURL is the base URL for subscription links (e.g., "https://sub.example.com")
+	// If empty, falls back to server base URL
+	BaseURL string `mapstructure:"base_url"`
+}
+
+// GetBaseURL returns the subscription base URL, falling back to server base URL if not set
+func (s *SubscriptionConfig) GetBaseURL(serverBaseURL string) string {
+	if s.BaseURL != "" {
+		return s.BaseURL
+	}
+	return serverBaseURL
+}

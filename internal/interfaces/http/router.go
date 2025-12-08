@@ -211,11 +211,12 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	activateSubscriptionUC := subscriptionUsecases.NewActivateSubscriptionUseCase(
 		subscriptionRepo, log,
 	)
+	subscriptionBaseURL := cfg.Subscription.GetBaseURL(cfg.Server.GetBaseURL())
 	getSubscriptionUC := subscriptionUsecases.NewGetSubscriptionUseCase(
-		subscriptionRepo, subscriptionPlanRepo, log,
+		subscriptionRepo, subscriptionPlanRepo, log, subscriptionBaseURL,
 	)
 	listUserSubscriptionsUC := subscriptionUsecases.NewListUserSubscriptionsUseCase(
-		subscriptionRepo, subscriptionPlanRepo, log,
+		subscriptionRepo, subscriptionPlanRepo, log, subscriptionBaseURL,
 	)
 	cancelSubscriptionUC := subscriptionUsecases.NewCancelSubscriptionUseCase(
 		subscriptionRepo, subscriptionTokenRepo, log,
@@ -228,6 +229,9 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	)
 	getSubscriptionTrafficStatsUC := subscriptionUsecases.NewGetSubscriptionTrafficStatsUseCase(
 		subscriptionTrafficRepo, log,
+	)
+	resetSubscriptionLinkUC := subscriptionUsecases.NewResetSubscriptionLinkUseCase(
+		subscriptionRepo, subscriptionPlanRepo, log, subscriptionBaseURL,
 	)
 
 	createPlanUC := subscriptionUsecases.NewCreateSubscriptionPlanUseCase(
@@ -270,7 +274,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	subscriptionHandler := handlers.NewSubscriptionHandler(
 		createSubscriptionUC, getSubscriptionUC, listUserSubscriptionsUC,
-		cancelSubscriptionUC, changePlanUC, getSubscriptionTrafficStatsUC, log,
+		cancelSubscriptionUC, changePlanUC, getSubscriptionTrafficStatsUC,
+		resetSubscriptionLinkUC, log,
 	)
 	adminSubscriptionHandler := adminHandlers.NewSubscriptionHandler(
 		createSubscriptionUC, getSubscriptionUC, listUserSubscriptionsUC,
@@ -607,6 +612,7 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 			subscriptionWithOwnership.GET("", r.subscriptionHandler.GetSubscription)
 			subscriptionWithOwnership.PATCH("/status", r.subscriptionHandler.UpdateStatus)
 			subscriptionWithOwnership.PATCH("/plan", r.subscriptionHandler.ChangePlan)
+			subscriptionWithOwnership.PUT("/link", r.subscriptionHandler.ResetLink)
 
 			// Token sub-resource endpoints (using /action path due to Gin framework limitation with colon format)
 			subscriptionWithOwnership.POST("/tokens/:token_id/refresh", r.subscriptionTokenHandler.RefreshToken)

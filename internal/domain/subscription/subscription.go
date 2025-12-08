@@ -342,6 +342,14 @@ func (s *Subscription) SetAutoRenew(autoRenew bool) {
 	s.version++
 }
 
+// ResetUUID generates a new UUID for the subscription link
+// This invalidates the old subscription link
+func (s *Subscription) ResetUUID() {
+	s.uuid = uuid.New().String()
+	s.updatedAt = time.Now()
+	s.version++
+}
+
 // UpdateCurrentPeriod updates the current billing period
 func (s *Subscription) UpdateCurrentPeriod(start, end time.Time) error {
 	if end.Before(start) {

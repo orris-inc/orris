@@ -26,6 +26,7 @@ type SubscriptionHandler struct {
 	cancelUseCase          *usecases.CancelSubscriptionUseCase
 	changePlanUseCase      *usecases.ChangePlanUseCase
 	getTrafficStatsUseCase *usecases.GetSubscriptionTrafficStatsUseCase
+	resetLinkUseCase       *usecases.ResetSubscriptionLinkUseCase
 	logger                 logger.Interface
 }
 
@@ -37,6 +38,7 @@ func NewSubscriptionHandler(
 	cancelUC *usecases.CancelSubscriptionUseCase,
 	changePlanUC *usecases.ChangePlanUseCase,
 	getTrafficStatsUC *usecases.GetSubscriptionTrafficStatsUseCase,
+	resetLinkUC *usecases.ResetSubscriptionLinkUseCase,
 	logger logger.Interface,
 ) *SubscriptionHandler {
 	return &SubscriptionHandler{
@@ -46,6 +48,7 @@ func NewSubscriptionHandler(
 		cancelUseCase:          cancelUC,
 		changePlanUseCase:      changePlanUC,
 		getTrafficStatsUseCase: getTrafficStatsUC,
+		resetLinkUseCase:       resetLinkUC,
 		logger:                 logger,
 	}
 }
@@ -350,4 +353,32 @@ func (h *SubscriptionHandler) GetTrafficStats(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "", result)
+}
+
+// ResetLink handles PUT /subscriptions/:id/link
+// Resets the subscription link by generating a new UUID
+func (h *SubscriptionHandler) ResetLink(c *gin.Context) {
+	// Ownership already verified by middleware
+	subscriptionID, exists := c.Get("subscription_id")
+	if !exists {
+		subscriptionID64, err := strconv.ParseUint(c.Param("id"), 10, 64)
+		if err != nil {
+			utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID")
+			return
+		}
+		subscriptionID = uint(subscriptionID64)
+	}
+
+	cmd := usecases.ResetSubscriptionLinkCommand{
+		SubscriptionID: subscriptionID.(uint),
+	}
+
+	result, err := h.resetLinkUseCase.Execute(c.Request.Context(), cmd)
+	if err != nil {
+		h.logger.Errorw("failed to reset subscription link", "error", err, "subscription_id", subscriptionID)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Subscription link reset successfully", result)
 }

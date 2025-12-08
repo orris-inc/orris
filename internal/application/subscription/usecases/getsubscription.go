@@ -17,17 +17,20 @@ type GetSubscriptionUseCase struct {
 	subscriptionRepo subscription.SubscriptionRepository
 	planRepo         subscription.SubscriptionPlanRepository
 	logger           logger.Interface
+	baseURL          string
 }
 
 func NewGetSubscriptionUseCase(
 	subscriptionRepo subscription.SubscriptionRepository,
 	planRepo subscription.SubscriptionPlanRepository,
 	logger logger.Interface,
+	baseURL string,
 ) *GetSubscriptionUseCase {
 	return &GetSubscriptionUseCase{
 		subscriptionRepo: subscriptionRepo,
 		planRepo:         planRepo,
 		logger:           logger,
+		baseURL:          baseURL,
 	}
 }
 
@@ -44,7 +47,7 @@ func (uc *GetSubscriptionUseCase) Execute(ctx context.Context, query GetSubscrip
 		return nil, fmt.Errorf("failed to get subscription plan: %w", err)
 	}
 
-	result := dto.ToSubscriptionDTO(sub, plan)
+	result := dto.ToSubscriptionDTO(sub, plan, uc.baseURL)
 
 	uc.logger.Debugw("subscription retrieved successfully",
 		"subscription_id", query.SubscriptionID,

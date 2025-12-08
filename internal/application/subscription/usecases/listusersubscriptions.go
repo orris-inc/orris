@@ -27,17 +27,20 @@ type ListUserSubscriptionsUseCase struct {
 	subscriptionRepo subscription.SubscriptionRepository
 	planRepo         subscription.SubscriptionPlanRepository
 	logger           logger.Interface
+	baseURL          string
 }
 
 func NewListUserSubscriptionsUseCase(
 	subscriptionRepo subscription.SubscriptionRepository,
 	planRepo subscription.SubscriptionPlanRepository,
 	logger logger.Interface,
+	baseURL string,
 ) *ListUserSubscriptionsUseCase {
 	return &ListUserSubscriptionsUseCase{
 		subscriptionRepo: subscriptionRepo,
 		planRepo:         planRepo,
 		logger:           logger,
+		baseURL:          baseURL,
 	}
 }
 
@@ -85,7 +88,7 @@ func (uc *ListUserSubscriptionsUseCase) Execute(ctx context.Context, query ListU
 	dtos := make([]*dto.SubscriptionDTO, 0, len(subscriptions))
 	for _, sub := range subscriptions {
 		plan := plans[sub.PlanID()]
-		result := dto.ToSubscriptionDTO(sub, plan)
+		result := dto.ToSubscriptionDTO(sub, plan, uc.baseURL)
 		dtos = append(dtos, result)
 	}
 

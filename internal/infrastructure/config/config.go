@@ -11,13 +11,14 @@ import (
 )
 
 type Config struct {
-	Server   sharedConfig.ServerConfig   `mapstructure:"server"`
-	Database sharedConfig.DatabaseConfig `mapstructure:"database"`
-	Logger   sharedConfig.LoggerConfig   `mapstructure:"logger"`
-	Auth     sharedConfig.AuthConfig     `mapstructure:"auth"`
-	OAuth    sharedConfig.OAuthConfig    `mapstructure:"oauth"`
-	Email    sharedConfig.EmailConfig    `mapstructure:"email"`
-	Redis    sharedConfig.RedisConfig    `mapstructure:"redis"`
+	Server       sharedConfig.ServerConfig       `mapstructure:"server"`
+	Database     sharedConfig.DatabaseConfig     `mapstructure:"database"`
+	Logger       sharedConfig.LoggerConfig       `mapstructure:"logger"`
+	Auth         sharedConfig.AuthConfig         `mapstructure:"auth"`
+	OAuth        sharedConfig.OAuthConfig        `mapstructure:"oauth"`
+	Email        sharedConfig.EmailConfig        `mapstructure:"email"`
+	Redis        sharedConfig.RedisConfig        `mapstructure:"redis"`
+	Subscription sharedConfig.SubscriptionConfig `mapstructure:"subscription"`
 }
 
 var (

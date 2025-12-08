@@ -1,6 +1,7 @@
 package dto
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/orris-inc/orris/internal/domain/subscription"
@@ -10,6 +11,8 @@ import (
 type SubscriptionDTO struct {
 	ID                 uint                 `json:"id"`
 	UserID             uint                 `json:"user_id"`
+	UUID               string               `json:"uuid"`
+	SubscribeURL       string               `json:"subscribe_url"`
 	Plan               *SubscriptionPlanDTO `json:"plan,omitempty"`
 	Status             string               `json:"status"`
 	StartDate          time.Time            `json:"start_date"`
@@ -30,8 +33,8 @@ type SubscriptionPlanDTO struct {
 	Name         string                 `json:"name"`
 	Slug         string                 `json:"slug"`
 	Description  string                 `json:"description"`
-	Price        uint64                 `json:"price"`        // Deprecated: use Pricings array, kept for backward compatibility
-	Currency     string                 `json:"currency"`     // Deprecated: use Pricings array, kept for backward compatibility
+	Price        uint64                 `json:"price"`         // Deprecated: use Pricings array, kept for backward compatibility
+	Currency     string                 `json:"currency"`      // Deprecated: use Pricings array, kept for backward compatibility
 	BillingCycle string                 `json:"billing_cycle"` // Deprecated: use Pricings array, kept for backward compatibility
 	TrialDays    int                    `json:"trial_days"`
 	Status       string                 `json:"status"`
@@ -71,7 +74,7 @@ type SubscriptionTokenDTO struct {
 var (
 	SubscriptionMapper = mapper.New(
 		func(sub *subscription.Subscription) *SubscriptionDTO {
-			return toSubscriptionDTOInternal(sub, nil)
+			return toSubscriptionDTOInternal(sub, nil, "")
 		},
 		func(dto *SubscriptionDTO) *subscription.Subscription {
 			return nil
@@ -93,18 +96,28 @@ var (
 	)
 )
 
-func ToSubscriptionDTO(sub *subscription.Subscription, plan *subscription.SubscriptionPlan) *SubscriptionDTO {
-	return toSubscriptionDTOInternal(sub, plan)
+// ToSubscriptionDTO converts a domain subscription to DTO with subscribe URL.
+// baseURL is used to construct the full subscribe URL (e.g., "https://api.example.com").
+func ToSubscriptionDTO(sub *subscription.Subscription, plan *subscription.SubscriptionPlan, baseURL string) *SubscriptionDTO {
+	return toSubscriptionDTOInternal(sub, plan, baseURL)
 }
 
-func toSubscriptionDTOInternal(sub *subscription.Subscription, plan *subscription.SubscriptionPlan) *SubscriptionDTO {
+func toSubscriptionDTOInternal(sub *subscription.Subscription, plan *subscription.SubscriptionPlan, baseURL string) *SubscriptionDTO {
 	if sub == nil {
 		return nil
+	}
+
+	// Build subscribe URL: {baseURL}/s/{uuid}
+	subscribeURL := ""
+	if baseURL != "" && sub.UUID() != "" {
+		subscribeURL = fmt.Sprintf("%s/s/%s", baseURL, sub.UUID())
 	}
 
 	dto := &SubscriptionDTO{
 		ID:                 sub.ID(),
 		UserID:             sub.UserID(),
+		UUID:               sub.UUID(),
+		SubscribeURL:       subscribeURL,
 		Status:             sub.Status().String(),
 		StartDate:          sub.StartDate(),
 		EndDate:            sub.EndDate(),

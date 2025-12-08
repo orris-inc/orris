@@ -113,7 +113,7 @@ func SetupNodeRoutes(engine *gin.Engine, config *NodeRouteConfig) {
 	}
 
 	// Subscription routes - public access with token validation
-	sub := engine.Group("/sub")
+	sub := engine.Group("/s")
 	{
 		// Base64 subscription format (default)
 		sub.GET("/:token",

@@ -30,7 +30,7 @@ func NewSubscriptionHandler(
 	}
 }
 
-// GetSubscription handles GET /sub/:token
+// GetSubscription handles GET /s/:token
 func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 	token := c.Param("token")
 	if token == "" {
@@ -54,7 +54,7 @@ func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 	c.String(http.StatusOK, result.Content)
 }
 
-// GetClashSubscription handles GET /sub/:token/clash
+// GetClashSubscription handles GET /s/:token/clash
 func (h *SubscriptionHandler) GetClashSubscription(c *gin.Context) {
 	token := c.Param("token")
 	if token == "" {
@@ -78,7 +78,7 @@ func (h *SubscriptionHandler) GetClashSubscription(c *gin.Context) {
 	c.String(http.StatusOK, result.Content)
 }
 
-// GetV2RaySubscription handles GET /sub/:token/v2ray
+// GetV2RaySubscription handles GET /s/:token/v2ray
 func (h *SubscriptionHandler) GetV2RaySubscription(c *gin.Context) {
 	token := c.Param("token")
 	if token == "" {
@@ -101,7 +101,7 @@ func (h *SubscriptionHandler) GetV2RaySubscription(c *gin.Context) {
 	c.String(http.StatusOK, result.Content)
 }
 
-// GetSIP008Subscription handles GET /sub/:token/sip008
+// GetSIP008Subscription handles GET /s/:token/sip008
 func (h *SubscriptionHandler) GetSIP008Subscription(c *gin.Context) {
 	token := c.Param("token")
 	if token == "" {
@@ -124,7 +124,7 @@ func (h *SubscriptionHandler) GetSIP008Subscription(c *gin.Context) {
 	c.String(http.StatusOK, result.Content)
 }
 
-// GetSurgeSubscription handles GET /sub/:token/surge
+// GetSurgeSubscription handles GET /s/:token/surge
 func (h *SubscriptionHandler) GetSurgeSubscription(c *gin.Context) {
 	token := c.Param("token")
 	if token == "" {
