@@ -16,9 +16,9 @@ type NodeRepository interface {
 	ExistsByName(ctx context.Context, name string) (bool, error)
 	ExistsByAddress(ctx context.Context, address string, port int) (bool, error)
 	IncrementTraffic(ctx context.Context, nodeID uint, amount uint64) error
-	// UpdateLastSeenAt updates the last_seen_at timestamp for a node
-	// Returns the previous last_seen_at value for throttling check
-	UpdateLastSeenAt(ctx context.Context, nodeID uint) error
+	// UpdateLastSeenAt updates the last_seen_at timestamp and public IPs for a node
+	// Public IPs are optional - pass empty strings to skip updating them
+	UpdateLastSeenAt(ctx context.Context, nodeID uint, publicIPv4, publicIPv6 string) error
 	// GetLastSeenAt retrieves the last_seen_at timestamp for a node
 	GetLastSeenAt(ctx context.Context, nodeID uint) (*Node, error)
 }

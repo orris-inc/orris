@@ -11,6 +11,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
+	vo "github.com/orris-inc/orris/internal/domain/forward/value_objects"
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -74,7 +75,8 @@ func (s *ProbeService) HandleMessage(agentID uint, msgType string, data any) boo
 }
 
 // ProbeRule probes a single forward rule and returns the latency results.
-func (s *ProbeService) ProbeRule(ctx context.Context, ruleID uint) (*dto.RuleProbeResponse, error) {
+// ipVersionOverride allows overriding the rule's IP version for this probe only.
+func (s *ProbeService) ProbeRule(ctx context.Context, ruleID uint, ipVersionOverride string) (*dto.RuleProbeResponse, error) {
 	// Get the rule
 	rule, err := s.repo.GetByID(ctx, ruleID)
 	if err != nil {
@@ -82,6 +84,15 @@ func (s *ProbeService) ProbeRule(ctx context.Context, ruleID uint) (*dto.RulePro
 	}
 	if rule == nil {
 		return nil, forward.ErrRuleNotFound
+	}
+
+	// Determine IP version to use (override or rule's default)
+	ipVersion := rule.IPVersion()
+	if ipVersionOverride != "" {
+		ipVersion = vo.IPVersion(ipVersionOverride)
+		if !ipVersion.IsValid() {
+			return nil, forward.ErrInvalidIPVersion
+		}
 	}
 
 	ruleType := rule.RuleType().String()
@@ -92,7 +103,7 @@ func (s *ProbeService) ProbeRule(ctx context.Context, ruleID uint) (*dto.RulePro
 
 	switch ruleType {
 	case "direct":
-		return s.probeDirectRule(ctx, rule, response)
+		return s.probeDirectRule(ctx, rule, ipVersion, response)
 	case "entry":
 		return s.probeEntryRule(ctx, rule, response)
 	case "exit":
@@ -106,7 +117,7 @@ func (s *ProbeService) ProbeRule(ctx context.Context, ruleID uint) (*dto.RulePro
 }
 
 // probeDirectRule probes a direct rule (agent → target).
-func (s *ProbeService) probeDirectRule(ctx context.Context, rule *forward.ForwardRule, response *dto.RuleProbeResponse) (*dto.RuleProbeResponse, error) {
+func (s *ProbeService) probeDirectRule(ctx context.Context, rule *forward.ForwardRule, ipVersion vo.IPVersion, response *dto.RuleProbeResponse) (*dto.RuleProbeResponse, error) {
 	agentID := rule.AgentID()
 
 	// Resolve target address and port
@@ -124,7 +135,12 @@ func (s *ProbeService) probeDirectRule(ctx context.Context, rule *forward.Forwar
 			response.Error = "target node not found"
 			return response, nil
 		}
-		targetAddress = targetNode.ServerAddress().Value()
+		// Resolve target address based on IP version preference
+		targetAddress = s.resolveNodeAddress(targetNode, ipVersion)
+		if targetAddress == "" {
+			response.Error = "target node has no available address for ip_version: " + ipVersion.String()
+			return response, nil
+		}
 		// Use node's agent port if rule's target port is not set
 		if targetPort == 0 {
 			targetPort = targetNode.AgentPort()
@@ -141,10 +157,22 @@ func (s *ProbeService) probeDirectRule(ctx context.Context, rule *forward.Forwar
 
 	// Check if agent is online
 	if !s.hub.IsAgentOnline(agentID) {
-		s.logger.Warnw("agent not connected for probe",
-			"rule_id", rule.ID(),
-			"agent_id", agentID,
-		)
+		if rule.HasTargetNode() {
+			s.logger.Warnw("agent not connected for probe",
+				"rule_id", rule.ID(),
+				"agent_id", agentID,
+				"target_node_id", *rule.TargetNodeID(),
+				"target", targetAddress,
+				"port", targetPort,
+			)
+		} else {
+			s.logger.Warnw("agent not connected for probe",
+				"rule_id", rule.ID(),
+				"agent_id", agentID,
+				"target", targetAddress,
+				"port", targetPort,
+			)
+		}
 		response.Error = "agent not connected"
 		return response, nil
 	}
@@ -330,4 +358,35 @@ type probeError struct {
 
 func (e *probeError) Error() string {
 	return e.message
+}
+
+// resolveNodeAddress resolves the node address based on IP version preference.
+// Priority: ServerAddress > PublicIP (based on ipVersion)
+func (s *ProbeService) resolveNodeAddress(n *node.Node, ipVersion vo.IPVersion) string {
+	// If server address is set, use it directly
+	serverAddr := n.ServerAddress().Value()
+	if serverAddr != "" {
+		return serverAddr
+	}
+
+	// Fallback to public IP based on IP version preference
+	switch ipVersion {
+	case vo.IPVersionIPv4:
+		if n.PublicIPv4() != nil && *n.PublicIPv4() != "" {
+			return *n.PublicIPv4()
+		}
+	case vo.IPVersionIPv6:
+		if n.PublicIPv6() != nil && *n.PublicIPv6() != "" {
+			return *n.PublicIPv6()
+		}
+	default: // auto: prefer IPv4, fallback to IPv6
+		if n.PublicIPv4() != nil && *n.PublicIPv4() != "" {
+			return *n.PublicIPv4()
+		}
+		if n.PublicIPv6() != nil && *n.PublicIPv6() != "" {
+			return *n.PublicIPv6()
+		}
+	}
+
+	return ""
 }

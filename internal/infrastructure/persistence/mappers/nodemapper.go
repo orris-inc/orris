@@ -110,6 +110,8 @@ func (m *NodeMapperImpl) ToEntity(model *models.NodeModel, encryptionConfig vo.E
 		model.SortOrder,
 		model.MaintenanceReason,
 		model.LastSeenAt,
+		model.PublicIPv4,
+		model.PublicIPv6,
 		model.Version,
 		model.CreatedAt,
 		model.UpdatedAt,

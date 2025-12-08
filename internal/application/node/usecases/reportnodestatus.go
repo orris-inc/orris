@@ -32,10 +32,10 @@ type NodeSystemStatusUpdater interface {
 	UpdateSystemStatus(ctx context.Context, nodeID uint, cpu, memory, disk float64, uptime int, publicIPv4, publicIPv6 string) error
 }
 
-// NodeLastSeenUpdater defines the interface for updating node last_seen_at
+// NodeLastSeenUpdater defines the interface for updating node last_seen_at and public IPs
 type NodeLastSeenUpdater interface {
 	GetLastSeenAt(ctx context.Context, nodeID uint) (*node.Node, error)
-	UpdateLastSeenAt(ctx context.Context, nodeID uint) error
+	UpdateLastSeenAt(ctx context.Context, nodeID uint, publicIPv4, publicIPv6 string) error
 }
 
 // ReportNodeStatusUseCase handles reporting node system status from node agents
@@ -87,8 +87,8 @@ func (uc *ReportNodeStatusUseCase) Execute(ctx context.Context, cmd ReportNodeSt
 		return nil, fmt.Errorf("failed to update node status")
 	}
 
-	// Update last_seen_at in database (throttled to reduce DB writes)
-	uc.updateLastSeenAtThrottled(ctx, cmd.NodeID)
+	// Update last_seen_at and public IPs in database (throttled to reduce DB writes)
+	uc.updateLastSeenAtThrottled(ctx, cmd.NodeID, cmd.Status.PublicIPv4, cmd.Status.PublicIPv6)
 
 	uc.logger.Infow("node status reported successfully",
 		"node_id", cmd.NodeID,
@@ -105,9 +105,9 @@ func (uc *ReportNodeStatusUseCase) Execute(ctx context.Context, cmd ReportNodeSt
 	}, nil
 }
 
-// updateLastSeenAtThrottled updates last_seen_at only if it hasn't been updated recently
+// updateLastSeenAtThrottled updates last_seen_at and public IPs only if it hasn't been updated recently
 // This reduces database writes when agents report frequently (e.g., every 30 seconds)
-func (uc *ReportNodeStatusUseCase) updateLastSeenAtThrottled(ctx context.Context, nodeID uint) {
+func (uc *ReportNodeStatusUseCase) updateLastSeenAtThrottled(ctx context.Context, nodeID uint, publicIPv4, publicIPv6 string) {
 	if uc.lastSeenUpdater == nil {
 		return
 	}
@@ -120,7 +120,7 @@ func (uc *ReportNodeStatusUseCase) updateLastSeenAtThrottled(ctx context.Context
 			"node_id", nodeID,
 		)
 		// On error, try to update anyway
-		if updateErr := uc.lastSeenUpdater.UpdateLastSeenAt(ctx, nodeID); updateErr != nil {
+		if updateErr := uc.lastSeenUpdater.UpdateLastSeenAt(ctx, nodeID, publicIPv4, publicIPv6); updateErr != nil {
 			uc.logger.Warnw("failed to update last_seen_at",
 				"error", updateErr,
 				"node_id", nodeID,
@@ -135,7 +135,7 @@ func (uc *ReportNodeStatusUseCase) updateLastSeenAtThrottled(ctx context.Context
 		time.Since(*nodeEntity.LastSeenAt()) > LastSeenUpdateThreshold
 
 	if shouldUpdate {
-		if err := uc.lastSeenUpdater.UpdateLastSeenAt(ctx, nodeID); err != nil {
+		if err := uc.lastSeenUpdater.UpdateLastSeenAt(ctx, nodeID, publicIPv4, publicIPv6); err != nil {
 			uc.logger.Warnw("failed to update last_seen_at",
 				"error", err,
 				"node_id", nodeID,
@@ -143,6 +143,8 @@ func (uc *ReportNodeStatusUseCase) updateLastSeenAtThrottled(ctx context.Context
 		} else {
 			uc.logger.Debugw("last_seen_at updated",
 				"node_id", nodeID,
+				"public_ipv4", publicIPv4,
+				"public_ipv6", publicIPv6,
 			)
 		}
 	}

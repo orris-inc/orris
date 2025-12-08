@@ -22,6 +22,7 @@ type CreateForwardRuleCommand struct {
 	TargetAddress string // required for direct and exit types (mutually exclusive with TargetNodeID)
 	TargetPort    uint16 // required for direct and exit types (mutually exclusive with TargetNodeID)
 	TargetNodeID  *uint  // optional for direct and exit types (mutually exclusive with TargetAddress/TargetPort)
+	IPVersion     string // auto, ipv4, ipv6 (default: auto)
 	Protocol      string
 	Remark        string
 }
@@ -38,6 +39,7 @@ type CreateForwardRuleResult struct {
 	TargetAddress string `json:"target_address,omitempty"`
 	TargetPort    uint16 `json:"target_port,omitempty"`
 	TargetNodeID  *uint  `json:"target_node_id,omitempty"`
+	IPVersion     string `json:"ip_version"`
 	Protocol      string `json:"protocol"`
 	Status        string `json:"status"`
 	CreatedAt     string `json:"created_at"`
@@ -86,6 +88,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	// Create domain entity
 	protocol := vo.ForwardProtocol(cmd.Protocol)
 	ruleType := vo.ForwardRuleType(cmd.RuleType)
+	ipVersion := vo.IPVersion(cmd.IPVersion)
 	rule, err := forward.NewForwardRule(
 		cmd.AgentID,
 		ruleType,
@@ -96,6 +99,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		cmd.TargetAddress,
 		cmd.TargetPort,
 		cmd.TargetNodeID,
+		ipVersion,
 		protocol,
 		cmd.Remark,
 	)
@@ -121,6 +125,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		TargetAddress: rule.TargetAddress(),
 		TargetPort:    rule.TargetPort(),
 		TargetNodeID:  rule.TargetNodeID(),
+		IPVersion:     rule.IPVersion().String(),
 		Protocol:      rule.Protocol().String(),
 		Status:        rule.Status().String(),
 		CreatedAt:     rule.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),

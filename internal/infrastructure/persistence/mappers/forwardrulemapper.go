@@ -65,6 +65,8 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 		targetNodeID = model.TargetNodeID
 	}
 
+	ipVersion := vo.IPVersion(model.IPVersion)
+
 	entity, err := forward.ReconstructForwardRule(
 		model.ID,
 		model.AgentID,
@@ -76,6 +78,7 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 		model.TargetAddress,
 		model.TargetPort,
 		targetNodeID,
+		ipVersion,
 		protocol,
 		status,
 		model.Remark,
@@ -126,6 +129,7 @@ func (m *ForwardRuleMapperImpl) ToModel(entity *forward.ForwardRule) (*models.Fo
 		TargetAddress: entity.TargetAddress(),
 		TargetPort:    entity.TargetPort(),
 		TargetNodeID:  targetNodeID,
+		IPVersion:     entity.IPVersion().String(),
 		Protocol:      entity.Protocol().String(),
 		Status:        entity.Status().String(),
 		Remark:        entity.Remark(),

@@ -29,6 +29,8 @@ type Node struct {
 	sortOrder         int
 	maintenanceReason *string
 	lastSeenAt        *time.Time // last time the node agent reported status
+	publicIPv4        *string    // public IPv4 address reported by agent
+	publicIPv6        *string    // public IPv6 address reported by agent
 	version           int
 	createdAt         time.Time
 	updatedAt         time.Time
@@ -113,6 +115,8 @@ func ReconstructNode(
 	sortOrder int,
 	maintenanceReason *string,
 	lastSeenAt *time.Time,
+	publicIPv4 *string,
+	publicIPv6 *string,
 	version int,
 	createdAt, updatedAt time.Time,
 ) (*Node, error) {
@@ -148,6 +152,8 @@ func ReconstructNode(
 		sortOrder:         sortOrder,
 		maintenanceReason: maintenanceReason,
 		lastSeenAt:        lastSeenAt,
+		publicIPv4:        publicIPv4,
+		publicIPv6:        publicIPv6,
 		version:           version,
 		createdAt:         createdAt,
 		updatedAt:         updatedAt,
@@ -490,6 +496,16 @@ func (n *Node) IsOnline() bool {
 		return false
 	}
 	return time.Since(*n.lastSeenAt) < 5*time.Minute
+}
+
+// PublicIPv4 returns the public IPv4 address reported by agent
+func (n *Node) PublicIPv4() *string {
+	return n.publicIPv4
+}
+
+// PublicIPv6 returns the public IPv6 address reported by agent
+func (n *Node) PublicIPv6() *string {
+	return n.publicIPv6
 }
 
 // GetAPIToken returns the plain API token (only available after creation)

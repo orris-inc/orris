@@ -417,11 +417,23 @@ func (r *NodeRepositoryImpl) IncrementTraffic(ctx context.Context, nodeID uint, 
 	return nil
 }
 
-// UpdateLastSeenAt updates the last_seen_at timestamp for a node
-func (r *NodeRepositoryImpl) UpdateLastSeenAt(ctx context.Context, nodeID uint) error {
+// UpdateLastSeenAt updates the last_seen_at timestamp and public IPs for a node
+func (r *NodeRepositoryImpl) UpdateLastSeenAt(ctx context.Context, nodeID uint, publicIPv4, publicIPv6 string) error {
+	updates := map[string]interface{}{
+		"last_seen_at": gorm.Expr("NOW()"),
+	}
+
+	// Only update public IPs if provided
+	if publicIPv4 != "" {
+		updates["public_ipv4"] = publicIPv4
+	}
+	if publicIPv6 != "" {
+		updates["public_ipv6"] = publicIPv6
+	}
+
 	result := r.db.WithContext(ctx).Model(&models.NodeModel{}).
 		Where("id = ?", nodeID).
-		UpdateColumn("last_seen_at", gorm.Expr("NOW()"))
+		Updates(updates)
 
 	if result.Error != nil {
 		r.logger.Errorw("failed to update last_seen_at", "node_id", nodeID, "error", result.Error)
@@ -432,7 +444,11 @@ func (r *NodeRepositoryImpl) UpdateLastSeenAt(ctx context.Context, nodeID uint) 
 		return errors.NewNotFoundError("node not found")
 	}
 
-	r.logger.Debugw("last_seen_at updated successfully", "node_id", nodeID)
+	r.logger.Debugw("last_seen_at updated successfully",
+		"node_id", nodeID,
+		"public_ipv4", publicIPv4,
+		"public_ipv6", publicIPv6,
+	)
 	return nil
 }
 
@@ -471,6 +487,8 @@ func (r *NodeRepositoryImpl) GetLastSeenAt(ctx context.Context, nodeID uint) (*n
 		0,
 		nil,
 		model.LastSeenAt,
+		nil, // publicIPv4
+		nil, // publicIPv6
 		0,
 		model.CreatedAt,
 		model.UpdatedAt,

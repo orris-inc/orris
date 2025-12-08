@@ -23,6 +23,7 @@ type ForwardRule struct {
 	targetAddress string // final target address (required for direct and exit types if targetNodeID is not set)
 	targetPort    uint16 // final target port (required for direct and exit types if targetNodeID is not set)
 	targetNodeID  *uint  // target node ID for dynamic address resolution (mutually exclusive with targetAddress/targetPort)
+	ipVersion     vo.IPVersion
 	protocol      vo.ForwardProtocol
 	status        vo.ForwardStatus
 	remark        string
@@ -47,6 +48,7 @@ func NewForwardRule(
 	targetAddress string,
 	targetPort uint16,
 	targetNodeID *uint,
+	ipVersion vo.IPVersion,
 	protocol vo.ForwardProtocol,
 	remark string,
 ) (*ForwardRule, error) {
@@ -110,6 +112,14 @@ func NewForwardRule(
 		}
 	}
 
+	// Default ipVersion to auto if not set
+	if ipVersion == "" {
+		ipVersion = vo.IPVersionAuto
+	}
+	if !ipVersion.IsValid() {
+		return nil, fmt.Errorf("invalid IP version: %s", ipVersion)
+	}
+
 	now := time.Now()
 	return &ForwardRule{
 		agentID:       agentID,
@@ -121,6 +131,7 @@ func NewForwardRule(
 		targetAddress: targetAddress,
 		targetPort:    targetPort,
 		targetNodeID:  targetNodeID,
+		ipVersion:     ipVersion,
 		protocol:      protocol,
 		status:        vo.ForwardStatusDisabled,
 		remark:        remark,
@@ -143,6 +154,7 @@ func ReconstructForwardRule(
 	targetAddress string,
 	targetPort uint16,
 	targetNodeID *uint,
+	ipVersion vo.IPVersion,
 	protocol vo.ForwardProtocol,
 	status vo.ForwardStatus,
 	remark string,
@@ -169,6 +181,11 @@ func ReconstructForwardRule(
 		return nil, fmt.Errorf("invalid status: %s", status)
 	}
 
+	// Default ipVersion to auto if not set
+	if ipVersion == "" {
+		ipVersion = vo.IPVersionAuto
+	}
+
 	return &ForwardRule{
 		id:            id,
 		agentID:       agentID,
@@ -180,6 +197,7 @@ func ReconstructForwardRule(
 		targetAddress: targetAddress,
 		targetPort:    targetPort,
 		targetNodeID:  targetNodeID,
+		ipVersion:     ipVersion,
 		protocol:      protocol,
 		status:        status,
 		remark:        remark,
@@ -269,6 +287,11 @@ func (r *ForwardRule) TargetNodeID() *uint {
 // HasTargetNode returns true if targetNodeID is set.
 func (r *ForwardRule) HasTargetNode() bool {
 	return r.targetNodeID != nil && *r.targetNodeID != 0
+}
+
+// IPVersion returns the IP version preference.
+func (r *ForwardRule) IPVersion() vo.IPVersion {
+	return r.ipVersion
 }
 
 // Target returns the full target address with port.
@@ -423,6 +446,22 @@ func (r *ForwardRule) UpdateTargetNodeID(nodeID *uint) error {
 	r.targetNodeID = nodeID
 	r.targetAddress = "" // clear static address when setting node ID
 	r.targetPort = 0
+	r.updatedAt = time.Now()
+	return nil
+}
+
+// UpdateIPVersion updates the IP version preference.
+func (r *ForwardRule) UpdateIPVersion(ipVersion vo.IPVersion) error {
+	if ipVersion == "" {
+		ipVersion = vo.IPVersionAuto
+	}
+	if !ipVersion.IsValid() {
+		return fmt.Errorf("invalid IP version: %s", ipVersion)
+	}
+	if r.ipVersion == ipVersion {
+		return nil
+	}
+	r.ipVersion = ipVersion
 	r.updatedAt = time.Now()
 	return nil
 }

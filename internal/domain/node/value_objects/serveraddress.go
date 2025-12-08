@@ -14,8 +14,9 @@ type ServerAddress struct {
 }
 
 func NewServerAddress(address string) (ServerAddress, error) {
+	// Allow empty address (will use public IP as fallback)
 	if address == "" {
-		return ServerAddress{}, fmt.Errorf("server address cannot be empty")
+		return ServerAddress{}, nil
 	}
 
 	address = strings.TrimSpace(address)

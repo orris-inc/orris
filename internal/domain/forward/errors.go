@@ -29,4 +29,7 @@ var (
 
 	// ErrNoProbeTargets is returned when there are no targets to probe.
 	ErrNoProbeTargets = errors.New("no probe targets available")
+
+	// ErrInvalidIPVersion is returned when an invalid IP version is specified.
+	ErrInvalidIPVersion = errors.New("invalid IP version, must be auto, ipv4 or ipv6")
 )

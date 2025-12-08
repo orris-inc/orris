@@ -103,7 +103,30 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 			}
 
 			// Dynamically populate target address and port from node
-			ruleDTO.TargetAddress = node.ServerAddress().Value()
+			// Priority: server_address > public_ipv4 > public_ipv6
+			targetAddress := node.ServerAddress().Value()
+
+			// Check if server_address is invalid or placeholder
+			if targetAddress == "" || targetAddress == "0.0.0.0" || targetAddress == "::" {
+				// Fall back to public IP (prefer IPv4)
+				if node.PublicIPv4() != nil && *node.PublicIPv4() != "" {
+					targetAddress = *node.PublicIPv4()
+					h.logger.Debugw("using public IPv4 as fallback",
+						"rule_id", ruleDTO.ID,
+						"node_id", *ruleDTO.TargetNodeID,
+						"public_ipv4", targetAddress,
+					)
+				} else if node.PublicIPv6() != nil && *node.PublicIPv6() != "" {
+					targetAddress = *node.PublicIPv6()
+					h.logger.Debugw("using public IPv6 as fallback",
+						"rule_id", ruleDTO.ID,
+						"node_id", *ruleDTO.TargetNodeID,
+						"public_ipv6", targetAddress,
+					)
+				}
+			}
+
+			ruleDTO.TargetAddress = targetAddress
 			ruleDTO.TargetPort = node.AgentPort()
 
 			h.logger.Debugw("resolved target node address for rule",

@@ -135,11 +135,13 @@ func (uc *ListNodesUseCase) Execute(ctx context.Context, query ListNodesQuery) (
 			for _, nodeDTO := range nodeDTOs {
 				if status, ok := statusMap[nodeDTO.ID]; ok && status != nil {
 					nodeDTO.SystemStatus = &dto.NodeSystemStatusDTO{
-						CPU:       status.CPU,
-						Memory:    status.Memory,
-						Disk:      status.Disk,
-						Uptime:    status.Uptime,
-						UpdatedAt: status.UpdatedAt,
+						CPU:        status.CPU,
+						Memory:     status.Memory,
+						Disk:       status.Disk,
+						Uptime:     status.Uptime,
+						UpdatedAt:  status.UpdatedAt,
+						PublicIPv4: status.PublicIPv4,
+						PublicIPv6: status.PublicIPv6,
 					}
 				}
 			}

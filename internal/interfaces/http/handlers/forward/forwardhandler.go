@@ -284,6 +284,11 @@ func (h *ForwardHandler) ResetTraffic(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "Traffic counters reset successfully", nil)
 }
 
+// ProbeRuleRequest represents the request body for probing a rule.
+type ProbeRuleRequest struct {
+	IPVersion string `json:"ip_version"` // optional: auto, ipv4, ipv6
+}
+
 // ProbeRule handles POST /forward-rules/:id/probe
 func (h *ForwardHandler) ProbeRule(c *gin.Context) {
 	ruleID, err := parseRuleID(c)
@@ -297,7 +302,12 @@ func (h *ForwardHandler) ProbeRule(c *gin.Context) {
 		return
 	}
 
-	result, err := h.probeService.ProbeRule(c.Request.Context(), ruleID)
+	// Parse optional request body
+	var req ProbeRuleRequest
+	// Ignore binding errors for optional body
+	_ = c.ShouldBindJSON(&req)
+
+	result, err := h.probeService.ProbeRule(c.Request.Context(), ruleID, req.IPVersion)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
