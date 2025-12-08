@@ -6,6 +6,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -17,18 +18,21 @@ type GetForwardRuleQuery struct {
 
 // GetForwardRuleUseCase handles getting a single forward rule.
 type GetForwardRuleUseCase struct {
-	repo   forward.Repository
-	logger logger.Interface
+	repo     forward.Repository
+	nodeRepo node.NodeRepository
+	logger   logger.Interface
 }
 
 // NewGetForwardRuleUseCase creates a new GetForwardRuleUseCase.
 func NewGetForwardRuleUseCase(
 	repo forward.Repository,
+	nodeRepo node.NodeRepository,
 	logger logger.Interface,
 ) *GetForwardRuleUseCase {
 	return &GetForwardRuleUseCase{
-		repo:   repo,
-		logger: logger,
+		repo:     repo,
+		nodeRepo: nodeRepo,
+		logger:   logger,
 	}
 }
 
@@ -49,5 +53,23 @@ func (uc *GetForwardRuleUseCase) Execute(ctx context.Context, query GetForwardRu
 		return nil, errors.NewNotFoundError("forward rule", fmt.Sprintf("%d", query.ID))
 	}
 
-	return dto.ToForwardRuleDTO(rule), nil
+	ruleDTO := dto.ToForwardRuleDTO(rule)
+
+	// Populate target node info if rule has target node
+	if rule.HasTargetNode() && uc.nodeRepo != nil {
+		nodes, err := uc.nodeRepo.GetByIDs(ctx, []uint{*rule.TargetNodeID()})
+		if err != nil {
+			uc.logger.Warnw("failed to fetch target node", "node_id", *rule.TargetNodeID(), "error", err)
+			// Continue without node info
+		} else if len(nodes) > 0 {
+			n := nodes[0]
+			ruleDTO.PopulateTargetNodeInfo(&dto.TargetNodeInfo{
+				ServerAddress: n.ServerAddress().Value(),
+				PublicIPv4:    n.PublicIPv4(),
+				PublicIPv6:    n.PublicIPv6(),
+			})
+		}
+	}
+
+	return ruleDTO, nil
 }

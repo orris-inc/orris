@@ -134,6 +134,57 @@ func (r *NodeRepositoryImpl) GetByID(ctx context.Context, id uint) (*node.Node, 
 	return entity, nil
 }
 
+// GetByIDs retrieves nodes by their IDs
+func (r *NodeRepositoryImpl) GetByIDs(ctx context.Context, ids []uint) ([]*node.Node, error) {
+	if len(ids) == 0 {
+		return []*node.Node{}, nil
+	}
+
+	var nodeModels []*models.NodeModel
+	if err := r.db.WithContext(ctx).Where("id IN ?", ids).Find(&nodeModels).Error; err != nil {
+		r.logger.Errorw("failed to get nodes by IDs", "ids", ids, "error", err)
+		return nil, fmt.Errorf("failed to get nodes: %w", err)
+	}
+
+	// Collect node IDs for batch loading protocol configs
+	nodeIDs := make([]uint, len(nodeModels))
+	for i, m := range nodeModels {
+		nodeIDs[i] = m.ID
+	}
+
+	// Load shadowsocks configs
+	ssConfigsRaw, err := r.shadowsocksConfigRepo.GetByNodeIDs(ctx, nodeIDs)
+	if err != nil {
+		r.logger.Warnw("failed to load shadowsocks configs", "error", err)
+		ssConfigsRaw = make(map[uint]*ShadowsocksConfigData)
+	}
+
+	// Convert to mapper format
+	ssConfigs := make(map[uint]*mappers.ShadowsocksConfigData)
+	for nodeID, data := range ssConfigsRaw {
+		ssConfigs[nodeID] = &mappers.ShadowsocksConfigData{
+			EncryptionConfig: data.EncryptionConfig,
+			PluginConfig:     data.PluginConfig,
+		}
+	}
+
+	// Load trojan configs
+	trojanConfigs, err := r.trojanConfigRepo.GetByNodeIDs(ctx, nodeIDs)
+	if err != nil {
+		r.logger.Warnw("failed to load trojan configs", "error", err)
+		trojanConfigs = make(map[uint]*vo.TrojanConfig)
+	}
+
+	// Convert to entities
+	entities, err := r.mapper.ToEntities(nodeModels, ssConfigs, trojanConfigs)
+	if err != nil {
+		r.logger.Errorw("failed to map node models to entities", "error", err)
+		return nil, fmt.Errorf("failed to map nodes: %w", err)
+	}
+
+	return entities, nil
+}
+
 // GetByToken retrieves a node by its API token hash
 func (r *NodeRepositoryImpl) GetByToken(ctx context.Context, tokenHash string) (*node.Node, error) {
 	var model models.NodeModel

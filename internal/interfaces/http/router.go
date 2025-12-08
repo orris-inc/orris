@@ -420,10 +420,10 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	forwardRuleRepo := repository.NewForwardRuleRepository(db, log)
 
 	createForwardRuleUC := forwardUsecases.NewCreateForwardRuleUseCase(forwardRuleRepo, nodeRepoImpl, log)
-	getForwardRuleUC := forwardUsecases.NewGetForwardRuleUseCase(forwardRuleRepo, log)
+	getForwardRuleUC := forwardUsecases.NewGetForwardRuleUseCase(forwardRuleRepo, nodeRepoImpl, log)
 	updateForwardRuleUC := forwardUsecases.NewUpdateForwardRuleUseCase(forwardRuleRepo, nodeRepoImpl, log)
 	deleteForwardRuleUC := forwardUsecases.NewDeleteForwardRuleUseCase(forwardRuleRepo, log)
-	listForwardRulesUC := forwardUsecases.NewListForwardRulesUseCase(forwardRuleRepo, log)
+	listForwardRulesUC := forwardUsecases.NewListForwardRulesUseCase(forwardRuleRepo, nodeRepoImpl, log)
 	enableForwardRuleUC := forwardUsecases.NewEnableForwardRuleUseCase(forwardRuleRepo, log)
 	disableForwardRuleUC := forwardUsecases.NewDisableForwardRuleUseCase(forwardRuleRepo, log)
 	resetForwardTrafficUC := forwardUsecases.NewResetForwardRuleTrafficUseCase(forwardRuleRepo, log)

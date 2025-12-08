@@ -9,6 +9,7 @@ import (
 type NodeRepository interface {
 	Create(ctx context.Context, node *Node) error
 	GetByID(ctx context.Context, id uint) (*Node, error)
+	GetByIDs(ctx context.Context, ids []uint) ([]*Node, error)
 	GetByToken(ctx context.Context, tokenHash string) (*Node, error)
 	Update(ctx context.Context, node *Node) error
 	Delete(ctx context.Context, id uint) error

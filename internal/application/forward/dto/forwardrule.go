@@ -17,6 +17,7 @@ type ForwardRuleDTO struct {
 	TargetAddress string `json:"target_address,omitempty"` // for direct and exit types
 	TargetPort    uint16 `json:"target_port,omitempty"`    // for direct and exit types
 	TargetNodeID  *uint  `json:"target_node_id,omitempty"` // for dynamic node address resolution
+	IPVersion     string `json:"ip_version"`               // auto, ipv4, ipv6
 	Protocol      string `json:"protocol"`
 	Status        string `json:"status"`
 	Remark        string `json:"remark"`
@@ -25,9 +26,16 @@ type ForwardRuleDTO struct {
 	TotalBytes    int64  `json:"total_bytes"`
 	CreatedAt     string `json:"created_at"`
 	UpdatedAt     string `json:"updated_at"`
+
+	// Target node info (populated when targetNodeID is set)
+	TargetNodeServerAddress string  `json:"target_node_server_address,omitempty"` // node's configured server address
+	TargetNodePublicIPv4    *string `json:"target_node_public_ipv4,omitempty"`    // node's reported public IPv4
+	TargetNodePublicIPv6    *string `json:"target_node_public_ipv6,omitempty"`    // node's reported public IPv6
 }
 
 // ToForwardRuleDTO converts a domain forward rule to DTO.
+// Note: TargetNode* fields are NOT populated by this function.
+// Use PopulateTargetNodeInfo to fill them after getting node data.
 func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 	if rule == nil {
 		return nil
@@ -44,6 +52,7 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 		TargetAddress: rule.TargetAddress(),
 		TargetPort:    rule.TargetPort(),
 		TargetNodeID:  rule.TargetNodeID(),
+		IPVersion:     rule.IPVersion().String(),
 		Protocol:      rule.Protocol().String(),
 		Status:        rule.Status().String(),
 		Remark:        rule.Remark(),
@@ -53,6 +62,23 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 		CreatedAt:     rule.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:     rule.UpdatedAt().Format("2006-01-02T15:04:05Z07:00"),
 	}
+}
+
+// TargetNodeInfo contains node information for target address resolution.
+type TargetNodeInfo struct {
+	ServerAddress string
+	PublicIPv4    *string
+	PublicIPv6    *string
+}
+
+// PopulateTargetNodeInfo fills in the target node info fields.
+func (d *ForwardRuleDTO) PopulateTargetNodeInfo(info *TargetNodeInfo) {
+	if info == nil {
+		return
+	}
+	d.TargetNodeServerAddress = info.ServerAddress
+	d.TargetNodePublicIPv4 = info.PublicIPv4
+	d.TargetNodePublicIPv6 = info.PublicIPv6
 }
 
 // ToForwardRuleDTOs converts a slice of domain forward rules to DTOs.

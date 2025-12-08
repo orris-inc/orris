@@ -6,6 +6,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -30,18 +31,21 @@ type ListForwardRulesResult struct {
 
 // ListForwardRulesUseCase handles listing forward rules.
 type ListForwardRulesUseCase struct {
-	repo   forward.Repository
-	logger logger.Interface
+	repo     forward.Repository
+	nodeRepo node.NodeRepository
+	logger   logger.Interface
 }
 
 // NewListForwardRulesUseCase creates a new ListForwardRulesUseCase.
 func NewListForwardRulesUseCase(
 	repo forward.Repository,
+	nodeRepo node.NodeRepository,
 	logger logger.Interface,
 ) *ListForwardRulesUseCase {
 	return &ListForwardRulesUseCase{
-		repo:   repo,
-		logger: logger,
+		repo:     repo,
+		nodeRepo: nodeRepo,
+		logger:   logger,
 	}
 }
 
@@ -82,9 +86,45 @@ func (uc *ListForwardRulesUseCase) Execute(ctx context.Context, query ListForwar
 		pages++
 	}
 
+	// Convert to DTOs
 	dtos := make([]*dto.ForwardRuleDTO, len(rules))
 	for i, rule := range rules {
 		dtos[i] = dto.ToForwardRuleDTO(rule)
+	}
+
+	// Collect target node IDs
+	nodeIDs := make([]uint, 0)
+	for _, rule := range rules {
+		if rule.HasTargetNode() {
+			nodeIDs = append(nodeIDs, *rule.TargetNodeID())
+		}
+	}
+
+	// Fetch target nodes and populate info
+	if len(nodeIDs) > 0 && uc.nodeRepo != nil {
+		nodes, err := uc.nodeRepo.GetByIDs(ctx, nodeIDs)
+		if err != nil {
+			uc.logger.Warnw("failed to fetch target nodes", "error", err)
+			// Continue without node info
+		} else {
+			// Build node map
+			nodeMap := make(map[uint]*node.Node)
+			for _, n := range nodes {
+				nodeMap[n.ID()] = n
+			}
+			// Populate target node info
+			for _, ruleDTO := range dtos {
+				if ruleDTO.TargetNodeID != nil {
+					if n, ok := nodeMap[*ruleDTO.TargetNodeID]; ok {
+						ruleDTO.PopulateTargetNodeInfo(&dto.TargetNodeInfo{
+							ServerAddress: n.ServerAddress().Value(),
+							PublicIPv4:    n.PublicIPv4(),
+							PublicIPv6:    n.PublicIPv6(),
+						})
+					}
+				}
+			}
+		}
 	}
 
 	return &ListForwardRulesResult{
