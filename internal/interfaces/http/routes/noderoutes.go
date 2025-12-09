@@ -45,6 +45,10 @@ func SetupNodeRoutes(engine *gin.Engine, config *NodeRouteConfig) {
 		nodes.POST("/:id/tokens",
 			authorization.RequireAdmin(),
 			config.NodeHandler.GenerateToken)
+		// Using GET for retrieving install script
+		nodes.GET("/:id/install-script",
+			authorization.RequireAdmin(),
+			config.NodeHandler.GetInstallScript)
 
 		// Generic parameterized routes (must come LAST)
 		nodes.GET("/:id",

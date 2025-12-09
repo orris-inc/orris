@@ -253,6 +253,7 @@ func (r *NodeRepositoryImpl) Update(ctx context.Context, nodeEntity *node.Node) 
 				"sort_order":         model.SortOrder,
 				"maintenance_reason": model.MaintenanceReason,
 				"token_hash":         model.TokenHash,
+				"api_token":          model.APIToken,
 				"updated_at":         model.UpdatedAt,
 			})
 
@@ -534,7 +535,8 @@ func (r *NodeRepositoryImpl) GetLastSeenAt(ctx context.Context, nodeID uint) (*n
 		nil,
 		vo.NodeStatusInactive,
 		vo.NewNodeMetadata("", nil, ""),
-		"placeholder",
+		"placeholder", // tokenHash
+		"",            // apiToken
 		0,
 		nil,
 		model.LastSeenAt,

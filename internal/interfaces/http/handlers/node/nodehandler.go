@@ -13,13 +13,15 @@ import (
 )
 
 type NodeHandler struct {
-	createNodeUC    usecases.CreateNodeExecutor
-	getNodeUC       usecases.GetNodeExecutor
-	updateNodeUC    usecases.UpdateNodeExecutor
-	deleteNodeUC    usecases.DeleteNodeExecutor
-	listNodesUC     usecases.ListNodesExecutor
-	generateTokenUC usecases.GenerateNodeTokenExecutor
-	logger          logger.Interface
+	createNodeUC            usecases.CreateNodeExecutor
+	getNodeUC               usecases.GetNodeExecutor
+	updateNodeUC            usecases.UpdateNodeExecutor
+	deleteNodeUC            usecases.DeleteNodeExecutor
+	listNodesUC             usecases.ListNodesExecutor
+	generateTokenUC         usecases.GenerateNodeTokenExecutor
+	generateInstallScriptUC usecases.GenerateNodeInstallScriptExecutor
+	apiURL                  string
+	logger                  logger.Interface
 }
 
 func NewNodeHandler(
@@ -29,15 +31,19 @@ func NewNodeHandler(
 	deleteNodeUC usecases.DeleteNodeExecutor,
 	listNodesUC usecases.ListNodesExecutor,
 	generateTokenUC usecases.GenerateNodeTokenExecutor,
+	generateInstallScriptUC usecases.GenerateNodeInstallScriptExecutor,
+	apiURL string,
 ) *NodeHandler {
 	return &NodeHandler{
-		createNodeUC:    createNodeUC,
-		getNodeUC:       getNodeUC,
-		updateNodeUC:    updateNodeUC,
-		deleteNodeUC:    deleteNodeUC,
-		listNodesUC:     listNodesUC,
-		generateTokenUC: generateTokenUC,
-		logger:          logger.NewLogger(),
+		createNodeUC:            createNodeUC,
+		getNodeUC:               getNodeUC,
+		updateNodeUC:            updateNodeUC,
+		deleteNodeUC:            deleteNodeUC,
+		listNodesUC:             listNodesUC,
+		generateTokenUC:         generateTokenUC,
+		generateInstallScriptUC: generateInstallScriptUC,
+		apiURL:                  apiURL,
+		logger:                  logger.NewLogger(),
 	}
 }
 
@@ -157,6 +163,41 @@ func (h *NodeHandler) GenerateToken(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "Token generated successfully", result)
+}
+
+// GetInstallScript handles GET /nodes/:id/install-script
+// Query params:
+//   - token (optional): API token. If not provided, uses node's current stored token
+//   - api_url (optional): Override the default API URL
+func (h *NodeHandler) GetInstallScript(c *gin.Context) {
+	nodeID, err := parseNodeID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	// Token is optional - if not provided, will use node's stored token
+	token := c.Query("token")
+
+	// Use query param to override API URL if provided
+	apiURL := c.Query("api_url")
+	if apiURL == "" {
+		apiURL = h.apiURL
+	}
+
+	query := usecases.GenerateNodeInstallScriptQuery{
+		NodeID: nodeID,
+		APIURL: apiURL,
+		Token:  token,
+	}
+
+	result, err := h.generateInstallScriptUC.Execute(c.Request.Context(), query)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Install command generated successfully", result)
 }
 
 // UpdateNodeStatusRequest represents a request for node status changes
