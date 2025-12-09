@@ -98,6 +98,15 @@ func (uc *GenerateSubscriptionUseCase) Execute(ctx context.Context, cmd Generate
 	hmacSecret := config.Get().Auth.JWT.Secret
 	password := generateHMACPassword(subscriptionUUID, hmacSecret)
 
+	// Debug: log if password is empty
+	if password == "" {
+		uc.logger.Warnw("generated empty password",
+			"subscription_uuid", subscriptionUUID,
+			"uuid_empty", subscriptionUUID == "",
+			"secret_empty", hmacSecret == "",
+		)
+	}
+
 	// Pass HMAC password for node authentication
 	content, err := formatter.FormatWithPassword(nodes, password)
 	if err != nil {

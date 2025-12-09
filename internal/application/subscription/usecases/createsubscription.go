@@ -23,6 +23,7 @@ type CreateSubscriptionCommand struct {
 type CreateSubscriptionResult struct {
 	Subscription *subscription.Subscription
 	Token        *subscription.SubscriptionToken
+	PlainToken   string // Plain token value, only available at creation time
 }
 
 type CreateSubscriptionUseCase struct {
@@ -130,7 +131,7 @@ func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, cmd CreateSubs
 		return nil, fmt.Errorf("failed to create subscription: %w", err)
 	}
 
-	token, err := uc.createDefaultToken(ctx, sub.ID())
+	token, plainToken, err := uc.createDefaultToken(ctx, sub.ID())
 	if err != nil {
 		uc.logger.Warnw("failed to create default token", "error", err, "subscription_id", sub.ID())
 	}
@@ -146,6 +147,7 @@ func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, cmd CreateSubs
 	return &CreateSubscriptionResult{
 		Subscription: sub,
 		Token:        token,
+		PlainToken:   plainToken,
 	}, nil
 }
 
@@ -162,20 +164,22 @@ func (uc *CreateSubscriptionUseCase) calculateEndDate(startDate time.Time, billi
 	}
 }
 
-func (uc *CreateSubscriptionUseCase) createDefaultToken(ctx context.Context, subscriptionID uint) (*subscription.SubscriptionToken, error) {
-	_, hashedToken, err := uc.tokenGenerator.Generate("sub")
+func (uc *CreateSubscriptionUseCase) createDefaultToken(ctx context.Context, subscriptionID uint) (*subscription.SubscriptionToken, string, error) {
+	plainToken, hashedToken, err := uc.tokenGenerator.Generate("sub")
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate token: %w", err)
+		return nil, "", fmt.Errorf("failed to generate token: %w", err)
 	}
 
-	token, err := subscription.NewSubscriptionToken(subscriptionID, "Default Token", hashedToken, "sub", vo.TokenScopeFull, nil)
+	prefix := plainToken[:8]
+
+	token, err := subscription.NewSubscriptionToken(subscriptionID, "Default Token", hashedToken, prefix, vo.TokenScopeFull, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create token: %w", err)
+		return nil, "", fmt.Errorf("failed to create token: %w", err)
 	}
 
 	if err := uc.tokenRepo.Create(ctx, token); err != nil {
-		return nil, fmt.Errorf("failed to save token: %w", err)
+		return nil, "", fmt.Errorf("failed to save token: %w", err)
 	}
 
-	return token, nil
+	return token, plainToken, nil
 }

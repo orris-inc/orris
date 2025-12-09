@@ -124,7 +124,7 @@ func (h *SubscriptionHandler) CreateSubscription(c *gin.Context) {
 
 	utils.CreatedResponse(c, gin.H{
 		"subscription": result.Subscription,
-		"token":        result.Token,
+		"token":        result.PlainToken,
 	}, "Subscription created successfully")
 }
 
