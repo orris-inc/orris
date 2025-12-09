@@ -11,6 +11,7 @@ import (
 // ForwardAgentModel represents the database persistence model for forward agents.
 type ForwardAgentModel struct {
 	ID            uint   `gorm:"primarykey"`
+	ShortID       string `gorm:"not null;size:16;uniqueIndex:idx_forward_agent_short_id"` // external API identifier
 	Name          string `gorm:"not null;size:100;index:idx_forward_agent_name"`
 	TokenHash     string `gorm:"not null;size:64;index:idx_forward_agent_token_hash"`
 	APIToken      string `gorm:"column:api_token;size:255"` // stored token for retrieval

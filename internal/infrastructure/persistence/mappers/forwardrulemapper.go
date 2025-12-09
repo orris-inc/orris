@@ -69,6 +69,7 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 
 	entity, err := forward.ReconstructForwardRule(
 		model.ID,
+		model.ShortID,
 		model.AgentID,
 		ruleType,
 		exitAgentID,
@@ -120,6 +121,7 @@ func (m *ForwardRuleMapperImpl) ToModel(entity *forward.ForwardRule) (*models.Fo
 
 	return &models.ForwardRuleModel{
 		ID:            entity.ID(),
+		ShortID:       entity.ShortID(),
 		AgentID:       entity.AgentID(),
 		RuleType:      entity.RuleType().String(),
 		ExitAgentID:   exitAgentID,

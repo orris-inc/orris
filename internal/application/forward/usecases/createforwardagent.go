@@ -6,6 +6,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -18,7 +19,7 @@ type CreateForwardAgentCommand struct {
 
 // CreateForwardAgentResult represents the output of creating a forward agent.
 type CreateForwardAgentResult struct {
-	ID            uint   `json:"id"`
+	ID            string `json:"id"` // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
 	Name          string `json:"name"`
 	PublicAddress string `json:"public_address"`
 	Token         string `json:"token"`
@@ -65,7 +66,7 @@ func (uc *CreateForwardAgentUseCase) Execute(ctx context.Context, cmd CreateForw
 	}
 
 	// Create domain entity
-	agent, err := forward.NewForwardAgent(cmd.Name, cmd.PublicAddress, cmd.Remark)
+	agent, err := forward.NewForwardAgent(cmd.Name, cmd.PublicAddress, cmd.Remark, id.NewForwardAgentID)
 	if err != nil {
 		uc.logger.Errorw("failed to create forward agent entity", "error", err)
 		return nil, fmt.Errorf("failed to create forward agent: %w", err)
@@ -81,7 +82,7 @@ func (uc *CreateForwardAgentUseCase) Execute(ctx context.Context, cmd CreateForw
 	plainToken := agent.GetAPIToken()
 
 	result := &CreateForwardAgentResult{
-		ID:            agent.ID(),
+		ID:            id.FormatForwardAgentID(agent.ShortID()),
 		Name:          agent.Name(),
 		PublicAddress: agent.PublicAddress(),
 		Token:         plainToken,

@@ -11,6 +11,7 @@ import (
 // ForwardRuleModel represents the database persistence model for forward rules.
 type ForwardRuleModel struct {
 	ID            uint    `gorm:"primarykey"`
+	ShortID       string  `gorm:"not null;size:16;uniqueIndex:idx_forward_rule_short_id"` // external API identifier
 	AgentID       uint    `gorm:"not null;index:idx_forward_agent_id;uniqueIndex:idx_listen_port_agent"`
 	RuleType      string  `gorm:"not null;default:direct;size:20"` // direct, chain, websocket
 	ExitAgentID   *uint   `gorm:"index:idx_forward_exit_agent_id"` // exit agent ID for chain/websocket forward (nullable)

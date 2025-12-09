@@ -32,6 +32,7 @@ var domainNameRegex = regexp.MustCompile(`^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-
 // ForwardAgent represents the forward agent aggregate root
 type ForwardAgent struct {
 	id             uint
+	shortID        string // external API identifier (Stripe-style)
 	name           string
 	tokenHash      string
 	apiToken       string // stored token for retrieval
@@ -44,7 +45,7 @@ type ForwardAgent struct {
 }
 
 // NewForwardAgent creates a new forward agent with auto-generated token
-func NewForwardAgent(name string, publicAddress string, remark string) (*ForwardAgent, error) {
+func NewForwardAgent(name string, publicAddress string, remark string, shortIDGenerator func() (string, error)) (*ForwardAgent, error) {
 	if name == "" {
 		return nil, fmt.Errorf("agent name is required")
 	}
@@ -62,8 +63,15 @@ func NewForwardAgent(name string, publicAddress string, remark string) (*Forward
 		return nil, fmt.Errorf("failed to generate API token: %w", err)
 	}
 
+	// Generate short ID for external API use
+	shortID, err := shortIDGenerator()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate short ID: %w", err)
+	}
+
 	now := time.Now()
 	agent := &ForwardAgent{
+		shortID:        shortID,
 		name:           name,
 		tokenHash:      tokenHash,
 		apiToken:       plainToken,
@@ -81,6 +89,7 @@ func NewForwardAgent(name string, publicAddress string, remark string) (*Forward
 // ReconstructForwardAgent reconstructs a forward agent from persistence
 func ReconstructForwardAgent(
 	id uint,
+	shortID string,
 	name string,
 	tokenHash string,
 	apiToken string,
@@ -91,6 +100,9 @@ func ReconstructForwardAgent(
 ) (*ForwardAgent, error) {
 	if id == 0 {
 		return nil, fmt.Errorf("agent ID cannot be zero")
+	}
+	if shortID == "" {
+		return nil, fmt.Errorf("agent short ID is required")
 	}
 	if name == "" {
 		return nil, fmt.Errorf("agent name is required")
@@ -111,6 +123,7 @@ func ReconstructForwardAgent(
 
 	return &ForwardAgent{
 		id:             id,
+		shortID:        shortID,
 		name:           name,
 		tokenHash:      tokenHash,
 		apiToken:       apiToken,
@@ -126,6 +139,11 @@ func ReconstructForwardAgent(
 // ID returns the agent ID
 func (a *ForwardAgent) ID() uint {
 	return a.id
+}
+
+// ShortID returns the external API identifier
+func (a *ForwardAgent) ShortID() string {
+	return a.shortID
 }
 
 // Name returns the agent name

@@ -9,6 +9,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/forward/usecases"
 	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
@@ -107,13 +108,13 @@ func (h *ForwardAgentHandler) CreateAgent(c *gin.Context) {
 
 // GetAgent handles GET /forward-agents/:id
 func (h *ForwardAgentHandler) GetAgent(c *gin.Context) {
-	agentID, err := parseAgentID(c)
+	shortID, err := parseAgentShortID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	query := usecases.GetForwardAgentQuery{ID: agentID}
+	query := usecases.GetForwardAgentQuery{ShortID: shortID}
 	result, err := h.getAgentUC.Execute(c.Request.Context(), query)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
@@ -339,14 +340,31 @@ func (h *ForwardAgentHandler) GetInstallScript(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "Install command generated successfully", result)
 }
 
+// parseAgentShortID extracts the short ID from a prefixed agent ID (e.g., "fa_xK9mP2vL3nQ" -> "xK9mP2vL3nQ").
+func parseAgentShortID(c *gin.Context) (string, error) {
+	prefixedID := c.Param("id")
+	if prefixedID == "" {
+		return "", errors.NewValidationError("forward agent ID is required")
+	}
+
+	shortID, err := id.ParseForwardAgentID(prefixedID)
+	if err != nil {
+		return "", errors.NewValidationError("invalid forward agent ID format, expected fa_xxxxx")
+	}
+
+	return shortID, nil
+}
+
+// parseAgentID is deprecated, use parseAgentShortID instead.
+// Kept for backward compatibility with internal routes.
 func parseAgentID(c *gin.Context) (uint, error) {
 	idStr := c.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 32)
+	parsedID, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
 		return 0, errors.NewValidationError("Invalid forward agent ID")
 	}
-	if id == 0 {
+	if parsedID == 0 {
 		return 0, errors.NewValidationError("Forward agent ID must be greater than 0")
 	}
-	return uint(id), nil
+	return uint(parsedID), nil
 }

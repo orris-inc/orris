@@ -10,6 +10,9 @@ type Repository interface {
 	// GetByID retrieves a forward rule by ID.
 	GetByID(ctx context.Context, id uint) (*ForwardRule, error)
 
+	// GetByShortID retrieves a forward rule by short ID.
+	GetByShortID(ctx context.Context, shortID string) (*ForwardRule, error)
+
 	// GetByListenPort retrieves a forward rule by listen port.
 	GetByListenPort(ctx context.Context, port uint16) (*ForwardRule, error)
 
@@ -64,8 +67,15 @@ type AgentRepository interface {
 	// GetByID retrieves a forward agent by ID.
 	GetByID(ctx context.Context, id uint) (*ForwardAgent, error)
 
+	// GetByShortID retrieves a forward agent by short ID.
+	GetByShortID(ctx context.Context, shortID string) (*ForwardAgent, error)
+
 	// GetByTokenHash retrieves a forward agent by token hash.
 	GetByTokenHash(ctx context.Context, tokenHash string) (*ForwardAgent, error)
+
+	// GetShortIDsByIDs retrieves short IDs for multiple agents by their internal IDs.
+	// Returns a map from internal ID to short ID.
+	GetShortIDsByIDs(ctx context.Context, ids []uint) (map[uint]string, error)
 
 	// Update updates an existing forward agent.
 	Update(ctx context.Context, agent *ForwardAgent) error

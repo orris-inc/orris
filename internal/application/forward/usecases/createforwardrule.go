@@ -8,6 +8,7 @@ import (
 	vo "github.com/orris-inc/orris/internal/domain/forward/value_objects"
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -29,8 +30,8 @@ type CreateForwardRuleCommand struct {
 
 // CreateForwardRuleResult represents the output of creating a forward rule.
 type CreateForwardRuleResult struct {
-	ID            uint   `json:"id"`
-	AgentID       uint   `json:"agent_id"`
+	ID            string `json:"id"`       // Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ")
+	AgentID       uint   `json:"agent_id"` // internal agent ID (will be converted to short ID in handler if needed)
 	RuleType      string `json:"rule_type"`
 	ExitAgentID   uint   `json:"exit_agent_id,omitempty"`
 	WsListenPort  uint16 `json:"ws_listen_port,omitempty"`
@@ -102,6 +103,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		ipVersion,
 		protocol,
 		cmd.Remark,
+		id.NewForwardRuleID,
 	)
 	if err != nil {
 		uc.logger.Errorw("failed to create forward rule entity", "error", err)
@@ -115,7 +117,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	}
 
 	result := &CreateForwardRuleResult{
-		ID:            rule.ID(),
+		ID:            id.FormatForwardRuleID(rule.ShortID()),
 		AgentID:       rule.AgentID(),
 		RuleType:      rule.RuleType().String(),
 		ExitAgentID:   rule.ExitAgentID(),

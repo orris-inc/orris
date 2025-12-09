@@ -14,6 +14,7 @@ import (
 // ForwardRule represents the forward rule aggregate root.
 type ForwardRule struct {
 	id            uint
+	shortID       string // external API identifier (Stripe-style)
 	agentID       uint
 	ruleType      vo.ForwardRuleType
 	exitAgentID   uint   // exit agent ID (required for entry type)
@@ -51,6 +52,7 @@ func NewForwardRule(
 	ipVersion vo.IPVersion,
 	protocol vo.ForwardProtocol,
 	remark string,
+	shortIDGenerator func() (string, error),
 ) (*ForwardRule, error) {
 	if agentID == 0 {
 		return nil, fmt.Errorf("agent ID is required")
@@ -120,8 +122,15 @@ func NewForwardRule(
 		return nil, fmt.Errorf("invalid IP version: %s", ipVersion)
 	}
 
+	// Generate short ID for external API use
+	shortID, err := shortIDGenerator()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate short ID: %w", err)
+	}
+
 	now := time.Now()
 	return &ForwardRule{
+		shortID:       shortID,
 		agentID:       agentID,
 		ruleType:      ruleType,
 		exitAgentID:   exitAgentID,
@@ -145,6 +154,7 @@ func NewForwardRule(
 // ReconstructForwardRule reconstructs a forward rule from persistence.
 func ReconstructForwardRule(
 	id uint,
+	shortID string,
 	agentID uint,
 	ruleType vo.ForwardRuleType,
 	exitAgentID uint,
@@ -164,6 +174,9 @@ func ReconstructForwardRule(
 ) (*ForwardRule, error) {
 	if id == 0 {
 		return nil, fmt.Errorf("forward rule ID cannot be zero")
+	}
+	if shortID == "" {
+		return nil, fmt.Errorf("forward rule short ID is required")
 	}
 	if agentID == 0 {
 		return nil, fmt.Errorf("agent ID is required")
@@ -188,6 +201,7 @@ func ReconstructForwardRule(
 
 	return &ForwardRule{
 		id:            id,
+		shortID:       shortID,
 		agentID:       agentID,
 		ruleType:      ruleType,
 		exitAgentID:   exitAgentID,
@@ -237,6 +251,11 @@ func validateAddress(address string) error {
 // ID returns the forward rule ID.
 func (r *ForwardRule) ID() uint {
 	return r.id
+}
+
+// ShortID returns the external API identifier.
+func (r *ForwardRule) ShortID() string {
+	return r.shortID
 }
 
 // AgentID returns the forward agent ID.

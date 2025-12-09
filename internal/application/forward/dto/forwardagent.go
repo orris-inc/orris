@@ -3,11 +3,12 @@ package dto
 
 import (
 	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/shared/id"
 )
 
 // ForwardAgentDTO represents the data transfer object for forward agents.
 type ForwardAgentDTO struct {
-	ID            uint   `json:"id"`
+	ID            string `json:"id"` // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
 	Name          string `json:"name"`
 	PublicAddress string `json:"public_address"`
 	Status        string `json:"status"`
@@ -23,7 +24,7 @@ func ToForwardAgentDTO(agent *forward.ForwardAgent) *ForwardAgentDTO {
 	}
 
 	return &ForwardAgentDTO{
-		ID:            agent.ID(),
+		ID:            id.FormatForwardAgentID(agent.ShortID()),
 		Name:          agent.Name(),
 		PublicAddress: agent.PublicAddress(),
 		Status:        string(agent.Status()),
