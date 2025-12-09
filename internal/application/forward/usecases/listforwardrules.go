@@ -31,21 +31,24 @@ type ListForwardRulesResult struct {
 
 // ListForwardRulesUseCase handles listing forward rules.
 type ListForwardRulesUseCase struct {
-	repo     forward.Repository
-	nodeRepo node.NodeRepository
-	logger   logger.Interface
+	repo      forward.Repository
+	agentRepo forward.AgentRepository
+	nodeRepo  node.NodeRepository
+	logger    logger.Interface
 }
 
 // NewListForwardRulesUseCase creates a new ListForwardRulesUseCase.
 func NewListForwardRulesUseCase(
 	repo forward.Repository,
+	agentRepo forward.AgentRepository,
 	nodeRepo node.NodeRepository,
 	logger logger.Interface,
 ) *ListForwardRulesUseCase {
 	return &ListForwardRulesUseCase{
-		repo:     repo,
-		nodeRepo: nodeRepo,
-		logger:   logger,
+		repo:      repo,
+		agentRepo: agentRepo,
+		nodeRepo:  nodeRepo,
+		logger:    logger,
 	}
 }
 
@@ -87,9 +90,20 @@ func (uc *ListForwardRulesUseCase) Execute(ctx context.Context, query ListForwar
 	}
 
 	// Convert to DTOs
-	dtos := make([]*dto.ForwardRuleDTO, len(rules))
-	for i, rule := range rules {
-		dtos[i] = dto.ToForwardRuleDTO(rule)
+	dtos := dto.ToForwardRuleDTOs(rules)
+
+	// Populate agent info (AgentID and ExitAgentID)
+	agentIDs := dto.CollectAgentIDs(dtos)
+	if len(agentIDs) > 0 && uc.agentRepo != nil {
+		agentShortIDs, err := uc.agentRepo.GetShortIDsByIDs(ctx, agentIDs)
+		if err != nil {
+			uc.logger.Warnw("failed to fetch agent short IDs", "error", err)
+			// Continue without agent info
+		} else {
+			for _, ruleDTO := range dtos {
+				ruleDTO.PopulateAgentInfo(agentShortIDs)
+			}
+		}
 	}
 
 	// Collect target node IDs

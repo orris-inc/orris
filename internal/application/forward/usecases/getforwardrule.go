@@ -18,21 +18,24 @@ type GetForwardRuleQuery struct {
 
 // GetForwardRuleUseCase handles getting a single forward rule.
 type GetForwardRuleUseCase struct {
-	repo     forward.Repository
-	nodeRepo node.NodeRepository
-	logger   logger.Interface
+	repo      forward.Repository
+	agentRepo forward.AgentRepository
+	nodeRepo  node.NodeRepository
+	logger    logger.Interface
 }
 
 // NewGetForwardRuleUseCase creates a new GetForwardRuleUseCase.
 func NewGetForwardRuleUseCase(
 	repo forward.Repository,
+	agentRepo forward.AgentRepository,
 	nodeRepo node.NodeRepository,
 	logger logger.Interface,
 ) *GetForwardRuleUseCase {
 	return &GetForwardRuleUseCase{
-		repo:     repo,
-		nodeRepo: nodeRepo,
-		logger:   logger,
+		repo:      repo,
+		agentRepo: agentRepo,
+		nodeRepo:  nodeRepo,
+		logger:    logger,
 	}
 }
 
@@ -54,6 +57,18 @@ func (uc *GetForwardRuleUseCase) Execute(ctx context.Context, query GetForwardRu
 	}
 
 	ruleDTO := dto.ToForwardRuleDTO(rule)
+
+	// Populate agent info (AgentID and ExitAgentID)
+	agentIDs := dto.CollectAgentIDs([]*dto.ForwardRuleDTO{ruleDTO})
+	if len(agentIDs) > 0 && uc.agentRepo != nil {
+		agentShortIDs, err := uc.agentRepo.GetShortIDsByIDs(ctx, agentIDs)
+		if err != nil {
+			uc.logger.Warnw("failed to fetch agent short IDs", "error", err)
+			// Continue without agent info
+		} else {
+			ruleDTO.PopulateAgentInfo(agentShortIDs)
+		}
+	}
 
 	// Populate target node info if rule has target node
 	if rule.HasTargetNode() && uc.nodeRepo != nil {

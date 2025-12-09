@@ -421,14 +421,16 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		log,
 	)
 
-	// Initialize forward rule components
+	// Initialize forward repositories (agent repo needed by rule use cases)
+	forwardAgentRepo := repository.NewForwardAgentRepository(db, log)
 	forwardRuleRepo := repository.NewForwardRuleRepository(db, log)
 
+	// Initialize forward rule components
 	createForwardRuleUC := forwardUsecases.NewCreateForwardRuleUseCase(forwardRuleRepo, nodeRepoImpl, log)
-	getForwardRuleUC := forwardUsecases.NewGetForwardRuleUseCase(forwardRuleRepo, nodeRepoImpl, log)
+	getForwardRuleUC := forwardUsecases.NewGetForwardRuleUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, log)
 	updateForwardRuleUC := forwardUsecases.NewUpdateForwardRuleUseCase(forwardRuleRepo, nodeRepoImpl, log)
 	deleteForwardRuleUC := forwardUsecases.NewDeleteForwardRuleUseCase(forwardRuleRepo, log)
-	listForwardRulesUC := forwardUsecases.NewListForwardRulesUseCase(forwardRuleRepo, nodeRepoImpl, log)
+	listForwardRulesUC := forwardUsecases.NewListForwardRulesUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, log)
 	enableForwardRuleUC := forwardUsecases.NewEnableForwardRuleUseCase(forwardRuleRepo, log)
 	disableForwardRuleUC := forwardUsecases.NewDisableForwardRuleUseCase(forwardRuleRepo, log)
 	resetForwardTrafficUC := forwardUsecases.NewResetForwardRuleTrafficUseCase(forwardRuleRepo, log)
@@ -436,7 +438,6 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// forwardRuleHandler will be initialized later after probeService is available
 
 	// Initialize forward agent components
-	forwardAgentRepo := repository.NewForwardAgentRepository(db, log)
 
 	createForwardAgentUC := forwardUsecases.NewCreateForwardAgentUseCase(forwardAgentRepo, log)
 	getForwardAgentUC := forwardUsecases.NewGetForwardAgentUseCase(forwardAgentRepo, log)
