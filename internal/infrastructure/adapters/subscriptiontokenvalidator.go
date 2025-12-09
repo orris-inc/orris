@@ -2,8 +2,6 @@ package adapters
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"time"
 
 	"gorm.io/gorm"
@@ -26,41 +24,17 @@ func NewSubscriptionTokenValidatorAdapter(db *gorm.DB, logger logger.Interface) 
 	}
 }
 
-func (v *SubscriptionTokenValidatorAdapter) Validate(ctx context.Context, token string) error {
-	tokenHash := hashToken(token)
-
-	var tokenModel models.SubscriptionTokenModel
-	if err := v.db.WithContext(ctx).
-		Where("token_hash = ?", tokenHash).
-		First(&tokenModel).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			v.logger.Warnw("subscription token not found", "token_hash", tokenHash)
-			return errors.NewNotFoundError("subscription token not found")
-		}
-		v.logger.Errorw("failed to query subscription token", "error", err)
-		return errors.NewInternalError("failed to validate token")
-	}
-
-	if !tokenModel.IsActive {
-		v.logger.Warnw("subscription token is inactive", "token_id", tokenModel.ID)
-		return errors.NewValidationError("subscription token is inactive")
-	}
-
-	if tokenModel.ExpiresAt != nil && tokenModel.ExpiresAt.Before(time.Now()) {
-		v.logger.Warnw("subscription token expired", "token_id", tokenModel.ID, "expired_at", tokenModel.ExpiresAt)
-		return errors.NewValidationError("subscription token expired")
-	}
-
+func (v *SubscriptionTokenValidatorAdapter) Validate(ctx context.Context, subscriptionUUID string) error {
 	var subscriptionModel models.SubscriptionModel
 	if err := v.db.WithContext(ctx).
-		Where("id = ?", tokenModel.SubscriptionID).
+		Where("uuid = ?", subscriptionUUID).
 		First(&subscriptionModel).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			v.logger.Warnw("subscription not found", "subscription_id", tokenModel.SubscriptionID)
+			v.logger.Warnw("subscription not found", "uuid", subscriptionUUID)
 			return errors.NewNotFoundError("subscription not found")
 		}
 		v.logger.Errorw("failed to query subscription", "error", err)
-		return errors.NewInternalError("failed to validate token")
+		return errors.NewInternalError("failed to validate subscription")
 	}
 
 	if subscriptionModel.Status != "active" {
@@ -73,51 +47,20 @@ func (v *SubscriptionTokenValidatorAdapter) Validate(ctx context.Context, token 
 		return errors.NewValidationError("subscription expired")
 	}
 
-	v.db.WithContext(ctx).
-		Model(&tokenModel).
-		Updates(map[string]interface{}{
-			"last_used_at": time.Now(),
-			"usage_count":  gorm.Expr("usage_count + 1"),
-		})
-
 	return nil
 }
 
-func (v *SubscriptionTokenValidatorAdapter) ValidateAndGetSubscription(ctx context.Context, token string) (*nodeusecases.SubscriptionValidationResult, error) {
-	tokenHash := hashToken(token)
-
-	var tokenModel models.SubscriptionTokenModel
-	if err := v.db.WithContext(ctx).
-		Where("token_hash = ?", tokenHash).
-		First(&tokenModel).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			v.logger.Warnw("subscription token not found", "token_hash", tokenHash)
-			return nil, errors.NewNotFoundError("subscription token not found")
-		}
-		v.logger.Errorw("failed to query subscription token", "error", err)
-		return nil, errors.NewInternalError("failed to validate token")
-	}
-
-	if !tokenModel.IsActive {
-		v.logger.Warnw("subscription token is inactive", "token_id", tokenModel.ID)
-		return nil, errors.NewValidationError("subscription token is inactive")
-	}
-
-	if tokenModel.ExpiresAt != nil && tokenModel.ExpiresAt.Before(time.Now()) {
-		v.logger.Warnw("subscription token expired", "token_id", tokenModel.ID, "expired_at", tokenModel.ExpiresAt)
-		return nil, errors.NewValidationError("subscription token expired")
-	}
-
+func (v *SubscriptionTokenValidatorAdapter) ValidateAndGetSubscription(ctx context.Context, subscriptionUUID string) (*nodeusecases.SubscriptionValidationResult, error) {
 	var subscriptionModel models.SubscriptionModel
 	if err := v.db.WithContext(ctx).
-		Where("id = ?", tokenModel.SubscriptionID).
+		Where("uuid = ?", subscriptionUUID).
 		First(&subscriptionModel).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			v.logger.Warnw("subscription not found", "subscription_id", tokenModel.SubscriptionID)
+			v.logger.Warnw("subscription not found", "uuid", subscriptionUUID)
 			return nil, errors.NewNotFoundError("subscription not found")
 		}
 		v.logger.Errorw("failed to query subscription", "error", err)
-		return nil, errors.NewInternalError("failed to validate token")
+		return nil, errors.NewInternalError("failed to validate subscription")
 	}
 
 	if subscriptionModel.Status != "active" {
@@ -130,20 +73,7 @@ func (v *SubscriptionTokenValidatorAdapter) ValidateAndGetSubscription(ctx conte
 		return nil, errors.NewValidationError("subscription expired")
 	}
 
-	// Update token usage
-	v.db.WithContext(ctx).
-		Model(&tokenModel).
-		Updates(map[string]interface{}{
-			"last_used_at": time.Now(),
-			"usage_count":  gorm.Expr("usage_count + 1"),
-		})
-
 	return &nodeusecases.SubscriptionValidationResult{
 		SubscriptionUUID: subscriptionModel.UUID,
 	}, nil
-}
-
-func hashToken(token string) string {
-	hash := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(hash[:])
 }

@@ -2,8 +2,6 @@ package adapters
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 
 	"gorm.io/gorm"
@@ -33,30 +31,15 @@ func NewNodeRepositoryAdapter(nodeRepo NodeRepository, db *gorm.DB, logger logge
 	}
 }
 
-func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, token string) ([]*usecases.Node, error) {
-	// Hash the token
-	tokenHash := hashSubscriptionToken(token)
-
-	// Query subscription token
-	var tokenModel models.SubscriptionTokenModel
-	if err := r.db.WithContext(ctx).
-		Where("token_hash = ? AND is_active = ?", tokenHash, true).
-		First(&tokenModel).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			r.logger.Warnw("subscription token not found", "token_hash", tokenHash)
-			return []*usecases.Node{}, nil
-		}
-		r.logger.Errorw("failed to query subscription token", "error", err)
-		return nil, err
-	}
-
-	// Query subscription
+func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, subscriptionUUID string) ([]*usecases.Node, error) {
 	var subscriptionModel models.SubscriptionModel
+
+	// Query subscription by UUID
 	if err := r.db.WithContext(ctx).
-		Where("id = ? AND status = ?", tokenModel.SubscriptionID, "active").
+		Where("uuid = ? AND status = ?", subscriptionUUID, "active").
 		First(&subscriptionModel).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			r.logger.Warnw("active subscription not found", "subscription_id", tokenModel.SubscriptionID)
+			r.logger.Warnw("active subscription not found", "uuid", subscriptionUUID)
 			return []*usecases.Node{}, nil
 		}
 		r.logger.Errorw("failed to query subscription", "error", err)
@@ -248,11 +231,6 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, toke
 	)
 
 	return nodes, nil
-}
-
-func hashSubscriptionToken(token string) string {
-	hash := sha256.Sum256([]byte(token))
-	return hex.EncodeToString(hash[:])
 }
 
 func (r *NodeRepositoryAdapter) GetByTokenHash(ctx context.Context, tokenHash string) (usecases.NodeData, error) {
