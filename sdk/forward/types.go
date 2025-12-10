@@ -35,6 +35,10 @@ type Rule struct {
 	CreatedAt     string   `json:"created_at"`
 	UpdatedAt     string   `json:"updated_at"`
 
+	// Role indicates the requesting agent's role in this rule
+	// Values: "entry" (needs to establish tunnel), "exit" (accepts tunnel connections), "relay" (chain middle node)
+	Role string `json:"role,omitempty"`
+
 	// Chain-specific fields (for chain rule type)
 	ChainAgentIDs  []string `json:"chain_agent_ids,omitempty"`   // Ordered list of agent IDs in chain
 	ChainPosition  int      `json:"chain_position,omitempty"`    // Agent's position in chain (0-indexed)

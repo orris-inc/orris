@@ -35,6 +35,10 @@ type ForwardRuleDTO struct {
 	TargetNodePublicIPv4    *string `json:"target_node_public_ipv4,omitempty"`    // node's reported public IPv4
 	TargetNodePublicIPv6    *string `json:"target_node_public_ipv6,omitempty"`    // node's reported public IPv6
 
+	// Role indicates the requesting agent's role in this rule
+	// Values: "entry" (needs to establish tunnel), "exit" (accepts tunnel connections), "relay" (chain middle node)
+	Role string `json:"role,omitempty"`
+
 	// Chain-specific fields (populated for chain rules based on requesting agent's role)
 	ChainPosition  int    `json:"chain_position,omitempty"`    // agent's position in chain (0-indexed)
 	IsLastInChain  bool   `json:"is_last_in_chain,omitempty"`  // true if agent is last in chain

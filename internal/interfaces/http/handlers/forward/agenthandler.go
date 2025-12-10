@@ -158,6 +158,25 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 	// Convert to DTOs and resolve dynamic node addresses
 	ruleDTOs := dto.ToForwardRuleDTOs(rules)
 
+	// Collect all agent IDs that need short ID lookup (for AgentID and ExitAgentID)
+	agentIDs := dto.CollectAgentIDs(ruleDTOs)
+	if len(agentIDs) > 0 {
+		// Batch fetch agent short IDs
+		agentMap, err := h.agentRepo.GetShortIDsByIDs(ctx, agentIDs)
+		if err != nil {
+			h.logger.Warnw("failed to get agent short IDs",
+				"agent_ids", agentIDs,
+				"error", err,
+			)
+			// Continue with empty map
+			agentMap = make(dto.AgentShortIDMap)
+		}
+		// Populate agent info (AgentID and ExitAgentID) for all DTOs
+		for _, ruleDTO := range ruleDTOs {
+			ruleDTO.PopulateAgentInfo(agentMap)
+		}
+	}
+
 	// Resolve node addresses for rules with targetNodeID
 	for _, ruleDTO := range ruleDTOs {
 		targetNodeID := ruleDTO.InternalTargetNodeID()
@@ -300,6 +319,42 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 				"rule_id", ruleDTO.ID,
 				"agent_id", agentID,
 			)
+		}
+	}
+
+	// Set role field for all rules based on requesting agent's position
+	for i, rule := range rules {
+		ruleDTO := ruleDTOs[i]
+
+		switch rule.RuleType().String() {
+		case "direct":
+			// Direct rules: agent is always the forwarder
+			ruleDTO.Role = "entry"
+
+		case "entry":
+			if rule.AgentID() == agentID {
+				// This agent is the entry point
+				ruleDTO.Role = "entry"
+			} else if rule.ExitAgentID() == agentID {
+				// This agent is the exit point - clear exit_agent_id (minimum info principle)
+				ruleDTO.Role = "exit"
+				ruleDTO.ExitAgentID = ""
+
+				h.logger.Debugw("set role=exit for exit agent",
+					"rule_id", ruleDTO.ID,
+					"agent_id", agentID,
+				)
+			}
+
+		case "chain":
+			// Chain role is already set based on position
+			if ruleDTO.ChainPosition == 0 {
+				ruleDTO.Role = "entry"
+			} else if ruleDTO.IsLastInChain {
+				ruleDTO.Role = "exit"
+			} else {
+				ruleDTO.Role = "relay"
+			}
 		}
 	}
 
@@ -491,12 +546,21 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 		return
 	}
 
-	// Check if any entry rule points to the requested exit agent
+	// Check if any entry or chain rule points to the requested exit agent
 	hasAccess := false
 	for _, rule := range entryRules {
+		// Entry rule: entry agent connects to exit agent
 		if rule.RuleType().String() == "entry" && rule.ExitAgentID() == exitAgentID {
 			hasAccess = true
 			break
+		}
+		// Chain rule: agent connects to its next hop in the chain
+		if rule.RuleType().String() == "chain" {
+			nextHopID := rule.GetNextHopAgentID(entryAgentID)
+			if nextHopID == exitAgentID {
+				hasAccess = true
+				break
+			}
 		}
 	}
 
