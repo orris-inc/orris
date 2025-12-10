@@ -179,7 +179,7 @@ func (a *ForwardAgentStatusAdapter) parseStatus(values map[string]string) *dto.A
 
 	// Parse tunnel status JSON
 	if tunnelJSON, ok := values["tunnel_status"]; ok && tunnelJSON != "" {
-		var tunnelStatus map[uint]string
+		var tunnelStatus map[string]string
 		if err := json.Unmarshal([]byte(tunnelJSON), &tunnelStatus); err == nil {
 			status.TunnelStatus = tunnelStatus
 		}

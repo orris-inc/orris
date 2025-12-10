@@ -10,10 +10,8 @@ import (
 )
 
 // RegenerateForwardAgentTokenCommand represents the input for regenerating an agent token.
-// Use either ID (internal) or ShortID (external API identifier).
 type RegenerateForwardAgentTokenCommand struct {
-	ID      uint   // Internal database ID (deprecated, use ShortID for external API)
-	ShortID string // External API identifier (without prefix)
+	ShortID string // External API identifier
 }
 
 // RegenerateForwardAgentTokenResult represents the output of regenerating an agent token.
@@ -41,32 +39,19 @@ func NewRegenerateForwardAgentTokenUseCase(
 
 // Execute regenerates the API token for a forward agent.
 func (uc *RegenerateForwardAgentTokenUseCase) Execute(ctx context.Context, cmd RegenerateForwardAgentTokenCommand) (*RegenerateForwardAgentTokenResult, error) {
-	var agent *forward.ForwardAgent
-	var err error
+	if cmd.ShortID == "" {
+		return nil, errors.NewValidationError("short_id is required")
+	}
 
-	// Prefer ShortID over internal ID for external API
-	if cmd.ShortID != "" {
-		uc.logger.Infow("executing regenerate forward agent token use case", "short_id", cmd.ShortID)
-		agent, err = uc.repo.GetByShortID(ctx, cmd.ShortID)
-		if err != nil {
-			uc.logger.Errorw("failed to get forward agent", "short_id", cmd.ShortID, "error", err)
-			return nil, fmt.Errorf("failed to get forward agent: %w", err)
-		}
-		if agent == nil {
-			return nil, errors.NewNotFoundError("forward agent", cmd.ShortID)
-		}
-	} else if cmd.ID != 0 {
-		uc.logger.Infow("executing regenerate forward agent token use case", "id", cmd.ID)
-		agent, err = uc.repo.GetByID(ctx, cmd.ID)
-		if err != nil {
-			uc.logger.Errorw("failed to get forward agent", "id", cmd.ID, "error", err)
-			return nil, fmt.Errorf("failed to get forward agent: %w", err)
-		}
-		if agent == nil {
-			return nil, errors.NewNotFoundError("forward agent", fmt.Sprintf("%d", cmd.ID))
-		}
-	} else {
-		return nil, errors.NewValidationError("agent ID or short_id is required")
+	uc.logger.Infow("executing regenerate forward agent token use case", "short_id", cmd.ShortID)
+
+	agent, err := uc.repo.GetByShortID(ctx, cmd.ShortID)
+	if err != nil {
+		uc.logger.Errorw("failed to get forward agent", "short_id", cmd.ShortID, "error", err)
+		return nil, fmt.Errorf("failed to get forward agent: %w", err)
+	}
+	if agent == nil {
+		return nil, errors.NewNotFoundError("forward agent", cmd.ShortID)
 	}
 
 	// Generate new token

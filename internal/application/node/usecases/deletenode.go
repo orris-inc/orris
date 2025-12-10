@@ -11,8 +11,7 @@ import (
 )
 
 type DeleteNodeCommand struct {
-	NodeID  uint   // Internal numeric ID (deprecated, use ShortID)
-	ShortID string // External API identifier (preferred)
+	ShortID string // External API identifier
 	Force   bool
 }
 
@@ -40,36 +39,25 @@ func NewDeleteNodeUseCase(
 }
 
 func (uc *DeleteNodeUseCase) Execute(ctx context.Context, cmd DeleteNodeCommand) (*DeleteNodeResult, error) {
-	uc.logger.Infow("executing delete node use case", "node_id", cmd.NodeID, "short_id", cmd.ShortID, "force", cmd.Force)
+	uc.logger.Infow("executing delete node use case", "short_id", cmd.ShortID, "force", cmd.Force)
 
 	if err := uc.validateCommand(cmd); err != nil {
-		uc.logger.Errorw("invalid delete node command", "error", err, "node_id", cmd.NodeID, "short_id", cmd.ShortID)
+		uc.logger.Errorw("invalid delete node command", "error", err, "short_id", cmd.ShortID)
 		return nil, err
 	}
 
-	// Retrieve the node (prefer ShortID if provided)
-	var existingNode *node.Node
-	var err error
-
-	if cmd.ShortID != "" {
-		existingNode, err = uc.nodeRepo.GetByShortID(ctx, cmd.ShortID)
-		if err != nil {
-			uc.logger.Errorw("failed to get node by short ID", "short_id", cmd.ShortID, "error", err)
-			return nil, fmt.Errorf("failed to get node: %w", err)
-		}
-		// Update NodeID from the retrieved node for subsequent operations
-		cmd.NodeID = existingNode.ID()
-	} else {
-		existingNode, err = uc.nodeRepo.GetByID(ctx, cmd.NodeID)
-		if err != nil {
-			uc.logger.Errorw("failed to get node by ID", "node_id", cmd.NodeID, "error", err)
-			return nil, fmt.Errorf("failed to get node: %w", err)
-		}
+	// Retrieve the node
+	existingNode, err := uc.nodeRepo.GetByShortID(ctx, cmd.ShortID)
+	if err != nil {
+		uc.logger.Errorw("failed to get node by short ID", "short_id", cmd.ShortID, "error", err)
+		return nil, fmt.Errorf("failed to get node: %w", err)
 	}
+
+	nodeID := existingNode.ID()
 
 	// Check if node is part of any node groups (business validation)
 	if !cmd.Force {
-		if err := uc.checkNodeGroupAssociations(ctx, cmd.NodeID); err != nil {
+		if err := uc.checkNodeGroupAssociations(ctx, nodeID); err != nil {
 			return nil, err
 		}
 	}
@@ -77,26 +65,26 @@ func (uc *DeleteNodeUseCase) Execute(ctx context.Context, cmd DeleteNodeCommand)
 	// Soft delete the node
 	// Note: Foreign key constraints have been removed to support soft deletes.
 	// Associated records in node_group_nodes will remain but queries should filter by deleted_at.
-	if err := uc.nodeRepo.Delete(ctx, cmd.NodeID); err != nil {
-		uc.logger.Errorw("failed to delete node from database", "error", err, "node_id", cmd.NodeID)
+	if err := uc.nodeRepo.Delete(ctx, nodeID); err != nil {
+		uc.logger.Errorw("failed to delete node from database", "error", err, "short_id", cmd.ShortID)
 		return nil, fmt.Errorf("failed to delete node: %w", err)
 	}
 
 	uc.logger.Infow("node deleted successfully",
-		"node_id", cmd.NodeID,
+		"short_id", cmd.ShortID,
 		"name", existingNode.Name(),
 		"address", existingNode.ServerAddress().Value(),
 	)
 
 	return &DeleteNodeResult{
-		NodeID:    cmd.NodeID,
+		NodeID:    nodeID,
 		DeletedAt: time.Now().Format(time.RFC3339),
 	}, nil
 }
 
 func (uc *DeleteNodeUseCase) validateCommand(cmd DeleteNodeCommand) error {
-	if cmd.NodeID == 0 && cmd.ShortID == "" {
-		return errors.NewValidationError("either node ID or short ID must be provided")
+	if cmd.ShortID == "" {
+		return errors.NewValidationError("short ID must be provided")
 	}
 
 	return nil

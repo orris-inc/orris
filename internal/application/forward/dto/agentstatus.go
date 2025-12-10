@@ -18,9 +18,9 @@ type AgentStatusDTO struct {
 	UDPConnections int `json:"udp_connections"`
 
 	// Forward status
-	ActiveRules       int             `json:"active_rules"`
-	ActiveConnections int             `json:"active_connections"`
-	TunnelStatus      map[uint]string `json:"tunnel_status,omitempty"`
+	ActiveRules       int               `json:"active_rules"`
+	ActiveConnections int               `json:"active_connections"`
+	TunnelStatus      map[string]string `json:"tunnel_status,omitempty"` // Key is Stripe-style rule ID (e.g., "fr_xK9mP2vL3nQ")
 }
 
 // ReportAgentStatusInput represents the input for ReportAgentStatus use case.

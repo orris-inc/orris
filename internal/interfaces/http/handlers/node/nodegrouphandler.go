@@ -210,8 +210,8 @@ func (h *NodeGroupHandler) AddNodeToGroup(c *gin.Context) {
 	}
 
 	cmd := usecases.AddNodeToGroupCommand{
-		GroupID: groupID,
-		NodeID:  req.NodeID,
+		GroupID:     groupID,
+		NodeShortID: req.NodeShortID,
 	}
 
 	result, err := h.addNodeToGroupUC.Execute(c.Request.Context(), cmd)
@@ -231,15 +231,15 @@ func (h *NodeGroupHandler) RemoveNodeFromGroup(c *gin.Context) {
 		return
 	}
 
-	nodeID, err := parseNodeIDFromParam(c, "node_id")
-	if err != nil {
-		utils.ErrorResponseWithError(c, err)
+	nodeShortID := c.Param("node_id")
+	if nodeShortID == "" {
+		utils.ErrorResponseWithError(c, errors.NewValidationError("node ID is required"))
 		return
 	}
 
 	cmd := usecases.RemoveNodeFromGroupCommand{
-		GroupID: groupID,
-		NodeID:  nodeID,
+		GroupID:     groupID,
+		NodeShortID: nodeShortID,
 	}
 
 	_, err = h.removeNodeFromGroupUC.Execute(c.Request.Context(), cmd)
@@ -352,7 +352,7 @@ type UpdateNodeGroupRequest struct {
 }
 
 type AddNodeToGroupRequest struct {
-	NodeID uint `json:"node_id" binding:"required"`
+	NodeShortID string `json:"node_id" binding:"required"`
 }
 
 type ListNodeGroupsRequest struct {

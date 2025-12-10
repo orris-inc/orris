@@ -322,7 +322,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	deleteNodeGroupUC := nodeUsecases.NewDeleteNodeGroupUseCase(nodeGroupRepoImpl, log)
 	listNodeGroupsUC := nodeUsecases.NewListNodeGroupsUseCase(nodeGroupRepoImpl, log)
 	addNodeToGroupUC := nodeUsecases.NewAddNodeToGroupUseCase(nodeRepoImpl, nodeGroupRepoImpl, log)
-	removeNodeFromGroupUC := nodeUsecases.NewRemoveNodeFromGroupUseCase(nodeGroupRepoImpl, log)
+	removeNodeFromGroupUC := nodeUsecases.NewRemoveNodeFromGroupUseCase(nodeRepoImpl, nodeGroupRepoImpl, log)
 	batchAddNodesToGroupUC := nodeUsecases.NewBatchAddNodesToGroupUseCase(nodeRepoImpl, nodeGroupRepoImpl, log)
 	batchRemoveNodesFromGroupUC := nodeUsecases.NewBatchRemoveNodesFromGroupUseCase(nodeGroupRepoImpl, log)
 	listGroupNodesUC := nodeUsecases.NewListGroupNodesUseCase(nodeRepoImpl, nodeGroupRepoImpl, log)

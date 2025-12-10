@@ -49,13 +49,13 @@ type ListNodeGroupsRequest struct {
 }
 
 type AddNodeToGroupRequest struct {
-	GroupID uint `json:"group_id" binding:"required"`
-	NodeID  uint `json:"node_id" binding:"required"`
+	GroupID     uint   `json:"group_id" binding:"required"`
+	NodeShortID string `json:"node_id" binding:"required"`
 }
 
 type RemoveNodeFromGroupRequest struct {
-	GroupID uint `json:"group_id" binding:"required"`
-	NodeID  uint `json:"node_id" binding:"required"`
+	GroupID     uint   `json:"group_id" binding:"required"`
+	NodeShortID string `json:"node_id" binding:"required"`
 }
 
 type AssociatePlanRequest struct {

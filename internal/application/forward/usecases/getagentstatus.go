@@ -17,10 +17,8 @@ type AgentStatusQuerier interface {
 }
 
 // GetAgentStatusQuery represents the query for GetAgentStatus use case.
-// Use either AgentID (internal) or ShortID (external API identifier).
 type GetAgentStatusQuery struct {
-	AgentID uint   // Internal database ID (deprecated, use ShortID for external API)
-	ShortID string // External API identifier (without prefix)
+	ShortID string // External API identifier
 }
 
 // GetAgentStatusUseCase handles querying agent status.
@@ -45,30 +43,17 @@ func NewGetAgentStatusUseCase(
 
 // Execute queries agent status.
 func (uc *GetAgentStatusUseCase) Execute(ctx context.Context, query GetAgentStatusQuery) (*dto.AgentStatusDTO, error) {
-	var agent *forward.ForwardAgent
-	var err error
+	if query.ShortID == "" {
+		return nil, fmt.Errorf("short_id is required")
+	}
 
-	// Prefer ShortID over internal ID for external API
-	if query.ShortID != "" {
-		agent, err = uc.agentRepo.GetByShortID(ctx, query.ShortID)
-		if err != nil {
-			uc.logger.Errorw("failed to get agent", "short_id", query.ShortID, "error", err)
-			return nil, fmt.Errorf("get agent: %w", err)
-		}
-		if agent == nil {
-			return nil, fmt.Errorf("agent not found: %s", query.ShortID)
-		}
-	} else if query.AgentID != 0 {
-		agent, err = uc.agentRepo.GetByID(ctx, query.AgentID)
-		if err != nil {
-			uc.logger.Errorw("failed to get agent", "agent_id", query.AgentID, "error", err)
-			return nil, fmt.Errorf("get agent: %w", err)
-		}
-		if agent == nil {
-			return nil, fmt.Errorf("agent not found: %d", query.AgentID)
-		}
-	} else {
-		return nil, fmt.Errorf("agent ID or short_id is required")
+	agent, err := uc.agentRepo.GetByShortID(ctx, query.ShortID)
+	if err != nil {
+		uc.logger.Errorw("failed to get agent", "short_id", query.ShortID, "error", err)
+		return nil, fmt.Errorf("get agent: %w", err)
+	}
+	if agent == nil {
+		return nil, fmt.Errorf("agent not found: %s", query.ShortID)
 	}
 
 	// Get status from Redis using internal ID

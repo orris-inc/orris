@@ -11,10 +11,8 @@ import (
 )
 
 // GetNodeQuery represents the query for getting a node
-// Either NodeID or ShortID should be provided
 type GetNodeQuery struct {
-	NodeID  uint   // Internal numeric ID (deprecated, use ShortID)
-	ShortID string // External API identifier (preferred)
+	ShortID string // External API identifier
 }
 
 // GetNodeResult represents the result of getting a node
@@ -58,9 +56,9 @@ func NewGetNodeUseCase(
 	}
 }
 
-// Execute retrieves a node by ID or ShortID
+// Execute retrieves a node by ShortID
 func (uc *GetNodeUseCase) Execute(ctx context.Context, query GetNodeQuery) (*GetNodeResult, error) {
-	uc.logger.Infow("executing get node use case", "node_id", query.NodeID, "short_id", query.ShortID)
+	uc.logger.Infow("executing get node use case", "short_id", query.ShortID)
 
 	// Validate query
 	if err := uc.validateQuery(query); err != nil {
@@ -68,26 +66,15 @@ func (uc *GetNodeUseCase) Execute(ctx context.Context, query GetNodeQuery) (*Get
 		return nil, err
 	}
 
-	// Retrieve the node (prefer ShortID if provided)
-	var nodeEntity *domainNode.Node
-	var err error
-
-	if query.ShortID != "" {
-		nodeEntity, err = uc.nodeRepo.GetByShortID(ctx, query.ShortID)
-		if err != nil {
-			uc.logger.Errorw("failed to get node by short ID", "short_id", query.ShortID, "error", err)
-			return nil, fmt.Errorf("failed to get node: %w", err)
-		}
-	} else {
-		nodeEntity, err = uc.nodeRepo.GetByID(ctx, query.NodeID)
-		if err != nil {
-			uc.logger.Errorw("failed to get node by ID", "node_id", query.NodeID, "error", err)
-			return nil, fmt.Errorf("failed to get node: %w", err)
-		}
+	// Retrieve the node
+	nodeEntity, err := uc.nodeRepo.GetByShortID(ctx, query.ShortID)
+	if err != nil {
+		uc.logger.Errorw("failed to get node by short ID", "short_id", query.ShortID, "error", err)
+		return nil, fmt.Errorf("failed to get node: %w", err)
 	}
 
 	if nodeEntity == nil {
-		uc.logger.Warnw("node not found", "node_id", query.NodeID, "short_id", query.ShortID)
+		uc.logger.Warnw("node not found", "short_id", query.ShortID)
 		return nil, errors.NewNotFoundError("node not found")
 	}
 
@@ -123,8 +110,8 @@ func (uc *GetNodeUseCase) Execute(ctx context.Context, query GetNodeQuery) (*Get
 
 // validateQuery validates the get node query
 func (uc *GetNodeUseCase) validateQuery(query GetNodeQuery) error {
-	if query.NodeID == 0 && query.ShortID == "" {
-		return errors.NewValidationError("either node ID or short ID must be provided")
+	if query.ShortID == "" {
+		return errors.NewValidationError("short ID must be provided")
 	}
 
 	return nil

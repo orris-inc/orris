@@ -10,10 +10,8 @@ import (
 )
 
 // UpdateForwardAgentCommand represents the input for updating a forward agent.
-// Use either ID (internal) or ShortID (external API identifier).
 type UpdateForwardAgentCommand struct {
-	ID            uint   // Internal database ID (deprecated, use ShortID for external API)
-	ShortID       string // External API identifier (without prefix)
+	ShortID       string // External API identifier
 	Name          *string
 	PublicAddress *string
 	Remark        *string
@@ -38,32 +36,19 @@ func NewUpdateForwardAgentUseCase(
 
 // Execute updates an existing forward agent.
 func (uc *UpdateForwardAgentUseCase) Execute(ctx context.Context, cmd UpdateForwardAgentCommand) error {
-	var agent *forward.ForwardAgent
-	var err error
+	if cmd.ShortID == "" {
+		return errors.NewValidationError("short_id is required")
+	}
 
-	// Prefer ShortID over internal ID for external API
-	if cmd.ShortID != "" {
-		uc.logger.Infow("executing update forward agent use case", "short_id", cmd.ShortID)
-		agent, err = uc.repo.GetByShortID(ctx, cmd.ShortID)
-		if err != nil {
-			uc.logger.Errorw("failed to get forward agent", "short_id", cmd.ShortID, "error", err)
-			return fmt.Errorf("failed to get forward agent: %w", err)
-		}
-		if agent == nil {
-			return errors.NewNotFoundError("forward agent", cmd.ShortID)
-		}
-	} else if cmd.ID != 0 {
-		uc.logger.Infow("executing update forward agent use case", "id", cmd.ID)
-		agent, err = uc.repo.GetByID(ctx, cmd.ID)
-		if err != nil {
-			uc.logger.Errorw("failed to get forward agent", "id", cmd.ID, "error", err)
-			return fmt.Errorf("failed to get forward agent: %w", err)
-		}
-		if agent == nil {
-			return errors.NewNotFoundError("forward agent", fmt.Sprintf("%d", cmd.ID))
-		}
-	} else {
-		return errors.NewValidationError("agent ID or short_id is required")
+	uc.logger.Infow("executing update forward agent use case", "short_id", cmd.ShortID)
+
+	agent, err := uc.repo.GetByShortID(ctx, cmd.ShortID)
+	if err != nil {
+		uc.logger.Errorw("failed to get forward agent", "short_id", cmd.ShortID, "error", err)
+		return fmt.Errorf("failed to get forward agent: %w", err)
+	}
+	if agent == nil {
+		return errors.NewNotFoundError("forward agent", cmd.ShortID)
 	}
 
 	// Update fields

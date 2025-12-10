@@ -44,9 +44,9 @@ func NewAgentHandler(
 
 // ForwardRuleTrafficItem represents traffic data for a single forward rule
 type ForwardRuleTrafficItem struct {
-	RuleID        uint  `json:"rule_id" binding:"required"`
-	UploadBytes   int64 `json:"upload_bytes" binding:"min=0"`
-	DownloadBytes int64 `json:"download_bytes" binding:"min=0"`
+	RuleID        string `json:"rule_id" binding:"required"` // Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ")
+	UploadBytes   int64  `json:"upload_bytes" binding:"min=0"`
+	DownloadBytes int64  `json:"download_bytes" binding:"min=0"`
 }
 
 // ReportTrafficRequest represents traffic report request from forward client
@@ -204,7 +204,7 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 		"ip", c.ClientIP(),
 	)
 
-	// Build a set of valid rule IDs for this agent
+	// Build a map of valid rule IDs for this agent (Stripe-style ID -> internal uint ID)
 	agentRules, err := h.repo.ListByAgentID(ctx, agentID)
 	if err != nil {
 		h.logger.Errorw("failed to get agent rules for validation",
@@ -215,9 +215,10 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to validate rules")
 		return
 	}
-	validRuleIDs := make(map[uint]bool)
+	validRuleIDs := make(map[string]uint) // Stripe-style ID -> internal uint ID
 	for _, rule := range agentRules {
-		validRuleIDs[rule.ID()] = true
+		stripeID := id.FormatForwardRuleID(rule.ShortID())
+		validRuleIDs[stripeID] = rule.ID()
 	}
 
 	// Update traffic for each rule
@@ -226,8 +227,9 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 	deniedCount := 0
 
 	for _, item := range req.Rules {
-		// Validate rule belongs to this agent
-		if !validRuleIDs[item.RuleID] {
+		// Validate rule belongs to this agent and get internal ID
+		internalID, valid := validRuleIDs[item.RuleID]
+		if !valid {
 			h.logger.Warnw("traffic report for unauthorized rule",
 				"rule_id", item.RuleID,
 				"agent_id", agentID,
@@ -254,10 +256,11 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 			continue
 		}
 
-		err := h.repo.UpdateTraffic(ctx, item.RuleID, item.UploadBytes, item.DownloadBytes)
+		err := h.repo.UpdateTraffic(ctx, internalID, item.UploadBytes, item.DownloadBytes)
 		if err != nil {
 			h.logger.Errorw("failed to update rule traffic",
 				"rule_id", item.RuleID,
+				"internal_id", internalID,
 				"agent_id", agentID,
 				"upload", item.UploadBytes,
 				"download", item.DownloadBytes,
@@ -430,19 +433,19 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 
 // ReportStatusRequest represents status report request from forward client
 type ReportStatusRequest struct {
-	CPUPercent        float64         `json:"cpu_percent"`
-	MemoryPercent     float64         `json:"memory_percent"`
-	MemoryUsed        uint64          `json:"memory_used"`
-	MemoryTotal       uint64          `json:"memory_total"`
-	DiskPercent       float64         `json:"disk_percent"`
-	DiskUsed          uint64          `json:"disk_used"`
-	DiskTotal         uint64          `json:"disk_total"`
-	UptimeSeconds     int64           `json:"uptime_seconds"`
-	TCPConnections    int             `json:"tcp_connections"`
-	UDPConnections    int             `json:"udp_connections"`
-	ActiveRules       int             `json:"active_rules"`
-	ActiveConnections int             `json:"active_connections"`
-	TunnelStatus      map[uint]string `json:"tunnel_status,omitempty"`
+	CPUPercent        float64           `json:"cpu_percent"`
+	MemoryPercent     float64           `json:"memory_percent"`
+	MemoryUsed        uint64            `json:"memory_used"`
+	MemoryTotal       uint64            `json:"memory_total"`
+	DiskPercent       float64           `json:"disk_percent"`
+	DiskUsed          uint64            `json:"disk_used"`
+	DiskTotal         uint64            `json:"disk_total"`
+	UptimeSeconds     int64             `json:"uptime_seconds"`
+	TCPConnections    int               `json:"tcp_connections"`
+	UDPConnections    int               `json:"udp_connections"`
+	ActiveRules       int               `json:"active_rules"`
+	ActiveConnections int               `json:"active_connections"`
+	TunnelStatus      map[string]string `json:"tunnel_status,omitempty"` // Key is Stripe-style rule ID (e.g., "fr_xK9mP2vL3nQ")
 }
 
 // ReportStatus handles POST /forward-agent-api/status

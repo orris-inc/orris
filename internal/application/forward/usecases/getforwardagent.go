@@ -12,10 +12,8 @@ import (
 )
 
 // GetForwardAgentQuery represents the input for getting a forward agent.
-// Use either ID (internal) or ShortID (external API identifier).
 type GetForwardAgentQuery struct {
-	ID      uint   // Internal database ID (deprecated, use ShortID for external API)
-	ShortID string // External API identifier (without prefix)
+	ShortID string // External API identifier
 }
 
 // GetForwardAgentResult represents the output of getting a forward agent.
@@ -50,34 +48,21 @@ func NewGetForwardAgentUseCase(
 	}
 }
 
-// Execute retrieves a forward agent by ID or ShortID.
+// Execute retrieves a forward agent by ShortID.
 func (uc *GetForwardAgentUseCase) Execute(ctx context.Context, query GetForwardAgentQuery) (*GetForwardAgentResult, error) {
-	var agent *forward.ForwardAgent
-	var err error
+	if query.ShortID == "" {
+		return nil, errors.NewValidationError("short_id is required")
+	}
 
-	// Prefer ShortID over internal ID for external API
-	if query.ShortID != "" {
-		uc.logger.Infow("executing get forward agent use case", "short_id", query.ShortID)
-		agent, err = uc.repo.GetByShortID(ctx, query.ShortID)
-		if err != nil {
-			uc.logger.Errorw("failed to get forward agent", "short_id", query.ShortID, "error", err)
-			return nil, fmt.Errorf("failed to get forward agent: %w", err)
-		}
-		if agent == nil {
-			return nil, errors.NewNotFoundError("forward agent", query.ShortID)
-		}
-	} else if query.ID != 0 {
-		uc.logger.Infow("executing get forward agent use case", "id", query.ID)
-		agent, err = uc.repo.GetByID(ctx, query.ID)
-		if err != nil {
-			uc.logger.Errorw("failed to get forward agent", "id", query.ID, "error", err)
-			return nil, fmt.Errorf("failed to get forward agent: %w", err)
-		}
-		if agent == nil {
-			return nil, errors.NewNotFoundError("forward agent", fmt.Sprintf("%d", query.ID))
-		}
-	} else {
-		return nil, errors.NewValidationError("agent ID or short_id is required")
+	uc.logger.Infow("executing get forward agent use case", "short_id", query.ShortID)
+
+	agent, err := uc.repo.GetByShortID(ctx, query.ShortID)
+	if err != nil {
+		uc.logger.Errorw("failed to get forward agent", "short_id", query.ShortID, "error", err)
+		return nil, fmt.Errorf("failed to get forward agent: %w", err)
+	}
+	if agent == nil {
+		return nil, errors.NewNotFoundError("forward agent", query.ShortID)
 	}
 
 	result := &GetForwardAgentResult{

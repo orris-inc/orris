@@ -15,7 +15,7 @@ const (
 type ProbeTask struct {
 	ID       string        `json:"id"`
 	Type     ProbeTaskType `json:"type"`
-	RuleID   uint          `json:"rule_id"`
+	RuleID   string        `json:"rule_id"` // Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ")
 	Target   string        `json:"target"`
 	Port     uint16        `json:"port"`
 	Protocol string        `json:"protocol"`
@@ -26,7 +26,7 @@ type ProbeTask struct {
 type ProbeTaskResult struct {
 	TaskID    string        `json:"task_id"`
 	Type      ProbeTaskType `json:"type"`
-	RuleID    uint          `json:"rule_id"`
+	RuleID    string        `json:"rule_id"` // Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ")
 	Success   bool          `json:"success"`
 	LatencyMs int64         `json:"latency_ms"`
 	Error     string        `json:"error,omitempty"`
@@ -36,7 +36,7 @@ type ProbeTaskResult struct {
 // For direct rules: only targetLatencyMs is set.
 // For entry rules: both tunnelLatencyMs and targetLatencyMs are set.
 type RuleProbeResponse struct {
-	RuleID          uint   `json:"rule_id"`
+	RuleID          string `json:"rule_id"`   // Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ")
 	RuleType        string `json:"rule_type"` // direct, entry
 	Success         bool   `json:"success"`
 	TunnelLatencyMs *int64 `json:"tunnel_latency_ms,omitempty"` // entry only: entry→exit

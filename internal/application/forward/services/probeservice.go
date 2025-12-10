@@ -13,6 +13,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/forward"
 	vo "github.com/orris-inc/orris/internal/domain/forward/value_objects"
 	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -117,7 +118,7 @@ func (s *ProbeService) probeRule(ctx context.Context, rule *forward.ForwardRule,
 
 	ruleType := rule.RuleType().String()
 	response := &dto.RuleProbeResponse{
-		RuleID:   rule.ID(),
+		RuleID:   id.FormatForwardRuleID(rule.ShortID()),
 		RuleType: ruleType,
 	}
 
@@ -198,7 +199,8 @@ func (s *ProbeService) probeDirectRule(ctx context.Context, rule *forward.Forwar
 	}
 
 	// Probe target using TCP for reliable connectivity check
-	targetLatency, err := s.sendProbeTask(ctx, agentID, rule.ID(), dto.ProbeTaskTypeTarget,
+	ruleStripeID := id.FormatForwardRuleID(rule.ShortID())
+	targetLatency, err := s.sendProbeTask(ctx, agentID, ruleStripeID, dto.ProbeTaskTypeTarget,
 		targetAddress, targetPort, "tcp")
 	if err != nil {
 		response.Error = err.Error()
@@ -247,7 +249,8 @@ func (s *ProbeService) probeEntryRule(ctx context.Context, rule *forward.Forward
 	}
 
 	// Step 1: Probe tunnel (entry → exit)
-	tunnelLatency, err := s.sendProbeTask(ctx, entryAgentID, rule.ID(), dto.ProbeTaskTypeTunnel,
+	ruleStripeID := id.FormatForwardRuleID(rule.ShortID())
+	tunnelLatency, err := s.sendProbeTask(ctx, entryAgentID, ruleStripeID, dto.ProbeTaskTypeTunnel,
 		exitAgent.PublicAddress(), exitRule.WsListenPort(), "tcp")
 	if err != nil {
 		response.Error = "tunnel probe failed: " + err.Error()
@@ -263,7 +266,7 @@ func (s *ProbeService) probeEntryRule(ctx context.Context, rule *forward.Forward
 	}
 
 	// Probe target using TCP for reliable connectivity check
-	targetLatency, err := s.sendProbeTask(ctx, exitAgentID, rule.ID(), dto.ProbeTaskTypeTarget,
+	targetLatency, err := s.sendProbeTask(ctx, exitAgentID, ruleStripeID, dto.ProbeTaskTypeTarget,
 		exitRule.TargetAddress(), exitRule.TargetPort(), "tcp")
 	if err != nil {
 		response.Error = "target probe failed: " + err.Error()
@@ -281,7 +284,7 @@ func (s *ProbeService) probeEntryRule(ctx context.Context, rule *forward.Forward
 func (s *ProbeService) sendProbeTask(
 	ctx context.Context,
 	agentID uint,
-	ruleID uint,
+	ruleID string, // Stripe-style prefixed ID
 	taskType dto.ProbeTaskType,
 	target string,
 	port uint16,

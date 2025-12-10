@@ -11,8 +11,7 @@ import (
 
 // EnableForwardRuleCommand represents the input for enabling a forward rule.
 type EnableForwardRuleCommand struct {
-	ID      uint   // Internal database ID (deprecated, use ShortID for external API)
-	ShortID string // External API identifier (without prefix)
+	ShortID string // External API identifier
 }
 
 // EnableForwardRuleUseCase handles enabling a forward rule.
@@ -34,32 +33,18 @@ func NewEnableForwardRuleUseCase(
 
 // Execute enables a forward rule.
 func (uc *EnableForwardRuleUseCase) Execute(ctx context.Context, cmd EnableForwardRuleCommand) error {
-	var rule *forward.ForwardRule
-	var err error
+	if cmd.ShortID == "" {
+		return errors.NewValidationError("short_id is required")
+	}
 
-	// Prefer ShortID over internal ID for external API
-	if cmd.ShortID != "" {
-		uc.logger.Infow("executing enable forward rule use case", "short_id", cmd.ShortID)
-		rule, err = uc.repo.GetByShortID(ctx, cmd.ShortID)
-		if err != nil {
-			uc.logger.Errorw("failed to get forward rule", "short_id", cmd.ShortID, "error", err)
-			return fmt.Errorf("failed to get forward rule: %w", err)
-		}
-		if rule == nil {
-			return errors.NewNotFoundError("forward rule", cmd.ShortID)
-		}
-	} else if cmd.ID != 0 {
-		uc.logger.Infow("executing enable forward rule use case", "id", cmd.ID)
-		rule, err = uc.repo.GetByID(ctx, cmd.ID)
-		if err != nil {
-			uc.logger.Errorw("failed to get forward rule", "id", cmd.ID, "error", err)
-			return fmt.Errorf("failed to get forward rule: %w", err)
-		}
-		if rule == nil {
-			return errors.NewNotFoundError("forward rule", fmt.Sprintf("%d", cmd.ID))
-		}
-	} else {
-		return errors.NewValidationError("rule ID or short_id is required")
+	uc.logger.Infow("executing enable forward rule use case", "short_id", cmd.ShortID)
+	rule, err := uc.repo.GetByShortID(ctx, cmd.ShortID)
+	if err != nil {
+		uc.logger.Errorw("failed to get forward rule", "short_id", cmd.ShortID, "error", err)
+		return fmt.Errorf("failed to get forward rule: %w", err)
+	}
+	if rule == nil {
+		return errors.NewNotFoundError("forward rule", cmd.ShortID)
 	}
 
 	if err := rule.Enable(); err != nil {
@@ -67,18 +52,10 @@ func (uc *EnableForwardRuleUseCase) Execute(ctx context.Context, cmd EnableForwa
 	}
 
 	if err := uc.repo.Update(ctx, rule); err != nil {
-		if cmd.ShortID != "" {
-			uc.logger.Errorw("failed to enable forward rule", "short_id", cmd.ShortID, "error", err)
-		} else {
-			uc.logger.Errorw("failed to enable forward rule", "id", cmd.ID, "error", err)
-		}
+		uc.logger.Errorw("failed to enable forward rule", "short_id", cmd.ShortID, "error", err)
 		return fmt.Errorf("failed to enable forward rule: %w", err)
 	}
 
-	if cmd.ShortID != "" {
-		uc.logger.Infow("forward rule enabled successfully", "short_id", cmd.ShortID)
-	} else {
-		uc.logger.Infow("forward rule enabled successfully", "id", cmd.ID)
-	}
+	uc.logger.Infow("forward rule enabled successfully", "short_id", cmd.ShortID)
 	return nil
 }

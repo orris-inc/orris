@@ -57,9 +57,9 @@ type ExitEndpoint struct {
 
 // TrafficItem represents traffic data for a single rule.
 type TrafficItem struct {
-	RuleID        uint  `json:"rule_id"`
-	UploadBytes   int64 `json:"upload_bytes"`
-	DownloadBytes int64 `json:"download_bytes"`
+	RuleID        string `json:"rule_id"` // Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ")
+	UploadBytes   int64  `json:"upload_bytes"`
+	DownloadBytes int64  `json:"download_bytes"`
 }
 
 // TrafficReportResult represents the result of a traffic report.
@@ -93,9 +93,9 @@ type AgentStatus struct {
 	UDPConnections int `json:"udp_connections"`
 
 	// Forward status
-	ActiveRules       int                  `json:"active_rules"`
-	ActiveConnections int                  `json:"active_connections"`
-	TunnelStatus      map[uint]TunnelState `json:"tunnel_status,omitempty"`
+	ActiveRules       int                    `json:"active_rules"`
+	ActiveConnections int                    `json:"active_connections"`
+	TunnelStatus      map[string]TunnelState `json:"tunnel_status,omitempty"` // Key is Stripe-style rule ID (e.g., "fr_xK9mP2vL3nQ")
 }
 
 // TunnelState represents the connection state of a tunnel.
@@ -121,7 +121,7 @@ const (
 type ProbeTask struct {
 	ID       string        `json:"id"`
 	Type     ProbeTaskType `json:"type"`
-	RuleID   uint          `json:"rule_id"`
+	RuleID   string        `json:"rule_id"` // Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ")
 	Target   string        `json:"target"`
 	Port     uint16        `json:"port"`
 	Protocol string        `json:"protocol"` // always "tcp"
@@ -132,7 +132,7 @@ type ProbeTask struct {
 type ProbeTaskResult struct {
 	TaskID    string        `json:"task_id"`
 	Type      ProbeTaskType `json:"type"`
-	RuleID    uint          `json:"rule_id"`
+	RuleID    string        `json:"rule_id"` // Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ")
 	Success   bool          `json:"success"`
 	LatencyMs int64         `json:"latency_ms"`
 	Error     string        `json:"error,omitempty"`
