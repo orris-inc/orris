@@ -129,9 +129,6 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	jwtSvc := auth.NewJWTService(cfg.Auth.JWT.Secret, cfg.Auth.JWT.AccessExpMinutes, cfg.Auth.JWT.RefreshExpDays)
 	jwtService := &jwtServiceAdapter{jwtSvc}
 
-	// Initialize agent connection token service (simple random tokens)
-	agentConnectionTokenSvc := auth.NewAgentConnectionTokenService()
-
 	emailCfg := email.SMTPConfig{
 		Host:        cfg.Email.SMTPHost,
 		Port:        cfg.Email.SMTPPort,
@@ -176,6 +173,9 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		"oauth:state:",
 		10*time.Minute,
 	)
+
+	// Initialize agent connection token service with Redis storage
+	agentConnectionTokenSvc := auth.NewAgentConnectionTokenService(redisClient, 5*time.Minute)
 
 	authHelper := helpers.NewAuthHelper(userRepo, sessionRepo, log)
 

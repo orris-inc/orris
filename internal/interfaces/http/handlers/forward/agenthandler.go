@@ -11,6 +11,7 @@ import (
 	"github.com/orris-inc/orris/internal/application/forward/usecases"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/infrastructure/auth"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
@@ -19,6 +20,7 @@ import (
 // AgentConnectionTokenService defines the interface for agent connection token operations
 type AgentConnectionTokenService interface {
 	Generate(entryAgentID, exitAgentID string) (string, error)
+	Verify(token string) (*auth.ConnectionTokenInfo, error)
 }
 
 // AgentHandler handles RESTful agent API requests for forward client
@@ -783,4 +785,93 @@ func (h *AgentHandler) ReportStatus(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "status reported successfully", nil)
+}
+
+// VerifyConnectionTokenRequest represents the request body for token verification
+type VerifyConnectionTokenRequest struct {
+	Token string `json:"token" binding:"required"`
+}
+
+// VerifyConnectionToken handles POST /forward-agent-api/verify-connection-token
+// This endpoint allows an exit agent to verify a connection token before accepting
+// a tunnel connection from an entry agent. The token is one-time use and will be
+// invalidated after successful verification.
+func (h *AgentHandler) VerifyConnectionToken(c *gin.Context) {
+	// Get authenticated agent ID (the exit agent verifying the token)
+	exitAgentID, err := h.getAuthenticatedAgentID(c)
+	if err != nil {
+		h.logger.Warnw("failed to get authenticated agent ID",
+			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	// Parse request body
+	var req VerifyConnectionTokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid verify token request body",
+			"error", err,
+			"agent_id", exitAgentID,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid request body: token is required")
+		return
+	}
+
+	h.logger.Debugw("exit agent verifying connection token",
+		"agent_id", exitAgentID,
+		"ip", c.ClientIP(),
+	)
+
+	// Verify the token (one-time use - token will be deleted after verification)
+	tokenInfo, err := h.connectionTokenSvc.Verify(req.Token)
+	if err != nil {
+		h.logger.Warnw("connection token verification failed",
+			"error", err,
+			"agent_id", exitAgentID,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusUnauthorized, "invalid or expired token")
+		return
+	}
+
+	// Get current agent's short ID to verify it matches the token's exit_agent_id
+	ctx := c.Request.Context()
+	currentAgent, err := h.agentRepo.GetByID(ctx, exitAgentID)
+	if err != nil {
+		h.logger.Errorw("failed to get current agent details",
+			"agent_id", exitAgentID,
+			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to verify token")
+		return
+	}
+
+	currentAgentShortID := id.FormatForwardAgentID(currentAgent.ShortID())
+
+	// Verify the token was intended for this exit agent
+	if tokenInfo.ExitAgentID != currentAgentShortID {
+		h.logger.Warnw("token exit_agent_id mismatch",
+			"token_exit_agent_id", tokenInfo.ExitAgentID,
+			"current_agent_id", currentAgentShortID,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusForbidden, "token not intended for this agent")
+		return
+	}
+
+	h.logger.Infow("connection token verified successfully",
+		"entry_agent_id", tokenInfo.EntryAgentID,
+		"exit_agent_id", tokenInfo.ExitAgentID,
+		"ip", c.ClientIP(),
+	)
+
+	// Return token info so exit agent knows which entry agent is connecting
+	utils.SuccessResponse(c, http.StatusOK, "token verified successfully", map[string]any{
+		"entry_agent_id": tokenInfo.EntryAgentID,
+		"exit_agent_id":  tokenInfo.ExitAgentID,
+	})
 }

@@ -102,6 +102,29 @@ func (c *Client) ReportStatus(ctx context.Context, status *AgentStatus) error {
 	return nil
 }
 
+// ConnectionTokenVerifyResult represents the result of verifying a connection token.
+type ConnectionTokenVerifyResult struct {
+	EntryAgentID string `json:"entry_agent_id"`
+	ExitAgentID  string `json:"exit_agent_id"`
+}
+
+// VerifyConnectionToken verifies a connection token received from an entry agent.
+// This should be called by exit agents before accepting a tunnel connection.
+// The token is one-time use and will be invalidated after successful verification.
+func (c *Client) VerifyConnectionToken(ctx context.Context, token string) (*ConnectionTokenVerifyResult, error) {
+	url := fmt.Sprintf("%s/forward-agent-api/verify-connection-token", c.baseURL)
+
+	body := map[string]string{
+		"token": token,
+	}
+
+	var result ConnectionTokenVerifyResult
+	if err := c.doRequest(ctx, http.MethodPost, url, body, &result); err != nil {
+		return nil, fmt.Errorf("verify connection token: %w", err)
+	}
+	return &result, nil
+}
+
 // doRequest performs an HTTP request and decodes the response.
 func (c *Client) doRequest(ctx context.Context, method, url string, body any, result any) error {
 	var reqBody io.Reader
