@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/url"
 	"strings"
 	"sync"
@@ -372,6 +371,11 @@ func parseProbeTask(data any) *ProbeTask {
 // It uses exponential backoff strategy to retry failed connections.
 // The probeHandler is called when a probe task is received.
 // This method blocks until the context is canceled.
+//
+// Use the ReconnectConfig callbacks to handle connection events:
+//   - OnConnected: called when successfully connected
+//   - OnDisconnected: called when disconnected (with error)
+//   - OnReconnecting: called before each reconnection attempt
 func (c *Client) RunHubLoopWithReconnect(ctx context.Context, probeHandler ProbeTaskHandler, config *ReconnectConfig) error {
 	if config == nil {
 		config = DefaultReconnectConfig()
@@ -413,23 +417,19 @@ func (c *Client) RunHubLoopWithReconnect(ctx context.Context, probeHandler Probe
 
 		// Check max elapsed time
 		if config.MaxElapsedTime > 0 && time.Since(startTime) >= config.MaxElapsedTime {
-			log.Printf("max elapsed time reached, stopping reconnection attempts")
 			return fmt.Errorf("reconnection failed after %v: %w", config.MaxElapsedTime, err)
 		}
 
 		// Calculate next backoff delay
 		delay := expBackoff.NextBackOff()
 		if delay == backoff.Stop {
-			log.Printf("max interval reached, stopping reconnection attempts")
 			return fmt.Errorf("reconnection failed: %w", err)
 		}
 
-		// Call reconnecting callback
+		// Call reconnecting callback with attempt info
 		if config.OnReconnecting != nil {
 			config.OnReconnecting(attempt, delay)
 		}
-
-		log.Printf("disconnected from hub (attempt %d): %v, reconnecting in %v", attempt, err, delay)
 
 		// Wait before reconnecting
 		timer := time.NewTimer(delay)
@@ -455,8 +455,6 @@ func (c *Client) runHubLoopOnce(ctx context.Context, probeHandler ProbeTaskHandl
 	if config.OnConnected != nil {
 		config.OnConnected()
 	}
-
-	log.Printf("connected to hub successfully")
 
 	// Set up message handler
 	conn.SetMessageHandler(func(msg *HubMessage) {

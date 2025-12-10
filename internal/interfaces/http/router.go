@@ -448,7 +448,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	getForwardAgentUC := forwardUsecases.NewGetForwardAgentUseCase(forwardAgentRepo, forwardAgentStatusAdapter, log)
 	updateForwardAgentUC := forwardUsecases.NewUpdateForwardAgentUseCase(forwardAgentRepo, log)
 	deleteForwardAgentUC := forwardUsecases.NewDeleteForwardAgentUseCase(forwardAgentRepo, log)
-	listForwardAgentsUC := forwardUsecases.NewListForwardAgentsUseCase(forwardAgentRepo, log)
+	listForwardAgentsUC := forwardUsecases.NewListForwardAgentsUseCase(forwardAgentRepo, forwardAgentStatusAdapter, log)
 	enableForwardAgentUC := forwardUsecases.NewEnableForwardAgentUseCase(forwardAgentRepo, log)
 	disableForwardAgentUC := forwardUsecases.NewDisableForwardAgentUseCase(forwardAgentRepo, log)
 	regenerateForwardAgentTokenUC := forwardUsecases.NewRegenerateForwardAgentTokenUseCase(forwardAgentRepo, log)

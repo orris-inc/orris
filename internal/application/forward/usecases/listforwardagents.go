@@ -29,18 +29,21 @@ type ListForwardAgentsResult struct {
 
 // ListForwardAgentsUseCase handles listing forward agents.
 type ListForwardAgentsUseCase struct {
-	repo   forward.AgentRepository
-	logger logger.Interface
+	repo          forward.AgentRepository
+	statusQuerier AgentStatusQuerier
+	logger        logger.Interface
 }
 
 // NewListForwardAgentsUseCase creates a new ListForwardAgentsUseCase.
 func NewListForwardAgentsUseCase(
 	repo forward.AgentRepository,
+	statusQuerier AgentStatusQuerier,
 	logger logger.Interface,
 ) *ListForwardAgentsUseCase {
 	return &ListForwardAgentsUseCase{
-		repo:   repo,
-		logger: logger,
+		repo:          repo,
+		statusQuerier: statusQuerier,
+		logger:        logger,
 	}
 }
 
@@ -81,6 +84,31 @@ func (uc *ListForwardAgentsUseCase) Execute(ctx context.Context, query ListForwa
 	}
 
 	dtos := dto.ToForwardAgentDTOs(agents)
+
+	// Collect agent IDs for batch status query and create ID mapping
+	agentIDs := make([]uint, 0, len(agents))
+	idToIndexMap := make(map[uint]int, len(agents))
+	for i, agent := range agents {
+		agentIDs = append(agentIDs, agent.ID())
+		idToIndexMap[agent.ID()] = i
+	}
+
+	// Query system status for all agents from Redis
+	if len(agentIDs) > 0 && uc.statusQuerier != nil {
+		statusMap, err := uc.statusQuerier.GetMultipleStatus(ctx, agentIDs)
+		if err != nil {
+			uc.logger.Warnw("failed to get agents system status, continuing without it",
+				"error", err,
+			)
+		} else {
+			// Attach system status to each agent DTO using the mapping
+			for agentID, status := range statusMap {
+				if idx, ok := idToIndexMap[agentID]; ok && status != nil {
+					dtos[idx].SystemStatus = status
+				}
+			}
+		}
+	}
 
 	return &ListForwardAgentsResult{
 		Agents: dtos,

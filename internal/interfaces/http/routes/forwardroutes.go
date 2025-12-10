@@ -66,7 +66,7 @@ func SetupForwardRoutes(engine *gin.Engine, cfg *ForwardRouteConfig) {
 		forwardAgents.POST("/:id/disable", cfg.ForwardAgentHandler.DisableAgent)
 
 		// Runtime status (from agent reports)
-		forwardAgents.GET("/:id/runtime-status", cfg.ForwardAgentHandler.GetAgentStatus)
+		forwardAgents.GET("/:id/status", cfg.ForwardAgentHandler.GetAgentStatus)
 
 		// Token operations
 		forwardAgents.GET("/:id/token", cfg.ForwardAgentHandler.GetToken)

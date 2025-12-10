@@ -8,13 +8,14 @@ import (
 
 // ForwardAgentDTO represents the data transfer object for forward agents.
 type ForwardAgentDTO struct {
-	ID            string `json:"id"` // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
-	Name          string `json:"name"`
-	PublicAddress string `json:"public_address"`
-	Status        string `json:"status"`
-	Remark        string `json:"remark"`
-	CreatedAt     string `json:"created_at"`
-	UpdatedAt     string `json:"updated_at"`
+	ID            string          `json:"id"` // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
+	Name          string          `json:"name"`
+	PublicAddress string          `json:"public_address"`
+	Status        string          `json:"status"`
+	Remark        string          `json:"remark"`
+	CreatedAt     string          `json:"created_at"`
+	UpdatedAt     string          `json:"updated_at"`
+	SystemStatus  *AgentStatusDTO `json:"system_status,omitempty"`
 }
 
 // ToForwardAgentDTO converts a domain forward agent to DTO.

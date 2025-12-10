@@ -6,6 +6,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/shared/services"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -17,8 +18,9 @@ type ValidateForwardAgentTokenCommand struct {
 
 // ValidateForwardAgentTokenResult contains the result of token validation.
 type ValidateForwardAgentTokenResult struct {
-	AgentID   uint
-	AgentName string
+	AgentID       uint   // Internal database ID for downstream handlers
+	AgentStripeID string // Stripe-style ID for logging and external display (e.g., "fa_xK9mP2vL3nQ")
+	AgentName     string
 }
 
 // ValidateForwardAgentTokenUseCase handles the validation of forward agent tokens.
@@ -58,10 +60,12 @@ func (uc *ValidateForwardAgentTokenUseCase) Execute(
 		return nil, fmt.Errorf("invalid token")
 	}
 
+	agentStripeID := id.FormatForwardAgentID(agent.ShortID())
+
 	// Verify token using constant-time comparison
 	if !agent.VerifyAPIToken(cmd.PlainToken) {
 		uc.logger.Warnw("forward agent token verification failed",
-			"agent_id", agent.ID(),
+			"agent_id", agentStripeID,
 			"ip", cmd.IPAddress,
 		)
 		return nil, fmt.Errorf("token verification failed")
@@ -70,7 +74,7 @@ func (uc *ValidateForwardAgentTokenUseCase) Execute(
 	// Check if agent is enabled
 	if !agent.IsEnabled() {
 		uc.logger.Warnw("forward agent is not enabled",
-			"agent_id", agent.ID(),
+			"agent_id", agentStripeID,
 			"status", agent.Status(),
 			"ip", cmd.IPAddress,
 		)
@@ -78,14 +82,15 @@ func (uc *ValidateForwardAgentTokenUseCase) Execute(
 	}
 
 	uc.logger.Infow("forward agent token validated successfully",
-		"agent_id", agent.ID(),
+		"agent_id", agentStripeID,
 		"agent_name", agent.Name(),
 		"ip", cmd.IPAddress,
 	)
 
 	return &ValidateForwardAgentTokenResult{
-		AgentID:   agent.ID(),
-		AgentName: agent.Name(),
+		AgentID:       agent.ID(),
+		AgentStripeID: agentStripeID,
+		AgentName:     agent.Name(),
 	}, nil
 }
 
