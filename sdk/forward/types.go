@@ -85,8 +85,9 @@ func (r *Rule) IsChainExit() bool {
 
 // ExitEndpoint represents the connection information for an exit agent.
 type ExitEndpoint struct {
-	Address string `json:"address"`
-	WsPort  uint16 `json:"ws_port"`
+	Address         string `json:"address"`
+	WsPort          uint16 `json:"ws_port"`
+	ConnectionToken string `json:"connection_token"` // Short-term JWT for agent-to-agent authentication
 }
 
 // TrafficItem represents traffic data for a single rule.

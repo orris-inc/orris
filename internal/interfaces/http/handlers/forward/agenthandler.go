@@ -16,14 +16,20 @@ import (
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
+// AgentConnectionTokenService defines the interface for agent connection token operations
+type AgentConnectionTokenService interface {
+	Generate(entryAgentID, exitAgentID string) (string, error)
+}
+
 // AgentHandler handles RESTful agent API requests for forward client
 type AgentHandler struct {
-	repo           forward.Repository
-	agentRepo      forward.AgentRepository
-	nodeRepo       node.NodeRepository
-	reportStatusUC *usecases.ReportAgentStatusUseCase
-	statusQuerier  usecases.AgentStatusQuerier
-	logger         logger.Interface
+	repo                forward.Repository
+	agentRepo           forward.AgentRepository
+	nodeRepo            node.NodeRepository
+	reportStatusUC      *usecases.ReportAgentStatusUseCase
+	statusQuerier       usecases.AgentStatusQuerier
+	connectionTokenSvc  AgentConnectionTokenService
+	logger              logger.Interface
 }
 
 // NewAgentHandler creates a new AgentHandler instance
@@ -33,15 +39,17 @@ func NewAgentHandler(
 	nodeRepo node.NodeRepository,
 	reportStatusUC *usecases.ReportAgentStatusUseCase,
 	statusQuerier usecases.AgentStatusQuerier,
+	connectionTokenSvc AgentConnectionTokenService,
 	logger logger.Interface,
 ) *AgentHandler {
 	return &AgentHandler{
-		repo:           repo,
-		agentRepo:      agentRepo,
-		nodeRepo:       nodeRepo,
-		reportStatusUC: reportStatusUC,
-		statusQuerier:  statusQuerier,
-		logger:         logger,
+		repo:               repo,
+		agentRepo:          agentRepo,
+		nodeRepo:           nodeRepo,
+		reportStatusUC:     reportStatusUC,
+		statusQuerier:      statusQuerier,
+		connectionTokenSvc: connectionTokenSvc,
+		logger:             logger,
 	}
 }
 
@@ -615,6 +623,34 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 		return
 	}
 
+	// Generate connection token for entry agent to authenticate with exit agent
+	// Get entry agent details to retrieve its short ID
+	entryAgent, err := h.agentRepo.GetByID(ctx, entryAgentID)
+	if err != nil {
+		h.logger.Errorw("failed to get entry agent details",
+			"entry_agent_id", entryAgentID,
+			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to generate connection token")
+		return
+	}
+	entryAgentShortID := id.FormatForwardAgentID(entryAgent.ShortID())
+	exitAgentShortID := id.FormatForwardAgentID(exitAgent.ShortID())
+
+	// Generate connection token
+	connectionToken, err := h.connectionTokenSvc.Generate(entryAgentShortID, exitAgentShortID)
+	if err != nil {
+		h.logger.Errorw("failed to generate connection token",
+			"entry_agent_id", entryAgentID,
+			"exit_agent_id", exitAgentID,
+			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to generate connection token")
+		return
+	}
+
 	h.logger.Infow("exit endpoint information retrieved successfully",
 		"exit_agent_id", exitAgentID,
 		"entry_agent_id", entryAgentID,
@@ -625,8 +661,9 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 
 	// Return the connection information
 	utils.SuccessResponse(c, http.StatusOK, "exit endpoint information retrieved successfully", map[string]any{
-		"address": exitAgent.PublicAddress(),
-		"ws_port": exitStatus.WsListenPort,
+		"address":          exitAgent.PublicAddress(),
+		"ws_port":          exitStatus.WsListenPort,
+		"connection_token": connectionToken,
 	})
 }
 

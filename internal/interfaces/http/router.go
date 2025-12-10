@@ -129,6 +129,9 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	jwtSvc := auth.NewJWTService(cfg.Auth.JWT.Secret, cfg.Auth.JWT.AccessExpMinutes, cfg.Auth.JWT.RefreshExpDays)
 	jwtService := &jwtServiceAdapter{jwtSvc}
 
+	// Initialize agent connection token service (uses same secret as JWT)
+	agentConnectionTokenSvc := auth.NewAgentConnectionTokenService(cfg.Auth.JWT.Secret, cfg.Forward.ConnectionTokenExpMinutes)
+
 	emailCfg := email.SMTPConfig{
 		Host:        cfg.Email.SMTPHost,
 		Port:        cfg.Email.SMTPPort,
@@ -485,7 +488,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	)
 
 	// Initialize forward agent API handler for client to fetch rules and report traffic
-	forwardAgentAPIHandler := forwardHandlers.NewAgentHandler(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, reportAgentStatusUC, forwardAgentStatusAdapter, log)
+	forwardAgentAPIHandler := forwardHandlers.NewAgentHandler(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, reportAgentStatusUC, forwardAgentStatusAdapter, agentConnectionTokenSvc, log)
 
 	// Initialize forward agent token middleware
 	forwardAgentTokenMiddleware := middleware.NewForwardAgentTokenMiddleware(validateForwardAgentTokenUC, log)

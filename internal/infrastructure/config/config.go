@@ -19,6 +19,7 @@ type Config struct {
 	Email        sharedConfig.EmailConfig        `mapstructure:"email"`
 	Redis        sharedConfig.RedisConfig        `mapstructure:"redis"`
 	Subscription sharedConfig.SubscriptionConfig `mapstructure:"subscription"`
+	Forward      sharedConfig.ForwardConfig      `mapstructure:"forward"`
 }
 
 var (
@@ -129,4 +130,7 @@ func setDefaults() {
 	viper.SetDefault("redis.port", 6379)
 	viper.SetDefault("redis.password", "")
 	viper.SetDefault("redis.db", 0)
+
+	// Forward defaults
+	viper.SetDefault("forward.connection_token_exp_minutes", 5)
 }
