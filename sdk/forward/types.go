@@ -43,9 +43,10 @@ type Rule struct {
 	ChainAgentIDs  []string `json:"chain_agent_ids,omitempty"`   // Ordered list of agent IDs in chain
 	ChainPosition  int      `json:"chain_position,omitempty"`    // Agent's position in chain (0-indexed)
 	IsLastInChain  bool     `json:"is_last_in_chain,omitempty"`  // True if agent is last in chain
-	NextHopAgentID string   `json:"next_hop_agent_id,omitempty"` // Next agent in chain
-	NextHopAddress string   `json:"next_hop_address,omitempty"`  // Next agent's public address
-	NextHopWsPort  uint16   `json:"next_hop_ws_port,omitempty"`  // Next agent's WS port
+	NextHopAgentID         string `json:"next_hop_agent_id,omitempty"`         // Next agent in chain
+	NextHopAddress         string `json:"next_hop_address,omitempty"`          // Next agent's public address
+	NextHopWsPort          uint16 `json:"next_hop_ws_port,omitempty"`          // Next agent's WS port
+	NextHopConnectionToken string `json:"next_hop_connection_token,omitempty"` // Short-term JWT for next hop authentication
 }
 
 // IsDirect returns true if this is a direct forward rule.

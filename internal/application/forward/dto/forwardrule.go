@@ -42,9 +42,10 @@ type ForwardRuleDTO struct {
 	// Chain-specific fields (populated for chain rules based on requesting agent's role)
 	ChainPosition  int    `json:"chain_position,omitempty"`    // agent's position in chain (0-indexed)
 	IsLastInChain  bool   `json:"is_last_in_chain,omitempty"`  // true if agent is last in chain
-	NextHopAgentID string `json:"next_hop_agent_id,omitempty"` // next agent in chain (Stripe-style ID)
-	NextHopAddress string `json:"next_hop_address,omitempty"`  // next agent's public address
-	NextHopWsPort  uint16 `json:"next_hop_ws_port,omitempty"`  // next agent's WS port (from status cache)
+	NextHopAgentID         string `json:"next_hop_agent_id,omitempty"`         // next agent in chain (Stripe-style ID)
+	NextHopAddress         string `json:"next_hop_address,omitempty"`          // next agent's public address
+	NextHopWsPort          uint16 `json:"next_hop_ws_port,omitempty"`          // next agent's WS port (from status cache)
+	NextHopConnectionToken string `json:"next_hop_connection_token,omitempty"` // short-term JWT for next hop authentication
 
 	// Internal fields for mapping (not exposed in JSON)
 	internalAgentID     uint   `json:"-"`

@@ -245,6 +245,18 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 		}
 	}
 
+	// Get current agent's short ID for connection token generation
+	var currentAgentShortID string
+	currentAgent, err := h.agentRepo.GetByID(ctx, agentID)
+	if err != nil {
+		h.logger.Warnw("failed to get current agent details for connection token",
+			"agent_id", agentID,
+			"error", err,
+		)
+	} else if currentAgent != nil {
+		currentAgentShortID = id.FormatForwardAgentID(currentAgent.ShortID())
+	}
+
 	// Process chain rules to populate role-specific information
 	for i, rule := range rules {
 		if rule.RuleType().String() != "chain" {
@@ -294,11 +306,28 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 					} else if nextStatus != nil && nextStatus.WsListenPort > 0 {
 						ruleDTO.NextHopWsPort = nextStatus.WsListenPort
 
+						// Generate connection token for next hop authentication
+						if currentAgentShortID != "" {
+							nextHopShortID := id.FormatForwardAgentID(nextAgent.ShortID())
+							connectionToken, tokenErr := h.connectionTokenSvc.Generate(currentAgentShortID, nextHopShortID)
+							if tokenErr != nil {
+								h.logger.Warnw("failed to generate connection token for chain rule",
+									"rule_id", ruleDTO.ID,
+									"entry_agent_id", currentAgentShortID,
+									"exit_agent_id", nextHopShortID,
+									"error", tokenErr,
+								)
+							} else {
+								ruleDTO.NextHopConnectionToken = connectionToken
+							}
+						}
+
 						h.logger.Debugw("populated next hop info for chain rule",
 							"rule_id", ruleDTO.ID,
 							"next_hop_agent_id", ruleDTO.NextHopAgentID,
 							"next_hop_address", ruleDTO.NextHopAddress,
 							"next_hop_ws_port", ruleDTO.NextHopWsPort,
+							"has_connection_token", ruleDTO.NextHopConnectionToken != "",
 						)
 					} else {
 						h.logger.Warnw("next hop agent has no ws_listen_port configured or is offline",
