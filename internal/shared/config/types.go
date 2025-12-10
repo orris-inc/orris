@@ -155,6 +155,5 @@ func (s *SubscriptionConfig) GetBaseURL(serverBaseURL string) string {
 
 // ForwardConfig holds forward-related configuration
 type ForwardConfig struct {
-	// ConnectionTokenExpMinutes is the expiration time for agent connection tokens in minutes
-	ConnectionTokenExpMinutes int `mapstructure:"connection_token_exp_minutes"`
+	// Reserved for future forward-related configuration
 }

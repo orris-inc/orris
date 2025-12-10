@@ -46,7 +46,7 @@ type Rule struct {
 	NextHopAgentID         string `json:"next_hop_agent_id,omitempty"`         // Next agent in chain
 	NextHopAddress         string `json:"next_hop_address,omitempty"`          // Next agent's public address
 	NextHopWsPort          uint16 `json:"next_hop_ws_port,omitempty"`          // Next agent's WS port
-	NextHopConnectionToken string `json:"next_hop_connection_token,omitempty"` // Short-term JWT for next hop authentication
+	NextHopConnectionToken string `json:"next_hop_connection_token,omitempty"` // Short-term token for next hop authentication
 }
 
 // IsDirect returns true if this is a direct forward rule.
@@ -88,7 +88,7 @@ func (r *Rule) IsChainExit() bool {
 type ExitEndpoint struct {
 	Address         string `json:"address"`
 	WsPort          uint16 `json:"ws_port"`
-	ConnectionToken string `json:"connection_token"` // Short-term JWT for agent-to-agent authentication
+	ConnectionToken string `json:"connection_token"` // Short-term token for agent-to-agent authentication
 }
 
 // TrafficItem represents traffic data for a single rule.

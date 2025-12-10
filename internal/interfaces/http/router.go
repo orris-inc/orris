@@ -129,8 +129,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	jwtSvc := auth.NewJWTService(cfg.Auth.JWT.Secret, cfg.Auth.JWT.AccessExpMinutes, cfg.Auth.JWT.RefreshExpDays)
 	jwtService := &jwtServiceAdapter{jwtSvc}
 
-	// Initialize agent connection token service (uses same secret as JWT)
-	agentConnectionTokenSvc := auth.NewAgentConnectionTokenService(cfg.Auth.JWT.Secret, cfg.Forward.ConnectionTokenExpMinutes)
+	// Initialize agent connection token service (simple random tokens)
+	agentConnectionTokenSvc := auth.NewAgentConnectionTokenService()
 
 	emailCfg := email.SMTPConfig{
 		Host:        cfg.Email.SMTPHost,

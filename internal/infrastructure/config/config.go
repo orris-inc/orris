@@ -130,7 +130,4 @@ func setDefaults() {
 	viper.SetDefault("redis.port", 6379)
 	viper.SetDefault("redis.password", "")
 	viper.SetDefault("redis.db", 0)
-
-	// Forward defaults
-	viper.SetDefault("forward.connection_token_exp_minutes", 5)
 }
