@@ -7,16 +7,17 @@ import (
 )
 
 // ForwardRuleDTO represents the data transfer object for forward rules.
+// Note: ws_listen_port field has been removed (exit type deprecated).
+// Database column is kept for backward compatibility but not exposed in API.
 type ForwardRuleDTO struct {
-	ID            string `json:"id"`                       // Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ")
-	AgentID       string `json:"agent_id"`                 // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
-	RuleType      string `json:"rule_type"`                // direct, entry, exit
-	ExitAgentID   string `json:"exit_agent_id,omitempty"`  // for entry type (Stripe-style prefixed ID)
-	WsListenPort  uint16 `json:"ws_listen_port,omitempty"` // for exit type
+	ID            string `json:"id"`                      // Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ")
+	AgentID       string `json:"agent_id"`                // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
+	RuleType      string `json:"rule_type"`               // direct, entry
+	ExitAgentID   string `json:"exit_agent_id,omitempty"` // for entry type (Stripe-style prefixed ID)
 	Name          string `json:"name"`
 	ListenPort    uint16 `json:"listen_port"`
-	TargetAddress string `json:"target_address,omitempty"` // for direct and exit types
-	TargetPort    uint16 `json:"target_port,omitempty"`    // for direct and exit types
+	TargetAddress string `json:"target_address,omitempty"` // for direct and entry types
+	TargetPort    uint16 `json:"target_port,omitempty"`    // for direct and entry types
 	TargetNodeID  string `json:"target_node_id,omitempty"` // Stripe-style prefixed Node ID (e.g., "node_xK9mP2vL3nQ")
 	IPVersion     string `json:"ip_version"`               // auto, ipv4, ipv6
 	Protocol      string `json:"protocol"`
@@ -56,7 +57,6 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 		AgentID:             "", // populated later via PopulateAgentInfo
 		RuleType:            rule.RuleType().String(),
 		ExitAgentID:         "", // populated later via PopulateAgentInfo
-		WsListenPort:        rule.WsListenPort(),
 		Name:                rule.Name(),
 		ListenPort:          rule.ListenPort(),
 		TargetAddress:       rule.TargetAddress(),

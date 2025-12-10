@@ -15,14 +15,13 @@ import (
 // CreateForwardRuleCommand represents the input for creating a forward rule.
 type CreateForwardRuleCommand struct {
 	AgentShortID      string // Stripe-style short ID (without prefix, e.g., "xK9mP2vL3nQ")
-	RuleType          string // direct, entry, exit
+	RuleType          string // direct, entry
 	ExitAgentShortID  string // required for entry type (Stripe-style short ID without prefix)
-	WsListenPort      uint16 // required for exit type
 	Name              string
 	ListenPort        uint16 // required for direct and entry types
-	TargetAddress     string // required for direct and exit types (mutually exclusive with TargetNodeShortID)
-	TargetPort        uint16 // required for direct and exit types (mutually exclusive with TargetNodeShortID)
-	TargetNodeShortID string // optional for direct and exit types (Stripe-style short ID without prefix)
+	TargetAddress     string // required for direct and entry types (mutually exclusive with TargetNodeShortID)
+	TargetPort        uint16 // required for direct and entry types (mutually exclusive with TargetNodeShortID)
+	TargetNodeShortID string // optional for direct and entry types (Stripe-style short ID without prefix)
 	IPVersion         string // auto, ipv4, ipv6 (default: auto)
 	Protocol          string
 	Remark            string
@@ -34,7 +33,6 @@ type CreateForwardRuleResult struct {
 	AgentID       uint   `json:"agent_id"` // internal agent ID (will be converted to short ID in handler if needed)
 	RuleType      string `json:"rule_type"`
 	ExitAgentID   uint   `json:"exit_agent_id,omitempty"`
-	WsListenPort  uint16 `json:"ws_listen_port,omitempty"`
 	Name          string `json:"name"`
 	ListenPort    uint16 `json:"listen_port"`
 	TargetAddress string `json:"target_address,omitempty"`
@@ -141,7 +139,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		agentID,
 		ruleType,
 		exitAgentID,
-		cmd.WsListenPort,
+		0, // wsListenPort is deprecated (exit type removed)
 		cmd.Name,
 		cmd.ListenPort,
 		cmd.TargetAddress,
@@ -168,7 +166,6 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		AgentID:       rule.AgentID(),
 		RuleType:      rule.RuleType().String(),
 		ExitAgentID:   rule.ExitAgentID(),
-		WsListenPort:  rule.WsListenPort(),
 		Name:          rule.Name(),
 		ListenPort:    rule.ListenPort(),
 		TargetAddress: rule.TargetAddress(),
@@ -199,7 +196,7 @@ func (uc *CreateForwardRuleUseCase) validateCommand(_ context.Context, cmd Creat
 	// Validate rule type
 	ruleType := vo.ForwardRuleType(cmd.RuleType)
 	if !ruleType.IsValid() {
-		return errors.NewValidationError(fmt.Sprintf("invalid rule_type: %s, must be direct, entry or exit", cmd.RuleType))
+		return errors.NewValidationError(fmt.Sprintf("invalid rule_type: %s, must be direct or entry", cmd.RuleType))
 	}
 
 	// Validate protocol
@@ -230,19 +227,17 @@ func (uc *CreateForwardRuleUseCase) validateCommand(_ context.Context, cmd Creat
 		if cmd.ExitAgentShortID == "" {
 			return errors.NewValidationError("exit_agent_id is required for entry forward")
 		}
-	case vo.ForwardRuleTypeExit:
-		if cmd.WsListenPort == 0 {
-			return errors.NewValidationError("ws_listen_port is required for exit forward")
-		}
-		// Either targetAddress+targetPort OR targetNodeShortID must be provided
+		// Entry rules now also require target information (to be passed to exit agent)
 		hasTarget := cmd.TargetAddress != "" && cmd.TargetPort != 0
 		hasTargetNode := targetNodeID != nil && *targetNodeID != 0
 		if !hasTarget && !hasTargetNode {
-			return errors.NewValidationError("either target_address+target_port or target_node_id is required for exit forward")
+			return errors.NewValidationError("either target_address+target_port or target_node_id is required for entry forward")
 		}
 		if hasTarget && hasTargetNode {
-			return errors.NewValidationError("target_address+target_port and target_node_id are mutually exclusive for exit forward")
+			return errors.NewValidationError("target_address+target_port and target_node_id are mutually exclusive for entry forward")
 		}
+	default:
+		return errors.NewValidationError(fmt.Sprintf("invalid rule_type: %s, must be direct or entry", cmd.RuleType))
 	}
 
 	return nil

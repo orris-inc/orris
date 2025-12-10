@@ -22,6 +22,7 @@ type AgentHandler struct {
 	agentRepo      forward.AgentRepository
 	nodeRepo       node.NodeRepository
 	reportStatusUC *usecases.ReportAgentStatusUseCase
+	statusQuerier  usecases.AgentStatusQuerier
 	logger         logger.Interface
 }
 
@@ -31,6 +32,7 @@ func NewAgentHandler(
 	agentRepo forward.AgentRepository,
 	nodeRepo node.NodeRepository,
 	reportStatusUC *usecases.ReportAgentStatusUseCase,
+	statusQuerier usecases.AgentStatusQuerier,
 	logger logger.Interface,
 ) *AgentHandler {
 	return &AgentHandler{
@@ -38,6 +40,7 @@ func NewAgentHandler(
 		agentRepo:      agentRepo,
 		nodeRepo:       nodeRepo,
 		reportStatusUC: reportStatusUC,
+		statusQuerier:  statusQuerier,
 		logger:         logger,
 	}
 }
@@ -87,7 +90,7 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 		"ip", c.ClientIP(),
 	)
 
-	// Retrieve enabled forward rules only for this agent
+	// Retrieve enabled forward rules for this agent (as entry agent)
 	rules, err := h.repo.ListEnabledByAgentID(ctx, agentID)
 	if err != nil {
 		h.logger.Errorw("failed to retrieve enabled forward rules",
@@ -99,11 +102,42 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 		return
 	}
 
+	// Also retrieve entry rules where this agent is the exit agent
+	exitRules, err := h.repo.ListEnabledByExitAgentID(ctx, agentID)
+	if err != nil {
+		h.logger.Errorw("failed to retrieve enabled exit rules",
+			"error", err,
+			"agent_id", agentID,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to retrieve enabled forward rules")
+		return
+	}
+
+	// Merge rules (avoid duplicates by using a map)
+	ruleMap := make(map[uint]*forward.ForwardRule)
+	for _, rule := range rules {
+		ruleMap[rule.ID()] = rule
+	}
+	for _, rule := range exitRules {
+		ruleMap[rule.ID()] = rule
+	}
+
+	// Convert map back to slice
+	allRules := make([]*forward.ForwardRule, 0, len(ruleMap))
+	for _, rule := range ruleMap {
+		allRules = append(allRules, rule)
+	}
+
 	h.logger.Infow("enabled forward rules retrieved successfully",
-		"rule_count", len(rules),
+		"rule_count", len(allRules),
+		"entry_rules", len(rules),
+		"exit_rules", len(exitRules),
 		"agent_id", agentID,
 		"ip", c.ClientIP(),
 	)
+
+	rules = allRules
 
 	// Convert to DTOs and resolve dynamic node addresses
 	ruleDTOs := dto.ToForwardRuleDTOs(rules)
@@ -395,24 +429,24 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 		return
 	}
 
-	// Get exit rule for the exit agent
-	exitRule, err := h.repo.GetExitRuleByAgentID(ctx, exitAgentID)
+	// Get exit agent status from cache to retrieve ws_listen_port
+	exitStatus, err := h.statusQuerier.GetStatus(ctx, exitAgentID)
 	if err != nil {
-		h.logger.Errorw("failed to get exit rule for agent",
+		h.logger.Errorw("failed to get exit agent status",
 			"exit_agent_id", exitAgentID,
 			"error", err,
 			"ip", c.ClientIP(),
 		)
-		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to retrieve exit rule")
+		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to retrieve exit agent status")
 		return
 	}
 
-	if exitRule == nil {
-		h.logger.Warnw("no exit rule found for agent",
+	if exitStatus == nil || exitStatus.WsListenPort == 0 {
+		h.logger.Warnw("exit agent has no ws_listen_port configured or is offline",
 			"exit_agent_id", exitAgentID,
 			"ip", c.ClientIP(),
 		)
-		utils.ErrorResponse(c, http.StatusNotFound, "no exit rule found for this agent")
+		utils.ErrorResponse(c, http.StatusNotFound, "exit agent is offline or has no ws_listen_port configured")
 		return
 	}
 
@@ -420,14 +454,14 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 		"exit_agent_id", exitAgentID,
 		"entry_agent_id", entryAgentID,
 		"address", exitAgent.PublicAddress(),
-		"ws_port", exitRule.WsListenPort(),
+		"ws_port", exitStatus.WsListenPort,
 		"ip", c.ClientIP(),
 	)
 
 	// Return the connection information
 	utils.SuccessResponse(c, http.StatusOK, "exit endpoint information retrieved successfully", map[string]any{
 		"address": exitAgent.PublicAddress(),
-		"ws_port": exitRule.WsListenPort(),
+		"ws_port": exitStatus.WsListenPort,
 	})
 }
 
@@ -445,7 +479,8 @@ type ReportStatusRequest struct {
 	UDPConnections    int               `json:"udp_connections"`
 	ActiveRules       int               `json:"active_rules"`
 	ActiveConnections int               `json:"active_connections"`
-	TunnelStatus      map[string]string `json:"tunnel_status,omitempty"` // Key is Stripe-style rule ID (e.g., "fr_xK9mP2vL3nQ")
+	TunnelStatus      map[string]string `json:"tunnel_status,omitempty"`  // Key is Stripe-style rule ID (e.g., "fr_xK9mP2vL3nQ")
+	WsListenPort      uint16            `json:"ws_listen_port,omitempty"` // WebSocket listen port for exit agent tunnel connections
 }
 
 // ReportStatus handles POST /forward-agent-api/status
@@ -497,6 +532,7 @@ func (h *AgentHandler) ReportStatus(c *gin.Context) {
 		ActiveRules:       req.ActiveRules,
 		ActiveConnections: req.ActiveConnections,
 		TunnelStatus:      req.TunnelStatus,
+		WsListenPort:      req.WsListenPort,
 	}
 
 	// Execute use case

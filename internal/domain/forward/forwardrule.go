@@ -37,8 +37,7 @@ type ForwardRule struct {
 // NewForwardRule creates a new forward rule aggregate.
 // Parameters depend on ruleType:
 // - direct: requires agentID, listenPort, (targetAddress+targetPort OR targetNodeID)
-// - entry: requires agentID, listenPort, exitAgentID
-// - exit: requires agentID, wsListenPort, (targetAddress+targetPort OR targetNodeID)
+// - entry: requires agentID, listenPort, exitAgentID, (targetAddress+targetPort OR targetNodeID)
 func NewForwardRule(
 	agentID uint,
 	ruleType vo.ForwardRuleType,
@@ -94,18 +93,14 @@ func NewForwardRule(
 		if exitAgentID == 0 {
 			return nil, fmt.Errorf("exit agent ID is required for entry forward")
 		}
-	case vo.ForwardRuleTypeExit:
-		if wsListenPort == 0 {
-			return nil, fmt.Errorf("WebSocket listen port is required for exit forward")
-		}
-		// Either targetAddress+targetPort OR targetNodeID must be set
+		// Entry rules now also require target information (to be passed to exit agent)
 		hasTarget := targetAddress != "" && targetPort != 0
 		hasTargetNode := targetNodeID != nil && *targetNodeID != 0
 		if !hasTarget && !hasTargetNode {
-			return nil, fmt.Errorf("either target address+port or target node ID is required for exit forward")
+			return nil, fmt.Errorf("either target address+port or target node ID is required for entry forward")
 		}
 		if hasTarget && hasTargetNode {
-			return nil, fmt.Errorf("target address+port and target node ID are mutually exclusive for exit forward")
+			return nil, fmt.Errorf("target address+port and target node ID are mutually exclusive for entry forward")
 		}
 		if hasTarget {
 			if err := validateAddress(targetAddress); err != nil {
@@ -445,9 +440,9 @@ func (r *ForwardRule) UpdateTarget(address string, port uint16) error {
 // UpdateTargetNodeID updates the target node ID for dynamic address resolution.
 // This will clear the targetAddress and targetPort when setting node ID.
 func (r *ForwardRule) UpdateTargetNodeID(nodeID *uint) error {
-	// Only direct and exit types support targetNodeID
-	if !r.ruleType.IsDirect() && !r.ruleType.IsExit() {
-		return fmt.Errorf("target node ID can only be set for direct or exit type rules")
+	// Only direct and entry types support targetNodeID (exit type has been removed)
+	if !r.ruleType.IsDirect() && !r.ruleType.IsEntry() {
+		return fmt.Errorf("target node ID can only be set for direct or entry type rules")
 	}
 
 	// If nodeID is nil or 0, clear the targetNodeID
@@ -524,20 +519,9 @@ func (r *ForwardRule) UpdateExitAgentID(exitAgentID uint) error {
 	return nil
 }
 
-// UpdateWsListenPort updates the WebSocket listen port for exit type rules.
+// UpdateWsListenPort updates the WebSocket listen port (deprecated - exit type has been removed).
 func (r *ForwardRule) UpdateWsListenPort(port uint16) error {
-	if !r.ruleType.IsExit() {
-		return fmt.Errorf("WebSocket listen port can only be updated for exit type rules")
-	}
-	if port == 0 {
-		return fmt.Errorf("WebSocket listen port cannot be zero")
-	}
-	if r.wsListenPort == port {
-		return nil
-	}
-	r.wsListenPort = port
-	r.updatedAt = time.Now()
-	return nil
+	return fmt.Errorf("WebSocket listen port update is not supported (exit type has been removed)")
 }
 
 // RecordTraffic records traffic bytes.
@@ -599,18 +583,14 @@ func (r *ForwardRule) Validate() error {
 		if r.exitAgentID == 0 {
 			return fmt.Errorf("exit agent ID is required for entry forward")
 		}
-	case vo.ForwardRuleTypeExit:
-		if r.wsListenPort == 0 {
-			return fmt.Errorf("WebSocket listen port is required for exit forward")
-		}
-		// Either targetAddress+targetPort OR targetNodeID must be set
+		// Entry rules now also require target information (to be passed to exit agent)
 		hasTarget := r.targetAddress != "" && r.targetPort != 0
 		hasTargetNode := r.targetNodeID != nil && *r.targetNodeID != 0
 		if !hasTarget && !hasTargetNode {
-			return fmt.Errorf("either target address+port or target node ID is required for exit forward")
+			return fmt.Errorf("either target address+port or target node ID is required for entry forward")
 		}
 		if hasTarget && hasTargetNode {
-			return fmt.Errorf("target address+port and target node ID are mutually exclusive for exit forward")
+			return fmt.Errorf("target address+port and target node ID are mutually exclusive for entry forward")
 		}
 	}
 

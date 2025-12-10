@@ -8,18 +8,17 @@ const (
 	// RuleTypeDirect forwards traffic directly to the target.
 	RuleTypeDirect RuleType = "direct"
 	// RuleTypeEntry is the entry point that forwards traffic to exit agent via WS tunnel.
+	// The target information is configured on the entry rule and passed to the exit agent.
 	RuleTypeEntry RuleType = "entry"
-	// RuleTypeExit receives traffic from entry agent and forwards to the target.
-	RuleTypeExit RuleType = "exit"
 )
 
 // Rule represents a forward rule returned by the API.
+// Note: ws_listen_port field has been removed (exit type deprecated).
 type Rule struct {
 	ID            string   `json:"id"`       // Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ")
 	AgentID       string   `json:"agent_id"` // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
 	RuleType      RuleType `json:"rule_type"`
 	ExitAgentID   string   `json:"exit_agent_id,omitempty"` // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
-	WsListenPort  uint16   `json:"ws_listen_port,omitempty"`
 	Name          string   `json:"name"`
 	ListenPort    uint16   `json:"listen_port"`
 	TargetAddress string   `json:"target_address,omitempty"`
@@ -44,9 +43,9 @@ func (r *Rule) IsEntry() bool {
 	return r.RuleType == RuleTypeEntry
 }
 
-// IsExit returns true if this is an exit rule.
+// IsExit is deprecated (exit type has been removed).
 func (r *Rule) IsExit() bool {
-	return r.RuleType == RuleTypeExit
+	return false
 }
 
 // ExitEndpoint represents the connection information for an exit agent.
@@ -96,6 +95,11 @@ type AgentStatus struct {
 	ActiveRules       int                    `json:"active_rules"`
 	ActiveConnections int                    `json:"active_connections"`
 	TunnelStatus      map[string]TunnelState `json:"tunnel_status,omitempty"` // Key is Stripe-style rule ID (e.g., "fr_xK9mP2vL3nQ")
+
+	// WebSocket tunnel configuration (for exit agent)
+	// Note: WsListenPort is now reported directly by the agent in status updates,
+	// not configured per-rule (exit rule type has been removed).
+	WsListenPort uint16 `json:"ws_listen_port,omitempty"` // WebSocket listen port for tunnel connections
 }
 
 // TunnelState represents the connection state of a tunnel.

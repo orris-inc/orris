@@ -356,24 +356,27 @@ func (r *ForwardRuleRepositoryImpl) ListByExitAgentID(ctx context.Context, exitA
 	return entities, nil
 }
 
-// GetExitRuleByAgentID retrieves the exit rule for a specific agent.
-func (r *ForwardRuleRepositoryImpl) GetExitRuleByAgentID(ctx context.Context, agentID uint) (*forward.ForwardRule, error) {
-	var model models.ForwardRuleModel
+// ListEnabledByExitAgentID returns all enabled entry rules for a specific exit agent.
+func (r *ForwardRuleRepositoryImpl) ListEnabledByExitAgentID(ctx context.Context, exitAgentID uint) ([]*forward.ForwardRule, error) {
+	var ruleModels []*models.ForwardRuleModel
 
 	tx := db.GetTxFromContext(ctx, r.db)
-	if err := tx.Where("agent_id = ? AND rule_type = ?", agentID, "exit").First(&model).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, nil
-		}
-		r.logger.Errorw("failed to get exit rule by agent ID", "agent_id", agentID, "error", err)
-		return nil, fmt.Errorf("failed to get exit rule: %w", err)
+	if err := tx.Where("exit_agent_id = ? AND status = ? AND rule_type = ?", exitAgentID, "enabled", "entry").Find(&ruleModels).Error; err != nil {
+		r.logger.Errorw("failed to list enabled entry rules by exit agent ID", "exit_agent_id", exitAgentID, "error", err)
+		return nil, fmt.Errorf("failed to list enabled entry rules by exit agent ID: %w", err)
 	}
 
-	entity, err := r.mapper.ToEntity(&model)
+	entities, err := r.mapper.ToEntities(ruleModels)
 	if err != nil {
-		r.logger.Errorw("failed to map forward rule model to entity", "agent_id", agentID, "error", err)
-		return nil, fmt.Errorf("failed to map forward rule: %w", err)
+		r.logger.Errorw("failed to map forward rule models to entities", "error", err)
+		return nil, fmt.Errorf("failed to map forward rules: %w", err)
 	}
 
-	return entity, nil
+	return entities, nil
+}
+
+// GetExitRuleByAgentID is deprecated (exit type has been removed).
+func (r *ForwardRuleRepositoryImpl) GetExitRuleByAgentID(ctx context.Context, agentID uint) (*forward.ForwardRule, error) {
+	r.logger.Warnw("GetExitRuleByAgentID called but exit type has been removed", "agent_id", agentID)
+	return nil, nil
 }
