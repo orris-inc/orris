@@ -10,6 +10,9 @@ const (
 	// RuleTypeEntry is the entry point that forwards traffic to exit agent via WS tunnel.
 	// The target information is configured on the entry rule and passed to the exit agent.
 	RuleTypeEntry RuleType = "entry"
+	// RuleTypeChain is a multi-hop chain forward rule.
+	// Traffic flows through multiple agents: entry -> relay1 -> relay2 -> ... -> exit -> target.
+	RuleTypeChain RuleType = "chain"
 )
 
 // Rule represents a forward rule returned by the API.
@@ -31,6 +34,14 @@ type Rule struct {
 	TotalBytes    int64    `json:"total_bytes"`
 	CreatedAt     string   `json:"created_at"`
 	UpdatedAt     string   `json:"updated_at"`
+
+	// Chain-specific fields (for chain rule type)
+	ChainAgentIDs  []string `json:"chain_agent_ids,omitempty"`   // Ordered list of agent IDs in chain
+	ChainPosition  int      `json:"chain_position,omitempty"`    // Agent's position in chain (0-indexed)
+	IsLastInChain  bool     `json:"is_last_in_chain,omitempty"`  // True if agent is last in chain
+	NextHopAgentID string   `json:"next_hop_agent_id,omitempty"` // Next agent in chain
+	NextHopAddress string   `json:"next_hop_address,omitempty"`  // Next agent's public address
+	NextHopWsPort  uint16   `json:"next_hop_ws_port,omitempty"`  // Next agent's WS port
 }
 
 // IsDirect returns true if this is a direct forward rule.
@@ -46,6 +57,26 @@ func (r *Rule) IsEntry() bool {
 // IsExit is deprecated (exit type has been removed).
 func (r *Rule) IsExit() bool {
 	return false
+}
+
+// IsChain returns true if this is a chain forward rule.
+func (r *Rule) IsChain() bool {
+	return r.RuleType == RuleTypeChain
+}
+
+// IsChainEntry returns true if this agent is the entry point of a chain rule.
+func (r *Rule) IsChainEntry() bool {
+	return r.RuleType == RuleTypeChain && r.ChainPosition == 0
+}
+
+// IsChainRelay returns true if this agent is a relay (middle) node in a chain rule.
+func (r *Rule) IsChainRelay() bool {
+	return r.RuleType == RuleTypeChain && !r.IsLastInChain && r.ChainPosition > 0
+}
+
+// IsChainExit returns true if this agent is the exit (last) node in a chain rule.
+func (r *Rule) IsChainExit() bool {
+	return r.RuleType == RuleTypeChain && r.IsLastInChain
 }
 
 // ExitEndpoint represents the connection information for an exit agent.

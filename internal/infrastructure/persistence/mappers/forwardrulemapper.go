@@ -1,7 +1,10 @@
 package mappers
 
 import (
+	"encoding/json"
 	"fmt"
+
+	"gorm.io/datatypes"
 
 	"github.com/orris-inc/orris/internal/domain/forward"
 	vo "github.com/orris-inc/orris/internal/domain/forward/value_objects"
@@ -65,6 +68,14 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 		targetNodeID = model.TargetNodeID
 	}
 
+	// Parse chain_agent_ids JSON
+	var chainAgentIDs []uint
+	if model.ChainAgentIDs != nil && len(model.ChainAgentIDs) > 0 {
+		if err := json.Unmarshal(model.ChainAgentIDs, &chainAgentIDs); err != nil {
+			return nil, fmt.Errorf("failed to parse chain_agent_ids: %w", err)
+		}
+	}
+
 	ipVersion := vo.IPVersion(model.IPVersion)
 
 	entity, err := forward.ReconstructForwardRule(
@@ -73,6 +84,7 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 		model.AgentID,
 		ruleType,
 		exitAgentID,
+		chainAgentIDs,
 		wsListenPort,
 		model.Name,
 		model.ListenPort,
@@ -119,12 +131,23 @@ func (m *ForwardRuleMapperImpl) ToModel(entity *forward.ForwardRule) (*models.Fo
 		targetNodeID = entity.TargetNodeID()
 	}
 
+	// Serialize chain_agent_ids to JSON
+	var chainAgentIDsJSON datatypes.JSON
+	if len(entity.ChainAgentIDs()) > 0 {
+		jsonBytes, err := json.Marshal(entity.ChainAgentIDs())
+		if err != nil {
+			return nil, fmt.Errorf("failed to serialize chain_agent_ids: %w", err)
+		}
+		chainAgentIDsJSON = jsonBytes
+	}
+
 	return &models.ForwardRuleModel{
 		ID:            entity.ID(),
 		ShortID:       entity.ShortID(),
 		AgentID:       entity.AgentID(),
 		RuleType:      entity.RuleType().String(),
 		ExitAgentID:   exitAgentID,
+		ChainAgentIDs: chainAgentIDsJSON,
 		WsListenPort:  wsListenPort,
 		Name:          entity.Name(),
 		ListenPort:    entity.ListenPort(),

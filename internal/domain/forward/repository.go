@@ -46,6 +46,10 @@ type Repository interface {
 	// ListEnabledByExitAgentID returns all enabled entry rules for a specific exit agent.
 	ListEnabledByExitAgentID(ctx context.Context, exitAgentID uint) ([]*ForwardRule, error)
 
+	// ListEnabledByChainAgentID returns all enabled chain rules where the agent participates.
+	// This includes rules where the agent is in the chain_agent_ids array.
+	ListEnabledByChainAgentID(ctx context.Context, agentID uint) ([]*ForwardRule, error)
+
 	// GetExitRuleByAgentID is deprecated (exit type has been removed).
 	// Kept for backward compatibility, always returns nil.
 	GetExitRuleByAgentID(ctx context.Context, agentID uint) (*ForwardRule, error)

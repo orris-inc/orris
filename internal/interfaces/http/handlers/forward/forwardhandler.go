@@ -59,17 +59,19 @@ func NewForwardHandler(
 // Required fields by rule type:
 // - direct: agent_id, listen_port, (target_address+target_port OR target_node_id)
 // - entry: agent_id, exit_agent_id, listen_port, (target_address+target_port OR target_node_id)
+// - chain: agent_id, chain_agent_ids, listen_port, (target_address+target_port OR target_node_id)
 type CreateForwardRuleRequest struct {
-	AgentID       string `json:"agent_id" binding:"required" example:"fa_xK9mP2vL3nQ"`
-	RuleType      string `json:"rule_type" binding:"required,oneof=direct entry" example:"direct"`
-	ExitAgentID   string `json:"exit_agent_id,omitempty" example:"fa_yL8nQ3wM4oR"`
-	Name          string `json:"name" binding:"required" example:"MySQL-Forward"`
-	ListenPort    uint16 `json:"listen_port,omitempty" example:"13306"`
-	TargetAddress string `json:"target_address,omitempty" example:"192.168.1.100"`
-	TargetPort    uint16 `json:"target_port,omitempty" example:"3306"`
-	TargetNodeID  string `json:"target_node_id,omitempty" example:"node_xK9mP2vL3nQ"`
-	Protocol      string `json:"protocol" binding:"required,oneof=tcp udp both" example:"tcp"`
-	Remark        string `json:"remark,omitempty" example:"Forward to internal MySQL server"`
+	AgentID       string   `json:"agent_id" binding:"required" example:"fa_xK9mP2vL3nQ"`
+	RuleType      string   `json:"rule_type" binding:"required,oneof=direct entry chain" example:"direct"`
+	ExitAgentID   string   `json:"exit_agent_id,omitempty" example:"fa_yL8nQ3wM4oR"`
+	ChainAgentIDs []string `json:"chain_agent_ids,omitempty" example:"[\"fa_aaa\",\"fa_bbb\"]"`
+	Name          string   `json:"name" binding:"required" example:"MySQL-Forward"`
+	ListenPort    uint16   `json:"listen_port,omitempty" example:"13306"`
+	TargetAddress string   `json:"target_address,omitempty" example:"192.168.1.100"`
+	TargetPort    uint16   `json:"target_port,omitempty" example:"3306"`
+	TargetNodeID  string   `json:"target_node_id,omitempty" example:"node_xK9mP2vL3nQ"`
+	Protocol      string   `json:"protocol" binding:"required,oneof=tcp udp both" example:"tcp"`
+	Remark        string   `json:"remark,omitempty" example:"Forward to internal MySQL server"`
 }
 
 // UpdateForwardRuleRequest represents a request to update a forward rule.
@@ -110,6 +112,21 @@ func (h *ForwardHandler) CreateRule(c *gin.Context) {
 		}
 	}
 
+	// Parse chain agent IDs
+	var chainAgentShortIDs []string
+	if len(req.ChainAgentIDs) > 0 {
+		chainAgentShortIDs = make([]string, len(req.ChainAgentIDs))
+		for i, chainAgentID := range req.ChainAgentIDs {
+			shortID, parseErr := id.ParseForwardAgentID(chainAgentID)
+			if parseErr != nil {
+				h.logger.Warnw("invalid chain_agent_id format", "chain_agent_id", chainAgentID, "error", parseErr)
+				utils.ErrorResponseWithError(c, errors.NewValidationError("invalid chain_agent_id format, expected fa_xxxxx"))
+				return
+			}
+			chainAgentShortIDs[i] = shortID
+		}
+	}
+
 	var targetNodeShortID string
 	if req.TargetNodeID != "" {
 		targetNodeShortID, err = id.ParseNodeID(req.TargetNodeID)
@@ -121,16 +138,17 @@ func (h *ForwardHandler) CreateRule(c *gin.Context) {
 	}
 
 	cmd := usecases.CreateForwardRuleCommand{
-		AgentShortID:      agentShortID,
-		RuleType:          req.RuleType,
-		ExitAgentShortID:  exitAgentShortID,
-		Name:              req.Name,
-		ListenPort:        req.ListenPort,
-		TargetAddress:     req.TargetAddress,
-		TargetPort:        req.TargetPort,
-		TargetNodeShortID: targetNodeShortID,
-		Protocol:          req.Protocol,
-		Remark:            req.Remark,
+		AgentShortID:       agentShortID,
+		RuleType:           req.RuleType,
+		ExitAgentShortID:   exitAgentShortID,
+		ChainAgentShortIDs: chainAgentShortIDs,
+		Name:               req.Name,
+		ListenPort:         req.ListenPort,
+		TargetAddress:      req.TargetAddress,
+		TargetPort:         req.TargetPort,
+		TargetNodeShortID:  targetNodeShortID,
+		Protocol:           req.Protocol,
+		Remark:             req.Remark,
 	}
 
 	result, err := h.createRuleUC.Execute(c.Request.Context(), cmd)

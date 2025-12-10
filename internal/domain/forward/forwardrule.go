@@ -18,6 +18,7 @@ type ForwardRule struct {
 	agentID       uint
 	ruleType      vo.ForwardRuleType
 	exitAgentID   uint   // exit agent ID (required for entry type)
+	chainAgentIDs []uint // ordered array of intermediate agent IDs for chain forwarding
 	wsListenPort  uint16 // WebSocket listen port (required for exit type)
 	name          string
 	listenPort    uint16
@@ -38,10 +39,12 @@ type ForwardRule struct {
 // Parameters depend on ruleType:
 // - direct: requires agentID, listenPort, (targetAddress+targetPort OR targetNodeID)
 // - entry: requires agentID, listenPort, exitAgentID, (targetAddress+targetPort OR targetNodeID)
+// - chain: requires agentID, listenPort, chainAgentIDs (at least 1), (targetAddress+targetPort OR targetNodeID)
 func NewForwardRule(
 	agentID uint,
 	ruleType vo.ForwardRuleType,
 	exitAgentID uint,
+	chainAgentIDs []uint,
 	wsListenPort uint16,
 	name string,
 	listenPort uint16,
@@ -107,6 +110,42 @@ func NewForwardRule(
 				return nil, fmt.Errorf("invalid target address: %w", err)
 			}
 		}
+	case vo.ForwardRuleTypeChain:
+		if listenPort == 0 {
+			return nil, fmt.Errorf("listen port is required for chain forward")
+		}
+		if len(chainAgentIDs) == 0 {
+			return nil, fmt.Errorf("chain agent IDs is required for chain forward (at least 1 intermediate agent)")
+		}
+		if len(chainAgentIDs) > 10 {
+			return nil, fmt.Errorf("chain forward supports maximum 10 intermediate agents")
+		}
+		// Check for duplicates in chain (including entry agent)
+		seen := make(map[uint]bool)
+		seen[agentID] = true
+		for _, id := range chainAgentIDs {
+			if id == 0 {
+				return nil, fmt.Errorf("chain agent ID cannot be zero")
+			}
+			if seen[id] {
+				return nil, fmt.Errorf("chain contains duplicate agent ID: %d", id)
+			}
+			seen[id] = true
+		}
+		// Chain rules require target information (at the end of chain)
+		hasTarget := targetAddress != "" && targetPort != 0
+		hasTargetNode := targetNodeID != nil && *targetNodeID != 0
+		if !hasTarget && !hasTargetNode {
+			return nil, fmt.Errorf("either target address+port or target node ID is required for chain forward")
+		}
+		if hasTarget && hasTargetNode {
+			return nil, fmt.Errorf("target address+port and target node ID are mutually exclusive for chain forward")
+		}
+		if hasTarget {
+			if err := validateAddress(targetAddress); err != nil {
+				return nil, fmt.Errorf("invalid target address: %w", err)
+			}
+		}
 	}
 
 	// Default ipVersion to auto if not set
@@ -129,6 +168,7 @@ func NewForwardRule(
 		agentID:       agentID,
 		ruleType:      ruleType,
 		exitAgentID:   exitAgentID,
+		chainAgentIDs: chainAgentIDs,
 		wsListenPort:  wsListenPort,
 		name:          name,
 		listenPort:    listenPort,
@@ -153,6 +193,7 @@ func ReconstructForwardRule(
 	agentID uint,
 	ruleType vo.ForwardRuleType,
 	exitAgentID uint,
+	chainAgentIDs []uint,
 	wsListenPort uint16,
 	name string,
 	listenPort uint16,
@@ -200,6 +241,7 @@ func ReconstructForwardRule(
 		agentID:       agentID,
 		ruleType:      ruleType,
 		exitAgentID:   exitAgentID,
+		chainAgentIDs: chainAgentIDs,
 		wsListenPort:  wsListenPort,
 		name:          name,
 		listenPort:    listenPort,
@@ -266,6 +308,56 @@ func (r *ForwardRule) RuleType() vo.ForwardRuleType {
 // ExitAgentID returns the exit agent ID (for entry type rules).
 func (r *ForwardRule) ExitAgentID() uint {
 	return r.exitAgentID
+}
+
+// ChainAgentIDs returns the chain agent IDs (for chain type rules).
+func (r *ForwardRule) ChainAgentIDs() []uint {
+	return r.chainAgentIDs
+}
+
+// GetNextHopAgentID returns the next hop agent ID for a given agent in the chain.
+// Returns 0 if the agent is the last in chain or not part of the chain.
+func (r *ForwardRule) GetNextHopAgentID(currentAgentID uint) uint {
+	if !r.ruleType.IsChain() {
+		return 0
+	}
+
+	// Build full chain: agentID -> chainAgentIDs[0] -> chainAgentIDs[1] -> ...
+	fullChain := append([]uint{r.agentID}, r.chainAgentIDs...)
+
+	for i, id := range fullChain {
+		if id == currentAgentID && i < len(fullChain)-1 {
+			return fullChain[i+1]
+		}
+	}
+	return 0 // Last agent in chain or not found
+}
+
+// IsLastInChain checks if the given agent is the last in the forwarding chain.
+func (r *ForwardRule) IsLastInChain(agentID uint) bool {
+	if !r.ruleType.IsChain() {
+		return false
+	}
+	if len(r.chainAgentIDs) == 0 {
+		return agentID == r.agentID
+	}
+	return agentID == r.chainAgentIDs[len(r.chainAgentIDs)-1]
+}
+
+// GetChainPosition returns the position (0-indexed) of the agent in the chain.
+// Returns -1 if not in chain.
+func (r *ForwardRule) GetChainPosition(agentID uint) int {
+	if !r.ruleType.IsChain() {
+		return -1
+	}
+
+	fullChain := append([]uint{r.agentID}, r.chainAgentIDs...)
+	for i, id := range fullChain {
+		if id == agentID {
+			return i
+		}
+	}
+	return -1
 }
 
 // WsListenPort returns the WebSocket listen port (for exit type rules).
@@ -440,9 +532,9 @@ func (r *ForwardRule) UpdateTarget(address string, port uint16) error {
 // UpdateTargetNodeID updates the target node ID for dynamic address resolution.
 // This will clear the targetAddress and targetPort when setting node ID.
 func (r *ForwardRule) UpdateTargetNodeID(nodeID *uint) error {
-	// Only direct and entry types support targetNodeID (exit type has been removed)
-	if !r.ruleType.IsDirect() && !r.ruleType.IsEntry() {
-		return fmt.Errorf("target node ID can only be set for direct or entry type rules")
+	// Only direct, entry, and chain types support targetNodeID
+	if !r.ruleType.IsDirect() && !r.ruleType.IsEntry() && !r.ruleType.IsChain() {
+		return fmt.Errorf("target node ID can only be set for direct, entry, or chain type rules")
 	}
 
 	// If nodeID is nil or 0, clear the targetNodeID
@@ -591,6 +683,22 @@ func (r *ForwardRule) Validate() error {
 		}
 		if hasTarget && hasTargetNode {
 			return fmt.Errorf("target address+port and target node ID are mutually exclusive for entry forward")
+		}
+	case vo.ForwardRuleTypeChain:
+		if r.listenPort == 0 {
+			return fmt.Errorf("listen port is required for chain forward")
+		}
+		if len(r.chainAgentIDs) == 0 {
+			return fmt.Errorf("chain agent IDs is required for chain forward")
+		}
+		// Chain rules require target information (at the end of chain)
+		hasTarget := r.targetAddress != "" && r.targetPort != 0
+		hasTargetNode := r.targetNodeID != nil && *r.targetNodeID != 0
+		if !hasTarget && !hasTargetNode {
+			return fmt.Errorf("either target address+port or target node ID is required for chain forward")
+		}
+		if hasTarget && hasTargetNode {
+			return fmt.Errorf("target address+port and target node ID are mutually exclusive for chain forward")
 		}
 	}
 

@@ -10,33 +10,42 @@ import (
 // Note: ws_listen_port field has been removed (exit type deprecated).
 // Database column is kept for backward compatibility but not exposed in API.
 type ForwardRuleDTO struct {
-	ID            string `json:"id"`                      // Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ")
-	AgentID       string `json:"agent_id"`                // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
-	RuleType      string `json:"rule_type"`               // direct, entry
-	ExitAgentID   string `json:"exit_agent_id,omitempty"` // for entry type (Stripe-style prefixed ID)
-	Name          string `json:"name"`
-	ListenPort    uint16 `json:"listen_port"`
-	TargetAddress string `json:"target_address,omitempty"` // for direct and entry types
-	TargetPort    uint16 `json:"target_port,omitempty"`    // for direct and entry types
-	TargetNodeID  string `json:"target_node_id,omitempty"` // Stripe-style prefixed Node ID (e.g., "node_xK9mP2vL3nQ")
-	IPVersion     string `json:"ip_version"`               // auto, ipv4, ipv6
-	Protocol      string `json:"protocol"`
-	Status        string `json:"status"`
-	Remark        string `json:"remark"`
-	UploadBytes   int64  `json:"upload_bytes"`
-	DownloadBytes int64  `json:"download_bytes"`
-	TotalBytes    int64  `json:"total_bytes"`
-	CreatedAt     string `json:"created_at"`
-	UpdatedAt     string `json:"updated_at"`
+	ID            string   `json:"id"`                        // Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ")
+	AgentID       string   `json:"agent_id"`                  // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
+	RuleType      string   `json:"rule_type"`                 // direct, entry, chain
+	ExitAgentID   string   `json:"exit_agent_id,omitempty"`   // for entry type (Stripe-style prefixed ID)
+	ChainAgentIDs []string `json:"chain_agent_ids,omitempty"` // for chain type (ordered Stripe-style prefixed IDs)
+	Name          string   `json:"name"`
+	ListenPort    uint16   `json:"listen_port"`
+	TargetAddress string   `json:"target_address,omitempty"` // for direct, entry, and chain exit types
+	TargetPort    uint16   `json:"target_port,omitempty"`    // for direct, entry, and chain exit types
+	TargetNodeID  string   `json:"target_node_id,omitempty"` // Stripe-style prefixed Node ID (e.g., "node_xK9mP2vL3nQ")
+	IPVersion     string   `json:"ip_version"`               // auto, ipv4, ipv6
+	Protocol      string   `json:"protocol"`
+	Status        string   `json:"status"`
+	Remark        string   `json:"remark"`
+	UploadBytes   int64    `json:"upload_bytes"`
+	DownloadBytes int64    `json:"download_bytes"`
+	TotalBytes    int64    `json:"total_bytes"`
+	CreatedAt     string   `json:"created_at"`
+	UpdatedAt     string   `json:"updated_at"`
 
 	// Target node info (populated when targetNodeID is set)
 	TargetNodeServerAddress string  `json:"target_node_server_address,omitempty"` // node's configured server address
 	TargetNodePublicIPv4    *string `json:"target_node_public_ipv4,omitempty"`    // node's reported public IPv4
 	TargetNodePublicIPv6    *string `json:"target_node_public_ipv6,omitempty"`    // node's reported public IPv6
 
+	// Chain-specific fields (populated for chain rules based on requesting agent's role)
+	ChainPosition  int    `json:"chain_position,omitempty"`    // agent's position in chain (0-indexed)
+	IsLastInChain  bool   `json:"is_last_in_chain,omitempty"`  // true if agent is last in chain
+	NextHopAgentID string `json:"next_hop_agent_id,omitempty"` // next agent in chain (Stripe-style ID)
+	NextHopAddress string `json:"next_hop_address,omitempty"`  // next agent's public address
+	NextHopWsPort  uint16 `json:"next_hop_ws_port,omitempty"`  // next agent's WS port (from status cache)
+
 	// Internal fields for mapping (not exposed in JSON)
 	internalAgentID     uint   `json:"-"`
 	internalExitAgentID uint   `json:"-"`
+	internalChainAgents []uint `json:"-"` // internal chain agent IDs for lookup
 	internalTargetNode  *uint  `json:"-"` // internal node ID for lookup
 	agentShortID        string `json:"-"`
 	exitAgentShortID    string `json:"-"`
@@ -56,7 +65,8 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 		ID:                  id.FormatForwardRuleID(rule.ShortID()),
 		AgentID:             "", // populated later via PopulateAgentInfo
 		RuleType:            rule.RuleType().String(),
-		ExitAgentID:         "", // populated later via PopulateAgentInfo
+		ExitAgentID:         "",  // populated later via PopulateAgentInfo
+		ChainAgentIDs:       nil, // populated later via PopulateAgentInfo
 		Name:                rule.Name(),
 		ListenPort:          rule.ListenPort(),
 		TargetAddress:       rule.TargetAddress(),
@@ -73,6 +83,7 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 		UpdatedAt:           rule.UpdatedAt().Format("2006-01-02T15:04:05Z07:00"),
 		internalAgentID:     rule.AgentID(),
 		internalExitAgentID: rule.ExitAgentID(),
+		internalChainAgents: rule.ChainAgentIDs(),
 		internalTargetNode:  rule.TargetNodeID(),
 	}
 }
@@ -107,6 +118,20 @@ func (d *ForwardRuleDTO) PopulateAgentInfo(agentMap AgentShortIDMap) {
 			d.ExitAgentID = id.FormatForwardAgentID(shortID)
 		}
 	}
+	// Populate chain agent IDs
+	if len(d.internalChainAgents) > 0 {
+		d.ChainAgentIDs = make([]string, len(d.internalChainAgents))
+		for i, agentID := range d.internalChainAgents {
+			if shortID, ok := agentMap[agentID]; ok {
+				d.ChainAgentIDs[i] = id.FormatForwardAgentID(shortID)
+			}
+		}
+	}
+}
+
+// InternalChainAgentIDs returns the internal chain agent IDs for repository lookups.
+func (d *ForwardRuleDTO) InternalChainAgentIDs() []uint {
+	return d.internalChainAgents
 }
 
 // InternalAgentID returns the internal agent ID for repository lookups.
@@ -171,6 +196,12 @@ func CollectAgentIDs(dtos []*ForwardRuleDTO) []uint {
 		}
 		if dto.internalExitAgentID != 0 {
 			idSet[dto.internalExitAgentID] = struct{}{}
+		}
+		// Collect chain agent IDs
+		for _, chainAgentID := range dto.internalChainAgents {
+			if chainAgentID != 0 {
+				idSet[chainAgentID] = struct{}{}
+			}
 		}
 	}
 

@@ -380,3 +380,28 @@ func (r *ForwardRuleRepositoryImpl) GetExitRuleByAgentID(ctx context.Context, ag
 	r.logger.Warnw("GetExitRuleByAgentID called but exit type has been removed", "agent_id", agentID)
 	return nil, nil
 }
+
+// ListEnabledByChainAgentID returns all enabled chain rules where the agent participates.
+func (r *ForwardRuleRepositoryImpl) ListEnabledByChainAgentID(ctx context.Context, agentID uint) ([]*forward.ForwardRule, error) {
+	var ruleModels []*models.ForwardRuleModel
+
+	tx := db.GetTxFromContext(ctx, r.db)
+	// Query chain rules where agent is in chain_agent_ids using MySQL JSON_CONTAINS
+	if err := tx.Where(
+		"status = ? AND rule_type = ? AND JSON_CONTAINS(chain_agent_ids, ?)",
+		"enabled",
+		"chain",
+		fmt.Sprintf("%d", agentID),
+	).Find(&ruleModels).Error; err != nil {
+		r.logger.Errorw("failed to list enabled chain rules by agent ID", "agent_id", agentID, "error", err)
+		return nil, fmt.Errorf("failed to list enabled chain rules: %w", err)
+	}
+
+	entities, err := r.mapper.ToEntities(ruleModels)
+	if err != nil {
+		r.logger.Errorw("failed to map chain rule models to entities", "error", err)
+		return nil, fmt.Errorf("failed to map chain rules: %w", err)
+	}
+
+	return entities, nil
+}
