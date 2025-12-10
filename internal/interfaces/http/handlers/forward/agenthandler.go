@@ -2,6 +2,7 @@
 package forward
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -53,18 +54,45 @@ type ReportTrafficRequest struct {
 	Rules []ForwardRuleTrafficItem `json:"rules" binding:"required,dive"`
 }
 
+// getAuthenticatedAgentID extracts the authenticated forward agent ID from context.
+// Returns the agent ID or an error if not found.
+func (h *AgentHandler) getAuthenticatedAgentID(c *gin.Context) (uint, error) {
+	agentID, exists := c.Get("forward_agent_id")
+	if !exists {
+		return 0, fmt.Errorf("forward_agent_id not found in context")
+	}
+	id, ok := agentID.(uint)
+	if !ok {
+		return 0, fmt.Errorf("invalid forward_agent_id type in context")
+	}
+	return id, nil
+}
+
 func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 	ctx := c.Request.Context()
 
+	// Get authenticated agent ID from context
+	agentID, err := h.getAuthenticatedAgentID(c)
+	if err != nil {
+		h.logger.Warnw("failed to get authenticated agent ID",
+			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
 	h.logger.Infow("forward client requesting enabled rules",
+		"agent_id", agentID,
 		"ip", c.ClientIP(),
 	)
 
-	// Retrieve all enabled forward rules
-	rules, err := h.repo.ListEnabled(ctx)
+	// Retrieve enabled forward rules only for this agent
+	rules, err := h.repo.ListEnabledByAgentID(ctx, agentID)
 	if err != nil {
 		h.logger.Errorw("failed to retrieve enabled forward rules",
 			"error", err,
+			"agent_id", agentID,
 			"ip", c.ClientIP(),
 		)
 		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to retrieve enabled forward rules")
@@ -73,6 +101,7 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 
 	h.logger.Infow("enabled forward rules retrieved successfully",
 		"rule_count", len(rules),
+		"agent_id", agentID,
 		"ip", c.ClientIP(),
 	)
 
@@ -146,11 +175,23 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 	ctx := c.Request.Context()
 
+	// Get authenticated agent ID from context
+	agentID, err := h.getAuthenticatedAgentID(c)
+	if err != nil {
+		h.logger.Warnw("failed to get authenticated agent ID",
+			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
 	// Parse request body
 	var req ReportTrafficRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Warnw("invalid traffic report request body",
 			"error", err,
+			"agent_id", agentID,
 			"ip", c.ClientIP(),
 		)
 		utils.ErrorResponse(c, http.StatusBadRequest, "invalid request body")
@@ -159,18 +200,48 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 
 	h.logger.Infow("forward client traffic report received",
 		"rule_count", len(req.Rules),
+		"agent_id", agentID,
 		"ip", c.ClientIP(),
 	)
+
+	// Build a set of valid rule IDs for this agent
+	agentRules, err := h.repo.ListByAgentID(ctx, agentID)
+	if err != nil {
+		h.logger.Errorw("failed to get agent rules for validation",
+			"agent_id", agentID,
+			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to validate rules")
+		return
+	}
+	validRuleIDs := make(map[uint]bool)
+	for _, rule := range agentRules {
+		validRuleIDs[rule.ID()] = true
+	}
 
 	// Update traffic for each rule
 	successCount := 0
 	errorCount := 0
+	deniedCount := 0
 
 	for _, item := range req.Rules {
+		// Validate rule belongs to this agent
+		if !validRuleIDs[item.RuleID] {
+			h.logger.Warnw("traffic report for unauthorized rule",
+				"rule_id", item.RuleID,
+				"agent_id", agentID,
+				"ip", c.ClientIP(),
+			)
+			deniedCount++
+			continue
+		}
+
 		// Skip invalid traffic data
 		if item.UploadBytes < 0 || item.DownloadBytes < 0 {
 			h.logger.Warnw("invalid traffic data for rule",
 				"rule_id", item.RuleID,
+				"agent_id", agentID,
 				"upload", item.UploadBytes,
 				"download", item.DownloadBytes,
 			)
@@ -187,6 +258,7 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 		if err != nil {
 			h.logger.Errorw("failed to update rule traffic",
 				"rule_id", item.RuleID,
+				"agent_id", agentID,
 				"upload", item.UploadBytes,
 				"download", item.DownloadBytes,
 				"error", err,
@@ -201,6 +273,8 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 	h.logger.Infow("forward traffic report processed",
 		"success_count", successCount,
 		"error_count", errorCount,
+		"denied_count", deniedCount,
+		"agent_id", agentID,
 		"ip", c.ClientIP(),
 	)
 
@@ -208,19 +282,35 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "traffic reported successfully", map[string]any{
 		"rules_updated": successCount,
 		"rules_failed":  errorCount,
+		"rules_denied":  deniedCount,
 	})
 }
 
 // GetExitEndpoint handles GET /forward-agent-api/exit-endpoint/:agent_id
+// This endpoint allows an entry agent to get the exit endpoint information
+// for establishing tunnel connections. Access is restricted to entry agents
+// that have an entry rule pointing to the requested exit agent.
 func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	// Parse agent ID from path
-	agentIDStr := c.Param("agent_id")
-	id, err := strconv.ParseUint(agentIDStr, 10, 32)
+	// Get authenticated agent ID (the entry agent making the request)
+	entryAgentID, err := h.getAuthenticatedAgentID(c)
+	if err != nil {
+		h.logger.Warnw("failed to get authenticated agent ID",
+			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	// Parse requested exit agent ID from path
+	exitAgentIDStr := c.Param("agent_id")
+	id, err := strconv.ParseUint(exitAgentIDStr, 10, 32)
 	if err != nil {
 		h.logger.Warnw("invalid agent_id parameter",
-			"agent_id", agentIDStr,
+			"agent_id", exitAgentIDStr,
+			"entry_agent_id", entryAgentID,
 			"error", err,
 			"ip", c.ClientIP(),
 		)
@@ -229,25 +319,58 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 	}
 	if id == 0 {
 		h.logger.Warnw("invalid agent_id parameter",
-			"agent_id", agentIDStr,
+			"agent_id", exitAgentIDStr,
+			"entry_agent_id", entryAgentID,
 			"error", "agent ID must be greater than 0",
 			"ip", c.ClientIP(),
 		)
 		utils.ErrorResponse(c, http.StatusBadRequest, "agent ID must be greater than 0")
 		return
 	}
-	agentID := uint(id)
+	exitAgentID := uint(id)
 
 	h.logger.Infow("forward client requesting exit endpoint information",
-		"agent_id", agentID,
+		"exit_agent_id", exitAgentID,
+		"entry_agent_id", entryAgentID,
 		"ip", c.ClientIP(),
 	)
 
-	// Get agent by ID from agent repository
-	agent, err := h.agentRepo.GetByID(ctx, agentID)
+	// Verify that the entry agent has an entry rule pointing to this exit agent
+	entryRules, err := h.repo.ListByAgentID(ctx, entryAgentID)
+	if err != nil {
+		h.logger.Errorw("failed to get entry agent rules",
+			"entry_agent_id", entryAgentID,
+			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to validate access")
+		return
+	}
+
+	// Check if any entry rule points to the requested exit agent
+	hasAccess := false
+	for _, rule := range entryRules {
+		if rule.RuleType().String() == "entry" && rule.ExitAgentID() == exitAgentID {
+			hasAccess = true
+			break
+		}
+	}
+
+	if !hasAccess {
+		h.logger.Warnw("entry agent not authorized to access exit endpoint",
+			"entry_agent_id", entryAgentID,
+			"exit_agent_id", exitAgentID,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusForbidden, "access denied")
+		return
+	}
+
+	// Get exit agent by ID from agent repository
+	exitAgent, err := h.agentRepo.GetByID(ctx, exitAgentID)
 	if err != nil {
 		h.logger.Errorw("failed to get forward agent",
-			"agent_id", agentID,
+			"exit_agent_id", exitAgentID,
 			"error", err,
 			"ip", c.ClientIP(),
 		)
@@ -255,30 +378,30 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 		return
 	}
 
-	if agent == nil {
+	if exitAgent == nil {
 		h.logger.Warnw("forward agent not found",
-			"agent_id", agentID,
+			"exit_agent_id", exitAgentID,
 			"ip", c.ClientIP(),
 		)
 		utils.ErrorResponse(c, http.StatusNotFound, "forward agent not found")
 		return
 	}
 
-	// Check if agent has a public address
-	if agent.PublicAddress() == "" {
-		h.logger.Warnw("agent has no public address configured",
-			"agent_id", agentID,
+	// Check if exit agent has a public address
+	if exitAgent.PublicAddress() == "" {
+		h.logger.Warnw("exit agent has no public address configured",
+			"exit_agent_id", exitAgentID,
 			"ip", c.ClientIP(),
 		)
 		utils.ErrorResponse(c, http.StatusNotFound, "agent has no public address configured")
 		return
 	}
 
-	// Get exit rules for this agent
-	exitRule, err := h.repo.GetExitRuleByAgentID(ctx, agentID)
+	// Get exit rule for the exit agent
+	exitRule, err := h.repo.GetExitRuleByAgentID(ctx, exitAgentID)
 	if err != nil {
 		h.logger.Errorw("failed to get exit rule for agent",
-			"agent_id", agentID,
+			"exit_agent_id", exitAgentID,
 			"error", err,
 			"ip", c.ClientIP(),
 		)
@@ -288,7 +411,7 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 
 	if exitRule == nil {
 		h.logger.Warnw("no exit rule found for agent",
-			"agent_id", agentID,
+			"exit_agent_id", exitAgentID,
 			"ip", c.ClientIP(),
 		)
 		utils.ErrorResponse(c, http.StatusNotFound, "no exit rule found for this agent")
@@ -296,15 +419,16 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 	}
 
 	h.logger.Infow("exit endpoint information retrieved successfully",
-		"agent_id", agentID,
-		"address", agent.PublicAddress(),
+		"exit_agent_id", exitAgentID,
+		"entry_agent_id", entryAgentID,
+		"address", exitAgent.PublicAddress(),
 		"ws_port", exitRule.WsListenPort(),
 		"ip", c.ClientIP(),
 	)
 
 	// Return the connection information
 	utils.SuccessResponse(c, http.StatusOK, "exit endpoint information retrieved successfully", map[string]any{
-		"address": agent.PublicAddress(),
+		"address": exitAgent.PublicAddress(),
 		"ws_port": exitRule.WsListenPort(),
 	})
 }

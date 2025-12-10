@@ -66,6 +66,7 @@ type TrafficItem struct {
 type TrafficReportResult struct {
 	RulesUpdated int `json:"rules_updated"`
 	RulesFailed  int `json:"rules_failed"`
+	RulesDenied  int `json:"rules_denied"` // rules denied due to authorization failure
 }
 
 // apiResponse represents the standard API response structure.
