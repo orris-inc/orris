@@ -15,10 +15,10 @@ const (
 
 // Rule represents a forward rule returned by the API.
 type Rule struct {
-	ID            uint     `json:"id"`
-	AgentID       uint     `json:"agent_id"`
+	ID            string   `json:"id"`       // Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ")
+	AgentID       string   `json:"agent_id"` // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
 	RuleType      RuleType `json:"rule_type"`
-	ExitAgentID   uint     `json:"exit_agent_id,omitempty"`
+	ExitAgentID   string   `json:"exit_agent_id,omitempty"` // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
 	WsListenPort  uint16   `json:"ws_listen_port,omitempty"`
 	Name          string   `json:"name"`
 	ListenPort    uint16   `json:"listen_port"`

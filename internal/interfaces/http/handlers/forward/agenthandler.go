@@ -4,7 +4,6 @@ package forward
 import (
 	"fmt"
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -12,6 +11,7 @@ import (
 	"github.com/orris-inc/orris/internal/application/forward/usecases"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
@@ -304,9 +304,11 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 		return
 	}
 
-	// Parse requested exit agent ID from path
+	// Parse requested exit agent ID from path (supports Stripe-style ID like "fa_xK9mP2vL3nQ")
 	exitAgentIDStr := c.Param("agent_id")
-	id, err := strconv.ParseUint(exitAgentIDStr, 10, 32)
+
+	// Parse Stripe-style prefixed ID
+	shortID, err := id.ParseForwardAgentID(exitAgentIDStr)
 	if err != nil {
 		h.logger.Warnw("invalid agent_id parameter",
 			"agent_id", exitAgentIDStr,
@@ -314,20 +316,24 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 			"error", err,
 			"ip", c.ClientIP(),
 		)
-		utils.ErrorResponse(c, http.StatusBadRequest, "invalid agent_id parameter")
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid agent_id parameter: must be in format fa_xxx")
 		return
 	}
-	if id == 0 {
-		h.logger.Warnw("invalid agent_id parameter",
+
+	// Look up the internal agent ID by short ID
+	exitAgent, err := h.agentRepo.GetByShortID(ctx, shortID)
+	if err != nil {
+		h.logger.Warnw("exit agent not found",
 			"agent_id", exitAgentIDStr,
+			"short_id", shortID,
 			"entry_agent_id", entryAgentID,
-			"error", "agent ID must be greater than 0",
+			"error", err,
 			"ip", c.ClientIP(),
 		)
-		utils.ErrorResponse(c, http.StatusBadRequest, "agent ID must be greater than 0")
+		utils.ErrorResponse(c, http.StatusNotFound, "exit agent not found")
 		return
 	}
-	exitAgentID := uint(id)
+	exitAgentID := exitAgent.ID()
 
 	h.logger.Infow("forward client requesting exit endpoint information",
 		"exit_agent_id", exitAgentID,
@@ -366,18 +372,7 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 		return
 	}
 
-	// Get exit agent by ID from agent repository
-	exitAgent, err := h.agentRepo.GetByID(ctx, exitAgentID)
-	if err != nil {
-		h.logger.Errorw("failed to get forward agent",
-			"exit_agent_id", exitAgentID,
-			"error", err,
-			"ip", c.ClientIP(),
-		)
-		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to retrieve agent information")
-		return
-	}
-
+	// exitAgent was already retrieved by GetByShortID above
 	if exitAgent == nil {
 		h.logger.Warnw("forward agent not found",
 			"exit_agent_id", exitAgentID,

@@ -87,7 +87,7 @@ func (h *NodeHandler) GetNode(c *gin.Context) {
 
 // UpdateNode handles PUT /nodes/:id
 func (h *NodeHandler) UpdateNode(c *gin.Context) {
-	nodeID, err := parseNodeID(c)
+	shortID, err := parseNodeShortID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -96,13 +96,13 @@ func (h *NodeHandler) UpdateNode(c *gin.Context) {
 	var req UpdateNodeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Warnw("invalid request body for update node",
-			"node_id", nodeID,
+			"short_id", shortID,
 			"error", err)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	cmd := req.ToCommand(nodeID)
+	cmd := req.ToCommand(shortID)
 	result, err := h.updateNodeUC.Execute(c.Request.Context(), cmd)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
@@ -114,13 +114,13 @@ func (h *NodeHandler) UpdateNode(c *gin.Context) {
 
 // DeleteNode handles DELETE /nodes/:id
 func (h *NodeHandler) DeleteNode(c *gin.Context) {
-	nodeID, err := parseNodeID(c)
+	shortID, err := parseNodeShortID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	cmd := usecases.DeleteNodeCommand{NodeID: nodeID}
+	cmd := usecases.DeleteNodeCommand{ShortID: shortID}
 	_, err = h.deleteNodeUC.Execute(c.Request.Context(), cmd)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
@@ -150,13 +150,13 @@ func (h *NodeHandler) ListNodes(c *gin.Context) {
 
 // GenerateToken handles POST /nodes/:id/tokens
 func (h *NodeHandler) GenerateToken(c *gin.Context) {
-	nodeID, err := parseNodeID(c)
+	shortID, err := parseNodeShortID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	cmd := usecases.GenerateNodeTokenCommand{NodeID: nodeID}
+	cmd := usecases.GenerateNodeTokenCommand{ShortID: shortID}
 	result, err := h.generateTokenUC.Execute(c.Request.Context(), cmd)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
@@ -171,7 +171,7 @@ func (h *NodeHandler) GenerateToken(c *gin.Context) {
 //   - token (optional): API token. If not provided, uses node's current stored token
 //   - api_url (optional): Override the default API URL
 func (h *NodeHandler) GetInstallScript(c *gin.Context) {
-	nodeID, err := parseNodeID(c)
+	shortID, err := parseNodeShortID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -187,9 +187,9 @@ func (h *NodeHandler) GetInstallScript(c *gin.Context) {
 	}
 
 	query := usecases.GenerateNodeInstallScriptQuery{
-		NodeID: nodeID,
-		APIURL: apiURL,
-		Token:  token,
+		ShortID: shortID,
+		APIURL:  apiURL,
+		Token:   token,
 	}
 
 	result, err := h.generateInstallScriptUC.Execute(c.Request.Context(), query)
@@ -208,7 +208,7 @@ type UpdateNodeStatusRequest struct {
 
 // UpdateNodeStatus handles PATCH /nodes/:id/status
 func (h *NodeHandler) UpdateNodeStatus(c *gin.Context) {
-	nodeID, err := parseNodeID(c)
+	shortID, err := parseNodeShortID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -222,8 +222,8 @@ func (h *NodeHandler) UpdateNodeStatus(c *gin.Context) {
 	}
 
 	cmd := usecases.UpdateNodeCommand{
-		NodeID: nodeID,
-		Status: &req.Status,
+		ShortID: shortID,
+		Status:  &req.Status,
 	}
 	result, err := h.updateNodeUC.Execute(c.Request.Context(), cmd)
 	if err != nil {
@@ -327,9 +327,9 @@ type UpdateNodeRequest struct {
 	AllowInsecure     *bool   `json:"allow_insecure,omitempty" example:"false" comment:"Allow insecure TLS connection"`
 }
 
-func (r *UpdateNodeRequest) ToCommand(nodeID uint) usecases.UpdateNodeCommand {
+func (r *UpdateNodeRequest) ToCommand(shortID string) usecases.UpdateNodeCommand {
 	return usecases.UpdateNodeCommand{
-		NodeID:                  nodeID,
+		ShortID:                 shortID,
 		Name:                    r.Name,
 		ServerAddress:           r.ServerAddress,
 		AgentPort:               r.AgentPort,

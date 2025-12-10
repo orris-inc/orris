@@ -11,8 +11,9 @@ import (
 )
 
 type DeleteNodeCommand struct {
-	NodeID uint
-	Force  bool
+	NodeID  uint   // Internal numeric ID (deprecated, use ShortID)
+	ShortID string // External API identifier (preferred)
+	Force   bool
 }
 
 type DeleteNodeResult struct {
@@ -39,18 +40,31 @@ func NewDeleteNodeUseCase(
 }
 
 func (uc *DeleteNodeUseCase) Execute(ctx context.Context, cmd DeleteNodeCommand) (*DeleteNodeResult, error) {
-	uc.logger.Infow("executing delete node use case", "node_id", cmd.NodeID, "force", cmd.Force)
+	uc.logger.Infow("executing delete node use case", "node_id", cmd.NodeID, "short_id", cmd.ShortID, "force", cmd.Force)
 
 	if err := uc.validateCommand(cmd); err != nil {
-		uc.logger.Errorw("invalid delete node command", "error", err, "node_id", cmd.NodeID)
+		uc.logger.Errorw("invalid delete node command", "error", err, "node_id", cmd.NodeID, "short_id", cmd.ShortID)
 		return nil, err
 	}
 
-	// Check if node exists
-	existingNode, err := uc.nodeRepo.GetByID(ctx, cmd.NodeID)
-	if err != nil {
-		uc.logger.Errorw("failed to get node", "error", err, "node_id", cmd.NodeID)
-		return nil, fmt.Errorf("failed to get node: %w", err)
+	// Retrieve the node (prefer ShortID if provided)
+	var existingNode *node.Node
+	var err error
+
+	if cmd.ShortID != "" {
+		existingNode, err = uc.nodeRepo.GetByShortID(ctx, cmd.ShortID)
+		if err != nil {
+			uc.logger.Errorw("failed to get node by short ID", "short_id", cmd.ShortID, "error", err)
+			return nil, fmt.Errorf("failed to get node: %w", err)
+		}
+		// Update NodeID from the retrieved node for subsequent operations
+		cmd.NodeID = existingNode.ID()
+	} else {
+		existingNode, err = uc.nodeRepo.GetByID(ctx, cmd.NodeID)
+		if err != nil {
+			uc.logger.Errorw("failed to get node by ID", "node_id", cmd.NodeID, "error", err)
+			return nil, fmt.Errorf("failed to get node: %w", err)
+		}
 	}
 
 	// Check if node is part of any node groups (business validation)
@@ -81,8 +95,8 @@ func (uc *DeleteNodeUseCase) Execute(ctx context.Context, cmd DeleteNodeCommand)
 }
 
 func (uc *DeleteNodeUseCase) validateCommand(cmd DeleteNodeCommand) error {
-	if cmd.NodeID == 0 {
-		return errors.NewValidationError("node id is required")
+	if cmd.NodeID == 0 && cmd.ShortID == "" {
+		return errors.NewValidationError("either node ID or short ID must be provided")
 	}
 
 	return nil

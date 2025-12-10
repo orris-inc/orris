@@ -16,9 +16,10 @@ const (
 
 // GenerateNodeInstallScriptQuery represents the input for generating node install script.
 type GenerateNodeInstallScriptQuery struct {
-	NodeID uint
-	APIURL string // API server URL (e.g., https://api.example.com)
-	Token  string // Optional: API token for the node. If not provided, uses node's current token
+	NodeID  uint   // Internal numeric ID (deprecated, use ShortID)
+	ShortID string // External API identifier (preferred)
+	APIURL  string // API server URL (e.g., https://api.example.com)
+	Token   string // Optional: API token for the node. If not provided, uses node's current token
 }
 
 // GenerateNodeInstallScriptResult represents the output of generating node install script.
@@ -55,21 +56,33 @@ func NewGenerateNodeInstallScriptUseCase(
 
 // Execute generates the install command for a node.
 func (uc *GenerateNodeInstallScriptUseCase) Execute(ctx context.Context, query GenerateNodeInstallScriptQuery) (*GenerateNodeInstallScriptResult, error) {
-	uc.logger.Infow("executing generate node install script use case", "node_id", query.NodeID)
+	uc.logger.Infow("executing generate node install script use case", "node_id", query.NodeID, "short_id", query.ShortID)
 
-	if query.NodeID == 0 {
-		return nil, errors.NewValidationError("node ID is required")
-	}
-	if query.APIURL == "" {
-		return nil, errors.NewValidationError("API URL is required")
+	if err := uc.validateQuery(query); err != nil {
+		uc.logger.Errorw("invalid generate node install script query", "error", err, "node_id", query.NodeID, "short_id", query.ShortID)
+		return nil, err
 	}
 
-	// Get the node
-	n, err := uc.repo.GetByID(ctx, query.NodeID)
-	if err != nil {
-		uc.logger.Errorw("failed to get node", "node_id", query.NodeID, "error", err)
-		return nil, fmt.Errorf("failed to get node: %w", err)
+	// Get the node (prefer ShortID if provided)
+	var n *node.Node
+	var err error
+
+	if query.ShortID != "" {
+		n, err = uc.repo.GetByShortID(ctx, query.ShortID)
+		if err != nil {
+			uc.logger.Errorw("failed to get node by short ID", "short_id", query.ShortID, "error", err)
+			return nil, fmt.Errorf("failed to get node: %w", err)
+		}
+		// Update NodeID from the retrieved node for subsequent operations
+		query.NodeID = n.ID()
+	} else {
+		n, err = uc.repo.GetByID(ctx, query.NodeID)
+		if err != nil {
+			uc.logger.Errorw("failed to get node by ID", "node_id", query.NodeID, "error", err)
+			return nil, fmt.Errorf("failed to get node: %w", err)
+		}
 	}
+
 	if n == nil {
 		return nil, errors.NewNotFoundError("node", fmt.Sprintf("%d", query.NodeID))
 	}
@@ -100,4 +113,14 @@ func (uc *GenerateNodeInstallScriptUseCase) Execute(ctx context.Context, query G
 
 	uc.logger.Infow("node install command generated successfully", "node_id", query.NodeID)
 	return result, nil
+}
+
+func (uc *GenerateNodeInstallScriptUseCase) validateQuery(query GenerateNodeInstallScriptQuery) error {
+	if query.NodeID == 0 && query.ShortID == "" {
+		return errors.NewValidationError("either node ID or short ID must be provided")
+	}
+	if query.APIURL == "" {
+		return errors.NewValidationError("API URL is required")
+	}
+	return nil
 }
