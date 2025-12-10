@@ -6,6 +6,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -16,7 +17,7 @@ type RegenerateForwardAgentTokenCommand struct {
 
 // RegenerateForwardAgentTokenResult represents the output of regenerating an agent token.
 type RegenerateForwardAgentTokenResult struct {
-	ID    uint   `json:"id"`
+	ID    string `json:"id"` // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
 	Token string `json:"token"`
 }
 
@@ -68,7 +69,7 @@ func (uc *RegenerateForwardAgentTokenUseCase) Execute(ctx context.Context, cmd R
 	}
 
 	result := &RegenerateForwardAgentTokenResult{
-		ID:    agent.ID(),
+		ID:    id.FormatForwardAgentID(agent.ShortID()),
 		Token: plainToken,
 	}
 

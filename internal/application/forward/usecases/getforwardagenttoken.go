@@ -6,6 +6,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -16,7 +17,7 @@ type GetForwardAgentTokenQuery struct {
 
 // GetForwardAgentTokenResult represents the output of getting an agent token.
 type GetForwardAgentTokenResult struct {
-	ID       uint   `json:"id"`
+	ID       string `json:"id"` // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
 	Token    string `json:"token"`
 	HasToken bool   `json:"has_token"`
 }
@@ -56,7 +57,7 @@ func (uc *GetForwardAgentTokenUseCase) Execute(ctx context.Context, query GetFor
 	}
 
 	result := &GetForwardAgentTokenResult{
-		ID:       agent.ID(),
+		ID:       id.FormatForwardAgentID(agent.ShortID()),
 		Token:    agent.GetAPIToken(),
 		HasToken: agent.HasToken(),
 	}

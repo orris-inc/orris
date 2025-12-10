@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/cenkalti/backoff/v5"
 	"github.com/gorilla/websocket"
 )
 
@@ -17,6 +19,44 @@ const (
 	hubPongWait   = 60 * time.Second
 	hubPingPeriod = 30 * time.Second
 )
+
+// ReconnectConfig holds reconnection strategy parameters.
+type ReconnectConfig struct {
+	// InitialInterval is the first retry delay (default: 1s)
+	InitialInterval time.Duration
+
+	// MaxInterval is the maximum retry delay (default: 60s)
+	MaxInterval time.Duration
+
+	// MaxElapsedTime is the total time to keep retrying. 0 means never stop (default: 0)
+	MaxElapsedTime time.Duration
+
+	// Multiplier is the exponential backoff multiplier (default: 2.0)
+	Multiplier float64
+
+	// RandomizationFactor adds jitter to prevent thundering herd (default: 0.1)
+	RandomizationFactor float64
+
+	// OnConnected is called when successfully connected
+	OnConnected func()
+
+	// OnDisconnected is called when disconnected (with error)
+	OnDisconnected func(err error)
+
+	// OnReconnecting is called before each reconnection attempt
+	OnReconnecting func(attempt uint64, delay time.Duration)
+}
+
+// DefaultReconnectConfig returns the default reconnection configuration.
+func DefaultReconnectConfig() *ReconnectConfig {
+	return &ReconnectConfig{
+		InitialInterval:     1 * time.Second,
+		MaxInterval:         60 * time.Second,
+		MaxElapsedTime:      0, // Never give up
+		Multiplier:          2.0,
+		RandomizationFactor: 0.1,
+	}
+}
 
 // HubConn represents a WebSocket connection to the AgentHub.
 type HubConn struct {
@@ -326,4 +366,118 @@ func parseProbeTask(data any) *ProbeTask {
 		return nil
 	}
 	return &task
+}
+
+// RunHubLoopWithReconnect connects to the hub with automatic reconnection.
+// It uses exponential backoff strategy to retry failed connections.
+// The probeHandler is called when a probe task is received.
+// This method blocks until the context is canceled.
+func (c *Client) RunHubLoopWithReconnect(ctx context.Context, probeHandler ProbeTaskHandler, config *ReconnectConfig) error {
+	if config == nil {
+		config = DefaultReconnectConfig()
+	}
+
+	// Create exponential backoff strategy
+	expBackoff := backoff.NewExponentialBackOff()
+	expBackoff.InitialInterval = config.InitialInterval
+	expBackoff.MaxInterval = config.MaxInterval
+	expBackoff.Multiplier = config.Multiplier
+	expBackoff.RandomizationFactor = config.RandomizationFactor
+	expBackoff.Reset()
+
+	var attempt uint64
+	startTime := time.Now()
+
+	// Reconnection loop
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		attempt++
+
+		// Attempt to connect and run
+		err := c.runHubLoopOnce(ctx, probeHandler, config)
+
+		// Connection ended, call disconnect callback
+		if config.OnDisconnected != nil {
+			config.OnDisconnected(err)
+		}
+
+		// If context was canceled, exit immediately
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		// Check max elapsed time
+		if config.MaxElapsedTime > 0 && time.Since(startTime) >= config.MaxElapsedTime {
+			log.Printf("max elapsed time reached, stopping reconnection attempts")
+			return fmt.Errorf("reconnection failed after %v: %w", config.MaxElapsedTime, err)
+		}
+
+		// Calculate next backoff delay
+		delay := expBackoff.NextBackOff()
+		if delay == backoff.Stop {
+			log.Printf("max interval reached, stopping reconnection attempts")
+			return fmt.Errorf("reconnection failed: %w", err)
+		}
+
+		// Call reconnecting callback
+		if config.OnReconnecting != nil {
+			config.OnReconnecting(attempt, delay)
+		}
+
+		log.Printf("disconnected from hub (attempt %d): %v, reconnecting in %v", attempt, err, delay)
+
+		// Wait before reconnecting
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+			// Continue to next connection attempt
+		}
+	}
+}
+
+// runHubLoopOnce executes a single hub connection lifecycle.
+func (c *Client) runHubLoopOnce(ctx context.Context, probeHandler ProbeTaskHandler, config *ReconnectConfig) error {
+	conn, err := c.ConnectHub(ctx)
+	if err != nil {
+		return fmt.Errorf("connect hub: %w", err)
+	}
+	defer conn.Close()
+
+	// Call connected callback
+	if config.OnConnected != nil {
+		config.OnConnected()
+	}
+
+	log.Printf("connected to hub successfully")
+
+	// Set up message handler
+	conn.SetMessageHandler(func(msg *HubMessage) {
+		switch msg.Type {
+		case MsgTypeProbeTask:
+			if probeHandler != nil {
+				go func() {
+					task := parseProbeTask(msg.Data)
+					if task != nil {
+						result := probeHandler(task)
+						if result != nil {
+							conn.SendProbeResult(result)
+						}
+					}
+				}()
+			}
+		case MsgTypeCommand:
+			// Handle commands if needed
+		}
+	})
+
+	// Run the connection (blocks until disconnected)
+	return conn.Run(ctx)
 }
