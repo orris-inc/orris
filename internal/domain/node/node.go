@@ -14,6 +14,7 @@ import (
 // Node represents the node aggregate root
 type Node struct {
 	id                uint
+	shortID           string // external API identifier (Stripe-style)
 	name              string
 	serverAddress     vo.ServerAddress
 	agentPort         uint16  // port for agent connections (required)
@@ -49,6 +50,7 @@ func NewNode(
 	trojanConfig *vo.TrojanConfig,
 	metadata vo.NodeMetadata,
 	sortOrder int,
+	shortIDGenerator func() (string, error),
 ) (*Node, error) {
 	if name == "" {
 		return nil, fmt.Errorf("node name is required")
@@ -74,8 +76,15 @@ func NewNode(
 		return nil, fmt.Errorf("failed to generate API token: %w", err)
 	}
 
+	// Generate short ID for external API use
+	shortID, err := shortIDGenerator()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate short ID: %w", err)
+	}
+
 	now := time.Now()
 	n := &Node{
+		shortID:          shortID,
 		name:             name,
 		serverAddress:    serverAddress,
 		agentPort:        agentPort,
@@ -101,6 +110,7 @@ func NewNode(
 // ReconstructNode reconstructs a node from persistence
 func ReconstructNode(
 	id uint,
+	shortID string,
 	name string,
 	serverAddress vo.ServerAddress,
 	agentPort uint16,
@@ -124,6 +134,9 @@ func ReconstructNode(
 	if id == 0 {
 		return nil, fmt.Errorf("node ID cannot be zero")
 	}
+	if shortID == "" {
+		return nil, fmt.Errorf("node short ID is required")
+	}
 	if name == "" {
 		return nil, fmt.Errorf("node name is required")
 	}
@@ -139,6 +152,7 @@ func ReconstructNode(
 
 	return &Node{
 		id:                id,
+		shortID:           shortID,
 		name:              name,
 		serverAddress:     serverAddress,
 		agentPort:         agentPort,
@@ -166,6 +180,11 @@ func ReconstructNode(
 // ID returns the node ID
 func (n *Node) ID() uint {
 	return n.id
+}
+
+// ShortID returns the external API identifier
+func (n *Node) ShortID() string {
+	return n.shortID
 }
 
 // Name returns the node name

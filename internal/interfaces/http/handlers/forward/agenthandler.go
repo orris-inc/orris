@@ -81,13 +81,14 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 
 	// Resolve node addresses for rules with targetNodeID
 	for _, ruleDTO := range ruleDTOs {
-		if ruleDTO.TargetNodeID != nil && *ruleDTO.TargetNodeID != 0 {
+		targetNodeID := ruleDTO.InternalTargetNodeID()
+		if targetNodeID != nil && *targetNodeID != 0 {
 			// Fetch node information
-			node, err := h.nodeRepo.GetByID(ctx, *ruleDTO.TargetNodeID)
+			node, err := h.nodeRepo.GetByID(ctx, *targetNodeID)
 			if err != nil {
 				h.logger.Warnw("failed to get target node for rule",
 					"rule_id", ruleDTO.ID,
-					"node_id", *ruleDTO.TargetNodeID,
+					"node_id", *targetNodeID,
 					"error", err,
 				)
 				// Keep original values if node fetch fails
@@ -96,7 +97,7 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 			if node == nil {
 				h.logger.Warnw("target node not found for rule",
 					"rule_id", ruleDTO.ID,
-					"node_id", *ruleDTO.TargetNodeID,
+					"node_id", *targetNodeID,
 				)
 				// Keep original values if node not found
 				continue
@@ -113,14 +114,14 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 					targetAddress = *node.PublicIPv4()
 					h.logger.Debugw("using public IPv4 as fallback",
 						"rule_id", ruleDTO.ID,
-						"node_id", *ruleDTO.TargetNodeID,
+						"node_id", *targetNodeID,
 						"public_ipv4", targetAddress,
 					)
 				} else if node.PublicIPv6() != nil && *node.PublicIPv6() != "" {
 					targetAddress = *node.PublicIPv6()
 					h.logger.Debugw("using public IPv6 as fallback",
 						"rule_id", ruleDTO.ID,
-						"node_id", *ruleDTO.TargetNodeID,
+						"node_id", *targetNodeID,
 						"public_ipv6", targetAddress,
 					)
 				}
@@ -131,7 +132,7 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 
 			h.logger.Debugw("resolved target node address for rule",
 				"rule_id", ruleDTO.ID,
-				"node_id", *ruleDTO.TargetNodeID,
+				"node_id", *targetNodeID,
 				"target_address", ruleDTO.TargetAddress,
 				"target_port", ruleDTO.TargetPort,
 			)

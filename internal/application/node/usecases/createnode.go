@@ -7,6 +7,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/node"
 	vo "github.com/orris-inc/orris/internal/domain/node/value_objects"
 	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -169,6 +170,7 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 		trojanConfig,
 		metadata,
 		cmd.SortOrder,
+		id.NewNodeID,
 	)
 	if err != nil {
 		uc.logger.Errorw("failed to create node entity", "error", err)

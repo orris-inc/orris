@@ -134,6 +134,49 @@ func (r *NodeRepositoryImpl) GetByID(ctx context.Context, id uint) (*node.Node, 
 	return entity, nil
 }
 
+// GetByShortID retrieves a node by its short ID
+func (r *NodeRepositoryImpl) GetByShortID(ctx context.Context, shortID string) (*node.Node, error) {
+	var model models.NodeModel
+
+	if err := r.db.WithContext(ctx).Where("short_id = ?", shortID).First(&model).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, errors.NewNotFoundError("node not found")
+		}
+		r.logger.Errorw("failed to get node by short ID", "short_id", shortID, "error", err)
+		return nil, fmt.Errorf("failed to get node: %w", err)
+	}
+
+	// Load protocol-specific config
+	var trojanConfig *vo.TrojanConfig
+	var encryptionConfig vo.EncryptionConfig
+	var pluginConfig *vo.PluginConfig
+
+	switch model.Protocol {
+	case "shadowsocks":
+		var err error
+		encryptionConfig, pluginConfig, err = r.shadowsocksConfigRepo.GetByNodeID(ctx, model.ID)
+		if err != nil {
+			r.logger.Errorw("failed to get shadowsocks config", "node_id", model.ID, "error", err)
+			return nil, fmt.Errorf("failed to get shadowsocks config: %w", err)
+		}
+	case "trojan":
+		var err error
+		trojanConfig, err = r.trojanConfigRepo.GetByNodeID(ctx, model.ID)
+		if err != nil {
+			r.logger.Errorw("failed to get trojan config", "node_id", model.ID, "error", err)
+			return nil, fmt.Errorf("failed to get trojan config: %w", err)
+		}
+	}
+
+	entity, err := r.mapper.ToEntity(&model, encryptionConfig, pluginConfig, trojanConfig)
+	if err != nil {
+		r.logger.Errorw("failed to map node model to entity", "short_id", shortID, "error", err)
+		return nil, fmt.Errorf("failed to map node: %w", err)
+	}
+
+	return entity, nil
+}
+
 // GetByIDs retrieves nodes by their IDs
 func (r *NodeRepositoryImpl) GetByIDs(ctx context.Context, ids []uint) ([]*node.Node, error) {
 	if len(ids) == 0 {
@@ -525,6 +568,7 @@ func (r *NodeRepositoryImpl) GetLastSeenAt(ctx context.Context, nodeID uint) (*n
 	serverAddr, _ := vo.NewServerAddress("0.0.0.0")
 	nodeEntity, _ := node.ReconstructNode(
 		model.ID,
+		model.ShortID,
 		"",
 		serverAddr,
 		1,   // agentPort (placeholder, just needs to be non-zero)

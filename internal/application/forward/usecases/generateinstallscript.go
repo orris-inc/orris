@@ -15,8 +15,10 @@ const (
 )
 
 // GenerateInstallScriptQuery represents the input for generating install script.
+// Use either AgentID (internal) or ShortID (external API identifier).
 type GenerateInstallScriptQuery struct {
-	AgentID   uint
+	AgentID   uint   // Internal database ID (deprecated, use ShortID for external API)
+	ShortID   string // External API identifier (without prefix)
 	ServerURL string // WebSocket server URL (e.g., wss://example.com)
 	Token     string // Optional: API token for the agent. If not provided, uses agent's current token
 }
@@ -49,23 +51,36 @@ func NewGenerateInstallScriptUseCase(
 
 // Execute generates the install command for a forward agent.
 func (uc *GenerateInstallScriptUseCase) Execute(ctx context.Context, query GenerateInstallScriptQuery) (*GenerateInstallScriptResult, error) {
-	uc.logger.Infow("executing generate install script use case", "agent_id", query.AgentID)
+	var agent *forward.ForwardAgent
+	var err error
 
-	if query.AgentID == 0 {
-		return nil, errors.NewValidationError("agent ID is required")
-	}
 	if query.ServerURL == "" {
 		return nil, errors.NewValidationError("server URL is required")
 	}
 
-	// Get the agent
-	agent, err := uc.repo.GetByID(ctx, query.AgentID)
-	if err != nil {
-		uc.logger.Errorw("failed to get forward agent", "agent_id", query.AgentID, "error", err)
-		return nil, fmt.Errorf("failed to get forward agent: %w", err)
-	}
-	if agent == nil {
-		return nil, errors.NewNotFoundError("forward agent", fmt.Sprintf("%d", query.AgentID))
+	// Prefer ShortID over internal ID for external API
+	if query.ShortID != "" {
+		uc.logger.Infow("executing generate install script use case", "short_id", query.ShortID)
+		agent, err = uc.repo.GetByShortID(ctx, query.ShortID)
+		if err != nil {
+			uc.logger.Errorw("failed to get forward agent", "short_id", query.ShortID, "error", err)
+			return nil, fmt.Errorf("failed to get forward agent: %w", err)
+		}
+		if agent == nil {
+			return nil, errors.NewNotFoundError("forward agent", query.ShortID)
+		}
+	} else if query.AgentID != 0 {
+		uc.logger.Infow("executing generate install script use case", "agent_id", query.AgentID)
+		agent, err = uc.repo.GetByID(ctx, query.AgentID)
+		if err != nil {
+			uc.logger.Errorw("failed to get forward agent", "agent_id", query.AgentID, "error", err)
+			return nil, fmt.Errorf("failed to get forward agent: %w", err)
+		}
+		if agent == nil {
+			return nil, errors.NewNotFoundError("forward agent", fmt.Sprintf("%d", query.AgentID))
+		}
+	} else {
+		return nil, errors.NewValidationError("agent ID or short_id is required")
 	}
 
 	// Use provided token or fall back to agent's stored token
@@ -89,6 +104,6 @@ func (uc *GenerateInstallScriptUseCase) Execute(ctx context.Context, query Gener
 		Token:            token,
 	}
 
-	uc.logger.Infow("install command generated successfully", "agent_id", query.AgentID)
+	uc.logger.Infow("install command generated successfully", "agent_id", agent.ID(), "short_id", agent.ShortID())
 	return result, nil
 }

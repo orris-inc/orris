@@ -106,13 +106,8 @@ func (uc *ListForwardRulesUseCase) Execute(ctx context.Context, query ListForwar
 		}
 	}
 
-	// Collect target node IDs
-	nodeIDs := make([]uint, 0)
-	for _, rule := range rules {
-		if rule.HasTargetNode() {
-			nodeIDs = append(nodeIDs, *rule.TargetNodeID())
-		}
-	}
+	// Collect target node IDs from DTOs
+	nodeIDs := dto.CollectTargetNodeIDs(dtos)
 
 	// Fetch target nodes and populate info
 	if len(nodeIDs) > 0 && uc.nodeRepo != nil {
@@ -121,15 +116,18 @@ func (uc *ListForwardRulesUseCase) Execute(ctx context.Context, query ListForwar
 			uc.logger.Warnw("failed to fetch target nodes", "error", err)
 			// Continue without node info
 		} else {
-			// Build node map
+			// Build node map for info and short ID map
 			nodeMap := make(map[uint]*node.Node)
+			nodeShortIDMap := make(dto.NodeShortIDMap)
 			for _, n := range nodes {
 				nodeMap[n.ID()] = n
+				nodeShortIDMap[n.ID()] = n.ShortID()
 			}
-			// Populate target node info
+			// Populate target node short ID and info
 			for _, ruleDTO := range dtos {
-				if ruleDTO.TargetNodeID != nil {
-					if n, ok := nodeMap[*ruleDTO.TargetNodeID]; ok {
+				ruleDTO.PopulateTargetNodeShortID(nodeShortIDMap)
+				if targetNodeID := ruleDTO.InternalTargetNodeID(); targetNodeID != nil {
+					if n, ok := nodeMap[*targetNodeID]; ok {
 						ruleDTO.PopulateTargetNodeInfo(&dto.TargetNodeInfo{
 							ServerAddress: n.ServerAddress().Value(),
 							PublicIPv4:    n.PublicIPv4(),

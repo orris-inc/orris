@@ -8,6 +8,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/node/usecases"
 	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
@@ -68,13 +69,13 @@ func (h *NodeHandler) CreateNode(c *gin.Context) {
 
 // GetNode handles GET /nodes/:id
 func (h *NodeHandler) GetNode(c *gin.Context) {
-	nodeID, err := parseNodeID(c)
+	shortID, err := parseNodeShortID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	query := usecases.GetNodeQuery{NodeID: nodeID}
+	query := usecases.GetNodeQuery{ShortID: shortID}
 	result, err := h.getNodeUC.Execute(c.Request.Context(), query)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
@@ -233,6 +234,23 @@ func (h *NodeHandler) UpdateNodeStatus(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "Node status updated successfully", result)
 }
 
+// parseNodeShortID extracts the short ID from a prefixed node ID (e.g., "node_xK9mP2vL3nQ" -> "xK9mP2vL3nQ").
+func parseNodeShortID(c *gin.Context) (string, error) {
+	prefixedID := c.Param("id")
+	if prefixedID == "" {
+		return "", errors.NewValidationError("node ID is required")
+	}
+
+	shortID, err := id.ParseNodeID(prefixedID)
+	if err != nil {
+		return "", errors.NewValidationError("invalid node ID format, expected node_xxxxx")
+	}
+
+	return shortID, nil
+}
+
+// parseNodeID is deprecated, use parseNodeShortID instead.
+// Kept for backward compatibility with internal routes.
 func parseNodeID(c *gin.Context) (uint, error) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)

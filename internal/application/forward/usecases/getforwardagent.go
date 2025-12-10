@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/id"
@@ -19,29 +20,33 @@ type GetForwardAgentQuery struct {
 
 // GetForwardAgentResult represents the output of getting a forward agent.
 type GetForwardAgentResult struct {
-	ID            string `json:"id"` // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
-	Name          string `json:"name"`
-	PublicAddress string `json:"public_address"`
-	Status        string `json:"status"`
-	Remark        string `json:"remark"`
-	CreatedAt     string `json:"created_at"`
-	UpdatedAt     string `json:"updated_at"`
+	ID            string              `json:"id"` // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
+	Name          string              `json:"name"`
+	PublicAddress string              `json:"public_address"`
+	Status        string              `json:"status"`
+	Remark        string              `json:"remark"`
+	CreatedAt     string              `json:"created_at"`
+	UpdatedAt     string              `json:"updated_at"`
+	SystemStatus  *dto.AgentStatusDTO `json:"system_status,omitempty"`
 }
 
 // GetForwardAgentUseCase handles retrieving a single forward agent.
 type GetForwardAgentUseCase struct {
-	repo   forward.AgentRepository
-	logger logger.Interface
+	repo          forward.AgentRepository
+	statusQuerier AgentStatusQuerier
+	logger        logger.Interface
 }
 
 // NewGetForwardAgentUseCase creates a new GetForwardAgentUseCase.
 func NewGetForwardAgentUseCase(
 	repo forward.AgentRepository,
+	statusQuerier AgentStatusQuerier,
 	logger logger.Interface,
 ) *GetForwardAgentUseCase {
 	return &GetForwardAgentUseCase{
-		repo:   repo,
-		logger: logger,
+		repo:          repo,
+		statusQuerier: statusQuerier,
+		logger:        logger,
 	}
 }
 
@@ -83,6 +88,20 @@ func (uc *GetForwardAgentUseCase) Execute(ctx context.Context, query GetForwardA
 		Remark:        agent.Remark(),
 		CreatedAt:     agent.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:     agent.UpdatedAt().Format("2006-01-02T15:04:05Z07:00"),
+	}
+
+	// Query system status from cache using internal ID
+	if uc.statusQuerier != nil {
+		systemStatus, err := uc.statusQuerier.GetStatus(ctx, agent.ID())
+		if err != nil {
+			uc.logger.Warnw("failed to get agent system status, continuing without it",
+				"agent_id", agent.ID(),
+				"short_id", agent.ShortID(),
+				"error", err,
+			)
+		} else if systemStatus != nil {
+			result.SystemStatus = systemStatus
+		}
 	}
 
 	uc.logger.Infow("forward agent retrieved successfully", "short_id", agent.ShortID())

@@ -11,8 +11,10 @@ import (
 )
 
 // GetNodeQuery represents the query for getting a node
+// Either NodeID or ShortID should be provided
 type GetNodeQuery struct {
-	NodeID uint
+	NodeID  uint   // Internal numeric ID (deprecated, use ShortID)
+	ShortID string // External API identifier (preferred)
 }
 
 // GetNodeResult represents the result of getting a node
@@ -56,9 +58,9 @@ func NewGetNodeUseCase(
 	}
 }
 
-// Execute retrieves a node by ID
+// Execute retrieves a node by ID or ShortID
 func (uc *GetNodeUseCase) Execute(ctx context.Context, query GetNodeQuery) (*GetNodeResult, error) {
-	uc.logger.Infow("executing get node use case", "node_id", query.NodeID)
+	uc.logger.Infow("executing get node use case", "node_id", query.NodeID, "short_id", query.ShortID)
 
 	// Validate query
 	if err := uc.validateQuery(query); err != nil {
@@ -66,26 +68,37 @@ func (uc *GetNodeUseCase) Execute(ctx context.Context, query GetNodeQuery) (*Get
 		return nil, err
 	}
 
-	// Retrieve the node
-	nodeEntity, err := uc.nodeRepo.GetByID(ctx, query.NodeID)
-	if err != nil {
-		uc.logger.Errorw("failed to get node", "node_id", query.NodeID, "error", err)
-		return nil, fmt.Errorf("failed to get node: %w", err)
+	// Retrieve the node (prefer ShortID if provided)
+	var nodeEntity *domainNode.Node
+	var err error
+
+	if query.ShortID != "" {
+		nodeEntity, err = uc.nodeRepo.GetByShortID(ctx, query.ShortID)
+		if err != nil {
+			uc.logger.Errorw("failed to get node by short ID", "short_id", query.ShortID, "error", err)
+			return nil, fmt.Errorf("failed to get node: %w", err)
+		}
+	} else {
+		nodeEntity, err = uc.nodeRepo.GetByID(ctx, query.NodeID)
+		if err != nil {
+			uc.logger.Errorw("failed to get node by ID", "node_id", query.NodeID, "error", err)
+			return nil, fmt.Errorf("failed to get node: %w", err)
+		}
 	}
 
 	if nodeEntity == nil {
-		uc.logger.Warnw("node not found", "node_id", query.NodeID)
+		uc.logger.Warnw("node not found", "node_id", query.NodeID, "short_id", query.ShortID)
 		return nil, errors.NewNotFoundError("node not found")
 	}
 
 	// Map to DTO
 	nodeDTO := dto.ToNodeDTO(nodeEntity)
 
-	// Query system status from Redis
-	systemStatus, err := uc.statusQuerier.GetNodeSystemStatus(ctx, query.NodeID)
+	// Query system status from Redis using internal ID
+	systemStatus, err := uc.statusQuerier.GetNodeSystemStatus(ctx, nodeEntity.ID())
 	if err != nil {
 		uc.logger.Warnw("failed to get node system status, continuing without it",
-			"node_id", query.NodeID,
+			"node_id", nodeEntity.ID(),
 			"error", err,
 		)
 	} else if systemStatus != nil {
@@ -101,7 +114,7 @@ func (uc *GetNodeUseCase) Execute(ctx context.Context, query GetNodeQuery) (*Get
 		}
 	}
 
-	uc.logger.Infow("node retrieved successfully", "node_id", query.NodeID, "name", nodeEntity.Name())
+	uc.logger.Infow("node retrieved successfully", "node_id", nodeEntity.ID(), "short_id", nodeEntity.ShortID(), "name", nodeEntity.Name())
 
 	return &GetNodeResult{
 		Node: nodeDTO,
@@ -110,8 +123,8 @@ func (uc *GetNodeUseCase) Execute(ctx context.Context, query GetNodeQuery) (*Get
 
 // validateQuery validates the get node query
 func (uc *GetNodeUseCase) validateQuery(query GetNodeQuery) error {
-	if query.NodeID == 0 {
-		return errors.NewValidationError("node ID cannot be zero")
+	if query.NodeID == 0 && query.ShortID == "" {
+		return errors.NewValidationError("either node ID or short ID must be provided")
 	}
 
 	return nil

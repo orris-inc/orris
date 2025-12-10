@@ -14,18 +14,18 @@ import (
 
 // CreateForwardRuleCommand represents the input for creating a forward rule.
 type CreateForwardRuleCommand struct {
-	AgentID       uint
-	RuleType      string // direct, entry, exit
-	ExitAgentID   uint   // required for entry type
-	WsListenPort  uint16 // required for exit type
-	Name          string
-	ListenPort    uint16 // required for direct and entry types
-	TargetAddress string // required for direct and exit types (mutually exclusive with TargetNodeID)
-	TargetPort    uint16 // required for direct and exit types (mutually exclusive with TargetNodeID)
-	TargetNodeID  *uint  // optional for direct and exit types (mutually exclusive with TargetAddress/TargetPort)
-	IPVersion     string // auto, ipv4, ipv6 (default: auto)
-	Protocol      string
-	Remark        string
+	AgentShortID      string // Stripe-style short ID (without prefix, e.g., "xK9mP2vL3nQ")
+	RuleType          string // direct, entry, exit
+	ExitAgentShortID  string // required for entry type (Stripe-style short ID without prefix)
+	WsListenPort      uint16 // required for exit type
+	Name              string
+	ListenPort        uint16 // required for direct and entry types
+	TargetAddress     string // required for direct and exit types (mutually exclusive with TargetNodeShortID)
+	TargetPort        uint16 // required for direct and exit types (mutually exclusive with TargetNodeShortID)
+	TargetNodeShortID string // optional for direct and exit types (Stripe-style short ID without prefix)
+	IPVersion         string // auto, ipv4, ipv6 (default: auto)
+	Protocol          string
+	Remark            string
 }
 
 // CreateForwardRuleResult represents the output of creating a forward rule.
@@ -48,21 +48,24 @@ type CreateForwardRuleResult struct {
 
 // CreateForwardRuleUseCase handles forward rule creation.
 type CreateForwardRuleUseCase struct {
-	repo     forward.Repository
-	nodeRepo node.NodeRepository
-	logger   logger.Interface
+	repo      forward.Repository
+	agentRepo forward.AgentRepository
+	nodeRepo  node.NodeRepository
+	logger    logger.Interface
 }
 
 // NewCreateForwardRuleUseCase creates a new CreateForwardRuleUseCase.
 func NewCreateForwardRuleUseCase(
 	repo forward.Repository,
+	agentRepo forward.AgentRepository,
 	nodeRepo node.NodeRepository,
 	logger logger.Interface,
 ) *CreateForwardRuleUseCase {
 	return &CreateForwardRuleUseCase{
-		repo:     repo,
-		nodeRepo: nodeRepo,
-		logger:   logger,
+		repo:      repo,
+		agentRepo: agentRepo,
+		nodeRepo:  nodeRepo,
+		logger:    logger,
 	}
 }
 
@@ -70,7 +73,51 @@ func NewCreateForwardRuleUseCase(
 func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwardRuleCommand) (*CreateForwardRuleResult, error) {
 	uc.logger.Infow("executing create forward rule use case", "name", cmd.Name, "listen_port", cmd.ListenPort)
 
-	if err := uc.validateCommand(ctx, cmd); err != nil {
+	// Resolve AgentShortID to internal ID
+	if cmd.AgentShortID == "" {
+		return nil, errors.NewValidationError("agent_id is required")
+	}
+	agent, err := uc.agentRepo.GetByShortID(ctx, cmd.AgentShortID)
+	if err != nil {
+		uc.logger.Errorw("failed to get agent", "agent_short_id", cmd.AgentShortID, "error", err)
+		return nil, fmt.Errorf("failed to validate agent: %w", err)
+	}
+	if agent == nil {
+		return nil, errors.NewNotFoundError("forward agent", cmd.AgentShortID)
+	}
+	agentID := agent.ID()
+
+	// Resolve ExitAgentShortID to internal ID (if provided)
+	var exitAgentID uint
+	if cmd.ExitAgentShortID != "" {
+		exitAgent, err := uc.agentRepo.GetByShortID(ctx, cmd.ExitAgentShortID)
+		if err != nil {
+			uc.logger.Errorw("failed to get exit agent", "exit_agent_short_id", cmd.ExitAgentShortID, "error", err)
+			return nil, fmt.Errorf("failed to validate exit agent: %w", err)
+		}
+		if exitAgent == nil {
+			return nil, errors.NewNotFoundError("exit forward agent", cmd.ExitAgentShortID)
+		}
+		exitAgentID = exitAgent.ID()
+	}
+
+	// Resolve TargetNodeShortID to internal ID (if provided)
+	var targetNodeID *uint
+	if cmd.TargetNodeShortID != "" {
+		targetNode, err := uc.nodeRepo.GetByShortID(ctx, cmd.TargetNodeShortID)
+		if err != nil {
+			uc.logger.Errorw("failed to get target node", "target_node_short_id", cmd.TargetNodeShortID, "error", err)
+			return nil, fmt.Errorf("failed to validate target node: %w", err)
+		}
+		if targetNode == nil {
+			return nil, errors.NewNotFoundError("target node", cmd.TargetNodeShortID)
+		}
+		nodeID := targetNode.ID()
+		targetNodeID = &nodeID
+	}
+
+	// Validate command with resolved IDs
+	if err := uc.validateCommand(ctx, cmd, targetNodeID); err != nil {
 		uc.logger.Errorw("invalid create forward rule command", "error", err)
 		return nil, err
 	}
@@ -91,15 +138,15 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	ruleType := vo.ForwardRuleType(cmd.RuleType)
 	ipVersion := vo.IPVersion(cmd.IPVersion)
 	rule, err := forward.NewForwardRule(
-		cmd.AgentID,
+		agentID,
 		ruleType,
-		cmd.ExitAgentID,
+		exitAgentID,
 		cmd.WsListenPort,
 		cmd.Name,
 		cmd.ListenPort,
 		cmd.TargetAddress,
 		cmd.TargetPort,
-		cmd.TargetNodeID,
+		targetNodeID,
 		ipVersion,
 		protocol,
 		cmd.Remark,
@@ -137,10 +184,8 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	return result, nil
 }
 
-func (uc *CreateForwardRuleUseCase) validateCommand(ctx context.Context, cmd CreateForwardRuleCommand) error {
-	if cmd.AgentID == 0 {
-		return errors.NewValidationError("agent_id is required")
-	}
+func (uc *CreateForwardRuleUseCase) validateCommand(_ context.Context, cmd CreateForwardRuleCommand, targetNodeID *uint) error {
+	// AgentShortID validation is done in Execute before calling this method
 	if cmd.Name == "" {
 		return errors.NewValidationError("name is required")
 	}
@@ -169,62 +214,36 @@ func (uc *CreateForwardRuleUseCase) validateCommand(ctx context.Context, cmd Cre
 		if cmd.ListenPort == 0 {
 			return errors.NewValidationError("listen_port is required for direct forward")
 		}
-		// Either targetAddress+targetPort OR targetNodeID must be provided
+		// Either targetAddress+targetPort OR targetNodeShortID must be provided
 		hasTarget := cmd.TargetAddress != "" && cmd.TargetPort != 0
-		hasTargetNode := cmd.TargetNodeID != nil && *cmd.TargetNodeID != 0
+		hasTargetNode := targetNodeID != nil && *targetNodeID != 0
 		if !hasTarget && !hasTargetNode {
 			return errors.NewValidationError("either target_address+target_port or target_node_id is required for direct forward")
 		}
 		if hasTarget && hasTargetNode {
 			return errors.NewValidationError("target_address+target_port and target_node_id are mutually exclusive for direct forward")
 		}
-		// Validate node existence if targetNodeID is provided
-		if hasTargetNode {
-			if err := uc.validateNodeExists(ctx, *cmd.TargetNodeID); err != nil {
-				return err
-			}
-		}
 	case vo.ForwardRuleTypeEntry:
 		if cmd.ListenPort == 0 {
 			return errors.NewValidationError("listen_port is required for entry forward")
 		}
-		if cmd.ExitAgentID == 0 {
+		if cmd.ExitAgentShortID == "" {
 			return errors.NewValidationError("exit_agent_id is required for entry forward")
 		}
 	case vo.ForwardRuleTypeExit:
 		if cmd.WsListenPort == 0 {
 			return errors.NewValidationError("ws_listen_port is required for exit forward")
 		}
-		// Either targetAddress+targetPort OR targetNodeID must be provided
+		// Either targetAddress+targetPort OR targetNodeShortID must be provided
 		hasTarget := cmd.TargetAddress != "" && cmd.TargetPort != 0
-		hasTargetNode := cmd.TargetNodeID != nil && *cmd.TargetNodeID != 0
+		hasTargetNode := targetNodeID != nil && *targetNodeID != 0
 		if !hasTarget && !hasTargetNode {
 			return errors.NewValidationError("either target_address+target_port or target_node_id is required for exit forward")
 		}
 		if hasTarget && hasTargetNode {
 			return errors.NewValidationError("target_address+target_port and target_node_id are mutually exclusive for exit forward")
 		}
-		// Validate node existence if targetNodeID is provided
-		if hasTargetNode {
-			if err := uc.validateNodeExists(ctx, *cmd.TargetNodeID); err != nil {
-				return err
-			}
-		}
 	}
 
-	return nil
-}
-
-// validateNodeExists checks if a node exists with the given ID
-func (uc *CreateForwardRuleUseCase) validateNodeExists(ctx context.Context, nodeID uint) error {
-	node, err := uc.nodeRepo.GetByID(ctx, nodeID)
-	if err != nil {
-		uc.logger.Errorw("failed to get node", "node_id", nodeID, "error", err)
-		return fmt.Errorf("failed to validate node: %w", err)
-	}
-	if node == nil {
-		uc.logger.Warnw("target node not found", "node_id", nodeID)
-		return errors.NewNotFoundError("node", fmt.Sprintf("%d", nodeID))
-	}
 	return nil
 }

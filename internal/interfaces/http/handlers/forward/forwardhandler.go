@@ -10,6 +10,7 @@ import (
 	"github.com/orris-inc/orris/internal/application/forward/services"
 	"github.com/orris-inc/orris/internal/application/forward/usecases"
 	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
@@ -56,15 +57,15 @@ func NewForwardHandler(
 
 // CreateForwardRuleRequest represents a request to create a forward rule.
 type CreateForwardRuleRequest struct {
-	AgentID       uint   `json:"agent_id" binding:"required" example:"1"`
+	AgentID       string `json:"agent_id" binding:"required" example:"fa_xK9mP2vL3nQ"`
 	RuleType      string `json:"rule_type" binding:"required,oneof=direct entry exit" example:"direct"`
-	ExitAgentID   uint   `json:"exit_agent_id,omitempty" example:"2"`
+	ExitAgentID   string `json:"exit_agent_id,omitempty" example:"fa_yL8nQ3wM4oR"`
 	WsListenPort  uint16 `json:"ws_listen_port,omitempty" example:"9090"`
 	Name          string `json:"name" binding:"required" example:"MySQL-Forward"`
 	ListenPort    uint16 `json:"listen_port,omitempty" example:"13306"`
 	TargetAddress string `json:"target_address,omitempty" example:"192.168.1.100"`
 	TargetPort    uint16 `json:"target_port,omitempty" example:"3306"`
-	TargetNodeID  *uint  `json:"target_node_id,omitempty" example:"1"`
+	TargetNodeID  string `json:"target_node_id,omitempty" example:"node_xK9mP2vL3nQ"`
 	Protocol      string `json:"protocol" binding:"required,oneof=tcp udp both" example:"tcp"`
 	Remark        string `json:"remark,omitempty" example:"Forward to internal MySQL server"`
 }
@@ -75,7 +76,7 @@ type UpdateForwardRuleRequest struct {
 	ListenPort    *uint16 `json:"listen_port,omitempty" example:"13307"`
 	TargetAddress *string `json:"target_address,omitempty" example:"192.168.1.101"`
 	TargetPort    *uint16 `json:"target_port,omitempty" example:"3307"`
-	TargetNodeID  *uint   `json:"target_node_id,omitempty" example:"1"`
+	TargetNodeID  *string `json:"target_node_id,omitempty" example:"node_xK9mP2vL3nQ"`
 	Protocol      *string `json:"protocol,omitempty" binding:"omitempty,oneof=tcp udp both" example:"tcp"`
 	Remark        *string `json:"remark,omitempty" example:"Updated remark"`
 }
@@ -89,18 +90,46 @@ func (h *ForwardHandler) CreateRule(c *gin.Context) {
 		return
 	}
 
+	// Parse Stripe-style IDs to extract short IDs
+	agentShortID, err := id.ParseForwardAgentID(req.AgentID)
+	if err != nil {
+		h.logger.Warnw("invalid agent_id format", "agent_id", req.AgentID, "error", err)
+		utils.ErrorResponseWithError(c, errors.NewValidationError("invalid agent_id format, expected fa_xxxxx"))
+		return
+	}
+
+	var exitAgentShortID string
+	if req.ExitAgentID != "" {
+		exitAgentShortID, err = id.ParseForwardAgentID(req.ExitAgentID)
+		if err != nil {
+			h.logger.Warnw("invalid exit_agent_id format", "exit_agent_id", req.ExitAgentID, "error", err)
+			utils.ErrorResponseWithError(c, errors.NewValidationError("invalid exit_agent_id format, expected fa_xxxxx"))
+			return
+		}
+	}
+
+	var targetNodeShortID string
+	if req.TargetNodeID != "" {
+		targetNodeShortID, err = id.ParseNodeID(req.TargetNodeID)
+		if err != nil {
+			h.logger.Warnw("invalid target_node_id format", "target_node_id", req.TargetNodeID, "error", err)
+			utils.ErrorResponseWithError(c, errors.NewValidationError("invalid target_node_id format, expected node_xxxxx"))
+			return
+		}
+	}
+
 	cmd := usecases.CreateForwardRuleCommand{
-		AgentID:       req.AgentID,
-		RuleType:      req.RuleType,
-		ExitAgentID:   req.ExitAgentID,
-		WsListenPort:  req.WsListenPort,
-		Name:          req.Name,
-		ListenPort:    req.ListenPort,
-		TargetAddress: req.TargetAddress,
-		TargetPort:    req.TargetPort,
-		TargetNodeID:  req.TargetNodeID,
-		Protocol:      req.Protocol,
-		Remark:        req.Remark,
+		AgentShortID:      agentShortID,
+		RuleType:          req.RuleType,
+		ExitAgentShortID:  exitAgentShortID,
+		WsListenPort:      req.WsListenPort,
+		Name:              req.Name,
+		ListenPort:        req.ListenPort,
+		TargetAddress:     req.TargetAddress,
+		TargetPort:        req.TargetPort,
+		TargetNodeShortID: targetNodeShortID,
+		Protocol:          req.Protocol,
+		Remark:            req.Remark,
 	}
 
 	result, err := h.createRuleUC.Execute(c.Request.Context(), cmd)
@@ -114,13 +143,13 @@ func (h *ForwardHandler) CreateRule(c *gin.Context) {
 
 // GetRule handles GET /forward-rules/:id
 func (h *ForwardHandler) GetRule(c *gin.Context) {
-	ruleID, err := parseRuleID(c)
+	shortID, err := parseRuleShortID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	query := usecases.GetForwardRuleQuery{ID: ruleID}
+	query := usecases.GetForwardRuleQuery{ShortID: shortID}
 	result, err := h.getRuleUC.Execute(c.Request.Context(), query)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
@@ -132,7 +161,7 @@ func (h *ForwardHandler) GetRule(c *gin.Context) {
 
 // UpdateRule handles PUT /forward-rules/:id
 func (h *ForwardHandler) UpdateRule(c *gin.Context) {
-	ruleID, err := parseRuleID(c)
+	shortID, err := parseRuleShortID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -140,20 +169,39 @@ func (h *ForwardHandler) UpdateRule(c *gin.Context) {
 
 	var req UpdateForwardRuleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Warnw("invalid request body for update forward rule", "rule_id", ruleID, "error", err)
+		h.logger.Warnw("invalid request body for update forward rule", "short_id", shortID, "error", err)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
+	// Parse target_node_id if provided
+	var targetNodeShortID *string
+	if req.TargetNodeID != nil {
+		if *req.TargetNodeID == "" {
+			// Empty string means clear the target node
+			emptyStr := ""
+			targetNodeShortID = &emptyStr
+		} else {
+			// Parse Stripe-style ID
+			nodeShortID, err := id.ParseNodeID(*req.TargetNodeID)
+			if err != nil {
+				h.logger.Warnw("invalid target_node_id format", "target_node_id", *req.TargetNodeID, "error", err)
+				utils.ErrorResponseWithError(c, errors.NewValidationError("invalid target_node_id format, expected node_xxxxx"))
+				return
+			}
+			targetNodeShortID = &nodeShortID
+		}
+	}
+
 	cmd := usecases.UpdateForwardRuleCommand{
-		ID:            ruleID,
-		Name:          req.Name,
-		ListenPort:    req.ListenPort,
-		TargetAddress: req.TargetAddress,
-		TargetPort:    req.TargetPort,
-		TargetNodeID:  req.TargetNodeID,
-		Protocol:      req.Protocol,
-		Remark:        req.Remark,
+		ShortID:           shortID,
+		Name:              req.Name,
+		ListenPort:        req.ListenPort,
+		TargetAddress:     req.TargetAddress,
+		TargetPort:        req.TargetPort,
+		TargetNodeShortID: targetNodeShortID,
+		Protocol:          req.Protocol,
+		Remark:            req.Remark,
 	}
 
 	if err := h.updateRuleUC.Execute(c.Request.Context(), cmd); err != nil {
@@ -166,13 +214,13 @@ func (h *ForwardHandler) UpdateRule(c *gin.Context) {
 
 // DeleteRule handles DELETE /forward-rules/:id
 func (h *ForwardHandler) DeleteRule(c *gin.Context) {
-	ruleID, err := parseRuleID(c)
+	shortID, err := parseRuleShortID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	cmd := usecases.DeleteForwardRuleCommand{ID: ruleID}
+	cmd := usecases.DeleteForwardRuleCommand{ShortID: shortID}
 	if err := h.deleteRuleUC.Execute(c.Request.Context(), cmd); err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -214,13 +262,13 @@ func (h *ForwardHandler) ListRules(c *gin.Context) {
 
 // EnableRule handles POST /forward-rules/:id/enable
 func (h *ForwardHandler) EnableRule(c *gin.Context) {
-	ruleID, err := parseRuleID(c)
+	shortID, err := parseRuleShortID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	cmd := usecases.EnableForwardRuleCommand{ID: ruleID}
+	cmd := usecases.EnableForwardRuleCommand{ShortID: shortID}
 	if err := h.enableRuleUC.Execute(c.Request.Context(), cmd); err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -231,13 +279,13 @@ func (h *ForwardHandler) EnableRule(c *gin.Context) {
 
 // DisableRule handles POST /forward-rules/:id/disable
 func (h *ForwardHandler) DisableRule(c *gin.Context) {
-	ruleID, err := parseRuleID(c)
+	shortID, err := parseRuleShortID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	cmd := usecases.DisableForwardRuleCommand{ID: ruleID}
+	cmd := usecases.DisableForwardRuleCommand{ShortID: shortID}
 	if err := h.disableRuleUC.Execute(c.Request.Context(), cmd); err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -269,13 +317,13 @@ func (h *ForwardHandler) UpdateStatus(c *gin.Context) {
 
 // ResetTraffic handles POST /forward-rules/:id/reset-traffic
 func (h *ForwardHandler) ResetTraffic(c *gin.Context) {
-	ruleID, err := parseRuleID(c)
+	shortID, err := parseRuleShortID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	cmd := usecases.ResetForwardRuleTrafficCommand{ID: ruleID}
+	cmd := usecases.ResetForwardRuleTrafficCommand{ShortID: shortID}
 	if err := h.resetTrafficUC.Execute(c.Request.Context(), cmd); err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -291,7 +339,7 @@ type ProbeRuleRequest struct {
 
 // ProbeRule handles POST /forward-rules/:id/probe
 func (h *ForwardHandler) ProbeRule(c *gin.Context) {
-	ruleID, err := parseRuleID(c)
+	shortID, err := parseRuleShortID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -307,7 +355,7 @@ func (h *ForwardHandler) ProbeRule(c *gin.Context) {
 	// Ignore binding errors for optional body
 	_ = c.ShouldBindJSON(&req)
 
-	result, err := h.probeService.ProbeRule(c.Request.Context(), ruleID, req.IPVersion)
+	result, err := h.probeService.ProbeRuleByShortID(c.Request.Context(), shortID, req.IPVersion)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -316,14 +364,31 @@ func (h *ForwardHandler) ProbeRule(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "Probe completed", result)
 }
 
+// parseRuleShortID extracts the short ID from a prefixed rule ID (e.g., "fr_xK9mP2vL3nQ" -> "xK9mP2vL3nQ").
+func parseRuleShortID(c *gin.Context) (string, error) {
+	prefixedID := c.Param("id")
+	if prefixedID == "" {
+		return "", errors.NewValidationError("forward rule ID is required")
+	}
+
+	shortID, err := id.ParseForwardRuleID(prefixedID)
+	if err != nil {
+		return "", errors.NewValidationError("invalid forward rule ID format, expected fr_xxxxx")
+	}
+
+	return shortID, nil
+}
+
+// parseRuleID is deprecated, use parseRuleShortID instead.
+// Kept for backward compatibility with internal routes.
 func parseRuleID(c *gin.Context) (uint, error) {
 	idStr := c.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 32)
+	parsedID, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
 		return 0, errors.NewValidationError("Invalid forward rule ID")
 	}
-	if id == 0 {
+	if parsedID == 0 {
 		return 0, errors.NewValidationError("Forward rule ID must be greater than 0")
 	}
-	return uint(id), nil
+	return uint(parsedID), nil
 }

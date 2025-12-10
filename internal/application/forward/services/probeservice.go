@@ -74,8 +74,23 @@ func (s *ProbeService) HandleMessage(agentID uint, msgType string, data any) boo
 	}
 }
 
+// ProbeRuleByShortID probes a single forward rule by short ID and returns the latency results.
+// ipVersionOverride allows overriding the rule's IP version for this probe only.
+func (s *ProbeService) ProbeRuleByShortID(ctx context.Context, shortID string, ipVersionOverride string) (*dto.RuleProbeResponse, error) {
+	// Get the rule
+	rule, err := s.repo.GetByShortID(ctx, shortID)
+	if err != nil {
+		return nil, err
+	}
+	if rule == nil {
+		return nil, forward.ErrRuleNotFound
+	}
+	return s.probeRule(ctx, rule, ipVersionOverride)
+}
+
 // ProbeRule probes a single forward rule and returns the latency results.
 // ipVersionOverride allows overriding the rule's IP version for this probe only.
+// Deprecated: Use ProbeRuleByShortID instead for external API.
 func (s *ProbeService) ProbeRule(ctx context.Context, ruleID uint, ipVersionOverride string) (*dto.RuleProbeResponse, error) {
 	// Get the rule
 	rule, err := s.repo.GetByID(ctx, ruleID)
@@ -85,6 +100,11 @@ func (s *ProbeService) ProbeRule(ctx context.Context, ruleID uint, ipVersionOver
 	if rule == nil {
 		return nil, forward.ErrRuleNotFound
 	}
+	return s.probeRule(ctx, rule, ipVersionOverride)
+}
+
+// probeRule is the internal implementation for probing a rule.
+func (s *ProbeService) probeRule(ctx context.Context, rule *forward.ForwardRule, ipVersionOverride string) (*dto.RuleProbeResponse, error) {
 
 	// Determine IP version to use (override or rule's default)
 	ipVersion := rule.IPVersion()
@@ -97,7 +117,7 @@ func (s *ProbeService) ProbeRule(ctx context.Context, ruleID uint, ipVersionOver
 
 	ruleType := rule.RuleType().String()
 	response := &dto.RuleProbeResponse{
-		RuleID:   ruleID,
+		RuleID:   rule.ID(),
 		RuleType: ruleType,
 	}
 

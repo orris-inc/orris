@@ -17,7 +17,7 @@ type ForwardRuleDTO struct {
 	ListenPort    uint16 `json:"listen_port"`
 	TargetAddress string `json:"target_address,omitempty"` // for direct and exit types
 	TargetPort    uint16 `json:"target_port,omitempty"`    // for direct and exit types
-	TargetNodeID  *uint  `json:"target_node_id,omitempty"` // for dynamic node address resolution (internal ID, will be updated later)
+	TargetNodeID  string `json:"target_node_id,omitempty"` // Stripe-style prefixed Node ID (e.g., "node_xK9mP2vL3nQ")
 	IPVersion     string `json:"ip_version"`               // auto, ipv4, ipv6
 	Protocol      string `json:"protocol"`
 	Status        string `json:"status"`
@@ -36,6 +36,7 @@ type ForwardRuleDTO struct {
 	// Internal fields for mapping (not exposed in JSON)
 	internalAgentID     uint   `json:"-"`
 	internalExitAgentID uint   `json:"-"`
+	internalTargetNode  *uint  `json:"-"` // internal node ID for lookup
 	agentShortID        string `json:"-"`
 	exitAgentShortID    string `json:"-"`
 }
@@ -44,6 +45,7 @@ type ForwardRuleDTO struct {
 // Note: TargetNode* fields are NOT populated by this function.
 // Use PopulateTargetNodeInfo to fill them after getting node data.
 // Note: AgentID and ExitAgentID will be empty strings. Use PopulateAgentInfo to fill them.
+// Note: TargetNodeID requires PopulateTargetNodeShortID to be called for Stripe-style ID.
 func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 	if rule == nil {
 		return nil
@@ -59,7 +61,7 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 		ListenPort:          rule.ListenPort(),
 		TargetAddress:       rule.TargetAddress(),
 		TargetPort:          rule.TargetPort(),
-		TargetNodeID:        rule.TargetNodeID(),
+		TargetNodeID:        "", // populated later via PopulateTargetNodeShortID
 		IPVersion:           rule.IPVersion().String(),
 		Protocol:            rule.Protocol().String(),
 		Status:              rule.Status().String(),
@@ -71,6 +73,7 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 		UpdatedAt:           rule.UpdatedAt().Format("2006-01-02T15:04:05Z07:00"),
 		internalAgentID:     rule.AgentID(),
 		internalExitAgentID: rule.ExitAgentID(),
+		internalTargetNode:  rule.TargetNodeID(),
 	}
 }
 
@@ -114,6 +117,40 @@ func (d *ForwardRuleDTO) InternalAgentID() uint {
 // InternalExitAgentID returns the internal exit agent ID for repository lookups.
 func (d *ForwardRuleDTO) InternalExitAgentID() uint {
 	return d.internalExitAgentID
+}
+
+// InternalTargetNodeID returns the internal target node ID for repository lookups.
+func (d *ForwardRuleDTO) InternalTargetNodeID() *uint {
+	return d.internalTargetNode
+}
+
+// NodeShortIDMap maps internal node ID to short ID.
+type NodeShortIDMap map[uint]string
+
+// PopulateTargetNodeShortID fills in the target node ID field using the short ID map.
+func (d *ForwardRuleDTO) PopulateTargetNodeShortID(nodeMap NodeShortIDMap) {
+	if d.internalTargetNode == nil || *d.internalTargetNode == 0 {
+		return
+	}
+	if shortID, ok := nodeMap[*d.internalTargetNode]; ok {
+		d.TargetNodeID = id.FormatNodeID(shortID)
+	}
+}
+
+// CollectTargetNodeIDs collects unique target node IDs from DTOs for batch lookup.
+func CollectTargetNodeIDs(dtos []*ForwardRuleDTO) []uint {
+	idSet := make(map[uint]struct{})
+	for _, dto := range dtos {
+		if dto.internalTargetNode != nil && *dto.internalTargetNode != 0 {
+			idSet[*dto.internalTargetNode] = struct{}{}
+		}
+	}
+
+	ids := make([]uint, 0, len(idSet))
+	for nodeID := range idSet {
+		ids = append(ids, nodeID)
+	}
+	return ids
 }
 
 // ToForwardRuleDTOs converts a slice of domain forward rules to DTOs.

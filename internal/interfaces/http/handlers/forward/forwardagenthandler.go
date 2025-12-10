@@ -156,7 +156,7 @@ func (h *ForwardAgentHandler) ListAgents(c *gin.Context) {
 
 // UpdateAgent handles PUT /forward-agents/:id
 func (h *ForwardAgentHandler) UpdateAgent(c *gin.Context) {
-	agentID, err := parseAgentID(c)
+	shortID, err := parseAgentShortID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -164,13 +164,13 @@ func (h *ForwardAgentHandler) UpdateAgent(c *gin.Context) {
 
 	var req UpdateForwardAgentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Warnw("invalid request body for update forward agent", "agent_id", agentID, "error", err)
+		h.logger.Warnw("invalid request body for update forward agent", "short_id", shortID, "error", err)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
 	cmd := usecases.UpdateForwardAgentCommand{
-		ID:            agentID,
+		ShortID:       shortID,
 		Name:          req.Name,
 		PublicAddress: req.PublicAddress,
 		Remark:        req.Remark,
@@ -186,13 +186,13 @@ func (h *ForwardAgentHandler) UpdateAgent(c *gin.Context) {
 
 // DeleteAgent handles DELETE /forward-agents/:id
 func (h *ForwardAgentHandler) DeleteAgent(c *gin.Context) {
-	agentID, err := parseAgentID(c)
+	shortID, err := parseAgentShortID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	cmd := usecases.DeleteForwardAgentCommand{ID: agentID}
+	cmd := usecases.DeleteForwardAgentCommand{ShortID: shortID}
 	if err := h.deleteAgentUC.Execute(c.Request.Context(), cmd); err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -203,13 +203,13 @@ func (h *ForwardAgentHandler) DeleteAgent(c *gin.Context) {
 
 // EnableAgent handles POST /forward-agents/:id/enable
 func (h *ForwardAgentHandler) EnableAgent(c *gin.Context) {
-	agentID, err := parseAgentID(c)
+	shortID, err := parseAgentShortID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	cmd := usecases.EnableForwardAgentCommand{ID: agentID}
+	cmd := usecases.EnableForwardAgentCommand{ShortID: shortID}
 	if err := h.enableAgentUC.Execute(c.Request.Context(), cmd); err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -220,13 +220,13 @@ func (h *ForwardAgentHandler) EnableAgent(c *gin.Context) {
 
 // DisableAgent handles POST /forward-agents/:id/disable
 func (h *ForwardAgentHandler) DisableAgent(c *gin.Context) {
-	agentID, err := parseAgentID(c)
+	shortID, err := parseAgentShortID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	cmd := usecases.DisableForwardAgentCommand{ID: agentID}
+	cmd := usecases.DisableForwardAgentCommand{ShortID: shortID}
 	if err := h.disableAgentUC.Execute(c.Request.Context(), cmd); err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -253,13 +253,13 @@ func (h *ForwardAgentHandler) UpdateStatus(c *gin.Context) {
 
 // RegenerateToken handles POST /forward-agents/:id/regenerate-token
 func (h *ForwardAgentHandler) RegenerateToken(c *gin.Context) {
-	agentID, err := parseAgentID(c)
+	shortID, err := parseAgentShortID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	cmd := usecases.RegenerateForwardAgentTokenCommand{ID: agentID}
+	cmd := usecases.RegenerateForwardAgentTokenCommand{ShortID: shortID}
 	result, err := h.regenerateTokenUC.Execute(c.Request.Context(), cmd)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
@@ -271,13 +271,13 @@ func (h *ForwardAgentHandler) RegenerateToken(c *gin.Context) {
 
 // GetToken handles GET /forward-agents/:id/token
 func (h *ForwardAgentHandler) GetToken(c *gin.Context) {
-	agentID, err := parseAgentID(c)
+	shortID, err := parseAgentShortID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	query := usecases.GetForwardAgentTokenQuery{ID: agentID}
+	query := usecases.GetForwardAgentTokenQuery{ShortID: shortID}
 	result, err := h.getAgentTokenUC.Execute(c.Request.Context(), query)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
@@ -289,13 +289,13 @@ func (h *ForwardAgentHandler) GetToken(c *gin.Context) {
 
 // GetAgentStatus handles GET /forward-agents/:id/status
 func (h *ForwardAgentHandler) GetAgentStatus(c *gin.Context) {
-	agentID, err := parseAgentID(c)
+	shortID, err := parseAgentShortID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	query := usecases.GetAgentStatusQuery{AgentID: agentID}
+	query := usecases.GetAgentStatusQuery{ShortID: shortID}
 	result, err := h.getAgentStatusUC.Execute(c.Request.Context(), query)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
@@ -310,7 +310,7 @@ func (h *ForwardAgentHandler) GetAgentStatus(c *gin.Context) {
 //   - token (optional): API token. If not provided, uses agent's current stored token
 //   - server_url (optional): Override the default server URL
 func (h *ForwardAgentHandler) GetInstallScript(c *gin.Context) {
-	agentID, err := parseAgentID(c)
+	shortID, err := parseAgentShortID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -326,7 +326,7 @@ func (h *ForwardAgentHandler) GetInstallScript(c *gin.Context) {
 	}
 
 	query := usecases.GenerateInstallScriptQuery{
-		AgentID:   agentID,
+		ShortID:   shortID,
 		ServerURL: serverURL,
 		Token:     token,
 	}

@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 
@@ -67,19 +68,51 @@ func NewAgentHandler(
 	}
 }
 
+// validateNodeAccess validates that the URL node ID matches the authenticated node ID from token.
+// Returns the validated node ID or an error if validation fails.
+func (h *AgentHandler) validateNodeAccess(c *gin.Context) (uint, error) {
+	// Get authenticated node ID from context (set by middleware after token validation)
+	authenticatedNodeID, exists := c.Get("node_id")
+	if !exists {
+		return 0, fmt.Errorf("node_id not found in context")
+	}
+
+	authNodeID, ok := authenticatedNodeID.(uint)
+	if !ok {
+		return 0, fmt.Errorf("invalid node_id type in context")
+	}
+
+	// Parse requested node ID from URL path parameter
+	nodeIDStr := c.Param("id")
+	requestedNodeID, err := strconv.ParseUint(nodeIDStr, 10, 32)
+	if err != nil {
+		return 0, fmt.Errorf("invalid node_id parameter: %s", nodeIDStr)
+	}
+
+	// Validate that requested node ID matches authenticated node ID
+	if uint(requestedNodeID) != authNodeID {
+		h.logger.Warnw("node access denied: token does not match requested node",
+			"requested_node_id", requestedNodeID,
+			"authenticated_node_id", authNodeID,
+			"ip", c.ClientIP(),
+		)
+		return 0, fmt.Errorf("access denied: token does not authorize access to node %d", requestedNodeID)
+	}
+
+	return authNodeID, nil
+}
+
 func (h *AgentHandler) GetConfig(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	// Parse node ID from path parameter
-	nodeIDStr := c.Param("id")
-	nodeID, err := strconv.ParseUint(nodeIDStr, 10, 32)
+	// Validate node access: ensure URL node ID matches authenticated token
+	nodeID, err := h.validateNodeAccess(c)
 	if err != nil {
-		h.logger.Warnw("invalid node_id parameter",
-			"node_id", nodeIDStr,
+		h.logger.Warnw("node access validation failed",
 			"error", err,
 			"ip", c.ClientIP(),
 		)
-		utils.ErrorResponse(c, http.StatusBadRequest, "invalid node_id parameter")
+		utils.ErrorResponse(c, http.StatusForbidden, "access denied")
 		return
 	}
 
@@ -94,7 +127,7 @@ func (h *AgentHandler) GetConfig(c *gin.Context) {
 
 	// Execute use case
 	cmd := usecases.GetNodeConfigCommand{
-		NodeID:   uint(nodeID),
+		NodeID:   nodeID,
 		NodeType: nodeType,
 	}
 
@@ -133,16 +166,14 @@ func (h *AgentHandler) GetConfig(c *gin.Context) {
 func (h *AgentHandler) GetSubscriptions(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	// Parse node ID from path parameter
-	nodeIDStr := c.Param("id")
-	nodeID, err := strconv.ParseUint(nodeIDStr, 10, 32)
+	// Validate node access: ensure URL node ID matches authenticated token
+	nodeID, err := h.validateNodeAccess(c)
 	if err != nil {
-		h.logger.Warnw("invalid node_id parameter",
-			"node_id", nodeIDStr,
+		h.logger.Warnw("node access validation failed",
 			"error", err,
 			"ip", c.ClientIP(),
 		)
-		utils.ErrorResponse(c, http.StatusBadRequest, "invalid node_id parameter")
+		utils.ErrorResponse(c, http.StatusForbidden, "access denied")
 		return
 	}
 
@@ -153,7 +184,7 @@ func (h *AgentHandler) GetSubscriptions(c *gin.Context) {
 
 	// Execute use case
 	cmd := usecases.GetNodeSubscriptionsCommand{
-		NodeID: uint(nodeID),
+		NodeID: nodeID,
 	}
 
 	result, err := h.getNodeSubscriptionsUC.Execute(ctx, cmd)
@@ -179,16 +210,14 @@ func (h *AgentHandler) GetSubscriptions(c *gin.Context) {
 func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	// Parse node ID from path parameter
-	nodeIDStr := c.Param("id")
-	nodeID, err := strconv.ParseUint(nodeIDStr, 10, 32)
+	// Validate node access: ensure URL node ID matches authenticated token
+	nodeID, err := h.validateNodeAccess(c)
 	if err != nil {
-		h.logger.Warnw("invalid node_id parameter",
-			"node_id", nodeIDStr,
+		h.logger.Warnw("node access validation failed",
 			"error", err,
 			"ip", c.ClientIP(),
 		)
-		utils.ErrorResponse(c, http.StatusBadRequest, "invalid node_id parameter")
+		utils.ErrorResponse(c, http.StatusForbidden, "access denied")
 		return
 	}
 
@@ -212,7 +241,7 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 
 	// Execute use case
 	cmd := usecases.ReportSubscriptionTrafficCommand{
-		NodeID:        uint(nodeID),
+		NodeID:        nodeID,
 		Subscriptions: subscriptions,
 	}
 
@@ -241,16 +270,14 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 func (h *AgentHandler) UpdateStatus(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	// Parse node ID from path parameter
-	nodeIDStr := c.Param("id")
-	nodeID, err := strconv.ParseUint(nodeIDStr, 10, 32)
+	// Validate node access: ensure URL node ID matches authenticated token
+	nodeID, err := h.validateNodeAccess(c)
 	if err != nil {
-		h.logger.Warnw("invalid node_id parameter",
-			"node_id", nodeIDStr,
+		h.logger.Warnw("node access validation failed",
 			"error", err,
 			"ip", c.ClientIP(),
 		)
-		utils.ErrorResponse(c, http.StatusBadRequest, "invalid node_id parameter")
+		utils.ErrorResponse(c, http.StatusForbidden, "access denied")
 		return
 	}
 
@@ -275,7 +302,7 @@ func (h *AgentHandler) UpdateStatus(c *gin.Context) {
 
 	// Execute use case
 	cmd := usecases.ReportNodeStatusCommand{
-		NodeID: uint(nodeID),
+		NodeID: nodeID,
 		Status: status,
 	}
 
@@ -303,16 +330,14 @@ func (h *AgentHandler) UpdateStatus(c *gin.Context) {
 func (h *AgentHandler) UpdateOnlineSubscriptions(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	// Parse node ID from path parameter
-	nodeIDStr := c.Param("id")
-	nodeID, err := strconv.ParseUint(nodeIDStr, 10, 32)
+	// Validate node access: ensure URL node ID matches authenticated token
+	nodeID, err := h.validateNodeAccess(c)
 	if err != nil {
-		h.logger.Warnw("invalid node_id parameter",
-			"node_id", nodeIDStr,
+		h.logger.Warnw("node access validation failed",
 			"error", err,
 			"ip", c.ClientIP(),
 		)
-		utils.ErrorResponse(c, http.StatusBadRequest, "invalid node_id parameter")
+		utils.ErrorResponse(c, http.StatusForbidden, "access denied")
 		return
 	}
 
@@ -336,7 +361,7 @@ func (h *AgentHandler) UpdateOnlineSubscriptions(c *gin.Context) {
 
 	// Execute use case
 	cmd := usecases.ReportOnlineSubscriptionsCommand{
-		NodeID:        uint(nodeID),
+		NodeID:        nodeID,
 		Subscriptions: req.Subscriptions,
 	}
 

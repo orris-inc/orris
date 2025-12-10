@@ -19,6 +19,7 @@ const (
 const (
 	PrefixForwardAgent = "fa"
 	PrefixForwardRule  = "fr"
+	PrefixNode         = "node"
 )
 
 // Generate creates a random short ID with the specified length using Base62 encoding.
@@ -140,4 +141,19 @@ func ParseForwardAgentID(prefixedID string) (string, error) {
 // ParseForwardRuleID extracts the short ID from a Forward Rule prefixed ID.
 func ParseForwardRuleID(prefixedID string) (string, error) {
 	return ExtractShortID(prefixedID, PrefixForwardRule)
+}
+
+// NewNodeID generates a new Node ID.
+func NewNodeID() (string, error) {
+	return Generate(DefaultLength)
+}
+
+// FormatNodeID formats a short ID as a Node prefixed ID.
+func FormatNodeID(shortID string) string {
+	return FormatWithPrefix(PrefixNode, shortID)
+}
+
+// ParseNodeID extracts the short ID from a Node prefixed ID.
+func ParseNodeID(prefixedID string) (string, error) {
+	return ExtractShortID(prefixedID, PrefixNode)
 }

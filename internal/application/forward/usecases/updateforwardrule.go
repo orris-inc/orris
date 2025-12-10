@@ -13,14 +13,15 @@ import (
 
 // UpdateForwardRuleCommand represents the input for updating a forward rule.
 type UpdateForwardRuleCommand struct {
-	ID            uint
-	Name          *string
-	ListenPort    *uint16
-	TargetAddress *string
-	TargetPort    *uint16
-	TargetNodeID  *uint // nil means no update, set to pointer to 0 to clear
-	Protocol      *string
-	Remark        *string
+	ID                uint   // Internal database ID (deprecated, use ShortID for external API)
+	ShortID           string // External API identifier (without prefix)
+	Name              *string
+	ListenPort        *uint16
+	TargetAddress     *string
+	TargetPort        *uint16
+	TargetNodeShortID *string // nil means no update, empty string means clear, non-empty means set to this node
+	Protocol          *string
+	Remark            *string
 }
 
 // UpdateForwardRuleUseCase handles forward rule updates.
@@ -45,20 +46,32 @@ func NewUpdateForwardRuleUseCase(
 
 // Execute updates an existing forward rule.
 func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwardRuleCommand) error {
-	uc.logger.Infow("executing update forward rule use case", "id", cmd.ID)
+	var rule *forward.ForwardRule
+	var err error
 
-	if cmd.ID == 0 {
-		return errors.NewValidationError("rule ID is required")
-	}
-
-	// Get existing rule
-	rule, err := uc.repo.GetByID(ctx, cmd.ID)
-	if err != nil {
-		uc.logger.Errorw("failed to get forward rule", "id", cmd.ID, "error", err)
-		return fmt.Errorf("failed to get forward rule: %w", err)
-	}
-	if rule == nil {
-		return errors.NewNotFoundError("forward rule", fmt.Sprintf("%d", cmd.ID))
+	// Prefer ShortID over internal ID for external API
+	if cmd.ShortID != "" {
+		uc.logger.Infow("executing update forward rule use case", "short_id", cmd.ShortID)
+		rule, err = uc.repo.GetByShortID(ctx, cmd.ShortID)
+		if err != nil {
+			uc.logger.Errorw("failed to get forward rule", "short_id", cmd.ShortID, "error", err)
+			return fmt.Errorf("failed to get forward rule: %w", err)
+		}
+		if rule == nil {
+			return errors.NewNotFoundError("forward rule", cmd.ShortID)
+		}
+	} else if cmd.ID != 0 {
+		uc.logger.Infow("executing update forward rule use case", "id", cmd.ID)
+		rule, err = uc.repo.GetByID(ctx, cmd.ID)
+		if err != nil {
+			uc.logger.Errorw("failed to get forward rule", "id", cmd.ID, "error", err)
+			return fmt.Errorf("failed to get forward rule: %w", err)
+		}
+		if rule == nil {
+			return errors.NewNotFoundError("forward rule", fmt.Sprintf("%d", cmd.ID))
+		}
+	} else {
+		return errors.NewValidationError("rule ID or short_id is required")
 	}
 
 	// Update fields
@@ -86,22 +99,25 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 	}
 
 	// Handle target updates
-	// Priority: if TargetNodeID is provided, use it; otherwise use TargetAddress/TargetPort
-	if cmd.TargetNodeID != nil {
-		// Validate node exists if TargetNodeID is not zero
-		if *cmd.TargetNodeID != 0 {
-			node, err := uc.nodeRepo.GetByID(ctx, *cmd.TargetNodeID)
+	// Priority: if TargetNodeShortID is provided, use it; otherwise use TargetAddress/TargetPort
+	if cmd.TargetNodeShortID != nil {
+		var targetNodeID *uint
+		// If non-empty, resolve short ID to internal ID
+		if *cmd.TargetNodeShortID != "" {
+			targetNode, err := uc.nodeRepo.GetByShortID(ctx, *cmd.TargetNodeShortID)
 			if err != nil {
-				uc.logger.Errorw("failed to get target node", "node_id", *cmd.TargetNodeID, "error", err)
+				uc.logger.Errorw("failed to get target node", "node_short_id", *cmd.TargetNodeShortID, "error", err)
 				return fmt.Errorf("failed to validate target node: %w", err)
 			}
-			if node == nil {
-				uc.logger.Warnw("target node not found", "node_id", *cmd.TargetNodeID)
-				return errors.NewNotFoundError("node", fmt.Sprintf("%d", *cmd.TargetNodeID))
+			if targetNode == nil {
+				uc.logger.Warnw("target node not found", "node_short_id", *cmd.TargetNodeShortID)
+				return errors.NewNotFoundError("node", *cmd.TargetNodeShortID)
 			}
+			nodeID := targetNode.ID()
+			targetNodeID = &nodeID
 		}
-		// Update targetNodeID (will clear targetAddress and targetPort)
-		if err := rule.UpdateTargetNodeID(cmd.TargetNodeID); err != nil {
+		// Update targetNodeID (will clear targetAddress and targetPort if set, or clear nodeID if empty)
+		if err := rule.UpdateTargetNodeID(targetNodeID); err != nil {
 			return errors.NewValidationError(err.Error())
 		}
 	} else if cmd.TargetAddress != nil || cmd.TargetPort != nil {
@@ -134,10 +150,18 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 
 	// Persist changes
 	if err := uc.repo.Update(ctx, rule); err != nil {
-		uc.logger.Errorw("failed to update forward rule", "id", cmd.ID, "error", err)
+		if cmd.ShortID != "" {
+			uc.logger.Errorw("failed to update forward rule", "short_id", cmd.ShortID, "error", err)
+		} else {
+			uc.logger.Errorw("failed to update forward rule", "id", cmd.ID, "error", err)
+		}
 		return fmt.Errorf("failed to update forward rule: %w", err)
 	}
 
-	uc.logger.Infow("forward rule updated successfully", "id", cmd.ID)
+	if cmd.ShortID != "" {
+		uc.logger.Infow("forward rule updated successfully", "short_id", cmd.ShortID)
+	} else {
+		uc.logger.Infow("forward rule updated successfully", "id", cmd.ID)
+	}
 	return nil
 }

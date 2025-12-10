@@ -4,10 +4,11 @@ import (
 	"time"
 
 	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/shared/id"
 )
 
 type NodeDTO struct {
-	ID               uint                   `json:"id" example:"1" description:"Unique identifier for the node"`
+	ID               string                 `json:"id" example:"node_xK9mP2vL3nQ" description:"Unique identifier for the node (Stripe-style prefixed ID)"`
 	Name             string                 `json:"name" example:"US-Node-01" description:"Display name of the node"`
 	ServerAddress    string                 `json:"server_address" example:"proxy.example.com" description:"Server hostname or IP address"`
 	AgentPort        uint16                 `json:"agent_port" example:"8388" description:"Port for agent connections"`
@@ -106,7 +107,7 @@ func ToNodeDTO(n *node.Node) *NodeDTO {
 	}
 
 	dto := &NodeDTO{
-		ID:                n.ID(),
+		ID:                id.FormatNodeID(n.ShortID()),
 		Name:              n.Name(),
 		ServerAddress:     n.ServerAddress().Value(),
 		AgentPort:         n.AgentPort(),

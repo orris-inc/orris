@@ -117,10 +117,12 @@ func (uc *ListNodesUseCase) Execute(ctx context.Context, query ListNodesQuery) (
 	// Convert domain entities to DTOs
 	nodeDTOs := dto.ToNodeDTOList(nodes)
 
-	// Collect node IDs for batch status query
+	// Collect node IDs for batch status query and create ID mapping
 	nodeIDs := make([]uint, 0, len(nodes))
-	for _, n := range nodes {
+	idToIndexMap := make(map[uint]int, len(nodes))
+	for i, n := range nodes {
 		nodeIDs = append(nodeIDs, n.ID())
+		idToIndexMap[n.ID()] = i
 	}
 
 	// Query system status for all nodes from Redis
@@ -131,10 +133,10 @@ func (uc *ListNodesUseCase) Execute(ctx context.Context, query ListNodesQuery) (
 				"error", err,
 			)
 		} else {
-			// Attach system status to each node DTO
-			for _, nodeDTO := range nodeDTOs {
-				if status, ok := statusMap[nodeDTO.ID]; ok && status != nil {
-					nodeDTO.SystemStatus = &dto.NodeSystemStatusDTO{
+			// Attach system status to each node DTO using the mapping
+			for nodeID, status := range statusMap {
+				if idx, ok := idToIndexMap[nodeID]; ok && status != nil {
+					nodeDTOs[idx].SystemStatus = &dto.NodeSystemStatusDTO{
 						CPU:        status.CPU,
 						Memory:     status.Memory,
 						Disk:       status.Disk,

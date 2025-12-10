@@ -17,8 +17,10 @@ type AgentStatusQuerier interface {
 }
 
 // GetAgentStatusQuery represents the query for GetAgentStatus use case.
+// Use either AgentID (internal) or ShortID (external API identifier).
 type GetAgentStatusQuery struct {
-	AgentID uint
+	AgentID uint   // Internal database ID (deprecated, use ShortID for external API)
+	ShortID string // External API identifier (without prefix)
 }
 
 // GetAgentStatusUseCase handles querying agent status.
@@ -43,20 +45,36 @@ func NewGetAgentStatusUseCase(
 
 // Execute queries agent status.
 func (uc *GetAgentStatusUseCase) Execute(ctx context.Context, query GetAgentStatusQuery) (*dto.AgentStatusDTO, error) {
-	// Verify agent exists
-	agent, err := uc.agentRepo.GetByID(ctx, query.AgentID)
-	if err != nil {
-		uc.logger.Errorw("failed to get agent", "agent_id", query.AgentID, "error", err)
-		return nil, fmt.Errorf("get agent: %w", err)
-	}
-	if agent == nil {
-		return nil, fmt.Errorf("agent not found: %d", query.AgentID)
+	var agent *forward.ForwardAgent
+	var err error
+
+	// Prefer ShortID over internal ID for external API
+	if query.ShortID != "" {
+		agent, err = uc.agentRepo.GetByShortID(ctx, query.ShortID)
+		if err != nil {
+			uc.logger.Errorw("failed to get agent", "short_id", query.ShortID, "error", err)
+			return nil, fmt.Errorf("get agent: %w", err)
+		}
+		if agent == nil {
+			return nil, fmt.Errorf("agent not found: %s", query.ShortID)
+		}
+	} else if query.AgentID != 0 {
+		agent, err = uc.agentRepo.GetByID(ctx, query.AgentID)
+		if err != nil {
+			uc.logger.Errorw("failed to get agent", "agent_id", query.AgentID, "error", err)
+			return nil, fmt.Errorf("get agent: %w", err)
+		}
+		if agent == nil {
+			return nil, fmt.Errorf("agent not found: %d", query.AgentID)
+		}
+	} else {
+		return nil, fmt.Errorf("agent ID or short_id is required")
 	}
 
-	// Get status from Redis
-	status, err := uc.statusQuerier.GetStatus(ctx, query.AgentID)
+	// Get status from Redis using internal ID
+	status, err := uc.statusQuerier.GetStatus(ctx, agent.ID())
 	if err != nil {
-		uc.logger.Errorw("failed to get agent status", "agent_id", query.AgentID, "error", err)
+		uc.logger.Errorw("failed to get agent status", "agent_id", agent.ID(), "short_id", agent.ShortID(), "error", err)
 		return nil, fmt.Errorf("get status: %w", err)
 	}
 
