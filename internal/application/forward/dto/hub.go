@@ -76,6 +76,7 @@ type RuleSyncData struct {
 	TargetPort     uint16   `json:"target_port,omitempty"`
 	Protocol       string   `json:"protocol"`
 	Role           string   `json:"role,omitempty"`
+	AgentID        string   `json:"agent_id,omitempty"` // Entry agent ID (for exit agents to verify handshake)
 	NextHopAgentID string   `json:"next_hop_agent_id,omitempty"`
 	NextHopAddress string   `json:"next_hop_address,omitempty"`
 	NextHopWsPort  uint16   `json:"next_hop_ws_port,omitempty"`

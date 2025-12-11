@@ -185,6 +185,32 @@ func (s *ConfigSyncService) NotifyRuleChange(ctx context.Context, agentID uint, 
 	// Update agent version
 	s.agentVersions.Store(agentID, version)
 
+	// Debug log: print sync data details
+	if len(syncData.Added) > 0 {
+		for _, rule := range syncData.Added {
+			s.logger.Infow("config sync rule details (added)",
+				"short_id", rule.ShortID,
+				"rule_type", rule.RuleType,
+				"role", rule.Role,
+				"next_hop_agent_id", rule.NextHopAgentID,
+				"next_hop_address", rule.NextHopAddress,
+				"next_hop_ws_port", rule.NextHopWsPort,
+			)
+		}
+	}
+	if len(syncData.Updated) > 0 {
+		for _, rule := range syncData.Updated {
+			s.logger.Infow("config sync rule details (updated)",
+				"short_id", rule.ShortID,
+				"rule_type", rule.RuleType,
+				"role", rule.Role,
+				"next_hop_agent_id", rule.NextHopAgentID,
+				"next_hop_address", rule.NextHopAddress,
+				"next_hop_ws_port", rule.NextHopWsPort,
+			)
+		}
+	}
+
 	s.logger.Infow("config sync notification sent",
 		"agent_id", agentID,
 		"version", version,
@@ -416,6 +442,21 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 			syncData.Role = "exit"
 			syncData.TargetAddress = targetAddress
 			syncData.TargetPort = targetPort
+
+			// Exit agent needs entry agent ID to verify tunnel handshake
+			entryAgentID := rule.AgentID()
+			if entryAgentID != 0 {
+				entryAgent, err := s.agentRepo.GetByID(ctx, entryAgentID)
+				if err != nil {
+					s.logger.Warnw("failed to get entry agent for exit rule",
+						"rule_id", rule.ID(),
+						"entry_agent_id", entryAgentID,
+						"error", err,
+					)
+				} else if entryAgent != nil {
+					syncData.AgentID = id.FormatForwardAgentID(entryAgent.ShortID())
+				}
+			}
 		}
 
 	case "chain":

@@ -65,9 +65,9 @@ func DefaultReconnectConfig() *ReconnectConfig {
 type HubConn struct {
 	conn   *websocket.Conn
 	send   chan *HubMessage
-	done   chan struct{}       // Signal channel for graceful shutdown
-	Events chan *HubEvent      // Event channel for agent to receive events
-	mu     sync.Mutex          // Protects closed and send channel access
+	done   chan struct{}  // Signal channel for graceful shutdown
+	Events chan *HubEvent // Event channel for agent to receive events
+	mu     sync.Mutex     // Protects closed and send channel access
 	closed bool
 
 	// Message handler callback
@@ -134,6 +134,7 @@ type RuleSyncData struct {
 	TargetPort     uint16   `json:"target_port,omitempty"`
 	Protocol       string   `json:"protocol"`
 	Role           string   `json:"role,omitempty"`
+	AgentID        string   `json:"agent_id,omitempty"` // Entry agent ID (for exit agents to verify handshake)
 	NextHopAgentID string   `json:"next_hop_agent_id,omitempty"`
 	NextHopAddress string   `json:"next_hop_address,omitempty"`
 	NextHopWsPort  uint16   `json:"next_hop_ws_port,omitempty"`
