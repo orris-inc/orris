@@ -44,6 +44,10 @@ type ReconnectConfig struct {
 
 	// OnReconnecting is called before each reconnection attempt
 	OnReconnecting func(attempt uint64, delay time.Duration)
+
+	// OnConfigSync is called when a config sync message is received from the server.
+	// This is used to handle incremental or full configuration updates.
+	OnConfigSync ConfigSyncHandler
 }
 
 // DefaultReconnectConfig returns the default reconnection configuration.
@@ -437,9 +441,13 @@ type HubMessageHandler func(msg *HubMessage)
 // Returns the probe result to be sent back to the server.
 type ProbeTaskHandler func(task *ProbeTask) *ProbeTaskResult
 
+// ConfigSyncHandler is a callback function for handling config sync events.
+// The handler receives the config sync data and should return an error if processing failed.
+type ConfigSyncHandler func(data *ConfigSyncData) error
+
 // RunHubLoop connects to the hub and handles messages.
-// This is a convenience method that manages the connection lifecycle.
-// The probeHandler is called when a probe task is received.
+// This is a convenience method that manages the connection lifecycle without reconnection.
+// For production use, prefer RunHubLoopWithReconnect which handles automatic reconnection.
 func (c *Client) RunHubLoop(ctx context.Context, probeHandler ProbeTaskHandler) error {
 	conn, err := c.ConnectHub(ctx)
 	if err != nil {
@@ -586,6 +594,24 @@ func (c *Client) runHubLoopOnce(ctx context.Context, probeHandler ProbeTaskHandl
 						if result != nil {
 							conn.SendProbeResult(result)
 						}
+					}
+				}()
+			}
+		case MsgTypeConfigSync:
+			if config.OnConfigSync != nil {
+				go func() {
+					configSync := parseConfigSync(msg.Data)
+					if configSync != nil {
+						err := config.OnConfigSync(configSync)
+						// Send acknowledgment back to server
+						ack := &ConfigAckData{
+							Version: configSync.Version,
+							Success: err == nil,
+						}
+						if err != nil {
+							ack.Error = err.Error()
+						}
+						conn.SendConfigAck(ack)
 					}
 				}()
 			}
