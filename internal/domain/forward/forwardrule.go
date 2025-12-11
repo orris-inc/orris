@@ -611,6 +611,55 @@ func (r *ForwardRule) UpdateExitAgentID(exitAgentID uint) error {
 	return nil
 }
 
+// UpdateAgentID updates the entry agent ID.
+func (r *ForwardRule) UpdateAgentID(agentID uint) error {
+	if agentID == 0 {
+		return fmt.Errorf("agent ID cannot be zero")
+	}
+	if r.agentID == agentID {
+		return nil
+	}
+	// For chain type, ensure the new agent is not in the chain
+	if r.ruleType.IsChain() {
+		for _, id := range r.chainAgentIDs {
+			if id == agentID {
+				return fmt.Errorf("agent ID cannot be the same as a chain agent ID")
+			}
+		}
+	}
+	r.agentID = agentID
+	r.updatedAt = time.Now()
+	return nil
+}
+
+// UpdateChainAgentIDs updates the chain agent IDs for chain type rules.
+func (r *ForwardRule) UpdateChainAgentIDs(chainAgentIDs []uint) error {
+	if !r.ruleType.IsChain() {
+		return fmt.Errorf("chain agent IDs can only be updated for chain type rules")
+	}
+	if len(chainAgentIDs) == 0 {
+		return fmt.Errorf("chain agent IDs cannot be empty for chain forward")
+	}
+	if len(chainAgentIDs) > 10 {
+		return fmt.Errorf("chain forward supports maximum 10 intermediate agents")
+	}
+	// Check for duplicates (including entry agent)
+	seen := make(map[uint]bool)
+	seen[r.agentID] = true
+	for _, id := range chainAgentIDs {
+		if id == 0 {
+			return fmt.Errorf("chain agent ID cannot be zero")
+		}
+		if seen[id] {
+			return fmt.Errorf("chain contains duplicate agent ID: %d", id)
+		}
+		seen[id] = true
+	}
+	r.chainAgentIDs = chainAgentIDs
+	r.updatedAt = time.Now()
+	return nil
+}
+
 // UpdateWsListenPort updates the WebSocket listen port (deprecated - exit type has been removed).
 func (r *ForwardRule) UpdateWsListenPort(port uint16) error {
 	return fmt.Errorf("WebSocket listen port update is not supported (exit type has been removed)")

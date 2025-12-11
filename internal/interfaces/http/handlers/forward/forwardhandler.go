@@ -76,13 +76,16 @@ type CreateForwardRuleRequest struct {
 
 // UpdateForwardRuleRequest represents a request to update a forward rule.
 type UpdateForwardRuleRequest struct {
-	Name          *string `json:"name,omitempty" example:"MySQL-Forward-Updated"`
-	ListenPort    *uint16 `json:"listen_port,omitempty" example:"13307"`
-	TargetAddress *string `json:"target_address,omitempty" example:"192.168.1.101"`
-	TargetPort    *uint16 `json:"target_port,omitempty" example:"3307"`
-	TargetNodeID  *string `json:"target_node_id,omitempty" example:"node_xK9mP2vL3nQ"`
-	Protocol      *string `json:"protocol,omitempty" binding:"omitempty,oneof=tcp udp both" example:"tcp"`
-	Remark        *string `json:"remark,omitempty" example:"Updated remark"`
+	Name          *string  `json:"name,omitempty" example:"MySQL-Forward-Updated"`
+	AgentID       *string  `json:"agent_id,omitempty" example:"fa_xK9mP2vL3nQ"`
+	ExitAgentID   *string  `json:"exit_agent_id,omitempty" example:"fa_yL8nQ3wM4oR"`
+	ChainAgentIDs []string `json:"chain_agent_ids,omitempty" example:"[\"fa_aaa\",\"fa_bbb\"]"`
+	ListenPort    *uint16  `json:"listen_port,omitempty" example:"13307"`
+	TargetAddress *string  `json:"target_address,omitempty" example:"192.168.1.101"`
+	TargetPort    *uint16  `json:"target_port,omitempty" example:"3307"`
+	TargetNodeID  *string  `json:"target_node_id,omitempty" example:"node_xK9mP2vL3nQ"`
+	Protocol      *string  `json:"protocol,omitempty" binding:"omitempty,oneof=tcp udp both" example:"tcp"`
+	Remark        *string  `json:"remark,omitempty" example:"Updated remark"`
 }
 
 // CreateRule handles POST /forward-rules
@@ -193,6 +196,45 @@ func (h *ForwardHandler) UpdateRule(c *gin.Context) {
 		return
 	}
 
+	// Parse agent_id if provided
+	var agentShortID *string
+	if req.AgentID != nil {
+		parsedID, err := id.ParseForwardAgentID(*req.AgentID)
+		if err != nil {
+			h.logger.Warnw("invalid agent_id format", "agent_id", *req.AgentID, "error", err)
+			utils.ErrorResponseWithError(c, errors.NewValidationError("invalid agent_id format, expected fa_xxxxx"))
+			return
+		}
+		agentShortID = &parsedID
+	}
+
+	// Parse exit_agent_id if provided
+	var exitAgentShortID *string
+	if req.ExitAgentID != nil {
+		parsedID, err := id.ParseForwardAgentID(*req.ExitAgentID)
+		if err != nil {
+			h.logger.Warnw("invalid exit_agent_id format", "exit_agent_id", *req.ExitAgentID, "error", err)
+			utils.ErrorResponseWithError(c, errors.NewValidationError("invalid exit_agent_id format, expected fa_xxxxx"))
+			return
+		}
+		exitAgentShortID = &parsedID
+	}
+
+	// Parse chain_agent_ids if provided
+	var chainAgentShortIDs []string
+	if req.ChainAgentIDs != nil {
+		chainAgentShortIDs = make([]string, len(req.ChainAgentIDs))
+		for i, chainAgentID := range req.ChainAgentIDs {
+			parsedID, parseErr := id.ParseForwardAgentID(chainAgentID)
+			if parseErr != nil {
+				h.logger.Warnw("invalid chain_agent_id format", "chain_agent_id", chainAgentID, "error", parseErr)
+				utils.ErrorResponseWithError(c, errors.NewValidationError("invalid chain_agent_id format, expected fa_xxxxx"))
+				return
+			}
+			chainAgentShortIDs[i] = parsedID
+		}
+	}
+
 	// Parse target_node_id if provided
 	var targetNodeShortID *string
 	if req.TargetNodeID != nil {
@@ -213,14 +255,17 @@ func (h *ForwardHandler) UpdateRule(c *gin.Context) {
 	}
 
 	cmd := usecases.UpdateForwardRuleCommand{
-		ShortID:           shortID,
-		Name:              req.Name,
-		ListenPort:        req.ListenPort,
-		TargetAddress:     req.TargetAddress,
-		TargetPort:        req.TargetPort,
-		TargetNodeShortID: targetNodeShortID,
-		Protocol:          req.Protocol,
-		Remark:            req.Remark,
+		ShortID:            shortID,
+		Name:               req.Name,
+		AgentShortID:       agentShortID,
+		ExitAgentShortID:   exitAgentShortID,
+		ChainAgentShortIDs: chainAgentShortIDs,
+		ListenPort:         req.ListenPort,
+		TargetAddress:      req.TargetAddress,
+		TargetPort:         req.TargetPort,
+		TargetNodeShortID:  targetNodeShortID,
+		Protocol:           req.Protocol,
+		Remark:             req.Remark,
 	}
 
 	if err := h.updateRuleUC.Execute(c.Request.Context(), cmd); err != nil {

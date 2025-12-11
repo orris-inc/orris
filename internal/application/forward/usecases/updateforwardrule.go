@@ -13,19 +13,23 @@ import (
 
 // UpdateForwardRuleCommand represents the input for updating a forward rule.
 type UpdateForwardRuleCommand struct {
-	ShortID           string // External API identifier
-	Name              *string
-	ListenPort        *uint16
-	TargetAddress     *string
-	TargetPort        *uint16
-	TargetNodeShortID *string // nil means no update, empty string means clear, non-empty means set to this node
-	Protocol          *string
-	Remark            *string
+	ShortID            string // External API identifier
+	Name               *string
+	AgentShortID       *string  // entry agent ID (for all rule types)
+	ExitAgentShortID   *string  // exit agent ID (for entry type rules only)
+	ChainAgentShortIDs []string // chain agent IDs (for chain type rules only), nil means no update
+	ListenPort         *uint16
+	TargetAddress      *string
+	TargetPort         *uint16
+	TargetNodeShortID  *string // nil means no update, empty string means clear, non-empty means set to this node
+	Protocol           *string
+	Remark             *string
 }
 
 // UpdateForwardRuleUseCase handles forward rule updates.
 type UpdateForwardRuleUseCase struct {
 	repo          forward.Repository
+	agentRepo     forward.AgentRepository
 	nodeRepo      node.NodeRepository
 	configSyncSvc ConfigSyncNotifier
 	logger        logger.Interface
@@ -34,12 +38,14 @@ type UpdateForwardRuleUseCase struct {
 // NewUpdateForwardRuleUseCase creates a new UpdateForwardRuleUseCase.
 func NewUpdateForwardRuleUseCase(
 	repo forward.Repository,
+	agentRepo forward.AgentRepository,
 	nodeRepo node.NodeRepository,
 	configSyncSvc ConfigSyncNotifier,
 	logger logger.Interface,
 ) *UpdateForwardRuleUseCase {
 	return &UpdateForwardRuleUseCase{
 		repo:          repo,
+		agentRepo:     agentRepo,
 		nodeRepo:      nodeRepo,
 		configSyncSvc: configSyncSvc,
 		logger:        logger,
@@ -62,9 +68,61 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 		return errors.NewNotFoundError("forward rule", cmd.ShortID)
 	}
 
+	// Track original agent ID for config sync notification
+	originalAgentID := rule.AgentID()
+
 	// Update fields
 	if cmd.Name != nil {
 		if err := rule.UpdateName(*cmd.Name); err != nil {
+			return errors.NewValidationError(err.Error())
+		}
+	}
+
+	// Update entry agent ID
+	if cmd.AgentShortID != nil {
+		agent, err := uc.agentRepo.GetByShortID(ctx, *cmd.AgentShortID)
+		if err != nil {
+			uc.logger.Errorw("failed to get agent", "agent_short_id", *cmd.AgentShortID, "error", err)
+			return fmt.Errorf("failed to validate agent: %w", err)
+		}
+		if agent == nil {
+			return errors.NewNotFoundError("forward agent", *cmd.AgentShortID)
+		}
+		if err := rule.UpdateAgentID(agent.ID()); err != nil {
+			return errors.NewValidationError(err.Error())
+		}
+	}
+
+	// Update exit agent ID (for entry type rules)
+	if cmd.ExitAgentShortID != nil {
+		exitAgent, err := uc.agentRepo.GetByShortID(ctx, *cmd.ExitAgentShortID)
+		if err != nil {
+			uc.logger.Errorw("failed to get exit agent", "exit_agent_short_id", *cmd.ExitAgentShortID, "error", err)
+			return fmt.Errorf("failed to validate exit agent: %w", err)
+		}
+		if exitAgent == nil {
+			return errors.NewNotFoundError("exit forward agent", *cmd.ExitAgentShortID)
+		}
+		if err := rule.UpdateExitAgentID(exitAgent.ID()); err != nil {
+			return errors.NewValidationError(err.Error())
+		}
+	}
+
+	// Update chain agent IDs (for chain type rules)
+	if cmd.ChainAgentShortIDs != nil {
+		chainAgentIDs := make([]uint, len(cmd.ChainAgentShortIDs))
+		for i, shortID := range cmd.ChainAgentShortIDs {
+			chainAgent, err := uc.agentRepo.GetByShortID(ctx, shortID)
+			if err != nil {
+				uc.logger.Errorw("failed to get chain agent", "chain_agent_short_id", shortID, "error", err)
+				return fmt.Errorf("failed to validate chain agent: %w", err)
+			}
+			if chainAgent == nil {
+				return errors.NewNotFoundError("chain forward agent", shortID)
+			}
+			chainAgentIDs[i] = chainAgent.ID()
+		}
+		if err := rule.UpdateChainAgentIDs(chainAgentIDs); err != nil {
 			return errors.NewValidationError(err.Error())
 		}
 	}
@@ -146,9 +204,17 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 
 	// Notify config sync asynchronously if rule is enabled (failure only logs warning, doesn't block)
 	if rule.IsEnabled() && uc.configSyncSvc != nil {
+		newAgentID := rule.AgentID()
 		go func() {
-			if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), rule.AgentID(), cmd.ShortID, "updated"); err != nil {
-				uc.logger.Warnw("failed to notify config sync", "rule_id", cmd.ShortID, "error", err)
+			// Notify new agent
+			if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), newAgentID, cmd.ShortID, "updated"); err != nil {
+				uc.logger.Warnw("failed to notify config sync for new agent", "rule_id", cmd.ShortID, "agent_id", newAgentID, "error", err)
+			}
+			// If agent changed, also notify original agent to remove the rule
+			if originalAgentID != newAgentID {
+				if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), originalAgentID, cmd.ShortID, "deleted"); err != nil {
+					uc.logger.Warnw("failed to notify config sync for original agent", "rule_id", cmd.ShortID, "agent_id", originalAgentID, "error", err)
+				}
 			}
 		}()
 	}
