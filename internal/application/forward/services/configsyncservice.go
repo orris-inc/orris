@@ -329,19 +329,8 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 			// Use original values if node fetch fails
 		} else if targetNode != nil {
 			// Dynamically populate target address and port from node
-			// Priority: server_address > public_ipv4 > public_ipv6
-			nodeTargetAddress := targetNode.ServerAddress().Value()
-
-			// Check if server_address is invalid or placeholder
-			if nodeTargetAddress == "" || nodeTargetAddress == "0.0.0.0" || nodeTargetAddress == "::" {
-				// Fall back to public IP (prefer IPv4)
-				if targetNode.PublicIPv4() != nil && *targetNode.PublicIPv4() != "" {
-					nodeTargetAddress = *targetNode.PublicIPv4()
-				} else if targetNode.PublicIPv6() != nil && *targetNode.PublicIPv6() != "" {
-					nodeTargetAddress = *targetNode.PublicIPv6()
-				}
-			}
-
+			// Selection priority depends on rule's IP version setting
+			nodeTargetAddress := s.resolveNodeAddress(targetNode, rule.IPVersion().String())
 			targetAddress = nodeTargetAddress
 			targetPort = targetNode.AgentPort()
 		}
@@ -494,4 +483,62 @@ func (s *ConfigSyncService) GetAgentVersion(agentID uint) uint64 {
 // GetGlobalVersion returns the current global version.
 func (s *ConfigSyncService) GetGlobalVersion() uint64 {
 	return s.globalVersion.Load()
+}
+
+// resolveNodeAddress selects the appropriate node address based on IP version preference.
+// ipVersion: "auto", "ipv4", or "ipv6"
+func (s *ConfigSyncService) resolveNodeAddress(targetNode *node.Node, ipVersion string) string {
+	serverAddr := targetNode.ServerAddress().Value()
+	ipv4 := ""
+	ipv6 := ""
+
+	if targetNode.PublicIPv4() != nil {
+		ipv4 = *targetNode.PublicIPv4()
+	}
+	if targetNode.PublicIPv6() != nil {
+		ipv6 = *targetNode.PublicIPv6()
+	}
+
+	// Check if server_address is a valid usable address
+	isValidServerAddr := serverAddr != "" && serverAddr != "0.0.0.0" && serverAddr != "::"
+
+	switch ipVersion {
+	case "ipv6":
+		// Prefer IPv6: ipv6 > server_address > ipv4
+		if ipv6 != "" {
+			return ipv6
+		}
+		if isValidServerAddr {
+			return serverAddr
+		}
+		if ipv4 != "" {
+			return ipv4
+		}
+
+	case "ipv4":
+		// Prefer IPv4: ipv4 > server_address > ipv6
+		if ipv4 != "" {
+			return ipv4
+		}
+		if isValidServerAddr {
+			return serverAddr
+		}
+		if ipv6 != "" {
+			return ipv6
+		}
+
+	default: // "auto" or unknown
+		// Default priority: server_address > ipv4 > ipv6
+		if isValidServerAddr {
+			return serverAddr
+		}
+		if ipv4 != "" {
+			return ipv4
+		}
+		if ipv6 != "" {
+			return ipv6
+		}
+	}
+
+	return serverAddr
 }

@@ -84,6 +84,7 @@ type UpdateForwardRuleRequest struct {
 	TargetAddress *string  `json:"target_address,omitempty" example:"192.168.1.101"`
 	TargetPort    *uint16  `json:"target_port,omitempty" example:"3307"`
 	TargetNodeID  *string  `json:"target_node_id,omitempty" example:"node_xK9mP2vL3nQ"`
+	IPVersion     *string  `json:"ip_version,omitempty" binding:"omitempty,oneof=auto ipv4 ipv6" example:"auto"`
 	Protocol      *string  `json:"protocol,omitempty" binding:"omitempty,oneof=tcp udp both" example:"tcp"`
 	Remark        *string  `json:"remark,omitempty" example:"Updated remark"`
 }
@@ -264,6 +265,7 @@ func (h *ForwardHandler) UpdateRule(c *gin.Context) {
 		TargetAddress:      req.TargetAddress,
 		TargetPort:         req.TargetPort,
 		TargetNodeShortID:  targetNodeShortID,
+		IPVersion:          req.IPVersion,
 		Protocol:           req.Protocol,
 		Remark:             req.Remark,
 	}

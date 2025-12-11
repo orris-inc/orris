@@ -205,28 +205,8 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 			}
 
 			// Dynamically populate target address and port from node
-			// Priority: server_address > public_ipv4 > public_ipv6
-			targetAddress := node.ServerAddress().Value()
-
-			// Check if server_address is invalid or placeholder
-			if targetAddress == "" || targetAddress == "0.0.0.0" || targetAddress == "::" {
-				// Fall back to public IP (prefer IPv4)
-				if node.PublicIPv4() != nil && *node.PublicIPv4() != "" {
-					targetAddress = *node.PublicIPv4()
-					h.logger.Debugw("using public IPv4 as fallback",
-						"rule_id", ruleDTO.ID,
-						"node_id", *targetNodeID,
-						"public_ipv4", targetAddress,
-					)
-				} else if node.PublicIPv6() != nil && *node.PublicIPv6() != "" {
-					targetAddress = *node.PublicIPv6()
-					h.logger.Debugw("using public IPv6 as fallback",
-						"rule_id", ruleDTO.ID,
-						"node_id", *targetNodeID,
-						"public_ipv6", targetAddress,
-					)
-				}
-			}
+			// Selection priority depends on rule's IP version setting
+			targetAddress := h.resolveNodeAddress(node, ruleDTO.IPVersion)
 
 			ruleDTO.TargetAddress = targetAddress
 			ruleDTO.TargetPort = node.AgentPort()
@@ -637,6 +617,82 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 		"address": exitAgent.PublicAddress(),
 		"ws_port": exitStatus.WsListenPort,
 	})
+}
+
+// resolveNodeAddress selects the appropriate node address based on IP version preference.
+// ipVersion: "auto", "ipv4", or "ipv6"
+func (h *AgentHandler) resolveNodeAddress(targetNode *node.Node, ipVersion string) string {
+	serverAddr := targetNode.ServerAddress().Value()
+	ipv4 := ""
+	ipv6 := ""
+
+	if targetNode.PublicIPv4() != nil {
+		ipv4 = *targetNode.PublicIPv4()
+	}
+	if targetNode.PublicIPv6() != nil {
+		ipv6 = *targetNode.PublicIPv6()
+	}
+
+	// Check if server_address is a valid usable address
+	isValidServerAddr := serverAddr != "" && serverAddr != "0.0.0.0" && serverAddr != "::"
+
+	switch ipVersion {
+	case "ipv6":
+		// Prefer IPv6: ipv6 > server_address > ipv4
+		if ipv6 != "" {
+			h.logger.Debugw("using IPv6 address per ip_version setting",
+				"ipv6", ipv6,
+			)
+			return ipv6
+		}
+		if isValidServerAddr {
+			return serverAddr
+		}
+		if ipv4 != "" {
+			h.logger.Debugw("falling back to IPv4 (IPv6 not available)",
+				"ipv4", ipv4,
+			)
+			return ipv4
+		}
+
+	case "ipv4":
+		// Prefer IPv4: ipv4 > server_address > ipv6
+		if ipv4 != "" {
+			h.logger.Debugw("using IPv4 address per ip_version setting",
+				"ipv4", ipv4,
+			)
+			return ipv4
+		}
+		if isValidServerAddr {
+			return serverAddr
+		}
+		if ipv6 != "" {
+			h.logger.Debugw("falling back to IPv6 (IPv4 not available)",
+				"ipv6", ipv6,
+			)
+			return ipv6
+		}
+
+	default: // "auto" or unknown
+		// Default priority: server_address > ipv4 > ipv6
+		if isValidServerAddr {
+			return serverAddr
+		}
+		if ipv4 != "" {
+			h.logger.Debugw("using public IPv4 as fallback",
+				"ipv4", ipv4,
+			)
+			return ipv4
+		}
+		if ipv6 != "" {
+			h.logger.Debugw("using public IPv6 as fallback",
+				"ipv6", ipv6,
+			)
+			return ipv6
+		}
+	}
+
+	return serverAddr
 }
 
 // ReportStatusRequest represents status report request from forward client
