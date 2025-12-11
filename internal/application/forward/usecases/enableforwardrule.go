@@ -16,18 +16,21 @@ type EnableForwardRuleCommand struct {
 
 // EnableForwardRuleUseCase handles enabling a forward rule.
 type EnableForwardRuleUseCase struct {
-	repo   forward.Repository
-	logger logger.Interface
+	repo          forward.Repository
+	configSyncSvc ConfigSyncNotifier
+	logger        logger.Interface
 }
 
 // NewEnableForwardRuleUseCase creates a new EnableForwardRuleUseCase.
 func NewEnableForwardRuleUseCase(
 	repo forward.Repository,
+	configSyncSvc ConfigSyncNotifier,
 	logger logger.Interface,
 ) *EnableForwardRuleUseCase {
 	return &EnableForwardRuleUseCase{
-		repo:   repo,
-		logger: logger,
+		repo:          repo,
+		configSyncSvc: configSyncSvc,
+		logger:        logger,
 	}
 }
 
@@ -57,5 +60,15 @@ func (uc *EnableForwardRuleUseCase) Execute(ctx context.Context, cmd EnableForwa
 	}
 
 	uc.logger.Infow("forward rule enabled successfully", "short_id", cmd.ShortID)
+
+	// Notify config sync asynchronously (failure only logs warning, doesn't block)
+	if uc.configSyncSvc != nil {
+		go func() {
+			if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), rule.AgentID(), cmd.ShortID, "added"); err != nil {
+				uc.logger.Warnw("failed to notify config sync", "rule_id", cmd.ShortID, "error", err)
+			}
+		}()
+	}
+
 	return nil
 }

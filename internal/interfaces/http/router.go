@@ -61,6 +61,7 @@ type Router struct {
 	forwardAgentAPIHandler      *forwardHandlers.AgentHandler
 	agentHub                    *services.AgentHub
 	agentHubHandler             *agentHandlers.HubHandler
+	configSyncService           *forwardServices.ConfigSyncService
 	authMiddleware              *middleware.AuthMiddleware
 	subscriptionOwnerMiddleware *middleware.SubscriptionOwnerMiddleware
 	nodeTokenMiddleware         *middleware.NodeTokenMiddleware
@@ -431,15 +432,15 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	forwardAgentRepo := repository.NewForwardAgentRepository(db, log)
 	forwardRuleRepo := repository.NewForwardRuleRepository(db, log)
 
-	// Initialize forward rule components
-	createForwardRuleUC := forwardUsecases.NewCreateForwardRuleUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, log)
-	getForwardRuleUC := forwardUsecases.NewGetForwardRuleUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, log)
-	updateForwardRuleUC := forwardUsecases.NewUpdateForwardRuleUseCase(forwardRuleRepo, nodeRepoImpl, log)
-	deleteForwardRuleUC := forwardUsecases.NewDeleteForwardRuleUseCase(forwardRuleRepo, log)
-	listForwardRulesUC := forwardUsecases.NewListForwardRulesUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, log)
-	enableForwardRuleUC := forwardUsecases.NewEnableForwardRuleUseCase(forwardRuleRepo, log)
-	disableForwardRuleUC := forwardUsecases.NewDisableForwardRuleUseCase(forwardRuleRepo, log)
-	resetForwardTrafficUC := forwardUsecases.NewResetForwardRuleTrafficUseCase(forwardRuleRepo, log)
+	// Initialize forward rule components (configSyncService will be injected after creation)
+	var createForwardRuleUC *forwardUsecases.CreateForwardRuleUseCase
+	var getForwardRuleUC *forwardUsecases.GetForwardRuleUseCase
+	var updateForwardRuleUC *forwardUsecases.UpdateForwardRuleUseCase
+	var deleteForwardRuleUC *forwardUsecases.DeleteForwardRuleUseCase
+	var listForwardRulesUC *forwardUsecases.ListForwardRulesUseCase
+	var enableForwardRuleUC *forwardUsecases.EnableForwardRuleUseCase
+	var disableForwardRuleUC *forwardUsecases.DisableForwardRuleUseCase
+	var resetForwardTrafficUC *forwardUsecases.ResetForwardRuleTrafficUseCase
 
 	// forwardRuleHandler will be initialized later after probeService is available
 
@@ -504,6 +505,20 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	probeService := forwardServices.NewProbeService(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, agentHub, log)
 	agentHub.RegisterMessageHandler(probeService)
 
+	// Initialize and register config sync service for forward domain
+	configSyncService := forwardServices.NewConfigSyncService(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, forwardAgentStatusAdapter, cfg.Forward.TokenSigningSecret, agentHub, log)
+	agentHub.RegisterMessageHandler(configSyncService)
+
+	// Now initialize forward rule use cases with configSyncService
+	createForwardRuleUC = forwardUsecases.NewCreateForwardRuleUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, configSyncService, log)
+	getForwardRuleUC = forwardUsecases.NewGetForwardRuleUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, log)
+	updateForwardRuleUC = forwardUsecases.NewUpdateForwardRuleUseCase(forwardRuleRepo, nodeRepoImpl, configSyncService, log)
+	deleteForwardRuleUC = forwardUsecases.NewDeleteForwardRuleUseCase(forwardRuleRepo, configSyncService, log)
+	listForwardRulesUC = forwardUsecases.NewListForwardRulesUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, log)
+	enableForwardRuleUC = forwardUsecases.NewEnableForwardRuleUseCase(forwardRuleRepo, configSyncService, log)
+	disableForwardRuleUC = forwardUsecases.NewDisableForwardRuleUseCase(forwardRuleRepo, configSyncService, log)
+	resetForwardTrafficUC = forwardUsecases.NewResetForwardRuleTrafficUseCase(forwardRuleRepo, log)
+
 	// Initialize forward rule handler (after probeService is available)
 	forwardRuleHandler := forwardHandlers.NewForwardHandler(
 		createForwardRuleUC,
@@ -517,8 +532,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		probeService,
 	)
 
-	// Initialize agent hub handler
-	agentHubHandler := agentHandlers.NewHubHandler(agentHub, log)
+	// Initialize agent hub handler with config sync service
+	agentHubHandler := agentHandlers.NewHubHandler(agentHub, configSyncService, log)
 
 	return &Router{
 		engine:                      engine,
@@ -541,6 +556,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		forwardAgentAPIHandler:      forwardAgentAPIHandler,
 		agentHub:                    agentHub,
 		agentHubHandler:             agentHubHandler,
+		configSyncService:           configSyncService,
 		authMiddleware:              authMiddleware,
 		subscriptionOwnerMiddleware: subscriptionOwnerMiddleware,
 		nodeTokenMiddleware:         nodeTokenMiddleware,

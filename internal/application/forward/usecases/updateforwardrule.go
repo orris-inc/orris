@@ -25,21 +25,24 @@ type UpdateForwardRuleCommand struct {
 
 // UpdateForwardRuleUseCase handles forward rule updates.
 type UpdateForwardRuleUseCase struct {
-	repo     forward.Repository
-	nodeRepo node.NodeRepository
-	logger   logger.Interface
+	repo          forward.Repository
+	nodeRepo      node.NodeRepository
+	configSyncSvc ConfigSyncNotifier
+	logger        logger.Interface
 }
 
 // NewUpdateForwardRuleUseCase creates a new UpdateForwardRuleUseCase.
 func NewUpdateForwardRuleUseCase(
 	repo forward.Repository,
 	nodeRepo node.NodeRepository,
+	configSyncSvc ConfigSyncNotifier,
 	logger logger.Interface,
 ) *UpdateForwardRuleUseCase {
 	return &UpdateForwardRuleUseCase{
-		repo:     repo,
-		nodeRepo: nodeRepo,
-		logger:   logger,
+		repo:          repo,
+		nodeRepo:      nodeRepo,
+		configSyncSvc: configSyncSvc,
+		logger:        logger,
 	}
 }
 
@@ -140,5 +143,15 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 	}
 
 	uc.logger.Infow("forward rule updated successfully", "short_id", cmd.ShortID)
+
+	// Notify config sync asynchronously if rule is enabled (failure only logs warning, doesn't block)
+	if rule.IsEnabled() && uc.configSyncSvc != nil {
+		go func() {
+			if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), rule.AgentID(), cmd.ShortID, "updated"); err != nil {
+				uc.logger.Warnw("failed to notify config sync", "rule_id", cmd.ShortID, "error", err)
+			}
+		}()
+	}
+
 	return nil
 }

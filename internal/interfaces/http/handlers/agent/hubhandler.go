@@ -2,6 +2,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -29,17 +30,24 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+// ConfigSyncService defines the interface for full sync on agent connection.
+type ConfigSyncService interface {
+	FullSyncToAgent(ctx context.Context, agentID uint) error
+}
+
 // HubHandler handles WebSocket connections for forward agent hub.
 type HubHandler struct {
-	hub    *services.AgentHub
-	logger logger.Interface
+	hub               *services.AgentHub
+	configSyncService ConfigSyncService
+	logger            logger.Interface
 }
 
 // NewHubHandler creates a new HubHandler.
-func NewHubHandler(hub *services.AgentHub, log logger.Interface) *HubHandler {
+func NewHubHandler(hub *services.AgentHub, configSyncService ConfigSyncService, log logger.Interface) *HubHandler {
 	return &HubHandler{
-		hub:    hub,
-		logger: log,
+		hub:               hub,
+		configSyncService: configSyncService,
+		logger:            log,
 	}
 }
 
@@ -72,6 +80,18 @@ func (h *HubHandler) ForwardAgentWS(c *gin.Context) {
 		"agent_id", agentID,
 		"ip", c.ClientIP(),
 	)
+
+	// Perform full config sync to agent (asynchronously)
+	if h.configSyncService != nil {
+		go func() {
+			if err := h.configSyncService.FullSyncToAgent(c.Request.Context(), agentID); err != nil {
+				h.logger.Warnw("failed to perform full config sync on agent connection",
+					"agent_id", agentID,
+					"error", err,
+				)
+			}
+		}()
+	}
 
 	// Start read and write pumps
 	go h.writePump(agentID, conn, agentConn.Send)

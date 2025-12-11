@@ -14,6 +14,10 @@ const (
 	// Probe message types (Forward domain specific, routed through AgentHub).
 	MsgTypeProbeTask   = "probe_task"   // Server -> Agent
 	MsgTypeProbeResult = "probe_result" // Agent -> Server
+
+	// Config sync message types (Forward domain specific, routed through AgentHub).
+	MsgTypeConfigSync = "config_sync" // Server -> Agent
+	MsgTypeConfigAck  = "config_ack"  // Agent -> Server
 )
 
 // HubMessage is the unified WebSocket message envelope.
@@ -53,3 +57,36 @@ const (
 	EventTypeError        = "error"
 	EventTypeConfigChange = "config_change"
 )
+
+// ConfigSyncData represents incremental configuration sync data.
+type ConfigSyncData struct {
+	Version  uint64         `json:"version"`
+	FullSync bool           `json:"full_sync"`
+	Added    []RuleSyncData `json:"added,omitempty"`
+	Updated  []RuleSyncData `json:"updated,omitempty"`
+	Removed  []string       `json:"removed,omitempty"` // Rule short IDs to remove
+}
+
+// RuleSyncData represents rule sync data for config sync.
+type RuleSyncData struct {
+	ShortID        string   `json:"short_id"`
+	RuleType       string   `json:"rule_type"`
+	ListenPort     uint16   `json:"listen_port"`
+	TargetAddress  string   `json:"target_address,omitempty"`
+	TargetPort     uint16   `json:"target_port,omitempty"`
+	Protocol       string   `json:"protocol"`
+	Role           string   `json:"role,omitempty"`
+	NextHopAgentID string   `json:"next_hop_agent_id,omitempty"`
+	NextHopAddress string   `json:"next_hop_address,omitempty"`
+	NextHopWsPort  uint16   `json:"next_hop_ws_port,omitempty"`
+	ChainAgentIDs  []string `json:"chain_agent_ids,omitempty"`
+	ChainPosition  int      `json:"chain_position,omitempty"`
+	IsLastInChain  bool     `json:"is_last_in_chain,omitempty"`
+}
+
+// ConfigAckData represents agent acknowledgment of config sync.
+type ConfigAckData struct {
+	Version uint64 `json:"version"`
+	Success bool   `json:"success"`
+	Error   string `json:"error,omitempty"`
+}

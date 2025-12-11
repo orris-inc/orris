@@ -1,0 +1,497 @@
+package services
+
+import (
+	"context"
+	"encoding/json"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/orris-inc/orris/internal/application/forward/dto"
+	"github.com/orris-inc/orris/internal/application/forward/usecases"
+	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/shared/id"
+	"github.com/orris-inc/orris/internal/shared/logger"
+)
+
+// ConfigSyncService handles incremental configuration synchronization for agents.
+// It implements agent.MessageHandler interface.
+type ConfigSyncService struct {
+	repo               forward.Repository
+	agentRepo          forward.AgentRepository
+	nodeRepo           node.NodeRepository
+	statusQuerier      usecases.AgentStatusQuerier
+	tokenSigningSecret string
+
+	// Hub interface for sending messages
+	hub SyncHub
+
+	// Agent version tracking: map[agentID]version
+	agentVersions sync.Map
+
+	// Global version counter (incremented on each config change)
+	globalVersion atomic.Uint64
+
+	logger logger.Interface
+}
+
+// SyncHub defines the interface for sending messages through the hub.
+type SyncHub interface {
+	IsAgentOnline(agentID uint) bool
+	SendMessageToAgent(agentID uint, msg *dto.HubMessage) error
+}
+
+// NewConfigSyncService creates a new ConfigSyncService.
+func NewConfigSyncService(
+	repo forward.Repository,
+	agentRepo forward.AgentRepository,
+	nodeRepo node.NodeRepository,
+	statusQuerier usecases.AgentStatusQuerier,
+	tokenSigningSecret string,
+	hub SyncHub,
+	log logger.Interface,
+) *ConfigSyncService {
+	svc := &ConfigSyncService{
+		repo:               repo,
+		agentRepo:          agentRepo,
+		nodeRepo:           nodeRepo,
+		statusQuerier:      statusQuerier,
+		tokenSigningSecret: tokenSigningSecret,
+		hub:                hub,
+		logger:             log,
+	}
+	// Initialize global version to 1
+	svc.globalVersion.Store(1)
+	return svc
+}
+
+// HandleMessage processes config sync acknowledgment messages from agents.
+// Implements agent.MessageHandler interface.
+func (s *ConfigSyncService) HandleMessage(agentID uint, msgType string, data any) bool {
+	switch msgType {
+	case dto.MsgTypeConfigAck:
+		s.handleConfigAck(agentID, data)
+		return true
+	default:
+		return false
+	}
+}
+
+// NotifyRuleChange notifies an agent about a rule change (add/update/delete).
+// changeType should be "added", "updated", or "removed".
+func (s *ConfigSyncService) NotifyRuleChange(ctx context.Context, agentID uint, ruleShortID string, changeType string) error {
+	s.logger.Infow("notifying agent of rule change",
+		"agent_id", agentID,
+		"rule_short_id", ruleShortID,
+		"change_type", changeType,
+	)
+
+	// Check if agent is online
+	if !s.hub.IsAgentOnline(agentID) {
+		s.logger.Debugw("agent offline, skipping incremental sync notification",
+			"agent_id", agentID,
+			"rule_short_id", ruleShortID,
+		)
+		return nil
+	}
+
+	// Increment global version
+	version := s.globalVersion.Add(1)
+
+	// Build sync data based on change type
+	syncData := &dto.ConfigSyncData{
+		Version:  version,
+		FullSync: false,
+	}
+
+	switch changeType {
+	case "added", "updated":
+		// Fetch the rule to include in sync
+		rule, err := s.repo.GetByShortID(ctx, ruleShortID)
+		if err != nil {
+			s.logger.Errorw("failed to get rule for sync",
+				"rule_short_id", ruleShortID,
+				"error", err,
+			)
+			return err
+		}
+		if rule == nil {
+			s.logger.Warnw("rule not found for sync",
+				"rule_short_id", ruleShortID,
+			)
+			return forward.ErrRuleNotFound
+		}
+
+		// Convert to sync data
+		ruleSyncData, err := s.convertRuleToSyncData(ctx, rule, agentID)
+		if err != nil {
+			s.logger.Errorw("failed to convert rule to sync data",
+				"rule_short_id", ruleShortID,
+				"error", err,
+			)
+			return err
+		}
+
+		if changeType == "added" {
+			syncData.Added = []dto.RuleSyncData{*ruleSyncData}
+		} else {
+			syncData.Updated = []dto.RuleSyncData{*ruleSyncData}
+		}
+
+	case "removed":
+		syncData.Removed = []string{ruleShortID}
+
+	default:
+		s.logger.Warnw("unknown change type for rule sync",
+			"change_type", changeType,
+		)
+		return nil
+	}
+
+	// Send sync message
+	msg := &dto.HubMessage{
+		Type:      dto.MsgTypeConfigSync,
+		AgentID:   agentID,
+		Timestamp: time.Now().Unix(),
+		Data:      syncData,
+	}
+
+	if err := s.hub.SendMessageToAgent(agentID, msg); err != nil {
+		s.logger.Errorw("failed to send config sync message",
+			"agent_id", agentID,
+			"version", version,
+			"error", err,
+		)
+		return err
+	}
+
+	// Update agent version
+	s.agentVersions.Store(agentID, version)
+
+	s.logger.Infow("config sync notification sent",
+		"agent_id", agentID,
+		"version", version,
+		"change_type", changeType,
+		"rule_short_id", ruleShortID,
+	)
+
+	return nil
+}
+
+// FullSyncToAgent performs a full configuration sync to an agent (typically on reconnection).
+func (s *ConfigSyncService) FullSyncToAgent(ctx context.Context, agentID uint) error {
+	s.logger.Infow("performing full config sync to agent",
+		"agent_id", agentID,
+	)
+
+	// Check if agent is online
+	if !s.hub.IsAgentOnline(agentID) {
+		s.logger.Debugw("agent offline, skipping full sync",
+			"agent_id", agentID,
+		)
+		return nil
+	}
+
+	// Increment global version
+	version := s.globalVersion.Add(1)
+
+	// Retrieve all enabled rules for this agent
+	rules, err := s.getEnabledRulesForAgent(ctx, agentID)
+	if err != nil {
+		s.logger.Errorw("failed to get enabled rules for full sync",
+			"agent_id", agentID,
+			"error", err,
+		)
+		return err
+	}
+
+	s.logger.Infow("fetched enabled rules for full sync",
+		"agent_id", agentID,
+		"rule_count", len(rules),
+	)
+
+	// Convert all rules to sync data
+	ruleSyncDataList := make([]dto.RuleSyncData, 0, len(rules))
+	for _, rule := range rules {
+		ruleSyncData, err := s.convertRuleToSyncData(ctx, rule, agentID)
+		if err != nil {
+			s.logger.Warnw("failed to convert rule to sync data, skipping",
+				"rule_id", rule.ID(),
+				"error", err,
+			)
+			continue
+		}
+		ruleSyncDataList = append(ruleSyncDataList, *ruleSyncData)
+	}
+
+	// Build full sync data
+	syncData := &dto.ConfigSyncData{
+		Version:  version,
+		FullSync: true,
+		Added:    ruleSyncDataList,
+	}
+
+	// Send sync message
+	msg := &dto.HubMessage{
+		Type:      dto.MsgTypeConfigSync,
+		AgentID:   agentID,
+		Timestamp: time.Now().Unix(),
+		Data:      syncData,
+	}
+
+	if err := s.hub.SendMessageToAgent(agentID, msg); err != nil {
+		s.logger.Errorw("failed to send full config sync message",
+			"agent_id", agentID,
+			"version", version,
+			"error", err,
+		)
+		return err
+	}
+
+	// Update agent version
+	s.agentVersions.Store(agentID, version)
+
+	s.logger.Infow("full config sync completed",
+		"agent_id", agentID,
+		"version", version,
+		"rule_count", len(ruleSyncDataList),
+	)
+
+	return nil
+}
+
+// getEnabledRulesForAgent retrieves all enabled rules for a specific agent.
+// This mirrors the logic in AgentHandler.GetEnabledRules.
+func (s *ConfigSyncService) getEnabledRulesForAgent(ctx context.Context, agentID uint) ([]*forward.ForwardRule, error) {
+	// Retrieve enabled forward rules for this agent (as entry agent)
+	rules, err := s.repo.ListEnabledByAgentID(ctx, agentID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Also retrieve entry rules where this agent is the exit agent
+	exitRules, err := s.repo.ListEnabledByExitAgentID(ctx, agentID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Also retrieve chain rules where this agent participates
+	chainRules, err := s.repo.ListEnabledByChainAgentID(ctx, agentID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Merge rules (avoid duplicates by using a map)
+	ruleMap := make(map[uint]*forward.ForwardRule)
+	for _, rule := range rules {
+		ruleMap[rule.ID()] = rule
+	}
+	for _, rule := range exitRules {
+		ruleMap[rule.ID()] = rule
+	}
+	for _, rule := range chainRules {
+		ruleMap[rule.ID()] = rule
+	}
+
+	// Convert map back to slice
+	allRules := make([]*forward.ForwardRule, 0, len(ruleMap))
+	for _, rule := range ruleMap {
+		allRules = append(allRules, rule)
+	}
+
+	return allRules, nil
+}
+
+// convertRuleToSyncData converts a ForwardRule to RuleSyncData.
+// This mirrors the logic in AgentHandler.GetEnabledRules for building rule DTOs.
+func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *forward.ForwardRule, agentID uint) (*dto.RuleSyncData, error) {
+	syncData := &dto.RuleSyncData{
+		ShortID:    rule.ShortID(),
+		RuleType:   rule.RuleType().String(),
+		ListenPort: rule.ListenPort(),
+		Protocol:   rule.Protocol().String(),
+	}
+
+	// Resolve target address and port
+	targetAddress := rule.TargetAddress()
+	targetPort := rule.TargetPort()
+
+	// If rule has target node, get address from node
+	if rule.HasTargetNode() {
+		targetNode, err := s.nodeRepo.GetByID(ctx, *rule.TargetNodeID())
+		if err != nil {
+			s.logger.Warnw("failed to get target node for rule",
+				"rule_id", rule.ID(),
+				"node_id", *rule.TargetNodeID(),
+				"error", err,
+			)
+			// Use original values if node fetch fails
+		} else if targetNode != nil {
+			// Dynamically populate target address and port from node
+			// Priority: server_address > public_ipv4 > public_ipv6
+			nodeTargetAddress := targetNode.ServerAddress().Value()
+
+			// Check if server_address is invalid or placeholder
+			if nodeTargetAddress == "" || nodeTargetAddress == "0.0.0.0" || nodeTargetAddress == "::" {
+				// Fall back to public IP (prefer IPv4)
+				if targetNode.PublicIPv4() != nil && *targetNode.PublicIPv4() != "" {
+					nodeTargetAddress = *targetNode.PublicIPv4()
+				} else if targetNode.PublicIPv6() != nil && *targetNode.PublicIPv6() != "" {
+					nodeTargetAddress = *targetNode.PublicIPv6()
+				}
+			}
+
+			targetAddress = nodeTargetAddress
+			targetPort = targetNode.AgentPort()
+		}
+	}
+
+	// Determine role based on rule type and requesting agent
+	switch rule.RuleType().String() {
+	case "direct":
+		syncData.Role = "entry"
+		syncData.TargetAddress = targetAddress
+		syncData.TargetPort = targetPort
+
+	case "entry":
+		if rule.AgentID() == agentID {
+			// This agent is the entry point
+			syncData.Role = "entry"
+			// Entry agent doesn't need target info (exit agent will handle it)
+		} else if rule.ExitAgentID() == agentID {
+			// This agent is the exit point
+			syncData.Role = "exit"
+			syncData.TargetAddress = targetAddress
+			syncData.TargetPort = targetPort
+		}
+
+	case "chain":
+		// Calculate chain position and last-in-chain flag for this agent
+		chainPosition := rule.GetChainPosition(agentID)
+		isLast := rule.IsLastInChain(agentID)
+
+		syncData.ChainPosition = chainPosition
+		syncData.IsLastInChain = isLast
+
+		// Populate ChainAgentIDs (Stripe-style IDs)
+		chainAgentIDs := rule.ChainAgentIDs()
+		if len(chainAgentIDs) > 0 {
+			agentMap, err := s.agentRepo.GetShortIDsByIDs(ctx, chainAgentIDs)
+			if err != nil {
+				s.logger.Warnw("failed to get chain agent short IDs",
+					"rule_id", rule.ID(),
+					"error", err,
+				)
+			} else {
+				syncData.ChainAgentIDs = make([]string, len(chainAgentIDs))
+				for i, chainAgentID := range chainAgentIDs {
+					if shortID, ok := agentMap[chainAgentID]; ok {
+						syncData.ChainAgentIDs[i] = id.FormatForwardAgentID(shortID)
+					}
+				}
+			}
+		}
+
+		// Determine role
+		if chainPosition == 0 {
+			syncData.Role = "entry"
+		} else if isLast {
+			syncData.Role = "exit"
+		} else {
+			syncData.Role = "relay"
+		}
+
+		// For non-exit agents in chain, populate next hop information
+		if !isLast {
+			nextHopAgentID := rule.GetNextHopAgentID(agentID)
+			if nextHopAgentID != 0 {
+				// Get next hop agent details
+				nextAgent, err := s.agentRepo.GetByID(ctx, nextHopAgentID)
+				if err != nil {
+					s.logger.Warnw("failed to get next hop agent for chain rule",
+						"rule_id", rule.ID(),
+						"next_hop_agent_id", nextHopAgentID,
+						"error", err,
+					)
+				} else if nextAgent != nil {
+					syncData.NextHopAgentID = id.FormatForwardAgentID(nextAgent.ShortID())
+					syncData.NextHopAddress = nextAgent.PublicAddress()
+
+					// Get ws_listen_port from cached agent status
+					nextStatus, err := s.statusQuerier.GetStatus(ctx, nextHopAgentID)
+					if err != nil {
+						s.logger.Warnw("failed to get next hop agent status",
+							"rule_id", rule.ID(),
+							"next_hop_agent_id", nextHopAgentID,
+							"error", err,
+						)
+					} else if nextStatus != nil && nextStatus.WsListenPort > 0 {
+						syncData.NextHopWsPort = nextStatus.WsListenPort
+					} else {
+						s.logger.Warnw("next hop agent has no ws_listen_port configured or is offline",
+							"rule_id", rule.ID(),
+							"next_hop_agent_id", nextHopAgentID,
+						)
+					}
+				}
+			}
+		} else {
+			// For exit agents, include target info
+			syncData.TargetAddress = targetAddress
+			syncData.TargetPort = targetPort
+		}
+	}
+
+	return syncData, nil
+}
+
+// handleConfigAck handles config acknowledgment from agent.
+func (s *ConfigSyncService) handleConfigAck(agentID uint, data any) {
+	dataBytes, err := json.Marshal(data)
+	if err != nil {
+		s.logger.Warnw("failed to marshal config ack data",
+			"agent_id", agentID,
+			"error", err,
+		)
+		return
+	}
+
+	var ack dto.ConfigAckData
+	if err := json.Unmarshal(dataBytes, &ack); err != nil {
+		s.logger.Warnw("failed to parse config ack",
+			"error", err,
+			"agent_id", agentID,
+		)
+		return
+	}
+
+	if ack.Success {
+		s.logger.Infow("agent acknowledged config sync",
+			"agent_id", agentID,
+			"version", ack.Version,
+		)
+	} else {
+		s.logger.Warnw("agent reported config sync failure",
+			"agent_id", agentID,
+			"version", ack.Version,
+			"error", ack.Error,
+		)
+	}
+
+	// Update agent's acknowledged version
+	s.agentVersions.Store(agentID, ack.Version)
+}
+
+// GetAgentVersion returns the current version for an agent.
+func (s *ConfigSyncService) GetAgentVersion(agentID uint) uint64 {
+	if version, ok := s.agentVersions.Load(agentID); ok {
+		return version.(uint64)
+	}
+	return 0
+}
+
+// GetGlobalVersion returns the current global version.
+func (s *ConfigSyncService) GetGlobalVersion() uint64 {
+	return s.globalVersion.Load()
+}

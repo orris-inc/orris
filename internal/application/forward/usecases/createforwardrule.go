@@ -47,10 +47,11 @@ type CreateForwardRuleResult struct {
 
 // CreateForwardRuleUseCase handles forward rule creation.
 type CreateForwardRuleUseCase struct {
-	repo      forward.Repository
-	agentRepo forward.AgentRepository
-	nodeRepo  node.NodeRepository
-	logger    logger.Interface
+	repo          forward.Repository
+	agentRepo     forward.AgentRepository
+	nodeRepo      node.NodeRepository
+	configSyncSvc ConfigSyncNotifier
+	logger        logger.Interface
 }
 
 // NewCreateForwardRuleUseCase creates a new CreateForwardRuleUseCase.
@@ -58,13 +59,15 @@ func NewCreateForwardRuleUseCase(
 	repo forward.Repository,
 	agentRepo forward.AgentRepository,
 	nodeRepo node.NodeRepository,
+	configSyncSvc ConfigSyncNotifier,
 	logger logger.Interface,
 ) *CreateForwardRuleUseCase {
 	return &CreateForwardRuleUseCase{
-		repo:      repo,
-		agentRepo: agentRepo,
-		nodeRepo:  nodeRepo,
-		logger:    logger,
+		repo:          repo,
+		agentRepo:     agentRepo,
+		nodeRepo:      nodeRepo,
+		configSyncSvc: configSyncSvc,
+		logger:        logger,
 	}
 }
 
@@ -197,6 +200,16 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	}
 
 	uc.logger.Infow("forward rule created successfully", "id", result.ID, "name", cmd.Name)
+
+	// Notify config sync asynchronously if rule is enabled (failure only logs warning, doesn't block)
+	if rule.IsEnabled() && uc.configSyncSvc != nil {
+		go func() {
+			if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), rule.AgentID(), rule.ShortID(), "added"); err != nil {
+				uc.logger.Warnw("failed to notify config sync", "rule_id", rule.ShortID(), "error", err)
+			}
+		}()
+	}
+
 	return result, nil
 }
 

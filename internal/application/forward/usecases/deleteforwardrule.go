@@ -16,18 +16,21 @@ type DeleteForwardRuleCommand struct {
 
 // DeleteForwardRuleUseCase handles forward rule deletion.
 type DeleteForwardRuleUseCase struct {
-	repo   forward.Repository
-	logger logger.Interface
+	repo          forward.Repository
+	configSyncSvc ConfigSyncNotifier
+	logger        logger.Interface
 }
 
 // NewDeleteForwardRuleUseCase creates a new DeleteForwardRuleUseCase.
 func NewDeleteForwardRuleUseCase(
 	repo forward.Repository,
+	configSyncSvc ConfigSyncNotifier,
 	logger logger.Interface,
 ) *DeleteForwardRuleUseCase {
 	return &DeleteForwardRuleUseCase{
-		repo:   repo,
-		logger: logger,
+		repo:          repo,
+		configSyncSvc: configSyncSvc,
+		logger:        logger,
 	}
 }
 
@@ -47,6 +50,11 @@ func (uc *DeleteForwardRuleUseCase) Execute(ctx context.Context, cmd DeleteForwa
 		return errors.NewNotFoundError("forward rule", cmd.ShortID)
 	}
 
+	// Store info for notification before deletion
+	agentID := rule.AgentID()
+	ruleShortID := rule.ShortID()
+	wasEnabled := rule.IsEnabled()
+
 	// Delete the rule using the internal ID
 	if err := uc.repo.Delete(ctx, rule.ID()); err != nil {
 		uc.logger.Errorw("failed to delete forward rule", "short_id", cmd.ShortID, "error", err)
@@ -54,5 +62,15 @@ func (uc *DeleteForwardRuleUseCase) Execute(ctx context.Context, cmd DeleteForwa
 	}
 
 	uc.logger.Infow("forward rule deleted successfully", "short_id", cmd.ShortID)
+
+	// Notify config sync asynchronously if rule was enabled (failure only logs warning, doesn't block)
+	if wasEnabled && uc.configSyncSvc != nil {
+		go func() {
+			if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), agentID, ruleShortID, "removed"); err != nil {
+				uc.logger.Warnw("failed to notify config sync", "rule_id", ruleShortID, "error", err)
+			}
+		}()
+	}
+
 	return nil
 }

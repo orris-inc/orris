@@ -61,6 +61,7 @@ func DefaultReconnectConfig() *ReconnectConfig {
 type HubConn struct {
 	conn   *websocket.Conn
 	send   chan *HubMessage
+	Events chan *HubEvent // Event channel for agent to receive events
 	mu     sync.Mutex
 	closed bool
 
@@ -89,7 +90,59 @@ const (
 	// Probe message types.
 	MsgTypeProbeTask   = "probe_task"   // Server -> Agent
 	MsgTypeProbeResult = "probe_result" // Agent -> Server
+
+	// Config sync message types.
+	MsgTypeConfigSync = "config_sync" // Server -> Agent
+	MsgTypeConfigAck  = "config_ack"  // Agent -> Server
 )
+
+// HubEventType represents the type of event received from hub.
+type HubEventType string
+
+const (
+	HubEventConfigSync HubEventType = "config_sync"
+	HubEventProbeTask  HubEventType = "probe_task"
+)
+
+// HubEvent is a unified event structure for agent to consume.
+type HubEvent struct {
+	Type       HubEventType
+	ConfigSync *ConfigSyncData
+	ProbeTask  *ProbeTask
+}
+
+// ConfigSyncData represents configuration synchronization data.
+type ConfigSyncData struct {
+	Version  uint64         `json:"version"`
+	FullSync bool           `json:"full_sync"`
+	Added    []RuleSyncData `json:"added,omitempty"`
+	Updated  []RuleSyncData `json:"updated,omitempty"`
+	Removed  []string       `json:"removed,omitempty"`
+}
+
+// RuleSyncData represents rule synchronization data (aligned with server DTO).
+type RuleSyncData struct {
+	ShortID        string   `json:"short_id"`
+	RuleType       string   `json:"rule_type"`
+	ListenPort     uint16   `json:"listen_port"`
+	TargetAddress  string   `json:"target_address,omitempty"`
+	TargetPort     uint16   `json:"target_port,omitempty"`
+	Protocol       string   `json:"protocol"`
+	Role           string   `json:"role,omitempty"`
+	NextHopAgentID string   `json:"next_hop_agent_id,omitempty"`
+	NextHopAddress string   `json:"next_hop_address,omitempty"`
+	NextHopWsPort  uint16   `json:"next_hop_ws_port,omitempty"`
+	ChainAgentIDs  []string `json:"chain_agent_ids,omitempty"`
+	ChainPosition  int      `json:"chain_position,omitempty"`
+	IsLastInChain  bool     `json:"is_last_in_chain,omitempty"`
+}
+
+// ConfigAckData represents configuration acknowledgment data.
+type ConfigAckData struct {
+	Version uint64 `json:"version"`
+	Success bool   `json:"success"`
+	Error   string `json:"error,omitempty"`
+}
 
 // ConnectHub establishes a WebSocket connection to the AgentHub.
 // The connection allows the agent to receive commands and send status updates.
@@ -114,6 +167,7 @@ func (c *Client) ConnectHub(ctx context.Context) (*HubConn, error) {
 	hubConn := &HubConn{
 		conn:   conn,
 		send:   make(chan *HubMessage, 256),
+		Events: make(chan *HubEvent, 256),
 		closed: false,
 	}
 
@@ -190,6 +244,16 @@ func (hc *HubConn) SendProbeResult(result *ProbeTaskResult) error {
 	return hc.Send(msg)
 }
 
+// SendConfigAck sends a configuration acknowledgment to the server.
+func (hc *HubConn) SendConfigAck(ack *ConfigAckData) error {
+	msg := &HubMessage{
+		Type:      MsgTypeConfigAck,
+		Timestamp: time.Now().Unix(),
+		Data:      ack,
+	}
+	return hc.Send(msg)
+}
+
 // SendEvent sends an event to the server.
 func (hc *HubConn) SendEvent(eventType, message string, extra any) error {
 	msg := &HubMessage{
@@ -250,10 +314,63 @@ func (hc *HubConn) readPump(ctx context.Context) error {
 			continue // Skip malformed messages
 		}
 
+		// Convert message to event and send to Events channel
+		hc.dispatchEvent(&msg)
+
+		// Also call legacy onMessage handler for backward compatibility
 		if hc.onMessage != nil {
 			hc.onMessage(&msg)
 		}
 	}
+}
+
+// dispatchEvent converts HubMessage to HubEvent and sends to Events channel.
+func (hc *HubConn) dispatchEvent(msg *HubMessage) {
+	var event *HubEvent
+
+	switch msg.Type {
+	case MsgTypeConfigSync:
+		configSync := parseConfigSync(msg.Data)
+		if configSync != nil {
+			event = &HubEvent{
+				Type:       HubEventConfigSync,
+				ConfigSync: configSync,
+			}
+		}
+	case MsgTypeProbeTask:
+		probeTask := parseProbeTask(msg.Data)
+		if probeTask != nil {
+			event = &HubEvent{
+				Type:      HubEventProbeTask,
+				ProbeTask: probeTask,
+			}
+		}
+	default:
+		// Ignore other message types for event channel
+		return
+	}
+
+	if event != nil {
+		select {
+		case hc.Events <- event:
+		default:
+			// Event channel full, skip this event to avoid blocking
+		}
+	}
+}
+
+// parseConfigSync parses config sync data from message data.
+func parseConfigSync(data any) *ConfigSyncData {
+	dataBytes, err := json.Marshal(data)
+	if err != nil {
+		return nil
+	}
+
+	var configSync ConfigSyncData
+	if err := json.Unmarshal(dataBytes, &configSync); err != nil {
+		return nil
+	}
+	return &configSync
 }
 
 // writePump writes messages to the WebSocket.
@@ -296,6 +413,7 @@ func (hc *HubConn) Close() error {
 
 	hc.closed = true
 	close(hc.send)
+	close(hc.Events)
 
 	_ = hc.conn.WriteMessage(
 		websocket.CloseMessage,
