@@ -64,12 +64,13 @@ type ConfigSyncData struct {
 	FullSync bool           `json:"full_sync"`
 	Added    []RuleSyncData `json:"added,omitempty"`
 	Updated  []RuleSyncData `json:"updated,omitempty"`
-	Removed  []string       `json:"removed,omitempty"` // Rule short IDs to remove
+	Removed  []string       `json:"removed,omitempty"` // Rule IDs to remove (Stripe-style prefixed, e.g., "fr_xxx")
 }
 
 // RuleSyncData represents rule sync data for config sync.
 type RuleSyncData struct {
-	ShortID        string   `json:"short_id"`
+	ID             string   `json:"id"`       // Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ")
+	ShortID        string   `json:"short_id"` // Deprecated: use ID instead
 	RuleType       string   `json:"rule_type"`
 	ListenPort     uint16   `json:"listen_port"`
 	TargetAddress  string   `json:"target_address,omitempty"`

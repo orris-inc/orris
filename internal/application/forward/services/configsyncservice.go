@@ -140,7 +140,7 @@ func (s *ConfigSyncService) NotifyRuleChange(ctx context.Context, agentID uint, 
 		}
 
 	case "removed":
-		syncData.Removed = []string{ruleShortID}
+		syncData.Removed = []string{id.FormatForwardRuleID(ruleShortID)}
 
 	default:
 		s.logger.Warnw("unknown change type for rule sync",
@@ -365,6 +365,7 @@ func (s *ConfigSyncService) getEnabledRulesForAgent(ctx context.Context, agentID
 // This mirrors the logic in AgentHandler.GetEnabledRules for building rule DTOs.
 func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *forward.ForwardRule, agentID uint) (*dto.RuleSyncData, error) {
 	syncData := &dto.RuleSyncData{
+		ID:         id.FormatForwardRuleID(rule.ShortID()),
 		ShortID:    rule.ShortID(),
 		RuleType:   rule.RuleType().String(),
 		ListenPort: rule.ListenPort(),
