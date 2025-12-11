@@ -40,13 +40,13 @@ type Rule struct {
 	Role string `json:"role,omitempty"`
 
 	// Chain-specific fields (for chain rule type)
-	ChainAgentIDs  []string `json:"chain_agent_ids,omitempty"`   // Ordered list of agent IDs in chain
-	ChainPosition  int      `json:"chain_position,omitempty"`    // Agent's position in chain (0-indexed)
-	IsLastInChain  bool     `json:"is_last_in_chain,omitempty"`  // True if agent is last in chain
-	NextHopAgentID         string `json:"next_hop_agent_id,omitempty"`         // Next agent in chain
-	NextHopAddress         string `json:"next_hop_address,omitempty"`          // Next agent's public address
-	NextHopWsPort          uint16 `json:"next_hop_ws_port,omitempty"`          // Next agent's WS port
-	NextHopConnectionToken string `json:"next_hop_connection_token,omitempty"` // Short-term token for next hop authentication
+	ChainAgentIDs          []string `json:"chain_agent_ids,omitempty"`           // Ordered list of agent IDs in chain
+	ChainPosition          int      `json:"chain_position,omitempty"`            // Agent's position in chain (0-indexed)
+	IsLastInChain          bool     `json:"is_last_in_chain,omitempty"`          // True if agent is last in chain
+	NextHopAgentID         string   `json:"next_hop_agent_id,omitempty"`         // Next agent in chain
+	NextHopAddress         string   `json:"next_hop_address,omitempty"`          // Next agent's public address
+	NextHopWsPort          uint16   `json:"next_hop_ws_port,omitempty"`          // Next agent's WS port
+	NextHopConnectionToken string   `json:"next_hop_connection_token,omitempty"` // Short-term token for next hop authentication
 }
 
 // IsDirect returns true if this is a direct forward rule.
@@ -86,9 +86,14 @@ func (r *Rule) IsChainExit() bool {
 
 // ExitEndpoint represents the connection information for an exit agent.
 type ExitEndpoint struct {
-	Address         string `json:"address"`
-	WsPort          uint16 `json:"ws_port"`
-	ConnectionToken string `json:"connection_token"` // Short-term token for agent-to-agent authentication
+	Address string `json:"address"`
+	WsPort  uint16 `json:"ws_port"`
+}
+
+// RulesResponse represents the response from GetRules API.
+type RulesResponse struct {
+	Rules              []Rule `json:"rules"`
+	TokenSigningSecret string `json:"token_signing_secret"` // Secret for local agent token verification
 }
 
 // TrafficItem represents traffic data for a single rule.
@@ -190,3 +195,17 @@ const (
 	ProbeMessageTypeTask   = "task"
 	ProbeMessageTypeResult = "result"
 )
+
+// TunnelHandshake is sent by entry agent to exit agent when establishing a tunnel connection.
+// The exit agent should verify the token and check if the rule allows this connection.
+type TunnelHandshake struct {
+	AgentToken string `json:"agent_token"` // Entry agent's HMAC-based token for verification
+	RuleID     string `json:"rule_id"`     // The rule this connection belongs to (e.g., "fr_xK9mP2vL3nQ")
+}
+
+// TunnelHandshakeResult is sent by exit agent back to entry agent after verification.
+type TunnelHandshakeResult struct {
+	Success      bool   `json:"success"`
+	Error        string `json:"error,omitempty"`
+	EntryAgentID string `json:"entry_agent_id,omitempty"` // Verified entry agent ID (e.g., "fa_xK9mP2vL3nQ")
+}

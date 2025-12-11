@@ -30,18 +30,21 @@ type CreateForwardAgentResult struct {
 
 // CreateForwardAgentUseCase handles forward agent creation.
 type CreateForwardAgentUseCase struct {
-	repo   forward.AgentRepository
-	logger logger.Interface
+	repo     forward.AgentRepository
+	tokenGen AgentTokenGenerator
+	logger   logger.Interface
 }
 
 // NewCreateForwardAgentUseCase creates a new CreateForwardAgentUseCase.
 func NewCreateForwardAgentUseCase(
 	repo forward.AgentRepository,
+	tokenGen AgentTokenGenerator,
 	logger logger.Interface,
 ) *CreateForwardAgentUseCase {
 	return &CreateForwardAgentUseCase{
-		repo:   repo,
-		logger: logger,
+		repo:     repo,
+		tokenGen: tokenGen,
+		logger:   logger,
 	}
 }
 
@@ -65,8 +68,8 @@ func (uc *CreateForwardAgentUseCase) Execute(ctx context.Context, cmd CreateForw
 		return nil, errors.NewConflictError("agent name already exists", cmd.Name)
 	}
 
-	// Create domain entity
-	agent, err := forward.NewForwardAgent(cmd.Name, cmd.PublicAddress, cmd.Remark, id.NewForwardAgentID)
+	// Create domain entity with HMAC-based token generator
+	agent, err := forward.NewForwardAgent(cmd.Name, cmd.PublicAddress, cmd.Remark, id.NewForwardAgentID, uc.tokenGen.Generate)
 	if err != nil {
 		uc.logger.Errorw("failed to create forward agent entity", "error", err)
 		return nil, fmt.Errorf("failed to create forward agent: %w", err)

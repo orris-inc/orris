@@ -11,27 +11,20 @@ import (
 	"github.com/orris-inc/orris/internal/application/forward/usecases"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
-	"github.com/orris-inc/orris/internal/infrastructure/auth"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
-// AgentConnectionTokenService defines the interface for agent connection token operations
-type AgentConnectionTokenService interface {
-	Generate(entryAgentID, exitAgentID string) (string, error)
-	Verify(token string) (*auth.ConnectionTokenInfo, error)
-}
-
 // AgentHandler handles RESTful agent API requests for forward client
 type AgentHandler struct {
-	repo                forward.Repository
-	agentRepo           forward.AgentRepository
-	nodeRepo            node.NodeRepository
-	reportStatusUC      *usecases.ReportAgentStatusUseCase
-	statusQuerier       usecases.AgentStatusQuerier
-	connectionTokenSvc  AgentConnectionTokenService
-	logger              logger.Interface
+	repo               forward.Repository
+	agentRepo          forward.AgentRepository
+	nodeRepo           node.NodeRepository
+	reportStatusUC     *usecases.ReportAgentStatusUseCase
+	statusQuerier      usecases.AgentStatusQuerier
+	tokenSigningSecret string
+	logger             logger.Interface
 }
 
 // NewAgentHandler creates a new AgentHandler instance
@@ -41,7 +34,7 @@ func NewAgentHandler(
 	nodeRepo node.NodeRepository,
 	reportStatusUC *usecases.ReportAgentStatusUseCase,
 	statusQuerier usecases.AgentStatusQuerier,
-	connectionTokenSvc AgentConnectionTokenService,
+	tokenSigningSecret string,
 	logger logger.Interface,
 ) *AgentHandler {
 	return &AgentHandler{
@@ -50,7 +43,7 @@ func NewAgentHandler(
 		nodeRepo:           nodeRepo,
 		reportStatusUC:     reportStatusUC,
 		statusQuerier:      statusQuerier,
-		connectionTokenSvc: connectionTokenSvc,
+		tokenSigningSecret: tokenSigningSecret,
 		logger:             logger,
 	}
 }
@@ -247,18 +240,6 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 		}
 	}
 
-	// Get current agent's short ID for connection token generation
-	var currentAgentShortID string
-	currentAgent, err := h.agentRepo.GetByID(ctx, agentID)
-	if err != nil {
-		h.logger.Warnw("failed to get current agent details for connection token",
-			"agent_id", agentID,
-			"error", err,
-		)
-	} else if currentAgent != nil {
-		currentAgentShortID = id.FormatForwardAgentID(currentAgent.ShortID())
-	}
-
 	// Process chain rules to populate role-specific information
 	for i, rule := range rules {
 		if rule.RuleType().String() != "chain" {
@@ -308,28 +289,13 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 					} else if nextStatus != nil && nextStatus.WsListenPort > 0 {
 						ruleDTO.NextHopWsPort = nextStatus.WsListenPort
 
-						// Generate connection token for next hop authentication
-						if currentAgentShortID != "" {
-							nextHopShortID := id.FormatForwardAgentID(nextAgent.ShortID())
-							connectionToken, tokenErr := h.connectionTokenSvc.Generate(currentAgentShortID, nextHopShortID)
-							if tokenErr != nil {
-								h.logger.Warnw("failed to generate connection token for chain rule",
-									"rule_id", ruleDTO.ID,
-									"entry_agent_id", currentAgentShortID,
-									"exit_agent_id", nextHopShortID,
-									"error", tokenErr,
-								)
-							} else {
-								ruleDTO.NextHopConnectionToken = connectionToken
-							}
-						}
+						// Note: connection token is no longer needed as agents use HMAC-based agent tokens
 
 						h.logger.Debugw("populated next hop info for chain rule",
 							"rule_id", ruleDTO.ID,
 							"next_hop_agent_id", ruleDTO.NextHopAgentID,
 							"next_hop_address", ruleDTO.NextHopAddress,
 							"next_hop_ws_port", ruleDTO.NextHopWsPort,
-							"has_connection_token", ruleDTO.NextHopConnectionToken != "",
 						)
 					} else {
 						h.logger.Warnw("next hop agent has no ws_listen_port configured or is offline",
@@ -397,8 +363,11 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 		}
 	}
 
-	// Return success response
-	utils.SuccessResponse(c, http.StatusOK, "enabled forward rules retrieved successfully", ruleDTOs)
+	// Return success response with token signing secret for local verification
+	utils.SuccessResponse(c, http.StatusOK, "enabled forward rules retrieved successfully", map[string]any{
+		"rules":                ruleDTOs,
+		"token_signing_secret": h.tokenSigningSecret,
+	})
 }
 
 func (h *AgentHandler) ReportTraffic(c *gin.Context) {
@@ -654,34 +623,6 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 		return
 	}
 
-	// Generate connection token for entry agent to authenticate with exit agent
-	// Get entry agent details to retrieve its short ID
-	entryAgent, err := h.agentRepo.GetByID(ctx, entryAgentID)
-	if err != nil {
-		h.logger.Errorw("failed to get entry agent details",
-			"entry_agent_id", entryAgentID,
-			"error", err,
-			"ip", c.ClientIP(),
-		)
-		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to generate connection token")
-		return
-	}
-	entryAgentShortID := id.FormatForwardAgentID(entryAgent.ShortID())
-	exitAgentShortID := id.FormatForwardAgentID(exitAgent.ShortID())
-
-	// Generate connection token
-	connectionToken, err := h.connectionTokenSvc.Generate(entryAgentShortID, exitAgentShortID)
-	if err != nil {
-		h.logger.Errorw("failed to generate connection token",
-			"entry_agent_id", entryAgentID,
-			"exit_agent_id", exitAgentID,
-			"error", err,
-			"ip", c.ClientIP(),
-		)
-		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to generate connection token")
-		return
-	}
-
 	h.logger.Infow("exit endpoint information retrieved successfully",
 		"exit_agent_id", exitAgentID,
 		"entry_agent_id", entryAgentID,
@@ -691,10 +632,10 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 	)
 
 	// Return the connection information
+	// Note: connection_token is no longer needed as agents use HMAC-based agent tokens for verification
 	utils.SuccessResponse(c, http.StatusOK, "exit endpoint information retrieved successfully", map[string]any{
-		"address":          exitAgent.PublicAddress(),
-		"ws_port":          exitStatus.WsListenPort,
-		"connection_token": connectionToken,
+		"address": exitAgent.PublicAddress(),
+		"ws_port": exitStatus.WsListenPort,
 	})
 }
 
@@ -785,93 +726,4 @@ func (h *AgentHandler) ReportStatus(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "status reported successfully", nil)
-}
-
-// VerifyConnectionTokenRequest represents the request body for token verification
-type VerifyConnectionTokenRequest struct {
-	Token string `json:"token" binding:"required"`
-}
-
-// VerifyConnectionToken handles POST /forward-agent-api/verify-connection-token
-// This endpoint allows an exit agent to verify a connection token before accepting
-// a tunnel connection from an entry agent. The token is one-time use and will be
-// invalidated after successful verification.
-func (h *AgentHandler) VerifyConnectionToken(c *gin.Context) {
-	// Get authenticated agent ID (the exit agent verifying the token)
-	exitAgentID, err := h.getAuthenticatedAgentID(c)
-	if err != nil {
-		h.logger.Warnw("failed to get authenticated agent ID",
-			"error", err,
-			"ip", c.ClientIP(),
-		)
-		utils.ErrorResponse(c, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-
-	// Parse request body
-	var req VerifyConnectionTokenRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Warnw("invalid verify token request body",
-			"error", err,
-			"agent_id", exitAgentID,
-			"ip", c.ClientIP(),
-		)
-		utils.ErrorResponse(c, http.StatusBadRequest, "invalid request body: token is required")
-		return
-	}
-
-	h.logger.Debugw("exit agent verifying connection token",
-		"agent_id", exitAgentID,
-		"ip", c.ClientIP(),
-	)
-
-	// Verify the token (one-time use - token will be deleted after verification)
-	tokenInfo, err := h.connectionTokenSvc.Verify(req.Token)
-	if err != nil {
-		h.logger.Warnw("connection token verification failed",
-			"error", err,
-			"agent_id", exitAgentID,
-			"ip", c.ClientIP(),
-		)
-		utils.ErrorResponse(c, http.StatusUnauthorized, "invalid or expired token")
-		return
-	}
-
-	// Get current agent's short ID to verify it matches the token's exit_agent_id
-	ctx := c.Request.Context()
-	currentAgent, err := h.agentRepo.GetByID(ctx, exitAgentID)
-	if err != nil {
-		h.logger.Errorw("failed to get current agent details",
-			"agent_id", exitAgentID,
-			"error", err,
-			"ip", c.ClientIP(),
-		)
-		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to verify token")
-		return
-	}
-
-	currentAgentShortID := id.FormatForwardAgentID(currentAgent.ShortID())
-
-	// Verify the token was intended for this exit agent
-	if tokenInfo.ExitAgentID != currentAgentShortID {
-		h.logger.Warnw("token exit_agent_id mismatch",
-			"token_exit_agent_id", tokenInfo.ExitAgentID,
-			"current_agent_id", currentAgentShortID,
-			"ip", c.ClientIP(),
-		)
-		utils.ErrorResponse(c, http.StatusForbidden, "token not intended for this agent")
-		return
-	}
-
-	h.logger.Infow("connection token verified successfully",
-		"entry_agent_id", tokenInfo.EntryAgentID,
-		"exit_agent_id", tokenInfo.ExitAgentID,
-		"ip", c.ClientIP(),
-	)
-
-	// Return token info so exit agent knows which entry agent is connecting
-	utils.SuccessResponse(c, http.StatusOK, "token verified successfully", map[string]any{
-		"entry_agent_id": tokenInfo.EntryAgentID,
-		"exit_agent_id":  tokenInfo.ExitAgentID,
-	})
 }

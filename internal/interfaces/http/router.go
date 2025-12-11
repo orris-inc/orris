@@ -174,8 +174,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		10*time.Minute,
 	)
 
-	// Initialize agent connection token service with Redis storage
-	agentConnectionTokenSvc := auth.NewAgentConnectionTokenService(redisClient, 5*time.Minute)
+	// Initialize HMAC-based agent token service for local token verification
+	agentTokenSvc := auth.NewAgentTokenService(cfg.Forward.TokenSigningSecret)
 
 	authHelper := helpers.NewAuthHelper(userRepo, sessionRepo, log)
 
@@ -445,7 +445,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	// Initialize forward agent components
 
-	createForwardAgentUC := forwardUsecases.NewCreateForwardAgentUseCase(forwardAgentRepo, log)
+	createForwardAgentUC := forwardUsecases.NewCreateForwardAgentUseCase(forwardAgentRepo, agentTokenSvc, log)
 	// Initialize forward agent status adapter early for getForwardAgentUC
 	forwardAgentStatusAdapter := adapters.NewForwardAgentStatusAdapter(redisClient, log)
 	getForwardAgentUC := forwardUsecases.NewGetForwardAgentUseCase(forwardAgentRepo, forwardAgentStatusAdapter, log)
@@ -454,7 +454,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	listForwardAgentsUC := forwardUsecases.NewListForwardAgentsUseCase(forwardAgentRepo, forwardAgentStatusAdapter, log)
 	enableForwardAgentUC := forwardUsecases.NewEnableForwardAgentUseCase(forwardAgentRepo, log)
 	disableForwardAgentUC := forwardUsecases.NewDisableForwardAgentUseCase(forwardAgentRepo, log)
-	regenerateForwardAgentTokenUC := forwardUsecases.NewRegenerateForwardAgentTokenUseCase(forwardAgentRepo, log)
+	regenerateForwardAgentTokenUC := forwardUsecases.NewRegenerateForwardAgentTokenUseCase(forwardAgentRepo, agentTokenSvc, log)
 	validateForwardAgentTokenUC := forwardUsecases.NewValidateForwardAgentTokenUseCase(forwardAgentRepo, log)
 
 	// Initialize agent last seen updater for status reporting
@@ -488,7 +488,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	)
 
 	// Initialize forward agent API handler for client to fetch rules and report traffic
-	forwardAgentAPIHandler := forwardHandlers.NewAgentHandler(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, reportAgentStatusUC, forwardAgentStatusAdapter, agentConnectionTokenSvc, log)
+	forwardAgentAPIHandler := forwardHandlers.NewAgentHandler(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, reportAgentStatusUC, forwardAgentStatusAdapter, cfg.Forward.TokenSigningSecret, log)
 
 	// Initialize forward agent token middleware
 	forwardAgentTokenMiddleware := middleware.NewForwardAgentTokenMiddleware(validateForwardAgentTokenUC, log)

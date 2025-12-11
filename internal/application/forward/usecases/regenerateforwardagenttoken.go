@@ -23,18 +23,21 @@ type RegenerateForwardAgentTokenResult struct {
 
 // RegenerateForwardAgentTokenUseCase handles forward agent token regeneration.
 type RegenerateForwardAgentTokenUseCase struct {
-	repo   forward.AgentRepository
-	logger logger.Interface
+	repo     forward.AgentRepository
+	tokenGen AgentTokenGenerator
+	logger   logger.Interface
 }
 
 // NewRegenerateForwardAgentTokenUseCase creates a new RegenerateForwardAgentTokenUseCase.
 func NewRegenerateForwardAgentTokenUseCase(
 	repo forward.AgentRepository,
+	tokenGen AgentTokenGenerator,
 	logger logger.Interface,
 ) *RegenerateForwardAgentTokenUseCase {
 	return &RegenerateForwardAgentTokenUseCase{
-		repo:   repo,
-		logger: logger,
+		repo:     repo,
+		tokenGen: tokenGen,
+		logger:   logger,
 	}
 }
 
@@ -55,12 +58,9 @@ func (uc *RegenerateForwardAgentTokenUseCase) Execute(ctx context.Context, cmd R
 		return nil, errors.NewNotFoundError("forward agent", cmd.ShortID)
 	}
 
-	// Generate new token
-	plainToken, err := agent.GenerateAPIToken()
-	if err != nil {
-		uc.logger.Errorw("failed to generate API token", "id", agent.ID(), "short_id", agent.ShortID(), "error", err)
-		return nil, fmt.Errorf("failed to generate API token: %w", err)
-	}
+	// Generate new token using HMAC-based token generator
+	plainToken, tokenHash := uc.tokenGen.Generate(agent.ShortID())
+	agent.SetAPIToken(plainToken, tokenHash)
 
 	// Persist changes
 	if err := uc.repo.Update(ctx, agent); err != nil {

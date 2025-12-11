@@ -155,5 +155,7 @@ func (s *SubscriptionConfig) GetBaseURL(serverBaseURL string) string {
 
 // ForwardConfig holds forward-related configuration
 type ForwardConfig struct {
-	// Reserved for future forward-related configuration
+	// TokenSigningSecret is the secret key used to sign and verify agent tokens.
+	// This enables local token verification without server round-trip.
+	TokenSigningSecret string `mapstructure:"token_signing_secret"`
 }

@@ -84,6 +84,5 @@ func SetupForwardRoutes(engine *gin.Engine, cfg *ForwardRouteConfig) {
 		forwardAgentAPI.POST("/traffic", cfg.ForwardAgentAPIHandler.ReportTraffic)
 		forwardAgentAPI.POST("/status", cfg.ForwardAgentAPIHandler.ReportStatus)
 		forwardAgentAPI.GET("/exit-endpoint/:agent_id", cfg.ForwardAgentAPIHandler.GetExitEndpoint)
-		forwardAgentAPI.POST("/verify-connection-token", cfg.ForwardAgentAPIHandler.VerifyConnectionToken)
 	}
 }
