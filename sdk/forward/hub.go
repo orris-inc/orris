@@ -65,8 +65,9 @@ func DefaultReconnectConfig() *ReconnectConfig {
 type HubConn struct {
 	conn   *websocket.Conn
 	send   chan *HubMessage
-	Events chan *HubEvent // Event channel for agent to receive events
-	mu     sync.Mutex
+	done   chan struct{}       // Signal channel for graceful shutdown
+	Events chan *HubEvent      // Event channel for agent to receive events
+	mu     sync.Mutex          // Protects closed and send channel access
 	closed bool
 
 	// Message handler callback
@@ -171,6 +172,7 @@ func (c *Client) ConnectHub(ctx context.Context) (*HubConn, error) {
 	hubConn := &HubConn{
 		conn:   conn,
 		send:   make(chan *HubMessage, 256),
+		done:   make(chan struct{}),
 		Events: make(chan *HubEvent, 256),
 		closed: false,
 	}
@@ -378,6 +380,7 @@ func parseConfigSync(data any) *ConfigSyncData {
 }
 
 // writePump writes messages to the WebSocket.
+// All writes to the websocket connection are done here to avoid concurrent writes.
 func (hc *HubConn) writePump(ctx context.Context) error {
 	ticker := time.NewTicker(hubPingPeriod)
 	defer ticker.Stop()
@@ -385,14 +388,25 @@ func (hc *HubConn) writePump(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
-		case msg, ok := <-hc.send:
+			// Context canceled, send close message and exit
 			hc.conn.SetWriteDeadline(time.Now().Add(hubWriteWait))
+			hc.conn.WriteMessage(websocket.CloseMessage,
+				websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+			return ctx.Err()
+
+		case <-hc.done:
+			// Graceful shutdown requested, send close message
+			hc.conn.SetWriteDeadline(time.Now().Add(hubWriteWait))
+			hc.conn.WriteMessage(websocket.CloseMessage,
+				websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+			return nil
+
+		case msg, ok := <-hc.send:
 			if !ok {
-				hc.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				// Send channel closed, should not happen as we use done channel
 				return nil
 			}
-
+			hc.conn.SetWriteDeadline(time.Now().Add(hubWriteWait))
 			if err := hc.conn.WriteJSON(msg); err != nil {
 				return fmt.Errorf("write message: %w", err)
 			}
@@ -407,22 +421,21 @@ func (hc *HubConn) writePump(ctx context.Context) error {
 }
 
 // Close closes the hub connection.
+// It signals the writePump to send close message and shutdown gracefully.
 func (hc *HubConn) Close() error {
 	hc.mu.Lock()
-	defer hc.mu.Unlock()
-
 	if hc.closed {
+		hc.mu.Unlock()
 		return nil
 	}
-
 	hc.closed = true
-	close(hc.send)
-	close(hc.Events)
+	close(hc.done) // Signal writePump to shutdown and send close message
+	hc.mu.Unlock()
 
-	_ = hc.conn.WriteMessage(
-		websocket.CloseMessage,
-		websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""),
-	)
+	// Close Events channel (safe to close from any goroutine)
+	// Note: send channel is not closed here to avoid send-on-closed-channel panic
+	// writePump will exit via done channel
+	close(hc.Events)
 
 	return hc.conn.Close()
 }

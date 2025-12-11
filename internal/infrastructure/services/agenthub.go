@@ -189,7 +189,7 @@ func (h *AgentHub) SendCommandToAgent(agentID uint, cmd *dto.CommandData) error 
 
 	msg := &dto.HubMessage{
 		Type:      dto.MsgTypeCommand,
-		AgentID:   agentID,
+		AgentID:   "", // Agent already knows its own ID; this field is primarily for logging/debug
 		Timestamp: time.Now().Unix(),
 		Data:      cmd,
 	}

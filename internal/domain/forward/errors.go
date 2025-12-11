@@ -24,6 +24,9 @@ var (
 	// ErrAgentNotConnected is returned when the agent is not connected.
 	ErrAgentNotConnected = errors.New("agent not connected")
 
+	// ErrAgentNotFound is returned when a forward agent is not found.
+	ErrAgentNotFound = errors.New("forward agent not found")
+
 	// ErrProbeInProgress is returned when a probe session is already in progress.
 	ErrProbeInProgress = errors.New("probe session already in progress")
 

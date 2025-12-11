@@ -149,10 +149,26 @@ func (s *ConfigSyncService) NotifyRuleChange(ctx context.Context, agentID uint, 
 		return nil
 	}
 
+	// Get agent short ID for Stripe-style prefixed ID
+	agent, err := s.agentRepo.GetByID(ctx, agentID)
+	if err != nil {
+		s.logger.Errorw("failed to get agent for config sync",
+			"agent_id", agentID,
+			"error", err,
+		)
+		return err
+	}
+	if agent == nil {
+		s.logger.Warnw("agent not found for config sync",
+			"agent_id", agentID,
+		)
+		return forward.ErrAgentNotFound
+	}
+
 	// Send sync message
 	msg := &dto.HubMessage{
 		Type:      dto.MsgTypeConfigSync,
-		AgentID:   agentID,
+		AgentID:   id.FormatForwardAgentID(agent.ShortID()),
 		Timestamp: time.Now().Unix(),
 		Data:      syncData,
 	}
@@ -232,10 +248,26 @@ func (s *ConfigSyncService) FullSyncToAgent(ctx context.Context, agentID uint) e
 		Added:    ruleSyncDataList,
 	}
 
+	// Get agent short ID for Stripe-style prefixed ID
+	agent, err := s.agentRepo.GetByID(ctx, agentID)
+	if err != nil {
+		s.logger.Errorw("failed to get agent for full config sync",
+			"agent_id", agentID,
+			"error", err,
+		)
+		return err
+	}
+	if agent == nil {
+		s.logger.Warnw("agent not found for full config sync",
+			"agent_id", agentID,
+		)
+		return forward.ErrAgentNotFound
+	}
+
 	// Send sync message
 	msg := &dto.HubMessage{
 		Type:      dto.MsgTypeConfigSync,
-		AgentID:   agentID,
+		AgentID:   id.FormatForwardAgentID(agent.ShortID()),
 		Timestamp: time.Now().Unix(),
 		Data:      syncData,
 	}
@@ -347,7 +379,38 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 		if rule.AgentID() == agentID {
 			// This agent is the entry point
 			syncData.Role = "entry"
-			// Entry agent doesn't need target info (exit agent will handle it)
+			// Entry agent needs to know the exit agent info to establish tunnel
+			exitAgentID := rule.ExitAgentID()
+			if exitAgentID != 0 {
+				exitAgent, err := s.agentRepo.GetByID(ctx, exitAgentID)
+				if err != nil {
+					s.logger.Warnw("failed to get exit agent for entry rule",
+						"rule_id", rule.ID(),
+						"exit_agent_id", exitAgentID,
+						"error", err,
+					)
+				} else if exitAgent != nil {
+					syncData.NextHopAgentID = id.FormatForwardAgentID(exitAgent.ShortID())
+					syncData.NextHopAddress = exitAgent.PublicAddress()
+
+					// Get ws_listen_port from cached agent status
+					exitStatus, err := s.statusQuerier.GetStatus(ctx, exitAgentID)
+					if err != nil {
+						s.logger.Warnw("failed to get exit agent status",
+							"rule_id", rule.ID(),
+							"exit_agent_id", exitAgentID,
+							"error", err,
+						)
+					} else if exitStatus != nil && exitStatus.WsListenPort > 0 {
+						syncData.NextHopWsPort = exitStatus.WsListenPort
+					} else {
+						s.logger.Warnw("exit agent has no ws_listen_port configured or is offline",
+							"rule_id", rule.ID(),
+							"exit_agent_id", exitAgentID,
+						)
+					}
+				}
+			}
 		} else if rule.ExitAgentID() == agentID {
 			// This agent is the exit point
 			syncData.Role = "exit"

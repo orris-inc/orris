@@ -23,7 +23,7 @@ const (
 // HubMessage is the unified WebSocket message envelope.
 type HubMessage struct {
 	Type      string `json:"type"`
-	AgentID   uint   `json:"agent_id,omitempty"`
+	AgentID   string `json:"agent_id,omitempty"` // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
 	Timestamp int64  `json:"timestamp"`
 	Data      any    `json:"data,omitempty"`
 }

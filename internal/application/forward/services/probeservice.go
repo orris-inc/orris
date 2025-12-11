@@ -304,6 +304,15 @@ func (s *ProbeService) sendProbeTask(
 		s.pendingProbesMu.Unlock()
 	}()
 
+	// Get agent short ID for Stripe-style prefixed ID
+	agent, err := s.agentRepo.GetByID(ctx, agentID)
+	if err != nil {
+		return 0, err
+	}
+	if agent == nil {
+		return 0, forward.ErrAgentNotFound
+	}
+
 	// Send probe task
 	task := &dto.ProbeTask{
 		ID:       taskID,
@@ -317,7 +326,7 @@ func (s *ProbeService) sendProbeTask(
 
 	msg := &dto.HubMessage{
 		Type:      dto.MsgTypeProbeTask,
-		AgentID:   agentID,
+		AgentID:   id.FormatForwardAgentID(agent.ShortID()),
 		Timestamp: time.Now().Unix(),
 		Data:      task,
 	}
