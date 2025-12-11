@@ -220,6 +220,57 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 		}
 	}
 
+	// Process entry rules to populate next hop information for entry agents
+	for i, rule := range rules {
+		if rule.RuleType().String() != "entry" {
+			continue
+		}
+
+		ruleDTO := ruleDTOs[i]
+
+		// Only populate next hop info for entry agent (not exit agent)
+		if rule.AgentID() == agentID {
+			exitAgentID := rule.ExitAgentID()
+			if exitAgentID != 0 {
+				exitAgent, err := h.agentRepo.GetByID(ctx, exitAgentID)
+				if err != nil {
+					h.logger.Warnw("failed to get exit agent for entry rule",
+						"rule_id", ruleDTO.ID,
+						"exit_agent_id", exitAgentID,
+						"error", err,
+					)
+				} else if exitAgent != nil {
+					ruleDTO.NextHopAgentID = id.FormatForwardAgentID(exitAgent.ShortID())
+					ruleDTO.NextHopAddress = exitAgent.PublicAddress()
+
+					// Get ws_listen_port from cached agent status
+					exitStatus, err := h.statusQuerier.GetStatus(ctx, exitAgentID)
+					if err != nil {
+						h.logger.Warnw("failed to get exit agent status for entry rule",
+							"rule_id", ruleDTO.ID,
+							"exit_agent_id", exitAgentID,
+							"error", err,
+						)
+					} else if exitStatus != nil && exitStatus.WsListenPort > 0 {
+						ruleDTO.NextHopWsPort = exitStatus.WsListenPort
+
+						h.logger.Debugw("populated next hop info for entry rule",
+							"rule_id", ruleDTO.ID,
+							"next_hop_agent_id", ruleDTO.NextHopAgentID,
+							"next_hop_address", ruleDTO.NextHopAddress,
+							"next_hop_ws_port", ruleDTO.NextHopWsPort,
+						)
+					} else {
+						h.logger.Warnw("exit agent has no ws_listen_port configured or is offline",
+							"rule_id", ruleDTO.ID,
+							"exit_agent_id", exitAgentID,
+						)
+					}
+				}
+			}
+		}
+	}
+
 	// Process chain rules to populate role-specific information
 	for i, rule := range rules {
 		if rule.RuleType().String() != "chain" {
