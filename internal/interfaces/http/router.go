@@ -503,7 +503,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	agentHub.RegisterStatusHandler(forwardStatusHandler)
 
 	// Initialize and register probe service for forward domain
-	probeService := forwardServices.NewProbeService(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, agentHub, log)
+	probeService := forwardServices.NewProbeService(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, forwardAgentStatusAdapter, agentHub, log)
 	agentHub.RegisterMessageHandler(probeService)
 
 	// Initialize and register config sync service for forward domain

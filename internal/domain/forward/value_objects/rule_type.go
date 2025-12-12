@@ -47,11 +47,6 @@ func (t ForwardRuleType) IsEntry() bool {
 	return t == ForwardRuleTypeEntry
 }
 
-// IsExit checks if this is an exit rule (deprecated - exit type has been removed).
-func (t ForwardRuleType) IsExit() bool {
-	return false
-}
-
 // IsChain checks if this is a chain forward rule.
 func (t ForwardRuleType) IsChain() bool {
 	return t == ForwardRuleTypeChain

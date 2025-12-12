@@ -385,12 +385,6 @@ func (r *ForwardRuleRepositoryImpl) ListEnabledByExitAgentID(ctx context.Context
 	return entities, nil
 }
 
-// GetExitRuleByAgentID is deprecated (exit type has been removed).
-func (r *ForwardRuleRepositoryImpl) GetExitRuleByAgentID(ctx context.Context, agentID uint) (*forward.ForwardRule, error) {
-	r.logger.Warnw("GetExitRuleByAgentID called but exit type has been removed", "agent_id", agentID)
-	return nil, nil
-}
-
 // ListEnabledByChainAgentID returns all enabled chain rules where the agent participates.
 // This includes both 'chain' and 'direct_chain' rule types.
 func (r *ForwardRuleRepositoryImpl) ListEnabledByChainAgentID(ctx context.Context, agentID uint) ([]*forward.ForwardRule, error) {

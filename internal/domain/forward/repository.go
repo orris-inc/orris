@@ -49,10 +49,6 @@ type Repository interface {
 	// ListEnabledByChainAgentID returns all enabled chain rules where the agent participates.
 	// This includes rules where the agent is in the chain_agent_ids array.
 	ListEnabledByChainAgentID(ctx context.Context, agentID uint) ([]*ForwardRule, error)
-
-	// GetExitRuleByAgentID is deprecated (exit type has been removed).
-	// Kept for backward compatibility, always returns nil.
-	GetExitRuleByAgentID(ctx context.Context, agentID uint) (*ForwardRule, error)
 }
 
 // ListFilter defines the filtering options for listing forward rules.

@@ -64,11 +64,6 @@ func (r *Rule) IsEntry() bool {
 	return r.RuleType == RuleTypeEntry
 }
 
-// IsExit is deprecated (exit type has been removed).
-func (r *Rule) IsExit() bool {
-	return false
-}
-
 // IsChain returns true if this is a chain forward rule.
 func (r *Rule) IsChain() bool {
 	return r.RuleType == RuleTypeChain

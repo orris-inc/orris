@@ -208,7 +208,7 @@ func VerifyTunnelHandshake(handshake *TunnelHandshake, signingSecret string, rul
 
 		// For chain relay/exit: check if entry agent is the previous hop
 		// The entry agent should be at position (current position - 1) in the chain
-		if rule.RuleType == RuleTypeChain && rule.ChainPosition > 0 {
+		if (rule.RuleType == RuleTypeChain || rule.RuleType == RuleTypeDirectChain) && rule.ChainPosition > 0 {
 			// Check if entry agent is in the chain at the previous position
 			if rule.ChainPosition-1 < len(rule.ChainAgentIDs) {
 				prevAgentID := rule.ChainAgentIDs[rule.ChainPosition-1]

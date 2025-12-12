@@ -26,9 +26,10 @@ const (
 // ProbeService handles probe operations for forward rules.
 // It implements agent.MessageHandler interface.
 type ProbeService struct {
-	repo      forward.Repository
-	agentRepo forward.AgentRepository
-	nodeRepo  node.NodeRepository
+	repo          forward.Repository
+	agentRepo     forward.AgentRepository
+	nodeRepo      node.NodeRepository
+	statusQuerier ProbeStatusQuerier
 
 	// Hub interface for sending messages
 	hub ProbeHub
@@ -46,11 +47,17 @@ type ProbeHub interface {
 	SendMessageToAgent(agentID uint, msg *dto.HubMessage) error
 }
 
+// ProbeStatusQuerier queries agent status for ws_listen_port.
+type ProbeStatusQuerier interface {
+	GetStatus(ctx context.Context, agentID uint) (*dto.AgentStatusDTO, error)
+}
+
 // NewProbeService creates a new ProbeService.
 func NewProbeService(
 	repo forward.Repository,
 	agentRepo forward.AgentRepository,
 	nodeRepo node.NodeRepository,
+	statusQuerier ProbeStatusQuerier,
 	hub ProbeHub,
 	log logger.Interface,
 ) *ProbeService {
@@ -58,6 +65,7 @@ func NewProbeService(
 		repo:          repo,
 		agentRepo:     agentRepo,
 		nodeRepo:      nodeRepo,
+		statusQuerier: statusQuerier,
 		hub:           hub,
 		pendingProbes: make(map[string]chan *dto.ProbeTaskResult),
 		logger:        log,
@@ -251,17 +259,17 @@ func (s *ProbeService) probeEntryRule(ctx context.Context, rule *forward.Forward
 		return response, nil
 	}
 
-	// Get exit rule for WS port
-	exitRule, err := s.repo.GetExitRuleByAgentID(ctx, exitAgentID)
-	if err != nil || exitRule == nil {
-		response.Error = "exit rule not found"
+	// Get WS port from exit agent status cache
+	exitStatus, err := s.statusQuerier.GetStatus(ctx, exitAgentID)
+	if err != nil || exitStatus == nil || exitStatus.WsListenPort == 0 {
+		response.Error = "exit agent status not found or ws_listen_port not configured"
 		return response, nil
 	}
 
 	// Step 1: Probe tunnel (entry → exit)
 	ruleStripeID := id.FormatForwardRuleID(rule.ShortID())
 	tunnelLatency, err := s.sendProbeTask(ctx, entryAgentID, ruleStripeID, dto.ProbeTaskTypeTunnel,
-		exitAgent.PublicAddress(), exitRule.WsListenPort(), "tcp")
+		exitAgent.PublicAddress(), exitStatus.WsListenPort, "tcp")
 	if err != nil {
 		response.Error = "tunnel probe failed: " + err.Error()
 		return response, nil
@@ -276,8 +284,9 @@ func (s *ProbeService) probeEntryRule(ctx context.Context, rule *forward.Forward
 	}
 
 	// Probe target using TCP for reliable connectivity check
+	// Target info is stored on the entry rule itself
 	targetLatency, err := s.sendProbeTask(ctx, exitAgentID, ruleStripeID, dto.ProbeTaskTypeTarget,
-		exitRule.TargetAddress(), exitRule.TargetPort(), "tcp")
+		rule.TargetAddress(), rule.TargetPort(), "tcp")
 	if err != nil {
 		response.Error = "target probe failed: " + err.Error()
 		return response, nil
@@ -416,15 +425,15 @@ func (s *ProbeService) probeChainRule(ctx context.Context, rule *forward.Forward
 				continue
 			}
 
-			// Get next agent's exit rule for WS port
-			exitRule, err := s.repo.GetExitRuleByAgentID(ctx, nextAgentID)
-			if err != nil || exitRule == nil {
+			// Get next agent's WS port from status cache
+			nextStatus, err := s.statusQuerier.GetStatus(ctx, nextAgentID)
+			if err != nil || nextStatus == nil || nextStatus.WsListenPort == 0 {
 				hopLatency := &dto.ChainHopLatency{
 					From:    fromAgentStripeID,
 					To:      id.FormatForwardAgentID(nextAgent.ShortID()),
 					Success: false,
 					Online:  isOnline,
-					Error:   "exit rule not found for next agent",
+					Error:   "next agent status not found or ws_listen_port not configured",
 				}
 				chainLatencies = append(chainLatencies, hopLatency)
 				allSuccess = false
@@ -456,7 +465,7 @@ func (s *ProbeService) probeChainRule(ctx context.Context, rule *forward.Forward
 			}
 
 			latency, err := s.sendProbeTask(ctx, currentAgentID, ruleStripeID, dto.ProbeTaskTypeTunnel,
-				tunnelAddr, exitRule.WsListenPort(), "tcp")
+				tunnelAddr, nextStatus.WsListenPort, "tcp")
 			if err != nil {
 				hopLatency.Success = false
 				hopLatency.Error = err.Error()

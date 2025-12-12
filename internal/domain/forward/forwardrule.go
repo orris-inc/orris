@@ -826,11 +826,6 @@ func (r *ForwardRule) UpdateChainPortConfig(chainPortConfig map[uint]uint16) err
 	return nil
 }
 
-// UpdateWsListenPort updates the WebSocket listen port (deprecated - exit type has been removed).
-func (r *ForwardRule) UpdateWsListenPort(port uint16) error {
-	return fmt.Errorf("WebSocket listen port update is not supported (exit type has been removed)")
-}
-
 // RecordTraffic records traffic bytes.
 func (r *ForwardRule) RecordTraffic(upload, download int64) {
 	r.uploadBytes += upload
