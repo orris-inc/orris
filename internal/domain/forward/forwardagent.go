@@ -29,7 +29,10 @@ func (s AgentStatus) IsValid() bool {
 // domainNameRegex is a pre-compiled regex for validating RFC 1123 hostnames
 var domainNameRegex = regexp.MustCompile(`^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$`)
 
-// ForwardAgent represents the forward agent aggregate root
+// ForwardAgent represents the forward agent aggregate root.
+// An agent can participate in multiple rules with different roles simultaneously:
+// - As entry in rule A, exit in rule B, relay in rule C, etc.
+// The role is determined by the rule configuration, not the agent itself.
 type ForwardAgent struct {
 	id             uint
 	shortID        string // external API identifier (Stripe-style)
@@ -38,7 +41,7 @@ type ForwardAgent struct {
 	apiToken       string // stored token for retrieval
 	status         AgentStatus
 	publicAddress  string // optional public address for Entry to obtain Exit connection information
-	tunnelAddress  string // optional tunnel address for Entry to connect to Exit (overrides publicAddress if set)
+	tunnelAddress  string // IP or hostname only (no port), configure if agent may serve as relay/exit in any rule
 	remark         string
 	createdAt      time.Time
 	updatedAt      time.Time

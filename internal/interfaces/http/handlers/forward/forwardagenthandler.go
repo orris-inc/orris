@@ -64,10 +64,11 @@ func NewForwardAgentHandler(
 }
 
 // CreateForwardAgentRequest represents a request to create a forward agent.
+// An agent can participate in multiple rules with different roles (entry/relay/exit) simultaneously.
 type CreateForwardAgentRequest struct {
 	Name          string `json:"name" binding:"required" example:"Production Agent"`
 	PublicAddress string `json:"public_address,omitempty" example:"203.0.113.1"`
-	TunnelAddress string `json:"tunnel_address,omitempty" example:"192.168.1.100"`
+	TunnelAddress string `json:"tunnel_address,omitempty" example:"192.168.1.100"` // IP or hostname only (no port), configure if agent may serve as relay/exit in any rule
 	Remark        string `json:"remark,omitempty" example:"Forward agent for production environment"`
 }
 
@@ -75,7 +76,7 @@ type CreateForwardAgentRequest struct {
 type UpdateForwardAgentRequest struct {
 	Name          *string `json:"name,omitempty" example:"Updated Agent Name"`
 	PublicAddress *string `json:"public_address,omitempty" example:"203.0.113.2"`
-	TunnelAddress *string `json:"tunnel_address,omitempty" example:"192.168.1.100"`
+	TunnelAddress *string `json:"tunnel_address,omitempty" example:"192.168.1.100"` // IP or hostname only (no port), configure if agent may serve as relay/exit in any rule
 	Remark        *string `json:"remark,omitempty" example:"Updated remark"`
 }
 
