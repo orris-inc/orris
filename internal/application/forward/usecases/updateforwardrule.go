@@ -71,8 +71,10 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 		return errors.NewNotFoundError("forward rule", cmd.ShortID)
 	}
 
-	// Track original agent ID for config sync notification
+	// Track original agent IDs for config sync notification
 	originalAgentID := rule.AgentID()
+	originalExitAgentID := rule.ExitAgentID()
+	originalChainAgentIDs := rule.ChainAgentIDs()
 
 	// Update fields
 	if cmd.Name != nil {
@@ -240,15 +242,62 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 	// Notify config sync asynchronously if rule is enabled (failure only logs warning, doesn't block)
 	if rule.IsEnabled() && uc.configSyncSvc != nil {
 		newAgentID := rule.AgentID()
+		newExitAgentID := rule.ExitAgentID()
+		newChainAgentIDs := rule.ChainAgentIDs()
+		ruleType := rule.RuleType().String()
+
 		go func() {
-			// Notify new agent
+			// Notify entry agent
 			if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), newAgentID, cmd.ShortID, "updated"); err != nil {
-				uc.logger.Warnw("failed to notify config sync for new agent", "rule_id", cmd.ShortID, "agent_id", newAgentID, "error", err)
+				uc.logger.Warnw("failed to notify config sync for entry agent", "rule_id", cmd.ShortID, "agent_id", newAgentID, "error", err)
 			}
-			// If agent changed, also notify original agent to remove the rule
+
+			// If entry agent changed, notify original agent to remove the rule
 			if originalAgentID != newAgentID {
 				if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), originalAgentID, cmd.ShortID, "deleted"); err != nil {
-					uc.logger.Warnw("failed to notify config sync for original agent", "rule_id", cmd.ShortID, "agent_id", originalAgentID, "error", err)
+					uc.logger.Warnw("failed to notify config sync for original entry agent", "rule_id", cmd.ShortID, "agent_id", originalAgentID, "error", err)
+				}
+			}
+
+			// For entry type rules, notify exit agent
+			if ruleType == "entry" {
+				// Notify new exit agent
+				if newExitAgentID > 0 {
+					if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), newExitAgentID, cmd.ShortID, "updated"); err != nil {
+						uc.logger.Warnw("failed to notify config sync for exit agent", "rule_id", cmd.ShortID, "agent_id", newExitAgentID, "error", err)
+					}
+				}
+
+				// If exit agent changed, notify original exit agent to remove the rule
+				if originalExitAgentID > 0 && originalExitAgentID != newExitAgentID {
+					if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), originalExitAgentID, cmd.ShortID, "deleted"); err != nil {
+						uc.logger.Warnw("failed to notify config sync for original exit agent", "rule_id", cmd.ShortID, "agent_id", originalExitAgentID, "error", err)
+					}
+				}
+			}
+
+			// For chain and direct_chain type rules, notify chain agents
+			if ruleType == "chain" || ruleType == "direct_chain" {
+				// Create map of original chain agents for quick lookup
+				originalChainAgentMap := make(map[uint]bool)
+				for _, agentID := range originalChainAgentIDs {
+					originalChainAgentMap[agentID] = true
+				}
+
+				// Notify new chain agents
+				for _, agentID := range newChainAgentIDs {
+					if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), agentID, cmd.ShortID, "updated"); err != nil {
+						uc.logger.Warnw("failed to notify config sync for chain agent", "rule_id", cmd.ShortID, "agent_id", agentID, "error", err)
+					}
+					// Remove from original map (we'll notify remaining agents for deletion)
+					delete(originalChainAgentMap, agentID)
+				}
+
+				// Notify removed chain agents
+				for agentID := range originalChainAgentMap {
+					if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), agentID, cmd.ShortID, "deleted"); err != nil {
+						uc.logger.Warnw("failed to notify config sync for removed chain agent", "rule_id", cmd.ShortID, "agent_id", agentID, "error", err)
+					}
 				}
 			}
 		}()

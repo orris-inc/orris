@@ -828,33 +828,60 @@ func (e *probeError) Error() string {
 	return e.message
 }
 
-// resolveNodeAddress resolves the node address based on IP version preference.
-// Priority: ServerAddress > PublicIP (based on ipVersion)
+// resolveNodeAddress selects the appropriate node address based on IP version preference.
+// ipVersion: "auto", "ipv4", or "ipv6"
 func (s *ProbeService) resolveNodeAddress(n *node.Node, ipVersion vo.IPVersion) string {
-	// If server address is set, use it directly
 	serverAddr := n.ServerAddress().Value()
-	if serverAddr != "" {
-		return serverAddr
+	ipv4 := ""
+	ipv6 := ""
+
+	if n.PublicIPv4() != nil {
+		ipv4 = *n.PublicIPv4()
+	}
+	if n.PublicIPv6() != nil {
+		ipv6 = *n.PublicIPv6()
 	}
 
-	// Fallback to public IP based on IP version preference
+	// Check if server_address is a valid usable address
+	isValidServerAddr := serverAddr != "" && serverAddr != "0.0.0.0" && serverAddr != "::"
+
 	switch ipVersion {
-	case vo.IPVersionIPv4:
-		if n.PublicIPv4() != nil && *n.PublicIPv4() != "" {
-			return *n.PublicIPv4()
-		}
 	case vo.IPVersionIPv6:
-		if n.PublicIPv6() != nil && *n.PublicIPv6() != "" {
-			return *n.PublicIPv6()
+		// Prefer IPv6: ipv6 > server_address > ipv4
+		if ipv6 != "" {
+			return ipv6
 		}
-	default: // auto: prefer IPv4, fallback to IPv6
-		if n.PublicIPv4() != nil && *n.PublicIPv4() != "" {
-			return *n.PublicIPv4()
+		if isValidServerAddr {
+			return serverAddr
 		}
-		if n.PublicIPv6() != nil && *n.PublicIPv6() != "" {
-			return *n.PublicIPv6()
+		if ipv4 != "" {
+			return ipv4
+		}
+
+	case vo.IPVersionIPv4:
+		// Prefer IPv4: ipv4 > server_address > ipv6
+		if ipv4 != "" {
+			return ipv4
+		}
+		if isValidServerAddr {
+			return serverAddr
+		}
+		if ipv6 != "" {
+			return ipv6
+		}
+
+	default: // "auto" or unknown
+		// Default priority: server_address > ipv4 > ipv6
+		if isValidServerAddr {
+			return serverAddr
+		}
+		if ipv4 != "" {
+			return ipv4
+		}
+		if ipv6 != "" {
+			return ipv6
 		}
 	}
 
-	return ""
+	return serverAddr
 }

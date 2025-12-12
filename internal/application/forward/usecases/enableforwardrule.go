@@ -63,11 +63,34 @@ func (uc *EnableForwardRuleUseCase) Execute(ctx context.Context, cmd EnableForwa
 
 	// Notify config sync asynchronously (failure only logs warning, doesn't block)
 	if uc.configSyncSvc != nil {
+		// Notify entry agent
 		go func() {
 			if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), rule.AgentID(), cmd.ShortID, "added"); err != nil {
-				uc.logger.Warnw("failed to notify config sync", "rule_id", cmd.ShortID, "error", err)
+				uc.logger.Warnw("failed to notify config sync for entry agent", "rule_id", cmd.ShortID, "agent_id", rule.AgentID(), "error", err)
 			}
 		}()
+
+		// Notify additional agents based on rule type
+		switch rule.RuleType().String() {
+		case "entry":
+			// Notify exit agent for entry type rules
+			if rule.ExitAgentID() != 0 {
+				go func() {
+					if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), rule.ExitAgentID(), cmd.ShortID, "added"); err != nil {
+						uc.logger.Warnw("failed to notify config sync for exit agent", "rule_id", cmd.ShortID, "agent_id", rule.ExitAgentID(), "error", err)
+					}
+				}()
+			}
+		case "chain", "direct_chain":
+			// Notify all chain agents for chain and direct_chain type rules
+			for _, agentID := range rule.ChainAgentIDs() {
+				go func(aid uint) {
+					if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), aid, cmd.ShortID, "added"); err != nil {
+						uc.logger.Warnw("failed to notify config sync for chain agent", "rule_id", cmd.ShortID, "agent_id", aid, "error", err)
+					}
+				}(agentID)
+			}
+		}
 	}
 
 	return nil
