@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -489,17 +490,18 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 		syncData.IsLastInChain = isLast
 
 		// Populate ChainAgentIDs (Stripe-style IDs)
-		chainAgentIDs := rule.ChainAgentIDs()
-		if len(chainAgentIDs) > 0 {
-			agentMap, err := s.agentRepo.GetShortIDsByIDs(ctx, chainAgentIDs)
+		// Full chain: [entry_agent] + chain_agents (matches GetChainPosition calculation)
+		fullChainIDs := append([]uint{rule.AgentID()}, rule.ChainAgentIDs()...)
+		if len(fullChainIDs) > 0 {
+			agentMap, err := s.agentRepo.GetShortIDsByIDs(ctx, fullChainIDs)
 			if err != nil {
 				s.logger.Warnw("failed to get chain agent short IDs",
 					"rule_id", rule.ID(),
 					"error", err,
 				)
 			} else {
-				syncData.ChainAgentIDs = make([]string, len(chainAgentIDs))
-				for i, chainAgentID := range chainAgentIDs {
+				syncData.ChainAgentIDs = make([]string, len(fullChainIDs))
+				for i, chainAgentID := range fullChainIDs {
 					if shortID, ok := agentMap[chainAgentID]; ok {
 						syncData.ChainAgentIDs[i] = id.FormatForwardAgentID(shortID)
 					}
@@ -561,24 +563,52 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 		chainPosition := rule.GetChainPosition(agentID)
 		isLast := rule.IsLastInChain(agentID)
 
+		// Defensive check: agent must be in chain
+		if chainPosition < 0 {
+			s.logger.Errorw("agent not found in direct_chain rule",
+				"agent_id", agentID,
+				"rule_id", rule.ID(),
+				"entry_agent_id", rule.AgentID(),
+				"chain_agent_ids", rule.ChainAgentIDs(),
+			)
+			return nil, fmt.Errorf("agent %d not found in direct_chain rule %d", agentID, rule.ID())
+		}
+
 		syncData.ChainPosition = chainPosition
 		syncData.IsLastInChain = isLast
 
 		// Populate ChainAgentIDs (Stripe-style IDs)
+		// Include entry agent (rule.AgentID) + chain agents for complete chain
+		entryAgentID := rule.AgentID()
 		chainAgentIDs := rule.ChainAgentIDs()
-		if len(chainAgentIDs) > 0 {
-			agentMap, err := s.agentRepo.GetShortIDsByIDs(ctx, chainAgentIDs)
-			if err != nil {
-				s.logger.Warnw("failed to get chain agent short IDs",
-					"rule_id", rule.ID(),
-					"error", err,
-				)
-			} else {
-				syncData.ChainAgentIDs = make([]string, len(chainAgentIDs))
-				for i, chainAgentID := range chainAgentIDs {
-					if shortID, ok := agentMap[chainAgentID]; ok {
-						syncData.ChainAgentIDs[i] = id.FormatForwardAgentID(shortID)
-					}
+
+		// Debug logging for chain position and role assignment
+		s.logger.Infow("direct_chain rule sync debug",
+			"current_agent_id", agentID,
+			"rule_entry_agent_id", entryAgentID,
+			"chain_agent_ids", chainAgentIDs,
+			"calculated_position", chainPosition,
+			"is_last", isLast,
+		)
+		fullChainIDs := append([]uint{entryAgentID}, chainAgentIDs...)
+
+		agentMap, err := s.agentRepo.GetShortIDsByIDs(ctx, fullChainIDs)
+		if err != nil {
+			s.logger.Warnw("failed to get chain agent short IDs",
+				"rule_id", rule.ID(),
+				"error", err,
+			)
+		} else {
+			syncData.ChainAgentIDs = make([]string, len(fullChainIDs))
+			for i, chainAgentID := range fullChainIDs {
+				if shortID, ok := agentMap[chainAgentID]; ok {
+					syncData.ChainAgentIDs[i] = id.FormatForwardAgentID(shortID)
+				} else {
+					s.logger.Warnw("chain agent ID not found in agent map",
+						"rule_id", rule.ID(),
+						"chain_agent_id", chainAgentID,
+						"position", i,
+					)
 				}
 			}
 		}
@@ -600,6 +630,11 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 		// For non-exit agents in chain, populate next hop information
 		if !isLast {
 			nextHopAgentID, nextHopPort := rule.GetNextHopForDirectChain(agentID)
+			s.logger.Infow("direct_chain next hop lookup",
+				"current_agent_id", agentID,
+				"next_hop_agent_id", nextHopAgentID,
+				"next_hop_port", nextHopPort,
+			)
 			if nextHopAgentID != 0 {
 				// Get next hop agent details
 				nextAgent, err := s.agentRepo.GetByID(ctx, nextHopAgentID)
@@ -613,6 +648,16 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 					syncData.NextHopAgentID = id.FormatForwardAgentID(nextAgent.ShortID())
 					syncData.NextHopAddress = nextAgent.GetEffectiveTunnelAddress()
 					syncData.NextHopPort = nextHopPort
+
+					// Generate connection token for next hop authentication
+					nextHopToken, _ := s.agentTokenService.Generate(nextAgent.ShortID())
+					syncData.NextHopConnectionToken = nextHopToken
+
+					s.logger.Infow("direct_chain next hop token generated",
+						"current_agent_id", agentID,
+						"next_hop_short_id", nextAgent.ShortID(),
+						"next_hop_token", nextHopToken,
+					)
 				}
 			}
 		} else {
@@ -775,12 +820,14 @@ func (s *ConfigSyncService) NotifyExitPortChange(ctx context.Context, exitAgentI
 		// Continue with entry rules
 	} else {
 		for _, rule := range chainRules {
-			if rule.RuleType().String() == "chain" {
+			ruleType := rule.RuleType().String()
+			if ruleType == "chain" || ruleType == "direct_chain" {
 				// Find agents that have this exit agent as their next hop
-				chainAgents := rule.ChainAgentIDs()
-				for i, agentID := range chainAgents {
+				// Full chain: [entry_agent] + chainAgentIDs
+				fullChain := append([]uint{rule.AgentID()}, rule.ChainAgentIDs()...)
+				for i, agentID := range fullChain {
 					// Check if exitAgentID is the next hop for this agent
-					if i+1 < len(chainAgents) && chainAgents[i+1] == exitAgentID {
+					if i+1 < len(fullChain) && fullChain[i+1] == exitAgentID {
 						entryAgentIDs[agentID] = true
 					}
 				}
@@ -909,6 +956,12 @@ func (s *ConfigSyncService) getEntryRulesForExitAgent(ctx context.Context, entry
 		case "chain":
 			// Check if this entry agent has exitAgentID as its next hop
 			nextHop := rule.GetNextHopAgentID(entryAgentID)
+			if nextHop == exitAgentID {
+				result = append(result, rule)
+			}
+		case "direct_chain":
+			// Check if this agent has exitAgentID as its next hop in direct_chain
+			nextHop, _ := rule.GetNextHopForDirectChain(entryAgentID)
 			if nextHop == exitAgentID {
 				result = append(result, rule)
 			}

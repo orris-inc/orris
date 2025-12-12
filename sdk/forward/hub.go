@@ -129,23 +129,24 @@ type ConfigSyncData struct {
 
 // RuleSyncData represents rule synchronization data (aligned with server DTO).
 type RuleSyncData struct {
-	ID             string   `json:"id"`       // Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ")
-	ShortID        string   `json:"short_id"` // Deprecated: use ID instead
-	RuleType       string   `json:"rule_type"`
-	ListenPort     uint16   `json:"listen_port"`
-	TargetAddress  string   `json:"target_address,omitempty"`
-	TargetPort     uint16   `json:"target_port,omitempty"`
-	BindIP         string   `json:"bind_ip,omitempty"` // Bind IP address for outbound connections
-	Protocol       string   `json:"protocol"`
-	Role           string   `json:"role,omitempty"`
-	AgentID        string   `json:"agent_id,omitempty"` // Entry agent ID (for exit agents to verify handshake)
-	NextHopAgentID string   `json:"next_hop_agent_id,omitempty"`
-	NextHopAddress string   `json:"next_hop_address,omitempty"`
-	NextHopWsPort  uint16   `json:"next_hop_ws_port,omitempty"`
-	NextHopPort    uint16   `json:"next_hop_port,omitempty"` // Next agent's listen port for direct_chain
-	ChainAgentIDs  []string `json:"chain_agent_ids,omitempty"`
-	ChainPosition  int      `json:"chain_position,omitempty"`
-	IsLastInChain  bool     `json:"is_last_in_chain,omitempty"`
+	ID                     string   `json:"id"`       // Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ")
+	ShortID                string   `json:"short_id"` // Deprecated: use ID instead
+	RuleType               string   `json:"rule_type"`
+	ListenPort             uint16   `json:"listen_port"`
+	TargetAddress          string   `json:"target_address,omitempty"`
+	TargetPort             uint16   `json:"target_port,omitempty"`
+	BindIP                 string   `json:"bind_ip,omitempty"` // Bind IP address for outbound connections
+	Protocol               string   `json:"protocol"`
+	Role                   string   `json:"role,omitempty"`
+	AgentID                string   `json:"agent_id,omitempty"` // Entry agent ID (for exit agents to verify handshake)
+	NextHopAgentID         string   `json:"next_hop_agent_id,omitempty"`
+	NextHopAddress         string   `json:"next_hop_address,omitempty"`
+	NextHopWsPort          uint16   `json:"next_hop_ws_port,omitempty"`
+	NextHopPort            uint16   `json:"next_hop_port,omitempty"`             // Next agent's listen port for direct_chain
+	NextHopConnectionToken string   `json:"next_hop_connection_token,omitempty"` // Short-term token for next hop authentication
+	ChainAgentIDs          []string `json:"chain_agent_ids,omitempty"`
+	ChainPosition          int      `json:"chain_position,omitempty"`
+	IsLastInChain          bool     `json:"is_last_in_chain,omitempty"`
 }
 
 // ConfigAckData represents configuration acknowledgment data.

@@ -130,7 +130,18 @@ func (d *ForwardRuleDTO) PopulateAgentInfo(agentMap AgentShortIDMap) {
 		}
 	}
 	// Populate chain agent IDs
-	if len(d.internalChainAgents) > 0 {
+	// For chain and direct_chain types, include entry agent (d.internalAgentID) as first element
+	if len(d.internalChainAgents) > 0 && (d.RuleType == "chain" || d.RuleType == "direct_chain") {
+		// Full chain: [entry_agent] + chain_agents
+		fullChain := append([]uint{d.internalAgentID}, d.internalChainAgents...)
+		d.ChainAgentIDs = make([]string, len(fullChain))
+		for i, agentID := range fullChain {
+			if shortID, ok := agentMap[agentID]; ok {
+				d.ChainAgentIDs[i] = id.FormatForwardAgentID(shortID)
+			}
+		}
+	} else if len(d.internalChainAgents) > 0 {
+		// Fallback for other types (shouldn't happen)
 		d.ChainAgentIDs = make([]string, len(d.internalChainAgents))
 		for i, agentID := range d.internalChainAgents {
 			if shortID, ok := agentMap[agentID]; ok {

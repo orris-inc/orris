@@ -81,6 +81,7 @@ func SetupForwardRoutes(engine *gin.Engine, cfg *ForwardRouteConfig) {
 	forwardAgentAPI.Use(cfg.ForwardAgentTokenMiddleware.RequireForwardAgentToken())
 	{
 		forwardAgentAPI.GET("/rules", cfg.ForwardAgentAPIHandler.GetEnabledRules)
+		forwardAgentAPI.GET("/rules/:rule_id", cfg.ForwardAgentAPIHandler.RefreshRule)
 		forwardAgentAPI.POST("/traffic", cfg.ForwardAgentAPIHandler.ReportTraffic)
 		forwardAgentAPI.POST("/status", cfg.ForwardAgentAPIHandler.ReportStatus)
 		forwardAgentAPI.GET("/exit-endpoint/:agent_id", cfg.ForwardAgentAPIHandler.GetExitEndpoint)

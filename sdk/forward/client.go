@@ -76,6 +76,20 @@ func (c *Client) GetRules(ctx context.Context) (*RulesResponse, error) {
 	return &resp, nil
 }
 
+// RefreshRule retrieves the latest configuration for a specific rule.
+// This is useful when connection to the next hop fails and the agent needs
+// to get the latest ws_listen_port or other dynamic configuration.
+// ruleID should be the Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ").
+func (c *Client) RefreshRule(ctx context.Context, ruleID string) (*Rule, error) {
+	url := fmt.Sprintf("%s/forward-agent-api/rules/%s", c.baseURL, ruleID)
+
+	var rule Rule
+	if err := c.doRequest(ctx, http.MethodGet, url, nil, &rule); err != nil {
+		return nil, fmt.Errorf("refresh rule: %w", err)
+	}
+	return &rule, nil
+}
+
 // ReportTraffic reports traffic data for forward rules.
 func (c *Client) ReportTraffic(ctx context.Context, items []TrafficItem) (*TrafficReportResult, error) {
 	url := fmt.Sprintf("%s/forward-agent-api/traffic", c.baseURL)

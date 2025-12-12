@@ -375,6 +375,18 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 		chainPosition := rule.GetChainPosition(agentID)
 		isLast := rule.IsLastInChain(agentID)
 
+		// Defensive check: agent must be in chain
+		if chainPosition < 0 {
+			h.logger.Errorw("agent not found in direct_chain rule",
+				"agent_id", agentID,
+				"rule_id", ruleDTO.ID,
+				"entry_agent_id", rule.AgentID(),
+				"chain_agent_ids", rule.ChainAgentIDs(),
+			)
+			// Skip this rule instead of failing the entire request
+			continue
+		}
+
 		ruleDTO.ChainPosition = chainPosition
 		ruleDTO.IsLastInChain = isLast
 
@@ -413,11 +425,16 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 					ruleDTO.NextHopAddress = nextAgent.GetEffectiveTunnelAddress()
 					ruleDTO.NextHopPort = nextHopPort
 
+					// Generate connection token for next hop authentication
+					nextHopToken, _ := h.agentTokenService.Generate(nextAgent.ShortID())
+					ruleDTO.NextHopConnectionToken = nextHopToken
+
 					h.logger.Debugw("populated next hop info for direct_chain rule",
 						"rule_id", ruleDTO.ID,
 						"next_hop_agent_id", ruleDTO.NextHopAgentID,
 						"next_hop_address", ruleDTO.NextHopAddress,
 						"next_hop_port", ruleDTO.NextHopPort,
+						"next_hop_connection_token", nextHopToken,
 					)
 				}
 			}
@@ -513,6 +530,244 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 		"token_signing_secret": h.tokenSigningSecret,
 		"client_token":         clientToken,
 	})
+}
+
+// RefreshRule handles GET /forward-agent-api/rules/:rule_id
+// This endpoint allows an agent to refresh the configuration for a specific rule.
+// It returns the latest next_hop_ws_port and other dynamic configuration.
+// This is useful when the agent detects a connection failure to the next hop.
+func (h *AgentHandler) RefreshRule(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	// Get authenticated agent ID from context
+	agentID, err := h.getAuthenticatedAgentID(c)
+	if err != nil {
+		h.logger.Warnw("failed to get authenticated agent ID",
+			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	// Parse rule ID from path (Stripe-style ID like "fr_xK9mP2vL3nQ")
+	ruleIDStr := c.Param("rule_id")
+	shortID, err := id.ParseForwardRuleID(ruleIDStr)
+	if err != nil {
+		h.logger.Warnw("invalid rule_id parameter",
+			"rule_id", ruleIDStr,
+			"agent_id", agentID,
+			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid rule_id parameter: must be in format fr_xxx")
+		return
+	}
+
+	// Look up the rule by short ID
+	rule, err := h.repo.GetByShortID(ctx, shortID)
+	if err != nil {
+		h.logger.Warnw("rule not found",
+			"rule_id", ruleIDStr,
+			"short_id", shortID,
+			"agent_id", agentID,
+			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusNotFound, "rule not found")
+		return
+	}
+
+	// Verify that this agent has access to the rule
+	hasAccess := false
+	if rule.AgentID() == agentID {
+		hasAccess = true
+	} else if rule.RuleType().String() == "entry" && rule.ExitAgentID() == agentID {
+		hasAccess = true
+	} else if rule.RuleType().String() == "chain" || rule.RuleType().String() == "direct_chain" {
+		// Check if agent is in the chain
+		if rule.GetChainPosition(agentID) >= 0 {
+			hasAccess = true
+		}
+	}
+
+	if !hasAccess {
+		h.logger.Warnw("agent does not have access to rule",
+			"rule_id", ruleIDStr,
+			"agent_id", agentID,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusForbidden, "access denied")
+		return
+	}
+
+	h.logger.Infow("forward client requesting rule refresh",
+		"rule_id", ruleIDStr,
+		"agent_id", agentID,
+		"ip", c.ClientIP(),
+	)
+
+	// Convert to DTO
+	ruleDTO := dto.ToForwardRuleDTO(rule)
+
+	// Populate agent info
+	agentIDs := dto.CollectAgentIDs([]*dto.ForwardRuleDTO{ruleDTO})
+	if len(agentIDs) > 0 {
+		agentMap, err := h.agentRepo.GetShortIDsByIDs(ctx, agentIDs)
+		if err != nil {
+			h.logger.Warnw("failed to get agent short IDs",
+				"agent_ids", agentIDs,
+				"error", err,
+			)
+			agentMap = make(dto.AgentShortIDMap)
+		}
+		ruleDTO.PopulateAgentInfo(agentMap)
+	}
+
+	// Resolve node address if applicable
+	targetNodeID := ruleDTO.InternalTargetNodeID()
+	if targetNodeID != nil && *targetNodeID != 0 {
+		node, err := h.nodeRepo.GetByID(ctx, *targetNodeID)
+		if err == nil && node != nil {
+			targetAddress := h.resolveNodeAddress(node, ruleDTO.IPVersion)
+			ruleDTO.TargetAddress = targetAddress
+			ruleDTO.TargetPort = node.AgentPort()
+		}
+	}
+
+	// Populate role-specific information based on rule type
+	switch rule.RuleType().String() {
+	case "entry":
+		// Populate next hop info for entry agent
+		if rule.AgentID() == agentID {
+			exitAgentID := rule.ExitAgentID()
+			if exitAgentID != 0 {
+				exitAgent, err := h.agentRepo.GetByID(ctx, exitAgentID)
+				if err == nil && exitAgent != nil {
+					ruleDTO.NextHopAgentID = id.FormatForwardAgentID(exitAgent.ShortID())
+					ruleDTO.NextHopAddress = exitAgent.GetEffectiveTunnelAddress()
+
+					exitStatus, err := h.statusQuerier.GetStatus(ctx, exitAgentID)
+					if err == nil && exitStatus != nil && exitStatus.WsListenPort > 0 {
+						ruleDTO.NextHopWsPort = exitStatus.WsListenPort
+					}
+				}
+			}
+		}
+
+	case "chain":
+		chainPosition := rule.GetChainPosition(agentID)
+		isLast := rule.IsLastInChain(agentID)
+
+		ruleDTO.ChainPosition = chainPosition
+		ruleDTO.IsLastInChain = isLast
+
+		// Populate ChainAgentIDs (full chain: entry + chain_agents)
+		fullChainIDs := append([]uint{rule.AgentID()}, rule.ChainAgentIDs()...)
+		if len(fullChainIDs) > 0 {
+			agentMap, err := h.agentRepo.GetShortIDsByIDs(ctx, fullChainIDs)
+			if err == nil {
+				ruleDTO.ChainAgentIDs = make([]string, len(fullChainIDs))
+				for i, chainAgentID := range fullChainIDs {
+					if shortID, ok := agentMap[chainAgentID]; ok {
+						ruleDTO.ChainAgentIDs[i] = id.FormatForwardAgentID(shortID)
+					}
+				}
+			}
+		}
+
+		// Determine role
+		if chainPosition == 0 {
+			ruleDTO.Role = "entry"
+		} else if isLast {
+			ruleDTO.Role = "exit"
+		} else {
+			ruleDTO.Role = "relay"
+		}
+
+		// For non-exit agents, populate next hop info
+		if !isLast {
+			nextHopAgentID := rule.GetNextHopAgentID(agentID)
+			if nextHopAgentID != 0 {
+				nextAgent, err := h.agentRepo.GetByID(ctx, nextHopAgentID)
+				if err == nil && nextAgent != nil {
+					ruleDTO.NextHopAgentID = id.FormatForwardAgentID(nextAgent.ShortID())
+					ruleDTO.NextHopAddress = nextAgent.GetEffectiveTunnelAddress()
+
+					nextStatus, err := h.statusQuerier.GetStatus(ctx, nextHopAgentID)
+					if err == nil && nextStatus != nil && nextStatus.WsListenPort > 0 {
+						ruleDTO.NextHopWsPort = nextStatus.WsListenPort
+					}
+				}
+			}
+			// Clear target info for non-exit agents (minimum info principle)
+			ruleDTO.TargetAddress = ""
+			ruleDTO.TargetPort = 0
+		}
+
+	case "direct_chain":
+		chainPosition := rule.GetChainPosition(agentID)
+		isLast := rule.IsLastInChain(agentID)
+
+		ruleDTO.ChainPosition = chainPosition
+		ruleDTO.IsLastInChain = isLast
+
+		// Populate ChainAgentIDs (full chain: entry + chain_agents)
+		fullChainIDs := append([]uint{rule.AgentID()}, rule.ChainAgentIDs()...)
+		if len(fullChainIDs) > 0 {
+			agentMap, err := h.agentRepo.GetShortIDsByIDs(ctx, fullChainIDs)
+			if err == nil {
+				ruleDTO.ChainAgentIDs = make([]string, len(fullChainIDs))
+				for i, chainAgentID := range fullChainIDs {
+					if shortID, ok := agentMap[chainAgentID]; ok {
+						ruleDTO.ChainAgentIDs[i] = id.FormatForwardAgentID(shortID)
+					}
+				}
+			}
+		}
+
+		// Determine role and set ListenPort
+		if chainPosition == 0 {
+			ruleDTO.Role = "entry"
+			ruleDTO.ListenPort = rule.ListenPort()
+		} else if isLast {
+			ruleDTO.Role = "exit"
+			ruleDTO.ListenPort = rule.GetAgentListenPort(agentID)
+		} else {
+			ruleDTO.Role = "relay"
+			ruleDTO.ListenPort = rule.GetAgentListenPort(agentID)
+		}
+
+		// For non-exit agents, populate next hop info
+		if !isLast {
+			nextHopAgentID, nextHopPort := rule.GetNextHopForDirectChain(agentID)
+			if nextHopAgentID != 0 {
+				nextAgent, err := h.agentRepo.GetByID(ctx, nextHopAgentID)
+				if err == nil && nextAgent != nil {
+					ruleDTO.NextHopAgentID = id.FormatForwardAgentID(nextAgent.ShortID())
+					ruleDTO.NextHopAddress = nextAgent.GetEffectiveTunnelAddress()
+					ruleDTO.NextHopPort = nextHopPort
+
+					// Generate connection token for next hop authentication
+					nextHopToken, _ := h.agentTokenService.Generate(nextAgent.ShortID())
+					ruleDTO.NextHopConnectionToken = nextHopToken
+				}
+			}
+			// Clear target info for non-exit agents (minimum info principle)
+			ruleDTO.TargetAddress = ""
+			ruleDTO.TargetPort = 0
+		}
+	}
+
+	h.logger.Infow("rule refresh successful",
+		"rule_id", ruleIDStr,
+		"agent_id", agentID,
+		"rule_type", rule.RuleType().String(),
+		"next_hop_ws_port", ruleDTO.NextHopWsPort,
+		"ip", c.ClientIP(),
+	)
+
+	utils.SuccessResponse(c, http.StatusOK, "rule refreshed successfully", ruleDTO)
 }
 
 func (h *AgentHandler) ReportTraffic(c *gin.Context) {
