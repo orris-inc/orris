@@ -12,14 +12,14 @@ import (
 type ForwardRuleDTO struct {
 	ID              string            `json:"id"`                          // Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ")
 	AgentID         string            `json:"agent_id"`                    // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
-	RuleType        string            `json:"rule_type"`                   // direct, entry, chain
+	RuleType        string            `json:"rule_type"`                   // direct, entry, chain, direct_chain
 	ExitAgentID     string            `json:"exit_agent_id,omitempty"`     // for entry type (Stripe-style prefixed ID)
-	ChainAgentIDs   []string          `json:"chain_agent_ids,omitempty"`   // for chain type (ordered Stripe-style prefixed IDs)
+	ChainAgentIDs   []string          `json:"chain_agent_ids,omitempty"`   // for chain and direct_chain types (ordered Stripe-style prefixed IDs)
 	ChainPortConfig map[string]uint16 `json:"chain_port_config,omitempty"` // for direct_chain type (agent short_id -> listen port)
 	Name            string            `json:"name"`
 	ListenPort      uint16            `json:"listen_port"`
-	TargetAddress   string            `json:"target_address,omitempty"` // for direct, entry, and chain exit types
-	TargetPort      uint16            `json:"target_port,omitempty"`    // for direct, entry, and chain exit types
+	TargetAddress   string            `json:"target_address,omitempty"` // for all types (exit role only for chain/direct_chain)
+	TargetPort      uint16            `json:"target_port,omitempty"`    // for all types (exit role only for chain/direct_chain)
 	TargetNodeID    string            `json:"target_node_id,omitempty"` // Stripe-style prefixed Node ID (e.g., "node_xK9mP2vL3nQ")
 	IPVersion       string            `json:"ip_version"`               // auto, ipv4, ipv6
 	Protocol        string            `json:"protocol"`
@@ -52,10 +52,11 @@ type ForwardRuleDTO struct {
 	// Internal fields for mapping (not exposed in JSON)
 	internalAgentID     uint   `json:"-"`
 	internalExitAgentID uint   `json:"-"`
-	internalChainAgents []uint `json:"-"` // internal chain agent IDs for lookup
-	internalTargetNode  *uint  `json:"-"` // internal node ID for lookup
-	agentShortID        string `json:"-"`
-	exitAgentShortID    string `json:"-"`
+	internalChainAgents    []uint          `json:"-"` // internal chain agent IDs for lookup
+	internalChainPortConfig map[uint]uint16 `json:"-"` // internal chain port config for lookup
+	internalTargetNode     *uint           `json:"-"` // internal node ID for lookup
+	agentShortID           string          `json:"-"`
+	exitAgentShortID       string          `json:"-"`
 }
 
 // ToForwardRuleDTO converts a domain forward rule to DTO.
@@ -86,12 +87,13 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 		UploadBytes:         rule.UploadBytes(),
 		DownloadBytes:       rule.DownloadBytes(),
 		TotalBytes:          rule.TotalBytes(),
-		CreatedAt:           rule.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:           rule.UpdatedAt().Format("2006-01-02T15:04:05Z07:00"),
-		internalAgentID:     rule.AgentID(),
-		internalExitAgentID: rule.ExitAgentID(),
-		internalChainAgents: rule.ChainAgentIDs(),
-		internalTargetNode:  rule.TargetNodeID(),
+		CreatedAt:               rule.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:               rule.UpdatedAt().Format("2006-01-02T15:04:05Z07:00"),
+		internalAgentID:         rule.AgentID(),
+		internalExitAgentID:     rule.ExitAgentID(),
+		internalChainAgents:     rule.ChainAgentIDs(),
+		internalChainPortConfig: rule.ChainPortConfig(),
+		internalTargetNode:      rule.TargetNodeID(),
 	}
 }
 
@@ -131,6 +133,15 @@ func (d *ForwardRuleDTO) PopulateAgentInfo(agentMap AgentShortIDMap) {
 		for i, agentID := range d.internalChainAgents {
 			if shortID, ok := agentMap[agentID]; ok {
 				d.ChainAgentIDs[i] = id.FormatForwardAgentID(shortID)
+			}
+		}
+	}
+	// Populate chain port config (for direct_chain type)
+	if len(d.internalChainPortConfig) > 0 {
+		d.ChainPortConfig = make(map[string]uint16, len(d.internalChainPortConfig))
+		for agentID, port := range d.internalChainPortConfig {
+			if shortID, ok := agentMap[agentID]; ok {
+				d.ChainPortConfig[shortID] = port
 			}
 		}
 	}

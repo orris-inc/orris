@@ -563,18 +563,19 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 			}
 		}
 
-		// Determine role
+		// Determine role and set ListenPort
+		// Entry agent uses rule.ListenPort(), other agents use chainPortConfig
 		if chainPosition == 0 {
 			syncData.Role = "entry"
+			// Entry agent uses the rule's listen_port field
+			syncData.ListenPort = rule.ListenPort()
 		} else if isLast {
 			syncData.Role = "exit"
+			syncData.ListenPort = rule.GetAgentListenPort(agentID)
 		} else {
 			syncData.Role = "relay"
+			syncData.ListenPort = rule.GetAgentListenPort(agentID)
 		}
-
-		// Set ListenPort from chainPortConfig
-		listenPort := rule.GetAgentListenPort(agentID)
-		syncData.ListenPort = listenPort
 
 		// For non-exit agents in chain, populate next hop information
 		if !isLast {

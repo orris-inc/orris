@@ -437,8 +437,9 @@ func (r *ForwardRule) GetNextHopAgentID(currentAgentID uint) uint {
 }
 
 // IsLastInChain checks if the given agent is the last in the forwarding chain.
+// Works for both chain and direct_chain rule types.
 func (r *ForwardRule) IsLastInChain(agentID uint) bool {
-	if !r.ruleType.IsChain() {
+	if !r.ruleType.IsChain() && !r.ruleType.IsDirectChain() {
 		return false
 	}
 	if len(r.chainAgentIDs) == 0 {
@@ -448,9 +449,9 @@ func (r *ForwardRule) IsLastInChain(agentID uint) bool {
 }
 
 // GetChainPosition returns the position (0-indexed) of the agent in the chain.
-// Returns -1 if not in chain.
+// Returns -1 if not in chain. Works for both chain and direct_chain rule types.
 func (r *ForwardRule) GetChainPosition(agentID uint) int {
-	if !r.ruleType.IsChain() {
+	if !r.ruleType.IsChain() && !r.ruleType.IsDirectChain() {
 		return -1
 	}
 
@@ -635,9 +636,9 @@ func (r *ForwardRule) UpdateTarget(address string, port uint16) error {
 // UpdateTargetNodeID updates the target node ID for dynamic address resolution.
 // This will clear the targetAddress and targetPort when setting node ID.
 func (r *ForwardRule) UpdateTargetNodeID(nodeID *uint) error {
-	// Only direct, entry, and chain types support targetNodeID
-	if !r.ruleType.IsDirect() && !r.ruleType.IsEntry() && !r.ruleType.IsChain() {
-		return fmt.Errorf("target node ID can only be set for direct, entry, or chain type rules")
+	// Only direct, entry, chain, and direct_chain types support targetNodeID
+	if !r.ruleType.IsDirect() && !r.ruleType.IsEntry() && !r.ruleType.IsChain() && !r.ruleType.IsDirectChain() {
+		return fmt.Errorf("target node ID can only be set for direct, entry, chain, or direct_chain type rules")
 	}
 
 	// If nodeID is nil or 0, clear the targetNodeID

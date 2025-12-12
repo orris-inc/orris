@@ -20,10 +20,10 @@ type CreateForwardRuleCommand struct {
 	ChainAgentShortIDs []string          // required for chain type (ordered list of Stripe-style short IDs without prefix)
 	ChainPortConfig    map[string]uint16 // required for direct_chain type (agent short_id -> listen port)
 	Name               string
-	ListenPort         uint16 // required for direct, entry, and chain types
-	TargetAddress      string // required for direct, entry, and chain types (mutually exclusive with TargetNodeShortID)
-	TargetPort         uint16 // required for direct, entry, and chain types (mutually exclusive with TargetNodeShortID)
-	TargetNodeShortID  string // optional for direct, entry, and chain types (Stripe-style short ID without prefix)
+	ListenPort         uint16 // required for all types (direct, entry, chain, direct_chain)
+	TargetAddress      string // required for all types (mutually exclusive with TargetNodeShortID)
+	TargetPort         uint16 // required for all types (mutually exclusive with TargetNodeShortID)
+	TargetNodeShortID  string // optional for all types (Stripe-style short ID without prefix)
 	IPVersion          string // auto, ipv4, ipv6 (default: auto)
 	Protocol           string
 	Remark             string
@@ -247,7 +247,7 @@ func (uc *CreateForwardRuleUseCase) validateCommand(_ context.Context, cmd Creat
 	// Validate rule type
 	ruleType := vo.ForwardRuleType(cmd.RuleType)
 	if !ruleType.IsValid() {
-		return errors.NewValidationError(fmt.Sprintf("invalid rule_type: %s, must be direct, entry, or chain", cmd.RuleType))
+		return errors.NewValidationError(fmt.Sprintf("invalid rule_type: %s, must be direct, entry, chain, or direct_chain", cmd.RuleType))
 	}
 
 	// Validate protocol

@@ -380,9 +380,15 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 			"is_last", isLast,
 		)
 
-		// Set ListenPort from chainPortConfig
-		listenPort := rule.GetAgentListenPort(agentID)
-		ruleDTO.ListenPort = listenPort
+		// Set ListenPort based on role
+		// Entry agent uses rule.ListenPort(), other agents use chainPortConfig
+		if chainPosition == 0 {
+			// Entry agent uses the rule's listen_port field
+			ruleDTO.ListenPort = rule.ListenPort()
+		} else {
+			// Relay/exit agents use chainPortConfig
+			ruleDTO.ListenPort = rule.GetAgentListenPort(agentID)
+		}
 
 		// For non-exit agents in chain, populate next hop information
 		if !isLast {
