@@ -484,6 +484,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	reportAgentStatusUC := forwardUsecases.NewReportAgentStatusUseCase(
 		forwardAgentRepo,
 		forwardAgentStatusAdapter,
+		forwardAgentStatusAdapter, // statusQuerier (same adapter implements both interfaces)
 		agentLastSeenUpdater,
 		log,
 	)
@@ -508,6 +509,9 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Initialize and register config sync service for forward domain
 	configSyncService := forwardServices.NewConfigSyncService(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, forwardAgentStatusAdapter, cfg.Forward.TokenSigningSecret, agentHub, log)
 	agentHub.RegisterMessageHandler(configSyncService)
+
+	// Set port change notifier for exit agent port change detection
+	reportAgentStatusUC.SetPortChangeNotifier(configSyncService)
 
 	// Now initialize forward rule use cases with configSyncService
 	createForwardRuleUC = forwardUsecases.NewCreateForwardRuleUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, configSyncService, log)

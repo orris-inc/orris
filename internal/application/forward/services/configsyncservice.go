@@ -647,3 +647,188 @@ func (s *ConfigSyncService) resolveNodeAddress(targetNode *node.Node, ipVersion 
 
 	return serverAddr
 }
+
+// NotifyExitPortChange notifies all entry agents that have rules pointing to this exit agent.
+// This is called when an exit agent's ws_listen_port changes.
+func (s *ConfigSyncService) NotifyExitPortChange(ctx context.Context, exitAgentID uint) error {
+	s.logger.Infow("notifying entry agents of exit agent port change",
+		"exit_agent_id", exitAgentID,
+	)
+
+	// Find all entry rules where this agent is the exit agent
+	entryRules, err := s.repo.ListEnabledByExitAgentID(ctx, exitAgentID)
+	if err != nil {
+		s.logger.Errorw("failed to list entry rules for exit agent",
+			"exit_agent_id", exitAgentID,
+			"error", err,
+		)
+		return err
+	}
+
+	if len(entryRules) == 0 {
+		s.logger.Debugw("no entry rules found for exit agent",
+			"exit_agent_id", exitAgentID,
+		)
+		return nil
+	}
+
+	// Collect unique entry agent IDs
+	entryAgentIDs := make(map[uint]bool)
+	for _, rule := range entryRules {
+		if rule.RuleType().String() == "entry" {
+			entryAgentIDs[rule.AgentID()] = true
+		}
+	}
+
+	// Also check chain rules where this agent participates
+	chainRules, err := s.repo.ListEnabledByChainAgentID(ctx, exitAgentID)
+	if err != nil {
+		s.logger.Warnw("failed to list chain rules for exit agent",
+			"exit_agent_id", exitAgentID,
+			"error", err,
+		)
+		// Continue with entry rules
+	} else {
+		for _, rule := range chainRules {
+			if rule.RuleType().String() == "chain" {
+				// Find agents that have this exit agent as their next hop
+				chainAgents := rule.ChainAgentIDs()
+				for i, agentID := range chainAgents {
+					// Check if exitAgentID is the next hop for this agent
+					if i+1 < len(chainAgents) && chainAgents[i+1] == exitAgentID {
+						entryAgentIDs[agentID] = true
+					}
+				}
+			}
+		}
+	}
+
+	s.logger.Infow("found entry agents to notify",
+		"exit_agent_id", exitAgentID,
+		"entry_agent_count", len(entryAgentIDs),
+	)
+
+	// Notify each entry agent with updated rules
+	var lastErr error
+	for entryAgentID := range entryAgentIDs {
+		if !s.hub.IsAgentOnline(entryAgentID) {
+			s.logger.Debugw("entry agent offline, skipping port change notification",
+				"entry_agent_id", entryAgentID,
+				"exit_agent_id", exitAgentID,
+			)
+			continue
+		}
+
+		// Get rules for this entry agent that point to the exit agent
+		agentRules, err := s.getEntryRulesForExitAgent(ctx, entryAgentID, exitAgentID)
+		if err != nil {
+			s.logger.Warnw("failed to get rules for entry agent",
+				"entry_agent_id", entryAgentID,
+				"exit_agent_id", exitAgentID,
+				"error", err,
+			)
+			lastErr = err
+			continue
+		}
+
+		if len(agentRules) == 0 {
+			continue
+		}
+
+		// Convert rules to sync data
+		ruleSyncDataList := make([]dto.RuleSyncData, 0, len(agentRules))
+		for _, rule := range agentRules {
+			syncData, err := s.convertRuleToSyncData(ctx, rule, entryAgentID)
+			if err != nil {
+				s.logger.Warnw("failed to convert rule to sync data",
+					"rule_id", rule.ID(),
+					"error", err,
+				)
+				continue
+			}
+			ruleSyncDataList = append(ruleSyncDataList, *syncData)
+		}
+
+		if len(ruleSyncDataList) == 0 {
+			continue
+		}
+
+		// Increment global version
+		version := s.globalVersion.Add(1)
+
+		// Build sync data (as updated rules)
+		syncData := &dto.ConfigSyncData{
+			Version:  version,
+			FullSync: false,
+			Updated:  ruleSyncDataList,
+		}
+
+		// Get entry agent short ID
+		entryAgent, err := s.agentRepo.GetByID(ctx, entryAgentID)
+		if err != nil || entryAgent == nil {
+			s.logger.Warnw("failed to get entry agent",
+				"entry_agent_id", entryAgentID,
+				"error", err,
+			)
+			continue
+		}
+
+		// Send sync message
+		msg := &dto.HubMessage{
+			Type:      dto.MsgTypeConfigSync,
+			AgentID:   id.FormatForwardAgentID(entryAgent.ShortID()),
+			Timestamp: time.Now().Unix(),
+			Data:      syncData,
+		}
+
+		if err := s.hub.SendMessageToAgent(entryAgentID, msg); err != nil {
+			s.logger.Warnw("failed to send port change notification to entry agent",
+				"entry_agent_id", entryAgentID,
+				"exit_agent_id", exitAgentID,
+				"error", err,
+			)
+			lastErr = err
+			continue
+		}
+
+		// Update agent version
+		s.agentVersions.Store(entryAgentID, version)
+
+		s.logger.Infow("port change notification sent to entry agent",
+			"entry_agent_id", entryAgentID,
+			"exit_agent_id", exitAgentID,
+			"version", version,
+			"rule_count", len(ruleSyncDataList),
+		)
+	}
+
+	return lastErr
+}
+
+// getEntryRulesForExitAgent retrieves enabled rules for an entry agent that point to a specific exit agent.
+func (s *ConfigSyncService) getEntryRulesForExitAgent(ctx context.Context, entryAgentID, exitAgentID uint) ([]*forward.ForwardRule, error) {
+	// Get all enabled rules for this entry agent
+	rules, err := s.repo.ListEnabledByAgentID(ctx, entryAgentID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter rules that point to the exit agent
+	result := make([]*forward.ForwardRule, 0)
+	for _, rule := range rules {
+		switch rule.RuleType().String() {
+		case "entry":
+			if rule.ExitAgentID() == exitAgentID {
+				result = append(result, rule)
+			}
+		case "chain":
+			// Check if this entry agent has exitAgentID as its next hop
+			nextHop := rule.GetNextHopAgentID(entryAgentID)
+			if nextHop == exitAgentID {
+				result = append(result, rule)
+			}
+		}
+	}
+
+	return result, nil
+}

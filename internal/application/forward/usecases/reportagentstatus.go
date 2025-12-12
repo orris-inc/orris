@@ -21,12 +21,20 @@ type AgentLastSeenUpdater interface {
 	UpdateLastSeen(ctx context.Context, agentID uint) error
 }
 
+// ExitPortChangeNotifier defines the interface for notifying entry agents when exit agent's port changes.
+type ExitPortChangeNotifier interface {
+	// NotifyExitPortChange notifies all entry agents that have rules pointing to this exit agent.
+	NotifyExitPortChange(ctx context.Context, exitAgentID uint) error
+}
+
 // ReportAgentStatusUseCase handles agent status reporting.
 type ReportAgentStatusUseCase struct {
-	agentRepo       forward.AgentRepository
-	statusUpdater   AgentStatusUpdater
-	lastSeenUpdater AgentLastSeenUpdater
-	logger          logger.Interface
+	agentRepo          forward.AgentRepository
+	statusUpdater      AgentStatusUpdater
+	statusQuerier      AgentStatusQuerier
+	lastSeenUpdater    AgentLastSeenUpdater
+	portChangeNotifier ExitPortChangeNotifier
+	logger             logger.Interface
 
 	// Rate limiting for last_seen_at updates
 	lastSeenInterval time.Duration
@@ -37,17 +45,24 @@ type ReportAgentStatusUseCase struct {
 func NewReportAgentStatusUseCase(
 	agentRepo forward.AgentRepository,
 	statusUpdater AgentStatusUpdater,
+	statusQuerier AgentStatusQuerier,
 	lastSeenUpdater AgentLastSeenUpdater,
 	logger logger.Interface,
 ) *ReportAgentStatusUseCase {
 	return &ReportAgentStatusUseCase{
 		agentRepo:        agentRepo,
 		statusUpdater:    statusUpdater,
+		statusQuerier:    statusQuerier,
 		lastSeenUpdater:  lastSeenUpdater,
 		logger:           logger,
 		lastSeenInterval: 2 * time.Minute,
 		lastSeenCache:    make(map[uint]time.Time),
 	}
+}
+
+// SetPortChangeNotifier sets the port change notifier (used for late binding due to circular dependency).
+func (uc *ReportAgentStatusUseCase) SetPortChangeNotifier(notifier ExitPortChangeNotifier) {
+	uc.portChangeNotifier = notifier
 }
 
 // Execute reports agent status.
@@ -62,10 +77,40 @@ func (uc *ReportAgentStatusUseCase) Execute(ctx context.Context, input *dto.Repo
 		return fmt.Errorf("agent not found: %d", input.AgentID)
 	}
 
+	// Check if ws_listen_port has changed (for exit agent port change notification)
+	var oldWsPort uint16
+	if uc.statusQuerier != nil && input.Status.WsListenPort > 0 {
+		oldStatus, err := uc.statusQuerier.GetStatus(ctx, input.AgentID)
+		if err != nil {
+			uc.logger.Warnw("failed to get old status for port change detection",
+				"agent_id", input.AgentID,
+				"error", err,
+			)
+		} else if oldStatus != nil {
+			oldWsPort = oldStatus.WsListenPort
+		}
+	}
+
 	// Update status in Redis
 	if err := uc.statusUpdater.UpdateStatus(ctx, input.AgentID, input.Status); err != nil {
 		uc.logger.Errorw("failed to update agent status", "agent_id", input.AgentID, "error", err)
 		return fmt.Errorf("update status: %w", err)
+	}
+
+	// Notify entry agents if ws_listen_port has changed
+	if uc.portChangeNotifier != nil && input.Status.WsListenPort > 0 && oldWsPort > 0 && oldWsPort != input.Status.WsListenPort {
+		uc.logger.Infow("exit agent ws_listen_port changed, notifying entry agents",
+			"agent_id", input.AgentID,
+			"old_port", oldWsPort,
+			"new_port", input.Status.WsListenPort,
+		)
+		if err := uc.portChangeNotifier.NotifyExitPortChange(ctx, input.AgentID); err != nil {
+			uc.logger.Warnw("failed to notify entry agents of port change",
+				"agent_id", input.AgentID,
+				"error", err,
+			)
+			// Don't return error, status update was successful
+		}
 	}
 
 	// Update last_seen_at with rate limiting (avoid DB writes on every status report)
