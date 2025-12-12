@@ -6,7 +6,7 @@ import (
 	"text/template"
 	"time"
 
-	vo "github.com/orris-inc/orris/internal/domain/notification/value_objects"
+	vo "github.com/orris-inc/orris/internal/domain/notification/valueobjects"
 )
 
 type NotificationTemplate struct {

@@ -2,7 +2,7 @@ package dto
 
 import (
 	"github.com/orris-inc/orris/internal/domain/subscription"
-	vo "github.com/orris-inc/orris/internal/domain/subscription/value_objects"
+	vo "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
 )
 
 // ToPricingOptionDTO converts a PlanPricing value object to PricingOptionDTO

@@ -7,7 +7,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/orris-inc/orris/internal/domain/notification"
-	vo "github.com/orris-inc/orris/internal/domain/notification/value_objects"
+	vo "github.com/orris-inc/orris/internal/domain/notification/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 	"github.com/orris-inc/orris/internal/shared/errors"

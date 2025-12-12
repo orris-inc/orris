@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/orris-inc/orris/internal/domain/subscription"
-	vo "github.com/orris-inc/orris/internal/domain/subscription/value_objects"
+	vo "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/user"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )

@@ -7,7 +7,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/user/helpers"
 	"github.com/orris-inc/orris/internal/domain/user"
-	vo "github.com/orris-inc/orris/internal/domain/user/value_objects"
+	vo "github.com/orris-inc/orris/internal/domain/user/valueobjects"
 	"github.com/orris-inc/orris/internal/shared/config"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )

@@ -7,7 +7,7 @@ import (
 	"gorm.io/datatypes"
 
 	"github.com/orris-inc/orris/internal/domain/subscription"
-	vo "github.com/orris-inc/orris/internal/domain/subscription/value_objects"
+	vo "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 )
 

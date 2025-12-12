@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/orris-inc/orris/internal/domain/notification"
-	vo "github.com/orris-inc/orris/internal/domain/notification/value_objects"
+	vo "github.com/orris-inc/orris/internal/domain/notification/valueobjects"
 )
 
 type ActiveAnnouncements struct{}

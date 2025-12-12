@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	vo "github.com/orris-inc/orris/internal/domain/payment/value_objects"
+	vo "github.com/orris-inc/orris/internal/domain/payment/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/shared/services"
 )
 

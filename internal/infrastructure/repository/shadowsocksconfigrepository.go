@@ -6,7 +6,7 @@ import (
 
 	"gorm.io/gorm"
 
-	vo "github.com/orris-inc/orris/internal/domain/node/value_objects"
+	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 	"github.com/orris-inc/orris/internal/shared/logger"

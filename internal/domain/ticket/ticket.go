@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	vo "github.com/orris-inc/orris/internal/domain/ticket/value_objects"
+	vo "github.com/orris-inc/orris/internal/domain/ticket/valueobjects"
 )
 
 type Ticket struct {

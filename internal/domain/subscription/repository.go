@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	vo "github.com/orris-inc/orris/internal/domain/subscription/value_objects"
+	vo "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
 )
 
 type SubscriptionRepository interface {

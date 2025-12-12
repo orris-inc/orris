@@ -7,7 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/orris-inc/orris/internal/domain/node/value_objects"
+	"github.com/orris-inc/orris/internal/domain/node/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/config"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -155,7 +155,7 @@ func (n *Node) ToTrojanURI(password string) string {
 	}
 
 	// Create TrojanConfig from Node fields (validation already done at node creation)
-	config, err := value_objects.NewTrojanConfig(
+	config, err := valueobjects.NewTrojanConfig(
 		password,
 		transportProtocol,
 		n.Host,

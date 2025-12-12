@@ -12,7 +12,7 @@ import (
 	forwardUsecases "github.com/orris-inc/orris/internal/application/forward/usecases"
 	nodeUsecases "github.com/orris-inc/orris/internal/application/node/usecases"
 	notificationApp "github.com/orris-inc/orris/internal/application/notification"
-	paymentGateway "github.com/orris-inc/orris/internal/application/payment/payment_gateway"
+	paymentGateway "github.com/orris-inc/orris/internal/application/payment/paymentgateway"
 	paymentUsecases "github.com/orris-inc/orris/internal/application/payment/usecases"
 	subscriptionUsecases "github.com/orris-inc/orris/internal/application/subscription/usecases"
 	"github.com/orris-inc/orris/internal/application/user"

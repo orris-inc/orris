@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/orris-inc/orris/internal/domain/forward"
-	vo "github.com/orris-inc/orris/internal/domain/forward/value_objects"
+	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/id"

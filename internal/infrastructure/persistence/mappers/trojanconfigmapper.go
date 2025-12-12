@@ -3,7 +3,7 @@ package mappers
 import (
 	"fmt"
 
-	vo "github.com/orris-inc/orris/internal/domain/node/value_objects"
+	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 )
 

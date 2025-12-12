@@ -3,7 +3,7 @@ package mappers
 import (
 	"fmt"
 
-	"github.com/orris-inc/orris/internal/domain/subscription/value_objects"
+	"github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 )
 
@@ -16,19 +16,19 @@ func NewPlanPricingMapper() *PlanPricingMapper {
 }
 
 // ToDomain converts database model to domain value object
-func (m *PlanPricingMapper) ToDomain(model *models.SubscriptionPlanPricingModel) (*value_objects.PlanPricing, error) {
+func (m *PlanPricingMapper) ToDomain(model *models.SubscriptionPlanPricingModel) (*valueobjects.PlanPricing, error) {
 	if model == nil {
 		return nil, fmt.Errorf("pricing model cannot be nil")
 	}
 
 	// Parse billing cycle
-	cycle, err := value_objects.ParseBillingCycle(model.BillingCycle)
+	cycle, err := valueobjects.ParseBillingCycle(model.BillingCycle)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse billing cycle: %w", err)
 	}
 
 	// Reconstruct domain object
-	pricing := value_objects.ReconstructPlanPricing(
+	pricing := valueobjects.ReconstructPlanPricing(
 		model.ID,
 		model.PlanID,
 		cycle,
@@ -43,7 +43,7 @@ func (m *PlanPricingMapper) ToDomain(model *models.SubscriptionPlanPricingModel)
 }
 
 // ToModel converts domain value object to database model
-func (m *PlanPricingMapper) ToModel(pricing *value_objects.PlanPricing) (*models.SubscriptionPlanPricingModel, error) {
+func (m *PlanPricingMapper) ToModel(pricing *valueobjects.PlanPricing) (*models.SubscriptionPlanPricingModel, error) {
 	if pricing == nil {
 		return nil, fmt.Errorf("pricing cannot be nil")
 	}
@@ -63,12 +63,12 @@ func (m *PlanPricingMapper) ToModel(pricing *value_objects.PlanPricing) (*models
 }
 
 // ToDomainList converts a list of database models to domain value objects
-func (m *PlanPricingMapper) ToDomainList(models []*models.SubscriptionPlanPricingModel) ([]*value_objects.PlanPricing, error) {
+func (m *PlanPricingMapper) ToDomainList(models []*models.SubscriptionPlanPricingModel) ([]*valueobjects.PlanPricing, error) {
 	if models == nil {
-		return []*value_objects.PlanPricing{}, nil
+		return []*valueobjects.PlanPricing{}, nil
 	}
 
-	pricings := make([]*value_objects.PlanPricing, 0, len(models))
+	pricings := make([]*valueobjects.PlanPricing, 0, len(models))
 	for _, model := range models {
 		pricing, err := m.ToDomain(model)
 		if err != nil {
@@ -81,7 +81,7 @@ func (m *PlanPricingMapper) ToDomainList(models []*models.SubscriptionPlanPricin
 }
 
 // ToModelList converts a list of domain value objects to database models
-func (m *PlanPricingMapper) ToModelList(pricings []*value_objects.PlanPricing) ([]*models.SubscriptionPlanPricingModel, error) {
+func (m *PlanPricingMapper) ToModelList(pricings []*valueobjects.PlanPricing) ([]*models.SubscriptionPlanPricingModel, error) {
 	if pricings == nil {
 		return []*models.SubscriptionPlanPricingModel{}, nil
 	}

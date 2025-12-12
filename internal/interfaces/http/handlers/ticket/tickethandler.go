@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/orris-inc/orris/internal/application/ticket/usecases"
-	vo "github.com/orris-inc/orris/internal/domain/ticket/value_objects"
+	vo "github.com/orris-inc/orris/internal/domain/ticket/valueobjects"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"

@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/orris-inc/orris/internal/domain/payment"
-	vo "github.com/orris-inc/orris/internal/domain/payment/value_objects"
+	vo "github.com/orris-inc/orris/internal/domain/payment/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 )
 

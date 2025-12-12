@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	vo "github.com/orris-inc/orris/internal/domain/forward/value_objects"
+	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
 )
 
 // ForwardRule represents the forward rule aggregate root.

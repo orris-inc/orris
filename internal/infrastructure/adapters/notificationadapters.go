@@ -5,7 +5,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/notification/usecases"
 	"github.com/orris-inc/orris/internal/domain/notification"
-	vo "github.com/orris-inc/orris/internal/domain/notification/value_objects"
+	vo "github.com/orris-inc/orris/internal/domain/notification/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/user"
 )
 
