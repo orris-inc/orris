@@ -480,7 +480,7 @@ func (r *NodeRepositoryImpl) ExistsByName(ctx context.Context, name string) (boo
 func (r *NodeRepositoryImpl) ExistsByAddress(ctx context.Context, address string, port int) (bool, error) {
 	var count int64
 	err := r.db.WithContext(ctx).Model(&models.NodeModel{}).
-		Where("server_address = ? AND server_port = ?", address, port).
+		Where("server_address = ? AND agent_port = ?", address, port).
 		Count(&count).Error
 	if err != nil {
 		r.logger.Errorw("failed to check node existence by address", "address", address, "port", port, "error", err)
