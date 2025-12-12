@@ -500,6 +500,11 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 	} else if requestingAgent != nil {
 		// Generate token using agentTokenService to ensure correct format (fwd_xxx_xxx)
 		clientToken, _ = h.agentTokenService.Generate(requestingAgent.ShortID())
+		h.logger.Infow("generated client token for agent",
+			"agent_id", agentID,
+			"short_id", requestingAgent.ShortID(),
+			"client_token", clientToken,
+		)
 	}
 
 	// Return success response with token signing secret for local verification

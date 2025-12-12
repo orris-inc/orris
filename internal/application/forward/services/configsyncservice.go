@@ -294,6 +294,12 @@ func (s *ConfigSyncService) FullSyncToAgent(ctx context.Context, agentID uint) e
 	// Generate client token for this agent
 	clientToken, _ := s.agentTokenService.Generate(agent.ShortID())
 
+	s.logger.Infow("generated client token for full sync",
+		"agent_id", agentID,
+		"short_id", agent.ShortID(),
+		"client_token", clientToken,
+	)
+
 	// Build full sync data
 	syncData := &dto.ConfigSyncData{
 		Version:            version,
