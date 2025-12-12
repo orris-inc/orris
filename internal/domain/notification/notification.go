@@ -180,10 +180,6 @@ func (n *Notification) IsArchived() bool {
 	return n.archivedAt != nil
 }
 
-func (n *Notification) recordEventUnsafe(event interface{}) {
-	n.events = append(n.events, event)
-}
-
 func (n *Notification) GetEvents() []interface{} {
 	events := make([]interface{}, len(n.events))
 	copy(events, n.events)

@@ -102,9 +102,7 @@ func ExampleDynamicFeatureManagement() {
 	if err != nil {
 		// Handle error
 	}
-	if !hasRemaining {
-		// User has exceeded traffic limit
-	}
+	_ = hasRemaining // Example: check hasRemaining to determine if user exceeded traffic limit
 
 	// Get device limit
 	deviceLimit, err := pf.GetDeviceLimit()

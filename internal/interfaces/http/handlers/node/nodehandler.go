@@ -249,20 +249,6 @@ func parseNodeShortID(c *gin.Context) (string, error) {
 	return shortID, nil
 }
 
-// parseNodeID is deprecated, use parseNodeShortID instead.
-// Kept for backward compatibility with internal routes.
-func parseNodeID(c *gin.Context) (uint, error) {
-	idStr := c.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		return 0, errors.NewValidationError("Invalid node ID")
-	}
-	if id == 0 {
-		return 0, errors.NewValidationError("Node ID must be greater than 0")
-	}
-	return uint(id), nil
-}
-
 type CreateNodeRequest struct {
 	Name             string            `json:"name" binding:"required" example:"US-Node-01"`
 	ServerAddress    string            `json:"server_address" binding:"required" example:"1.2.3.4"`

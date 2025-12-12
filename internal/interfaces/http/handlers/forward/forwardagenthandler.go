@@ -359,17 +359,3 @@ func parseAgentShortID(c *gin.Context) (string, error) {
 
 	return shortID, nil
 }
-
-// parseAgentID is deprecated, use parseAgentShortID instead.
-// Kept for backward compatibility with internal routes.
-func parseAgentID(c *gin.Context) (uint, error) {
-	idStr := c.Param("id")
-	parsedID, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		return 0, errors.NewValidationError("Invalid forward agent ID")
-	}
-	if parsedID == 0 {
-		return 0, errors.NewValidationError("Forward agent ID must be greater than 0")
-	}
-	return uint(parsedID), nil
-}

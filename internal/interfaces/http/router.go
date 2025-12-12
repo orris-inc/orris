@@ -29,6 +29,7 @@ import (
 	"github.com/orris-inc/orris/internal/interfaces/http/handlers"
 	adminHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/admin"
 	agentHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/agent"
+	forwardAgentAPIHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward/agent"
 	forwardHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward"
 	nodeHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/node"
 	ticketHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/ticket"
@@ -58,7 +59,7 @@ type Router struct {
 	notificationHandler         *handlers.NotificationHandler
 	forwardRuleHandler          *forwardHandlers.ForwardHandler
 	forwardAgentHandler         *forwardHandlers.ForwardAgentHandler
-	forwardAgentAPIHandler      *forwardHandlers.AgentHandler
+	forwardAgentAPIHandler      *forwardAgentAPIHandlers.Handler
 	agentHub                    *services.AgentHub
 	agentHubHandler             *agentHandlers.HubHandler
 	configSyncService           *forwardServices.ConfigSyncService
@@ -67,53 +68,6 @@ type Router struct {
 	nodeTokenMiddleware         *middleware.NodeTokenMiddleware
 	forwardAgentTokenMiddleware *middleware.ForwardAgentTokenMiddleware
 	rateLimiter                 *middleware.RateLimiter
-}
-
-type jwtServiceAdapter struct {
-	*auth.JWTService
-}
-
-func (a *jwtServiceAdapter) Generate(userID uint, sessionID string, role authorization.UserRole) (*usecases.TokenPair, error) {
-	pair, err := a.JWTService.Generate(userID, sessionID, role)
-	if err != nil {
-		return nil, err
-	}
-	return &usecases.TokenPair{
-		AccessToken:  pair.AccessToken,
-		RefreshToken: pair.RefreshToken,
-		ExpiresIn:    pair.ExpiresIn,
-	}, nil
-}
-
-type oauthClientAdapter struct {
-	client interface {
-		GetAuthURL(state string) (authURL string, codeVerifier string, err error)
-		ExchangeCode(ctx context.Context, code string, codeVerifier string) (string, error)
-		GetUserInfo(ctx context.Context, accessToken string) (*auth.OAuthUserInfo, error)
-	}
-}
-
-func (a *oauthClientAdapter) GetAuthURL(state string) (string, string, error) {
-	return a.client.GetAuthURL(state)
-}
-
-func (a *oauthClientAdapter) ExchangeCode(ctx context.Context, code string, codeVerifier string) (string, error) {
-	return a.client.ExchangeCode(ctx, code, codeVerifier)
-}
-
-func (a *oauthClientAdapter) GetUserInfo(ctx context.Context, accessToken string) (*usecases.OAuthUserInfo, error) {
-	info, err := a.client.GetUserInfo(ctx, accessToken)
-	if err != nil {
-		return nil, err
-	}
-	return &usecases.OAuthUserInfo{
-		Email:         info.Email,
-		Name:          info.Name,
-		Picture:       info.Picture,
-		EmailVerified: info.EmailVerified,
-		Provider:      info.Provider,
-		ProviderID:    info.ProviderID,
-	}, nil
 }
 
 // NewRouter creates a new HTTP router with all dependencies
@@ -490,7 +444,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	)
 
 	// Initialize forward agent API handler for client to fetch rules and report traffic
-	forwardAgentAPIHandler := forwardHandlers.NewAgentHandler(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, reportAgentStatusUC, forwardAgentStatusAdapter, cfg.Forward.TokenSigningSecret, log)
+	forwardAgentAPIHandler := forwardAgentAPIHandlers.NewHandler(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, reportAgentStatusUC, forwardAgentStatusAdapter, cfg.Forward.TokenSigningSecret, log)
 
 	// Initialize forward agent token middleware
 	forwardAgentTokenMiddleware := middleware.NewForwardAgentTokenMiddleware(validateForwardAgentTokenUC, log)

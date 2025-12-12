@@ -12,8 +12,6 @@ import (
 const (
 	// AgentTokenPrefix is the prefix for forward agent tokens.
 	AgentTokenPrefix = "fwd"
-	// tokenSignatureLength is the length of the base64url-encoded signature (truncated HMAC).
-	tokenSignatureLength = 22 // 16 bytes -> ~22 chars in base64url
 )
 
 // AgentTokenService handles generation and verification of HMAC-based agent tokens.

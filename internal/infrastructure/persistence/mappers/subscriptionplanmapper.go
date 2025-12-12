@@ -48,7 +48,7 @@ func (m *subscriptionPlanMapper) ToEntity(model *models.SubscriptionPlanModel) (
 
 	// Parse features JSON
 	var features *vo.PlanFeatures
-	if model.Features != nil && len(model.Features) > 0 {
+	if len(model.Features) > 0 {
 		features = &vo.PlanFeatures{}
 		if err := json.Unmarshal(model.Features, features); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal features: %w", err)
@@ -57,7 +57,7 @@ func (m *subscriptionPlanMapper) ToEntity(model *models.SubscriptionPlanModel) (
 
 	// Parse metadata JSON
 	var metadata map[string]interface{}
-	if model.Metadata != nil && len(model.Metadata) > 0 {
+	if len(model.Metadata) > 0 {
 		if err := json.Unmarshal(model.Metadata, &metadata); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal metadata: %w", err)
 		}

@@ -4,6 +4,7 @@ package routes
 import (
 	"github.com/gin-gonic/gin"
 
+	forwardAgentAPIHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward/agent"
 	forwardHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward"
 	"github.com/orris-inc/orris/internal/interfaces/http/middleware"
 	"github.com/orris-inc/orris/internal/shared/authorization"
@@ -13,7 +14,7 @@ import (
 type ForwardRouteConfig struct {
 	ForwardRuleHandler          *forwardHandlers.ForwardHandler
 	ForwardAgentHandler         *forwardHandlers.ForwardAgentHandler
-	ForwardAgentAPIHandler      *forwardHandlers.AgentHandler
+	ForwardAgentAPIHandler      *forwardAgentAPIHandlers.Handler
 	AuthMiddleware              *middleware.AuthMiddleware
 	ForwardAgentTokenMiddleware *middleware.ForwardAgentTokenMiddleware
 }

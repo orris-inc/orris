@@ -56,8 +56,6 @@ type ForwardRuleDTO struct {
 	internalChainAgents     []uint          `json:"-"` // internal chain agent IDs for lookup
 	internalChainPortConfig map[uint]uint16 `json:"-"` // internal chain port config for lookup
 	internalTargetNode      *uint           `json:"-"` // internal node ID for lookup
-	agentShortID            string          `json:"-"`
-	exitAgentShortID        string          `json:"-"`
 }
 
 // ToForwardRuleDTO converts a domain forward rule to DTO.

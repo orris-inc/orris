@@ -24,7 +24,7 @@ func ToPricingOptionDTO(pricing *vo.PlanPricing) *PricingOptionDTO {
 // This function batch converts domain pricing information to presentation layer DTOs
 // Returns an empty slice if the input slice is nil or empty
 func ToPricingOptionDTOList(pricings []*vo.PlanPricing) []*PricingOptionDTO {
-	if pricings == nil || len(pricings) == 0 {
+	if len(pricings) == 0 {
 		return []*PricingOptionDTO{}
 	}
 

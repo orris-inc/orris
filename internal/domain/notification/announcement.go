@@ -254,10 +254,6 @@ func (a *Announcement) IsExpired() bool {
 	return time.Now().After(*a.expiresAt)
 }
 
-func (a *Announcement) recordEventUnsafe(event interface{}) {
-	a.events = append(a.events, event)
-}
-
 func (a *Announcement) GetEvents() []interface{} {
 	events := make([]interface{}, len(a.events))
 	copy(events, a.events)
