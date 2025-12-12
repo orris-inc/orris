@@ -4,11 +4,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
 )
+
+// ErrUnauthorized is returned when the API returns a 401 status code.
+// This typically means the node token is invalid or expired.
+var ErrUnauthorized = errors.New("unauthorized: invalid or expired node token")
 
 // Client is the Agent API client.
 type Client struct {
@@ -144,6 +149,9 @@ func (c *Client) doRequest(ctx context.Context, method, url string, body any, re
 		return fmt.Errorf("read response: %w", err)
 	}
 
+	if resp.StatusCode == http.StatusUnauthorized {
+		return ErrUnauthorized
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("api error: status=%d body=%s", resp.StatusCode, string(respBody))
 	}

@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 
 	"gorm.io/gorm"
@@ -109,12 +111,21 @@ func (r *UserRepositoryDDD) Update(ctx context.Context, userEntity *user.User) e
 	result := r.db.WithContext(ctx).Model(&models.UserModel{}).
 		Where("id = ?", model.ID).
 		Updates(map[string]interface{}{
-			"email":      model.Email,
-			"name":       model.Name,
-			"role":       model.Role,
-			"status":     model.Status,
-			"version":    model.Version,
-			"updated_at": model.UpdatedAt,
+			"email":                         model.Email,
+			"name":                          model.Name,
+			"role":                          model.Role,
+			"status":                        model.Status,
+			"version":                       model.Version,
+			"updated_at":                    model.UpdatedAt,
+			"password_hash":                 model.PasswordHash,
+			"email_verified":                model.EmailVerified,
+			"email_verification_token":      model.EmailVerificationToken,
+			"email_verification_expires_at": model.EmailVerificationExpiresAt,
+			"password_reset_token":          model.PasswordResetToken,
+			"password_reset_expires_at":     model.PasswordResetExpiresAt,
+			"last_password_change_at":       model.LastPasswordChangeAt,
+			"failed_login_attempts":         model.FailedLoginAttempts,
+			"locked_until":                  model.LockedUntil,
 		})
 
 	if result.Error != nil {
@@ -236,7 +247,10 @@ func (r *UserRepositoryDDD) ExistsByEmail(ctx context.Context, email string) (bo
 func (r *UserRepositoryDDD) GetByVerificationToken(ctx context.Context, token string) (*user.User, error) {
 	var model models.UserModel
 
-	if err := r.db.WithContext(ctx).Where("email_verification_token = ?", token).First(&model).Error; err != nil {
+	// Hash the token before querying database
+	tokenHash := hashToken(token)
+
+	if err := r.db.WithContext(ctx).Where("email_verification_token = ?", tokenHash).First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, fmt.Errorf("user not found")
 		}
@@ -257,7 +271,10 @@ func (r *UserRepositoryDDD) GetByVerificationToken(ctx context.Context, token st
 func (r *UserRepositoryDDD) GetByPasswordResetToken(ctx context.Context, token string) (*user.User, error) {
 	var model models.UserModel
 
-	if err := r.db.WithContext(ctx).Where("password_reset_token = ?", token).First(&model).Error; err != nil {
+	// Hash the token before querying database
+	tokenHash := hashToken(token)
+
+	if err := r.db.WithContext(ctx).Where("password_reset_token = ?", tokenHash).First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, fmt.Errorf("user not found")
 		}
@@ -272,4 +289,10 @@ func (r *UserRepositoryDDD) GetByPasswordResetToken(ctx context.Context, token s
 	}
 
 	return entity, nil
+}
+
+// hashToken computes SHA256 hash of the token for database lookup
+func hashToken(token string) string {
+	hash := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(hash[:])
 }
