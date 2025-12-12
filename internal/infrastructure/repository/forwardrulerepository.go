@@ -137,7 +137,7 @@ func (r *ForwardRuleRepositoryImpl) Update(ctx context.Context, rule *forward.Fo
 	tx := db.GetTxFromContext(ctx, r.db)
 	result := tx.Model(&models.ForwardRuleModel{}).
 		Where("id = ?", model.ID).
-		Updates(map[string]interface{}{
+		Updates(map[string]any{
 			"name":              model.Name,
 			"listen_port":       model.ListenPort,
 			"target_address":    model.TargetAddress,
@@ -174,10 +174,17 @@ func (r *ForwardRuleRepositoryImpl) Update(ctx context.Context, rule *forward.Fo
 	return nil
 }
 
-// Delete soft deletes a forward rule.
+// Delete soft deletes a forward rule and sets status to disabled.
 func (r *ForwardRuleRepositoryImpl) Delete(ctx context.Context, id uint) error {
 	tx := db.GetTxFromContext(ctx, r.db)
-	result := tx.Delete(&models.ForwardRuleModel{}, id)
+	// Set status to disabled before soft delete for defensive programming
+	result := tx.Model(&models.ForwardRuleModel{}).
+		Where("id = ? AND deleted_at IS NULL", id).
+		Updates(map[string]any{
+			"status":     "disabled",
+			"deleted_at": gorm.Expr("NOW()"),
+		})
+
 	if result.Error != nil {
 		r.logger.Errorw("failed to delete forward rule", "id", id, "error", result.Error)
 		return fmt.Errorf("failed to delete forward rule: %w", result.Error)
@@ -323,7 +330,7 @@ func (r *ForwardRuleRepositoryImpl) UpdateTraffic(ctx context.Context, id uint, 
 	tx := db.GetTxFromContext(ctx, r.db)
 	result := tx.Model(&models.ForwardRuleModel{}).
 		Where("id = ?", id).
-		Updates(map[string]interface{}{
+		Updates(map[string]any{
 			"upload_bytes":   gorm.Expr("upload_bytes + ?", upload),
 			"download_bytes": gorm.Expr("download_bytes + ?", download),
 		})

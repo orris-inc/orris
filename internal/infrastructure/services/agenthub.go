@@ -64,7 +64,7 @@ func (h *AgentHub) RegisterMessageHandler(handler MessageHandler) {
 	h.messageHandlersMu.Lock()
 	defer h.messageHandlersMu.Unlock()
 	h.messageHandlers = append(h.messageHandlers, handler)
-	h.logger.Infow("message handler registered")
+	h.logger.Infow("message handler registered", "handler", handler.String())
 }
 
 // RouteAgentMessage routes a message from an agent to registered handlers.
@@ -242,6 +242,8 @@ type StatusHandler interface {
 // MessageHandler defines the interface for handling specific message types.
 // Each domain can register handlers for message types they care about.
 type MessageHandler interface {
+	// String returns the handler name for logging purposes (implements fmt.Stringer).
+	String() string
 	// HandleMessage processes a message from a forward agent.
 	// Returns true if the message was handled, false otherwise.
 	HandleMessage(agentID uint, msgType string, data any) bool

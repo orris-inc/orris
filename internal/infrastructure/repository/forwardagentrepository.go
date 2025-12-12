@@ -156,12 +156,13 @@ func (r *ForwardAgentRepositoryImpl) Update(ctx context.Context, agent *forward.
 
 	result := r.db.WithContext(ctx).Model(&models.ForwardAgentModel{}).
 		Where("id = ?", model.ID).
-		Updates(map[string]interface{}{
+		Updates(map[string]any{
 			"name":           model.Name,
 			"token_hash":     model.TokenHash,
 			"api_token":      model.APIToken,
 			"status":         model.Status,
 			"public_address": model.PublicAddress,
+			"tunnel_address": model.TunnelAddress,
 			"remark":         model.Remark,
 			"updated_at":     model.UpdatedAt,
 		})
@@ -180,9 +181,16 @@ func (r *ForwardAgentRepositoryImpl) Update(ctx context.Context, agent *forward.
 	return nil
 }
 
-// Delete soft deletes a forward agent.
+// Delete soft deletes a forward agent and sets status to disabled.
 func (r *ForwardAgentRepositoryImpl) Delete(ctx context.Context, id uint) error {
-	result := r.db.WithContext(ctx).Delete(&models.ForwardAgentModel{}, id)
+	// Set status to disabled before soft delete for defensive programming
+	result := r.db.WithContext(ctx).Model(&models.ForwardAgentModel{}).
+		Where("id = ? AND deleted_at IS NULL", id).
+		Updates(map[string]any{
+			"status":     "disabled",
+			"deleted_at": gorm.Expr("NOW()"),
+		})
+
 	if result.Error != nil {
 		r.logger.Errorw("failed to delete forward agent", "id", id, "error", result.Error)
 		return fmt.Errorf("failed to delete forward agent: %w", result.Error)
@@ -293,43 +301,4 @@ func (r *ForwardAgentRepositoryImpl) UpdateLastSeen(ctx context.Context, id uint
 
 	r.logger.Debugw("forward agent last_seen_at updated", "id", id)
 	return nil
-}
-
-// GetEndpointInfo retrieves the agent's public address and the WebSocket listen port from its exit rule.
-// Returns the public address and WebSocket port. If the agent doesn't have a public address or exit rule, returns empty/zero values.
-func (r *ForwardAgentRepositoryImpl) GetEndpointInfo(ctx context.Context, agentID uint) (address string, wsPort uint16, err error) {
-	// Get agent's public address
-	var agent models.ForwardAgentModel
-	if err := r.db.WithContext(ctx).Select("public_address").Where("id = ?", agentID).First(&agent).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return "", 0, errors.NewNotFoundError("forward agent", fmt.Sprintf("%d", agentID))
-		}
-		r.logger.Errorw("failed to get forward agent public address", "agent_id", agentID, "error", err)
-		return "", 0, fmt.Errorf("failed to get forward agent: %w", err)
-	}
-
-	// Get the exit rule (websocket type) for this agent to find the WS listen port
-	var rule models.ForwardRuleModel
-	err = r.db.WithContext(ctx).
-		Select("ws_listen_port").
-		Where("agent_id = ? AND rule_type = ?", agentID, "websocket").
-		First(&rule).Error
-
-	if err != nil {
-		if err == gorm.ErrRecordNotFound {
-			// Agent exists but has no exit rule (websocket type), return only the public address
-			r.logger.Infow("forward agent has no websocket exit rule", "agent_id", agentID)
-			return agent.PublicAddress, 0, nil
-		}
-		r.logger.Errorw("failed to get forward agent exit rule", "agent_id", agentID, "error", err)
-		return "", 0, fmt.Errorf("failed to get forward agent exit rule: %w", err)
-	}
-
-	// Return both public address and ws_listen_port
-	var port uint16
-	if rule.WsListenPort != nil {
-		port = *rule.WsListenPort
-	}
-
-	return agent.PublicAddress, port, nil
 }

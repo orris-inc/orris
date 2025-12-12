@@ -66,6 +66,11 @@ func NewConfigSyncService(
 	return svc
 }
 
+// String implements fmt.Stringer for logging purposes.
+func (s *ConfigSyncService) String() string {
+	return "ConfigSyncService"
+}
+
 // HandleMessage processes config sync acknowledgment messages from agents.
 // Implements agent.MessageHandler interface.
 func (s *ConfigSyncService) HandleMessage(agentID uint, msgType string, data any) bool {
