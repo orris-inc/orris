@@ -241,7 +241,11 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 					)
 				} else if exitAgent != nil {
 					ruleDTO.NextHopAgentID = id.FormatForwardAgentID(exitAgent.ShortID())
-					ruleDTO.NextHopAddress = exitAgent.PublicAddress()
+					// Prefer tunnel_address over public_address for agent-to-agent connections
+					ruleDTO.NextHopAddress = exitAgent.TunnelAddress()
+					if ruleDTO.NextHopAddress == "" {
+						ruleDTO.NextHopAddress = exitAgent.PublicAddress()
+					}
 
 					// Get ws_listen_port from cached agent status
 					exitStatus, err := h.statusQuerier.GetStatus(ctx, exitAgentID)
@@ -307,7 +311,11 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 					)
 				} else if nextAgent != nil {
 					ruleDTO.NextHopAgentID = id.FormatForwardAgentID(nextAgent.ShortID())
-					ruleDTO.NextHopAddress = nextAgent.PublicAddress()
+					// Prefer tunnel_address over public_address for agent-to-agent connections
+					ruleDTO.NextHopAddress = nextAgent.TunnelAddress()
+					if ruleDTO.NextHopAddress == "" {
+						ruleDTO.NextHopAddress = nextAgent.PublicAddress()
+					}
 
 					// Get ws_listen_port from cached agent status (same as GetExitEndpoint)
 					nextStatus, err := h.statusQuerier.GetStatus(ctx, nextHopAgentID)
@@ -404,7 +412,11 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 					)
 				} else if nextAgent != nil {
 					ruleDTO.NextHopAgentID = id.FormatForwardAgentID(nextAgent.ShortID())
-					ruleDTO.NextHopAddress = nextAgent.PublicAddress()
+					// Prefer tunnel_address over public_address for agent-to-agent connections
+					ruleDTO.NextHopAddress = nextAgent.TunnelAddress()
+					if ruleDTO.NextHopAddress == "" {
+						ruleDTO.NextHopAddress = nextAgent.PublicAddress()
+					}
 					ruleDTO.NextHopPort = nextHopPort
 
 					h.logger.Debugw("populated next hop info for direct_chain rule",
@@ -743,10 +755,16 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 		return
 	}
 
+	// Prefer tunnel_address over public_address for agent-to-agent connections
+	address := exitAgent.TunnelAddress()
+	if address == "" {
+		address = exitAgent.PublicAddress()
+	}
+
 	h.logger.Infow("exit endpoint information retrieved successfully",
 		"exit_agent_id", exitAgentID,
 		"entry_agent_id", entryAgentID,
-		"address", exitAgent.PublicAddress(),
+		"address", address,
 		"ws_port", exitStatus.WsListenPort,
 		"ip", c.ClientIP(),
 	)
@@ -754,7 +772,7 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 	// Return the connection information
 	// Note: connection_token is no longer needed as agents use HMAC-based agent tokens for verification
 	utils.SuccessResponse(c, http.StatusOK, "exit endpoint information retrieved successfully", map[string]any{
-		"address": exitAgent.PublicAddress(),
+		"address": address,
 		"ws_port": exitStatus.WsListenPort,
 	})
 }

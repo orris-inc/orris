@@ -11,7 +11,7 @@ type ForwardAgentDTO struct {
 	ID            string          `json:"id"` // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
 	Name          string          `json:"name"`
 	PublicAddress string          `json:"public_address"`
-	TunnelAddress string          `json:"tunnel_address,omitempty"`
+	TunnelAddress string          `json:"tunnel_address,omitempty"` // IP or hostname only (no port), used for agent-to-agent connections
 	Status        string          `json:"status"`
 	Remark        string          `json:"remark"`
 	CreatedAt     string          `json:"created_at"`
