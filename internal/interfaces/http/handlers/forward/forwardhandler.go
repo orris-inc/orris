@@ -66,7 +66,7 @@ type CreateForwardRuleRequest struct {
 	RuleType        string            `json:"rule_type" binding:"required,oneof=direct entry chain direct_chain" example:"direct"`
 	ExitAgentID     string            `json:"exit_agent_id,omitempty" example:"fa_yL8nQ3wM4oR"`
 	ChainAgentIDs   []string          `json:"chain_agent_ids,omitempty" example:"[\"fa_aaa\",\"fa_bbb\"]"`
-	ChainPortConfig map[string]uint16 `json:"chain_port_config,omitempty" example:"{\"xK9mP2vL3nQ\":8080,\"yL8nQ3wM4oR\":9090}"`
+	ChainPortConfig map[string]uint16 `json:"chain_port_config,omitempty" example:"{\"fa_xK9mP2vL3nQ\":8080,\"fa_yL8nQ3wM4oR\":9090}"`
 	Name            string            `json:"name" binding:"required" example:"MySQL-Forward"`
 	ListenPort      uint16            `json:"listen_port,omitempty" example:"13306"`
 	TargetAddress   string            `json:"target_address,omitempty" example:"192.168.1.100"`
@@ -83,7 +83,7 @@ type UpdateForwardRuleRequest struct {
 	AgentID         *string           `json:"agent_id,omitempty" example:"fa_xK9mP2vL3nQ"`
 	ExitAgentID     *string           `json:"exit_agent_id,omitempty" example:"fa_yL8nQ3wM4oR"`
 	ChainAgentIDs   []string          `json:"chain_agent_ids,omitempty" example:"[\"fa_aaa\",\"fa_bbb\"]"`
-	ChainPortConfig map[string]uint16 `json:"chain_port_config,omitempty" example:"{\"xK9mP2vL3nQ\":8080,\"yL8nQ3wM4oR\":9090}"`
+	ChainPortConfig map[string]uint16 `json:"chain_port_config,omitempty" example:"{\"fa_xK9mP2vL3nQ\":8080,\"fa_yL8nQ3wM4oR\":9090}"`
 	ListenPort      *uint16           `json:"listen_port,omitempty" example:"13307"`
 	TargetAddress   *string           `json:"target_address,omitempty" example:"192.168.1.101"`
 	TargetPort      *uint16           `json:"target_port,omitempty" example:"3307"`

@@ -41,6 +41,7 @@ func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 	cmd := usecases.GenerateSubscriptionCommand{
 		SubscriptionToken: token,
 		Format:            "base64",
+		NodeMode:          c.DefaultQuery("mode", usecases.NodeModeAll),
 	}
 
 	result, err := h.generateSubscriptionUC.Execute(c.Request.Context(), cmd)
@@ -65,6 +66,7 @@ func (h *SubscriptionHandler) GetClashSubscription(c *gin.Context) {
 	cmd := usecases.GenerateSubscriptionCommand{
 		SubscriptionToken: token,
 		Format:            "clash",
+		NodeMode:          c.DefaultQuery("mode", usecases.NodeModeAll),
 	}
 
 	result, err := h.generateSubscriptionUC.Execute(c.Request.Context(), cmd)
@@ -89,6 +91,7 @@ func (h *SubscriptionHandler) GetV2RaySubscription(c *gin.Context) {
 	cmd := usecases.GenerateSubscriptionCommand{
 		SubscriptionToken: token,
 		Format:            "v2ray",
+		NodeMode:          c.DefaultQuery("mode", usecases.NodeModeAll),
 	}
 
 	result, err := h.generateSubscriptionUC.Execute(c.Request.Context(), cmd)
@@ -112,6 +115,7 @@ func (h *SubscriptionHandler) GetSIP008Subscription(c *gin.Context) {
 	cmd := usecases.GenerateSubscriptionCommand{
 		SubscriptionToken: token,
 		Format:            "sip008",
+		NodeMode:          c.DefaultQuery("mode", usecases.NodeModeAll),
 	}
 
 	result, err := h.generateSubscriptionUC.Execute(c.Request.Context(), cmd)
@@ -135,6 +139,7 @@ func (h *SubscriptionHandler) GetSurgeSubscription(c *gin.Context) {
 	cmd := usecases.GenerateSubscriptionCommand{
 		SubscriptionToken: token,
 		Format:            "surge",
+		NodeMode:          c.DefaultQuery("mode", usecases.NodeModeAll),
 	}
 
 	result, err := h.generateSubscriptionUC.Execute(c.Request.Context(), cmd)

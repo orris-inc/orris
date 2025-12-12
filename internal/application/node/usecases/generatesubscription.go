@@ -15,6 +15,7 @@ import (
 type GenerateSubscriptionCommand struct {
 	SubscriptionToken string
 	Format            string
+	NodeMode          string // "all" | "forward" | "origin", defaults to "all"
 }
 
 type GenerateSubscriptionResult struct {
@@ -77,7 +78,13 @@ func (uc *GenerateSubscriptionUseCase) Execute(ctx context.Context, cmd Generate
 	// Get subscription UUID for authentication
 	subscriptionUUID := validationResult.SubscriptionUUID
 
-	nodes, err := uc.nodeRepo.GetBySubscriptionToken(ctx, cmd.SubscriptionToken)
+	// Default node mode to "all" if not specified
+	nodeMode := cmd.NodeMode
+	if nodeMode == "" {
+		nodeMode = NodeModeAll
+	}
+
+	nodes, err := uc.nodeRepo.GetBySubscriptionToken(ctx, cmd.SubscriptionToken, nodeMode)
 	if err != nil {
 		uc.logger.Errorw("failed to get nodes", "error", err)
 		return nil, fmt.Errorf("failed to get nodes: %w", err)

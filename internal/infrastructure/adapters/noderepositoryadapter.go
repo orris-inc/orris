@@ -31,7 +31,7 @@ func NewNodeRepositoryAdapter(nodeRepo NodeRepository, db *gorm.DB, logger logge
 	}
 }
 
-func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, subscriptionUUID string) ([]*usecases.Node, error) {
+func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, subscriptionUUID string, mode string) ([]*usecases.Node, error) {
 	var subscriptionModel models.SubscriptionModel
 
 	// Query subscription by UUID
@@ -211,26 +211,32 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, subs
 		nodeMap[nodeModel.ID] = ucNode
 	}
 
-	// Convert map to slice
-	nodes := make([]*usecases.Node, 0, len(nodeMap))
+	// Convert map to slice (origin nodes)
+	originNodes := make([]*usecases.Node, 0, len(nodeMap))
 	for _, node := range nodeMap {
-		nodes = append(nodes, node)
+		originNodes = append(originNodes, node)
 	}
 
 	// Query forward rules that target these nodes to generate additional subscription entries
 	forwardedNodes := r.getForwardedNodes(ctx, nodeIDs, nodeMap)
-	if len(forwardedNodes) > 0 {
-		nodes = append(nodes, forwardedNodes...)
-	}
 
 	r.logger.Infow("retrieved nodes for subscription token",
 		"subscription_id", subscriptionModel.ID,
 		"plan_id", subscriptionModel.PlanID,
-		"node_count", len(nodes)-len(forwardedNodes),
+		"node_count", len(originNodes),
 		"forwarded_count", len(forwardedNodes),
+		"mode", mode,
 	)
 
-	return nodes, nil
+	// Return nodes based on mode
+	switch mode {
+	case usecases.NodeModeForward:
+		return forwardedNodes, nil
+	case usecases.NodeModeOrigin:
+		return originNodes, nil
+	default: // NodeModeAll
+		return append(originNodes, forwardedNodes...), nil
+	}
 }
 
 func (r *NodeRepositoryAdapter) GetByTokenHash(ctx context.Context, tokenHash string) (usecases.NodeData, error) {

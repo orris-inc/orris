@@ -15,7 +15,7 @@ type ForwardRuleDTO struct {
 	RuleType        string            `json:"rule_type"`                   // direct, entry, chain, direct_chain
 	ExitAgentID     string            `json:"exit_agent_id,omitempty"`     // for entry type (Stripe-style prefixed ID)
 	ChainAgentIDs   []string          `json:"chain_agent_ids,omitempty"`   // for chain and direct_chain types (ordered Stripe-style prefixed IDs)
-	ChainPortConfig map[string]uint16 `json:"chain_port_config,omitempty"` // for direct_chain type (agent short_id -> listen port)
+	ChainPortConfig map[string]uint16 `json:"chain_port_config,omitempty"` // for direct_chain type (Stripe-style agent ID -> listen port)
 	Name            string            `json:"name"`
 	ListenPort      uint16            `json:"listen_port"`
 	TargetAddress   string            `json:"target_address,omitempty"` // for all types (exit role only for chain/direct_chain)
@@ -143,7 +143,7 @@ func (d *ForwardRuleDTO) PopulateAgentInfo(agentMap AgentShortIDMap) {
 		d.ChainPortConfig = make(map[string]uint16, len(d.internalChainPortConfig))
 		for agentID, port := range d.internalChainPortConfig {
 			if shortID, ok := agentMap[agentID]; ok {
-				d.ChainPortConfig[shortID] = port
+				d.ChainPortConfig[id.FormatForwardAgentID(shortID)] = port
 			}
 		}
 	}

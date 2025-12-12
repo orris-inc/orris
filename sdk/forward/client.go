@@ -58,6 +58,13 @@ func NewClient(baseURL, token string, opts ...Option) *Client {
 	return c
 }
 
+// Token returns the agent token used by this client.
+// This token should be used as AgentToken in TunnelHandshake when establishing
+// tunnel connections to exit agents.
+func (c *Client) Token() string {
+	return c.token
+}
+
 // GetRules retrieves all enabled forward rules along with the token signing secret.
 func (c *Client) GetRules(ctx context.Context) (*RulesResponse, error) {
 	url := fmt.Sprintf("%s/forward-agent-api/rules", c.baseURL)
