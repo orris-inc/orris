@@ -193,7 +193,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	)
 	if err != nil {
 		uc.logger.Errorw("failed to create forward rule entity", "error", err)
-		return nil, fmt.Errorf("failed to create forward rule: %w", err)
+		return nil, errors.NewValidationError(err.Error())
 	}
 
 	// Persist
