@@ -267,9 +267,16 @@ func (s *ProbeService) probeEntryRule(ctx context.Context, rule *forward.Forward
 	}
 
 	// Step 1: Probe tunnel (entry → exit)
+	// Use GetEffectiveTunnelAddress for tunnel connections (prefers tunnel_address over public_address)
+	tunnelAddr := exitAgent.GetEffectiveTunnelAddress()
+	if tunnelAddr == "" {
+		response.Error = "exit agent has no tunnel address"
+		return response, nil
+	}
+
 	ruleStripeID := id.FormatForwardRuleID(rule.ShortID())
 	tunnelLatency, err := s.sendProbeTask(ctx, entryAgentID, ruleStripeID, dto.ProbeTaskTypeTunnel,
-		exitAgent.PublicAddress(), exitStatus.WsListenPort, "tcp")
+		tunnelAddr, exitStatus.WsListenPort, "tcp")
 	if err != nil {
 		response.Error = "tunnel probe failed: " + err.Error()
 		return response, nil

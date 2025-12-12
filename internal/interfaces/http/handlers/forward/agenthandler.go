@@ -241,11 +241,8 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 					)
 				} else if exitAgent != nil {
 					ruleDTO.NextHopAgentID = id.FormatForwardAgentID(exitAgent.ShortID())
-					// Prefer tunnel_address over public_address for agent-to-agent connections
-					ruleDTO.NextHopAddress = exitAgent.TunnelAddress()
-					if ruleDTO.NextHopAddress == "" {
-						ruleDTO.NextHopAddress = exitAgent.PublicAddress()
-					}
+					// Use effective tunnel address (prefers tunnel_address over public_address)
+					ruleDTO.NextHopAddress = exitAgent.GetEffectiveTunnelAddress()
 
 					// Get ws_listen_port from cached agent status
 					exitStatus, err := h.statusQuerier.GetStatus(ctx, exitAgentID)
@@ -311,11 +308,8 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 					)
 				} else if nextAgent != nil {
 					ruleDTO.NextHopAgentID = id.FormatForwardAgentID(nextAgent.ShortID())
-					// Prefer tunnel_address over public_address for agent-to-agent connections
-					ruleDTO.NextHopAddress = nextAgent.TunnelAddress()
-					if ruleDTO.NextHopAddress == "" {
-						ruleDTO.NextHopAddress = nextAgent.PublicAddress()
-					}
+					// Use effective tunnel address (prefers tunnel_address over public_address)
+					ruleDTO.NextHopAddress = nextAgent.GetEffectiveTunnelAddress()
 
 					// Get ws_listen_port from cached agent status (same as GetExitEndpoint)
 					nextStatus, err := h.statusQuerier.GetStatus(ctx, nextHopAgentID)
@@ -412,11 +406,8 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 					)
 				} else if nextAgent != nil {
 					ruleDTO.NextHopAgentID = id.FormatForwardAgentID(nextAgent.ShortID())
-					// Prefer tunnel_address over public_address for agent-to-agent connections
-					ruleDTO.NextHopAddress = nextAgent.TunnelAddress()
-					if ruleDTO.NextHopAddress == "" {
-						ruleDTO.NextHopAddress = nextAgent.PublicAddress()
-					}
+					// Use effective tunnel address (prefers tunnel_address over public_address)
+					ruleDTO.NextHopAddress = nextAgent.GetEffectiveTunnelAddress()
 					ruleDTO.NextHopPort = nextHopPort
 
 					h.logger.Debugw("populated next hop info for direct_chain rule",
@@ -724,13 +715,13 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 		return
 	}
 
-	// Check if exit agent has a public address
-	if exitAgent.PublicAddress() == "" {
-		h.logger.Warnw("exit agent has no public address configured",
+	// Check if exit agent has an address (tunnel_address or public_address)
+	if exitAgent.GetEffectiveTunnelAddress() == "" {
+		h.logger.Warnw("exit agent has no address configured",
 			"exit_agent_id", exitAgentID,
 			"ip", c.ClientIP(),
 		)
-		utils.ErrorResponse(c, http.StatusNotFound, "agent has no public address configured")
+		utils.ErrorResponse(c, http.StatusNotFound, "agent has no address configured")
 		return
 	}
 
@@ -755,11 +746,8 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 		return
 	}
 
-	// Prefer tunnel_address over public_address for agent-to-agent connections
-	address := exitAgent.TunnelAddress()
-	if address == "" {
-		address = exitAgent.PublicAddress()
-	}
+	// Use effective tunnel address (prefers tunnel_address over public_address)
+	address := exitAgent.GetEffectiveTunnelAddress()
 
 	h.logger.Infow("exit endpoint information retrieved successfully",
 		"exit_agent_id", exitAgentID,
