@@ -49,7 +49,8 @@ func (s *AgentTokenService) Verify(token string) (shortID string, err error) {
 	}
 
 	// Parse token: fwd_<short_id>_<signature>
-	parts := strings.Split(token, "_")
+	// Use SplitN to limit splits since signature may contain '_' (base64url encoding)
+	parts := strings.SplitN(token, "_", 3)
 	if len(parts) != 3 {
 		return "", errors.New("invalid token format")
 	}

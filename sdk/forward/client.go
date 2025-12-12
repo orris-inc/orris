@@ -135,7 +135,8 @@ func VerifyAgentToken(token, signingSecret string) (*AgentTokenVerifyResult, err
 	}
 
 	// Parse token: fwd_<short_id>_<signature>
-	parts := strings.Split(token, "_")
+	// Use SplitN to limit splits since signature may contain '_' (base64url encoding)
+	parts := strings.SplitN(token, "_", 3)
 	if len(parts) != 3 {
 		return nil, errors.New("invalid token format")
 	}
