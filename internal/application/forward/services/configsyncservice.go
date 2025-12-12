@@ -11,6 +11,7 @@ import (
 	"github.com/orris-inc/orris/internal/application/forward/usecases"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/infrastructure/auth"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -23,6 +24,7 @@ type ConfigSyncService struct {
 	nodeRepo           node.NodeRepository
 	statusQuerier      usecases.AgentStatusQuerier
 	tokenSigningSecret string
+	agentTokenService  *auth.AgentTokenService
 
 	// Hub interface for sending messages
 	hub SyncHub
@@ -58,6 +60,7 @@ func NewConfigSyncService(
 		nodeRepo:           nodeRepo,
 		statusQuerier:      statusQuerier,
 		tokenSigningSecret: tokenSigningSecret,
+		agentTokenService:  auth.NewAgentTokenService(tokenSigningSecret),
 		hub:                hub,
 		logger:             log,
 	}
@@ -272,13 +275,6 @@ func (s *ConfigSyncService) FullSyncToAgent(ctx context.Context, agentID uint) e
 		ruleSyncDataList = append(ruleSyncDataList, *ruleSyncData)
 	}
 
-	// Build full sync data
-	syncData := &dto.ConfigSyncData{
-		Version:  version,
-		FullSync: true,
-		Added:    ruleSyncDataList,
-	}
-
 	// Get agent short ID for Stripe-style prefixed ID
 	agent, err := s.agentRepo.GetByID(ctx, agentID)
 	if err != nil {
@@ -293,6 +289,18 @@ func (s *ConfigSyncService) FullSyncToAgent(ctx context.Context, agentID uint) e
 			"agent_id", agentID,
 		)
 		return forward.ErrAgentNotFound
+	}
+
+	// Generate client token for this agent
+	clientToken, _ := s.agentTokenService.Generate(agent.ShortID())
+
+	// Build full sync data
+	syncData := &dto.ConfigSyncData{
+		Version:            version,
+		FullSync:           true,
+		Added:              ruleSyncDataList,
+		ClientToken:        clientToken,
+		TokenSigningSecret: s.tokenSigningSecret,
 	}
 
 	// Send sync message
