@@ -114,6 +114,7 @@ type ExitEndpoint struct {
 type RulesResponse struct {
 	Rules              []Rule `json:"rules"`
 	TokenSigningSecret string `json:"token_signing_secret"` // Secret for local agent token verification
+	ClientToken        string `json:"client_token"`         // Agent's own token for tunnel handshake (fwd_xxx_xxx format)
 }
 
 // TrafficItem represents traffic data for a single rule.

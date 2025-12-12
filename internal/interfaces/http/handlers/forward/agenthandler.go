@@ -486,10 +486,23 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 		}
 	}
 
+	// Get the requesting agent's token for tunnel handshake
+	var clientToken string
+	requestingAgent, err := h.agentRepo.GetByID(ctx, agentID)
+	if err != nil {
+		h.logger.Warnw("failed to get requesting agent for token",
+			"agent_id", agentID,
+			"error", err,
+		)
+	} else if requestingAgent != nil {
+		clientToken = requestingAgent.GetAPIToken()
+	}
+
 	// Return success response with token signing secret for local verification
 	utils.SuccessResponse(c, http.StatusOK, "enabled forward rules retrieved successfully", map[string]any{
 		"rules":                ruleDTOs,
 		"token_signing_secret": h.tokenSigningSecret,
+		"client_token":         clientToken,
 	})
 }
 
