@@ -76,6 +76,25 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 		}
 	}
 
+	// Parse chain_port_config JSON
+	var chainPortConfig map[uint]uint16
+	if model.ChainPortConfig != nil && len(model.ChainPortConfig) > 0 {
+		// JSON unmarshals numeric keys as strings, so we need to handle this
+		var rawConfig map[string]uint16
+		if err := json.Unmarshal(model.ChainPortConfig, &rawConfig); err != nil {
+			return nil, fmt.Errorf("failed to parse chain_port_config: %w", err)
+		}
+		// Convert string keys to uint
+		chainPortConfig = make(map[uint]uint16)
+		for k, v := range rawConfig {
+			var agentID uint
+			if _, err := fmt.Sscanf(k, "%d", &agentID); err != nil {
+				return nil, fmt.Errorf("failed to parse agent ID in chain_port_config: %w", err)
+			}
+			chainPortConfig[agentID] = v
+		}
+	}
+
 	ipVersion := vo.IPVersion(model.IPVersion)
 
 	entity, err := forward.ReconstructForwardRule(
@@ -85,6 +104,7 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 		ruleType,
 		exitAgentID,
 		chainAgentIDs,
+		chainPortConfig,
 		wsListenPort,
 		model.Name,
 		model.ListenPort,
@@ -141,27 +161,43 @@ func (m *ForwardRuleMapperImpl) ToModel(entity *forward.ForwardRule) (*models.Fo
 		chainAgentIDsJSON = jsonBytes
 	}
 
+	// Serialize chain_port_config to JSON
+	// Convert map[uint]uint16 to map[string]uint16 for JSON storage
+	var chainPortConfigJSON datatypes.JSON
+	if len(entity.ChainPortConfig()) > 0 {
+		stringKeyConfig := make(map[string]uint16)
+		for k, v := range entity.ChainPortConfig() {
+			stringKeyConfig[fmt.Sprintf("%d", k)] = v
+		}
+		jsonBytes, err := json.Marshal(stringKeyConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to serialize chain_port_config: %w", err)
+		}
+		chainPortConfigJSON = jsonBytes
+	}
+
 	return &models.ForwardRuleModel{
-		ID:            entity.ID(),
-		ShortID:       entity.ShortID(),
-		AgentID:       entity.AgentID(),
-		RuleType:      entity.RuleType().String(),
-		ExitAgentID:   exitAgentID,
-		ChainAgentIDs: chainAgentIDsJSON,
-		WsListenPort:  wsListenPort,
-		Name:          entity.Name(),
-		ListenPort:    entity.ListenPort(),
-		TargetAddress: entity.TargetAddress(),
-		TargetPort:    entity.TargetPort(),
-		TargetNodeID:  targetNodeID,
-		IPVersion:     entity.IPVersion().String(),
-		Protocol:      entity.Protocol().String(),
-		Status:        entity.Status().String(),
-		Remark:        entity.Remark(),
-		UploadBytes:   entity.UploadBytes(),
-		DownloadBytes: entity.DownloadBytes(),
-		CreatedAt:     entity.CreatedAt(),
-		UpdatedAt:     entity.UpdatedAt(),
+		ID:              entity.ID(),
+		ShortID:         entity.ShortID(),
+		AgentID:         entity.AgentID(),
+		RuleType:        entity.RuleType().String(),
+		ExitAgentID:     exitAgentID,
+		ChainAgentIDs:   chainAgentIDsJSON,
+		ChainPortConfig: chainPortConfigJSON,
+		WsListenPort:    wsListenPort,
+		Name:            entity.Name(),
+		ListenPort:      entity.ListenPort(),
+		TargetAddress:   entity.TargetAddress(),
+		TargetPort:      entity.TargetPort(),
+		TargetNodeID:    targetNodeID,
+		IPVersion:       entity.IPVersion().String(),
+		Protocol:        entity.Protocol().String(),
+		Status:          entity.Status().String(),
+		Remark:          entity.Remark(),
+		UploadBytes:     entity.UploadBytes(),
+		DownloadBytes:   entity.DownloadBytes(),
+		CreatedAt:       entity.CreatedAt(),
+		UpdatedAt:       entity.UpdatedAt(),
 	}, nil
 }
 

@@ -139,6 +139,7 @@ type RuleSyncData struct {
 	NextHopAgentID string   `json:"next_hop_agent_id,omitempty"`
 	NextHopAddress string   `json:"next_hop_address,omitempty"`
 	NextHopWsPort  uint16   `json:"next_hop_ws_port,omitempty"`
+	NextHopPort    uint16   `json:"next_hop_port,omitempty"` // Next agent's listen port for direct_chain
 	ChainAgentIDs  []string `json:"chain_agent_ids,omitempty"`
 	ChainPosition  int      `json:"chain_position,omitempty"`
 	IsLastInChain  bool     `json:"is_last_in_chain,omitempty"`

@@ -358,6 +358,79 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 		}
 	}
 
+	// Process direct_chain rules to populate role-specific information
+	for i, rule := range rules {
+		if rule.RuleType().String() != "direct_chain" {
+			continue
+		}
+
+		ruleDTO := ruleDTOs[i]
+
+		// Calculate chain position and last-in-chain flag for this agent
+		chainPosition := rule.GetChainPosition(agentID)
+		isLast := rule.IsLastInChain(agentID)
+
+		ruleDTO.ChainPosition = chainPosition
+		ruleDTO.IsLastInChain = isLast
+
+		h.logger.Debugw("processing direct_chain rule for agent",
+			"rule_id", ruleDTO.ID,
+			"agent_id", agentID,
+			"chain_position", chainPosition,
+			"is_last", isLast,
+		)
+
+		// Set ListenPort from chainPortConfig
+		listenPort := rule.GetAgentListenPort(agentID)
+		ruleDTO.ListenPort = listenPort
+
+		// For non-exit agents in chain, populate next hop information
+		if !isLast {
+			nextHopAgentID, nextHopPort := rule.GetNextHopForDirectChain(agentID)
+			if nextHopAgentID != 0 {
+				// Get next hop agent details
+				nextAgent, err := h.agentRepo.GetByID(ctx, nextHopAgentID)
+				if err != nil {
+					h.logger.Warnw("failed to get next hop agent for direct_chain rule",
+						"rule_id", ruleDTO.ID,
+						"next_hop_agent_id", nextHopAgentID,
+						"error", err,
+					)
+				} else if nextAgent != nil {
+					ruleDTO.NextHopAgentID = id.FormatForwardAgentID(nextAgent.ShortID())
+					ruleDTO.NextHopAddress = nextAgent.PublicAddress()
+					ruleDTO.NextHopPort = nextHopPort
+
+					h.logger.Debugw("populated next hop info for direct_chain rule",
+						"rule_id", ruleDTO.ID,
+						"next_hop_agent_id", ruleDTO.NextHopAgentID,
+						"next_hop_address", ruleDTO.NextHopAddress,
+						"next_hop_port", ruleDTO.NextHopPort,
+					)
+				}
+			}
+
+			// Clear target info for non-exit agents (minimum info principle)
+			ruleDTO.TargetAddress = ""
+			ruleDTO.TargetPort = 0
+
+			h.logger.Debugw("cleared target info for non-exit direct_chain agent",
+				"rule_id", ruleDTO.ID,
+				"agent_id", agentID,
+			)
+		} else {
+			// For exit agents, clear next hop info (minimum info principle)
+			ruleDTO.NextHopAgentID = ""
+			ruleDTO.NextHopAddress = ""
+			ruleDTO.NextHopPort = 0
+
+			h.logger.Debugw("cleared next hop info for exit direct_chain agent",
+				"rule_id", ruleDTO.ID,
+				"agent_id", agentID,
+			)
+		}
+	}
+
 	// Set role field for all rules based on requesting agent's position
 	for i, rule := range rules {
 		ruleDTO := ruleDTOs[i]
@@ -384,6 +457,16 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 
 		case "chain":
 			// Chain role is already set based on position
+			if ruleDTO.ChainPosition == 0 {
+				ruleDTO.Role = "entry"
+			} else if ruleDTO.IsLastInChain {
+				ruleDTO.Role = "exit"
+			} else {
+				ruleDTO.Role = "relay"
+			}
+
+		case "direct_chain":
+			// Direct chain role is set based on position
 			if ruleDTO.ChainPosition == 0 {
 				ruleDTO.Role = "entry"
 			} else if ruleDTO.IsLastInChain {

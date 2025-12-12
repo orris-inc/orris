@@ -10,25 +10,26 @@ import (
 // Note: ws_listen_port field has been removed (exit type deprecated).
 // Database column is kept for backward compatibility but not exposed in API.
 type ForwardRuleDTO struct {
-	ID            string   `json:"id"`                        // Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ")
-	AgentID       string   `json:"agent_id"`                  // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
-	RuleType      string   `json:"rule_type"`                 // direct, entry, chain
-	ExitAgentID   string   `json:"exit_agent_id,omitempty"`   // for entry type (Stripe-style prefixed ID)
-	ChainAgentIDs []string `json:"chain_agent_ids,omitempty"` // for chain type (ordered Stripe-style prefixed IDs)
-	Name          string   `json:"name"`
-	ListenPort    uint16   `json:"listen_port"`
-	TargetAddress string   `json:"target_address,omitempty"` // for direct, entry, and chain exit types
-	TargetPort    uint16   `json:"target_port,omitempty"`    // for direct, entry, and chain exit types
-	TargetNodeID  string   `json:"target_node_id,omitempty"` // Stripe-style prefixed Node ID (e.g., "node_xK9mP2vL3nQ")
-	IPVersion     string   `json:"ip_version"`               // auto, ipv4, ipv6
-	Protocol      string   `json:"protocol"`
-	Status        string   `json:"status"`
-	Remark        string   `json:"remark"`
-	UploadBytes   int64    `json:"upload_bytes"`
-	DownloadBytes int64    `json:"download_bytes"`
-	TotalBytes    int64    `json:"total_bytes"`
-	CreatedAt     string   `json:"created_at"`
-	UpdatedAt     string   `json:"updated_at"`
+	ID              string            `json:"id"`                          // Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ")
+	AgentID         string            `json:"agent_id"`                    // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
+	RuleType        string            `json:"rule_type"`                   // direct, entry, chain
+	ExitAgentID     string            `json:"exit_agent_id,omitempty"`     // for entry type (Stripe-style prefixed ID)
+	ChainAgentIDs   []string          `json:"chain_agent_ids,omitempty"`   // for chain type (ordered Stripe-style prefixed IDs)
+	ChainPortConfig map[string]uint16 `json:"chain_port_config,omitempty"` // for direct_chain type (agent short_id -> listen port)
+	Name            string            `json:"name"`
+	ListenPort      uint16            `json:"listen_port"`
+	TargetAddress   string            `json:"target_address,omitempty"` // for direct, entry, and chain exit types
+	TargetPort      uint16            `json:"target_port,omitempty"`    // for direct, entry, and chain exit types
+	TargetNodeID    string            `json:"target_node_id,omitempty"` // Stripe-style prefixed Node ID (e.g., "node_xK9mP2vL3nQ")
+	IPVersion       string            `json:"ip_version"`               // auto, ipv4, ipv6
+	Protocol        string            `json:"protocol"`
+	Status          string            `json:"status"`
+	Remark          string            `json:"remark"`
+	UploadBytes     int64             `json:"upload_bytes"`
+	DownloadBytes   int64             `json:"download_bytes"`
+	TotalBytes      int64             `json:"total_bytes"`
+	CreatedAt       string            `json:"created_at"`
+	UpdatedAt       string            `json:"updated_at"`
 
 	// Target node info (populated when targetNodeID is set)
 	TargetNodeServerAddress string  `json:"target_node_server_address,omitempty"` // node's configured server address
@@ -40,11 +41,12 @@ type ForwardRuleDTO struct {
 	Role string `json:"role,omitempty"`
 
 	// Chain-specific fields (populated for chain rules based on requesting agent's role)
-	ChainPosition  int    `json:"chain_position,omitempty"`    // agent's position in chain (0-indexed)
-	IsLastInChain  bool   `json:"is_last_in_chain,omitempty"`  // true if agent is last in chain
+	ChainPosition          int    `json:"chain_position,omitempty"`            // agent's position in chain (0-indexed)
+	IsLastInChain          bool   `json:"is_last_in_chain,omitempty"`          // true if agent is last in chain
 	NextHopAgentID         string `json:"next_hop_agent_id,omitempty"`         // next agent in chain (Stripe-style ID)
 	NextHopAddress         string `json:"next_hop_address,omitempty"`          // next agent's public address
 	NextHopWsPort          uint16 `json:"next_hop_ws_port,omitempty"`          // next agent's WS port (from status cache)
+	NextHopPort            uint16 `json:"next_hop_port,omitempty"`             // next agent's listen port (for direct_chain type)
 	NextHopConnectionToken string `json:"next_hop_connection_token,omitempty"` // short-term JWT for next hop authentication
 
 	// Internal fields for mapping (not exposed in JSON)

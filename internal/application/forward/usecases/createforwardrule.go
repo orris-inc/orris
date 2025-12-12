@@ -14,10 +14,11 @@ import (
 
 // CreateForwardRuleCommand represents the input for creating a forward rule.
 type CreateForwardRuleCommand struct {
-	AgentShortID       string   // Stripe-style short ID (without prefix, e.g., "xK9mP2vL3nQ")
-	RuleType           string   // direct, entry, chain
-	ExitAgentShortID   string   // required for entry type (Stripe-style short ID without prefix)
-	ChainAgentShortIDs []string // required for chain type (ordered list of Stripe-style short IDs without prefix)
+	AgentShortID       string            // Stripe-style short ID (without prefix, e.g., "xK9mP2vL3nQ")
+	RuleType           string            // direct, entry, chain, direct_chain
+	ExitAgentShortID   string            // required for entry type (Stripe-style short ID without prefix)
+	ChainAgentShortIDs []string          // required for chain type (ordered list of Stripe-style short IDs without prefix)
+	ChainPortConfig    map[string]uint16 // required for direct_chain type (agent short_id -> listen port)
 	Name               string
 	ListenPort         uint16 // required for direct, entry, and chain types
 	TargetAddress      string // required for direct, entry, and chain types (mutually exclusive with TargetNodeShortID)
@@ -120,6 +121,23 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		}
 	}
 
+	// Resolve ChainPortConfig short IDs to internal IDs (if provided for direct_chain type)
+	var chainPortConfig map[uint]uint16
+	if len(cmd.ChainPortConfig) > 0 {
+		chainPortConfig = make(map[uint]uint16, len(cmd.ChainPortConfig))
+		for shortID, port := range cmd.ChainPortConfig {
+			chainAgent, err := uc.agentRepo.GetByShortID(ctx, shortID)
+			if err != nil {
+				uc.logger.Errorw("failed to get chain agent for port config", "chain_agent_short_id", shortID, "error", err)
+				return nil, fmt.Errorf("failed to validate chain agent in chain_port_config: %w", err)
+			}
+			if chainAgent == nil {
+				return nil, errors.NewNotFoundError("chain forward agent in chain_port_config", shortID)
+			}
+			chainPortConfig[chainAgent.ID()] = port
+		}
+	}
+
 	// Resolve TargetNodeShortID to internal ID (if provided)
 	var targetNodeID *uint
 	if cmd.TargetNodeShortID != "" {
@@ -136,7 +154,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	}
 
 	// Validate command with resolved IDs
-	if err := uc.validateCommand(ctx, cmd, targetNodeID); err != nil {
+	if err := uc.validateCommand(ctx, cmd, targetNodeID, chainAgentIDs, chainPortConfig); err != nil {
 		uc.logger.Errorw("invalid create forward rule command", "error", err)
 		return nil, err
 	}
@@ -161,6 +179,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		ruleType,
 		exitAgentID,
 		chainAgentIDs,
+		chainPortConfig,
 		0, // wsListenPort is deprecated (exit type removed)
 		cmd.Name,
 		cmd.ListenPort,
@@ -213,7 +232,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	return result, nil
 }
 
-func (uc *CreateForwardRuleUseCase) validateCommand(_ context.Context, cmd CreateForwardRuleCommand, targetNodeID *uint) error {
+func (uc *CreateForwardRuleUseCase) validateCommand(_ context.Context, cmd CreateForwardRuleCommand, targetNodeID *uint, chainAgentIDs []uint, chainPortConfig map[uint]uint16) error {
 	// AgentShortID validation is done in Execute before calling this method
 	if cmd.Name == "" {
 		return errors.NewValidationError("name is required")
@@ -287,8 +306,35 @@ func (uc *CreateForwardRuleUseCase) validateCommand(_ context.Context, cmd Creat
 		if hasTarget && hasTargetNode {
 			return errors.NewValidationError("target_address+target_port and target_node_id are mutually exclusive for chain forward")
 		}
+	case vo.ForwardRuleTypeDirectChain:
+		// Validate chain_agent_ids
+		if len(cmd.ChainAgentShortIDs) == 0 {
+			return errors.NewValidationError("chain_agent_ids is required for direct_chain forward (at least 1 intermediate agent)")
+		}
+		if len(cmd.ChainAgentShortIDs) > 10 {
+			return errors.NewValidationError("direct_chain forward supports maximum 10 intermediate agents")
+		}
+		// Validate chain_port_config provides port for each chain agent
+		if len(cmd.ChainPortConfig) == 0 {
+			return errors.NewValidationError("chain_port_config is required for direct_chain forward")
+		}
+		// Validate chain_port_config has port for every chain agent
+		for _, agentID := range chainAgentIDs {
+			if _, exists := chainPortConfig[agentID]; !exists {
+				return errors.NewValidationError(fmt.Sprintf("chain_port_config must provide listen port for all chain agents (missing agent_id: %d)", agentID))
+			}
+		}
+		// Direct chain rules require target information (at the end of chain)
+		hasTarget := cmd.TargetAddress != "" && cmd.TargetPort != 0
+		hasTargetNode := targetNodeID != nil && *targetNodeID != 0
+		if !hasTarget && !hasTargetNode {
+			return errors.NewValidationError("either target_address+target_port or target_node_id is required for direct_chain forward")
+		}
+		if hasTarget && hasTargetNode {
+			return errors.NewValidationError("target_address+target_port and target_node_id are mutually exclusive for direct_chain forward")
+		}
 	default:
-		return errors.NewValidationError(fmt.Sprintf("invalid rule_type: %s, must be direct, entry, or chain", cmd.RuleType))
+		return errors.NewValidationError(fmt.Sprintf("invalid rule_type: %s, must be direct, entry, chain, or direct_chain", cmd.RuleType))
 	}
 
 	return nil

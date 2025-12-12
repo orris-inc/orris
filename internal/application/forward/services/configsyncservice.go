@@ -535,6 +535,70 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 			syncData.TargetAddress = targetAddress
 			syncData.TargetPort = targetPort
 		}
+
+	case "direct_chain":
+		// Calculate chain position and last-in-chain flag for this agent
+		chainPosition := rule.GetChainPosition(agentID)
+		isLast := rule.IsLastInChain(agentID)
+
+		syncData.ChainPosition = chainPosition
+		syncData.IsLastInChain = isLast
+
+		// Populate ChainAgentIDs (Stripe-style IDs)
+		chainAgentIDs := rule.ChainAgentIDs()
+		if len(chainAgentIDs) > 0 {
+			agentMap, err := s.agentRepo.GetShortIDsByIDs(ctx, chainAgentIDs)
+			if err != nil {
+				s.logger.Warnw("failed to get chain agent short IDs",
+					"rule_id", rule.ID(),
+					"error", err,
+				)
+			} else {
+				syncData.ChainAgentIDs = make([]string, len(chainAgentIDs))
+				for i, chainAgentID := range chainAgentIDs {
+					if shortID, ok := agentMap[chainAgentID]; ok {
+						syncData.ChainAgentIDs[i] = id.FormatForwardAgentID(shortID)
+					}
+				}
+			}
+		}
+
+		// Determine role
+		if chainPosition == 0 {
+			syncData.Role = "entry"
+		} else if isLast {
+			syncData.Role = "exit"
+		} else {
+			syncData.Role = "relay"
+		}
+
+		// Set ListenPort from chainPortConfig
+		listenPort := rule.GetAgentListenPort(agentID)
+		syncData.ListenPort = listenPort
+
+		// For non-exit agents in chain, populate next hop information
+		if !isLast {
+			nextHopAgentID, nextHopPort := rule.GetNextHopForDirectChain(agentID)
+			if nextHopAgentID != 0 {
+				// Get next hop agent details
+				nextAgent, err := s.agentRepo.GetByID(ctx, nextHopAgentID)
+				if err != nil {
+					s.logger.Warnw("failed to get next hop agent for direct_chain rule",
+						"rule_id", rule.ID(),
+						"next_hop_agent_id", nextHopAgentID,
+						"error", err,
+					)
+				} else if nextAgent != nil {
+					syncData.NextHopAgentID = id.FormatForwardAgentID(nextAgent.ShortID())
+					syncData.NextHopAddress = nextAgent.PublicAddress()
+					syncData.NextHopPort = nextHopPort
+				}
+			}
+		} else {
+			// For exit agents, include target info
+			syncData.TargetAddress = targetAddress
+			syncData.TargetPort = targetPort
+		}
 	}
 
 	return syncData, nil

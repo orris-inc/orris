@@ -138,21 +138,23 @@ func (r *ForwardRuleRepositoryImpl) Update(ctx context.Context, rule *forward.Fo
 	result := tx.Model(&models.ForwardRuleModel{}).
 		Where("id = ?", model.ID).
 		Updates(map[string]interface{}{
-			"name":           model.Name,
-			"listen_port":    model.ListenPort,
-			"target_address": model.TargetAddress,
-			"target_port":    model.TargetPort,
-			"target_node_id": model.TargetNodeID,
-			"ip_version":     model.IPVersion,
-			"protocol":       model.Protocol,
-			"status":         model.Status,
-			"remark":         model.Remark,
-			"upload_bytes":   model.UploadBytes,
-			"download_bytes": model.DownloadBytes,
-			"rule_type":      model.RuleType,
-			"exit_agent_id":  model.ExitAgentID,
-			"ws_listen_port": model.WsListenPort,
-			"updated_at":     model.UpdatedAt,
+			"name":              model.Name,
+			"listen_port":       model.ListenPort,
+			"target_address":    model.TargetAddress,
+			"target_port":       model.TargetPort,
+			"target_node_id":    model.TargetNodeID,
+			"ip_version":        model.IPVersion,
+			"protocol":          model.Protocol,
+			"status":            model.Status,
+			"remark":            model.Remark,
+			"upload_bytes":      model.UploadBytes,
+			"download_bytes":    model.DownloadBytes,
+			"rule_type":         model.RuleType,
+			"exit_agent_id":     model.ExitAgentID,
+			"chain_agent_ids":   model.ChainAgentIDs,
+			"chain_port_config": model.ChainPortConfig,
+			"ws_listen_port":    model.WsListenPort,
+			"updated_at":        model.UpdatedAt,
 		})
 
 	if result.Error != nil {
@@ -383,15 +385,17 @@ func (r *ForwardRuleRepositoryImpl) GetExitRuleByAgentID(ctx context.Context, ag
 }
 
 // ListEnabledByChainAgentID returns all enabled chain rules where the agent participates.
+// This includes both 'chain' and 'direct_chain' rule types.
 func (r *ForwardRuleRepositoryImpl) ListEnabledByChainAgentID(ctx context.Context, agentID uint) ([]*forward.ForwardRule, error) {
 	var ruleModels []*models.ForwardRuleModel
 
 	tx := db.GetTxFromContext(ctx, r.db)
-	// Query chain rules where agent is in chain_agent_ids using MySQL JSON_CONTAINS
+	// Query chain and direct_chain rules where agent is in chain_agent_ids using MySQL JSON_CONTAINS
 	if err := tx.Where(
-		"status = ? AND rule_type = ? AND JSON_CONTAINS(chain_agent_ids, ?)",
+		"status = ? AND rule_type IN (?, ?) AND JSON_CONTAINS(chain_agent_ids, ?)",
 		"enabled",
 		"chain",
+		"direct_chain",
 		fmt.Sprintf("%d", agentID),
 	).Find(&ruleModels).Error; err != nil {
 		r.logger.Errorw("failed to list enabled chain rules by agent ID", "agent_id", agentID, "error", err)

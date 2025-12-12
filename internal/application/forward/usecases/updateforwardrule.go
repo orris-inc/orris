@@ -15,9 +15,10 @@ import (
 type UpdateForwardRuleCommand struct {
 	ShortID            string // External API identifier
 	Name               *string
-	AgentShortID       *string  // entry agent ID (for all rule types)
-	ExitAgentShortID   *string  // exit agent ID (for entry type rules only)
-	ChainAgentShortIDs []string // chain agent IDs (for chain type rules only), nil means no update
+	AgentShortID       *string           // entry agent ID (for all rule types)
+	ExitAgentShortID   *string           // exit agent ID (for entry type rules only)
+	ChainAgentShortIDs []string          // chain agent IDs (for chain type rules only), nil means no update
+	ChainPortConfig    map[string]uint16 // chain port config (for direct_chain type rules only), nil means no update
 	ListenPort         *uint16
 	TargetAddress      *string
 	TargetPort         *uint16
@@ -124,6 +125,25 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 			chainAgentIDs[i] = chainAgent.ID()
 		}
 		if err := rule.UpdateChainAgentIDs(chainAgentIDs); err != nil {
+			return errors.NewValidationError(err.Error())
+		}
+	}
+
+	// Update chain port config (for direct_chain type rules)
+	if cmd.ChainPortConfig != nil {
+		chainPortConfig := make(map[uint]uint16, len(cmd.ChainPortConfig))
+		for shortID, port := range cmd.ChainPortConfig {
+			chainAgent, err := uc.agentRepo.GetByShortID(ctx, shortID)
+			if err != nil {
+				uc.logger.Errorw("failed to get chain agent for port config", "chain_agent_short_id", shortID, "error", err)
+				return fmt.Errorf("failed to validate chain agent in chain_port_config: %w", err)
+			}
+			if chainAgent == nil {
+				return errors.NewNotFoundError("chain forward agent in chain_port_config", shortID)
+			}
+			chainPortConfig[chainAgent.ID()] = port
+		}
+		if err := rule.UpdateChainPortConfig(chainPortConfig); err != nil {
 			return errors.NewValidationError(err.Error())
 		}
 	}

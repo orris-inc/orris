@@ -14,12 +14,17 @@ const (
 	// Traffic flows through multiple agents: entry -> relay1 -> relay2 -> ... -> exit -> target.
 	// The chain_agent_ids field stores the ordered list of intermediate agent IDs.
 	ForwardRuleTypeChain ForwardRuleType = "chain"
+	// ForwardRuleTypeDirectChain is a multi-hop direct TCP/UDP forward rule.
+	// Traffic is directly forwarded through TCP/UDP connections across multiple agents.
+	// Each agent listens on a specific port defined in chain_port_config.
+	ForwardRuleTypeDirectChain ForwardRuleType = "direct_chain"
 )
 
 var validForwardRuleTypes = map[ForwardRuleType]bool{
-	ForwardRuleTypeDirect: true,
-	ForwardRuleTypeEntry:  true,
-	ForwardRuleTypeChain:  true,
+	ForwardRuleTypeDirect:      true,
+	ForwardRuleTypeEntry:       true,
+	ForwardRuleTypeChain:       true,
+	ForwardRuleTypeDirectChain: true,
 }
 
 // String returns the string representation.
@@ -52,6 +57,11 @@ func (t ForwardRuleType) IsChain() bool {
 	return t == ForwardRuleTypeChain
 }
 
+// IsDirectChain checks if this is a direct_chain forward rule.
+func (t ForwardRuleType) IsDirectChain() bool {
+	return t == ForwardRuleTypeDirectChain
+}
+
 // RequiresTarget checks if this rule type requires target address/port.
 func (t ForwardRuleType) RequiresTarget() bool {
 	return t == ForwardRuleTypeDirect
@@ -64,10 +74,15 @@ func (t ForwardRuleType) RequiresExitAgent() bool {
 
 // RequiresListenPort checks if this rule type requires listen port.
 func (t ForwardRuleType) RequiresListenPort() bool {
-	return t == ForwardRuleTypeDirect || t == ForwardRuleTypeEntry || t == ForwardRuleTypeChain
+	return t == ForwardRuleTypeDirect || t == ForwardRuleTypeEntry || t == ForwardRuleTypeChain || t == ForwardRuleTypeDirectChain
 }
 
 // RequiresChainAgents checks if this rule type requires chain agent IDs.
 func (t ForwardRuleType) RequiresChainAgents() bool {
-	return t == ForwardRuleTypeChain
+	return t == ForwardRuleTypeChain || t == ForwardRuleTypeDirectChain
+}
+
+// RequiresChainPortConfig checks if this rule type requires chain port configuration.
+func (t ForwardRuleType) RequiresChainPortConfig() bool {
+	return t == ForwardRuleTypeDirectChain
 }

@@ -13,26 +13,27 @@ import (
 
 // ForwardRule represents the forward rule aggregate root.
 type ForwardRule struct {
-	id            uint
-	shortID       string // external API identifier (Stripe-style)
-	agentID       uint
-	ruleType      vo.ForwardRuleType
-	exitAgentID   uint   // exit agent ID (required for entry type)
-	chainAgentIDs []uint // ordered array of intermediate agent IDs for chain forwarding
-	wsListenPort  uint16 // WebSocket listen port (required for exit type)
-	name          string
-	listenPort    uint16
-	targetAddress string // final target address (required for direct and exit types if targetNodeID is not set)
-	targetPort    uint16 // final target port (required for direct and exit types if targetNodeID is not set)
-	targetNodeID  *uint  // target node ID for dynamic address resolution (mutually exclusive with targetAddress/targetPort)
-	ipVersion     vo.IPVersion
-	protocol      vo.ForwardProtocol
-	status        vo.ForwardStatus
-	remark        string
-	uploadBytes   int64
-	downloadBytes int64
-	createdAt     time.Time
-	updatedAt     time.Time
+	id              uint
+	shortID         string // external API identifier (Stripe-style)
+	agentID         uint
+	ruleType        vo.ForwardRuleType
+	exitAgentID     uint            // exit agent ID (required for entry type)
+	chainAgentIDs   []uint          // ordered array of intermediate agent IDs for chain forwarding
+	chainPortConfig map[uint]uint16 // map of agent_id -> listen_port for direct_chain type
+	wsListenPort    uint16          // WebSocket listen port (required for exit type)
+	name            string
+	listenPort      uint16
+	targetAddress   string // final target address (required for direct and exit types if targetNodeID is not set)
+	targetPort      uint16 // final target port (required for direct and exit types if targetNodeID is not set)
+	targetNodeID    *uint  // target node ID for dynamic address resolution (mutually exclusive with targetAddress/targetPort)
+	ipVersion       vo.IPVersion
+	protocol        vo.ForwardProtocol
+	status          vo.ForwardStatus
+	remark          string
+	uploadBytes     int64
+	downloadBytes   int64
+	createdAt       time.Time
+	updatedAt       time.Time
 }
 
 // NewForwardRule creates a new forward rule aggregate.
@@ -40,11 +41,13 @@ type ForwardRule struct {
 // - direct: requires agentID, listenPort, (targetAddress+targetPort OR targetNodeID)
 // - entry: requires agentID, listenPort, exitAgentID, (targetAddress+targetPort OR targetNodeID)
 // - chain: requires agentID, listenPort, chainAgentIDs (at least 1), (targetAddress+targetPort OR targetNodeID)
+// - direct_chain: requires agentID, listenPort, chainAgentIDs (at least 1), chainPortConfig, (targetAddress+targetPort OR targetNodeID)
 func NewForwardRule(
 	agentID uint,
 	ruleType vo.ForwardRuleType,
 	exitAgentID uint,
 	chainAgentIDs []uint,
+	chainPortConfig map[uint]uint16,
 	wsListenPort uint16,
 	name string,
 	listenPort uint16,
@@ -146,6 +149,69 @@ func NewForwardRule(
 				return nil, fmt.Errorf("invalid target address: %w", err)
 			}
 		}
+	case vo.ForwardRuleTypeDirectChain:
+		if listenPort == 0 {
+			return nil, fmt.Errorf("listen port is required for direct_chain forward")
+		}
+		if len(chainAgentIDs) == 0 {
+			return nil, fmt.Errorf("chain agent IDs is required for direct_chain forward (at least 1 intermediate agent)")
+		}
+		if len(chainAgentIDs) > 10 {
+			return nil, fmt.Errorf("direct_chain forward supports maximum 10 intermediate agents")
+		}
+		// Check for duplicates in chain (including entry agent)
+		seen := make(map[uint]bool)
+		seen[agentID] = true
+		for _, id := range chainAgentIDs {
+			if id == 0 {
+				return nil, fmt.Errorf("chain agent ID cannot be zero")
+			}
+			if seen[id] {
+				return nil, fmt.Errorf("chain contains duplicate agent ID: %d", id)
+			}
+			seen[id] = true
+		}
+		// Validate chain_port_config
+		if chainPortConfig == nil || len(chainPortConfig) == 0 {
+			return nil, fmt.Errorf("chain_port_config is required for direct_chain forward")
+		}
+		// Verify all chain agents have port configuration
+		for _, id := range chainAgentIDs {
+			port, exists := chainPortConfig[id]
+			if !exists {
+				return nil, fmt.Errorf("chain_port_config missing port for agent ID %d", id)
+			}
+			if port == 0 {
+				return nil, fmt.Errorf("chain_port_config has invalid port for agent ID %d", id)
+			}
+		}
+		// Check for extra entries in chain_port_config
+		for id := range chainPortConfig {
+			found := false
+			for _, chainID := range chainAgentIDs {
+				if id == chainID {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return nil, fmt.Errorf("chain_port_config contains agent ID %d not in chain_agent_ids", id)
+			}
+		}
+		// Direct chain rules require target information (at the end of chain)
+		hasTarget := targetAddress != "" && targetPort != 0
+		hasTargetNode := targetNodeID != nil && *targetNodeID != 0
+		if !hasTarget && !hasTargetNode {
+			return nil, fmt.Errorf("either target address+port or target node ID is required for direct_chain forward")
+		}
+		if hasTarget && hasTargetNode {
+			return nil, fmt.Errorf("target address+port and target node ID are mutually exclusive for direct_chain forward")
+		}
+		if hasTarget {
+			if err := validateAddress(targetAddress); err != nil {
+				return nil, fmt.Errorf("invalid target address: %w", err)
+			}
+		}
 	}
 
 	// Default ipVersion to auto if not set
@@ -164,25 +230,26 @@ func NewForwardRule(
 
 	now := time.Now()
 	return &ForwardRule{
-		shortID:       shortID,
-		agentID:       agentID,
-		ruleType:      ruleType,
-		exitAgentID:   exitAgentID,
-		chainAgentIDs: chainAgentIDs,
-		wsListenPort:  wsListenPort,
-		name:          name,
-		listenPort:    listenPort,
-		targetAddress: targetAddress,
-		targetPort:    targetPort,
-		targetNodeID:  targetNodeID,
-		ipVersion:     ipVersion,
-		protocol:      protocol,
-		status:        vo.ForwardStatusDisabled,
-		remark:        remark,
-		uploadBytes:   0,
-		downloadBytes: 0,
-		createdAt:     now,
-		updatedAt:     now,
+		shortID:         shortID,
+		agentID:         agentID,
+		ruleType:        ruleType,
+		exitAgentID:     exitAgentID,
+		chainAgentIDs:   chainAgentIDs,
+		chainPortConfig: chainPortConfig,
+		wsListenPort:    wsListenPort,
+		name:            name,
+		listenPort:      listenPort,
+		targetAddress:   targetAddress,
+		targetPort:      targetPort,
+		targetNodeID:    targetNodeID,
+		ipVersion:       ipVersion,
+		protocol:        protocol,
+		status:          vo.ForwardStatusDisabled,
+		remark:          remark,
+		uploadBytes:     0,
+		downloadBytes:   0,
+		createdAt:       now,
+		updatedAt:       now,
 	}, nil
 }
 
@@ -194,6 +261,7 @@ func ReconstructForwardRule(
 	ruleType vo.ForwardRuleType,
 	exitAgentID uint,
 	chainAgentIDs []uint,
+	chainPortConfig map[uint]uint16,
 	wsListenPort uint16,
 	name string,
 	listenPort uint16,
@@ -236,26 +304,27 @@ func ReconstructForwardRule(
 	}
 
 	return &ForwardRule{
-		id:            id,
-		shortID:       shortID,
-		agentID:       agentID,
-		ruleType:      ruleType,
-		exitAgentID:   exitAgentID,
-		chainAgentIDs: chainAgentIDs,
-		wsListenPort:  wsListenPort,
-		name:          name,
-		listenPort:    listenPort,
-		targetAddress: targetAddress,
-		targetPort:    targetPort,
-		targetNodeID:  targetNodeID,
-		ipVersion:     ipVersion,
-		protocol:      protocol,
-		status:        status,
-		remark:        remark,
-		uploadBytes:   uploadBytes,
-		downloadBytes: downloadBytes,
-		createdAt:     createdAt,
-		updatedAt:     updatedAt,
+		id:              id,
+		shortID:         shortID,
+		agentID:         agentID,
+		ruleType:        ruleType,
+		exitAgentID:     exitAgentID,
+		chainAgentIDs:   chainAgentIDs,
+		chainPortConfig: chainPortConfig,
+		wsListenPort:    wsListenPort,
+		name:            name,
+		listenPort:      listenPort,
+		targetAddress:   targetAddress,
+		targetPort:      targetPort,
+		targetNodeID:    targetNodeID,
+		ipVersion:       ipVersion,
+		protocol:        protocol,
+		status:          status,
+		remark:          remark,
+		uploadBytes:     uploadBytes,
+		downloadBytes:   downloadBytes,
+		createdAt:       createdAt,
+		updatedAt:       updatedAt,
 	}, nil
 }
 
@@ -313,6 +382,40 @@ func (r *ForwardRule) ExitAgentID() uint {
 // ChainAgentIDs returns the chain agent IDs (for chain type rules).
 func (r *ForwardRule) ChainAgentIDs() []uint {
 	return r.chainAgentIDs
+}
+
+// ChainPortConfig returns the chain port configuration (for direct_chain type rules).
+func (r *ForwardRule) ChainPortConfig() map[uint]uint16 {
+	return r.chainPortConfig
+}
+
+// GetAgentListenPort returns the listen port for a specific agent in the chain.
+// Returns 0 if the agent is not found in chain_port_config.
+func (r *ForwardRule) GetAgentListenPort(agentID uint) uint16 {
+	if r.chainPortConfig == nil {
+		return 0
+	}
+	return r.chainPortConfig[agentID]
+}
+
+// GetNextHopForDirectChain returns the next hop agent ID and port for a given agent in the direct_chain.
+// Returns (0, 0) if the agent is the last in chain or not part of the chain.
+func (r *ForwardRule) GetNextHopForDirectChain(currentAgentID uint) (nextAgentID uint, nextPort uint16) {
+	if !r.ruleType.IsDirectChain() {
+		return 0, 0
+	}
+
+	// Build full chain: agentID -> chainAgentIDs[0] -> chainAgentIDs[1] -> ...
+	fullChain := append([]uint{r.agentID}, r.chainAgentIDs...)
+
+	for i, id := range fullChain {
+		if id == currentAgentID && i < len(fullChain)-1 {
+			nextID := fullChain[i+1]
+			nextPort := r.GetAgentListenPort(nextID)
+			return nextID, nextPort
+		}
+	}
+	return 0, 0 // Last agent in chain or not found
 }
 
 // GetNextHopAgentID returns the next hop agent ID for a given agent in the chain.
@@ -634,8 +737,8 @@ func (r *ForwardRule) UpdateAgentID(agentID uint) error {
 
 // UpdateChainAgentIDs updates the chain agent IDs for chain type rules.
 func (r *ForwardRule) UpdateChainAgentIDs(chainAgentIDs []uint) error {
-	if !r.ruleType.IsChain() {
-		return fmt.Errorf("chain agent IDs can only be updated for chain type rules")
+	if !r.ruleType.IsChain() && !r.ruleType.IsDirectChain() {
+		return fmt.Errorf("chain agent IDs can only be updated for chain or direct_chain type rules")
 	}
 	if len(chainAgentIDs) == 0 {
 		return fmt.Errorf("chain agent IDs cannot be empty for chain forward")
@@ -656,6 +759,42 @@ func (r *ForwardRule) UpdateChainAgentIDs(chainAgentIDs []uint) error {
 		seen[id] = true
 	}
 	r.chainAgentIDs = chainAgentIDs
+	r.updatedAt = time.Now()
+	return nil
+}
+
+// UpdateChainPortConfig updates the chain port configuration for direct_chain type rules.
+func (r *ForwardRule) UpdateChainPortConfig(chainPortConfig map[uint]uint16) error {
+	if !r.ruleType.IsDirectChain() {
+		return fmt.Errorf("chain_port_config can only be updated for direct_chain type rules")
+	}
+	if chainPortConfig == nil || len(chainPortConfig) == 0 {
+		return fmt.Errorf("chain_port_config cannot be empty for direct_chain forward")
+	}
+	// Verify all chain agents have port configuration
+	for _, id := range r.chainAgentIDs {
+		port, exists := chainPortConfig[id]
+		if !exists {
+			return fmt.Errorf("chain_port_config missing port for agent ID %d", id)
+		}
+		if port == 0 {
+			return fmt.Errorf("chain_port_config has invalid port for agent ID %d", id)
+		}
+	}
+	// Check for extra entries in chain_port_config
+	for id := range chainPortConfig {
+		found := false
+		for _, chainID := range r.chainAgentIDs {
+			if id == chainID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("chain_port_config contains agent ID %d not in chain_agent_ids", id)
+		}
+	}
+	r.chainPortConfig = chainPortConfig
 	r.updatedAt = time.Now()
 	return nil
 }
@@ -748,6 +887,36 @@ func (r *ForwardRule) Validate() error {
 		}
 		if hasTarget && hasTargetNode {
 			return fmt.Errorf("target address+port and target node ID are mutually exclusive for chain forward")
+		}
+	case vo.ForwardRuleTypeDirectChain:
+		if r.listenPort == 0 {
+			return fmt.Errorf("listen port is required for direct_chain forward")
+		}
+		if len(r.chainAgentIDs) == 0 {
+			return fmt.Errorf("chain agent IDs is required for direct_chain forward")
+		}
+		// Validate chain_port_config
+		if r.chainPortConfig == nil || len(r.chainPortConfig) == 0 {
+			return fmt.Errorf("chain_port_config is required for direct_chain forward")
+		}
+		// Verify all chain agents have port configuration
+		for _, id := range r.chainAgentIDs {
+			port, exists := r.chainPortConfig[id]
+			if !exists {
+				return fmt.Errorf("chain_port_config missing port for agent ID %d", id)
+			}
+			if port == 0 {
+				return fmt.Errorf("chain_port_config has invalid port for agent ID %d", id)
+			}
+		}
+		// Direct chain rules require target information (at the end of chain)
+		hasTarget := r.targetAddress != "" && r.targetPort != 0
+		hasTargetNode := r.targetNodeID != nil && *r.targetNodeID != 0
+		if !hasTarget && !hasTargetNode {
+			return fmt.Errorf("either target address+port or target node ID is required for direct_chain forward")
+		}
+		if hasTarget && hasTargetNode {
+			return fmt.Errorf("target address+port and target node ID are mutually exclusive for direct_chain forward")
 		}
 	}
 

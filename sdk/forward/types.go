@@ -13,6 +13,9 @@ const (
 	// RuleTypeChain is a multi-hop chain forward rule.
 	// Traffic flows through multiple agents: entry -> relay1 -> relay2 -> ... -> exit -> target.
 	RuleTypeChain RuleType = "chain"
+	// RuleTypeDirectChain is a direct chain forward rule that uses direct TCP/UDP connections instead of WS tunnels.
+	// Similar to chain but each hop connects directly to the next hop's listen port.
+	RuleTypeDirectChain RuleType = "direct_chain"
 )
 
 // Rule represents a forward rule returned by the API.
@@ -46,6 +49,7 @@ type Rule struct {
 	NextHopAgentID         string   `json:"next_hop_agent_id,omitempty"`         // Next agent in chain
 	NextHopAddress         string   `json:"next_hop_address,omitempty"`          // Next agent's public address
 	NextHopWsPort          uint16   `json:"next_hop_ws_port,omitempty"`          // Next agent's WS port
+	NextHopPort            uint16   `json:"next_hop_port,omitempty"`             // Next agent's listen port for direct_chain
 	NextHopConnectionToken string   `json:"next_hop_connection_token,omitempty"` // Short-term token for next hop authentication
 }
 
@@ -82,6 +86,26 @@ func (r *Rule) IsChainRelay() bool {
 // IsChainExit returns true if this agent is the exit (last) node in a chain rule.
 func (r *Rule) IsChainExit() bool {
 	return r.RuleType == RuleTypeChain && r.IsLastInChain
+}
+
+// IsDirectChain returns true if this is a direct_chain forward rule.
+func (r *Rule) IsDirectChain() bool {
+	return r.RuleType == RuleTypeDirectChain
+}
+
+// IsDirectChainEntry returns true if this agent is the entry point of a direct_chain rule.
+func (r *Rule) IsDirectChainEntry() bool {
+	return r.RuleType == RuleTypeDirectChain && r.ChainPosition == 0
+}
+
+// IsDirectChainRelay returns true if this agent is a relay (middle) node in a direct_chain rule.
+func (r *Rule) IsDirectChainRelay() bool {
+	return r.RuleType == RuleTypeDirectChain && !r.IsLastInChain && r.ChainPosition > 0
+}
+
+// IsDirectChainExit returns true if this agent is the exit (last) node in a direct_chain rule.
+func (r *Rule) IsDirectChainExit() bool {
+	return r.RuleType == RuleTypeDirectChain && r.IsLastInChain
 }
 
 // ExitEndpoint represents the connection information for an exit agent.
