@@ -20,7 +20,6 @@ type ForwardRule struct {
 	exitAgentID     uint            // exit agent ID (required for entry type)
 	chainAgentIDs   []uint          // ordered array of intermediate agent IDs for chain forwarding
 	chainPortConfig map[uint]uint16 // map of agent_id -> listen_port for direct_chain type
-	wsListenPort    uint16          // WebSocket listen port (required for exit type)
 	name            string
 	listenPort      uint16
 	targetAddress   string // final target address (required for direct and exit types if targetNodeID is not set)
@@ -49,7 +48,6 @@ func NewForwardRule(
 	exitAgentID uint,
 	chainAgentIDs []uint,
 	chainPortConfig map[uint]uint16,
-	wsListenPort uint16,
 	name string,
 	listenPort uint16,
 	targetAddress string,
@@ -238,7 +236,6 @@ func NewForwardRule(
 		exitAgentID:     exitAgentID,
 		chainAgentIDs:   chainAgentIDs,
 		chainPortConfig: chainPortConfig,
-		wsListenPort:    wsListenPort,
 		name:            name,
 		listenPort:      listenPort,
 		targetAddress:   targetAddress,
@@ -265,7 +262,6 @@ func ReconstructForwardRule(
 	exitAgentID uint,
 	chainAgentIDs []uint,
 	chainPortConfig map[uint]uint16,
-	wsListenPort uint16,
 	name string,
 	listenPort uint16,
 	targetAddress string,
@@ -315,7 +311,6 @@ func ReconstructForwardRule(
 		exitAgentID:     exitAgentID,
 		chainAgentIDs:   chainAgentIDs,
 		chainPortConfig: chainPortConfig,
-		wsListenPort:    wsListenPort,
 		name:            name,
 		listenPort:      listenPort,
 		targetAddress:   targetAddress,
@@ -467,11 +462,6 @@ func (r *ForwardRule) GetChainPosition(agentID uint) int {
 		}
 	}
 	return -1
-}
-
-// WsListenPort returns the WebSocket listen port (for exit type rules).
-func (r *ForwardRule) WsListenPort() uint16 {
-	return r.wsListenPort
 }
 
 // Name returns the forward rule name.

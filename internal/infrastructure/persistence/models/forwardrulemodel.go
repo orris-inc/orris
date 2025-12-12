@@ -18,7 +18,6 @@ type ForwardRuleModel struct {
 	ExitAgentID     *uint          `gorm:"index:idx_forward_exit_agent_id"` // exit agent ID for chain/websocket forward (nullable)
 	ChainAgentIDs   datatypes.JSON `gorm:"type:json;default:null"`          // ordered array of intermediate agent IDs for chain forwarding
 	ChainPortConfig datatypes.JSON `gorm:"type:json;default:null"`          // map of agent_id -> listen_port for direct_chain type
-	WsListenPort    *uint16        `gorm:"default:null"`                    // websocket listen port (nullable, used for websocket type)
 	Name            string         `gorm:"not null;size:100;index:idx_forward_name"`
 	ListenPort      uint16         `gorm:"not null;uniqueIndex:idx_listen_port_agent"`
 	TargetAddress   string         `gorm:"size:255"`                                    // required when RuleType=direct (if TargetNodeID is not set)

@@ -58,11 +58,6 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 		exitAgentID = *model.ExitAgentID
 	}
 
-	var wsListenPort uint16
-	if model.WsListenPort != nil {
-		wsListenPort = *model.WsListenPort
-	}
-
 	var targetNodeID *uint
 	if model.TargetNodeID != nil {
 		targetNodeID = model.TargetNodeID
@@ -105,7 +100,6 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 		exitAgentID,
 		chainAgentIDs,
 		chainPortConfig,
-		wsListenPort,
 		model.Name,
 		model.ListenPort,
 		model.TargetAddress,
@@ -139,12 +133,6 @@ func (m *ForwardRuleMapperImpl) ToModel(entity *forward.ForwardRule) (*models.Fo
 	if entity.ExitAgentID() != 0 {
 		val := entity.ExitAgentID()
 		exitAgentID = &val
-	}
-
-	var wsListenPort *uint16
-	if entity.WsListenPort() != 0 {
-		val := entity.WsListenPort()
-		wsListenPort = &val
 	}
 
 	var targetNodeID *uint
@@ -185,7 +173,6 @@ func (m *ForwardRuleMapperImpl) ToModel(entity *forward.ForwardRule) (*models.Fo
 		ExitAgentID:     exitAgentID,
 		ChainAgentIDs:   chainAgentIDsJSON,
 		ChainPortConfig: chainPortConfigJSON,
-		WsListenPort:    wsListenPort,
 		Name:            entity.Name(),
 		ListenPort:      entity.ListenPort(),
 		TargetAddress:   entity.TargetAddress(),

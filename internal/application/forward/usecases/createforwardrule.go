@@ -181,7 +181,6 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		exitAgentID,
 		chainAgentIDs,
 		chainPortConfig,
-		0, // wsListenPort is deprecated (exit type removed)
 		cmd.Name,
 		cmd.ListenPort,
 		cmd.TargetAddress,

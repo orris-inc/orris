@@ -153,7 +153,6 @@ func (r *ForwardRuleRepositoryImpl) Update(ctx context.Context, rule *forward.Fo
 			"exit_agent_id":     model.ExitAgentID,
 			"chain_agent_ids":   model.ChainAgentIDs,
 			"chain_port_config": model.ChainPortConfig,
-			"ws_listen_port":    model.WsListenPort,
 			"updated_at":        model.UpdatedAt,
 		})
 
