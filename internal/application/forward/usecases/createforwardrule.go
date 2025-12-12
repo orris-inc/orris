@@ -24,6 +24,7 @@ type CreateForwardRuleCommand struct {
 	TargetAddress      string // required for all types (mutually exclusive with TargetNodeShortID)
 	TargetPort         uint16 // required for all types (mutually exclusive with TargetNodeShortID)
 	TargetNodeShortID  string // optional for all types (Stripe-style short ID without prefix)
+	BindIP             string // optional bind IP address for outbound connections
 	IPVersion          string // auto, ipv4, ipv6 (default: auto)
 	Protocol           string
 	Remark             string
@@ -186,6 +187,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		cmd.TargetAddress,
 		cmd.TargetPort,
 		targetNodeID,
+		cmd.BindIP,
 		ipVersion,
 		protocol,
 		cmd.Remark,

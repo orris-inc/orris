@@ -21,6 +21,7 @@ type ForwardRuleDTO struct {
 	TargetAddress   string            `json:"target_address,omitempty"` // for all types (exit role only for chain/direct_chain)
 	TargetPort      uint16            `json:"target_port,omitempty"`    // for all types (exit role only for chain/direct_chain)
 	TargetNodeID    string            `json:"target_node_id,omitempty"` // Stripe-style prefixed Node ID (e.g., "node_xK9mP2vL3nQ")
+	BindIP          string            `json:"bind_ip,omitempty"`        // Bind IP address for outbound connections
 	IPVersion       string            `json:"ip_version"`               // auto, ipv4, ipv6
 	Protocol        string            `json:"protocol"`
 	Status          string            `json:"status"`
@@ -50,13 +51,13 @@ type ForwardRuleDTO struct {
 	NextHopConnectionToken string `json:"next_hop_connection_token,omitempty"` // short-term JWT for next hop authentication
 
 	// Internal fields for mapping (not exposed in JSON)
-	internalAgentID     uint   `json:"-"`
-	internalExitAgentID uint   `json:"-"`
-	internalChainAgents    []uint          `json:"-"` // internal chain agent IDs for lookup
+	internalAgentID         uint            `json:"-"`
+	internalExitAgentID     uint            `json:"-"`
+	internalChainAgents     []uint          `json:"-"` // internal chain agent IDs for lookup
 	internalChainPortConfig map[uint]uint16 `json:"-"` // internal chain port config for lookup
-	internalTargetNode     *uint           `json:"-"` // internal node ID for lookup
-	agentShortID           string          `json:"-"`
-	exitAgentShortID       string          `json:"-"`
+	internalTargetNode      *uint           `json:"-"` // internal node ID for lookup
+	agentShortID            string          `json:"-"`
+	exitAgentShortID        string          `json:"-"`
 }
 
 // ToForwardRuleDTO converts a domain forward rule to DTO.
@@ -70,23 +71,24 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 	}
 
 	return &ForwardRuleDTO{
-		ID:                  id.FormatForwardRuleID(rule.ShortID()),
-		AgentID:             "", // populated later via PopulateAgentInfo
-		RuleType:            rule.RuleType().String(),
-		ExitAgentID:         "",  // populated later via PopulateAgentInfo
-		ChainAgentIDs:       nil, // populated later via PopulateAgentInfo
-		Name:                rule.Name(),
-		ListenPort:          rule.ListenPort(),
-		TargetAddress:       rule.TargetAddress(),
-		TargetPort:          rule.TargetPort(),
-		TargetNodeID:        "", // populated later via PopulateTargetNodeShortID
-		IPVersion:           rule.IPVersion().String(),
-		Protocol:            rule.Protocol().String(),
-		Status:              rule.Status().String(),
-		Remark:              rule.Remark(),
-		UploadBytes:         rule.UploadBytes(),
-		DownloadBytes:       rule.DownloadBytes(),
-		TotalBytes:          rule.TotalBytes(),
+		ID:                      id.FormatForwardRuleID(rule.ShortID()),
+		AgentID:                 "", // populated later via PopulateAgentInfo
+		RuleType:                rule.RuleType().String(),
+		ExitAgentID:             "",  // populated later via PopulateAgentInfo
+		ChainAgentIDs:           nil, // populated later via PopulateAgentInfo
+		Name:                    rule.Name(),
+		ListenPort:              rule.ListenPort(),
+		TargetAddress:           rule.TargetAddress(),
+		TargetPort:              rule.TargetPort(),
+		TargetNodeID:            "", // populated later via PopulateTargetNodeShortID
+		BindIP:                  rule.BindIP(),
+		IPVersion:               rule.IPVersion().String(),
+		Protocol:                rule.Protocol().String(),
+		Status:                  rule.Status().String(),
+		Remark:                  rule.Remark(),
+		UploadBytes:             rule.UploadBytes(),
+		DownloadBytes:           rule.DownloadBytes(),
+		TotalBytes:              rule.TotalBytes(),
 		CreatedAt:               rule.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:               rule.UpdatedAt().Format("2006-01-02T15:04:05Z07:00"),
 		internalAgentID:         rule.AgentID(),

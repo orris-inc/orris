@@ -23,6 +23,7 @@ type UpdateForwardRuleCommand struct {
 	TargetAddress      *string
 	TargetPort         *uint16
 	TargetNodeShortID  *string // nil means no update, empty string means clear, non-empty means set to this node
+	BindIP             *string // nil means no update, empty string means clear
 	IPVersion          *string // auto, ipv4, ipv6
 	Protocol           *string
 	Remark             *string
@@ -205,6 +206,12 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 	if cmd.IPVersion != nil {
 		ipVersion := vo.IPVersion(*cmd.IPVersion)
 		if err := rule.UpdateIPVersion(ipVersion); err != nil {
+			return errors.NewValidationError(err.Error())
+		}
+	}
+
+	if cmd.BindIP != nil {
+		if err := rule.UpdateBindIP(*cmd.BindIP); err != nil {
 			return errors.NewValidationError(err.Error())
 		}
 	}

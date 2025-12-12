@@ -370,6 +370,7 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 		RuleType:   rule.RuleType().String(),
 		ListenPort: rule.ListenPort(),
 		Protocol:   rule.Protocol().String(),
+		BindIP:     rule.BindIP(),
 	}
 
 	// Resolve target address and port

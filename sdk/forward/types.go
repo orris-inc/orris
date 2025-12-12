@@ -29,6 +29,7 @@ type Rule struct {
 	ListenPort    uint16   `json:"listen_port"`
 	TargetAddress string   `json:"target_address,omitempty"`
 	TargetPort    uint16   `json:"target_port,omitempty"`
+	BindIP        string   `json:"bind_ip,omitempty"` // Bind IP address for outbound connections
 	Protocol      string   `json:"protocol"`
 	Status        string   `json:"status"`
 	Remark        string   `json:"remark,omitempty"`

@@ -24,6 +24,7 @@ type ForwardRuleModel struct {
 	TargetAddress   string         `gorm:"size:255"`                                    // required when RuleType=direct (if TargetNodeID is not set)
 	TargetPort      uint16         `gorm:"default:0"`                                   // required when RuleType=direct (if TargetNodeID is not set)
 	TargetNodeID    *uint          `gorm:"index:idx_forward_target_node_id"`            // target node ID for dynamic address resolution (mutually exclusive with TargetAddress/TargetPort)
+	BindIP          string         `gorm:"size:45"`                                     // bind IP address for outbound connections (optional)
 	IPVersion       string         `gorm:"not null;default:auto;size:10"`               // auto, ipv4, ipv6
 	Protocol        string         `gorm:"not null;size:10;index:idx_forward_protocol"` // tcp, udp, both
 	Status          string         `gorm:"not null;default:disabled;size:20;index:idx_forward_status"`

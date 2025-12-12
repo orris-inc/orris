@@ -26,6 +26,7 @@ type ForwardRule struct {
 	targetAddress   string // final target address (required for direct and exit types if targetNodeID is not set)
 	targetPort      uint16 // final target port (required for direct and exit types if targetNodeID is not set)
 	targetNodeID    *uint  // target node ID for dynamic address resolution (mutually exclusive with targetAddress/targetPort)
+	bindIP          string // bind IP address for outbound connections (optional)
 	ipVersion       vo.IPVersion
 	protocol        vo.ForwardProtocol
 	status          vo.ForwardStatus
@@ -54,6 +55,7 @@ func NewForwardRule(
 	targetAddress string,
 	targetPort uint16,
 	targetNodeID *uint,
+	bindIP string,
 	ipVersion vo.IPVersion,
 	protocol vo.ForwardProtocol,
 	remark string,
@@ -242,6 +244,7 @@ func NewForwardRule(
 		targetAddress:   targetAddress,
 		targetPort:      targetPort,
 		targetNodeID:    targetNodeID,
+		bindIP:          bindIP,
 		ipVersion:       ipVersion,
 		protocol:        protocol,
 		status:          vo.ForwardStatusDisabled,
@@ -268,6 +271,7 @@ func ReconstructForwardRule(
 	targetAddress string,
 	targetPort uint16,
 	targetNodeID *uint,
+	bindIP string,
 	ipVersion vo.IPVersion,
 	protocol vo.ForwardProtocol,
 	status vo.ForwardStatus,
@@ -317,6 +321,7 @@ func ReconstructForwardRule(
 		targetAddress:   targetAddress,
 		targetPort:      targetPort,
 		targetNodeID:    targetNodeID,
+		bindIP:          bindIP,
 		ipVersion:       ipVersion,
 		protocol:        protocol,
 		status:          status,
@@ -497,6 +502,11 @@ func (r *ForwardRule) TargetNodeID() *uint {
 // HasTargetNode returns true if targetNodeID is set.
 func (r *ForwardRule) HasTargetNode() bool {
 	return r.targetNodeID != nil && *r.targetNodeID != 0
+}
+
+// BindIP returns the bind IP address for outbound connections.
+func (r *ForwardRule) BindIP() string {
+	return r.bindIP
 }
 
 // IPVersion returns the IP version preference.
@@ -695,6 +705,22 @@ func (r *ForwardRule) UpdateRemark(remark string) error {
 		return nil
 	}
 	r.remark = remark
+	r.updatedAt = time.Now()
+	return nil
+}
+
+// UpdateBindIP updates the bind IP address for outbound connections.
+func (r *ForwardRule) UpdateBindIP(bindIP string) error {
+	if r.bindIP == bindIP {
+		return nil
+	}
+	// Validate bindIP if not empty
+	if bindIP != "" {
+		if ip := net.ParseIP(bindIP); ip == nil {
+			return fmt.Errorf("invalid bind IP address: %s", bindIP)
+		}
+	}
+	r.bindIP = bindIP
 	r.updatedAt = time.Now()
 	return nil
 }

@@ -133,6 +133,7 @@ type RuleSyncData struct {
 	ListenPort     uint16   `json:"listen_port"`
 	TargetAddress  string   `json:"target_address,omitempty"`
 	TargetPort     uint16   `json:"target_port,omitempty"`
+	BindIP         string   `json:"bind_ip,omitempty"` // Bind IP address for outbound connections
 	Protocol       string   `json:"protocol"`
 	Role           string   `json:"role,omitempty"`
 	AgentID        string   `json:"agent_id,omitempty"` // Entry agent ID (for exit agents to verify handshake)
