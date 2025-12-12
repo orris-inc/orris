@@ -38,6 +38,7 @@ type ForwardAgent struct {
 	apiToken       string // stored token for retrieval
 	status         AgentStatus
 	publicAddress  string // optional public address for Entry to obtain Exit connection information
+	tunnelAddress  string // optional tunnel address for Entry to connect to Exit (overrides publicAddress if set)
 	remark         string
 	createdAt      time.Time
 	updatedAt      time.Time
@@ -49,7 +50,7 @@ type ForwardAgent struct {
 type TokenGenerator func(shortID string) (string, string)
 
 // NewForwardAgent creates a new forward agent with the given token generator.
-func NewForwardAgent(name string, publicAddress string, remark string, shortIDGenerator func() (string, error), tokenGenerator TokenGenerator) (*ForwardAgent, error) {
+func NewForwardAgent(name string, publicAddress string, tunnelAddress string, remark string, shortIDGenerator func() (string, error), tokenGenerator TokenGenerator) (*ForwardAgent, error) {
 	if name == "" {
 		return nil, fmt.Errorf("agent name is required")
 	}
@@ -57,6 +58,13 @@ func NewForwardAgent(name string, publicAddress string, remark string, shortIDGe
 	// Validate public address if provided
 	if publicAddress != "" {
 		if err := validatePublicAddress(publicAddress); err != nil {
+			return nil, err
+		}
+	}
+
+	// Validate tunnel address if provided
+	if tunnelAddress != "" {
+		if err := validateTunnelAddress(tunnelAddress); err != nil {
 			return nil, err
 		}
 	}
@@ -78,6 +86,7 @@ func NewForwardAgent(name string, publicAddress string, remark string, shortIDGe
 		apiToken:       plainToken,
 		status:         AgentStatusEnabled,
 		publicAddress:  publicAddress,
+		tunnelAddress:  tunnelAddress,
 		remark:         remark,
 		createdAt:      now,
 		updatedAt:      now,
@@ -96,6 +105,7 @@ func ReconstructForwardAgent(
 	apiToken string,
 	status AgentStatus,
 	publicAddress string,
+	tunnelAddress string,
 	remark string,
 	createdAt, updatedAt time.Time,
 ) (*ForwardAgent, error) {
@@ -122,6 +132,13 @@ func ReconstructForwardAgent(
 		}
 	}
 
+	// Validate tunnel address if provided
+	if tunnelAddress != "" {
+		if err := validateTunnelAddress(tunnelAddress); err != nil {
+			return nil, err
+		}
+	}
+
 	return &ForwardAgent{
 		id:             id,
 		shortID:        shortID,
@@ -130,6 +147,7 @@ func ReconstructForwardAgent(
 		apiToken:       apiToken,
 		status:         status,
 		publicAddress:  publicAddress,
+		tunnelAddress:  tunnelAddress,
 		remark:         remark,
 		createdAt:      createdAt,
 		updatedAt:      updatedAt,
@@ -169,6 +187,20 @@ func (a *ForwardAgent) Remark() string {
 
 // PublicAddress returns the agent's public address
 func (a *ForwardAgent) PublicAddress() string {
+	return a.publicAddress
+}
+
+// TunnelAddress returns the agent's tunnel address
+func (a *ForwardAgent) TunnelAddress() string {
+	return a.tunnelAddress
+}
+
+// GetEffectiveTunnelAddress returns the address that entry agents should use to connect.
+// If tunnelAddress is set, it returns tunnelAddress; otherwise returns publicAddress.
+func (a *ForwardAgent) GetEffectiveTunnelAddress() string {
+	if a.tunnelAddress != "" {
+		return a.tunnelAddress
+	}
 	return a.publicAddress
 }
 
@@ -292,6 +324,25 @@ func (a *ForwardAgent) UpdatePublicAddress(address string) error {
 	return nil
 }
 
+// UpdateTunnelAddress updates the agent's tunnel address
+func (a *ForwardAgent) UpdateTunnelAddress(address string) error {
+	// Validate address if not empty
+	if address != "" {
+		if err := validateTunnelAddress(address); err != nil {
+			return err
+		}
+	}
+
+	if a.tunnelAddress == address {
+		return nil
+	}
+
+	a.tunnelAddress = address
+	a.updatedAt = time.Now()
+
+	return nil
+}
+
 // IsEnabled checks if the agent is enabled
 func (a *ForwardAgent) IsEnabled() bool {
 	return a.status == AgentStatusEnabled
@@ -333,4 +384,31 @@ func validatePublicAddress(address string) error {
 	}
 
 	return fmt.Errorf("invalid public address format: must be a valid IP address or domain name")
+}
+
+// validateTunnelAddress validates if the address is a valid IP (not loopback) or domain name
+func validateTunnelAddress(address string) error {
+	if address == "" {
+		return nil
+	}
+
+	// Try parsing as IP address
+	if ip := net.ParseIP(address); ip != nil {
+		// Reject loopback addresses (127.0.0.0/8 for IPv4, ::1 for IPv6)
+		if ip.IsLoopback() {
+			return fmt.Errorf("invalid tunnel address: loopback address not allowed")
+		}
+		return nil
+	}
+
+	// Validate as domain name (basic RFC 1123 hostname validation)
+	// Also reject localhost
+	if address == "localhost" {
+		return fmt.Errorf("invalid tunnel address: localhost not allowed")
+	}
+	if domainNameRegex.MatchString(address) {
+		return nil
+	}
+
+	return fmt.Errorf("invalid tunnel address format: must be a valid IP address or domain name")
 }

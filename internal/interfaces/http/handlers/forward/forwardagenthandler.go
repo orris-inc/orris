@@ -67,6 +67,7 @@ func NewForwardAgentHandler(
 type CreateForwardAgentRequest struct {
 	Name          string `json:"name" binding:"required" example:"Production Agent"`
 	PublicAddress string `json:"public_address,omitempty" example:"203.0.113.1"`
+	TunnelAddress string `json:"tunnel_address,omitempty" example:"192.168.1.100"`
 	Remark        string `json:"remark,omitempty" example:"Forward agent for production environment"`
 }
 
@@ -74,6 +75,7 @@ type CreateForwardAgentRequest struct {
 type UpdateForwardAgentRequest struct {
 	Name          *string `json:"name,omitempty" example:"Updated Agent Name"`
 	PublicAddress *string `json:"public_address,omitempty" example:"203.0.113.2"`
+	TunnelAddress *string `json:"tunnel_address,omitempty" example:"192.168.1.100"`
 	Remark        *string `json:"remark,omitempty" example:"Updated remark"`
 }
 
@@ -94,6 +96,7 @@ func (h *ForwardAgentHandler) CreateAgent(c *gin.Context) {
 	cmd := usecases.CreateForwardAgentCommand{
 		Name:          req.Name,
 		PublicAddress: req.PublicAddress,
+		TunnelAddress: req.TunnelAddress,
 		Remark:        req.Remark,
 	}
 
@@ -173,6 +176,7 @@ func (h *ForwardAgentHandler) UpdateAgent(c *gin.Context) {
 		ShortID:       shortID,
 		Name:          req.Name,
 		PublicAddress: req.PublicAddress,
+		TunnelAddress: req.TunnelAddress,
 		Remark:        req.Remark,
 	}
 

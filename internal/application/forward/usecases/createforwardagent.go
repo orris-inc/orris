@@ -14,6 +14,7 @@ import (
 type CreateForwardAgentCommand struct {
 	Name          string
 	PublicAddress string
+	TunnelAddress string
 	Remark        string
 }
 
@@ -22,6 +23,7 @@ type CreateForwardAgentResult struct {
 	ID            string `json:"id"` // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
 	Name          string `json:"name"`
 	PublicAddress string `json:"public_address"`
+	TunnelAddress string `json:"tunnel_address,omitempty"`
 	Token         string `json:"token"`
 	Status        string `json:"status"`
 	Remark        string `json:"remark"`
@@ -69,7 +71,7 @@ func (uc *CreateForwardAgentUseCase) Execute(ctx context.Context, cmd CreateForw
 	}
 
 	// Create domain entity with HMAC-based token generator
-	agent, err := forward.NewForwardAgent(cmd.Name, cmd.PublicAddress, cmd.Remark, id.NewForwardAgentID, uc.tokenGen.Generate)
+	agent, err := forward.NewForwardAgent(cmd.Name, cmd.PublicAddress, cmd.TunnelAddress, cmd.Remark, id.NewForwardAgentID, uc.tokenGen.Generate)
 	if err != nil {
 		uc.logger.Errorw("failed to create forward agent entity", "error", err)
 		return nil, fmt.Errorf("failed to create forward agent: %w", err)
@@ -88,6 +90,7 @@ func (uc *CreateForwardAgentUseCase) Execute(ctx context.Context, cmd CreateForw
 		ID:            id.FormatForwardAgentID(agent.ShortID()),
 		Name:          agent.Name(),
 		PublicAddress: agent.PublicAddress(),
+		TunnelAddress: agent.TunnelAddress(),
 		Token:         plainToken,
 		Status:        string(agent.Status()),
 		Remark:        agent.Remark(),

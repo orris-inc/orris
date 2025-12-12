@@ -419,7 +419,7 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 					)
 				} else if exitAgent != nil {
 					syncData.NextHopAgentID = id.FormatForwardAgentID(exitAgent.ShortID())
-					syncData.NextHopAddress = exitAgent.PublicAddress()
+					syncData.NextHopAddress = exitAgent.GetEffectiveTunnelAddress()
 
 					// Get ws_listen_port from cached agent status
 					exitStatus, err := s.statusQuerier.GetStatus(ctx, exitAgentID)
@@ -511,7 +511,7 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 					)
 				} else if nextAgent != nil {
 					syncData.NextHopAgentID = id.FormatForwardAgentID(nextAgent.ShortID())
-					syncData.NextHopAddress = nextAgent.PublicAddress()
+					syncData.NextHopAddress = nextAgent.GetEffectiveTunnelAddress()
 
 					// Get ws_listen_port from cached agent status
 					nextStatus, err := s.statusQuerier.GetStatus(ctx, nextHopAgentID)
@@ -592,7 +592,7 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 					)
 				} else if nextAgent != nil {
 					syncData.NextHopAgentID = id.FormatForwardAgentID(nextAgent.ShortID())
-					syncData.NextHopAddress = nextAgent.PublicAddress()
+					syncData.NextHopAddress = nextAgent.GetEffectiveTunnelAddress()
 					syncData.NextHopPort = nextHopPort
 				}
 			}

@@ -11,6 +11,7 @@ type ForwardAgentDTO struct {
 	ID            string          `json:"id"` // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
 	Name          string          `json:"name"`
 	PublicAddress string          `json:"public_address"`
+	TunnelAddress string          `json:"tunnel_address,omitempty"`
 	Status        string          `json:"status"`
 	Remark        string          `json:"remark"`
 	CreatedAt     string          `json:"created_at"`
@@ -28,6 +29,7 @@ func ToForwardAgentDTO(agent *forward.ForwardAgent) *ForwardAgentDTO {
 		ID:            id.FormatForwardAgentID(agent.ShortID()),
 		Name:          agent.Name(),
 		PublicAddress: agent.PublicAddress(),
+		TunnelAddress: agent.TunnelAddress(),
 		Status:        string(agent.Status()),
 		Remark:        agent.Remark(),
 		CreatedAt:     agent.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),

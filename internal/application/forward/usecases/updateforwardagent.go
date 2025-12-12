@@ -14,6 +14,7 @@ type UpdateForwardAgentCommand struct {
 	ShortID       string // External API identifier
 	Name          *string
 	PublicAddress *string
+	TunnelAddress *string
 	Remark        *string
 }
 
@@ -60,6 +61,12 @@ func (uc *UpdateForwardAgentUseCase) Execute(ctx context.Context, cmd UpdateForw
 
 	if cmd.PublicAddress != nil {
 		if err := agent.UpdatePublicAddress(*cmd.PublicAddress); err != nil {
+			return errors.NewValidationError(err.Error())
+		}
+	}
+
+	if cmd.TunnelAddress != nil {
+		if err := agent.UpdateTunnelAddress(*cmd.TunnelAddress); err != nil {
 			return errors.NewValidationError(err.Error())
 		}
 	}
