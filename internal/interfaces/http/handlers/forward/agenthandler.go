@@ -11,6 +11,7 @@ import (
 	"github.com/orris-inc/orris/internal/application/forward/usecases"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/infrastructure/auth"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
@@ -24,6 +25,7 @@ type AgentHandler struct {
 	reportStatusUC     *usecases.ReportAgentStatusUseCase
 	statusQuerier      usecases.AgentStatusQuerier
 	tokenSigningSecret string
+	agentTokenService  *auth.AgentTokenService
 	logger             logger.Interface
 }
 
@@ -44,6 +46,7 @@ func NewAgentHandler(
 		reportStatusUC:     reportStatusUC,
 		statusQuerier:      statusQuerier,
 		tokenSigningSecret: tokenSigningSecret,
+		agentTokenService:  auth.NewAgentTokenService(tokenSigningSecret),
 		logger:             logger,
 	}
 }
@@ -495,7 +498,8 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 			"error", err,
 		)
 	} else if requestingAgent != nil {
-		clientToken = requestingAgent.GetAPIToken()
+		// Generate token using agentTokenService to ensure correct format (fwd_xxx_xxx)
+		clientToken, _ = h.agentTokenService.Generate(requestingAgent.ShortID())
 	}
 
 	// Return success response with token signing secret for local verification
