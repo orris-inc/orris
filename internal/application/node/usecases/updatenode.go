@@ -345,18 +345,21 @@ func (uc *UpdateNodeUseCase) applyTrojanUpdates(n *node.Node, cmd UpdateNodeComm
 func (uc *UpdateNodeUseCase) validateProtocolMethodCompatibility(protocol vo.Protocol, method string) error {
 	// Shadowsocks encryption methods
 	ssMethods := map[string]bool{
-		"aes-128-gcm":             true,
-		"aes-256-gcm":             true,
-		"aes-128-cfb":             true,
-		"aes-192-cfb":             true,
-		"aes-256-cfb":             true,
-		"aes-128-ctr":             true,
-		"aes-192-ctr":             true,
-		"aes-256-ctr":             true,
-		"chacha20-ietf":           true,
-		"chacha20-ietf-poly1305":  true,
-		"xchacha20-ietf-poly1305": true,
-		"rc4-md5":                 true,
+		"aes-128-gcm":                   true,
+		"aes-256-gcm":                   true,
+		"aes-128-cfb":                   true,
+		"aes-192-cfb":                   true,
+		"aes-256-cfb":                   true,
+		"aes-128-ctr":                   true,
+		"aes-192-ctr":                   true,
+		"aes-256-ctr":                   true,
+		"chacha20-ietf":                 true,
+		"chacha20-ietf-poly1305":        true,
+		"xchacha20-ietf-poly1305":       true,
+		"rc4-md5":                       true,
+		"2022-blake3-aes-128-gcm":       true,
+		"2022-blake3-aes-256-gcm":       true,
+		"2022-blake3-chacha20-poly1305": true,
 	}
 
 	if protocol.IsShadowsocks() {

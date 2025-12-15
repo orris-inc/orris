@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/orris-inc/orris/internal/application/node/dto"
+	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/infrastructure/config"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -23,16 +24,19 @@ type GetNodeSubscriptionsResult struct {
 // GetNodeSubscriptionsUseCase handles fetching subscription list for node agents
 type GetNodeSubscriptionsUseCase struct {
 	subscriptionRepo subscription.SubscriptionRepository
+	nodeRepo         node.NodeRepository
 	logger           logger.Interface
 }
 
 // NewGetNodeSubscriptionsUseCase creates a new instance of GetNodeSubscriptionsUseCase
 func NewGetNodeSubscriptionsUseCase(
 	subscriptionRepo subscription.SubscriptionRepository,
+	nodeRepo node.NodeRepository,
 	logger logger.Interface,
 ) *GetNodeSubscriptionsUseCase {
 	return &GetNodeSubscriptionsUseCase{
 		subscriptionRepo: subscriptionRepo,
+		nodeRepo:         nodeRepo,
 		logger:           logger,
 	}
 }
@@ -41,6 +45,22 @@ func NewGetNodeSubscriptionsUseCase(
 func (uc *GetNodeSubscriptionsUseCase) Execute(ctx context.Context, cmd GetNodeSubscriptionsCommand) (*GetNodeSubscriptionsResult, error) {
 	if cmd.NodeID == 0 {
 		return nil, fmt.Errorf("node_id is required")
+	}
+
+	// Get node entity to determine encryption method
+	nodeEntity, err := uc.nodeRepo.GetByID(ctx, cmd.NodeID)
+	if err != nil {
+		uc.logger.Errorw("failed to get node",
+			"error", err,
+			"node_id", cmd.NodeID,
+		)
+		return nil, fmt.Errorf("failed to retrieve node")
+	}
+
+	// Extract encryption method
+	encryptionMethod := ""
+	if nodeEntity.Protocol().IsShadowsocks() {
+		encryptionMethod = nodeEntity.EncryptionConfig().Method()
 	}
 
 	// Get all active subscriptions that can access this node
@@ -57,11 +77,12 @@ func (uc *GetNodeSubscriptionsUseCase) Execute(ctx context.Context, cmd GetNodeS
 	hmacSecret := config.Get().Auth.JWT.Secret
 
 	// Convert subscriptions to agent subscriptions response
-	subscriptionInfos := dto.ToNodeSubscriptionsResponse(subscriptions, hmacSecret)
+	subscriptionInfos := dto.ToNodeSubscriptionsResponse(subscriptions, hmacSecret, encryptionMethod)
 
 	uc.logger.Infow("node subscriptions retrieved successfully",
 		"node_id", cmd.NodeID,
 		"subscription_count", len(subscriptionInfos.Subscriptions),
+		"encryption_method", encryptionMethod,
 	)
 
 	return &GetNodeSubscriptionsResult{

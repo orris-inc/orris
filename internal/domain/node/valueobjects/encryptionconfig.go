@@ -6,18 +6,23 @@ import (
 )
 
 const (
-	MethodAES256GCM            = "aes-256-gcm"
-	MethodAES128GCM            = "aes-128-gcm"
-	MethodAES128CFB            = "aes-128-cfb"
-	MethodAES192CFB            = "aes-192-cfb"
-	MethodAES256CFB            = "aes-256-cfb"
-	MethodAES128CTR            = "aes-128-ctr"
-	MethodAES192CTR            = "aes-192-ctr"
-	MethodAES256CTR            = "aes-256-ctr"
-	MethodChacha20IETF         = "chacha20-ietf"
-	MethodChacha20IETFPoly1305 = "chacha20-ietf-poly1305"
+	MethodAES256GCM             = "aes-256-gcm"
+	MethodAES128GCM             = "aes-128-gcm"
+	MethodAES128CFB             = "aes-128-cfb"
+	MethodAES192CFB             = "aes-192-cfb"
+	MethodAES256CFB             = "aes-256-cfb"
+	MethodAES128CTR             = "aes-128-ctr"
+	MethodAES192CTR             = "aes-192-ctr"
+	MethodAES256CTR             = "aes-256-ctr"
+	MethodChacha20IETF          = "chacha20-ietf"
+	MethodChacha20IETFPoly1305  = "chacha20-ietf-poly1305"
 	MethodXChacha20IETFPoly1305 = "xchacha20-ietf-poly1305"
-	MethodRC4MD5               = "rc4-md5"
+	MethodRC4MD5                = "rc4-md5"
+
+	// SS2022 encryption methods
+	Method2022Blake3AES128GCM        = "2022-blake3-aes-128-gcm"
+	Method2022Blake3AES256GCM        = "2022-blake3-aes-256-gcm"
+	Method2022Blake3Chacha20Poly1305 = "2022-blake3-chacha20-poly1305"
 )
 
 var validMethods = map[string]bool{
@@ -33,6 +38,11 @@ var validMethods = map[string]bool{
 	MethodChacha20IETFPoly1305:  true,
 	MethodXChacha20IETFPoly1305: true,
 	MethodRC4MD5:                true,
+
+	// SS2022 methods
+	Method2022Blake3AES128GCM:        true,
+	Method2022Blake3AES256GCM:        true,
+	Method2022Blake3Chacha20Poly1305: true,
 }
 
 type EncryptionConfig struct {
@@ -66,4 +76,30 @@ func (ec EncryptionConfig) Equals(other EncryptionConfig) bool {
 
 func isValidMethod(method string) bool {
 	return validMethods[method]
+}
+
+// IsSS2022Method checks if the encryption method is a SS2022 cipher
+func IsSS2022Method(method string) bool {
+	switch method {
+	case Method2022Blake3AES128GCM,
+		Method2022Blake3AES256GCM,
+		Method2022Blake3Chacha20Poly1305:
+		return true
+	default:
+		return false
+	}
+}
+
+// GetSS2022KeySize returns the required key size in bytes for SS2022 methods
+// Returns 0 for non-SS2022 methods
+func GetSS2022KeySize(method string) int {
+	switch method {
+	case Method2022Blake3AES128GCM:
+		return 16
+	case Method2022Blake3AES256GCM,
+		Method2022Blake3Chacha20Poly1305:
+		return 32
+	default:
+		return 0
+	}
 }

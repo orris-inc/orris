@@ -3,10 +3,12 @@ package dto
 import (
 	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 
 	"github.com/orris-inc/orris/internal/domain/node"
+	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 )
 
@@ -156,7 +158,8 @@ func ToNodeConfigResponse(n *node.Node) *NodeConfigResponse {
 
 // ToNodeSubscriptionsResponse converts subscription list to agent subscriptions response
 // The hmacSecret is used to generate HMAC-signed passwords from subscription UUIDs
-func ToNodeSubscriptionsResponse(subscriptions []*subscription.Subscription, hmacSecret string) *NodeSubscriptionsResponse {
+// The encryptionMethod parameter determines the password encoding format (hex for traditional SS, base64 for SS2022)
+func ToNodeSubscriptionsResponse(subscriptions []*subscription.Subscription, hmacSecret string, encryptionMethod string) *NodeSubscriptionsResponse {
 	if subscriptions == nil {
 		return &NodeSubscriptionsResponse{
 			Subscriptions: []NodeSubscriptionInfo{},
@@ -176,7 +179,7 @@ func ToNodeSubscriptionsResponse(subscriptions []*subscription.Subscription, hma
 
 		subscriptionInfo := NodeSubscriptionInfo{
 			SubscriptionID: int(sub.ID()), // Using subscription ID for traffic tracking
-			Password:       generateSubscriptionPassword(sub, hmacSecret),
+			Password:       generatePasswordForEncryptionMethod(sub, hmacSecret, encryptionMethod),
 			Name:           generateSubscriptionName(sub),
 			SpeedLimit:     0, // 0 = unlimited, can be set from subscription plan limits
 			DeviceLimit:    0, // 0 = unlimited, can be set from subscription plan limits
@@ -211,24 +214,6 @@ func NewErrorResponse(msg string) *AgentResponse {
 
 // Helper functions
 
-// generateSubscriptionPassword generates HMAC-signed password for subscription
-// Uses HMAC-SHA256 to sign the subscription UUID with a secret key
-// This ensures the password is derived from the UUID but not directly exposed
-//
-// The password generation is deterministic: same UUID + secret always produces same password
-// This allows agents to authenticate users without storing plain UUIDs
-func generateSubscriptionPassword(sub *subscription.Subscription, secret string) string {
-	if sub == nil || sub.UUID() == "" {
-		return ""
-	}
-
-	// Use HMAC-SHA256 to generate password from subscription UUID
-	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write([]byte(sub.UUID()))
-
-	return hex.EncodeToString(mac.Sum(nil))
-}
-
 // generateSubscriptionName generates name identifier for subscription (sing-box compatible)
 // Format: user{userId}-sub{subscriptionId}
 func generateSubscriptionName(sub *subscription.Subscription) string {
@@ -236,4 +221,35 @@ func generateSubscriptionName(sub *subscription.Subscription) string {
 		return ""
 	}
 	return fmt.Sprintf("user%d-sub%d", sub.UserID(), sub.ID())
+}
+
+// generatePasswordForEncryptionMethod generates password based on encryption method type
+// SS2022 methods use base64-encoded fixed-length keys
+// Traditional SS methods use hex-encoded keys (backward compatible)
+func generatePasswordForEncryptionMethod(sub *subscription.Subscription, secret string, method string) string {
+	if sub == nil || sub.UUID() == "" {
+		return ""
+	}
+
+	// Use HMAC-SHA256 to derive key material from subscription UUID
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(sub.UUID()))
+	keyMaterial := mac.Sum(nil) // 32 bytes
+
+	// Check if SS2022 method
+	if vo.IsSS2022Method(method) {
+		// SS2022 requires base64-encoded fixed-length key
+		keySize := vo.GetSS2022KeySize(method)
+		if keySize == 0 || keySize > len(keyMaterial) {
+			// Invalid key size, fallback to hex encoding
+			return hex.EncodeToString(keyMaterial)
+		}
+
+		// Use first N bytes of key material and encode with base64
+		key := keyMaterial[:keySize]
+		return base64.StdEncoding.EncodeToString(key)
+	}
+
+	// Traditional SS: hex-encoded (backward compatible)
+	return hex.EncodeToString(keyMaterial)
 }

@@ -408,7 +408,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	// Agent API handlers
 	getNodeConfigUC := nodeUsecases.NewGetNodeConfigUseCase(nodeRepoImpl, log)
-	getNodeSubscriptionsUC := nodeUsecases.NewGetNodeSubscriptionsUseCase(subscriptionRepo, log)
+	getNodeSubscriptionsUC := nodeUsecases.NewGetNodeSubscriptionsUseCase(subscriptionRepo, nodeRepoImpl, log)
 
 	// Initialize agent report use cases with adapters
 	subscriptionTrafficRecorder := adapters.NewSubscriptionTrafficRecorderAdapter(subscriptionTrafficRepo, log)
