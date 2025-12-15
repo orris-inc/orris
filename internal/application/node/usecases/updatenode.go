@@ -252,10 +252,6 @@ func (uc *UpdateNodeUseCase) validateCommand(cmd UpdateNodeCommand) error {
 		return errors.NewValidationError("node name cannot be empty")
 	}
 
-	if cmd.ServerAddress != nil && *cmd.ServerAddress == "" {
-		return errors.NewValidationError("server address cannot be empty")
-	}
-
 	if cmd.AgentPort != nil && *cmd.AgentPort == 0 {
 		return errors.NewValidationError("agent port cannot be zero")
 	}

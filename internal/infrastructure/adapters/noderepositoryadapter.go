@@ -165,7 +165,7 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, subs
 		ucNode := &usecases.Node{
 			ID:               nodeModel.ID,
 			Name:             nodeModel.Name,
-			ServerAddress:    nodeModel.ServerAddress,
+			ServerAddress:    resolveServerAddress(nodeModel.ServerAddress, nodeModel.PublicIPv4, nodeModel.PublicIPv6),
 			SubscriptionPort: subscriptionPort,
 			Protocol:         protocol,
 			Password:         "", // Password is not stored at node level; will be filled with subscription UUID
@@ -347,4 +347,27 @@ func (r *NodeRepositoryAdapter) getForwardedNodes(ctx context.Context, nodeIDs [
 	}
 
 	return forwardedNodes
+}
+
+// resolveServerAddress returns the effective server address for subscription
+// If server address is configured, use it; otherwise fall back to agent's reported public IP
+func resolveServerAddress(configuredAddr string, publicIPv4, publicIPv6 *string) string {
+	// If server address is explicitly configured, always use it
+	if configuredAddr != "" {
+		return configuredAddr
+	}
+
+	// Fall back to agent's reported public IP
+	// Prefer IPv4 over IPv6 for better compatibility
+	if publicIPv4 != nil && *publicIPv4 != "" {
+		return *publicIPv4
+	}
+
+	if publicIPv6 != nil && *publicIPv6 != "" {
+		return *publicIPv6
+	}
+
+	// Return empty if no address available (should not happen in practice)
+	// The value object layer allows empty addresses for this fallback scenario
+	return ""
 }
