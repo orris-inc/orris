@@ -302,12 +302,13 @@ func (s *ConfigSyncService) FullSyncToAgent(ctx context.Context, agentID uint) e
 	)
 
 	// Build full sync data
+	// Note: token_signing_secret is no longer included for security reasons.
+	// Agents should use the server for token verification.
 	syncData := &dto.ConfigSyncData{
-		Version:            version,
-		FullSync:           true,
-		Added:              ruleSyncDataList,
-		ClientToken:        clientToken,
-		TokenSigningSecret: s.tokenSigningSecret,
+		Version:     version,
+		FullSync:    true,
+		Added:       ruleSyncDataList,
+		ClientToken: clientToken,
 	}
 
 	// Send sync message
@@ -629,12 +630,22 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 
 		// For non-exit agents in chain, populate next hop information
 		if !isLast {
-			nextHopAgentID, nextHopPort := rule.GetNextHopForDirectChain(agentID)
+			nextHopAgentID, nextHopPort, err := rule.GetNextHopForDirectChainSafe(agentID)
+			if err != nil {
+				s.logger.Errorw("failed to get next hop for direct_chain rule in config sync",
+					"rule_id", rule.ID(),
+					"agent_id", agentID,
+					"error", err,
+				)
+				return nil, fmt.Errorf("failed to get next hop for direct_chain rule: %w", err)
+			}
+
 			s.logger.Infow("direct_chain next hop lookup",
 				"current_agent_id", agentID,
 				"next_hop_agent_id", nextHopAgentID,
 				"next_hop_port", nextHopPort,
 			)
+
 			if nextHopAgentID != 0 {
 				// Get next hop agent details
 				nextAgent, err := s.agentRepo.GetByID(ctx, nextHopAgentID)
@@ -961,7 +972,15 @@ func (s *ConfigSyncService) getEntryRulesForExitAgent(ctx context.Context, entry
 			}
 		case "direct_chain":
 			// Check if this agent has exitAgentID as its next hop in direct_chain
-			nextHop, _ := rule.GetNextHopForDirectChain(entryAgentID)
+			nextHop, _, err := rule.GetNextHopForDirectChainSafe(entryAgentID)
+			if err != nil {
+				s.logger.Warnw("failed to get next hop for direct_chain in exit endpoint change notification",
+					"rule_id", rule.ID(),
+					"entry_agent_id", entryAgentID,
+					"error", err,
+				)
+				continue
+			}
 			if nextHop == exitAgentID {
 				result = append(result, rule)
 			}

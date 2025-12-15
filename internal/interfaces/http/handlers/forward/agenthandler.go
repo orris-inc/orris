@@ -409,7 +409,17 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 
 		// For non-exit agents in chain, populate next hop information
 		if !isLast {
-			nextHopAgentID, nextHopPort := rule.GetNextHopForDirectChain(agentID)
+			nextHopAgentID, nextHopPort, err := rule.GetNextHopForDirectChainSafe(agentID)
+			if err != nil {
+				h.logger.Errorw("failed to get next hop for direct_chain rule",
+					"rule_id", ruleDTO.ID,
+					"agent_id", agentID,
+					"error", err,
+				)
+				// Skip this rule instead of failing the entire request
+				continue
+			}
+
 			if nextHopAgentID != 0 {
 				// Get next hop agent details
 				nextAgent, err := h.agentRepo.GetByID(ctx, nextHopAgentID)
@@ -524,11 +534,12 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 		)
 	}
 
-	// Return success response with token signing secret for local verification
+	// Return success response
+	// Note: token_signing_secret is no longer returned for security reasons.
+	// Agents should use the server for token verification, not local HMAC verification.
 	utils.SuccessResponse(c, http.StatusOK, "enabled forward rules retrieved successfully", map[string]any{
-		"rules":                ruleDTOs,
-		"token_signing_secret": h.tokenSigningSecret,
-		"client_token":         clientToken,
+		"rules":        ruleDTOs,
+		"client_token": clientToken,
 	})
 }
 
@@ -740,7 +751,17 @@ func (h *AgentHandler) RefreshRule(c *gin.Context) {
 
 		// For non-exit agents, populate next hop info
 		if !isLast {
-			nextHopAgentID, nextHopPort := rule.GetNextHopForDirectChain(agentID)
+			nextHopAgentID, nextHopPort, err := rule.GetNextHopForDirectChainSafe(agentID)
+			if err != nil {
+				h.logger.Errorw("failed to get next hop for direct_chain rule refresh",
+					"rule_id", ruleIDStr,
+					"agent_id", agentID,
+					"error", err,
+				)
+				utils.ErrorResponse(c, http.StatusInternalServerError, "failed to get next hop configuration")
+				return
+			}
+
 			if nextHopAgentID != 0 {
 				nextAgent, err := h.agentRepo.GetByID(ctx, nextHopAgentID)
 				if err == nil && nextAgent != nil {
@@ -867,6 +888,10 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 	errorCount := 0
 	deniedCount := 0
 
+	// Maximum reasonable traffic per report: 10TB
+	// This prevents overflow and detects potential malicious clients
+	const maxReasonableTraffic = 10 * 1024 * 1024 * 1024 * 1024 // 10TB
+
 	for _, item := range req.Rules {
 		// Validate rule belongs to this agent and get internal ID
 		internalID, valid := validRuleIDs[item.RuleID]
@@ -880,13 +905,28 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 			continue
 		}
 
-		// Skip invalid traffic data
+		// Validate traffic data range
 		if item.UploadBytes < 0 || item.DownloadBytes < 0 {
-			h.logger.Warnw("invalid traffic data for rule",
+			h.logger.Warnw("negative traffic data rejected",
 				"rule_id", item.RuleID,
 				"agent_id", agentID,
 				"upload", item.UploadBytes,
 				"download", item.DownloadBytes,
+				"ip", c.ClientIP(),
+			)
+			errorCount++
+			continue
+		}
+
+		// Check for suspiciously large values
+		if item.UploadBytes > maxReasonableTraffic || item.DownloadBytes > maxReasonableTraffic {
+			h.logger.Warnw("suspiciously large traffic data rejected",
+				"rule_id", item.RuleID,
+				"agent_id", agentID,
+				"upload", item.UploadBytes,
+				"download", item.DownloadBytes,
+				"max_allowed", maxReasonableTraffic,
+				"ip", c.ClientIP(),
 			)
 			errorCount++
 			continue
@@ -1161,6 +1201,20 @@ func (h *AgentHandler) resolveNodeAddress(targetNode *node.Node, ipVersion strin
 	return serverAddr
 }
 
+// VerifyTunnelHandshakeRequest represents a request to verify a tunnel handshake.
+// This is used by exit agents to verify incoming tunnel connections from entry agents.
+type VerifyTunnelHandshakeRequest struct {
+	AgentToken string `json:"agent_token" binding:"required"` // Entry agent's token (fwd_xxx_xxx format)
+	RuleID     string `json:"rule_id" binding:"required"`     // Rule ID (Stripe-style, e.g., "fr_xK9mP2vL3nQ")
+}
+
+// VerifyTunnelHandshakeResponse represents the result of tunnel handshake verification.
+type VerifyTunnelHandshakeResponse struct {
+	Success      bool   `json:"success"`
+	Error        string `json:"error,omitempty"`
+	EntryAgentID string `json:"entry_agent_id,omitempty"` // Verified entry agent ID (e.g., "fa_xK9mP2vL3nQ")
+}
+
 // ReportStatusRequest represents status report request from forward client
 type ReportStatusRequest struct {
 	CPUPercent        float64           `json:"cpu_percent"`
@@ -1248,4 +1302,174 @@ func (h *AgentHandler) ReportStatus(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "status reported successfully", nil)
+}
+
+// VerifyTunnelHandshake handles POST /forward-agent-api/verify-tunnel-handshake
+// This endpoint allows exit agents to verify tunnel handshake requests from entry agents
+// by validating the entry agent's token and checking rule access permissions.
+func (h *AgentHandler) VerifyTunnelHandshake(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	// Get authenticated agent ID (exit agent making the request)
+	exitAgentID, err := h.getAuthenticatedAgentID(c)
+	if err != nil {
+		h.logger.Warnw("failed to get authenticated agent ID",
+			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	// Parse request body
+	var req VerifyTunnelHandshakeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid tunnel handshake verification request",
+			"error", err,
+			"exit_agent_id", exitAgentID,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	h.logger.Infow("verifying tunnel handshake request",
+		"exit_agent_id", exitAgentID,
+		"rule_id", req.RuleID,
+		"ip", c.ClientIP(),
+	)
+
+	// Parse rule ID (Stripe-style ID like "fr_xK9mP2vL3nQ")
+	ruleShortID, err := id.ParseForwardRuleID(req.RuleID)
+	if err != nil {
+		h.logger.Warnw("invalid rule_id in handshake verification",
+			"rule_id", req.RuleID,
+			"exit_agent_id", exitAgentID,
+			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid rule_id format")
+		return
+	}
+
+	// Look up the rule by short ID
+	rule, err := h.repo.GetByShortID(ctx, ruleShortID)
+	if err != nil {
+		h.logger.Warnw("rule not found for handshake verification",
+			"rule_id", req.RuleID,
+			"short_id", ruleShortID,
+			"exit_agent_id", exitAgentID,
+			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusNotFound, "rule not found")
+		return
+	}
+
+	// Verify that the requesting agent (exit agent) has access to this rule
+	hasExitAccess := false
+	ruleType := rule.RuleType().String()
+
+	switch ruleType {
+	case "entry":
+		// For entry rules, exit agent must be the exit_agent_id
+		if rule.ExitAgentID() == exitAgentID {
+			hasExitAccess = true
+		}
+	case "chain", "direct_chain":
+		// For chain rules, exit agent must be in the chain
+		chainPosition := rule.GetChainPosition(exitAgentID)
+		if chainPosition > 0 {
+			hasExitAccess = true
+		}
+	}
+
+	if !hasExitAccess {
+		h.logger.Warnw("exit agent not authorized for rule",
+			"rule_id", req.RuleID,
+			"exit_agent_id", exitAgentID,
+			"rule_type", ruleType,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusForbidden, "access denied")
+		return
+	}
+
+	// Verify the entry agent's token using agentTokenService
+	entryAgentShortID, err := h.agentTokenService.Verify(req.AgentToken)
+	if err != nil {
+		h.logger.Warnw("invalid entry agent token in handshake",
+			"rule_id", req.RuleID,
+			"exit_agent_id", exitAgentID,
+			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.SuccessResponse(c, http.StatusOK, "handshake verification completed", VerifyTunnelHandshakeResponse{
+			Success: false,
+			Error:   "invalid token",
+		})
+		return
+	}
+
+	// Format the full entry agent ID (with prefix)
+	entryAgentIDStr := id.FormatForwardAgentID(entryAgentShortID)
+
+	// Verify that the entry agent has permission to access this rule
+	hasEntryAccess := false
+
+	switch ruleType {
+	case "entry":
+		// For entry rules, entry agent must be the owner (agent_id)
+		entryAgent, err := h.agentRepo.GetByShortID(ctx, entryAgentShortID)
+		if err == nil && entryAgent != nil && entryAgent.ID() == rule.AgentID() {
+			hasEntryAccess = true
+		}
+
+	case "chain", "direct_chain":
+		// For chain rules, entry agent must be the previous hop in the chain
+		// Full chain: [entry_agent] + chain_agents
+		fullChainIDs := append([]uint{rule.AgentID()}, rule.ChainAgentIDs()...)
+
+		// Find exit agent's position
+		exitPosition := rule.GetChainPosition(exitAgentID)
+		if exitPosition > 0 && exitPosition <= len(fullChainIDs) {
+			// Get the previous agent ID (should match entry agent)
+			prevAgentID := fullChainIDs[exitPosition-1]
+
+			// Lookup entry agent by short ID to get internal ID
+			entryAgent, err := h.agentRepo.GetByShortID(ctx, entryAgentShortID)
+			if err == nil && entryAgent != nil && entryAgent.ID() == prevAgentID {
+				hasEntryAccess = true
+			}
+		}
+	}
+
+	if !hasEntryAccess {
+		h.logger.Warnw("entry agent not authorized for rule",
+			"rule_id", req.RuleID,
+			"entry_agent_id", entryAgentIDStr,
+			"exit_agent_id", exitAgentID,
+			"rule_type", ruleType,
+			"ip", c.ClientIP(),
+		)
+		utils.SuccessResponse(c, http.StatusOK, "handshake verification completed", VerifyTunnelHandshakeResponse{
+			Success: false,
+			Error:   "access denied",
+		})
+		return
+	}
+
+	// Handshake verification successful
+	h.logger.Infow("tunnel handshake verified successfully",
+		"rule_id", req.RuleID,
+		"entry_agent_id", entryAgentIDStr,
+		"exit_agent_id", exitAgentID,
+		"rule_type", ruleType,
+		"ip", c.ClientIP(),
+	)
+
+	utils.SuccessResponse(c, http.StatusOK, "handshake verification completed", VerifyTunnelHandshakeResponse{
+		Success:      true,
+		EntryAgentID: entryAgentIDStr,
+	})
 }

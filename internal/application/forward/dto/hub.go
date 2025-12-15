@@ -60,13 +60,14 @@ const (
 
 // ConfigSyncData represents incremental configuration sync data.
 type ConfigSyncData struct {
-	Version            uint64         `json:"version"`
-	FullSync           bool           `json:"full_sync"`
-	Added              []RuleSyncData `json:"added,omitempty"`
-	Updated            []RuleSyncData `json:"updated,omitempty"`
-	Removed            []string       `json:"removed,omitempty"`              // Rule IDs to remove (Stripe-style prefixed, e.g., "fr_xxx")
-	ClientToken        string         `json:"client_token,omitempty"`         // Agent's token for tunnel handshake (full sync only)
-	TokenSigningSecret string         `json:"token_signing_secret,omitempty"` // Secret for local agent token verification (full sync only)
+	Version     uint64         `json:"version"`
+	FullSync    bool           `json:"full_sync"`
+	Added       []RuleSyncData `json:"added,omitempty"`
+	Updated     []RuleSyncData `json:"updated,omitempty"`
+	Removed     []string       `json:"removed,omitempty"`      // Rule IDs to remove (Stripe-style prefixed, e.g., "fr_xxx")
+	ClientToken string         `json:"client_token,omitempty"` // Agent's token for tunnel handshake (full sync only)
+	// Note: TokenSigningSecret has been removed for security reasons.
+	// Agents should verify tokens via the server API, not using local HMAC verification.
 }
 
 // RuleSyncData represents rule sync data for config sync.

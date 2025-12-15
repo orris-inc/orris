@@ -112,9 +112,10 @@ type ExitEndpoint struct {
 
 // RulesResponse represents the response from GetRules API.
 type RulesResponse struct {
-	Rules              []Rule `json:"rules"`
-	TokenSigningSecret string `json:"token_signing_secret"` // Secret for local agent token verification
-	ClientToken        string `json:"client_token"`         // Agent's own token for tunnel handshake (fwd_xxx_xxx format)
+	Rules       []Rule `json:"rules"`
+	ClientToken string `json:"client_token"` // Agent's own token for tunnel handshake (fwd_xxx_xxx format)
+	// Note: TokenSigningSecret has been removed for security reasons.
+	// Agents should verify tokens via the server API, not using local HMAC verification.
 }
 
 // TrafficItem represents traffic data for a single rule.

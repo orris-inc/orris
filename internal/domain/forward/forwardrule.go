@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"strconv"
-	"strings"
 	"time"
 
 	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
@@ -254,6 +253,7 @@ func NewForwardRule(
 }
 
 // ReconstructForwardRule reconstructs a forward rule from persistence.
+// It performs full validation to ensure data integrity, even for persisted data.
 func ReconstructForwardRule(
 	id uint,
 	shortID string,
@@ -303,7 +303,7 @@ func ReconstructForwardRule(
 		ipVersion = vo.IPVersionAuto
 	}
 
-	return &ForwardRule{
+	rule := &ForwardRule{
 		id:              id,
 		shortID:         shortID,
 		agentID:         agentID,
@@ -325,31 +325,41 @@ func ReconstructForwardRule(
 		downloadBytes:   downloadBytes,
 		createdAt:       createdAt,
 		updatedAt:       updatedAt,
-	}, nil
+	}
+
+	// Perform full validation to catch data corruption or manual DB modifications
+	if err := rule.Validate(); err != nil {
+		return nil, fmt.Errorf("reconstructed rule failed validation: %w", err)
+	}
+
+	return rule, nil
 }
 
 // validateAddress validates the target address format.
+// It accepts valid IP addresses or RFC 1123 compliant domain names.
 func validateAddress(address string) error {
+	if address == "" {
+		return fmt.Errorf("address cannot be empty")
+	}
+
 	// Check if it's a valid IP
 	if ip := net.ParseIP(address); ip != nil {
 		return nil
 	}
 
-	// Check if it's a valid domain (basic validation)
-	if len(address) > 0 && len(address) <= 253 {
-		// Simple domain validation
-		parts := strings.Split(address, ".")
-		if len(parts) >= 2 {
-			for _, part := range parts {
-				if len(part) == 0 || len(part) > 63 {
-					return fmt.Errorf("invalid domain format")
-				}
-			}
-			return nil
-		}
+	// Validate as domain name using RFC 1123 hostname rules
+	// Same regex as used in forwardagent.go for consistency
+	if len(address) > 253 {
+		return fmt.Errorf("domain name too long (max 253 characters)")
 	}
 
-	return fmt.Errorf("address must be a valid IP or domain")
+	// Use the existing domainNameRegex pattern
+	// Pattern: ^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)*[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$
+	if !domainNameRegex.MatchString(address) {
+		return fmt.Errorf("invalid domain name format (must comply with RFC 1123)")
+	}
+
+	return nil
 }
 
 // Getters
@@ -400,22 +410,50 @@ func (r *ForwardRule) GetAgentListenPort(agentID uint) uint16 {
 
 // GetNextHopForDirectChain returns the next hop agent ID and port for a given agent in the direct_chain.
 // Returns (0, 0) if the agent is the last in chain or not part of the chain.
+// WARNING: This method returns 0 for both "last in chain" and "missing port config" cases.
+// DEPRECATED: Use GetNextHopForDirectChainSafe for better error handling.
 func (r *ForwardRule) GetNextHopForDirectChain(currentAgentID uint) (nextAgentID uint, nextPort uint16) {
+	nextID, port, _ := r.GetNextHopForDirectChainSafe(currentAgentID)
+	return nextID, port
+}
+
+// GetNextHopForDirectChainSafe returns the next hop agent ID and port for a given agent in the direct_chain.
+// Returns error if:
+// - Not a direct_chain rule
+// - Agent not found in chain
+// - Next hop port configuration is missing or invalid
+// Returns (0, 0, nil) if the agent is the last in the chain.
+func (r *ForwardRule) GetNextHopForDirectChainSafe(currentAgentID uint) (nextAgentID uint, nextPort uint16, err error) {
 	if !r.ruleType.IsDirectChain() {
-		return 0, 0
+		return 0, 0, fmt.Errorf("not a direct_chain rule")
 	}
 
 	// Build full chain: agentID -> chainAgentIDs[0] -> chainAgentIDs[1] -> ...
 	fullChain := append([]uint{r.agentID}, r.chainAgentIDs...)
 
 	for i, id := range fullChain {
-		if id == currentAgentID && i < len(fullChain)-1 {
+		if id == currentAgentID {
+			// Found the agent in chain
+			if i >= len(fullChain)-1 {
+				// This is the last agent in chain
+				return 0, 0, nil
+			}
+
+			// Get next hop
 			nextID := fullChain[i+1]
 			nextPort := r.GetAgentListenPort(nextID)
-			return nextID, nextPort
+
+			// Validate port configuration
+			if nextPort == 0 {
+				return 0, 0, fmt.Errorf("missing or invalid port configuration for next hop agent %d", nextID)
+			}
+
+			return nextID, nextPort, nil
 		}
 	}
-	return 0, 0 // Last agent in chain or not found
+
+	// Agent not found in chain
+	return 0, 0, fmt.Errorf("agent %d not found in direct_chain", currentAgentID)
 }
 
 // GetNextHopAgentID returns the next hop agent ID for a given agent in the chain.
@@ -739,8 +777,8 @@ func (r *ForwardRule) UpdateAgentID(agentID uint) error {
 	if r.agentID == agentID {
 		return nil
 	}
-	// For chain type, ensure the new agent is not in the chain
-	if r.ruleType.IsChain() {
+	// For chain and direct_chain types, ensure the new agent is not in the chain
+	if r.ruleType.IsChain() || r.ruleType.IsDirectChain() {
 		for _, id := range r.chainAgentIDs {
 			if id == agentID {
 				return fmt.Errorf("agent ID cannot be the same as a chain agent ID")
@@ -781,6 +819,7 @@ func (r *ForwardRule) UpdateChainAgentIDs(chainAgentIDs []uint) error {
 }
 
 // UpdateChainPortConfig updates the chain port configuration for direct_chain type rules.
+// DEPRECATED: Use UpdateDirectChainConfig instead for atomic updates.
 func (r *ForwardRule) UpdateChainPortConfig(chainPortConfig map[uint]uint16) error {
 	if !r.ruleType.IsDirectChain() {
 		return fmt.Errorf("chain_port_config can only be updated for direct_chain type rules")
@@ -811,6 +850,67 @@ func (r *ForwardRule) UpdateChainPortConfig(chainPortConfig map[uint]uint16) err
 			return fmt.Errorf("chain_port_config contains agent ID %d not in chain_agent_ids", id)
 		}
 	}
+	r.chainPortConfig = chainPortConfig
+	r.updatedAt = time.Now()
+	return nil
+}
+
+// UpdateDirectChainConfig atomically updates both chainAgentIDs and chainPortConfig for direct_chain rules.
+// This method ensures consistency between chainAgentIDs and chainPortConfig by validating them together.
+func (r *ForwardRule) UpdateDirectChainConfig(chainAgentIDs []uint, chainPortConfig map[uint]uint16) error {
+	if !r.ruleType.IsDirectChain() {
+		return fmt.Errorf("direct chain config can only be updated for direct_chain type rules")
+	}
+	if len(chainAgentIDs) == 0 {
+		return fmt.Errorf("chain agent IDs cannot be empty for direct_chain forward")
+	}
+	if len(chainAgentIDs) > 10 {
+		return fmt.Errorf("direct_chain forward supports maximum 10 intermediate agents")
+	}
+	if chainPortConfig == nil || len(chainPortConfig) == 0 {
+		return fmt.Errorf("chain_port_config cannot be empty for direct_chain forward")
+	}
+
+	// Check for duplicates in chainAgentIDs (including entry agent)
+	seen := make(map[uint]bool)
+	seen[r.agentID] = true
+	for _, id := range chainAgentIDs {
+		if id == 0 {
+			return fmt.Errorf("chain agent ID cannot be zero")
+		}
+		if seen[id] {
+			return fmt.Errorf("chain contains duplicate agent ID: %d", id)
+		}
+		seen[id] = true
+	}
+
+	// Verify all chain agents have valid port configuration
+	for _, id := range chainAgentIDs {
+		port, exists := chainPortConfig[id]
+		if !exists {
+			return fmt.Errorf("chain_port_config missing port for agent ID %d", id)
+		}
+		if port == 0 {
+			return fmt.Errorf("chain_port_config has invalid port for agent ID %d", id)
+		}
+	}
+
+	// Check for extra entries in chain_port_config
+	for id := range chainPortConfig {
+		found := false
+		for _, chainID := range chainAgentIDs {
+			if id == chainID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("chain_port_config contains agent ID %d not in chain_agent_ids", id)
+		}
+	}
+
+	// All validations passed, update both fields atomically
+	r.chainAgentIDs = chainAgentIDs
 	r.chainPortConfig = chainPortConfig
 	r.updatedAt = time.Now()
 	return nil

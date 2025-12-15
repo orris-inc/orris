@@ -3,15 +3,11 @@ package forward
 import (
 	"bytes"
 	"context"
-	"crypto/hmac"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 )
 
@@ -128,128 +124,38 @@ func (c *Client) ReportStatus(ctx context.Context, status *AgentStatus) error {
 	return nil
 }
 
-const (
-	agentTokenPrefix = "fwd"
-)
-
-// AgentTokenVerifyResult represents the result of verifying an agent token.
-type AgentTokenVerifyResult struct {
-	AgentShortID string // The short ID of the agent (without prefix)
-}
-
-// VerifyAgentToken verifies an agent token locally using the signing secret.
-// This should be called by exit agents before accepting a tunnel connection.
-// Returns the agent short ID if the token is valid.
-func VerifyAgentToken(token, signingSecret string) (*AgentTokenVerifyResult, error) {
-	if token == "" {
-		return nil, errors.New("token cannot be empty")
-	}
-	if signingSecret == "" {
-		return nil, errors.New("signing secret cannot be empty")
-	}
-
-	// Parse token: fwd_<short_id>_<signature>
-	// Use SplitN to limit splits since signature may contain '_' (base64url encoding)
-	parts := strings.SplitN(token, "_", 3)
-	if len(parts) != 3 {
-		return nil, errors.New("invalid token format")
-	}
-
-	prefix := parts[0]
-	shortID := parts[1]
-	providedSig := parts[2]
-
-	if prefix != agentTokenPrefix {
-		return nil, errors.New("invalid token prefix")
-	}
-
-	if shortID == "" {
-		return nil, errors.New("invalid short ID in token")
-	}
-
-	// Compute expected signature and compare
-	expectedSig := computeAgentTokenSignature(shortID, signingSecret)
-	if !hmac.Equal([]byte(providedSig), []byte(expectedSig)) {
-		return nil, errors.New("invalid token signature")
-	}
-
-	return &AgentTokenVerifyResult{
-		AgentShortID: shortID,
-	}, nil
-}
-
-// computeAgentTokenSignature computes the HMAC signature for an agent token.
-func computeAgentTokenSignature(shortID, secret string) string {
-	data := fmt.Sprintf("%s_%s", agentTokenPrefix, shortID)
-	h := hmac.New(sha256.New, []byte(secret))
-	h.Write([]byte(data))
-	sig := h.Sum(nil)
-	// Truncate to 16 bytes and encode
-	return base64.RawURLEncoding.EncodeToString(sig[:16])
-}
-
-// VerifyTunnelHandshake verifies a tunnel handshake from an entry agent.
-// It checks the token signature and whether the agent is allowed to access the specified rule.
+// VerifyTunnelHandshakeViaServer verifies a tunnel handshake from an entry agent
+// by calling the server API. This is the recommended way to verify tunnel handshakes
+// as it does not require the signing secret to be distributed to agents.
+//
+// This method should be called by exit agents when they receive a tunnel connection
+// request from an entry agent.
 //
 // Parameters:
+//   - ctx: Context for the request
 //   - handshake: The handshake message from entry agent
-//   - signingSecret: The token signing secret from GetRules response
-//   - rules: The list of rules this agent has (from GetRules response)
 //
 // Returns:
 //   - result: Contains success status and entry agent ID if verified
-//   - error: Non-nil if verification failed
-func VerifyTunnelHandshake(handshake *TunnelHandshake, signingSecret string, rules []Rule) (*TunnelHandshakeResult, error) {
+//   - error: Non-nil if the API request failed
+func (c *Client) VerifyTunnelHandshakeViaServer(ctx context.Context, handshake *TunnelHandshake) (*TunnelHandshakeResult, error) {
 	if handshake == nil {
 		return &TunnelHandshakeResult{Success: false, Error: "handshake is nil"}, errors.New("handshake is nil")
 	}
 
-	// Verify the agent token
-	tokenResult, err := VerifyAgentToken(handshake.AgentToken, signingSecret)
-	if err != nil {
-		return &TunnelHandshakeResult{Success: false, Error: "invalid token"}, fmt.Errorf("verify token: %w", err)
+	url := fmt.Sprintf("%s/forward-agent-api/verify-tunnel-handshake", c.baseURL)
+
+	body := map[string]any{
+		"agent_token": handshake.AgentToken,
+		"rule_id":     handshake.RuleID,
 	}
 
-	// Format the full agent ID (with prefix)
-	entryAgentID := fmt.Sprintf("fa_%s", tokenResult.AgentShortID)
-
-	// Check if this agent is allowed to access the rule
-	allowed := false
-	for _, rule := range rules {
-		if rule.ID != handshake.RuleID {
-			continue
-		}
-
-		// For exit role: check if the entry agent matches the rule's agent
-		if rule.Role == "exit" {
-			if rule.AgentID == entryAgentID {
-				allowed = true
-				break
-			}
-		}
-
-		// For chain relay/exit: check if entry agent is the previous hop
-		// The entry agent should be at position (current position - 1) in the chain
-		if (rule.RuleType == RuleTypeChain || rule.RuleType == RuleTypeDirectChain) && rule.ChainPosition > 0 {
-			// Check if entry agent is in the chain at the previous position
-			if rule.ChainPosition-1 < len(rule.ChainAgentIDs) {
-				prevAgentID := rule.ChainAgentIDs[rule.ChainPosition-1]
-				if prevAgentID == entryAgentID {
-					allowed = true
-					break
-				}
-			}
-		}
+	var result TunnelHandshakeResult
+	if err := c.doRequest(ctx, http.MethodPost, url, body, &result); err != nil {
+		return &TunnelHandshakeResult{Success: false, Error: "verification failed"}, fmt.Errorf("verify tunnel handshake: %w", err)
 	}
 
-	if !allowed {
-		return &TunnelHandshakeResult{Success: false, Error: "access denied"}, errors.New("agent not allowed to access this rule")
-	}
-
-	return &TunnelHandshakeResult{
-		Success:      true,
-		EntryAgentID: entryAgentID,
-	}, nil
+	return &result, nil
 }
 
 // doRequest performs an HTTP request and decodes the response.
