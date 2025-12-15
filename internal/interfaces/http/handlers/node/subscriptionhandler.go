@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -30,7 +31,7 @@ func NewSubscriptionHandler(
 	}
 }
 
-// GetSubscription handles GET /s/:token
+// GetSubscription handles GET /s/:token with auto-format detection from User-Agent
 func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 	token := c.Param("token")
 	if token == "" {
@@ -38,9 +39,13 @@ func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 		return
 	}
 
+	// Auto-detect format from User-Agent header
+	userAgent := c.GetHeader("User-Agent")
+	format := detectFormatFromUserAgent(userAgent)
+
 	cmd := usecases.GenerateSubscriptionCommand{
 		SubscriptionToken: token,
-		Format:            "base64",
+		Format:            format,
 		NodeMode:          c.DefaultQuery("mode", usecases.NodeModeAll),
 	}
 
@@ -52,6 +57,12 @@ func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 
 	c.Header("Content-Type", result.ContentType)
 	c.Header("Subscription-Userinfo", "upload=0; download=0; total=0; expire=0")
+
+	// Set filename header based on format
+	if format == "clash" {
+		c.Header("Content-Disposition", "attachment; filename=clash.yaml")
+	}
+
 	c.String(http.StatusOK, result.Content)
 }
 
@@ -150,4 +161,41 @@ func (h *SubscriptionHandler) GetSurgeSubscription(c *gin.Context) {
 
 	c.Header("Content-Type", result.ContentType)
 	c.String(http.StatusOK, result.Content)
+}
+
+// detectFormatFromUserAgent detects subscription format from User-Agent header
+func detectFormatFromUserAgent(userAgent string) string {
+	if userAgent == "" {
+		return "base64"
+	}
+
+	ua := strings.ToLower(userAgent)
+
+	// Clash clients
+	if strings.Contains(ua, "clash") {
+		return "clash"
+	}
+
+	// Surge clients
+	if strings.Contains(ua, "surge") {
+		return "surge"
+	}
+
+	// Quantumult clients
+	if strings.Contains(ua, "quantumult") {
+		return "base64"
+	}
+
+	// Shadowrocket clients
+	if strings.Contains(ua, "shadowrocket") {
+		return "base64"
+	}
+
+	// V2Ray clients
+	if strings.Contains(ua, "v2ray") {
+		return "v2ray"
+	}
+
+	// Default to base64 format for unknown clients
+	return "base64"
 }
