@@ -26,6 +26,7 @@ type UpdateForwardRuleCommand struct {
 	BindIP             *string // nil means no update, empty string means clear
 	IPVersion          *string // auto, ipv4, ipv6
 	Protocol           *string
+	TrafficMultiplier  *float64 // nil means no update (0-1000000)
 	Remark             *string
 }
 
@@ -221,6 +222,12 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 	if cmd.Protocol != nil {
 		protocol := vo.ForwardProtocol(*cmd.Protocol)
 		if err := rule.UpdateProtocol(protocol); err != nil {
+			return errors.NewValidationError(err.Error())
+		}
+	}
+
+	if cmd.TrafficMultiplier != nil {
+		if err := rule.UpdateTrafficMultiplier(cmd.TrafficMultiplier); err != nil {
 			return errors.NewValidationError(err.Error())
 		}
 	}

@@ -12,27 +12,28 @@ import (
 
 // ForwardRule represents the forward rule aggregate root.
 type ForwardRule struct {
-	id              uint
-	shortID         string // external API identifier (Stripe-style)
-	agentID         uint
-	ruleType        vo.ForwardRuleType
-	exitAgentID     uint            // exit agent ID (required for entry type)
-	chainAgentIDs   []uint          // ordered array of intermediate agent IDs for chain forwarding
-	chainPortConfig map[uint]uint16 // map of agent_id -> listen_port for direct_chain type
-	name            string
-	listenPort      uint16
-	targetAddress   string // final target address (required for direct and exit types if targetNodeID is not set)
-	targetPort      uint16 // final target port (required for direct and exit types if targetNodeID is not set)
-	targetNodeID    *uint  // target node ID for dynamic address resolution (mutually exclusive with targetAddress/targetPort)
-	bindIP          string // bind IP address for outbound connections (optional)
-	ipVersion       vo.IPVersion
-	protocol        vo.ForwardProtocol
-	status          vo.ForwardStatus
-	remark          string
-	uploadBytes     int64
-	downloadBytes   int64
-	createdAt       time.Time
-	updatedAt       time.Time
+	id                uint
+	shortID           string // external API identifier (Stripe-style)
+	agentID           uint
+	ruleType          vo.ForwardRuleType
+	exitAgentID       uint            // exit agent ID (required for entry type)
+	chainAgentIDs     []uint          // ordered array of intermediate agent IDs for chain forwarding
+	chainPortConfig   map[uint]uint16 // map of agent_id -> listen_port for direct_chain type
+	name              string
+	listenPort        uint16
+	targetAddress     string // final target address (required for direct and exit types if targetNodeID is not set)
+	targetPort        uint16 // final target port (required for direct and exit types if targetNodeID is not set)
+	targetNodeID      *uint  // target node ID for dynamic address resolution (mutually exclusive with targetAddress/targetPort)
+	bindIP            string // bind IP address for outbound connections (optional)
+	ipVersion         vo.IPVersion
+	protocol          vo.ForwardProtocol
+	status            vo.ForwardStatus
+	remark            string
+	uploadBytes       int64
+	downloadBytes     int64
+	trafficMultiplier *float64 // traffic multiplier for display. nil means auto-calculate based on node count
+	createdAt         time.Time
+	updatedAt         time.Time
 }
 
 // NewForwardRule creates a new forward rule aggregate.
@@ -56,6 +57,7 @@ func NewForwardRule(
 	ipVersion vo.IPVersion,
 	protocol vo.ForwardProtocol,
 	remark string,
+	trafficMultiplier *float64,
 	shortIDGenerator func() (string, error),
 ) (*ForwardRule, error) {
 	if agentID == 0 {
@@ -69,6 +71,16 @@ func NewForwardRule(
 	}
 	if !protocol.IsValid() {
 		return nil, fmt.Errorf("invalid protocol: %s", protocol)
+	}
+
+	// Validate traffic multiplier
+	if trafficMultiplier != nil {
+		if *trafficMultiplier < 0 {
+			return nil, fmt.Errorf("traffic multiplier cannot be negative: %f", *trafficMultiplier)
+		}
+		if *trafficMultiplier > 1000000 {
+			return nil, fmt.Errorf("traffic multiplier exceeds maximum (1000000): %f", *trafficMultiplier)
+		}
 	}
 
 	// Validate required fields based on rule type
@@ -229,26 +241,27 @@ func NewForwardRule(
 
 	now := time.Now()
 	return &ForwardRule{
-		shortID:         shortID,
-		agentID:         agentID,
-		ruleType:        ruleType,
-		exitAgentID:     exitAgentID,
-		chainAgentIDs:   chainAgentIDs,
-		chainPortConfig: chainPortConfig,
-		name:            name,
-		listenPort:      listenPort,
-		targetAddress:   targetAddress,
-		targetPort:      targetPort,
-		targetNodeID:    targetNodeID,
-		bindIP:          bindIP,
-		ipVersion:       ipVersion,
-		protocol:        protocol,
-		status:          vo.ForwardStatusDisabled,
-		remark:          remark,
-		uploadBytes:     0,
-		downloadBytes:   0,
-		createdAt:       now,
-		updatedAt:       now,
+		shortID:           shortID,
+		agentID:           agentID,
+		ruleType:          ruleType,
+		exitAgentID:       exitAgentID,
+		chainAgentIDs:     chainAgentIDs,
+		chainPortConfig:   chainPortConfig,
+		name:              name,
+		listenPort:        listenPort,
+		targetAddress:     targetAddress,
+		targetPort:        targetPort,
+		targetNodeID:      targetNodeID,
+		bindIP:            bindIP,
+		ipVersion:         ipVersion,
+		protocol:          protocol,
+		status:            vo.ForwardStatusDisabled,
+		remark:            remark,
+		uploadBytes:       0,
+		downloadBytes:     0,
+		trafficMultiplier: trafficMultiplier,
+		createdAt:         now,
+		updatedAt:         now,
 	}, nil
 }
 
@@ -274,6 +287,7 @@ func ReconstructForwardRule(
 	remark string,
 	uploadBytes int64,
 	downloadBytes int64,
+	trafficMultiplier *float64,
 	createdAt, updatedAt time.Time,
 ) (*ForwardRule, error) {
 	if id == 0 {
@@ -298,33 +312,44 @@ func ReconstructForwardRule(
 		return nil, fmt.Errorf("invalid status: %s", status)
 	}
 
+	// Validate traffic multiplier
+	if trafficMultiplier != nil {
+		if *trafficMultiplier < 0 {
+			return nil, fmt.Errorf("traffic multiplier cannot be negative: %f", *trafficMultiplier)
+		}
+		if *trafficMultiplier > 1000000 {
+			return nil, fmt.Errorf("traffic multiplier exceeds maximum (1000000): %f", *trafficMultiplier)
+		}
+	}
+
 	// Default ipVersion to auto if not set
 	if ipVersion == "" {
 		ipVersion = vo.IPVersionAuto
 	}
 
 	rule := &ForwardRule{
-		id:              id,
-		shortID:         shortID,
-		agentID:         agentID,
-		ruleType:        ruleType,
-		exitAgentID:     exitAgentID,
-		chainAgentIDs:   chainAgentIDs,
-		chainPortConfig: chainPortConfig,
-		name:            name,
-		listenPort:      listenPort,
-		targetAddress:   targetAddress,
-		targetPort:      targetPort,
-		targetNodeID:    targetNodeID,
-		bindIP:          bindIP,
-		ipVersion:       ipVersion,
-		protocol:        protocol,
-		status:          status,
-		remark:          remark,
-		uploadBytes:     uploadBytes,
-		downloadBytes:   downloadBytes,
-		createdAt:       createdAt,
-		updatedAt:       updatedAt,
+		id:                id,
+		shortID:           shortID,
+		agentID:           agentID,
+		ruleType:          ruleType,
+		exitAgentID:       exitAgentID,
+		chainAgentIDs:     chainAgentIDs,
+		chainPortConfig:   chainPortConfig,
+		name:              name,
+		listenPort:        listenPort,
+		targetAddress:     targetAddress,
+		targetPort:        targetPort,
+		targetNodeID:      targetNodeID,
+		bindIP:            bindIP,
+		ipVersion:         ipVersion,
+		protocol:          protocol,
+		status:            status,
+		remark:            remark,
+		uploadBytes:       uploadBytes,
+		downloadBytes:     downloadBytes,
+		trafficMultiplier: trafficMultiplier,
+		createdAt:         createdAt,
+		updatedAt:         updatedAt,
 	}
 
 	// Perform full validation to catch data corruption or manual DB modifications
@@ -562,19 +587,76 @@ func (r *ForwardRule) Remark() string {
 	return r.remark
 }
 
-// UploadBytes returns the upload bytes count.
+// UploadBytes returns the upload bytes count with traffic multiplier applied.
 func (r *ForwardRule) UploadBytes() int64 {
+	multiplier := r.GetEffectiveMultiplier()
+	return int64(float64(r.uploadBytes) * multiplier)
+}
+
+// DownloadBytes returns the download bytes count with traffic multiplier applied.
+func (r *ForwardRule) DownloadBytes() int64 {
+	multiplier := r.GetEffectiveMultiplier()
+	return int64(float64(r.downloadBytes) * multiplier)
+}
+
+// TotalBytes returns the total bytes count with traffic multiplier applied.
+func (r *ForwardRule) TotalBytes() int64 {
+	return r.UploadBytes() + r.DownloadBytes()
+}
+
+// GetRawUploadBytes returns the raw upload bytes without multiplier (for internal use).
+func (r *ForwardRule) GetRawUploadBytes() int64 {
 	return r.uploadBytes
 }
 
-// DownloadBytes returns the download bytes count.
-func (r *ForwardRule) DownloadBytes() int64 {
+// GetRawDownloadBytes returns the raw download bytes without multiplier (for internal use).
+func (r *ForwardRule) GetRawDownloadBytes() int64 {
 	return r.downloadBytes
 }
 
-// TotalBytes returns the total bytes count.
-func (r *ForwardRule) TotalBytes() int64 {
+// GetRawTotalBytes returns the raw total bytes without multiplier (for internal use).
+func (r *ForwardRule) GetRawTotalBytes() int64 {
 	return r.uploadBytes + r.downloadBytes
+}
+
+// GetTrafficMultiplier returns the configured traffic multiplier (may be nil).
+func (r *ForwardRule) GetTrafficMultiplier() *float64 {
+	return r.trafficMultiplier
+}
+
+// CalculateNodeCount calculates the total number of nodes in the forward chain.
+func (r *ForwardRule) CalculateNodeCount() int {
+	switch r.ruleType {
+	case vo.ForwardRuleTypeDirect:
+		return 1 // Only entry agent
+	case vo.ForwardRuleTypeEntry, vo.ForwardRuleTypeChain:
+		return 2 // Entry + Exit
+	case vo.ForwardRuleTypeDirectChain:
+		chainCount := 0
+		if r.chainAgentIDs != nil {
+			chainCount = len(r.chainAgentIDs)
+		}
+		return 2 + chainCount // Entry + Chain + Exit
+	default:
+		return 1 // Safe fallback
+	}
+}
+
+// GetEffectiveMultiplier returns the effective traffic multiplier to use.
+// If a multiplier is configured, it uses that value.
+// Otherwise, it auto-calculates based on node count (1 / nodeCount).
+func (r *ForwardRule) GetEffectiveMultiplier() float64 {
+	if r.trafficMultiplier != nil {
+		return *r.trafficMultiplier
+	}
+
+	nodeCount := r.CalculateNodeCount()
+	if nodeCount <= 0 {
+		// Safety fallback, should not happen in practice
+		return 1.0
+	}
+
+	return 1.0 / float64(nodeCount)
 }
 
 // CreatedAt returns when the rule was created.
@@ -733,6 +815,32 @@ func (r *ForwardRule) UpdateRemark(remark string) error {
 		return nil
 	}
 	r.remark = remark
+	r.updatedAt = time.Now()
+	return nil
+}
+
+// UpdateTrafficMultiplier updates the traffic multiplier.
+// Set to nil to enable auto-calculation based on node count.
+func (r *ForwardRule) UpdateTrafficMultiplier(multiplier *float64) error {
+	// Validate if provided
+	if multiplier != nil {
+		if *multiplier < 0 {
+			return fmt.Errorf("traffic multiplier cannot be negative: %f", *multiplier)
+		}
+		if *multiplier > 1000000 {
+			return fmt.Errorf("traffic multiplier exceeds maximum (1000000): %f", *multiplier)
+		}
+	}
+
+	// Check if already set to the same value
+	if r.trafficMultiplier == nil && multiplier == nil {
+		return nil
+	}
+	if r.trafficMultiplier != nil && multiplier != nil && *r.trafficMultiplier == *multiplier {
+		return nil
+	}
+
+	r.trafficMultiplier = multiplier
 	r.updatedAt = time.Now()
 	return nil
 }

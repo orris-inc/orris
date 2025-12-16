@@ -26,20 +26,21 @@ func MockTokenGenerator(shortID string) (string, string) {
 
 // RuleParams holds parameters for creating a test forward rule.
 type RuleParams struct {
-	AgentID         uint
-	RuleType        vo.ForwardRuleType
-	ExitAgentID     uint
-	ChainAgentIDs   []uint
-	ChainPortConfig map[uint]uint16
-	Name            string
-	ListenPort      uint16
-	TargetAddress   string
-	TargetPort      uint16
-	TargetNodeID    *uint
-	BindIP          string
-	IPVersion       vo.IPVersion
-	Protocol        vo.ForwardProtocol
-	Remark          string
+	AgentID           uint
+	RuleType          vo.ForwardRuleType
+	ExitAgentID       uint
+	ChainAgentIDs     []uint
+	ChainPortConfig   map[uint]uint16
+	Name              string
+	ListenPort        uint16
+	TargetAddress     string
+	TargetPort        uint16
+	TargetNodeID      *uint
+	BindIP            string
+	IPVersion         vo.IPVersion
+	Protocol          vo.ForwardProtocol
+	Remark            string
+	TrafficMultiplier *float64
 }
 
 // RuleOption is a function that modifies RuleParams.
@@ -236,16 +237,17 @@ func NewTestForwardRule(params RuleParams) (*forward.ForwardRule, error) {
 		params.IPVersion,
 		params.Protocol,
 		params.Remark,
+		params.TrafficMultiplier,
 		generator,
 	)
 }
 
 // AgentParams holds parameters for creating a test forward agent.
 type AgentParams struct {
-	Name           string
-	PublicAddress  string
-	TunnelAddress  string
-	Remark         string
+	Name          string
+	PublicAddress string
+	TunnelAddress string
+	Remark        string
 }
 
 // AgentOption is a function that modifies AgentParams.
@@ -282,10 +284,10 @@ func WithAgentRemark(remark string) AgentOption {
 // ValidAgentParams returns valid parameters for an agent.
 func ValidAgentParams(opts ...AgentOption) AgentParams {
 	params := AgentParams{
-		Name:           "test-agent",
-		PublicAddress:  "203.0.113.1",
-		TunnelAddress:  "198.51.100.1",
-		Remark:         "",
+		Name:          "test-agent",
+		PublicAddress: "203.0.113.1",
+		TunnelAddress: "198.51.100.1",
+		Remark:        "",
 	}
 	for _, opt := range opts {
 		opt(&params)

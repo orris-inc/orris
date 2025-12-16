@@ -956,6 +956,7 @@ func createTestRule(t *testing.T, agentID uint, name string, listenPort uint16) 
 		vo.IPVersionAuto,
 		vo.ForwardProtocolTCP,
 		"",
+		nil, // trafficMultiplier
 		id.NewForwardRuleID,
 	)
 	if err != nil {

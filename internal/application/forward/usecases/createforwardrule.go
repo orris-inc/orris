@@ -27,6 +27,7 @@ type CreateForwardRuleCommand struct {
 	BindIP             string // optional bind IP address for outbound connections
 	IPVersion          string // auto, ipv4, ipv6 (default: auto)
 	Protocol           string
+	TrafficMultiplier  *float64 // optional traffic multiplier (nil for auto-calculation, 0-1000000)
 	Remark             string
 }
 
@@ -190,6 +191,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		ipVersion,
 		protocol,
 		cmd.Remark,
+		cmd.TrafficMultiplier,
 		id.NewForwardRuleID,
 	)
 	if err != nil {

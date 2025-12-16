@@ -26,11 +26,17 @@ type ForwardRuleDTO struct {
 	Protocol        string            `json:"protocol"`
 	Status          string            `json:"status"`
 	Remark          string            `json:"remark"`
-	UploadBytes     int64             `json:"upload_bytes"`
-	DownloadBytes   int64             `json:"download_bytes"`
-	TotalBytes      int64             `json:"total_bytes"`
+	UploadBytes     int64             `json:"upload_bytes"`   // traffic with multiplier already applied
+	DownloadBytes   int64             `json:"download_bytes"` // traffic with multiplier already applied
+	TotalBytes      int64             `json:"total_bytes"`    // traffic with multiplier already applied
 	CreatedAt       string            `json:"created_at"`
 	UpdatedAt       string            `json:"updated_at"`
+
+	// Traffic multiplier fields
+	TrafficMultiplier          *float64 `json:"traffic_multiplier,omitempty"`
+	EffectiveTrafficMultiplier float64  `json:"effective_traffic_multiplier"`
+	NodeCount                  int      `json:"node_count"`
+	IsAutoMultiplier           bool     `json:"is_auto_multiplier"`
 
 	// Target node info (populated when targetNodeID is set)
 	TargetNodeServerAddress string  `json:"target_node_server_address,omitempty"` // node's configured server address
@@ -70,32 +76,40 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 		return nil
 	}
 
+	effectiveMultiplier := rule.GetEffectiveMultiplier()
+	nodeCount := rule.CalculateNodeCount()
+	isAuto := rule.GetTrafficMultiplier() == nil
+
 	return &ForwardRuleDTO{
-		ID:                      id.FormatForwardRuleID(rule.ShortID()),
-		AgentID:                 "", // populated later via PopulateAgentInfo
-		RuleType:                rule.RuleType().String(),
-		ExitAgentID:             "",  // populated later via PopulateAgentInfo
-		ChainAgentIDs:           nil, // populated later via PopulateAgentInfo
-		Name:                    rule.Name(),
-		ListenPort:              rule.ListenPort(),
-		TargetAddress:           rule.TargetAddress(),
-		TargetPort:              rule.TargetPort(),
-		TargetNodeID:            "", // populated later via PopulateTargetNodeShortID
-		BindIP:                  rule.BindIP(),
-		IPVersion:               rule.IPVersion().String(),
-		Protocol:                rule.Protocol().String(),
-		Status:                  rule.Status().String(),
-		Remark:                  rule.Remark(),
-		UploadBytes:             rule.UploadBytes(),
-		DownloadBytes:           rule.DownloadBytes(),
-		TotalBytes:              rule.TotalBytes(),
-		CreatedAt:               rule.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:               rule.UpdatedAt().Format("2006-01-02T15:04:05Z07:00"),
-		internalAgentID:         rule.AgentID(),
-		internalExitAgentID:     rule.ExitAgentID(),
-		internalChainAgents:     rule.ChainAgentIDs(),
-		internalChainPortConfig: rule.ChainPortConfig(),
-		internalTargetNode:      rule.TargetNodeID(),
+		ID:                         id.FormatForwardRuleID(rule.ShortID()),
+		AgentID:                    "", // populated later via PopulateAgentInfo
+		RuleType:                   rule.RuleType().String(),
+		ExitAgentID:                "",  // populated later via PopulateAgentInfo
+		ChainAgentIDs:              nil, // populated later via PopulateAgentInfo
+		Name:                       rule.Name(),
+		ListenPort:                 rule.ListenPort(),
+		TargetAddress:              rule.TargetAddress(),
+		TargetPort:                 rule.TargetPort(),
+		TargetNodeID:               "", // populated later via PopulateTargetNodeShortID
+		BindIP:                     rule.BindIP(),
+		IPVersion:                  rule.IPVersion().String(),
+		Protocol:                   rule.Protocol().String(),
+		Status:                     rule.Status().String(),
+		Remark:                     rule.Remark(),
+		UploadBytes:                rule.UploadBytes(),   // traffic with multiplier already applied
+		DownloadBytes:              rule.DownloadBytes(), // traffic with multiplier already applied
+		TotalBytes:                 rule.TotalBytes(),    // traffic with multiplier already applied
+		CreatedAt:                  rule.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:                  rule.UpdatedAt().Format("2006-01-02T15:04:05Z07:00"),
+		TrafficMultiplier:          rule.GetTrafficMultiplier(),
+		EffectiveTrafficMultiplier: effectiveMultiplier,
+		NodeCount:                  nodeCount,
+		IsAutoMultiplier:           isAuto,
+		internalAgentID:            rule.AgentID(),
+		internalExitAgentID:        rule.ExitAgentID(),
+		internalChainAgents:        rule.ChainAgentIDs(),
+		internalChainPortConfig:    rule.ChainPortConfig(),
+		internalTargetNode:         rule.TargetNodeID(),
 	}
 }
 

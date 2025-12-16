@@ -21,20 +21,21 @@ func mockShortIDGenerator() func() (string, error) {
 
 // ruleParams holds parameters for creating a test forward rule.
 type ruleParams struct {
-	AgentID         uint
-	RuleType        vo.ForwardRuleType
-	ExitAgentID     uint
-	ChainAgentIDs   []uint
-	ChainPortConfig map[uint]uint16
-	Name            string
-	ListenPort      uint16
-	TargetAddress   string
-	TargetPort      uint16
-	TargetNodeID    *uint
-	BindIP          string
-	IPVersion       vo.IPVersion
-	Protocol        vo.ForwardProtocol
-	Remark          string
+	AgentID           uint
+	RuleType          vo.ForwardRuleType
+	ExitAgentID       uint
+	ChainAgentIDs     []uint
+	ChainPortConfig   map[uint]uint16
+	Name              string
+	ListenPort        uint16
+	TargetAddress     string
+	TargetPort        uint16
+	TargetNodeID      *uint
+	BindIP            string
+	IPVersion         vo.IPVersion
+	Protocol          vo.ForwardProtocol
+	Remark            string
+	TrafficMultiplier *float64
 }
 
 // ruleOption is a function that modifies ruleParams.
@@ -231,6 +232,7 @@ func newTestForwardRule(params ruleParams) (*ForwardRule, error) {
 		params.IPVersion,
 		params.Protocol,
 		params.Remark,
+		params.TrafficMultiplier,
 		generator,
 	)
 }
@@ -1734,7 +1736,7 @@ func TestForwardRule_Validate_RejectsInvalidRuleType(t *testing.T) {
 		"10.0.0.1", 9000, nil,
 		"", vo.IPVersionAuto, vo.ForwardProtocolTCP,
 		vo.ForwardStatusDisabled,
-		"", 0, 0,
+		"", 0, 0, nil,
 		time.Now(), time.Now(),
 	)
 
@@ -1899,4 +1901,432 @@ func TestForwardRule_Validate_BindIPFormat(t *testing.T) {
 			}
 		})
 	}
+}
+
+// =============================================================================
+// Traffic Multiplier Tests
+// =============================================================================
+
+// TestCalculateNodeCount verifies node count calculation for different rule types.
+// Business rule: Node count depends on rule type and chain configuration.
+func TestCalculateNodeCount(t *testing.T) {
+	tests := []struct {
+		name          string
+		params        ruleParams
+		expectedCount int
+	}{
+		{
+			name:          "Direct_OneNode",
+			params:        validDirectRuleParams(),
+			expectedCount: 1,
+		},
+		{
+			name:          "Entry_TwoNodes",
+			params:        validEntryRuleParams(),
+			expectedCount: 2,
+		},
+		{
+			name:          "Chain_TwoNodes",
+			params:        validChainRuleParams(),
+			expectedCount: 2,
+		},
+		{
+			name: "DirectChain_EmptyChainAgentIDs_TwoNodes",
+			params: ruleParams{
+				AgentID:         1,
+				RuleType:        vo.ForwardRuleTypeDirectChain,
+				ChainAgentIDs:   []uint{2},
+				ChainPortConfig: map[uint]uint16{2: 7001},
+				Name:            "test-direct-chain",
+				ListenPort:      8080,
+				TargetAddress:   "192.168.1.100",
+				TargetPort:      9000,
+				IPVersion:       vo.IPVersionAuto,
+				Protocol:        vo.ForwardProtocolTCP,
+			},
+			expectedCount: 3, // Entry + 1 Chain + Exit
+		},
+		{
+			name: "DirectChain_OneChainAgent_ThreeNodes",
+			params: ruleParams{
+				AgentID:         1,
+				RuleType:        vo.ForwardRuleTypeDirectChain,
+				ChainAgentIDs:   []uint{2},
+				ChainPortConfig: map[uint]uint16{2: 7001},
+				Name:            "test-direct-chain",
+				ListenPort:      8080,
+				TargetAddress:   "192.168.1.100",
+				TargetPort:      9000,
+				IPVersion:       vo.IPVersionAuto,
+				Protocol:        vo.ForwardProtocolTCP,
+			},
+			expectedCount: 3, // Entry + 1 Chain + Exit
+		},
+		{
+			name: "DirectChain_ThreeChainAgents_FiveNodes",
+			params: ruleParams{
+				AgentID:       1,
+				RuleType:      vo.ForwardRuleTypeDirectChain,
+				ChainAgentIDs: []uint{2, 3, 4},
+				ChainPortConfig: map[uint]uint16{
+					2: 7001,
+					3: 7002,
+					4: 7003,
+				},
+				Name:          "test-direct-chain",
+				ListenPort:    8080,
+				TargetAddress: "192.168.1.100",
+				TargetPort:    9000,
+				IPVersion:     vo.IPVersionAuto,
+				Protocol:      vo.ForwardProtocolTCP,
+			},
+			expectedCount: 5, // Entry + 3 Chain + Exit
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rule, err := newTestForwardRule(tt.params)
+			if err != nil {
+				t.Fatalf("newTestForwardRule() unexpected error = %v", err)
+			}
+
+			count := rule.CalculateNodeCount()
+
+			if count != tt.expectedCount {
+				t.Errorf("CalculateNodeCount() = %v, want %v", count, tt.expectedCount)
+			}
+		})
+	}
+}
+
+// TestGetEffectiveMultiplier verifies effective multiplier calculation.
+// Business rule: If multiplier is nil, auto-calculate as 1/nodeCount.
+// If multiplier is configured, use that value.
+func TestGetEffectiveMultiplier(t *testing.T) {
+	tests := []struct {
+		name               string
+		params             ruleParams
+		multiplier         *float64
+		expectedMultiplier float64
+	}{
+		{
+			name:               "NilMultiplier_OneNode",
+			params:             validDirectRuleParams(),
+			multiplier:         nil,
+			expectedMultiplier: 1.0,
+		},
+		{
+			name:               "NilMultiplier_TwoNodes",
+			params:             validEntryRuleParams(),
+			multiplier:         nil,
+			expectedMultiplier: 0.5,
+		},
+		{
+			name: "NilMultiplier_ThreeNodes",
+			params: ruleParams{
+				AgentID:         1,
+				RuleType:        vo.ForwardRuleTypeDirectChain,
+				ChainAgentIDs:   []uint{2},
+				ChainPortConfig: map[uint]uint16{2: 7001},
+				Name:            "test-direct-chain",
+				ListenPort:      8080,
+				TargetAddress:   "192.168.1.100",
+				TargetPort:      9000,
+				IPVersion:       vo.IPVersionAuto,
+				Protocol:        vo.ForwardProtocolTCP,
+			},
+			multiplier:         nil,
+			expectedMultiplier: 0.3333333333333333, // 1.0 / 3
+		},
+		{
+			name:               "ConfiguredMultiplier_08_AnyNodes",
+			params:             validEntryRuleParams(),
+			multiplier:         floatPtr(0.8),
+			expectedMultiplier: 0.8,
+		},
+		{
+			name:               "ConfiguredMultiplier_20_AnyNodes",
+			params:             validDirectRuleParams(),
+			multiplier:         floatPtr(2.0),
+			expectedMultiplier: 2.0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			generator := mockShortIDGenerator()
+			rule, err := NewForwardRule(
+				tt.params.AgentID,
+				tt.params.RuleType,
+				tt.params.ExitAgentID,
+				tt.params.ChainAgentIDs,
+				tt.params.ChainPortConfig,
+				tt.params.Name,
+				tt.params.ListenPort,
+				tt.params.TargetAddress,
+				tt.params.TargetPort,
+				tt.params.TargetNodeID,
+				tt.params.BindIP,
+				tt.params.IPVersion,
+				tt.params.Protocol,
+				tt.params.Remark,
+				tt.multiplier,
+				generator,
+			)
+			if err != nil {
+				t.Fatalf("NewForwardRule() unexpected error = %v", err)
+			}
+
+			multiplier := rule.GetEffectiveMultiplier()
+
+			if multiplier != tt.expectedMultiplier {
+				t.Errorf("GetEffectiveMultiplier() = %v, want %v", multiplier, tt.expectedMultiplier)
+			}
+		})
+	}
+}
+
+// TestTrafficBytesWithMultiplier verifies traffic bytes calculation with multiplier applied.
+// Business rule: UploadBytes() and DownloadBytes() should apply the effective multiplier.
+func TestTrafficBytesWithMultiplier(t *testing.T) {
+	tests := []struct {
+		name             string
+		params           ruleParams
+		multiplier       *float64
+		uploadBytes      int64
+		downloadBytes    int64
+		expectedUpload   int64
+		expectedDownload int64
+		expectedTotal    int64
+	}{
+		{
+			name:             "Multiplier_05_Upload1000_Download2000",
+			params:           validEntryRuleParams(),
+			multiplier:       floatPtr(0.5),
+			uploadBytes:      1000,
+			downloadBytes:    2000,
+			expectedUpload:   500,
+			expectedDownload: 1000,
+			expectedTotal:    1500,
+		},
+		{
+			name:             "Multiplier_03333_Upload1500_TruncationTest",
+			params:           validEntryRuleParams(),
+			multiplier:       floatPtr(0.3333),
+			uploadBytes:      1500,
+			downloadBytes:    0,
+			expectedUpload:   499, // int64(1500 * 0.3333) = 499
+			expectedDownload: 0,
+			expectedTotal:    499,
+		},
+		{
+			name:             "NilMultiplier_TwoNodes_AutoApply05",
+			params:           validEntryRuleParams(),
+			multiplier:       nil,
+			uploadBytes:      2000,
+			downloadBytes:    4000,
+			expectedUpload:   1000, // 2000 * 0.5
+			expectedDownload: 2000, // 4000 * 0.5
+			expectedTotal:    3000,
+		},
+		{
+			name:             "Multiplier_10_NoChange",
+			params:           validDirectRuleParams(),
+			multiplier:       floatPtr(1.0),
+			uploadBytes:      1234,
+			downloadBytes:    5678,
+			expectedUpload:   1234,
+			expectedDownload: 5678,
+			expectedTotal:    6912,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			generator := mockShortIDGenerator()
+			rule, err := NewForwardRule(
+				tt.params.AgentID,
+				tt.params.RuleType,
+				tt.params.ExitAgentID,
+				tt.params.ChainAgentIDs,
+				tt.params.ChainPortConfig,
+				tt.params.Name,
+				tt.params.ListenPort,
+				tt.params.TargetAddress,
+				tt.params.TargetPort,
+				tt.params.TargetNodeID,
+				tt.params.BindIP,
+				tt.params.IPVersion,
+				tt.params.Protocol,
+				tt.params.Remark,
+				tt.multiplier,
+				generator,
+			)
+			if err != nil {
+				t.Fatalf("NewForwardRule() unexpected error = %v", err)
+			}
+
+			// Record traffic
+			rule.RecordTraffic(tt.uploadBytes, tt.downloadBytes)
+
+			// Verify multiplied values
+			if rule.UploadBytes() != tt.expectedUpload {
+				t.Errorf("UploadBytes() = %v, want %v", rule.UploadBytes(), tt.expectedUpload)
+			}
+			if rule.DownloadBytes() != tt.expectedDownload {
+				t.Errorf("DownloadBytes() = %v, want %v", rule.DownloadBytes(), tt.expectedDownload)
+			}
+			if rule.TotalBytes() != tt.expectedTotal {
+				t.Errorf("TotalBytes() = %v, want %v", rule.TotalBytes(), tt.expectedTotal)
+			}
+		})
+	}
+}
+
+// TestTrafficMultiplierValidation verifies multiplier validation.
+// Business rule: Multiplier cannot be negative or exceed 1000000.
+func TestTrafficMultiplierValidation(t *testing.T) {
+	tests := []struct {
+		name       string
+		multiplier *float64
+		shouldFail bool
+	}{
+		{
+			name:       "NegativeMultiplier_ReturnsError",
+			multiplier: floatPtr(-0.5),
+			shouldFail: true,
+		},
+		{
+			name:       "ZeroMultiplier_Allowed",
+			multiplier: floatPtr(0.0),
+			shouldFail: false,
+		},
+		{
+			name:       "MaxMultiplier_Allowed",
+			multiplier: floatPtr(1000000.0),
+			shouldFail: false,
+		},
+		{
+			name:       "ExceedsMaxMultiplier_ReturnsError",
+			multiplier: floatPtr(1000001.0),
+			shouldFail: true,
+		},
+		{
+			name:       "NilMultiplier_Allowed",
+			multiplier: nil,
+			shouldFail: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			params := validDirectRuleParams()
+			generator := mockShortIDGenerator()
+
+			rule, err := NewForwardRule(
+				params.AgentID,
+				params.RuleType,
+				params.ExitAgentID,
+				params.ChainAgentIDs,
+				params.ChainPortConfig,
+				params.Name,
+				params.ListenPort,
+				params.TargetAddress,
+				params.TargetPort,
+				params.TargetNodeID,
+				params.BindIP,
+				params.IPVersion,
+				params.Protocol,
+				params.Remark,
+				tt.multiplier,
+				generator,
+			)
+
+			if tt.shouldFail {
+				if err == nil {
+					t.Error("NewForwardRule() expected error for invalid multiplier, got nil")
+				}
+				if rule != nil {
+					t.Error("NewForwardRule() expected nil rule for invalid multiplier, got non-nil")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("NewForwardRule() unexpected error = %v", err)
+				}
+				if rule == nil {
+					t.Error("NewForwardRule() returned nil rule for valid multiplier")
+				}
+			}
+		})
+	}
+}
+
+// TestGetRawBytes verifies raw traffic getter methods.
+// Business rule: Raw getters should return original values without multiplier.
+func TestGetRawBytes(t *testing.T) {
+	params := validEntryRuleParams()
+	multiplier := floatPtr(0.5)
+	generator := mockShortIDGenerator()
+
+	rule, err := NewForwardRule(
+		params.AgentID,
+		params.RuleType,
+		params.ExitAgentID,
+		params.ChainAgentIDs,
+		params.ChainPortConfig,
+		params.Name,
+		params.ListenPort,
+		params.TargetAddress,
+		params.TargetPort,
+		params.TargetNodeID,
+		params.BindIP,
+		params.IPVersion,
+		params.Protocol,
+		params.Remark,
+		multiplier,
+		generator,
+	)
+	if err != nil {
+		t.Fatalf("NewForwardRule() unexpected error = %v", err)
+	}
+
+	// Record traffic
+	uploadBytes := int64(1000)
+	downloadBytes := int64(2000)
+	rule.RecordTraffic(uploadBytes, downloadBytes)
+
+	// Verify raw values (without multiplier)
+	if rule.GetRawUploadBytes() != uploadBytes {
+		t.Errorf("GetRawUploadBytes() = %v, want %v", rule.GetRawUploadBytes(), uploadBytes)
+	}
+	if rule.GetRawDownloadBytes() != downloadBytes {
+		t.Errorf("GetRawDownloadBytes() = %v, want %v", rule.GetRawDownloadBytes(), downloadBytes)
+	}
+	if rule.GetRawTotalBytes() != uploadBytes+downloadBytes {
+		t.Errorf("GetRawTotalBytes() = %v, want %v", rule.GetRawTotalBytes(), uploadBytes+downloadBytes)
+	}
+
+	// Verify multiplied values (with multiplier) are different from raw
+	if rule.UploadBytes() == rule.GetRawUploadBytes() {
+		t.Error("UploadBytes() should differ from GetRawUploadBytes() when multiplier is applied")
+	}
+	if rule.DownloadBytes() == rule.GetRawDownloadBytes() {
+		t.Error("DownloadBytes() should differ from GetRawDownloadBytes() when multiplier is applied")
+	}
+
+	// Verify correct multiplied values
+	expectedUpload := int64(float64(uploadBytes) * 0.5)
+	expectedDownload := int64(float64(downloadBytes) * 0.5)
+	if rule.UploadBytes() != expectedUpload {
+		t.Errorf("UploadBytes() = %v, want %v", rule.UploadBytes(), expectedUpload)
+	}
+	if rule.DownloadBytes() != expectedDownload {
+		t.Errorf("DownloadBytes() = %v, want %v", rule.DownloadBytes(), expectedDownload)
+	}
+}
+
+// floatPtr is a helper function to create a pointer to a float64.
+func floatPtr(f float64) *float64 {
+	return &f
 }
