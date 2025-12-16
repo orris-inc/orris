@@ -133,4 +133,7 @@ func setDefaults() {
 
 	// Forward defaults
 	viper.SetDefault("forward.token_signing_secret", "change-me-in-production")
+
+	// Subscription defaults
+	viper.SetDefault("subscription.templates_path", "./configs/sub")
 }

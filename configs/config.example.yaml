@@ -129,6 +129,14 @@ subscription:
                          # Env override: ORRIS_SUBSCRIPTION_BASE_URL=https://sub.yourdomain.com
                          # Production example: "https://sub.yourdomain.com"
 
+  templates_path: "./configs/sub"  # Directory path for custom subscription template files
+                                   # Template files should be named: custom.{format}.yaml or custom.{format}.conf
+                                   # Supported formats: clash, surge, v2ray, sip008, base64
+                                   # Templates allow full client configuration with dynamic node injection
+                                   # Placeholders: {{PROXIES}} for node list, {{PROXY_NAMES}} for node names
+                                   # If directory doesn't exist or no templates found, uses default formatters
+                                   # Env override: ORRIS_SUBSCRIPTION_TEMPLATES_PATH=/path/to/templates
+
 # ------------------------------------------------------------
 # OAuth2 Configuration
 # ------------------------------------------------------------

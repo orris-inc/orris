@@ -25,6 +25,7 @@ import (
 	"github.com/orris-inc/orris/internal/infrastructure/email"
 	"github.com/orris-inc/orris/internal/infrastructure/repository"
 	"github.com/orris-inc/orris/internal/infrastructure/services"
+	"github.com/orris-inc/orris/internal/infrastructure/template"
 	"github.com/orris-inc/orris/internal/infrastructure/token"
 	"github.com/orris-inc/orris/internal/interfaces/http/handlers"
 	adminHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/admin"
@@ -299,8 +300,18 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	nodeRepo := adapters.NewNodeRepositoryAdapter(nodeRepoImpl, db, log)
 	nodeGroupRepoImpl := repository.NewNodeGroupRepository(db, log)
 	tokenValidator := adapters.NewSubscriptionTokenValidatorAdapter(db, log)
+
+	// Initialize subscription template loader
+	templateLoader := template.NewSubscriptionTemplateLoader(
+		cfg.Subscription.TemplatesPath,
+		log,
+	)
+	if err := templateLoader.Load(); err != nil {
+		log.Warnw("failed to load subscription templates, using defaults", "error", err)
+	}
+
 	generateSubscriptionUC := nodeUsecases.NewGenerateSubscriptionUseCase(
-		nodeRepo, tokenValidator, log,
+		nodeRepo, tokenValidator, templateLoader, log,
 	)
 
 	// Initialize node system status querier adapter

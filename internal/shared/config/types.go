@@ -143,6 +143,8 @@ type SubscriptionConfig struct {
 	// BaseURL is the base URL for subscription links (e.g., "https://sub.example.com")
 	// If empty, falls back to server base URL
 	BaseURL string `mapstructure:"base_url"`
+	// TemplatesPath is the directory path for subscription template files
+	TemplatesPath string `mapstructure:"templates_path"`
 }
 
 // GetBaseURL returns the subscription base URL, falling back to server base URL if not set

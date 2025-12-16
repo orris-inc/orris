@@ -379,3 +379,81 @@ func formatPluginOpts(opts map[string]string) string {
 	}
 	return strings.Join(parts, ";")
 }
+
+// TemplateClashFormatter wraps ClashFormatter with template support
+// It will use custom template if available, otherwise fall back to default formatter
+type TemplateClashFormatter struct {
+	renderer         *TemplateRenderer
+	defaultFormatter *ClashFormatter
+}
+
+// NewTemplateClashFormatter creates a new template-aware Clash formatter
+func NewTemplateClashFormatter(renderer *TemplateRenderer) *TemplateClashFormatter {
+	return &TemplateClashFormatter{
+		renderer:         renderer,
+		defaultFormatter: NewClashFormatter(),
+	}
+}
+
+func (f *TemplateClashFormatter) Format(nodes []*Node) (string, error) {
+	return f.FormatWithPassword(nodes, "")
+}
+
+func (f *TemplateClashFormatter) FormatWithPassword(nodes []*Node, password string) (string, error) {
+	// Try template rendering first
+	if f.renderer.HasTemplate("clash") {
+		content, err := f.renderer.RenderClash(nodes, password)
+		if err != nil {
+			// Log error but fall back to default formatter
+			// (error logging handled by caller)
+			return f.defaultFormatter.FormatWithPassword(nodes, password)
+		}
+		return content, nil
+	}
+
+	// Fall back to default formatter
+	return f.defaultFormatter.FormatWithPassword(nodes, password)
+}
+
+func (f *TemplateClashFormatter) ContentType() string {
+	return f.defaultFormatter.ContentType()
+}
+
+// TemplateSurgeFormatter wraps SurgeFormatter with template support
+// It will use custom template if available, otherwise fall back to default formatter
+type TemplateSurgeFormatter struct {
+	renderer         *TemplateRenderer
+	defaultFormatter *SurgeFormatter
+}
+
+// NewTemplateSurgeFormatter creates a new template-aware Surge formatter
+func NewTemplateSurgeFormatter(renderer *TemplateRenderer) *TemplateSurgeFormatter {
+	return &TemplateSurgeFormatter{
+		renderer:         renderer,
+		defaultFormatter: NewSurgeFormatter(),
+	}
+}
+
+func (f *TemplateSurgeFormatter) Format(nodes []*Node) (string, error) {
+	return f.FormatWithPassword(nodes, "")
+}
+
+func (f *TemplateSurgeFormatter) FormatWithPassword(nodes []*Node, password string) (string, error) {
+	// Try template rendering first
+	if f.renderer.HasTemplate("surge") {
+		content, err := f.renderer.RenderSurge(nodes, password)
+		if err != nil {
+			// Log error but fall back to default formatter
+			// (error logging handled by caller)
+			return f.defaultFormatter.FormatWithPassword(nodes, password)
+		}
+		return content, nil
+	}
+
+	// Fall back to default formatter
+	return f.defaultFormatter.FormatWithPassword(nodes, password)
+}
+
+func (f *TemplateSurgeFormatter) ContentType() string {
+	return f.defaultFormatter.ContentType()
+}

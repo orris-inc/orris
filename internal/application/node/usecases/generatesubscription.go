@@ -9,6 +9,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/node/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/config"
+	"github.com/orris-inc/orris/internal/infrastructure/template"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -49,6 +50,7 @@ type GenerateSubscriptionUseCase struct {
 func NewGenerateSubscriptionUseCase(
 	nodeRepo NodeRepository,
 	tokenValidator SubscriptionTokenValidator,
+	templateLoader *template.SubscriptionTemplateLoader,
 	logger logger.Interface,
 ) *GenerateSubscriptionUseCase {
 	uc := &GenerateSubscriptionUseCase{
@@ -58,11 +60,17 @@ func NewGenerateSubscriptionUseCase(
 		logger:         logger,
 	}
 
+	// Create template renderer
+	renderer := NewTemplateRenderer(templateLoader)
+
+	// Use template-aware formatters for clash and surge
+	uc.formatters["clash"] = NewTemplateClashFormatter(renderer)
+	uc.formatters["surge"] = NewTemplateSurgeFormatter(renderer)
+
+	// Keep original formatters for other formats
 	uc.formatters["base64"] = NewBase64Formatter()
-	uc.formatters["clash"] = NewClashFormatter()
 	uc.formatters["v2ray"] = NewV2RayFormatter()
 	uc.formatters["sip008"] = NewSIP008Formatter()
-	uc.formatters["surge"] = NewSurgeFormatter()
 
 	return uc
 }
