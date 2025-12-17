@@ -165,6 +165,22 @@ func (u *User) HasPassword() bool {
 	return u.passwordHash != nil && *u.passwordHash != ""
 }
 
+// AdminResetPassword allows an admin to reset a user's password without requiring the old password.
+// This should only be called after verifying the caller has admin privileges.
+func (u *User) AdminResetPassword(newPassword *vo.Password, hasher PasswordHasher) error {
+	if err := u.SetPassword(newPassword, hasher); err != nil {
+		return fmt.Errorf("failed to set new password: %w", err)
+	}
+
+	// Clear any pending password reset tokens and unlock the account
+	u.passwordResetToken = nil
+	u.passwordResetExpiresAt = nil
+	u.failedLoginAttempts = 0
+	u.lockedUntil = nil
+
+	return nil
+}
+
 func (u *User) IsEmailVerified() bool {
 	return u.emailVerified
 }

@@ -65,15 +65,6 @@ func (uc *CreateUserUseCase) Execute(ctx context.Context, request dto.CreateUser
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
-	// Apply business rules via domain service if needed
-	// For example, auto-activate users from trusted domains
-	if userEntity.IsBusinessEmail() {
-		if err := userEntity.Activate(); err != nil {
-			uc.logger.Warnw("failed to auto-activate business user", "email", request.Email, "error", err)
-			// Don't fail the operation, just log the warning
-		}
-	}
-
 	// Persist the user
 	if err := uc.userRepo.Create(ctx, userEntity); err != nil {
 		uc.logger.Errorw("failed to persist user", "error", err)

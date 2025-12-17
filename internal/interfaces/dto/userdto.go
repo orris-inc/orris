@@ -26,6 +26,11 @@ type UpdateUserRequest struct {
 	Role   *string `json:"role" binding:"omitempty,oneof=user admin"`
 }
 
+// AdminResetPasswordRequest represents HTTP request for admin to reset user password
+type AdminResetPasswordRequest struct {
+	Password string `json:"password" binding:"required,min=8,max=128"`
+}
+
 // ToApplicationRequest converts HTTP DTO to application layer DTO
 func (r *CreateUserRequest) ToApplicationRequest() *dto.CreateUserRequest {
 	return &dto.CreateUserRequest{

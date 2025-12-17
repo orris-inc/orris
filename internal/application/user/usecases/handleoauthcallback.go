@@ -162,12 +162,6 @@ func (uc *HandleOAuthCallbackUseCase) Execute(ctx context.Context, cmd HandleOAu
 				return nil, fmt.Errorf("failed to create user: %w", err)
 			}
 
-			if userInfo.EmailVerified {
-				if err := existingUser.Activate(); err != nil {
-					uc.logger.Warnw("failed to activate user", "error", err)
-				}
-			}
-
 			if err := uc.userRepo.Create(ctx, existingUser); err != nil {
 				uc.logger.Errorw("failed to create user in database", "error", err)
 				return nil, fmt.Errorf("failed to create user: %w", err)

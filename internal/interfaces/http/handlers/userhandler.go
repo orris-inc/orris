@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/orris-inc/orris/internal/application/user"
+	"github.com/orris-inc/orris/internal/application/user/usecases"
 	"github.com/orris-inc/orris/internal/interfaces/dto"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -14,15 +15,20 @@ import (
 
 // UserHandler handles HTTP requests for user operations
 type UserHandler struct {
-	userService *user.ServiceDDD
-	logger      logger.Interface
+	userService          *user.ServiceDDD
+	adminResetPasswordUC *usecases.AdminResetPasswordUseCase
+	logger               logger.Interface
 }
 
 // NewUserHandler creates a new user handler
-func NewUserHandler(userService *user.ServiceDDD) *UserHandler {
+func NewUserHandler(
+	userService *user.ServiceDDD,
+	adminResetPasswordUC *usecases.AdminResetPasswordUseCase,
+) *UserHandler {
 	return &UserHandler{
-		userService: userService,
-		logger:      logger.NewLogger(),
+		userService:          userService,
+		adminResetPasswordUC: adminResetPasswordUC,
+		logger:               logger.NewLogger(),
 	}
 }
 
@@ -160,6 +166,35 @@ func (h *UserHandler) GetUserByEmail(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "", userResp)
+}
+
+// AdminResetPassword handles PATCH /users/:id/password
+func (h *UserHandler) AdminResetPassword(c *gin.Context) {
+	// Parse user ID
+	userID, err := dto.ParseUserID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	var req dto.AdminResetPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid request body for admin reset password", "user_id", userID, "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	cmd := usecases.AdminResetPasswordCommand{
+		UserID:      userID,
+		NewPassword: req.Password,
+	}
+
+	if err := h.adminResetPasswordUC.Execute(c.Request.Context(), cmd); err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Password reset successfully", nil)
 }
 
 // HealthCheck handles GET /health for user service health check

@@ -125,8 +125,6 @@ func (a *oauthClientAdapter) GetUserInfo(ctx context.Context, accessToken string
 func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, log logger.Interface) *Router {
 	engine := gin.New()
 
-	userHandler := handlers.NewUserHandler(userService)
-
 	userRepo := repository.NewUserRepositoryDDD(db, log)
 	sessionRepo := repository.NewSessionRepository(db)
 	oauthRepo := repository.NewOAuthAccountRepository(db)
@@ -190,6 +188,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	verifyEmailUC := usecases.NewVerifyEmailUseCase(userRepo, log)
 	requestResetUC := usecases.NewRequestPasswordResetUseCase(userRepo, emailService, log)
 	resetPasswordUC := usecases.NewResetPasswordUseCase(userRepo, sessionRepo, hasher, emailService, log)
+	adminResetPasswordUC := usecases.NewAdminResetPasswordUseCase(userRepo, sessionRepo, hasher, emailService, log)
 	initiateOAuthUC := usecases.NewInitiateOAuthLoginUseCase(googleClient, githubClient, log, stateStore)
 	handleOAuthUC := usecases.NewHandleOAuthCallbackUseCase(userRepo, oauthRepo, sessionRepo, googleClient, githubClient, jwtService, initiateOAuthUC, authHelper, cfg.Auth.Session, log)
 	refreshTokenUC := usecases.NewRefreshTokenUseCase(sessionRepo, jwtService, authHelper, log)
@@ -201,6 +200,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		cfg.Auth.Cookie, cfg.Auth.JWT,
 		cfg.Server.FrontendCallbackURL, cfg.Server.AllowedOrigins,
 	)
+
+	userHandler := handlers.NewUserHandler(userService, adminResetPasswordUC)
 
 	authMiddleware := middleware.NewAuthMiddleware(jwtSvc, log)
 	rateLimiter := middleware.NewRateLimiter(100, 1*time.Minute)
@@ -572,11 +573,11 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		createUserForwardRuleUC,
 		listUserForwardRulesUC,
 		getUserForwardUsageUC,
-		updateForwardRuleUC,      // reuse existing
-		deleteForwardRuleUC,      // reuse existing
-		enableForwardRuleUC,      // reuse existing
-		disableForwardRuleUC,     // reuse existing
-		getForwardRuleUC,         // reuse existing
+		updateForwardRuleUC,  // reuse existing
+		deleteForwardRuleUC,  // reuse existing
+		enableForwardRuleUC,  // reuse existing
+		disableForwardRuleUC, // reuse existing
+		getForwardRuleUC,     // reuse existing
 	)
 
 	// Initialize forward rule owner middleware
@@ -686,6 +687,7 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		users.GET("/:id", authorization.RequireAdmin(), r.userHandler.GetUser)
 		users.PATCH("/:id", authorization.RequireAdmin(), r.userHandler.UpdateUser)
 		users.DELETE("/:id", authorization.RequireAdmin(), r.userHandler.DeleteUser)
+		users.PATCH("/:id/password", authorization.RequireAdmin(), r.userHandler.AdminResetPassword)
 	}
 
 	// Admin subscription routes - full CRUD for all subscriptions

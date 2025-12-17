@@ -45,7 +45,7 @@ func NewUser(email *vo.Email, name *vo.Name) (*User, error) {
 		email:     email,
 		name:      name,
 		role:      authorization.RoleUser,
-		status:    vo.StatusPending,
+		status:    vo.StatusActive,
 		createdAt: now,
 		updatedAt: now,
 		version:   1,

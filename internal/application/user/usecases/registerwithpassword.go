@@ -82,12 +82,6 @@ func (uc *RegisterWithPasswordUseCase) Execute(ctx context.Context, cmd Register
 		return nil, fmt.Errorf("failed to set password: %w", err)
 	}
 
-	token, err := newUser.GenerateEmailVerificationToken()
-	if err != nil {
-		uc.logger.Errorw("failed to generate verification token", "error", err)
-		return nil, fmt.Errorf("failed to generate verification token: %w", err)
-	}
-
 	if err := uc.userRepo.Create(ctx, newUser); err != nil {
 		uc.logger.Errorw("failed to create user in database", "error", err)
 		return nil, fmt.Errorf("failed to create user: %w", err)
@@ -97,10 +91,6 @@ func (uc *RegisterWithPasswordUseCase) Execute(ctx context.Context, cmd Register
 	if err := uc.authHelper.GrantAdminAndSave(ctx, newUser); err != nil {
 		uc.logger.Warnw("failed to grant admin role to first user", "error", err, "user_id", newUser.ID())
 		// Continue despite error as user is already created
-	}
-
-	if err := uc.emailService.SendVerificationEmail(email.String(), token.Value()); err != nil {
-		uc.logger.Warnw("failed to send verification email", "error", err, "email", email.String())
 	}
 
 	uc.logger.Infow("user registered successfully", "user_id", newUser.ID(), "email", email.String())
