@@ -90,4 +90,6 @@ type PlanPricingRepository interface {
 	GetActivePricingsByPlanIDs(ctx context.Context, planIDs []uint) (map[uint][]*vo.PlanPricing, error)
 	Update(ctx context.Context, pricing *vo.PlanPricing) error
 	Delete(ctx context.Context, id uint) error
+	// DeleteByPlanID deletes all pricing records for a specific plan
+	DeleteByPlanID(ctx context.Context, planID uint) error
 }

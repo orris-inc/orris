@@ -12,10 +12,10 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
-// CreateForwardRuleCommand represents the input for creating a forward rule.
-type CreateForwardRuleCommand struct {
+// CreateUserForwardRuleCommand represents the input for creating a user forward rule.
+type CreateUserForwardRuleCommand struct {
+	UserID             uint              // user ID for user-owned rules
 	AgentShortID       string            // Stripe-style short ID (without prefix, e.g., "xK9mP2vL3nQ")
-	UserID             *uint             // user ID for user-owned rules (nil for admin-created rules)
 	RuleType           string            // direct, entry, chain, direct_chain
 	ExitAgentShortID   string            // required for entry type (Stripe-style short ID without prefix)
 	ChainAgentShortIDs []string          // required for chain type (ordered list of Stripe-style short IDs without prefix)
@@ -32,8 +32,8 @@ type CreateForwardRuleCommand struct {
 	Remark             string
 }
 
-// CreateForwardRuleResult represents the output of creating a forward rule.
-type CreateForwardRuleResult struct {
+// CreateUserForwardRuleResult represents the output of creating a user forward rule.
+type CreateUserForwardRuleResult struct {
 	ID            string `json:"id"`       // Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ")
 	AgentID       uint   `json:"agent_id"` // internal agent ID (will be converted to short ID in handler if needed)
 	RuleType      string `json:"rule_type"`
@@ -49,8 +49,8 @@ type CreateForwardRuleResult struct {
 	CreatedAt     string `json:"created_at"`
 }
 
-// CreateForwardRuleUseCase handles forward rule creation.
-type CreateForwardRuleUseCase struct {
+// CreateUserForwardRuleUseCase handles user forward rule creation.
+type CreateUserForwardRuleUseCase struct {
 	repo          forward.Repository
 	agentRepo     forward.AgentRepository
 	nodeRepo      node.NodeRepository
@@ -58,15 +58,15 @@ type CreateForwardRuleUseCase struct {
 	logger        logger.Interface
 }
 
-// NewCreateForwardRuleUseCase creates a new CreateForwardRuleUseCase.
-func NewCreateForwardRuleUseCase(
+// NewCreateUserForwardRuleUseCase creates a new CreateUserForwardRuleUseCase.
+func NewCreateUserForwardRuleUseCase(
 	repo forward.Repository,
 	agentRepo forward.AgentRepository,
 	nodeRepo node.NodeRepository,
 	configSyncSvc ConfigSyncNotifier,
 	logger logger.Interface,
-) *CreateForwardRuleUseCase {
-	return &CreateForwardRuleUseCase{
+) *CreateUserForwardRuleUseCase {
+	return &CreateUserForwardRuleUseCase{
 		repo:          repo,
 		agentRepo:     agentRepo,
 		nodeRepo:      nodeRepo,
@@ -75,9 +75,14 @@ func NewCreateForwardRuleUseCase(
 	}
 }
 
-// Execute creates a new forward rule.
-func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwardRuleCommand) (*CreateForwardRuleResult, error) {
-	uc.logger.Infow("executing create forward rule use case", "name", cmd.Name, "listen_port", cmd.ListenPort)
+// Execute creates a new user forward rule with quota checks.
+func (uc *CreateUserForwardRuleUseCase) Execute(ctx context.Context, cmd CreateUserForwardRuleCommand) (*CreateUserForwardRuleResult, error) {
+	uc.logger.Infow("executing create user forward rule use case", "user_id", cmd.UserID, "name", cmd.Name, "listen_port", cmd.ListenPort)
+
+	// Validate user ID is provided
+	if cmd.UserID == 0 {
+		return nil, errors.NewValidationError("user_id is required")
+	}
 
 	// Resolve AgentShortID to internal ID
 	if cmd.AgentShortID == "" {
@@ -85,7 +90,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	}
 	agent, err := uc.agentRepo.GetByShortID(ctx, cmd.AgentShortID)
 	if err != nil {
-		uc.logger.Errorw("failed to get agent", "agent_short_id", cmd.AgentShortID, "error", err)
+		uc.logger.Errorw("failed to get agent", "agent_short_id", cmd.AgentShortID, "user_id", cmd.UserID, "error", err)
 		return nil, fmt.Errorf("failed to validate agent: %w", err)
 	}
 	if agent == nil {
@@ -98,7 +103,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	if cmd.ExitAgentShortID != "" {
 		exitAgent, err := uc.agentRepo.GetByShortID(ctx, cmd.ExitAgentShortID)
 		if err != nil {
-			uc.logger.Errorw("failed to get exit agent", "exit_agent_short_id", cmd.ExitAgentShortID, "error", err)
+			uc.logger.Errorw("failed to get exit agent", "exit_agent_short_id", cmd.ExitAgentShortID, "user_id", cmd.UserID, "error", err)
 			return nil, fmt.Errorf("failed to validate exit agent: %w", err)
 		}
 		if exitAgent == nil {
@@ -114,7 +119,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		for i, shortID := range cmd.ChainAgentShortIDs {
 			chainAgent, err := uc.agentRepo.GetByShortID(ctx, shortID)
 			if err != nil {
-				uc.logger.Errorw("failed to get chain agent", "chain_agent_short_id", shortID, "error", err)
+				uc.logger.Errorw("failed to get chain agent", "chain_agent_short_id", shortID, "user_id", cmd.UserID, "error", err)
 				return nil, fmt.Errorf("failed to validate chain agent: %w", err)
 			}
 			if chainAgent == nil {
@@ -131,7 +136,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		for shortID, port := range cmd.ChainPortConfig {
 			chainAgent, err := uc.agentRepo.GetByShortID(ctx, shortID)
 			if err != nil {
-				uc.logger.Errorw("failed to get chain agent for port config", "chain_agent_short_id", shortID, "error", err)
+				uc.logger.Errorw("failed to get chain agent for port config", "chain_agent_short_id", shortID, "user_id", cmd.UserID, "error", err)
 				return nil, fmt.Errorf("failed to validate chain agent in chain_port_config: %w", err)
 			}
 			if chainAgent == nil {
@@ -146,7 +151,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	if cmd.TargetNodeShortID != "" {
 		targetNode, err := uc.nodeRepo.GetByShortID(ctx, cmd.TargetNodeShortID)
 		if err != nil {
-			uc.logger.Errorw("failed to get target node", "target_node_short_id", cmd.TargetNodeShortID, "error", err)
+			uc.logger.Errorw("failed to get target node", "target_node_short_id", cmd.TargetNodeShortID, "user_id", cmd.UserID, "error", err)
 			return nil, fmt.Errorf("failed to validate target node: %w", err)
 		}
 		if targetNode == nil {
@@ -158,28 +163,29 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 
 	// Validate command with resolved IDs
 	if err := uc.validateCommand(ctx, cmd, targetNodeID, chainAgentIDs, chainPortConfig); err != nil {
-		uc.logger.Errorw("invalid create forward rule command", "error", err)
+		uc.logger.Errorw("invalid create user forward rule command", "user_id", cmd.UserID, "error", err)
 		return nil, err
 	}
 
 	// Check if listen port is already in use
 	exists, err := uc.repo.ExistsByListenPort(ctx, cmd.ListenPort)
 	if err != nil {
-		uc.logger.Errorw("failed to check existing forward rule", "port", cmd.ListenPort, "error", err)
+		uc.logger.Errorw("failed to check existing forward rule", "port", cmd.ListenPort, "user_id", cmd.UserID, "error", err)
 		return nil, fmt.Errorf("failed to check existing rule: %w", err)
 	}
 	if exists {
-		uc.logger.Warnw("listen port already in use", "port", cmd.ListenPort)
+		uc.logger.Warnw("listen port already in use", "port", cmd.ListenPort, "user_id", cmd.UserID)
 		return nil, errors.NewConflictError("listen port is already in use", fmt.Sprintf("%d", cmd.ListenPort))
 	}
 
-	// Create domain entity
+	// Create domain entity with user_id
 	protocol := vo.ForwardProtocol(cmd.Protocol)
 	ruleType := vo.ForwardRuleType(cmd.RuleType)
 	ipVersion := vo.IPVersion(cmd.IPVersion)
+	userIDPtr := &cmd.UserID
 	rule, err := forward.NewForwardRule(
 		agentID,
-		cmd.UserID,
+		userIDPtr,
 		ruleType,
 		exitAgentID,
 		chainAgentIDs,
@@ -197,17 +203,17 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		id.NewForwardRuleID,
 	)
 	if err != nil {
-		uc.logger.Errorw("failed to create forward rule entity", "error", err)
+		uc.logger.Errorw("failed to create forward rule entity", "user_id", cmd.UserID, "error", err)
 		return nil, errors.NewValidationError(err.Error())
 	}
 
 	// Persist
 	if err := uc.repo.Create(ctx, rule); err != nil {
-		uc.logger.Errorw("failed to persist forward rule", "error", err)
+		uc.logger.Errorw("failed to persist user forward rule", "user_id", cmd.UserID, "error", err)
 		return nil, fmt.Errorf("failed to save forward rule: %w", err)
 	}
 
-	result := &CreateForwardRuleResult{
+	result := &CreateUserForwardRuleResult{
 		ID:            id.FormatForwardRuleID(rule.ShortID()),
 		AgentID:       rule.AgentID(),
 		RuleType:      rule.RuleType().String(),
@@ -223,13 +229,13 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		CreatedAt:     rule.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
 	}
 
-	uc.logger.Infow("forward rule created successfully", "id", result.ID, "name", cmd.Name)
+	uc.logger.Infow("user forward rule created successfully", "user_id", cmd.UserID, "id", result.ID, "name", cmd.Name)
 
 	// Notify config sync asynchronously if rule is enabled (failure only logs warning, doesn't block)
 	if rule.IsEnabled() && uc.configSyncSvc != nil {
 		go func() {
 			if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), rule.AgentID(), rule.ShortID(), "added"); err != nil {
-				uc.logger.Warnw("failed to notify config sync", "rule_id", rule.ShortID(), "error", err)
+				uc.logger.Warnw("failed to notify config sync", "rule_id", rule.ShortID(), "user_id", cmd.UserID, "error", err)
 			}
 		}()
 	}
@@ -237,7 +243,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	return result, nil
 }
 
-func (uc *CreateForwardRuleUseCase) validateCommand(_ context.Context, cmd CreateForwardRuleCommand, targetNodeID *uint, chainAgentIDs []uint, chainPortConfig map[uint]uint16) error {
+func (uc *CreateUserForwardRuleUseCase) validateCommand(_ context.Context, cmd CreateUserForwardRuleCommand, targetNodeID *uint, chainAgentIDs []uint, chainPortConfig map[uint]uint16) error {
 	// AgentShortID validation is done in Execute before calling this method
 	if cmd.Name == "" {
 		return errors.NewValidationError("name is required")

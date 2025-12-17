@@ -58,6 +58,11 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 		exitAgentID = *model.ExitAgentID
 	}
 
+	var userID *uint
+	if model.UserID != nil {
+		userID = model.UserID
+	}
+
 	var targetNodeID *uint
 	if model.TargetNodeID != nil {
 		targetNodeID = model.TargetNodeID
@@ -96,6 +101,7 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 		model.ID,
 		model.ShortID,
 		model.AgentID,
+		userID,
 		ruleType,
 		exitAgentID,
 		chainAgentIDs,
@@ -136,6 +142,11 @@ func (m *ForwardRuleMapperImpl) ToModel(entity *forward.ForwardRule) (*models.Fo
 		exitAgentID = &val
 	}
 
+	var userID *uint
+	if entity.UserID() != nil {
+		userID = entity.UserID()
+	}
+
 	var targetNodeID *uint
 	if entity.TargetNodeID() != nil {
 		targetNodeID = entity.TargetNodeID()
@@ -170,6 +181,7 @@ func (m *ForwardRuleMapperImpl) ToModel(entity *forward.ForwardRule) (*models.Fo
 		ID:                entity.ID(),
 		ShortID:           entity.ShortID(),
 		AgentID:           entity.AgentID(),
+		UserID:            userID,
 		RuleType:          entity.RuleType().String(),
 		ExitAgentID:       exitAgentID,
 		ChainAgentIDs:     chainAgentIDsJSON,

@@ -251,3 +251,22 @@ func (r *PlanPricingRepositoryImpl) Delete(ctx context.Context, id uint) error {
 	r.logger.Infow("pricing deleted successfully", "id", id)
 	return nil
 }
+
+// DeleteByPlanID deletes all pricing records for a specific plan
+func (r *PlanPricingRepositoryImpl) DeleteByPlanID(ctx context.Context, planID uint) error {
+	result := r.db.WithContext(ctx).
+		Where("plan_id = ?", planID).
+		Delete(&models.SubscriptionPlanPricingModel{})
+
+	if result.Error != nil {
+		r.logger.Errorw("failed to delete pricings by plan ID",
+			"plan_id", planID,
+			"error", result.Error)
+		return fmt.Errorf("failed to delete pricings: %w", result.Error)
+	}
+
+	r.logger.Infow("pricings deleted successfully",
+		"plan_id", planID,
+		"count", result.RowsAffected)
+	return nil
+}

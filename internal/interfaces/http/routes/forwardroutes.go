@@ -14,8 +14,11 @@ type ForwardRouteConfig struct {
 	ForwardRuleHandler          *forwardHandlers.ForwardHandler
 	ForwardAgentHandler         *forwardHandlers.ForwardAgentHandler
 	ForwardAgentAPIHandler      *forwardHandlers.AgentHandler
+	UserForwardHandler          *forwardHandlers.UserForwardRuleHandler
 	AuthMiddleware              *middleware.AuthMiddleware
 	ForwardAgentTokenMiddleware *middleware.ForwardAgentTokenMiddleware
+	ForwardRuleOwnerMiddleware  *middleware.ForwardRuleOwnerMiddleware
+	ForwardQuotaMiddleware      *middleware.ForwardQuotaMiddleware
 }
 
 // SetupForwardRoutes configures forward-related routes.
@@ -74,6 +77,33 @@ func SetupForwardRoutes(engine *gin.Engine, cfg *ForwardRouteConfig) {
 
 		// Install script
 		forwardAgents.GET("/:id/install-script", cfg.ForwardAgentHandler.GetInstallScript)
+	}
+
+	// User forward rules API (requires authentication and quota limits)
+	userForwardRules := engine.Group("/user/forward-rules")
+	userForwardRules.Use(cfg.AuthMiddleware.RequireAuth())
+	{
+		// Collection operations
+		userForwardRules.POST("",
+			cfg.ForwardQuotaMiddleware.CheckRuleLimit(),
+			cfg.ForwardQuotaMiddleware.CheckRuleTypeAllowed(),
+			cfg.UserForwardHandler.CreateRule,
+		)
+		userForwardRules.GET("", cfg.UserForwardHandler.ListRules)
+
+		// Quota usage
+		userForwardRules.GET("/usage", cfg.UserForwardHandler.GetUsage)
+
+		// Single rule operations (require ownership check)
+		ruleGroup := userForwardRules.Group("/:id")
+		ruleGroup.Use(cfg.ForwardRuleOwnerMiddleware.RequireOwnership())
+		{
+			ruleGroup.GET("", cfg.UserForwardHandler.GetRule)
+			ruleGroup.PUT("", cfg.UserForwardHandler.UpdateRule)
+			ruleGroup.DELETE("", cfg.UserForwardHandler.DeleteRule)
+			ruleGroup.POST("/enable", cfg.UserForwardHandler.EnableRule)
+			ruleGroup.POST("/disable", cfg.UserForwardHandler.DisableRule)
+		}
 	}
 
 	// Forward agent API for clients to fetch rules and report traffic

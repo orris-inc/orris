@@ -79,6 +79,7 @@ coverage.out
 coverage.html
 
 CLAUDE.md
+.claude/commands
 
 # Build artifacts
 bin/

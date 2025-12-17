@@ -943,6 +943,7 @@ func createTestRule(t *testing.T, agentID uint, name string, listenPort uint16) 
 	t.Helper()
 	rule, err := forward.NewForwardRule(
 		agentID,
+		nil, // userID
 		vo.ForwardRuleTypeDirect,
 		0,
 		nil,

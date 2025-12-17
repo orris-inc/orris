@@ -15,6 +15,7 @@ type ForwardRule struct {
 	id                uint
 	shortID           string // external API identifier (Stripe-style)
 	agentID           uint
+	userID            *uint // user ID for user-owned rules (nil for admin-created rules)
 	ruleType          vo.ForwardRuleType
 	exitAgentID       uint            // exit agent ID (required for entry type)
 	chainAgentIDs     []uint          // ordered array of intermediate agent IDs for chain forwarding
@@ -44,6 +45,7 @@ type ForwardRule struct {
 // - direct_chain: requires agentID, listenPort, chainAgentIDs (at least 1), chainPortConfig, (targetAddress+targetPort OR targetNodeID)
 func NewForwardRule(
 	agentID uint,
+	userID *uint,
 	ruleType vo.ForwardRuleType,
 	exitAgentID uint,
 	chainAgentIDs []uint,
@@ -243,6 +245,7 @@ func NewForwardRule(
 	return &ForwardRule{
 		shortID:           shortID,
 		agentID:           agentID,
+		userID:            userID,
 		ruleType:          ruleType,
 		exitAgentID:       exitAgentID,
 		chainAgentIDs:     chainAgentIDs,
@@ -271,6 +274,7 @@ func ReconstructForwardRule(
 	id uint,
 	shortID string,
 	agentID uint,
+	userID *uint,
 	ruleType vo.ForwardRuleType,
 	exitAgentID uint,
 	chainAgentIDs []uint,
@@ -331,6 +335,7 @@ func ReconstructForwardRule(
 		id:                id,
 		shortID:           shortID,
 		agentID:           agentID,
+		userID:            userID,
 		ruleType:          ruleType,
 		exitAgentID:       exitAgentID,
 		chainAgentIDs:     chainAgentIDs,
@@ -402,6 +407,16 @@ func (r *ForwardRule) ShortID() string {
 // AgentID returns the forward agent ID.
 func (r *ForwardRule) AgentID() uint {
 	return r.agentID
+}
+
+// UserID returns the user ID.
+func (r *ForwardRule) UserID() *uint {
+	return r.userID
+}
+
+// IsUserOwned returns true if the rule is owned by a user.
+func (r *ForwardRule) IsUserOwned() bool {
+	return r.userID != nil && *r.userID != 0
 }
 
 // RuleType returns the rule type.

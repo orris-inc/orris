@@ -14,10 +14,11 @@ type ForwardRuleModel struct {
 	ID                uint           `gorm:"primarykey"`
 	ShortID           string         `gorm:"not null;size:16;uniqueIndex:idx_forward_rule_short_id"` // external API identifier
 	AgentID           uint           `gorm:"not null;index:idx_forward_agent_id;uniqueIndex:idx_listen_port_agent"`
-	RuleType          string         `gorm:"not null;default:direct;size:20"` // direct, chain, direct_chain, websocket
-	ExitAgentID       *uint          `gorm:"index:idx_forward_exit_agent_id"` // exit agent ID for chain/websocket forward (nullable)
-	ChainAgentIDs     datatypes.JSON `gorm:"type:json;default:null"`          // ordered array of intermediate agent IDs for chain forwarding
-	ChainPortConfig   datatypes.JSON `gorm:"type:json;default:null"`          // map of agent_id -> listen_port for direct_chain type
+	UserID            *uint          `gorm:"index:idx_forward_rules_user_id;index:idx_forward_rules_user_status"` // user ID for user-owned rules (nullable)
+	RuleType          string         `gorm:"not null;default:direct;size:20"`                                     // direct, chain, direct_chain, websocket
+	ExitAgentID       *uint          `gorm:"index:idx_forward_exit_agent_id"`                                     // exit agent ID for chain/websocket forward (nullable)
+	ChainAgentIDs     datatypes.JSON `gorm:"type:json;default:null"`                                              // ordered array of intermediate agent IDs for chain forwarding
+	ChainPortConfig   datatypes.JSON `gorm:"type:json;default:null"`                                              // map of agent_id -> listen_port for direct_chain type
 	Name              string         `gorm:"not null;size:100;index:idx_forward_name"`
 	ListenPort        uint16         `gorm:"not null;uniqueIndex:idx_listen_port_agent"`
 	TargetAddress     string         `gorm:"size:255"`                                    // required when RuleType=direct (if TargetNodeID is not set)

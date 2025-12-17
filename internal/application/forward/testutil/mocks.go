@@ -361,6 +361,89 @@ func (m *MockForwardRuleRepository) ListEnabledByChainAgentID(ctx context.Contex
 	return rules, nil
 }
 
+// ListByUserID returns forward rules for a specific user with filtering and pagination.
+func (m *MockForwardRuleRepository) ListByUserID(ctx context.Context, userID uint, filter forward.ListFilter) ([]*forward.ForwardRule, int64, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.listError != nil {
+		return nil, 0, m.listError
+	}
+
+	// Collect rules for the user
+	var rules []*forward.ForwardRule
+	for _, rule := range m.rules {
+		if rule.UserID() != nil && *rule.UserID() == userID {
+			// Apply additional filters
+			if filter.Name != "" && rule.Name() != filter.Name {
+				continue
+			}
+			if filter.Protocol != "" && string(rule.Protocol()) != filter.Protocol {
+				continue
+			}
+			if filter.Status != "" && string(rule.Status()) != filter.Status {
+				continue
+			}
+			rules = append(rules, rule)
+		}
+	}
+
+	total := int64(len(rules))
+
+	// Apply pagination
+	if filter.PageSize > 0 {
+		start := (filter.Page - 1) * filter.PageSize
+		end := start + filter.PageSize
+		if start >= len(rules) {
+			return []*forward.ForwardRule{}, total, nil
+		}
+		if end > len(rules) {
+			end = len(rules)
+		}
+		rules = rules[start:end]
+	}
+
+	return rules, total, nil
+}
+
+// CountByUserID returns the total count of forward rules for a specific user.
+func (m *MockForwardRuleRepository) CountByUserID(ctx context.Context, userID uint) (int64, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.listError != nil {
+		return 0, m.listError
+	}
+
+	count := int64(0)
+	for _, rule := range m.rules {
+		if rule.UserID() != nil && *rule.UserID() == userID {
+			count++
+		}
+	}
+
+	return count, nil
+}
+
+// GetTotalTrafficByUserID returns the total traffic (upload + download) for all rules owned by a user.
+func (m *MockForwardRuleRepository) GetTotalTrafficByUserID(ctx context.Context, userID uint) (int64, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.listError != nil {
+		return 0, m.listError
+	}
+
+	total := int64(0)
+	for _, rule := range m.rules {
+		if rule.UserID() != nil && *rule.UserID() == userID {
+			total += rule.GetRawTotalBytes()
+		}
+	}
+
+	return total, nil
+}
+
 // Helper methods for testing
 
 // AddRule adds a rule to the mock repository (for test setup).

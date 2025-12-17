@@ -17,7 +17,8 @@ func TestMockForwardRuleRepository(t *testing.T) {
 
 	// Create a test rule
 	rule, err := forward.NewForwardRule(
-		1, // agentID
+		1,   // agentID
+		nil, // userID
 		vo.ForwardRuleTypeDirect,
 		0,   // exitAgentID
 		nil, // chainAgentIDs
@@ -109,6 +110,7 @@ func TestMockForwardRuleRepository_ErrorInjection(t *testing.T) {
 
 	rule, err := forward.NewForwardRule(
 		1,
+		nil, // userID
 		vo.ForwardRuleTypeDirect,
 		0,
 		nil,

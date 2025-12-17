@@ -60,13 +60,17 @@ type Router struct {
 	forwardRuleHandler          *forwardHandlers.ForwardHandler
 	forwardAgentHandler         *forwardHandlers.ForwardAgentHandler
 	forwardAgentAPIHandler      *forwardHandlers.AgentHandler
+	userForwardRuleHandler      *forwardHandlers.UserForwardRuleHandler
 	agentHub                    *services.AgentHub
 	agentHubHandler             *agentHandlers.HubHandler
 	configSyncService           *forwardServices.ConfigSyncService
+	trafficLimitEnforcementSvc  *forwardServices.TrafficLimitEnforcementService
 	authMiddleware              *middleware.AuthMiddleware
 	subscriptionOwnerMiddleware *middleware.SubscriptionOwnerMiddleware
 	nodeTokenMiddleware         *middleware.NodeTokenMiddleware
 	forwardAgentTokenMiddleware *middleware.ForwardAgentTokenMiddleware
+	forwardRuleOwnerMiddleware  *middleware.ForwardRuleOwnerMiddleware
+	forwardQuotaMiddleware      *middleware.ForwardQuotaMiddleware
 	rateLimiter                 *middleware.RateLimiter
 }
 
@@ -240,10 +244,10 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	)
 
 	createPlanUC := subscriptionUsecases.NewCreateSubscriptionPlanUseCase(
-		subscriptionPlanRepo, log,
+		subscriptionPlanRepo, planPricingRepo, log,
 	)
 	updatePlanUC := subscriptionUsecases.NewUpdateSubscriptionPlanUseCase(
-		subscriptionPlanRepo, log,
+		subscriptionPlanRepo, planPricingRepo, log,
 	)
 	getPlanUC := subscriptionUsecases.NewGetSubscriptionPlanUseCase(
 		subscriptionPlanRepo, log,
@@ -534,6 +538,61 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	disableForwardRuleUC = forwardUsecases.NewDisableForwardRuleUseCase(forwardRuleRepo, configSyncService, log)
 	resetForwardTrafficUC = forwardUsecases.NewResetForwardRuleTrafficUseCase(forwardRuleRepo, log)
 
+	// Initialize user forward rule use cases
+	createUserForwardRuleUC := forwardUsecases.NewCreateUserForwardRuleUseCase(
+		forwardRuleRepo,
+		forwardAgentRepo,
+		nodeRepoImpl,
+		configSyncService,
+		log,
+	)
+	listUserForwardRulesUC := forwardUsecases.NewListUserForwardRulesUseCase(
+		forwardRuleRepo,
+		forwardAgentRepo,
+		nodeRepoImpl,
+		log,
+	)
+	getUserForwardUsageUC := forwardUsecases.NewGetUserForwardUsageUseCase(
+		forwardRuleRepo,
+		subscriptionRepo,
+		subscriptionPlanRepo,
+		log,
+	)
+
+	// Initialize traffic limit enforcement service
+	trafficLimitEnforcementSvc := forwardServices.NewTrafficLimitEnforcementService(
+		forwardRuleRepo,
+		subscriptionRepo,
+		subscriptionPlanRepo,
+		log,
+	)
+
+	// Initialize user forward rule handler
+	userForwardRuleHandler := forwardHandlers.NewUserForwardRuleHandler(
+		createUserForwardRuleUC,
+		listUserForwardRulesUC,
+		getUserForwardUsageUC,
+		updateForwardRuleUC,      // reuse existing
+		deleteForwardRuleUC,      // reuse existing
+		enableForwardRuleUC,      // reuse existing
+		disableForwardRuleUC,     // reuse existing
+		getForwardRuleUC,         // reuse existing
+	)
+
+	// Initialize forward rule owner middleware
+	forwardRuleOwnerMiddleware := middleware.NewForwardRuleOwnerMiddleware(
+		forwardRuleRepo,
+		log,
+	)
+
+	// Initialize forward quota middleware
+	forwardQuotaMiddleware := middleware.NewForwardQuotaMiddleware(
+		forwardRuleRepo,
+		subscriptionRepo,
+		subscriptionPlanRepo,
+		log,
+	)
+
 	// Initialize forward rule handler (after probeService is available)
 	forwardRuleHandler := forwardHandlers.NewForwardHandler(
 		createForwardRuleUC,
@@ -569,13 +628,17 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		forwardRuleHandler:          forwardRuleHandler,
 		forwardAgentHandler:         forwardAgentHandler,
 		forwardAgentAPIHandler:      forwardAgentAPIHandler,
+		userForwardRuleHandler:      userForwardRuleHandler,
 		agentHub:                    agentHub,
 		agentHubHandler:             agentHubHandler,
 		configSyncService:           configSyncService,
+		trafficLimitEnforcementSvc:  trafficLimitEnforcementSvc,
 		authMiddleware:              authMiddleware,
 		subscriptionOwnerMiddleware: subscriptionOwnerMiddleware,
 		nodeTokenMiddleware:         nodeTokenMiddleware,
 		forwardAgentTokenMiddleware: forwardAgentTokenMiddleware,
+		forwardRuleOwnerMiddleware:  forwardRuleOwnerMiddleware,
+		forwardQuotaMiddleware:      forwardQuotaMiddleware,
 		rateLimiter:                 rateLimiter,
 	}
 }
@@ -745,8 +808,11 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		ForwardRuleHandler:          r.forwardRuleHandler,
 		ForwardAgentHandler:         r.forwardAgentHandler,
 		ForwardAgentAPIHandler:      r.forwardAgentAPIHandler,
+		UserForwardHandler:          r.userForwardRuleHandler,
 		AuthMiddleware:              r.authMiddleware,
 		ForwardAgentTokenMiddleware: r.forwardAgentTokenMiddleware,
+		ForwardRuleOwnerMiddleware:  r.forwardRuleOwnerMiddleware,
+		ForwardQuotaMiddleware:      r.forwardQuotaMiddleware,
 	})
 
 	routes.SetupAgentHubRoutes(r.engine, &routes.AgentHubRouteConfig{

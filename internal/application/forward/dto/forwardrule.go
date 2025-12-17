@@ -12,6 +12,7 @@ import (
 type ForwardRuleDTO struct {
 	ID              string            `json:"id"`                          // Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ")
 	AgentID         string            `json:"agent_id"`                    // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
+	UserID          *uint             `json:"user_id,omitempty"`           // user ID for user-owned rules (nil for admin-created rules)
 	RuleType        string            `json:"rule_type"`                   // direct, entry, chain, direct_chain
 	ExitAgentID     string            `json:"exit_agent_id,omitempty"`     // for entry type (Stripe-style prefixed ID)
 	ChainAgentIDs   []string          `json:"chain_agent_ids,omitempty"`   // for chain and direct_chain types (ordered Stripe-style prefixed IDs)
@@ -62,8 +63,6 @@ type ForwardRuleDTO struct {
 	internalChainAgents     []uint          `json:"-"` // internal chain agent IDs for lookup
 	internalChainPortConfig map[uint]uint16 `json:"-"` // internal chain port config for lookup
 	internalTargetNode      *uint           `json:"-"` // internal node ID for lookup
-	agentShortID            string          `json:"-"`
-	exitAgentShortID        string          `json:"-"`
 }
 
 // ToForwardRuleDTO converts a domain forward rule to DTO.
@@ -83,6 +82,7 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 	return &ForwardRuleDTO{
 		ID:                         id.FormatForwardRuleID(rule.ShortID()),
 		AgentID:                    "", // populated later via PopulateAgentInfo
+		UserID:                     rule.UserID(),
 		RuleType:                   rule.RuleType().String(),
 		ExitAgentID:                "",  // populated later via PopulateAgentInfo
 		ChainAgentIDs:              nil, // populated later via PopulateAgentInfo

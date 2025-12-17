@@ -58,6 +58,14 @@ type PricingOptionDTO struct {
 	IsActive     bool   `json:"is_active"`     // Whether this pricing option is currently available
 }
 
+// PricingOptionInput represents input for creating/updating a pricing option
+type PricingOptionInput struct {
+	BillingCycle string `json:"billing_cycle" binding:"required"`
+	Price        uint64 `json:"price" binding:"required"`
+	Currency     string `json:"currency" binding:"required"`
+	IsActive     bool   `json:"is_active"`
+}
+
 type SubscriptionTokenDTO struct {
 	ID             uint       `json:"id"`
 	SubscriptionID uint       `json:"subscription_id"`
@@ -139,6 +147,7 @@ func toSubscriptionDTOInternal(sub *subscription.Subscription, plan *subscriptio
 	return dto
 }
 
+// ToSubscriptionPlanDTO converts a domain plan to DTO
 func ToSubscriptionPlanDTO(plan *subscription.SubscriptionPlan) *SubscriptionPlanDTO {
 	if plan == nil {
 		return nil

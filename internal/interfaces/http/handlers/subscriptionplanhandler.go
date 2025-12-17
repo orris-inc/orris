@@ -54,33 +54,35 @@ func NewSubscriptionPlanHandler(
 }
 
 type CreatePlanRequest struct {
-	Name         string                 `json:"name" binding:"required"`
-	Slug         string                 `json:"slug" binding:"required"`
-	Description  string                 `json:"description"`
-	Price        uint64                 `json:"price" binding:"required"`
-	Currency     string                 `json:"currency" binding:"required"`
-	BillingCycle string                 `json:"billing_cycle" binding:"required"`
-	TrialDays    int                    `json:"trial_days"`
-	Features     []string               `json:"features"`
-	Limits       map[string]interface{} `json:"limits"`
-	APIRateLimit uint                   `json:"api_rate_limit"`
-	MaxUsers     uint                   `json:"max_users"`
-	MaxProjects  uint                   `json:"max_projects"`
-	IsPublic     bool                   `json:"is_public"`
-	SortOrder    int                    `json:"sort_order"`
+	Name         string                      `json:"name" binding:"required"`
+	Slug         string                      `json:"slug" binding:"required"`
+	Description  string                      `json:"description"`
+	Price        uint64                      `json:"price" binding:"required"`
+	Currency     string                      `json:"currency" binding:"required"`
+	BillingCycle string                      `json:"billing_cycle" binding:"required"`
+	TrialDays    int                         `json:"trial_days"`
+	Features     []string                    `json:"features"`
+	Limits       map[string]interface{}      `json:"limits"`
+	APIRateLimit uint                        `json:"api_rate_limit"`
+	MaxUsers     uint                        `json:"max_users"`
+	MaxProjects  uint                        `json:"max_projects"`
+	IsPublic     bool                        `json:"is_public"`
+	SortOrder    int                         `json:"sort_order"`
+	Pricings     []subdto.PricingOptionInput `json:"pricings"` // Optional: multiple pricing options
 }
 
 type UpdatePlanRequest struct {
-	Description  *string                 `json:"description"`
-	Price        *uint64                 `json:"price"`
-	Currency     *string                 `json:"currency"`
-	Features     *[]string               `json:"features"`
-	Limits       *map[string]interface{} `json:"limits"`
-	APIRateLimit *uint                   `json:"api_rate_limit"`
-	MaxUsers     *uint                   `json:"max_users"`
-	MaxProjects  *uint                   `json:"max_projects"`
-	IsPublic     *bool                   `json:"is_public"`
-	SortOrder    *int                    `json:"sort_order"`
+	Description  *string                      `json:"description"`
+	Price        *uint64                      `json:"price"`
+	Currency     *string                      `json:"currency"`
+	Features     *[]string                    `json:"features"`
+	Limits       *map[string]interface{}      `json:"limits"`
+	APIRateLimit *uint                        `json:"api_rate_limit"`
+	MaxUsers     *uint                        `json:"max_users"`
+	MaxProjects  *uint                        `json:"max_projects"`
+	IsPublic     *bool                        `json:"is_public"`
+	SortOrder    *int                         `json:"sort_order"`
+	Pricings     *[]subdto.PricingOptionInput `json:"pricings"` // Optional: update pricing options
 }
 
 // UpdatePlanStatusRequest represents a unified request for plan status changes
@@ -111,6 +113,7 @@ func (h *SubscriptionPlanHandler) CreatePlan(c *gin.Context) {
 		MaxProjects:  req.MaxProjects,
 		IsPublic:     req.IsPublic,
 		SortOrder:    req.SortOrder,
+		Pricings:     req.Pricings,
 	}
 
 	result, err := h.createPlanUC.Execute(c.Request.Context(), cmd)
@@ -150,6 +153,7 @@ func (h *SubscriptionPlanHandler) UpdatePlan(c *gin.Context) {
 		MaxProjects:  req.MaxProjects,
 		IsPublic:     req.IsPublic,
 		SortOrder:    req.SortOrder,
+		Pricings:     req.Pricings,
 	}
 
 	result, err := h.updatePlanUC.Execute(c.Request.Context(), cmd)

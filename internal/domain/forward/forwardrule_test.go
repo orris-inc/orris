@@ -219,6 +219,7 @@ func newTestForwardRule(params ruleParams) (*ForwardRule, error) {
 	generator := mockShortIDGenerator()
 	return NewForwardRule(
 		params.AgentID,
+		nil, // userID is nil for test cases
 		params.RuleType,
 		params.ExitAgentID,
 		params.ChainAgentIDs,
@@ -1729,7 +1730,7 @@ func TestForwardRule_Validate_RejectsInvalidRuleType(t *testing.T) {
 	shortID, _ := generator()
 
 	_, err := ReconstructForwardRule(
-		1, shortID, 1,
+		1, shortID, 1, nil, // id, shortID, agentID, userID
 		vo.ForwardRuleType("invalid"),
 		0, nil, nil,
 		"test", 8080,
@@ -2058,6 +2059,7 @@ func TestGetEffectiveMultiplier(t *testing.T) {
 			generator := mockShortIDGenerator()
 			rule, err := NewForwardRule(
 				tt.params.AgentID,
+				nil, // userID
 				tt.params.RuleType,
 				tt.params.ExitAgentID,
 				tt.params.ChainAgentIDs,
@@ -2147,6 +2149,7 @@ func TestTrafficBytesWithMultiplier(t *testing.T) {
 			generator := mockShortIDGenerator()
 			rule, err := NewForwardRule(
 				tt.params.AgentID,
+				nil, // userID
 				tt.params.RuleType,
 				tt.params.ExitAgentID,
 				tt.params.ChainAgentIDs,
@@ -2226,6 +2229,7 @@ func TestTrafficMultiplierValidation(t *testing.T) {
 
 			rule, err := NewForwardRule(
 				params.AgentID,
+				nil, // userID
 				params.RuleType,
 				params.ExitAgentID,
 				params.ChainAgentIDs,
@@ -2271,6 +2275,7 @@ func TestGetRawBytes(t *testing.T) {
 
 	rule, err := NewForwardRule(
 		params.AgentID,
+		nil, // userID
 		params.RuleType,
 		params.ExitAgentID,
 		params.ChainAgentIDs,

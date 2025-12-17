@@ -22,20 +22,24 @@ type UpdateSubscriptionPlanCommand struct {
 	MaxProjects  *uint
 	SortOrder    *int
 	IsPublic     *bool
+	Pricings     *[]dto.PricingOptionInput // Optional: update pricing options
 }
 
 type UpdateSubscriptionPlanUseCase struct {
-	planRepo subscription.SubscriptionPlanRepository
-	logger   logger.Interface
+	planRepo    subscription.SubscriptionPlanRepository
+	pricingRepo subscription.PlanPricingRepository
+	logger      logger.Interface
 }
 
 func NewUpdateSubscriptionPlanUseCase(
 	planRepo subscription.SubscriptionPlanRepository,
+	pricingRepo subscription.PlanPricingRepository,
 	logger logger.Interface,
 ) *UpdateSubscriptionPlanUseCase {
 	return &UpdateSubscriptionPlanUseCase{
-		planRepo: planRepo,
-		logger:   logger,
+		planRepo:    planRepo,
+		pricingRepo: pricingRepo,
+		logger:      logger,
 	}
 }
 
@@ -120,6 +124,60 @@ func (uc *UpdateSubscriptionPlanUseCase) Execute(
 		return nil, fmt.Errorf("failed to update subscription plan: %w", err)
 	}
 
+	// Sync pricing options if provided (delete old, create new)
+	if cmd.Pricings != nil {
+		uc.logger.Infow("syncing pricing options", "plan_id", cmd.PlanID, "count", len(*cmd.Pricings))
+
+		// Delete all existing pricings for this plan
+		if err := uc.pricingRepo.DeleteByPlanID(ctx, cmd.PlanID); err != nil {
+			uc.logger.Errorw("failed to delete existing pricings",
+				"error", err,
+				"plan_id", cmd.PlanID)
+			return nil, fmt.Errorf("failed to delete existing pricings: %w", err)
+		}
+
+		// Create new pricings
+		for _, pricingInput := range *cmd.Pricings {
+			// Validate billing cycle
+			cycle, err := vo.NewBillingCycle(pricingInput.BillingCycle)
+			if err != nil {
+				uc.logger.Errorw("invalid billing cycle in pricing",
+					"error", err,
+					"billing_cycle", pricingInput.BillingCycle,
+					"plan_id", cmd.PlanID)
+				return nil, fmt.Errorf("invalid billing cycle '%s': %w", pricingInput.BillingCycle, err)
+			}
+
+			// Create pricing value object
+			pricing, err := vo.NewPlanPricing(cmd.PlanID, *cycle, pricingInput.Price, pricingInput.Currency)
+			if err != nil {
+				uc.logger.Errorw("failed to create pricing",
+					"error", err,
+					"plan_id", cmd.PlanID,
+					"billing_cycle", pricingInput.BillingCycle)
+				return nil, fmt.Errorf("failed to create pricing for cycle '%s': %w", pricingInput.BillingCycle, err)
+			}
+
+			// Set active status if explicitly set to false
+			if !pricingInput.IsActive {
+				pricing.Deactivate()
+			}
+
+			// Persist pricing
+			if err := uc.pricingRepo.Create(ctx, pricing); err != nil {
+				uc.logger.Errorw("failed to persist pricing",
+					"error", err,
+					"plan_id", cmd.PlanID,
+					"billing_cycle", pricingInput.BillingCycle)
+				return nil, fmt.Errorf("failed to persist pricing: %w", err)
+			}
+		}
+
+		uc.logger.Infow("pricing options synced successfully",
+			"plan_id", cmd.PlanID,
+			"count", len(*cmd.Pricings))
+	}
+
 	// Reload the plan from database to get the accurate state after update
 	updatedPlan, err := uc.planRepo.GetByID(ctx, cmd.PlanID)
 	if err != nil {
@@ -129,5 +187,15 @@ func (uc *UpdateSubscriptionPlanUseCase) Execute(
 
 	uc.logger.Infow("subscription plan updated successfully", "plan_id", updatedPlan.ID())
 
-	return dto.ToSubscriptionPlanDTO(updatedPlan), nil
+	// Fetch pricings to include in response
+	pricings, err := uc.pricingRepo.GetByPlanID(ctx, updatedPlan.ID())
+	if err != nil {
+		uc.logger.Warnw("failed to fetch pricings for response",
+			"error", err,
+			"plan_id", updatedPlan.ID())
+		// Don't fail the request, just return plan without pricings
+		return dto.ToSubscriptionPlanDTO(updatedPlan), nil
+	}
+
+	return dto.ToSubscriptionPlanDTOWithPricings(updatedPlan, pricings), nil
 }

@@ -206,6 +206,9 @@ func (r *ForwardRuleRepositoryImpl) List(ctx context.Context, filter forward.Lis
 	if filter.AgentID != 0 {
 		query = query.Where("agent_id = ?", filter.AgentID)
 	}
+	if filter.UserID != nil {
+		query = query.Where("user_id = ?", *filter.UserID)
+	}
 	if filter.Name != "" {
 		query = query.Where("name LIKE ?", "%"+filter.Name+"%")
 	}
@@ -409,4 +412,94 @@ func (r *ForwardRuleRepositoryImpl) ListEnabledByChainAgentID(ctx context.Contex
 	}
 
 	return entities, nil
+}
+
+// ListByUserID returns forward rules for a specific user with filtering and pagination.
+func (r *ForwardRuleRepositoryImpl) ListByUserID(ctx context.Context, userID uint, filter forward.ListFilter) ([]*forward.ForwardRule, int64, error) {
+	tx := db.GetTxFromContext(ctx, r.db)
+	query := tx.Model(&models.ForwardRuleModel{}).Where("user_id = ?", userID)
+
+	// Apply additional filters
+	if filter.AgentID != 0 {
+		query = query.Where("agent_id = ?", filter.AgentID)
+	}
+	if filter.Name != "" {
+		query = query.Where("name LIKE ?", "%"+filter.Name+"%")
+	}
+	if filter.Protocol != "" {
+		query = query.Where("protocol = ?", filter.Protocol)
+	}
+	if filter.Status != "" {
+		query = query.Where("status = ?", filter.Status)
+	}
+
+	// Count total records
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		r.logger.Errorw("failed to count forward rules by user ID", "user_id", userID, "error", err)
+		return nil, 0, fmt.Errorf("failed to count forward rules by user ID: %w", err)
+	}
+
+	// Apply sorting
+	orderBy := filter.OrderBy
+	order := filter.Order
+	if orderBy == "" {
+		orderBy = "created_at"
+	}
+	if order == "" {
+		order = "desc"
+	}
+	query = query.Order(fmt.Sprintf("%s %s", orderBy, order))
+
+	// Apply pagination
+	offset := (filter.Page - 1) * filter.PageSize
+	query = query.Offset(offset).Limit(filter.PageSize)
+
+	// Execute query
+	var ruleModels []*models.ForwardRuleModel
+	if err := query.Find(&ruleModels).Error; err != nil {
+		r.logger.Errorw("failed to list forward rules by user ID", "user_id", userID, "error", err)
+		return nil, 0, fmt.Errorf("failed to list forward rules by user ID: %w", err)
+	}
+
+	// Convert models to entities
+	entities, err := r.mapper.ToEntities(ruleModels)
+	if err != nil {
+		r.logger.Errorw("failed to map forward rule models to entities", "error", err)
+		return nil, 0, fmt.Errorf("failed to map forward rules: %w", err)
+	}
+
+	return entities, total, nil
+}
+
+// CountByUserID returns the total count of forward rules for a specific user.
+func (r *ForwardRuleRepositoryImpl) CountByUserID(ctx context.Context, userID uint) (int64, error) {
+	var count int64
+	tx := db.GetTxFromContext(ctx, r.db)
+	err := tx.Model(&models.ForwardRuleModel{}).Where("user_id = ?", userID).Count(&count).Error
+	if err != nil {
+		r.logger.Errorw("failed to count forward rules by user ID", "user_id", userID, "error", err)
+		return 0, fmt.Errorf("failed to count forward rules by user ID: %w", err)
+	}
+	return count, nil
+}
+
+// GetTotalTrafficByUserID returns the total traffic (upload + download) for all rules owned by a user.
+func (r *ForwardRuleRepositoryImpl) GetTotalTrafficByUserID(ctx context.Context, userID uint) (int64, error) {
+	var result struct {
+		TotalTraffic int64
+	}
+
+	tx := db.GetTxFromContext(ctx, r.db)
+	err := tx.Model(&models.ForwardRuleModel{}).
+		Select("COALESCE(SUM(upload_bytes + download_bytes), 0) as total_traffic").
+		Where("user_id = ?", userID).
+		Scan(&result).Error
+
+	if err != nil {
+		r.logger.Errorw("failed to get total traffic by user ID", "user_id", userID, "error", err)
+		return 0, fmt.Errorf("failed to get total traffic by user ID: %w", err)
+	}
+
+	return result.TotalTraffic, nil
 }

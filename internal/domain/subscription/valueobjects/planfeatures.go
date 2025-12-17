@@ -270,6 +270,22 @@ const (
 	LimitKeyNodeAccess = "node_access"
 )
 
+// Standard feature keys for plan capabilities
+const (
+	// FeatureForward represents the forward capability feature
+	FeatureForward = "forward"
+)
+
+// Forward-related limit keys
+const (
+	// LimitKeyForwardRuleCount represents maximum number of forward rules
+	LimitKeyForwardRuleCount = "forward_rule_limit"
+	// LimitKeyForwardTraffic represents monthly forward traffic limit in bytes
+	LimitKeyForwardTraffic = "forward_traffic_limit"
+	// LimitKeyForwardRuleTypes represents allowed forward rule types
+	LimitKeyForwardRuleTypes = "forward_rule_types"
+)
+
 // GetTrafficLimit returns the monthly traffic limit in bytes
 // Returns 0 if unlimited or not set
 func (p *PlanFeatures) GetTrafficLimit() (uint64, error) {
@@ -472,4 +488,152 @@ func (p *PlanFeatures) HasTrafficRemaining(usedBytes uint64) (bool, error) {
 	}
 
 	return usedBytes < limit, nil
+}
+
+// GetForwardRuleLimit returns the maximum number of forward rules
+// Returns 0 if unlimited or not set
+func (p *PlanFeatures) GetForwardRuleLimit() (int, error) {
+	value, exists := p.GetLimit(LimitKeyForwardRuleCount)
+	if !exists {
+		return 0, nil // 0 means unlimited
+	}
+
+	switch v := value.(type) {
+	case int:
+		if v < 0 {
+			return 0, fmt.Errorf("forward rule limit cannot be negative")
+		}
+		return v, nil
+	case float64:
+		if v < 0 {
+			return 0, fmt.Errorf("forward rule limit cannot be negative")
+		}
+		return int(v), nil
+	default:
+		return 0, fmt.Errorf("invalid forward rule limit type: %T", v)
+	}
+}
+
+// SetForwardRuleLimit sets the maximum number of forward rules
+// Use 0 for unlimited
+func (p *PlanFeatures) SetForwardRuleLimit(count int) error {
+	if count < 0 {
+		return fmt.Errorf("forward rule limit cannot be negative")
+	}
+	p.SetLimit(LimitKeyForwardRuleCount, count)
+	return nil
+}
+
+// GetForwardTrafficLimit returns the monthly forward traffic limit in bytes
+// Returns 0 if unlimited or not set
+func (p *PlanFeatures) GetForwardTrafficLimit() (uint64, error) {
+	value, exists := p.GetLimit(LimitKeyForwardTraffic)
+	if !exists {
+		return 0, nil // 0 means unlimited
+	}
+
+	switch v := value.(type) {
+	case uint64:
+		return v, nil
+	case int64:
+		if v < 0 {
+			return 0, fmt.Errorf("forward traffic limit cannot be negative")
+		}
+		return uint64(v), nil
+	case float64:
+		if v < 0 {
+			return 0, fmt.Errorf("forward traffic limit cannot be negative")
+		}
+		return uint64(v), nil
+	case int:
+		if v < 0 {
+			return 0, fmt.Errorf("forward traffic limit cannot be negative")
+		}
+		return uint64(v), nil
+	default:
+		return 0, fmt.Errorf("invalid forward traffic limit type: %T", v)
+	}
+}
+
+// SetForwardTrafficLimit sets the monthly forward traffic limit in bytes
+// Use 0 for unlimited
+func (p *PlanFeatures) SetForwardTrafficLimit(bytes uint64) {
+	p.SetLimit(LimitKeyForwardTraffic, bytes)
+}
+
+// GetAllowedForwardRuleTypes returns the list of allowed forward rule types
+// Returns empty slice if all types are allowed
+func (p *PlanFeatures) GetAllowedForwardRuleTypes() ([]string, error) {
+	value, exists := p.GetLimit(LimitKeyForwardRuleTypes)
+	if !exists {
+		return []string{}, nil // empty means all types allowed
+	}
+
+	switch v := value.(type) {
+	case []string:
+		return v, nil
+	case []interface{}:
+		result := make([]string, 0, len(v))
+		for _, item := range v {
+			switch ruleType := item.(type) {
+			case string:
+				result = append(result, ruleType)
+			default:
+				return nil, fmt.Errorf("invalid forward rule type: %T", item)
+			}
+		}
+		return result, nil
+	default:
+		return nil, fmt.Errorf("invalid forward rule types type: %T", v)
+	}
+}
+
+// SetAllowedForwardRuleTypes sets the list of allowed forward rule types
+// Use empty slice for all types allowed
+func (p *PlanFeatures) SetAllowedForwardRuleTypes(ruleTypes []string) {
+	p.SetLimit(LimitKeyForwardRuleTypes, ruleTypes)
+}
+
+// IsUnlimitedForwardTraffic checks if the plan has unlimited forward traffic
+func (p *PlanFeatures) IsUnlimitedForwardTraffic() bool {
+	limit, err := p.GetForwardTrafficLimit()
+	return err == nil && limit == 0
+}
+
+// HasForwardTrafficRemaining checks if the used forward traffic is within the plan limit
+// Returns true if unlimited or within limit
+func (p *PlanFeatures) HasForwardTrafficRemaining(usedBytes uint64) (bool, error) {
+	limit, err := p.GetForwardTrafficLimit()
+	if err != nil {
+		return false, err
+	}
+
+	// 0 means unlimited
+	if limit == 0 {
+		return true, nil
+	}
+
+	return usedBytes < limit, nil
+}
+
+// IsForwardRuleTypeAllowed checks if the given rule type is allowed in the plan
+// Returns true if all types allowed or the specific type is in the allowed list
+func (p *PlanFeatures) IsForwardRuleTypeAllowed(ruleType string) (bool, error) {
+	allowedTypes, err := p.GetAllowedForwardRuleTypes()
+	if err != nil {
+		return false, err
+	}
+
+	// empty means all types allowed
+	if len(allowedTypes) == 0 {
+		return true, nil
+	}
+
+	for _, allowed := range allowedTypes {
+		if allowed == ruleType {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }

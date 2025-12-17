@@ -49,6 +49,15 @@ type Repository interface {
 	// ListEnabledByChainAgentID returns all enabled chain rules where the agent participates.
 	// This includes rules where the agent is in the chain_agent_ids array.
 	ListEnabledByChainAgentID(ctx context.Context, agentID uint) ([]*ForwardRule, error)
+
+	// ListByUserID returns forward rules for a specific user with filtering and pagination.
+	ListByUserID(ctx context.Context, userID uint, filter ListFilter) ([]*ForwardRule, int64, error)
+
+	// CountByUserID returns the total count of forward rules for a specific user.
+	CountByUserID(ctx context.Context, userID uint) (int64, error)
+
+	// GetTotalTrafficByUserID returns the total traffic (upload + download) for all rules owned by a user.
+	GetTotalTrafficByUserID(ctx context.Context, userID uint) (int64, error)
 }
 
 // ListFilter defines the filtering options for listing forward rules.
@@ -56,6 +65,7 @@ type ListFilter struct {
 	Page     int
 	PageSize int
 	AgentID  uint
+	UserID   *uint
 	Name     string
 	Protocol string
 	Status   string
