@@ -20,6 +20,7 @@ type Config struct {
 	Redis        sharedConfig.RedisConfig        `mapstructure:"redis"`
 	Subscription sharedConfig.SubscriptionConfig `mapstructure:"subscription"`
 	Forward      sharedConfig.ForwardConfig      `mapstructure:"forward"`
+	Admin        sharedConfig.AdminConfig        `mapstructure:"admin"`
 }
 
 var (
@@ -29,13 +30,21 @@ var (
 )
 
 // Load loads configuration from file and environment variables
-func Load(env string) (*Config, error) {
+// If configPath is provided, it will be used instead of default search paths
+func Load(env string, configPath ...string) (*Config, error) {
 	// Load single config file
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
-	viper.AddConfigPath("./configs")
-	viper.AddConfigPath("../configs")
-	viper.AddConfigPath("../../configs")
+
+	// If custom config path is provided, use it exclusively
+	if len(configPath) > 0 && configPath[0] != "" {
+		viper.SetConfigFile(configPath[0])
+	} else {
+		// Use default search paths
+		viper.AddConfigPath("./configs")
+		viper.AddConfigPath("../configs")
+		viper.AddConfigPath("../../configs")
+	}
 
 	// Set environment variable prefix and replacer
 	viper.SetEnvPrefix("ORRIS")
@@ -136,4 +145,9 @@ func setDefaults() {
 
 	// Subscription defaults
 	viper.SetDefault("subscription.templates_path", "./configs/sub")
+
+	// Admin defaults (empty by default, must be configured via env vars)
+	viper.SetDefault("admin.email", "")
+	viper.SetDefault("admin.password", "")
+	viper.SetDefault("admin.name", "Admin")
 }

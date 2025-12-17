@@ -13,10 +13,11 @@ import (
 )
 
 var (
-	env     string
-	name    string
-	steps   int
-	version int
+	env        string
+	configPath string
+	name       string
+	steps      int
+	version    int
 )
 
 func NewCommand() *cobra.Command {
@@ -27,6 +28,7 @@ func NewCommand() *cobra.Command {
 	}
 
 	cmd.PersistentFlags().StringVarP(&env, "env", "e", "development", "Environment (development, test, production)")
+	cmd.PersistentFlags().StringVarP(&configPath, "config", "c", "", "Path to config file (default: ./configs/config.yaml)")
 
 	cmd.AddCommand(
 		newUpCommand(),
@@ -108,7 +110,7 @@ func newGenerateUserCommand() *cobra.Command {
 }
 
 func initEnv() (string, error) {
-	cfg, err := config.Load(env)
+	cfg, err := config.Load(env, configPath)
 	if err != nil {
 		return "", fmt.Errorf("failed to load config: %w", err)
 	}

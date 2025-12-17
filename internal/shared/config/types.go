@@ -161,3 +161,18 @@ type ForwardConfig struct {
 	// This enables local token verification without server round-trip.
 	TokenSigningSecret string `mapstructure:"token_signing_secret"`
 }
+
+// AdminConfig holds initial admin account configuration
+type AdminConfig struct {
+	// Email is the admin account email
+	Email string `mapstructure:"email"`
+	// Password is the admin account password (plain text, will be hashed)
+	Password string `mapstructure:"password"`
+	// Name is the admin account display name
+	Name string `mapstructure:"name"`
+}
+
+// IsConfigured returns true if admin config has required fields
+func (a *AdminConfig) IsConfigured() bool {
+	return a.Email != "" && a.Password != ""
+}

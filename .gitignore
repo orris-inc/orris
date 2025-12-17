@@ -55,6 +55,7 @@ Thumbs.db
 configs/config.yaml
 configs/config.yml
 configs/config.json
+configs/config-dev-init.yaml
 
 # Environment variables
 .env

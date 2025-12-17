@@ -15,17 +15,21 @@ import (
 	"github.com/spf13/cobra"
 
 	userApp "github.com/orris-inc/orris/internal/application/user"
+	"github.com/orris-inc/orris/internal/domain/user"
+	vo "github.com/orris-inc/orris/internal/domain/user/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/auth"
 	"github.com/orris-inc/orris/internal/infrastructure/config"
 	"github.com/orris-inc/orris/internal/infrastructure/database"
 	"github.com/orris-inc/orris/internal/infrastructure/migration"
 	"github.com/orris-inc/orris/internal/infrastructure/repository"
 	httpRouter "github.com/orris-inc/orris/internal/interfaces/http"
+	"github.com/orris-inc/orris/internal/shared/authorization"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 var (
 	env                string
+	configPath         string
 	skipMigrationCheck bool
 )
 
@@ -38,6 +42,7 @@ func NewCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&env, "env", "e", "development", "Environment (development, test, production)")
+	cmd.Flags().StringVarP(&configPath, "config", "c", "", "Path to config file (default: ./configs/config.yaml)")
 	cmd.Flags().BoolVar(&skipMigrationCheck, "skip-migration-check", false, "Skip migration status check on startup")
 
 	return cmd
@@ -50,7 +55,7 @@ func run(cmd *cobra.Command, args []string) error {
 
 	ginMode := mapEnvToGinMode(env)
 
-	cfg, err := config.Load(env)
+	cfg, err := config.Load(env, configPath)
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
@@ -86,6 +91,11 @@ func run(cmd *cobra.Command, args []string) error {
 	hasher := auth.NewBcryptPasswordHasher(cfg.Auth.Password.BcryptCost)
 
 	userAppService := userApp.NewServiceDDD(userRepo, sessionRepo, hasher, logger.NewLogger())
+
+	// Seed initial admin user if configured
+	if err := seedAdminUser(cfg, userRepo, hasher); err != nil {
+		logger.Warn("failed to seed admin user", "error", err)
+	}
 
 	router := httpRouter.NewRouter(userAppService, database.Get(), cfg, logger.NewLogger())
 	router.SetupRoutes(cfg)
@@ -174,4 +184,74 @@ func mapEnvToGinMode(environment string) string {
 	default:
 		return "debug"
 	}
+}
+
+// seedAdminUser creates initial admin user if configured via environment variables
+func seedAdminUser(cfg *config.Config, userRepo user.Repository, hasher *auth.BcryptPasswordHasher) error {
+	// Check if admin config is provided
+	if !cfg.Admin.IsConfigured() {
+		logger.Info("admin config not provided, skipping admin user creation")
+		return nil
+	}
+
+	ctx := context.Background()
+
+	// Check if user with admin email already exists
+	existingUser, err := userRepo.GetByEmail(ctx, cfg.Admin.Email)
+	if err == nil && existingUser != nil {
+		logger.Info("admin user already exists", "email", cfg.Admin.Email)
+		return nil
+	}
+
+	// Create admin user
+	logger.Info("creating initial admin user", "email", cfg.Admin.Email)
+
+	// Create value objects
+	email, err := vo.NewEmail(cfg.Admin.Email)
+	if err != nil {
+		return fmt.Errorf("invalid admin email: %w", err)
+	}
+
+	// Set default name if not provided
+	adminName := cfg.Admin.Name
+	if adminName == "" {
+		adminName = "Admin"
+	}
+
+	name, err := vo.NewName(adminName)
+	if err != nil {
+		return fmt.Errorf("invalid admin name: %w", err)
+	}
+
+	password, err := vo.NewPassword(cfg.Admin.Password)
+	if err != nil {
+		return fmt.Errorf("invalid admin password: %w", err)
+	}
+
+	// Create user domain object
+	adminUser, err := user.NewUser(email, name)
+	if err != nil {
+		return fmt.Errorf("failed to create admin user object: %w", err)
+	}
+
+	// Set password
+	if err := adminUser.SetPassword(password, hasher); err != nil {
+		return fmt.Errorf("failed to set admin password: %w", err)
+	}
+
+	// Set admin role
+	adminUser.SetRole(authorization.RoleAdmin)
+
+	// Activate user to allow immediate login
+	if err := adminUser.Activate(); err != nil {
+		return fmt.Errorf("failed to activate admin user: %w", err)
+	}
+
+	// Save to database
+	if err := userRepo.Create(ctx, adminUser); err != nil {
+		return fmt.Errorf("failed to save admin user: %w", err)
+	}
+
+	logger.Info("admin user created successfully", "email", cfg.Admin.Email, "id", adminUser.ID())
+	return nil
 }

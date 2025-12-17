@@ -1,226 +1,129 @@
 # ============================================================
-# Orris Application Configuration Example
+# Orris Configuration Example
 # ============================================================
+# Setup: cp config.example.yaml config.yaml
 #
-# SETUP INSTRUCTIONS:
-#   1. Copy this file: cp config.example.yaml config.yaml
-#   2. Edit config.yaml with your settings
-#   3. For production, use environment variables instead
+# Configuration priority: Env vars > config.yaml > defaults
+# Environment variable format: ORRIS_<SECTION>_<KEY>
+# Example: ORRIS_SERVER_PORT=8080
 #
-# Configuration Priority (highest to lowest):
-#   1. Environment variables (ORRIS_<SECTION>_<KEY>)
-#   2. config.yaml file (this file after copying)
-#   3. Default values in code
-#
-# Environment Variable Format:
-#   ORRIS_<SECTION>_<KEY>
-#   Example: ORRIS_SERVER_PORT=8080
-#            ORRIS_DATABASE_PASSWORD=secret
-#
-# SECURITY WARNING:
-#   - NEVER commit config.yaml with real passwords to git!
-#   - config.yaml is in .gitignore for safety
-#   - Always use environment variables for production secrets
+# ⚠️ Security: Never commit passwords to git!
+# Use environment variables for all secrets in production.
 # ============================================================
 
 # ------------------------------------------------------------
-# Server Configuration
+# Server
 # ------------------------------------------------------------
 server:
-  host: "0.0.0.0"  # Bind address (0.0.0.0 = all interfaces)
-  port: 8081       # HTTP server port (base_url auto-generated: http://localhost:{port})
-  mode: "debug"    # Options: debug, release, test
-                   # Env override: ORRIS_SERVER_MODE=release
-  allowed_origins:  # CORS allowed origins
+  host: "0.0.0.0"
+  port: 8081
+  mode: "debug"  # debug | release | test
+  allowed_origins:
     - "http://localhost:3000"
     - "http://localhost:8080"
-    # Production environment: replace with your actual domain
-    # - "https://yourdomain.com"
-    # - "https://app.yourdomain.com"
-
-  frontend_callback_url: "http://localhost:3000/oauth/callback"  # Frontend OAuth callback URL
-    # Env override: ORRIS_SERVER_FRONTEND_CALLBACK_URL=https://yourdomain.com/oauth/callback
-    # Production example:
-    # frontend_callback_url: "https://yourdomain.com/oauth/callback"
+  frontend_callback_url: "http://localhost:3000/oauth/callback"
 
 # ------------------------------------------------------------
-# Database Configuration
+# Database
 # ------------------------------------------------------------
 database:
-  host: "localhost"      # Database host
-                         # Env override: ORRIS_DATABASE_HOST=your-db-host
-  port: 3306             # MySQL port
-  username: "orris"      # Database username
-                         # Env override: ORRIS_DATABASE_USERNAME=your-user
-  password: ""           # ⚠️ LEAVE EMPTY - Use environment variable!
-                         # REQUIRED: ORRIS_DATABASE_PASSWORD=your_password
-  database: "orris_dev"  # Database name
-                         # Env override: ORRIS_DATABASE_DATABASE=orris_prod
-
-  # Connection pool settings
-  max_idle_conns: 10     # Maximum idle connections in pool
-  max_open_conns: 100    # Maximum open connections
-  conn_max_lifetime: 60  # Connection max lifetime (minutes)
+  host: "localhost"
+  port: 3306
+  username: "orris"
+  password: ""           # ORRIS_DATABASE_PASSWORD (required)
+  database: "orris_dev"
+  max_idle_conns: 10
+  max_open_conns: 100
+  conn_max_lifetime: 60  # minutes
 
 # ------------------------------------------------------------
-# Logger Configuration
+# Logger
 # ------------------------------------------------------------
 logger:
-  level: "info"          # Log level: debug, info, warn, error
-                         # Env override: ORRIS_LOGGER_LEVEL=debug
-  format: "console"      # Output format: json (prod), console (dev)
-                         # Env override: ORRIS_LOGGER_FORMAT=json
-  output_path: "stdout"  # Output: stdout, stderr, or file path
-                         # Env override: ORRIS_LOGGER_OUTPUT_PATH=/var/log/orris.log
+  level: "info"          # debug | info | warn | error
+  format: "console"      # console | json
+  output_path: "stdout"  # stdout | stderr | file path
 
 # ------------------------------------------------------------
-# Redis Configuration
+# Redis
 # ------------------------------------------------------------
 redis:
-  host: "localhost"      # Redis server host
-                         # Env override: ORRIS_REDIS_HOST=redis-server
-  port: 6379             # Redis server port
-  password: ""           # ⚠️ LEAVE EMPTY - Use environment variable!
-                         # OPTIONAL: ORRIS_REDIS_PASSWORD=your_redis_password
-  db: 0                  # Redis database number (0-15)
-                         # Env override: ORRIS_REDIS_DB=1
+  host: "localhost"
+  port: 6379
+  password: ""           # ORRIS_REDIS_PASSWORD (optional)
+  db: 0
 
 # ------------------------------------------------------------
-# Authentication Configuration
+# Authentication
 # ------------------------------------------------------------
 auth:
   password:
-    bcrypt_cost: 12      # BCrypt cost factor for password hashing (10-14 recommended)
-                         # Env override: ORRIS_AUTH_PASSWORD_BCRYPT_COST=12
+    bcrypt_cost: 12      # 10-14 recommended
 
   token:
-    verification_expires_hours: 24  # Email verification token expiry (hours)
-    reset_expires_minutes: 30       # Password reset token expiry (minutes)
+    verification_expires_hours: 24
+    reset_expires_minutes: 30
 
   jwt:
-    secret: "change-me-in-production"  # ⚠️ LEAVE EMPTY - Use environment variable!
-                                       # REQUIRED: ORRIS_AUTH_JWT_SECRET=your-secure-secret
-    access_exp_minutes: 15             # Access token expiration (minutes)
-    refresh_exp_days: 7                # Refresh token expiration (days)
+    secret: "change-me-in-production"  # ORRIS_AUTH_JWT_SECRET (required)
+    access_exp_minutes: 15
+    refresh_exp_days: 7
 
   session:
-    default_exp_days: 1    # Default session expiration (days)
-    remember_exp_days: 30  # Remember me session expiration (days)
+    default_exp_days: 1
+    remember_exp_days: 30
 
   cookie:
-    domain: ""             # Cookie domain (empty = current domain)
-                          # Production: ".yourdomain.com" (with leading dot for subdomains)
-                          # Env override: ORRIS_AUTH_COOKIE_DOMAIN=.yourdomain.com
-    path: "/"             # Cookie path (/ = entire domain)
-    secure: false         # HTTPS only (set true in production)
-                          # REQUIRED for production: ORRIS_AUTH_COOKIE_SECURE=true
-    same_site: "Lax"      # SameSite attribute: Strict, Lax, or None
-                          # Lax = balanced security (recommended)
-                          # Strict = maximum security (may break some flows)
-                          # None = requires Secure=true (for cross-site requests)
-                          # Env override: ORRIS_AUTH_COOKIE_SAME_SITE=Strict
+    domain: ""           # Empty = current domain
+    path: "/"
+    secure: false        # Set true in production
+    same_site: "Lax"     # Strict | Lax | None
 
 # ------------------------------------------------------------
-# Subscription Configuration
+# Subscription
 # ------------------------------------------------------------
 subscription:
-  base_url: ""           # Custom subscription link base URL (e.g., "https://sub.yourdomain.com")
-                         # If empty, falls back to server.base_url
-                         # Env override: ORRIS_SUBSCRIPTION_BASE_URL=https://sub.yourdomain.com
-                         # Production example: "https://sub.yourdomain.com"
-
-  templates_path: "./configs/sub"  # Directory path for custom subscription template files
-                                   # Template files should be named: custom.{format}.yaml or custom.{format}.conf
-                                   # Supported formats: clash, surge, v2ray, sip008, base64
-                                   # Templates allow full client configuration with dynamic node injection
-                                   # Placeholders: {{PROXIES}} for node list, {{PROXY_NAMES}} for node names
-                                   # If directory doesn't exist or no templates found, uses default formatters
-                                   # Env override: ORRIS_SUBSCRIPTION_TEMPLATES_PATH=/path/to/templates
+  base_url: ""           # Custom subscription URL (optional)
+  templates_path: "./configs/sub"
 
 # ------------------------------------------------------------
-# OAuth2 Configuration
+# Admin Account (Optional)
 # ------------------------------------------------------------
-# Setup instructions:
-#   1. Google OAuth:
-#      - Visit https://console.cloud.google.com/apis/credentials
-#      - Create OAuth 2.0 Client ID
-#      - Set authorized redirect URI: http://localhost:8081/auth/oauth/google/callback
-#   2. GitHub OAuth:
-#      - Visit https://github.com/settings/developers
-#      - Create new OAuth App
-#      - Set callback URL: http://localhost:8081/auth/oauth/github/callback
+# Auto-create admin on first startup
+# If not set, first registered user becomes admin
+admin:
+  email: ""              # ORRIS_ADMIN_EMAIL
+  password: ""           # ORRIS_ADMIN_PASSWORD
+  name: "Admin"
 
+# ------------------------------------------------------------
+# OAuth2
+# ------------------------------------------------------------
 oauth:
   google:
-    client_id: ""        # ⚠️ REQUIRED for Google OAuth
-                         # Get from: https://console.cloud.google.com/apis/credentials
-                         # Env override: ORRIS_OAUTH_GOOGLE_CLIENT_ID=your-client-id
-    client_secret: ""    # ⚠️ LEAVE EMPTY - Use environment variable!
-                         # REQUIRED: ORRIS_OAUTH_GOOGLE_CLIENT_SECRET=your-secret
-                         # redirect_url auto-generated: {base_url}/auth/oauth/google/callback
+    client_id: ""        # ORRIS_OAUTH_GOOGLE_CLIENT_ID
+    client_secret: ""    # ORRIS_OAUTH_GOOGLE_CLIENT_SECRET
+    # Get credentials: https://console.cloud.google.com/apis/credentials
 
   github:
-    client_id: ""        # ⚠️ REQUIRED for GitHub OAuth
-                         # Get from: https://github.com/settings/developers
-                         # Env override: ORRIS_OAUTH_GITHUB_CLIENT_ID=your-client-id
-    client_secret: ""    # ⚠️ LEAVE EMPTY - Use environment variable!
-                         # REQUIRED: ORRIS_OAUTH_GITHUB_CLIENT_SECRET=your-secret
-                         # redirect_url auto-generated: {base_url}/auth/oauth/github/callback
+    client_id: ""        # ORRIS_OAUTH_GITHUB_CLIENT_ID
+    client_secret: ""    # ORRIS_OAUTH_GITHUB_CLIENT_SECRET
+    # Get credentials: https://github.com/settings/developers
 
 # ============================================================
-# Usage Examples
+# Quick Start
 # ============================================================
 #
-# Development (local with config.yaml):
-#   1. cp config.example.yaml config.yaml
-#   2. Edit config.yaml with your local DB settings
-#   3. Set sensitive values as environment variables:
-#      export ORRIS_DATABASE_PASSWORD=local_password
-#      export ORRIS_OAUTH_GOOGLE_CLIENT_SECRET=your-google-secret
-#      export ORRIS_OAUTH_GITHUB_CLIENT_SECRET=your-github-secret
-#   4. Run: ./bin/orris server
-#
-#   Note: base_url and oauth redirect_urls will auto-generate from host:port
-#         Only set them explicitly if you need custom URLs
-#
-# Production (environment variables only):
-#   export ORRIS_SERVER_MODE=release
-#   export ORRIS_SERVER_PORT=8080
-#   export ORRIS_SERVER_BASE_URL=https://api.yourdomain.com  # Override auto-generated
-#   export ORRIS_SERVER_FRONTEND_CALLBACK_URL=https://yourdomain.com/oauth/callback
-#   export ORRIS_DATABASE_HOST=prod-db.example.com
-#   export ORRIS_DATABASE_USERNAME=prod_user
-#   export ORRIS_DATABASE_PASSWORD=secure_prod_password
-#   export ORRIS_DATABASE_DATABASE=orris_production
-#   export ORRIS_REDIS_HOST=redis-server
-#   export ORRIS_REDIS_PASSWORD=redis_password
-#   export ORRIS_OAUTH_GOOGLE_CLIENT_ID=your-google-client-id
-#   export ORRIS_OAUTH_GOOGLE_CLIENT_SECRET=your-google-secret
-#   export ORRIS_OAUTH_GOOGLE_REDIRECT_URL=https://api.yourdomain.com/auth/oauth/google/callback
-#   export ORRIS_OAUTH_GITHUB_CLIENT_ID=your-github-client-id
-#   export ORRIS_OAUTH_GITHUB_CLIENT_SECRET=your-github-secret
-#   export ORRIS_OAUTH_GITHUB_REDIRECT_URL=https://api.yourdomain.com/auth/oauth/github/callback
-#   export ORRIS_LOGGER_LEVEL=warn
-#   export ORRIS_LOGGER_FORMAT=json
+# Development:
+#   cp config.example.yaml config.yaml
+#   export ORRIS_DATABASE_PASSWORD=your_password
+#   export ORRIS_ADMIN_EMAIL=admin@example.com
+#   export ORRIS_ADMIN_PASSWORD=admin_password
 #   ./bin/orris server
 #
-# Docker Compose (docker-compose.yml):
-#   environment:
-#     - ORRIS_DATABASE_HOST=mysql
-#     - ORRIS_DATABASE_PASSWORD=${DB_PASSWORD}
-#     - ORRIS_REDIS_HOST=redis
-#     - ORRIS_OAUTH_GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-#     - ORRIS_OAUTH_GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-#     - ORRIS_OAUTH_GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
-#     - ORRIS_OAUTH_GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
-#     - ORRIS_SERVER_MODE=release
-#
-# Kubernetes (using ConfigMap + Secret):
-#   # ConfigMap for non-sensitive configs
-#   # Secret for passwords and OAuth secrets:
-#   #   - ORRIS_DATABASE_PASSWORD
-#   #   - ORRIS_REDIS_PASSWORD
-#   #   - ORRIS_OAUTH_GOOGLE_CLIENT_SECRET
-#   #   - ORRIS_OAUTH_GITHUB_CLIENT_SECRET
-#   # See deployment examples in docs/
+# Production:
+#   Use environment variables for all sensitive values
+#   Set ORRIS_SERVER_MODE=release
+#   Set ORRIS_AUTH_COOKIE_SECURE=true
+#   Set ORRIS_LOGGER_FORMAT=json
 # ============================================================
