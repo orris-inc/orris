@@ -6,6 +6,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/ticket/dto"
 	"github.com/orris-inc/orris/internal/domain/ticket"
+	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -55,7 +56,7 @@ func (uc *GetTicketUseCase) Execute(ctx context.Context, query GetTicketQuery) (
 
 	isAgentOrAdmin := false
 	for _, role := range query.UserRoles {
-		if role == "admin" || role == "support_agent" {
+		if role == constants.RoleAdmin || role == constants.RoleSupportAgent {
 			isAgentOrAdmin = true
 			break
 		}

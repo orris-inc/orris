@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -124,15 +125,15 @@ func (uc *GetNodeTrafficStatsUseCase) validateQuery(query GetNodeTrafficStatsQue
 func (uc *GetNodeTrafficStatsUseCase) buildFilter(query GetNodeTrafficStatsQuery) subscription.UsageStatsFilter {
 	page := query.Page
 	if page == 0 {
-		page = 1
+		page = constants.DefaultPage
 	}
 
 	pageSize := query.PageSize
 	if pageSize == 0 {
-		pageSize = 100
+		pageSize = constants.MaxPageSize
 	}
 
-	resourceType := "node"
+	resourceType := string(subscription.EntitlementResourceTypeNode)
 	filter := subscription.UsageStatsFilter{
 		ResourceType:   &resourceType,
 		ResourceID:     query.NodeID,

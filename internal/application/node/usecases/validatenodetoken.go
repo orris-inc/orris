@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/orris-inc/orris/internal/domain/node/valueobjects"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -49,7 +50,7 @@ func (uc *ValidateNodeTokenUseCase) Execute(ctx context.Context, cmd ValidateNod
 		return nil, fmt.Errorf("token verification failed")
 	}
 
-	if node.Status != "active" {
+	if node.Status != string(valueobjects.NodeStatusActive) {
 		uc.logger.Warnw("node is not active",
 			"node_id", node.ID,
 			"status", node.Status,

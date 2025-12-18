@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/orris-inc/orris/internal/infrastructure/auth"
+	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
@@ -63,7 +64,7 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 
 		c.Set("user_id", claims.UserID)
 		c.Set("session_id", claims.SessionID)
-		c.Set("user_role", string(claims.Role))
+		c.Set(constants.ContextKeyUserRole, string(claims.Role))
 
 		c.Next()
 	}
@@ -95,7 +96,7 @@ func (m *AuthMiddleware) OptionalAuth() gin.HandlerFunc {
 		if err == nil && claims.TokenType == auth.TokenTypeAccess {
 			c.Set("user_id", claims.UserID)
 			c.Set("session_id", claims.SessionID)
-			c.Set("user_role", string(claims.Role))
+			c.Set(constants.ContextKeyUserRole, string(claims.Role))
 		}
 
 		c.Next()

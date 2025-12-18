@@ -2,6 +2,8 @@ package models
 
 import (
 	"time"
+
+	"github.com/orris-inc/orris/internal/shared/constants"
 )
 
 // EntitlementModel represents the database persistence model for plan entitlements
@@ -19,5 +21,5 @@ type EntitlementModel struct {
 
 // TableName specifies the table name for GORM
 func (EntitlementModel) TableName() string {
-	return "entitlements"
+	return constants.TableEntitlements
 }

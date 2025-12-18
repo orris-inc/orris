@@ -8,6 +8,9 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/node/usecases"
 	"github.com/orris-inc/orris/internal/domain/node"
+	nodevo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
+	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -36,7 +39,7 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, subs
 
 	// Query subscription by UUID
 	if err := r.db.WithContext(ctx).
-		Where("uuid = ? AND status = ?", subscriptionUUID, "active").
+		Where("uuid = ? AND status = ?", subscriptionUUID, valueobjects.StatusActive).
 		First(&subscriptionModel).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			r.logger.Warnw("active subscription not found", "uuid", subscriptionUUID)
@@ -50,7 +53,7 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, subs
 	var nodeIDs []uint
 	if err := r.db.WithContext(ctx).
 		Table("entitlements").
-		Where("plan_id = ? AND resource_type = ?", subscriptionModel.PlanID, "node").
+		Where("plan_id = ? AND resource_type = ?", subscriptionModel.PlanID, string(subscription.EntitlementResourceTypeNode)).
 		Pluck("resource_id", &nodeIDs).Error; err != nil {
 		r.logger.Errorw("failed to query entitlements", "error", err, "plan_id", subscriptionModel.PlanID)
 		return nil, err
@@ -65,7 +68,7 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, subs
 	var nodeModels []models.NodeModel
 	if err := r.db.WithContext(ctx).
 		Where("id IN ?", nodeIDs).
-		Where("status = ?", "active").
+		Where("status = ?", string(nodevo.NodeStatusActive)).
 		Find(&nodeModels).Error; err != nil {
 		r.logger.Errorw("failed to query nodes", "error", err)
 		return nil, err

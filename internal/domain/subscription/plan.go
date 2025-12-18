@@ -32,6 +32,7 @@ type Plan struct {
 	billingCycle vo.BillingCycle
 	trialDays    int
 	status       PlanStatus
+	planType     vo.PlanType
 	features     *vo.PlanFeatures
 	apiRateLimit uint
 	maxUsers     uint
@@ -45,7 +46,7 @@ type Plan struct {
 }
 
 func NewPlan(name, slug, description string, price uint64, currency string,
-	billingCycle vo.BillingCycle, trialDays int) (*Plan, error) {
+	billingCycle vo.BillingCycle, trialDays int, planType vo.PlanType) (*Plan, error) {
 
 	if name == "" {
 		return nil, fmt.Errorf("plan name is required")
@@ -68,6 +69,9 @@ func NewPlan(name, slug, description string, price uint64, currency string,
 	if trialDays < 0 {
 		return nil, fmt.Errorf("trial days cannot be negative")
 	}
+	if !planType.IsValid() {
+		return nil, fmt.Errorf("invalid plan type: %s", planType)
+	}
 
 	now := time.Now()
 	return &Plan{
@@ -79,6 +83,7 @@ func NewPlan(name, slug, description string, price uint64, currency string,
 		billingCycle: billingCycle,
 		trialDays:    trialDays,
 		status:       PlanStatusActive,
+		planType:     planType,
 		features:     nil,
 		apiRateLimit: 60,
 		maxUsers:     0,
@@ -94,7 +99,7 @@ func NewPlan(name, slug, description string, price uint64, currency string,
 
 func ReconstructPlan(id uint, name, slug, description string, price uint64,
 	currency string, billingCycle vo.BillingCycle, trialDays int, status string,
-	features *vo.PlanFeatures, apiRateLimit, maxUsers, maxProjects uint,
+	planType string, features *vo.PlanFeatures, apiRateLimit, maxUsers, maxProjects uint,
 	isPublic bool, sortOrder int, metadata map[string]interface{}, version int,
 	createdAt, updatedAt time.Time) (*Plan, error) {
 
@@ -105,6 +110,11 @@ func ReconstructPlan(id uint, name, slug, description string, price uint64,
 	planStatus := PlanStatus(status)
 	if planStatus != PlanStatusActive && planStatus != PlanStatusInactive {
 		return nil, fmt.Errorf("invalid plan status: %s", status)
+	}
+
+	pt, err := vo.NewPlanType(planType)
+	if err != nil {
+		return nil, fmt.Errorf("invalid plan type: %w", err)
 	}
 
 	if metadata == nil {
@@ -121,6 +131,7 @@ func ReconstructPlan(id uint, name, slug, description string, price uint64,
 		billingCycle: billingCycle,
 		trialDays:    trialDays,
 		status:       planStatus,
+		planType:     pt,
 		features:     features,
 		apiRateLimit: apiRateLimit,
 		maxUsers:     maxUsers,
@@ -179,6 +190,10 @@ func (p *Plan) TrialDays() int {
 
 func (p *Plan) Status() PlanStatus {
 	return p.status
+}
+
+func (p *Plan) PlanType() vo.PlanType {
+	return p.planType
 }
 
 func (p *Plan) Features() *vo.PlanFeatures {

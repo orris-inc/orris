@@ -131,7 +131,7 @@ func (r *PlanRepositoryImpl) Delete(ctx context.Context, id uint) error {
 func (r *PlanRepositoryImpl) GetActivePublicPlans(ctx context.Context) ([]*subscription.Plan, error) {
 	var planModels []*models.PlanModel
 	err := r.db.WithContext(ctx).
-		Where("status = ? AND is_public = ?", "active", true).
+		Where("status = ? AND is_public = ?", subscription.PlanStatusActive, true).
 		Order("sort_order ASC, created_at DESC").
 		Find(&planModels).Error
 
@@ -146,7 +146,7 @@ func (r *PlanRepositoryImpl) GetActivePublicPlans(ctx context.Context) ([]*subsc
 func (r *PlanRepositoryImpl) GetAllActive(ctx context.Context) ([]*subscription.Plan, error) {
 	var planModels []*models.PlanModel
 	err := r.db.WithContext(ctx).
-		Where("status = ?", "active").
+		Where("status = ?", subscription.PlanStatusActive).
 		Order("sort_order ASC, created_at DESC").
 		Find(&planModels).Error
 
@@ -287,6 +287,7 @@ func (r *PlanRepositoryImpl) toEntity(model *models.PlanModel) (*subscription.Pl
 		*billingCycle,
 		model.TrialDays,
 		model.Status,
+		model.PlanType,
 		features,
 		model.APIRateLimit,
 		model.MaxUsers,

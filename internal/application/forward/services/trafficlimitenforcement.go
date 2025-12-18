@@ -296,8 +296,7 @@ func (s *TrafficLimitEnforcementService) getHighestTrafficLimit(ctx context.Cont
 	return highestLimit, hasLimit, nil
 }
 
-// getForwardTrafficLimit extracts the forward traffic limit from a plan.
-// It first checks for forward-specific traffic limit, then falls back to general traffic limit.
+// getForwardTrafficLimit extracts the traffic limit from a plan.
 // Returns 0 if unlimited or not set.
 func (s *TrafficLimitEnforcementService) getForwardTrafficLimit(plan *subscription.Plan) (uint64, error) {
 	features := plan.Features()
@@ -305,31 +304,6 @@ func (s *TrafficLimitEnforcementService) getForwardTrafficLimit(plan *subscripti
 		return 0, nil // No features = unlimited
 	}
 
-	// First check for forward-specific traffic limit
-	forwardLimit, err := features.GetForwardTrafficLimit()
-	if err != nil {
-		s.logger.Debugw("failed to get forward traffic limit, trying general traffic limit",
-			"plan_id", plan.ID(),
-			"error", err,
-		)
-		// Fall back to general traffic limit
-		generalLimit, err := features.GetTrafficLimit()
-		if err != nil {
-			return 0, fmt.Errorf("failed to get traffic limit: %w", err)
-		}
-		return generalLimit, nil
-	}
-
-	// If forward traffic limit is set and non-zero, use it
-	if forwardLimit > 0 {
-		return forwardLimit, nil
-	}
-
-	// Otherwise fall back to general traffic limit
-	generalLimit, err := features.GetTrafficLimit()
-	if err != nil {
-		return 0, fmt.Errorf("failed to get general traffic limit: %w", err)
-	}
-
-	return generalLimit, nil
+	// Directly use GetTrafficLimit() - no fallback needed as limits are now unified
+	return features.GetTrafficLimit()
 }

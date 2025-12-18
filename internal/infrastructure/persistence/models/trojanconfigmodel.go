@@ -25,7 +25,7 @@ type TrojanConfigModel struct {
 
 // TableName specifies the table name for GORM
 func (TrojanConfigModel) TableName() string {
-	return constants.TableTrojanConfigs
+	return constants.TableNodeTrojanConfigs
 }
 
 // BeforeCreate hook for GORM

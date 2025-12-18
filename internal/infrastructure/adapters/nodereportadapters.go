@@ -51,7 +51,7 @@ func (a *SubscriptionUsageRecorderAdapter) RecordSubscriptionUsage(ctx context.C
 
 	// Create domain entity
 	subIDUint := uint(subscriptionID)
-	usage, err := subscription.NewSubscriptionUsage("node", nodeID, &subIDUint, period)
+	usage, err := subscription.NewSubscriptionUsage(string(subscription.EntitlementResourceTypeNode), nodeID, &subIDUint, period)
 	if err != nil {
 		a.logger.Errorw("failed to create subscription usage entity",
 			"error", err,
@@ -121,7 +121,7 @@ func (a *SubscriptionUsageRecorderAdapter) BatchRecordSubscriptionUsage(ctx cont
 
 		// Create domain entity
 		subIDUint := uint(item.SubscriptionID)
-		usage, err := subscription.NewSubscriptionUsage("node", nodeID, &subIDUint, period)
+		usage, err := subscription.NewSubscriptionUsage(string(subscription.EntitlementResourceTypeNode), nodeID, &subIDUint, period)
 		if err != nil {
 			a.logger.Errorw("failed to create subscription usage entity in batch",
 				"error", err,

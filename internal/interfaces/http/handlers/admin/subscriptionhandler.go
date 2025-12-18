@@ -9,6 +9,8 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/orris-inc/orris/internal/application/subscription/usecases"
+	"github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
+	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
@@ -120,9 +122,9 @@ func (h *SubscriptionHandler) List(c *gin.Context) {
 		}
 	}
 
-	pageSize := 20
+	pageSize := constants.DefaultPageSize
 	if pageSizeStr := c.Query("page_size"); pageSizeStr != "" {
-		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 && ps <= 100 {
+		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 && ps <= constants.MaxPageSize {
 			pageSize = ps
 		}
 	}
@@ -193,7 +195,7 @@ func (h *SubscriptionHandler) UpdateStatus(c *gin.Context) {
 	}
 
 	switch req.Status {
-	case "active":
+	case string(valueobjects.StatusActive):
 		cmd := usecases.ActivateSubscriptionCommand{
 			SubscriptionID: uint(subscriptionID),
 		}
@@ -204,7 +206,7 @@ func (h *SubscriptionHandler) UpdateStatus(c *gin.Context) {
 		}
 		utils.SuccessResponse(c, http.StatusOK, "Subscription activated successfully", nil)
 
-	case "cancelled":
+	case string(valueobjects.StatusCancelled):
 		if req.Reason == nil || *req.Reason == "" {
 			utils.ErrorResponse(c, http.StatusBadRequest, "reason is required for cancellation")
 			return

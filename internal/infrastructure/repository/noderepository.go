@@ -10,6 +10,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/node"
 	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
+	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 	"github.com/orris-inc/orris/internal/shared/errors"
@@ -359,7 +360,7 @@ func (r *NodeRepositoryImpl) Delete(ctx context.Context, id uint) error {
 		}
 
 		// Delete subscription resource associations
-		if err := tx.Where("resource_type = ? AND resource_id = ?", "node", id).Delete(&models.EntitlementModel{}).Error; err != nil {
+		if err := tx.Where("resource_type = ? AND resource_id = ?", string(subscription.EntitlementResourceTypeNode), id).Delete(&models.EntitlementModel{}).Error; err != nil {
 			r.logger.Errorw("failed to delete subscription resource associations", "node_id", id, "error", err)
 			return fmt.Errorf("failed to delete subscription resource associations: %w", err)
 		}

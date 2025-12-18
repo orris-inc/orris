@@ -4,6 +4,8 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+
+	"github.com/orris-inc/orris/internal/shared/constants"
 )
 
 type AnnouncementModel struct {
@@ -23,7 +25,7 @@ type AnnouncementModel struct {
 }
 
 func (AnnouncementModel) TableName() string {
-	return "announcements"
+	return constants.TableAnnouncements
 }
 
 func (a *AnnouncementModel) BeforeCreate(tx *gorm.DB) error {

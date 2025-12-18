@@ -1,9 +1,11 @@
 package auth
 
+import "github.com/orris-inc/orris/internal/shared/constants"
+
 // IsAdmin checks if the user has admin role
 func IsAdmin(roles []string) bool {
 	for _, role := range roles {
-		if role == "admin" {
+		if role == constants.RoleAdmin {
 			return true
 		}
 	}
@@ -13,7 +15,7 @@ func IsAdmin(roles []string) bool {
 // IsSupportAgent checks if the user has support agent role
 func IsSupportAgent(roles []string) bool {
 	for _, role := range roles {
-		if role == "support_agent" {
+		if role == constants.RoleSupportAgent {
 			return true
 		}
 	}

@@ -335,7 +335,7 @@ CREATE TABLE nodes (
     INDEX idx_deleted_at (deleted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
-CREATE TABLE shadowsocks_configs (
+CREATE TABLE node_shadowsocks_configs (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     node_id BIGINT UNSIGNED NOT NULL,
     encryption_method VARCHAR(50) NOT NULL,
@@ -344,11 +344,11 @@ CREATE TABLE shadowsocks_configs (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP NULL,
-    UNIQUE INDEX idx_shadowsocks_configs_node_id (node_id),
-    INDEX idx_shadowsocks_configs_deleted_at (deleted_at)
+    UNIQUE INDEX idx_node_shadowsocks_configs_node_id (node_id),
+    INDEX idx_node_shadowsocks_configs_deleted_at (deleted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
-CREATE TABLE trojan_configs (
+CREATE TABLE node_trojan_configs (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     node_id BIGINT UNSIGNED NOT NULL,
     transport_protocol VARCHAR(10) NOT NULL DEFAULT 'tcp',
@@ -359,8 +359,8 @@ CREATE TABLE trojan_configs (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP NULL,
-    UNIQUE INDEX idx_trojan_configs_node_id (node_id),
-    INDEX idx_trojan_configs_deleted_at (deleted_at)
+    UNIQUE INDEX idx_node_trojan_configs_node_id (node_id),
+    INDEX idx_node_trojan_configs_deleted_at (deleted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- ============================================================================
@@ -436,8 +436,8 @@ CREATE TABLE forward_rules (
 
 DROP TABLE IF EXISTS forward_rules;
 DROP TABLE IF EXISTS forward_agents;
-DROP TABLE IF EXISTS trojan_configs;
-DROP TABLE IF EXISTS shadowsocks_configs;
+DROP TABLE IF EXISTS node_trojan_configs;
+DROP TABLE IF EXISTS node_shadowsocks_configs;
 DROP TABLE IF EXISTS nodes;
 DROP TABLE IF EXISTS notification_templates;
 DROP TABLE IF EXISTS announcements;

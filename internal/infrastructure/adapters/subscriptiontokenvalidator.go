@@ -7,6 +7,7 @@ import (
 	"gorm.io/gorm"
 
 	nodeusecases "github.com/orris-inc/orris/internal/application/node/usecases"
+	"github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -37,7 +38,7 @@ func (v *SubscriptionTokenValidatorAdapter) Validate(ctx context.Context, subscr
 		return errors.NewInternalError("failed to validate subscription")
 	}
 
-	if subscriptionModel.Status != "active" {
+	if subscriptionModel.Status != string(valueobjects.StatusActive) {
 		v.logger.Warnw("subscription is not active", "subscription_id", subscriptionModel.ID, "status", subscriptionModel.Status)
 		return errors.NewValidationError("subscription is not active")
 	}
@@ -63,7 +64,7 @@ func (v *SubscriptionTokenValidatorAdapter) ValidateAndGetSubscription(ctx conte
 		return nil, errors.NewInternalError("failed to validate subscription")
 	}
 
-	if subscriptionModel.Status != "active" {
+	if subscriptionModel.Status != string(valueobjects.StatusActive) {
 		v.logger.Warnw("subscription is not active", "subscription_id", subscriptionModel.ID, "status", subscriptionModel.Status)
 		return nil, errors.NewValidationError("subscription is not active")
 	}

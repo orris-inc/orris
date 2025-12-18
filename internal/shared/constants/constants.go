@@ -1,64 +1,45 @@
 package constants
 
 const (
-	// Environment constants
-	EnvDevelopment = "development"
-	EnvTest        = "test"
-	EnvProduction  = "production"
-
 	// Default pagination
 	DefaultPage     = 1
 	DefaultPageSize = 20
 	MaxPageSize     = 100
 
-	// HTTP Headers
-	HeaderContentType   = "Content-Type"
-	HeaderAuthorization = "Authorization"
-	HeaderXRequestID    = "X-Request-ID"
-	HeaderXForwardedFor = "X-Forwarded-For"
-	HeaderUserAgent     = "User-Agent"
-
-	// Content Types
-	ContentTypeJSON = "application/json"
-	ContentTypeXML  = "application/xml"
-	ContentTypeForm = "application/x-www-form-urlencoded"
-
-	// API version prefix (removed for small project)
-	// APIVersionPrefix = "/api/v1"
-
 	// Context keys
-	ContextKeyUserID    = "user_id"
-	ContextKeyRequestID = "request_id"
-	ContextKeyTraceID   = "trace_id"
+	ContextKeyUserID   = "user_id"
+	ContextKeyUserRole = "user_role"
 
 	// User status
 	UserStatusActive   = "active"
 	UserStatusInactive = "inactive"
 	UserStatusPending  = "pending"
 
+	// User roles
+	RoleAdmin        = "admin"
+	RoleUser         = "user"
+	RoleSupportAgent = "support_agent"
+
 	// Database table names
-	TableUsers               = "users"
-	TableRoles               = "roles"
-	TableUserRoles           = "user_roles"
-	TableNodes               = "nodes"
-	TableShadowsocksConfigs  = "shadowsocks_configs"
-	TableTrojanConfigs       = "trojan_configs"
-	TablePlans              = "plans"
-	TablePlanPricings       = "plan_pricings"
-	TableEntitlements       = "entitlements"
-	TableSubscriptionUsages = "subscription_usages"
-	TableForwardRules       = "forward_rules"
-	TableForwardAgents      = "forward_agents"
-	// TableSubscriptionTraffic removed - renamed to subscription_usages to reflect broader resource usage tracking
+	TableUsers                  = "users"
+	TableNodes                  = "nodes"
+	TableNodeShadowsocksConfigs = "node_shadowsocks_configs"
+	TableNodeTrojanConfigs      = "node_trojan_configs"
+	TablePlans                  = "plans"
+	TablePlanPricings           = "plan_pricings"
+	TableEntitlements           = "entitlements"
+	TableSubscriptions          = "subscriptions"
+	TableSubscriptionTokens     = "subscription_tokens"
+	TableSubscriptionUsages     = "subscription_usages"
+	TablePayments               = "payments"
+	TableNotifications          = "notifications"
+	TableNotificationTemplates  = "notification_templates"
+	TableAnnouncements          = "announcements"
+	TableTickets                = "tickets"
+	TableTicketComments         = "ticket_comments"
+	TableForwardRules           = "forward_rules"
+	TableForwardAgents          = "forward_agents"
 
 	// Default values
-	DefaultUserStatus = UserStatusActive
-
-	// Error messages
-	ErrMsgInternalServerError = "Internal server error occurred"
-	ErrMsgResourceNotFound    = "Resource not found"
-	ErrMsgUnauthorized        = "Unauthorized access"
-	ErrMsgForbidden           = "Access forbidden"
-	ErrMsgValidationFailed    = "Validation failed"
-	ErrMsgConflict            = "Resource already exists"
+	DefaultCurrency = "CNY"
 )

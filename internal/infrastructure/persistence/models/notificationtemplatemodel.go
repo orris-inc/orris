@@ -4,6 +4,8 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+
+	"github.com/orris-inc/orris/internal/shared/constants"
 )
 
 type NotificationTemplateModel struct {
@@ -20,5 +22,5 @@ type NotificationTemplateModel struct {
 }
 
 func (NotificationTemplateModel) TableName() string {
-	return "notification_templates"
+	return constants.TableNotificationTemplates
 }

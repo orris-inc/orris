@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/orris-inc/orris/internal/application/node/usecases"
+	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -362,9 +363,9 @@ func parseListNodesRequest(c *gin.Context) (*ListNodesRequest, error) {
 		page = 1
 	}
 
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-	if pageSize < 1 || pageSize > 100 {
-		pageSize = 20
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", strconv.Itoa(constants.DefaultPageSize)))
+	if pageSize < 1 || pageSize > constants.MaxPageSize {
+		pageSize = constants.DefaultPageSize
 	}
 
 	req := &ListNodesRequest{

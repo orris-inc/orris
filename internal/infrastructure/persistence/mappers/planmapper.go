@@ -46,6 +46,12 @@ func (m *planMapper) ToEntity(model *models.PlanModel) (*subscription.Plan, erro
 		return nil, fmt.Errorf("failed to parse billing cycle: %w", err)
 	}
 
+	// Parse plan type
+	planType := model.PlanType
+	if planType == "" {
+		planType = "node" // default value
+	}
+
 	// Parse features JSON
 	var features *vo.PlanFeatures
 	if model.Features != nil && len(model.Features) > 0 {
@@ -77,6 +83,7 @@ func (m *planMapper) ToEntity(model *models.PlanModel) (*subscription.Plan, erro
 		billingCycle,
 		model.TrialDays,
 		model.Status,
+		planType,
 		features,
 		model.APIRateLimit,
 		model.MaxUsers,
@@ -125,6 +132,7 @@ func (m *planMapper) ToModel(entity *subscription.Plan) (*models.PlanModel, erro
 		ID:           entity.ID(),
 		Name:         entity.Name(),
 		Slug:         entity.Slug(),
+		PlanType:     entity.PlanType().String(),
 		Description:  entity.Description(),
 		Price:        entity.Price(),
 		Currency:     entity.Currency(),

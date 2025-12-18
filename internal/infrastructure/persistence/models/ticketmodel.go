@@ -1,5 +1,9 @@
 package models
 
+import (
+	"github.com/orris-inc/orris/internal/shared/constants"
+)
+
 type TicketModel struct {
 	ID           uint   `gorm:"primaryKey"`
 	Number       string `gorm:"uniqueIndex;size:50;not null"`
@@ -25,7 +29,7 @@ type TicketModel struct {
 }
 
 func (TicketModel) TableName() string {
-	return "tickets"
+	return constants.TableTickets
 }
 
 type CommentModel struct {
@@ -39,5 +43,5 @@ type CommentModel struct {
 }
 
 func (CommentModel) TableName() string {
-	return "ticket_comments"
+	return constants.TableTicketComments
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-playground/validator/v10"
 
+	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
 )
 
@@ -116,8 +117,8 @@ func ValidatePagination(page, pageSize int) error {
 	if pageSize < 1 {
 		return errors.NewValidationError("Page size must be greater than 0")
 	}
-	if pageSize > 100 {
-		return errors.NewValidationError("Page size must not exceed 100")
+	if pageSize > constants.MaxPageSize {
+		return errors.NewValidationError(fmt.Sprintf("Page size must not exceed %d", constants.MaxPageSize))
 	}
 	return nil
 }

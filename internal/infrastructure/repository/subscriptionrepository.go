@@ -8,6 +8,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -92,7 +93,7 @@ func (r *SubscriptionRepositoryImpl) GetActiveByUserID(ctx context.Context, user
 	var models []*models.SubscriptionModel
 
 	if err := r.db.WithContext(ctx).
-		Where("user_id = ? AND status = ?", userID, "active").
+		Where("user_id = ? AND status = ?", userID, valueobjects.StatusActive).
 		Order("created_at DESC").
 		Find(&models).Error; err != nil {
 		r.logger.Errorw("failed to get active subscriptions by user ID", "user_id", userID, "error", err)
@@ -113,7 +114,7 @@ func (r *SubscriptionRepositoryImpl) GetActiveSubscriptionsByNodeID(ctx context.
 	var planIDs []uint
 	if err := r.db.WithContext(ctx).
 		Model(&models.EntitlementModel{}).
-		Where("resource_type = ? AND resource_id = ?", "node", nodeID).
+		Where("resource_type = ? AND resource_id = ?", subscription.EntitlementResourceTypeNode, nodeID).
 		Pluck("subscription_id", &planIDs).Error; err != nil {
 		r.logger.Errorw("failed to query subscription resources for node", "node_id", nodeID, "error", err)
 		return nil, fmt.Errorf("failed to query subscription resources: %w", err)
@@ -127,7 +128,7 @@ func (r *SubscriptionRepositoryImpl) GetActiveSubscriptionsByNodeID(ctx context.
 	// Query active subscriptions for these plans
 	var subscriptionModels []*models.SubscriptionModel
 	if err := r.db.WithContext(ctx).
-		Where("plan_id IN ? AND status = ?", planIDs, "active").
+		Where("plan_id IN ? AND status = ?", planIDs, valueobjects.StatusActive).
 		Order("created_at DESC").
 		Find(&subscriptionModels).Error; err != nil {
 		r.logger.Errorw("failed to query active subscriptions", "plan_ids", planIDs, "error", err)
@@ -204,7 +205,7 @@ func (r *SubscriptionRepositoryImpl) FindExpiringSubscriptions(ctx context.Conte
 	if err := r.db.WithContext(ctx).
 		Where("auto_renew = ?", true).
 		Where("end_date BETWEEN ? AND ?", now, expiryThreshold).
-		Where("status IN ?", []string{"active", "trialing"}).
+		Where("status IN ?", []string{string(valueobjects.StatusActive), string(valueobjects.StatusTrialing)}).
 		Order("end_date ASC").
 		Find(&models).Error; err != nil {
 		r.logger.Errorw("failed to find expiring subscriptions", "days", days, "error", err)
@@ -227,7 +228,7 @@ func (r *SubscriptionRepositoryImpl) FindExpiredSubscriptions(ctx context.Contex
 
 	if err := r.db.WithContext(ctx).
 		Where("end_date < ?", now).
-		Where("status IN ?", []string{"active", "trialing", "past_due"}).
+		Where("status IN ?", []string{string(valueobjects.StatusActive), string(valueobjects.StatusTrialing), string(valueobjects.StatusPastDue)}).
 		Order("end_date ASC").
 		Find(&models).Error; err != nil {
 		r.logger.Errorw("failed to find expired subscriptions", "error", err)

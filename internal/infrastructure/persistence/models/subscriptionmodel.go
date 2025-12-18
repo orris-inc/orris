@@ -5,6 +5,8 @@ import (
 
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
+
+	"github.com/orris-inc/orris/internal/shared/constants"
 )
 
 // SubscriptionModel represents the database persistence model for subscriptions
@@ -31,7 +33,7 @@ type SubscriptionModel struct {
 
 // TableName specifies the table name for GORM
 func (SubscriptionModel) TableName() string {
-	return "subscriptions"
+	return constants.TableSubscriptions
 }
 
 // BeforeCreate hook for GORM

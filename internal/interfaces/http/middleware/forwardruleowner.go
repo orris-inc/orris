@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
@@ -40,8 +41,8 @@ func (m *ForwardRuleOwnerMiddleware) RequireOwnership() gin.HandlerFunc {
 		}
 
 		// Get user role for admin check
-		userRole := c.GetString("user_role")
-		isAdmin := userRole == "admin"
+		userRole := c.GetString(constants.ContextKeyUserRole)
+		isAdmin := userRole == constants.RoleAdmin
 
 		prefixedID := c.Param("id")
 		if prefixedID == "" {

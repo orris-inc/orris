@@ -13,6 +13,7 @@ type ListPlansQuery struct {
 	Status       *string
 	IsPublic     *bool
 	BillingCycle *string
+	PlanType     *string // Optional: filter by plan type ("node" or "forward")
 	Page         int
 	PageSize     int
 }
@@ -45,6 +46,7 @@ func (uc *ListPlansUseCase) Execute(
 		Status:       query.Status,
 		IsPublic:     query.IsPublic,
 		BillingCycle: query.BillingCycle,
+		PlanType:     query.PlanType,
 		Page:         query.Page,
 		PageSize:     query.PageSize,
 	}

@@ -5,6 +5,9 @@ import (
 
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
+
+	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/shared/constants"
 )
 
 // PlanModel represents the database persistence model for subscription plans
@@ -13,9 +16,10 @@ type PlanModel struct {
 	ID           uint   `gorm:"primarykey"`
 	Name         string `gorm:"not null;size:100"`
 	Slug         string `gorm:"uniqueIndex;not null;size:50"`
+	PlanType     string `gorm:"not null;size:20;default:node"`
 	Description  string `gorm:"size:500"`
 	Price        uint64 `gorm:"not null"`
-	Currency     string `gorm:"not null;size:3;default:CNY"`
+	Currency     string `gorm:"not null;size:3"`
 	BillingCycle string `gorm:"not null;size:20"`
 	TrialDays    int    `gorm:"default:0"`
 	Status       string `gorm:"not null;size:20;default:active"`
@@ -35,16 +39,16 @@ type PlanModel struct {
 
 // TableName specifies the table name for GORM
 func (PlanModel) TableName() string {
-	return "plans"
+	return constants.TablePlans
 }
 
 // BeforeCreate hook for GORM
 func (p *PlanModel) BeforeCreate(tx *gorm.DB) error {
 	if p.Status == "" {
-		p.Status = "active"
+		p.Status = string(subscription.PlanStatusActive)
 	}
 	if p.Currency == "" {
-		p.Currency = "CNY"
+		p.Currency = constants.DefaultCurrency
 	}
 	return nil
 }

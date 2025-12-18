@@ -8,6 +8,8 @@ import (
 
 	subdto "github.com/orris-inc/orris/internal/application/subscription/dto"
 	"github.com/orris-inc/orris/internal/application/subscription/usecases"
+	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
@@ -60,6 +62,7 @@ type CreatePlanRequest struct {
 	Price        uint64                      `json:"price" binding:"required"`
 	Currency     string                      `json:"currency" binding:"required"`
 	BillingCycle string                      `json:"billing_cycle" binding:"required"`
+	PlanType     string                      `json:"plan_type" binding:"required,oneof=node forward"`
 	TrialDays    int                         `json:"trial_days"`
 	Features     []string                    `json:"features"`
 	Limits       map[string]interface{}      `json:"limits"`
@@ -105,6 +108,7 @@ func (h *PlanHandler) CreatePlan(c *gin.Context) {
 		Price:        req.Price,
 		Currency:     req.Currency,
 		BillingCycle: req.BillingCycle,
+		PlanType:     req.PlanType,
 		TrialDays:    req.TrialDays,
 		Features:     req.Features,
 		Limits:       req.Limits,
@@ -222,14 +226,14 @@ func (h *PlanHandler) UpdatePlanStatus(c *gin.Context) {
 	}
 
 	switch req.Status {
-	case "active":
+	case string(subscription.PlanStatusActive):
 		if err := h.activatePlanUC.Execute(c.Request.Context(), planID); err != nil {
 			utils.ErrorResponseWithError(c, err)
 			return
 		}
 		utils.SuccessResponse(c, http.StatusOK, "Plan activated successfully", nil)
 
-	case "inactive":
+	case string(subscription.PlanStatusInactive):
 		if err := h.deactivatePlanUC.Execute(c.Request.Context(), planID); err != nil {
 			utils.ErrorResponseWithError(c, err)
 			return
@@ -282,8 +286,8 @@ func parsePlanID(c *gin.Context) (uint, error) {
 
 func parseListPlansQuery(c *gin.Context) (*usecases.ListPlansQuery, error) {
 	query := &usecases.ListPlansQuery{
-		Page:     1,
-		PageSize: 20,
+		Page:     constants.DefaultPage,
+		PageSize: constants.DefaultPageSize,
 	}
 
 	if pageStr := c.Query("page"); pageStr != "" {
@@ -299,8 +303,8 @@ func parseListPlansQuery(c *gin.Context) (*usecases.ListPlansQuery, error) {
 		if err != nil || pageSize < 1 {
 			return nil, errors.NewValidationError("Invalid page_size parameter")
 		}
-		if pageSize > 100 {
-			pageSize = 100
+		if pageSize > constants.MaxPageSize {
+			pageSize = constants.MaxPageSize
 		}
 		query.PageSize = pageSize
 	}
@@ -319,6 +323,10 @@ func parseListPlansQuery(c *gin.Context) (*usecases.ListPlansQuery, error) {
 
 	if billingCycle := c.Query("billing_cycle"); billingCycle != "" {
 		query.BillingCycle = &billingCycle
+	}
+
+	if planType := c.Query("plan_type"); planType != "" {
+		query.PlanType = &planType
 	}
 
 	return query, nil

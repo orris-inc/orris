@@ -38,6 +38,7 @@ type PlanDTO struct {
 	BillingCycle string                 `json:"billing_cycle"` // Deprecated: use Pricings array, kept for backward compatibility
 	TrialDays    int                    `json:"trial_days"`
 	Status       string                 `json:"status"`
+	PlanType     string                 `json:"plan_type"` // Plan type: node or forward
 	Features     []string               `json:"features"`
 	Limits       map[string]interface{} `json:"limits"`
 	APIRateLimit uint                   `json:"api_rate_limit"`
@@ -171,6 +172,7 @@ func ToPlanDTO(plan *subscription.Plan) *PlanDTO {
 		BillingCycle: plan.BillingCycle().String(),
 		TrialDays:    plan.TrialDays(),
 		Status:       string(plan.Status()),
+		PlanType:     plan.PlanType().String(),
 		Features:     features,
 		Limits:       limits,
 		APIRateLimit: plan.APIRateLimit(),

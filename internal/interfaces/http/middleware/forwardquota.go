@@ -9,6 +9,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
@@ -47,8 +48,8 @@ func (m *ForwardQuotaMiddleware) CheckRuleLimit() gin.HandlerFunc {
 		}
 
 		// Get user role for admin check
-		userRole := c.GetString("user_role")
-		isAdmin := userRole == "admin"
+		userRole := c.GetString(constants.ContextKeyUserRole)
+		isAdmin := userRole == constants.RoleAdmin
 
 		// Admin has unlimited rules
 		if isAdmin {
@@ -166,8 +167,8 @@ func (m *ForwardQuotaMiddleware) CheckTrafficLimit() gin.HandlerFunc {
 		}
 
 		// Get user role for admin check
-		userRole := c.GetString("user_role")
-		isAdmin := userRole == "admin"
+		userRole := c.GetString(constants.ContextKeyUserRole)
+		isAdmin := userRole == constants.RoleAdmin
 
 		// Admin has unlimited traffic
 		if isAdmin {
@@ -291,8 +292,8 @@ func (m *ForwardQuotaMiddleware) CheckRuleTypeAllowed() gin.HandlerFunc {
 		}
 
 		// Get user role for admin check
-		userRole := c.GetString("user_role")
-		isAdmin := userRole == "admin"
+		userRole := c.GetString(constants.ContextKeyUserRole)
+		isAdmin := userRole == constants.RoleAdmin
 
 		// Admin can use all rule types
 		if isAdmin {

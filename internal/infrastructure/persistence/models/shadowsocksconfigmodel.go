@@ -24,7 +24,7 @@ type ShadowsocksConfigModel struct {
 
 // TableName specifies the table name for GORM
 func (ShadowsocksConfigModel) TableName() string {
-	return constants.TableShadowsocksConfigs
+	return constants.TableNodeShadowsocksConfigs
 }
 
 // BeforeCreate hook for GORM

@@ -266,6 +266,10 @@ const (
 	LimitKeySpeedLimit = "speed_limit"
 	// LimitKeyConnectionLimit represents maximum concurrent connections
 	LimitKeyConnectionLimit = "connection_limit"
+	// LimitKeyRuleCount represents maximum number of rules (unified for both forward and node)
+	LimitKeyRuleCount = "rule_limit"
+	// LimitKeyRuleTypes represents allowed rule types (unified for both forward and node)
+	LimitKeyRuleTypes = "rule_types"
 )
 
 // Standard feature keys for plan capabilities
@@ -274,13 +278,16 @@ const (
 	FeatureForward = "forward"
 )
 
-// Forward-related limit keys
+// Forward-related limit keys (deprecated, use unified keys instead)
 const (
 	// LimitKeyForwardRuleCount represents maximum number of forward rules
+	// Deprecated: use LimitKeyRuleCount instead
 	LimitKeyForwardRuleCount = "forward_rule_limit"
 	// LimitKeyForwardTraffic represents monthly forward traffic limit in bytes
+	// Deprecated: use LimitKeyTraffic instead
 	LimitKeyForwardTraffic = "forward_traffic_limit"
 	// LimitKeyForwardRuleTypes represents allowed forward rule types
+	// Deprecated: use LimitKeyRuleTypes instead
 	LimitKeyForwardRuleTypes = "forward_rule_types"
 )
 
@@ -575,6 +582,95 @@ func (p *PlanFeatures) HasForwardTrafficRemaining(usedBytes uint64) (bool, error
 // Returns true if all types allowed or the specific type is in the allowed list
 func (p *PlanFeatures) IsForwardRuleTypeAllowed(ruleType string) (bool, error) {
 	allowedTypes, err := p.GetAllowedForwardRuleTypes()
+	if err != nil {
+		return false, err
+	}
+
+	// empty means all types allowed
+	if len(allowedTypes) == 0 {
+		return true, nil
+	}
+
+	for _, allowed := range allowedTypes {
+		if allowed == ruleType {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+// GetRuleLimit returns the maximum number of rules (unified for both forward and node)
+// Returns 0 if unlimited or not set
+func (p *PlanFeatures) GetRuleLimit() (int, error) {
+	value, exists := p.GetLimit(LimitKeyRuleCount)
+	if !exists {
+		return 0, nil // 0 means unlimited
+	}
+
+	switch v := value.(type) {
+	case int:
+		if v < 0 {
+			return 0, fmt.Errorf("rule limit cannot be negative")
+		}
+		return v, nil
+	case float64:
+		if v < 0 {
+			return 0, fmt.Errorf("rule limit cannot be negative")
+		}
+		return int(v), nil
+	default:
+		return 0, fmt.Errorf("invalid rule limit type: %T", v)
+	}
+}
+
+// SetRuleLimit sets the maximum number of rules
+// Use 0 for unlimited
+func (p *PlanFeatures) SetRuleLimit(count int) error {
+	if count < 0 {
+		return fmt.Errorf("rule limit cannot be negative")
+	}
+	p.SetLimit(LimitKeyRuleCount, count)
+	return nil
+}
+
+// GetRuleTypes returns the list of allowed rule types
+// Returns empty slice if all types are allowed
+func (p *PlanFeatures) GetRuleTypes() ([]string, error) {
+	value, exists := p.GetLimit(LimitKeyRuleTypes)
+	if !exists {
+		return []string{}, nil // empty means all types allowed
+	}
+
+	switch v := value.(type) {
+	case []string:
+		return v, nil
+	case []interface{}:
+		result := make([]string, 0, len(v))
+		for _, item := range v {
+			switch ruleType := item.(type) {
+			case string:
+				result = append(result, ruleType)
+			default:
+				return nil, fmt.Errorf("invalid rule type: %T", item)
+			}
+		}
+		return result, nil
+	default:
+		return nil, fmt.Errorf("invalid rule types type: %T", v)
+	}
+}
+
+// SetRuleTypes sets the list of allowed rule types
+// Use empty slice for all types allowed
+func (p *PlanFeatures) SetRuleTypes(types []string) {
+	p.SetLimit(LimitKeyRuleTypes, types)
+}
+
+// IsRuleTypeAllowed checks if the given rule type is allowed in the plan
+// Returns true if all types allowed or the specific type is in the allowed list
+func (p *PlanFeatures) IsRuleTypeAllowed(ruleType string) (bool, error) {
+	allowedTypes, err := p.GetRuleTypes()
 	if err != nil {
 		return false, err
 	}

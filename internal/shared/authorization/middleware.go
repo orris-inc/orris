@@ -4,11 +4,13 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/orris-inc/orris/internal/shared/constants"
 )
 
 func RequireAdmin() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userRole := c.GetString("user_role")
+		userRole := c.GetString(constants.ContextKeyUserRole)
 		if userRole != string(RoleAdmin) {
 			c.JSON(403, gin.H{
 				"error": "admin access required",
@@ -34,7 +36,7 @@ func RequireOwnerOrAdmin(paramName string) gin.HandlerFunc {
 			return
 		}
 
-		userRole := c.GetString("user_role")
+		userRole := c.GetString(constants.ContextKeyUserRole)
 
 		// Admin has full access
 		if userRole == string(RoleAdmin) {

@@ -4,6 +4,8 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+
+	"github.com/orris-inc/orris/internal/shared/constants"
 )
 
 // PlanPricingModel represents the plan_pricings table
@@ -12,7 +14,7 @@ type PlanPricingModel struct {
 	PlanID       uint           `gorm:"not null;index:idx_plan_id;comment:Reference to plans table"`
 	BillingCycle string         `gorm:"not null;size:20;index:idx_billing_cycle;comment:Billing cycle: weekly, monthly, quarterly, semi_annual, yearly, lifetime"`
 	Price        uint64         `gorm:"not null;comment:Price in smallest currency unit (cents)"`
-	Currency     string         `gorm:"not null;size:3;default:CNY;comment:Currency code: CNY, USD, EUR, GBP, JPY"`
+	Currency     string         `gorm:"not null;size:3;comment:Currency code: CNY, USD, EUR, GBP, JPY"`
 	IsActive     bool           `gorm:"not null;default:true;index:idx_is_active;comment:Whether this pricing option is active"`
 	CreatedAt    time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
 	UpdatedAt    time.Time      `gorm:"not null;default:CURRENT_TIMESTAMP"`
@@ -24,7 +26,7 @@ type PlanPricingModel struct {
 
 // TableName specifies the table name for GORM
 func (PlanPricingModel) TableName() string {
-	return "plan_pricings"
+	return constants.TablePlanPricings
 }
 
 // BeforeCreate hook to set timestamps

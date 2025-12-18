@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/orris-inc/orris/internal/shared/constants"
 	vo "github.com/orris-inc/orris/internal/domain/ticket/valueobjects"
 )
 
@@ -426,7 +427,7 @@ func (t *Ticket) MarkResolved() error {
 
 func (t *Ticket) CanBeViewedBy(userID uint, userRoles []string) bool {
 	for _, role := range userRoles {
-		if role == "admin" || role == "support_agent" {
+		if role == constants.RoleAdmin || role == constants.RoleSupportAgent {
 			return true
 		}
 	}

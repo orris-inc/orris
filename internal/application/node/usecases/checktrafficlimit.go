@@ -92,7 +92,7 @@ func (uc *CheckTrafficLimitUseCase) Execute(
 	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	endOfMonth := startOfMonth.AddDate(0, 1, 0)
 
-	summary, err := uc.usageRepo.GetTotalUsage(ctx, "node", query.NodeID, startOfMonth, endOfMonth)
+	summary, err := uc.usageRepo.GetTotalUsage(ctx, string(subscription.EntitlementResourceTypeNode), query.NodeID, startOfMonth, endOfMonth)
 	if err != nil {
 		uc.logger.Errorw("failed to get total traffic", "error", err)
 		return nil, errors.NewInternalError("failed to get traffic statistics")

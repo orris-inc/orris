@@ -92,9 +92,9 @@ func (uc *GetUserForwardUsageUseCase) Execute(ctx context.Context, query GetUser
 		// Check if plan has forward feature
 		if planFeatures.HasFeature("forward") {
 			// Get rule limit
-			limit, err := planFeatures.GetForwardRuleLimit()
+			limit, err := planFeatures.GetRuleLimit()
 			if err != nil {
-				uc.logger.Warnw("failed to get forward rule limit", "subscription_id", sub.ID(), "error", err)
+				uc.logger.Warnw("failed to get rule limit", "subscription_id", sub.ID(), "error", err)
 				continue
 			}
 
@@ -107,9 +107,9 @@ func (uc *GetUserForwardUsageUseCase) Execute(ctx context.Context, query GetUser
 			}
 
 			// Get traffic limit
-			trafficLimit, err := planFeatures.GetForwardTrafficLimit()
+			trafficLimit, err := planFeatures.GetTrafficLimit()
 			if err != nil {
-				uc.logger.Warnw("failed to get forward traffic limit", "subscription_id", sub.ID(), "error", err)
+				uc.logger.Warnw("failed to get traffic limit", "subscription_id", sub.ID(), "error", err)
 				continue
 			}
 
@@ -122,9 +122,9 @@ func (uc *GetUserForwardUsageUseCase) Execute(ctx context.Context, query GetUser
 			}
 
 			// Collect allowed rule types
-			types, err := planFeatures.GetAllowedForwardRuleTypes()
+			types, err := planFeatures.GetRuleTypes()
 			if err != nil {
-				uc.logger.Warnw("failed to get allowed rule types", "subscription_id", sub.ID(), "error", err)
+				uc.logger.Warnw("failed to get rule types", "subscription_id", sub.ID(), "error", err)
 				continue
 			}
 

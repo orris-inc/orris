@@ -18,6 +18,7 @@ type CreatePlanCommand struct {
 	Currency     string
 	BillingCycle string
 	TrialDays    int
+	PlanType     string // Required: "node" or "forward"
 	Features     []string
 	Limits       map[string]interface{}
 	APIRateLimit uint
@@ -65,6 +66,12 @@ func (uc *CreatePlanUseCase) Execute(
 		return nil, fmt.Errorf("invalid billing cycle: %w", err)
 	}
 
+	planType, err := vo.NewPlanType(cmd.PlanType)
+	if err != nil {
+		uc.logger.Errorw("invalid plan type", "error", err, "plan_type", cmd.PlanType)
+		return nil, fmt.Errorf("invalid plan type: %w", err)
+	}
+
 	plan, err := subscription.NewPlan(
 		cmd.Name,
 		cmd.Slug,
@@ -73,6 +80,7 @@ func (uc *CreatePlanUseCase) Execute(
 		cmd.Currency,
 		*billingCycle,
 		cmd.TrialDays,
+		planType,
 	)
 	if err != nil {
 		uc.logger.Errorw("failed to create plan", "error", err)

@@ -1,6 +1,10 @@
 package valueobjects
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/orris-inc/orris/internal/shared/constants"
+)
 
 type Money struct {
 	amountInCents int64
@@ -9,7 +13,7 @@ type Money struct {
 
 func NewMoney(amountInCents int64, currency string) Money {
 	if currency == "" {
-		currency = "CNY"
+		currency = constants.DefaultCurrency
 	}
 	return Money{
 		amountInCents: amountInCents,

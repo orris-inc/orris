@@ -6,14 +6,15 @@ import (
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
+	"github.com/orris-inc/orris/internal/domain/node/valueobjects"
 	"github.com/orris-inc/orris/internal/shared/constants"
 )
 
 // NodeModel represents the database persistence model for nodes
 // This is the anti-corruption layer between domain and database
 // Note: Protocol-specific configs are now stored in separate tables:
-// - shadowsocks_configs for Shadowsocks protocol (encryption_method, plugin, plugin_opts)
-// - trojan_configs for Trojan protocol
+// - node_shadowsocks_configs for Shadowsocks protocol (encryption_method, plugin, plugin_opts)
+// - node_trojan_configs for Trojan protocol
 type NodeModel struct {
 	ID                uint    `gorm:"primarykey"`
 	ShortID           string  `gorm:"uniqueIndex;size:20"` // Stripe-style prefixed ID (node_xxx)
@@ -47,7 +48,7 @@ func (NodeModel) TableName() string {
 // BeforeCreate hook for GORM
 func (n *NodeModel) BeforeCreate(tx *gorm.DB) error {
 	if n.Status == "" {
-		n.Status = "inactive"
+		n.Status = string(valueobjects.NodeStatusInactive)
 	}
 	if n.Protocol == "" {
 		n.Protocol = "shadowsocks"

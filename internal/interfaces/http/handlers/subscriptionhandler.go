@@ -9,6 +9,8 @@ import (
 
 	subdto "github.com/orris-inc/orris/internal/application/subscription/dto"
 	"github.com/orris-inc/orris/internal/application/subscription/usecases"
+	"github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
+	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
@@ -168,9 +170,9 @@ func (h *SubscriptionHandler) ListUserSubscriptions(c *gin.Context) {
 		}
 	}
 
-	pageSize := 20
+	pageSize := constants.DefaultPageSize
 	if pageSizeStr := c.Query("page_size"); pageSizeStr != "" {
-		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 && ps <= 100 {
+		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 && ps <= constants.MaxPageSize {
 			pageSize = ps
 		}
 	}
@@ -218,7 +220,7 @@ func (h *SubscriptionHandler) UpdateStatus(c *gin.Context) {
 	}
 
 	switch req.Status {
-	case "cancelled":
+	case string(valueobjects.StatusCancelled):
 		reason := ""
 		if req.Reason != nil {
 			reason = *req.Reason
@@ -329,7 +331,7 @@ func (h *SubscriptionHandler) GetTrafficStats(c *gin.Context) {
 		}
 	}
 
-	pageSize := 100
+	pageSize := constants.MaxPageSize
 	if pageSizeStr := c.Query("page_size"); pageSizeStr != "" {
 		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 && ps <= 1000 {
 			pageSize = ps

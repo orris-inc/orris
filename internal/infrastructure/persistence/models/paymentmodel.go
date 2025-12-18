@@ -4,6 +4,8 @@ import (
 	"database/sql/driver"
 	"encoding/json"
 	"time"
+
+	"github.com/orris-inc/orris/internal/shared/constants"
 )
 
 type PaymentModel struct {
@@ -12,7 +14,7 @@ type PaymentModel struct {
 	SubscriptionID uint    `gorm:"index;not null"`
 	UserID         uint    `gorm:"index;not null"`
 	Amount         int64   `gorm:"not null"`
-	Currency       string  `gorm:"size:10;not null;default:'CNY'"`
+	Currency       string  `gorm:"size:10;not null"`
 	PaymentMethod  string  `gorm:"size:20;not null"`
 	PaymentStatus  string  `gorm:"size:20;not null;index"`
 	GatewayOrderNo *string `gorm:"size:128;index"`
@@ -28,7 +30,7 @@ type PaymentModel struct {
 }
 
 func (PaymentModel) TableName() string {
-	return "payments"
+	return constants.TablePayments
 }
 
 type JSONB map[string]interface{}

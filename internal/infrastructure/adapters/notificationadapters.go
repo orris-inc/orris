@@ -7,6 +7,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/notification"
 	vo "github.com/orris-inc/orris/internal/domain/notification/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/user"
+	uservo "github.com/orris-inc/orris/internal/domain/user/valueobjects"
 )
 
 type announcementAdapter struct {
@@ -331,7 +332,7 @@ func (a *UserRepositoryAdapter) FindAllActiveUserIDs(ctx context.Context) ([]uin
 	filter := user.ListFilter{
 		Page:     1,
 		PageSize: 10000,
-		Status:   "active", // Only get active users
+		Status:   string(uservo.StatusActive), // Only get active users
 	}
 	users, _, err := a.repo.List(ctx, filter)
 	if err != nil {

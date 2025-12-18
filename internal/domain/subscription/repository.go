@@ -51,6 +51,7 @@ type PlanFilter struct {
 	Status       *string
 	IsPublic     *bool
 	BillingCycle *string
+	PlanType     *string // Optional: filter by plan type ("node" or "forward")
 	Page         int
 	PageSize     int
 	SortBy       string
@@ -69,7 +70,6 @@ type SubscriptionTokenRepository interface {
 	RevokeAllBySubscriptionID(ctx context.Context, subscriptionID uint) error
 	DeleteExpiredTokens(ctx context.Context) error
 }
-
 
 // PlanPricingRepository handles plan pricing persistence
 type PlanPricingRepository interface {

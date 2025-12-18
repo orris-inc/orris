@@ -8,6 +8,7 @@ import (
 	domainUser "github.com/orris-inc/orris/internal/domain/user"
 	vo "github.com/orris-inc/orris/internal/domain/user/valueobjects"
 	"github.com/orris-inc/orris/internal/shared/authorization"
+	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -119,9 +120,9 @@ func (uc *UpdateUserUseCase) Execute(ctx context.Context, id uint, request dto.U
 	if request.Role != nil {
 		var newRole authorization.UserRole
 		switch *request.Role {
-		case "user":
+		case constants.RoleUser:
 			newRole = authorization.RoleUser
-		case "admin":
+		case constants.RoleAdmin:
 			newRole = authorization.RoleAdmin
 		default:
 			return nil, errors.NewValidationError(fmt.Sprintf("invalid role: %s", *request.Role))
@@ -176,7 +177,7 @@ func (uc *UpdateUserUseCase) ValidateRequest(request dto.UpdateUserRequest) erro
 
 	// Validate role if provided
 	if request.Role != nil {
-		if *request.Role != "user" && *request.Role != "admin" {
+		if *request.Role != constants.RoleUser && *request.Role != constants.RoleAdmin {
 			return errors.NewValidationError(fmt.Sprintf("invalid role: %s", *request.Role))
 		}
 	}

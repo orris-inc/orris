@@ -8,6 +8,7 @@ import (
 	"github.com/orris-inc/orris/internal/application/user"
 	"github.com/orris-inc/orris/internal/application/user/usecases"
 	"github.com/orris-inc/orris/internal/interfaces/dto"
+	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
@@ -77,7 +78,7 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 func (h *UserHandler) UpdateUser(c *gin.Context) {
 	// Log access control information
 	currentUserID, _ := c.Get("user_id")
-	userRole := c.GetString("user_role")
+	userRole := c.GetString(constants.ContextKeyUserRole)
 
 	// Parse user ID
 	userID, err := dto.ParseUserID(c)
@@ -88,7 +89,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 
 	h.logger.Infow("update user request",
 		"current_user_id", currentUserID,
-		"user_role", userRole,
+		constants.ContextKeyUserRole, userRole,
 		"target_user_id", userID)
 
 	var req dto.UpdateUserRequest
