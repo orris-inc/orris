@@ -93,26 +93,13 @@ func (uc *DeleteNodeUseCase) validateCommand(cmd DeleteNodeCommand) error {
 // checkNodeGroupAssociations checks if the node is part of any node groups
 // This provides business-level protection against accidentally deleting nodes that are in use
 func (uc *DeleteNodeUseCase) checkNodeGroupAssociations(ctx context.Context, nodeID uint) error {
-	// Get all node groups and check if any contains this node
-	filter := node.NodeGroupFilter{}
-	filter.Page = 1
-	filter.PageSize = 1000 // Large enough to get all groups
-
-	groups, _, err := uc.nodeGroupRepo.List(ctx, filter)
+	inGroup, err := uc.nodeGroupRepo.IsNodeInAnyGroup(ctx, nodeID)
 	if err != nil {
-		uc.logger.Errorw("failed to list node groups", "error", err, "node_id", nodeID)
+		uc.logger.Errorw("failed to check node group associations", "error", err, "node_id", nodeID)
 		return fmt.Errorf("failed to check node group associations: %w", err)
 	}
-
-	// Check if any group contains this node
-	for _, group := range groups {
-		if group.ContainsNode(nodeID) {
-			return errors.NewValidationError(fmt.Sprintf(
-				"cannot delete node that is part of node group '%s'. Use force=true to override",
-				group.Name(),
-			))
-		}
+	if inGroup {
+		return errors.NewValidationError("cannot delete node that is part of a node group. Use force=true to override")
 	}
-
 	return nil
 }

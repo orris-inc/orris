@@ -19,6 +19,8 @@ type NodeGroupRepository interface {
 	DisassociateSubscriptionPlan(ctx context.Context, groupID, planID uint) error
 	GetSubscriptionPlansByGroupID(ctx context.Context, groupID uint) ([]uint, error)
 	ExistsByName(ctx context.Context, name string) (bool, error)
+	// IsNodeInAnyGroup checks if a node is part of any node group
+	IsNodeInAnyGroup(ctx context.Context, nodeID uint) (bool, error)
 }
 
 type NodeGroupFilter struct {

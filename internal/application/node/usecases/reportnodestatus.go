@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/orris-inc/orris/internal/application/node/dto"
-	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -34,7 +33,7 @@ type NodeSystemStatusUpdater interface {
 
 // NodeLastSeenUpdater defines the interface for updating node last_seen_at and public IPs
 type NodeLastSeenUpdater interface {
-	GetLastSeenAt(ctx context.Context, nodeID uint) (*node.Node, error)
+	GetLastSeenAt(ctx context.Context, nodeID uint) (*time.Time, error)
 	UpdateLastSeenAt(ctx context.Context, nodeID uint, publicIPv4, publicIPv6 string) error
 }
 
@@ -113,7 +112,7 @@ func (uc *ReportNodeStatusUseCase) updateLastSeenAtThrottled(ctx context.Context
 	}
 
 	// Get current last_seen_at value
-	nodeEntity, err := uc.lastSeenUpdater.GetLastSeenAt(ctx, nodeID)
+	lastSeenAt, err := uc.lastSeenUpdater.GetLastSeenAt(ctx, nodeID)
 	if err != nil {
 		uc.logger.Warnw("failed to get last_seen_at for throttle check",
 			"error", err,
@@ -130,9 +129,7 @@ func (uc *ReportNodeStatusUseCase) updateLastSeenAtThrottled(ctx context.Context
 	}
 
 	// Check if we need to update (first time or exceeded threshold)
-	shouldUpdate := nodeEntity == nil ||
-		nodeEntity.LastSeenAt() == nil ||
-		time.Since(*nodeEntity.LastSeenAt()) > LastSeenUpdateThreshold
+	shouldUpdate := lastSeenAt == nil || time.Since(*lastSeenAt) > LastSeenUpdateThreshold
 
 	if shouldUpdate {
 		if err := uc.lastSeenUpdater.UpdateLastSeenAt(ctx, nodeID, publicIPv4, publicIPv6); err != nil {

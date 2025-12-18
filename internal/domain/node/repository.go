@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"time"
 
 	"github.com/orris-inc/orris/internal/shared/query"
 )
@@ -22,7 +23,7 @@ type NodeRepository interface {
 	// Public IPs are optional - pass empty strings to skip updating them
 	UpdateLastSeenAt(ctx context.Context, nodeID uint, publicIPv4, publicIPv6 string) error
 	// GetLastSeenAt retrieves the last_seen_at timestamp for a node
-	GetLastSeenAt(ctx context.Context, nodeID uint) (*Node, error)
+	GetLastSeenAt(ctx context.Context, nodeID uint) (*time.Time, error)
 }
 
 type NodeFilter struct {

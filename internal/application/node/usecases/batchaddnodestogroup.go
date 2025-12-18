@@ -59,23 +59,38 @@ func (uc *BatchAddNodesToGroupUseCase) Execute(ctx context.Context, cmd BatchAdd
 		return nil, fmt.Errorf("failed to get node group: %w", err)
 	}
 
-	// Validate that all nodes exist
-	validNodeIDs := make([]uint, 0, len(cmd.NodeIDs))
+	// Filter out zero IDs
+	nonZeroIDs := make([]uint, 0, len(cmd.NodeIDs))
 	for _, nodeID := range cmd.NodeIDs {
-		if nodeID == 0 {
-			continue
+		if nodeID != 0 {
+			nonZeroIDs = append(nonZeroIDs, nodeID)
 		}
+	}
 
-		_, err := uc.nodeRepo.GetByID(ctx, nodeID)
-		if err != nil {
-			uc.logger.Warnw("node not found, skipping",
-				"node_id", nodeID,
-				"error", err,
-			)
-			continue
+	if len(nonZeroIDs) == 0 {
+		return nil, errors.NewValidationError("no valid nodes to add")
+	}
+
+	// Validate that all nodes exist using batch query
+	existingNodes, err := uc.nodeRepo.GetByIDs(ctx, nonZeroIDs)
+	if err != nil {
+		uc.logger.Errorw("failed to get nodes by IDs", "error", err)
+		return nil, fmt.Errorf("failed to validate nodes: %w", err)
+	}
+
+	// Build valid node ID set from existing nodes
+	validNodeIDs := make([]uint, 0, len(existingNodes))
+	existingIDSet := make(map[uint]bool)
+	for _, n := range existingNodes {
+		existingIDSet[n.ID()] = true
+		validNodeIDs = append(validNodeIDs, n.ID())
+	}
+
+	// Log skipped nodes
+	for _, nodeID := range nonZeroIDs {
+		if !existingIDSet[nodeID] {
+			uc.logger.Warnw("node not found, skipping", "node_id", nodeID)
 		}
-
-		validNodeIDs = append(validNodeIDs, nodeID)
 	}
 
 	if len(validNodeIDs) == 0 {

@@ -502,3 +502,16 @@ func (r *NodeGroupRepositoryImpl) syncPlanAssociations(tx *gorm.DB, groupID uint
 
 	return nil
 }
+
+// IsNodeInAnyGroup checks if a node is part of any node group
+func (r *NodeGroupRepositoryImpl) IsNodeInAnyGroup(ctx context.Context, nodeID uint) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&models.NodeGroupNodeModel{}).
+		Where("node_id = ?", nodeID).
+		Count(&count).Error
+	if err != nil {
+		r.logger.Errorw("failed to check node group associations", "node_id", nodeID, "error", err)
+		return false, fmt.Errorf("failed to check node group associations: %w", err)
+	}
+	return count > 0, nil
+}

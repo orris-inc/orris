@@ -4,6 +4,7 @@ package testutil
 import (
 	"context"
 	"sync"
+	"time"
 
 	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
@@ -1001,7 +1002,7 @@ func (m *MockNodeRepository) UpdateLastSeenAt(ctx context.Context, nodeID uint, 
 	return nil
 }
 
-func (m *MockNodeRepository) GetLastSeenAt(ctx context.Context, nodeID uint) (*node.Node, error) {
+func (m *MockNodeRepository) GetLastSeenAt(ctx context.Context, nodeID uint) (*time.Time, error) {
 	return nil, nil
 }
 

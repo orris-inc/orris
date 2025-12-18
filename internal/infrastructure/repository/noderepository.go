@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -357,6 +358,12 @@ func (r *NodeRepositoryImpl) Delete(ctx context.Context, id uint) error {
 			return fmt.Errorf("failed to delete trojan config: %w", err)
 		}
 
+		// Delete node group associations
+		if err := tx.Where("node_id = ?", id).Delete(&models.NodeGroupNodeModel{}).Error; err != nil {
+			r.logger.Errorw("failed to delete node group associations", "node_id", id, "error", err)
+			return fmt.Errorf("failed to delete node group associations: %w", err)
+		}
+
 		// Delete node
 		result := tx.Delete(&models.NodeModel{}, id)
 		if result.Error != nil {
@@ -548,7 +555,7 @@ func (r *NodeRepositoryImpl) UpdateLastSeenAt(ctx context.Context, nodeID uint, 
 }
 
 // GetLastSeenAt retrieves just the last_seen_at timestamp for a node (lightweight query)
-func (r *NodeRepositoryImpl) GetLastSeenAt(ctx context.Context, nodeID uint) (*node.Node, error) {
+func (r *NodeRepositoryImpl) GetLastSeenAt(ctx context.Context, nodeID uint) (*time.Time, error) {
 	var model models.NodeModel
 	err := r.db.WithContext(ctx).
 		Select("id", "last_seen_at").
@@ -563,33 +570,5 @@ func (r *NodeRepositoryImpl) GetLastSeenAt(ctx context.Context, nodeID uint) (*n
 		return nil, fmt.Errorf("failed to get last_seen_at: %w", err)
 	}
 
-	// Create a minimal node entity with just the lastSeenAt field
-	// We use empty/default values for other fields since we only need lastSeenAt
-	serverAddr, _ := vo.NewServerAddress("0.0.0.0")
-	nodeEntity, _ := node.ReconstructNode(
-		model.ID,
-		model.ShortID,
-		"",
-		serverAddr,
-		1,   // agentPort (placeholder, just needs to be non-zero)
-		nil, // subscriptionPort
-		vo.Protocol("shadowsocks"),
-		vo.EncryptionConfig{},
-		nil,
-		nil,
-		vo.NodeStatusInactive,
-		vo.NewNodeMetadata("", nil, ""),
-		"placeholder", // tokenHash
-		"",            // apiToken
-		0,
-		nil,
-		model.LastSeenAt,
-		nil, // publicIPv4
-		nil, // publicIPv6
-		0,
-		model.CreatedAt,
-		model.UpdatedAt,
-	)
-
-	return nodeEntity, nil
+	return model.LastSeenAt, nil
 }

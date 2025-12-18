@@ -71,14 +71,10 @@ func (uc *ListGroupNodesUseCase) Execute(ctx context.Context, query ListGroupNod
 		}, nil
 	}
 
-	nodes := make([]*node.Node, 0, len(nodeIDs))
-	for _, nodeID := range nodeIDs {
-		n, err := uc.nodeRepo.GetByID(ctx, nodeID)
-		if err != nil {
-			uc.logger.Warnw("failed to get node from group", "node_id", nodeID, "error", err)
-			continue
-		}
-		nodes = append(nodes, n)
+	nodes, err := uc.nodeRepo.GetByIDs(ctx, nodeIDs)
+	if err != nil {
+		uc.logger.Errorw("failed to get nodes by IDs", "error", err, "group_id", query.GroupID)
+		return nil, fmt.Errorf("failed to get nodes: %w", err)
 	}
 
 	nodeDTOs := make([]*GroupNodeDTO, 0, len(nodes))
