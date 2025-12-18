@@ -10,12 +10,11 @@ import (
 )
 
 type ListPlansQuery struct {
-	Status       *string
-	IsPublic     *bool
-	BillingCycle *string
-	PlanType     *string // Optional: filter by plan type ("node" or "forward")
-	Page         int
-	PageSize     int
+	Status   *string
+	IsPublic *bool
+	PlanType *string // Optional: filter by plan type ("node" or "forward")
+	Page     int
+	PageSize int
 }
 
 type ListPlansResult struct {
@@ -43,12 +42,11 @@ func (uc *ListPlansUseCase) Execute(
 	query ListPlansQuery,
 ) (*ListPlansResult, error) {
 	filter := subscription.PlanFilter{
-		Status:       query.Status,
-		IsPublic:     query.IsPublic,
-		BillingCycle: query.BillingCycle,
-		PlanType:     query.PlanType,
-		Page:         query.Page,
-		PageSize:     query.PageSize,
+		Status:   query.Status,
+		IsPublic: query.IsPublic,
+		PlanType: query.PlanType,
+		Page:     query.Page,
+		PageSize: query.PageSize,
 	}
 
 	plans, total, err := uc.planRepo.List(ctx, filter)

@@ -13,9 +13,6 @@ import (
 type UpdatePlanCommand struct {
 	PlanID       uint
 	Description  *string
-	Price        *uint64
-	Currency     *string
-	Features     *[]string
 	Limits       *map[string]interface{}
 	APIRateLimit *uint
 	MaxUsers     *uint
@@ -60,25 +57,8 @@ func (uc *UpdatePlanUseCase) Execute(
 		plan.UpdateDescription(*cmd.Description)
 	}
 
-	if cmd.Price != nil && cmd.Currency != nil {
-		if err := plan.UpdatePrice(*cmd.Price, *cmd.Currency); err != nil {
-			uc.logger.Errorw("failed to update price", "error", err)
-			return nil, fmt.Errorf("failed to update price: %w", err)
-		}
-	}
-
-	if cmd.Features != nil || cmd.Limits != nil {
-		var featuresList []string
+	if cmd.Limits != nil {
 		var limitsMap map[string]interface{}
-
-		if cmd.Features != nil {
-			featuresList = *cmd.Features
-		} else {
-			// Keep existing features if not provided
-			if plan.Features() != nil {
-				featuresList = plan.Features().Features
-			}
-		}
 
 		if cmd.Limits != nil {
 			limitsMap = *cmd.Limits
@@ -89,7 +69,7 @@ func (uc *UpdatePlanUseCase) Execute(
 			}
 		}
 
-		features := vo.NewPlanFeatures(featuresList, limitsMap)
+		features := vo.NewPlanFeatures(limitsMap)
 		if err := plan.UpdateFeatures(features); err != nil {
 			uc.logger.Errorw("failed to update features", "error", err)
 			return nil, fmt.Errorf("failed to update features: %w", err)

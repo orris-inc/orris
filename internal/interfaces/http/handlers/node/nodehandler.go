@@ -266,7 +266,7 @@ func parseNodeID(c *gin.Context) (uint, error) {
 
 type CreateNodeRequest struct {
 	Name             string            `json:"name" binding:"required" example:"US-Node-01"`
-	ServerAddress    string            `json:"server_address" binding:"required" example:"1.2.3.4"`
+	ServerAddress    string            `json:"server_address,omitempty" example:"1.2.3.4"`
 	AgentPort        uint16            `json:"agent_port" binding:"required" example:"8388" comment:"Port for agent connections"`
 	SubscriptionPort *uint16           `json:"subscription_port,omitempty" example:"8389" comment:"Port for client subscriptions (if null, uses agent_port)"`
 	Protocol         string            `json:"protocol" binding:"required,oneof=shadowsocks trojan" example:"shadowsocks" comment:"Protocol type: shadowsocks or trojan"`

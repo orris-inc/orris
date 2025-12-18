@@ -70,16 +70,7 @@ func (uc *ChangePlanUseCase) Execute(ctx context.Context, cmd ChangePlanCommand)
 		return fmt.Errorf("new plan is not active")
 	}
 
-	actualChangeType := uc.determineChangeType(oldPlan, newPlan)
-	if actualChangeType != cmd.ChangeType {
-		uc.logger.Warnw("change type mismatch",
-			"requested", cmd.ChangeType,
-			"actual", actualChangeType,
-			"old_price", oldPlan.Price(),
-			"new_price", newPlan.Price(),
-		)
-		return fmt.Errorf("change type mismatch: requested %s but actual is %s based on price", cmd.ChangeType, actualChangeType)
-	}
+	// Note: Change type validation is removed as pricing is now flexible per billing cycle
 
 	if cmd.EffectiveDate == EffectiveDatePeriodEnd {
 		metadata := sub.Metadata()
@@ -118,13 +109,6 @@ func (uc *ChangePlanUseCase) Execute(ctx context.Context, cmd ChangePlanCommand)
 	}
 
 	return nil
-}
-
-func (uc *ChangePlanUseCase) determineChangeType(oldPlan, newPlan *subscription.Plan) ChangeType {
-	if newPlan.Price() > oldPlan.Price() {
-		return ChangeTypeUpgrade
-	}
-	return ChangeTypeDowngrade
 }
 
 func (uc *ChangePlanUseCase) applyPlanChange(sub *subscription.Subscription, newPlanID uint, changeType ChangeType) error {

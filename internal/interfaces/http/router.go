@@ -231,7 +231,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		subscriptionRepo, subscriptionTokenRepo, log,
 	)
 	renewSubscriptionUC := subscriptionUsecases.NewRenewSubscriptionUseCase(
-		subscriptionRepo, subscriptionPlanRepo, log,
+		subscriptionRepo, subscriptionPlanRepo, planPricingRepo, log,
 	)
 	changePlanUC := subscriptionUsecases.NewChangePlanUseCase(
 		subscriptionRepo, subscriptionPlanRepo, log,
@@ -379,6 +379,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		paymentRepo,
 		subscriptionRepo,
 		subscriptionPlanRepo,
+		planPricingRepo,
 		gateway,
 		log,
 		paymentConfig,

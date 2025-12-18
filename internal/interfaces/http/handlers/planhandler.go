@@ -59,26 +59,19 @@ type CreatePlanRequest struct {
 	Name         string                      `json:"name" binding:"required"`
 	Slug         string                      `json:"slug" binding:"required"`
 	Description  string                      `json:"description"`
-	Price        uint64                      `json:"price" binding:"required"`
-	Currency     string                      `json:"currency" binding:"required"`
-	BillingCycle string                      `json:"billing_cycle" binding:"required"`
 	PlanType     string                      `json:"plan_type" binding:"required,oneof=node forward"`
 	TrialDays    int                         `json:"trial_days"`
-	Features     []string                    `json:"features"`
 	Limits       map[string]interface{}      `json:"limits"`
 	APIRateLimit uint                        `json:"api_rate_limit"`
 	MaxUsers     uint                        `json:"max_users"`
 	MaxProjects  uint                        `json:"max_projects"`
 	IsPublic     bool                        `json:"is_public"`
 	SortOrder    int                         `json:"sort_order"`
-	Pricings     []subdto.PricingOptionInput `json:"pricings"` // Optional: multiple pricing options
+	Pricings     []subdto.PricingOptionInput `json:"pricings" binding:"required,min=1"`
 }
 
 type UpdatePlanRequest struct {
 	Description  *string                      `json:"description"`
-	Price        *uint64                      `json:"price"`
-	Currency     *string                      `json:"currency"`
-	Features     *[]string                    `json:"features"`
 	Limits       *map[string]interface{}      `json:"limits"`
 	APIRateLimit *uint                        `json:"api_rate_limit"`
 	MaxUsers     *uint                        `json:"max_users"`
@@ -105,12 +98,8 @@ func (h *PlanHandler) CreatePlan(c *gin.Context) {
 		Name:         req.Name,
 		Slug:         req.Slug,
 		Description:  req.Description,
-		Price:        req.Price,
-		Currency:     req.Currency,
-		BillingCycle: req.BillingCycle,
 		PlanType:     req.PlanType,
 		TrialDays:    req.TrialDays,
-		Features:     req.Features,
 		Limits:       req.Limits,
 		APIRateLimit: req.APIRateLimit,
 		MaxUsers:     req.MaxUsers,
@@ -148,9 +137,6 @@ func (h *PlanHandler) UpdatePlan(c *gin.Context) {
 	cmd := usecases.UpdatePlanCommand{
 		PlanID:       planID,
 		Description:  req.Description,
-		Price:        req.Price,
-		Currency:     req.Currency,
-		Features:     req.Features,
 		Limits:       req.Limits,
 		APIRateLimit: req.APIRateLimit,
 		MaxUsers:     req.MaxUsers,
@@ -319,10 +305,6 @@ func parseListPlansQuery(c *gin.Context) (*usecases.ListPlansQuery, error) {
 			return nil, errors.NewValidationError("Invalid is_public parameter")
 		}
 		query.IsPublic = &isPublic
-	}
-
-	if billingCycle := c.Query("billing_cycle"); billingCycle != "" {
-		query.BillingCycle = &billingCycle
 	}
 
 	if planType := c.Query("plan_type"); planType != "" {

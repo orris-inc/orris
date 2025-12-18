@@ -78,33 +78,31 @@ func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, cmd CreateSubs
 		return nil, fmt.Errorf("plan is not active")
 	}
 
-	// Determine the billing cycle to use
-	billingCycle := plan.BillingCycle()
-
-	// If user specified a billing cycle, validate and use it instead
-	if cmd.BillingCycle != "" {
-		// Parse the user-provided billing cycle
-		userCycle, err := vo.ParseBillingCycle(cmd.BillingCycle)
-		if err != nil {
-			uc.logger.Warnw("invalid billing cycle provided", "error", err, "billing_cycle", cmd.BillingCycle)
-			return nil, fmt.Errorf("invalid billing cycle: %w", err)
-		}
-
-		// Verify that pricing exists for this plan and billing cycle
-		pricing, err := uc.pricingRepo.GetByPlanAndCycle(ctx, cmd.PlanID, userCycle)
-		if err != nil {
-			uc.logger.Warnw("failed to get pricing for billing cycle", "error", err, "plan_id", cmd.PlanID, "billing_cycle", userCycle)
-			return nil, fmt.Errorf("pricing not available for selected billing cycle: %w", err)
-		}
-
-		if pricing == nil {
-			uc.logger.Warnw("pricing not found for billing cycle", "plan_id", cmd.PlanID, "billing_cycle", userCycle)
-			return nil, fmt.Errorf("pricing not found for selected billing cycle")
-		}
-
-		billingCycle = userCycle
-		uc.logger.Infow("pricing selected for billing cycle", "plan_id", cmd.PlanID, "billing_cycle", billingCycle, "price", pricing.Price())
+	// BillingCycle is required since Plan no longer has a default billing cycle
+	if cmd.BillingCycle == "" {
+		return nil, fmt.Errorf("billing cycle is required")
 	}
+
+	// Parse and validate the billing cycle
+	billingCycle, err := vo.ParseBillingCycle(cmd.BillingCycle)
+	if err != nil {
+		uc.logger.Warnw("invalid billing cycle provided", "error", err, "billing_cycle", cmd.BillingCycle)
+		return nil, fmt.Errorf("invalid billing cycle: %w", err)
+	}
+
+	// Verify that pricing exists for this plan and billing cycle
+	pricing, err := uc.pricingRepo.GetByPlanAndCycle(ctx, cmd.PlanID, billingCycle)
+	if err != nil {
+		uc.logger.Warnw("failed to get pricing for billing cycle", "error", err, "plan_id", cmd.PlanID, "billing_cycle", billingCycle)
+		return nil, fmt.Errorf("pricing not available for selected billing cycle: %w", err)
+	}
+
+	if pricing == nil {
+		uc.logger.Warnw("pricing not found for billing cycle", "plan_id", cmd.PlanID, "billing_cycle", billingCycle)
+		return nil, fmt.Errorf("pricing not found for selected billing cycle")
+	}
+
+	uc.logger.Infow("pricing selected for billing cycle", "plan_id", cmd.PlanID, "billing_cycle", billingCycle, "price", pricing.Price())
 
 	// Allow multiple active subscriptions per user
 	// No restriction on creating new subscriptions

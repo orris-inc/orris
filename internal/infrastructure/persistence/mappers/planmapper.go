@@ -40,25 +40,20 @@ func (m *planMapper) ToEntity(model *models.PlanModel) (*subscription.Plan, erro
 		return nil, nil
 	}
 
-	// Parse billing cycle
-	billingCycle, err := vo.ParseBillingCycle(model.BillingCycle)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse billing cycle: %w", err)
-	}
-
 	// Parse plan type
 	planType := model.PlanType
 	if planType == "" {
 		planType = "node" // default value
 	}
 
-	// Parse features JSON
+	// Parse limits JSON
 	var features *vo.PlanFeatures
-	if model.Features != nil && len(model.Features) > 0 {
-		features = &vo.PlanFeatures{}
-		if err := json.Unmarshal(model.Features, features); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal features: %w", err)
+	if model.Limits != nil && len(model.Limits) > 0 {
+		var limits map[string]interface{}
+		if err := json.Unmarshal(model.Limits, &limits); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal limits: %w", err)
 		}
+		features = vo.NewPlanFeatures(limits)
 	}
 
 	// Parse metadata JSON
@@ -78,9 +73,6 @@ func (m *planMapper) ToEntity(model *models.PlanModel) (*subscription.Plan, erro
 		model.Name,
 		model.Slug,
 		model.Description,
-		model.Price,
-		model.Currency,
-		billingCycle,
 		model.TrialDays,
 		model.Status,
 		planType,
@@ -108,14 +100,14 @@ func (m *planMapper) ToModel(entity *subscription.Plan) (*models.PlanModel, erro
 		return nil, nil
 	}
 
-	// Marshal features to JSON
-	var featuresJSON datatypes.JSON
-	if features := entity.Features(); features != nil {
-		data, err := json.Marshal(features)
+	// Marshal limits to JSON
+	var limitsJSON datatypes.JSON
+	if features := entity.Features(); features != nil && features.Limits != nil {
+		data, err := json.Marshal(features.Limits)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal features: %w", err)
+			return nil, fmt.Errorf("failed to marshal limits: %w", err)
 		}
-		featuresJSON = data
+		limitsJSON = data
 	}
 
 	// Marshal metadata to JSON
@@ -134,12 +126,9 @@ func (m *planMapper) ToModel(entity *subscription.Plan) (*models.PlanModel, erro
 		Slug:         entity.Slug(),
 		PlanType:     entity.PlanType().String(),
 		Description:  entity.Description(),
-		Price:        entity.Price(),
-		Currency:     entity.Currency(),
-		BillingCycle: entity.BillingCycle().String(),
 		TrialDays:    entity.TrialDays(),
 		Status:       string(entity.Status()),
-		Features:     featuresJSON,
+		Limits:       limitsJSON,
 		APIRateLimit: entity.APIRateLimit(),
 		MaxUsers:     entity.MaxUsers(),
 		MaxProjects:  entity.MaxProjects(),

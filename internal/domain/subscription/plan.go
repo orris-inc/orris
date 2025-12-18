@@ -14,22 +14,11 @@ const (
 	PlanStatusInactive PlanStatus = "inactive"
 )
 
-var validCurrencies = map[string]bool{
-	"CNY": true,
-	"USD": true,
-	"EUR": true,
-	"GBP": true,
-	"JPY": true,
-}
-
 type Plan struct {
 	id           uint
 	name         string
 	slug         string
 	description  string
-	price        uint64
-	currency     string
-	billingCycle vo.BillingCycle
 	trialDays    int
 	status       PlanStatus
 	planType     vo.PlanType
@@ -45,8 +34,7 @@ type Plan struct {
 	updatedAt    time.Time
 }
 
-func NewPlan(name, slug, description string, price uint64, currency string,
-	billingCycle vo.BillingCycle, trialDays int, planType vo.PlanType) (*Plan, error) {
+func NewPlan(name, slug, description string, trialDays int, planType vo.PlanType) (*Plan, error) {
 
 	if name == "" {
 		return nil, fmt.Errorf("plan name is required")
@@ -60,12 +48,6 @@ func NewPlan(name, slug, description string, price uint64, currency string,
 	if len(slug) > 100 {
 		return nil, fmt.Errorf("plan slug too long (max 100 characters)")
 	}
-	if !validCurrencies[currency] {
-		return nil, fmt.Errorf("invalid currency code: %s", currency)
-	}
-	if !billingCycle.IsValid() {
-		return nil, fmt.Errorf("invalid billing cycle: %s", billingCycle)
-	}
 	if trialDays < 0 {
 		return nil, fmt.Errorf("trial days cannot be negative")
 	}
@@ -78,9 +60,6 @@ func NewPlan(name, slug, description string, price uint64, currency string,
 		name:         name,
 		slug:         slug,
 		description:  description,
-		price:        price,
-		currency:     currency,
-		billingCycle: billingCycle,
 		trialDays:    trialDays,
 		status:       PlanStatusActive,
 		planType:     planType,
@@ -97,10 +76,10 @@ func NewPlan(name, slug, description string, price uint64, currency string,
 	}, nil
 }
 
-func ReconstructPlan(id uint, name, slug, description string, price uint64,
-	currency string, billingCycle vo.BillingCycle, trialDays int, status string,
-	planType string, features *vo.PlanFeatures, apiRateLimit, maxUsers, maxProjects uint,
-	isPublic bool, sortOrder int, metadata map[string]interface{}, version int,
+func ReconstructPlan(id uint, name, slug, description string,
+	trialDays int, status string, planType string, features *vo.PlanFeatures,
+	apiRateLimit, maxUsers, maxProjects uint, isPublic bool, sortOrder int,
+	metadata map[string]interface{}, version int,
 	createdAt, updatedAt time.Time) (*Plan, error) {
 
 	if id == 0 {
@@ -126,9 +105,6 @@ func ReconstructPlan(id uint, name, slug, description string, price uint64,
 		name:         name,
 		slug:         slug,
 		description:  description,
-		price:        price,
-		currency:     currency,
-		billingCycle: billingCycle,
 		trialDays:    trialDays,
 		status:       planStatus,
 		planType:     pt,
@@ -170,18 +146,6 @@ func (p *Plan) Slug() string {
 
 func (p *Plan) Description() string {
 	return p.description
-}
-
-func (p *Plan) Price() uint64 {
-	return p.price
-}
-
-func (p *Plan) Currency() string {
-	return p.currency
-}
-
-func (p *Plan) BillingCycle() vo.BillingCycle {
-	return p.billingCycle
 }
 
 func (p *Plan) TrialDays() int {
@@ -262,17 +226,6 @@ func (p *Plan) Deactivate() error {
 	return nil
 }
 
-func (p *Plan) UpdatePrice(price uint64, currency string) error {
-	if !validCurrencies[currency] {
-		return fmt.Errorf("invalid currency code: %s", currency)
-	}
-	p.price = price
-	p.currency = currency
-	p.updatedAt = time.Now()
-	p.version++
-	return nil
-}
-
 func (p *Plan) UpdateDescription(description string) {
 	p.description = description
 	p.updatedAt = time.Now()
@@ -321,13 +274,6 @@ func (p *Plan) SetPublic(isPublic bool) {
 	p.isPublic = isPublic
 	p.updatedAt = time.Now()
 	p.version++
-}
-
-func (p *Plan) HasFeature(feature string) bool {
-	if p.features == nil {
-		return false
-	}
-	return p.features.HasFeature(feature)
 }
 
 func (p *Plan) GetLimit(key string) (interface{}, bool) {

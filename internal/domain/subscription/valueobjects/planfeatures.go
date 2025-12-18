@@ -6,36 +6,17 @@ import (
 )
 
 type PlanFeatures struct {
-	Features []string               `json:"features"`
-	Limits   map[string]interface{} `json:"limits"`
+	Limits map[string]interface{} `json:"limits"`
 }
 
-func NewPlanFeatures(features []string, limits map[string]interface{}) *PlanFeatures {
-	if features == nil {
-		features = []string{}
-	}
+func NewPlanFeatures(limits map[string]interface{}) *PlanFeatures {
 	if limits == nil {
 		limits = make(map[string]interface{})
 	}
 
 	return &PlanFeatures{
-		Features: features,
-		Limits:   limits,
+		Limits: limits,
 	}
-}
-
-func (p *PlanFeatures) HasFeature(feature string) bool {
-	if p.Features == nil {
-		return false
-	}
-
-	for _, f := range p.Features {
-		if f == feature {
-			return true
-		}
-	}
-
-	return false
 }
 
 func (p *PlanFeatures) GetLimit(key string) (interface{}, bool) {
@@ -76,29 +57,6 @@ func (p *PlanFeatures) IsWithinLimit(key string, value interface{}) bool {
 	}
 
 	return false
-}
-
-func (p *PlanFeatures) AddFeature(feature string) {
-	if p.Features == nil {
-		p.Features = []string{}
-	}
-
-	if !p.HasFeature(feature) {
-		p.Features = append(p.Features, feature)
-	}
-}
-
-func (p *PlanFeatures) RemoveFeature(feature string) {
-	if p.Features == nil {
-		return
-	}
-
-	for i, f := range p.Features {
-		if f == feature {
-			p.Features = append(p.Features[:i], p.Features[i+1:]...)
-			return
-		}
-	}
 }
 
 func (p *PlanFeatures) SetLimit(key string, value interface{}) {
@@ -160,26 +118,18 @@ func (p *PlanFeatures) GetBoolLimit(key string) (bool, error) {
 }
 
 func (p *PlanFeatures) Clone() *PlanFeatures {
-	features := make([]string, len(p.Features))
-	copy(features, p.Features)
-
 	limits := make(map[string]interface{})
 	for k, v := range p.Limits {
 		limits[k] = v
 	}
 
 	return &PlanFeatures{
-		Features: features,
-		Limits:   limits,
+		Limits: limits,
 	}
 }
 
 func (p *PlanFeatures) IsEmpty() bool {
-	return len(p.Features) == 0 && len(p.Limits) == 0
-}
-
-func (p *PlanFeatures) FeatureCount() int {
-	return len(p.Features)
+	return len(p.Limits) == 0
 }
 
 func (p *PlanFeatures) LimitCount() int {
@@ -189,21 +139,6 @@ func (p *PlanFeatures) LimitCount() int {
 func (p *PlanFeatures) Equals(other *PlanFeatures) bool {
 	if other == nil {
 		return false
-	}
-
-	if len(p.Features) != len(other.Features) {
-		return false
-	}
-
-	featureMap := make(map[string]bool)
-	for _, f := range p.Features {
-		featureMap[f] = true
-	}
-
-	for _, f := range other.Features {
-		if !featureMap[f] {
-			return false
-		}
 	}
 
 	if len(p.Limits) != len(other.Limits) {
@@ -225,30 +160,23 @@ func (p *PlanFeatures) Equals(other *PlanFeatures) bool {
 
 func (p *PlanFeatures) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
-		Features []string               `json:"features"`
-		Limits   map[string]interface{} `json:"limits"`
+		Limits map[string]interface{} `json:"limits"`
 	}{
-		Features: p.Features,
-		Limits:   p.Limits,
+		Limits: p.Limits,
 	})
 }
 
 func (p *PlanFeatures) UnmarshalJSON(data []byte) error {
 	aux := &struct {
-		Features []string               `json:"features"`
-		Limits   map[string]interface{} `json:"limits"`
+		Limits map[string]interface{} `json:"limits"`
 	}{}
 
 	if err := json.Unmarshal(data, aux); err != nil {
 		return err
 	}
 
-	p.Features = aux.Features
 	p.Limits = aux.Limits
 
-	if p.Features == nil {
-		p.Features = []string{}
-	}
 	if p.Limits == nil {
 		p.Limits = make(map[string]interface{})
 	}
@@ -270,12 +198,6 @@ const (
 	LimitKeyRuleCount = "rule_limit"
 	// LimitKeyRuleTypes represents allowed rule types (unified for both forward and node)
 	LimitKeyRuleTypes = "rule_types"
-)
-
-// Standard feature keys for plan capabilities
-const (
-	// FeatureForward represents the forward capability feature
-	FeatureForward = "forward"
 )
 
 // Forward-related limit keys (deprecated, use unified keys instead)

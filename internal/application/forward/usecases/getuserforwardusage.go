@@ -84,60 +84,62 @@ func (uc *GetUserForwardUsageUseCase) Execute(ctx context.Context, query GetUser
 			continue
 		}
 
+		// Check if plan is forward type
+		if !plan.PlanType().IsForward() {
+			continue
+		}
+
 		planFeatures := plan.Features()
 		if planFeatures == nil {
 			continue
 		}
 
-		// Check if plan has forward feature
-		if planFeatures.HasFeature("forward") {
-			// Get rule limit
-			limit, err := planFeatures.GetRuleLimit()
-			if err != nil {
-				uc.logger.Warnw("failed to get rule limit", "subscription_id", sub.ID(), "error", err)
-				continue
-			}
+		// Get rule limit
+		limit, err := planFeatures.GetRuleLimit()
+		if err != nil {
+			uc.logger.Warnw("failed to get rule limit", "subscription_id", sub.ID(), "error", err)
+			continue
+		}
 
-			// 0 means unlimited - once found, it cannot be overridden
-			if limit == 0 {
-				hasUnlimitedRules = true
-			} else if !hasUnlimitedRules && limit > maxRuleLimit {
-				// Only update if no unlimited found and this limit is higher
-				maxRuleLimit = limit
-			}
+		// 0 means unlimited - once found, it cannot be overridden
+		if limit == 0 {
+			hasUnlimitedRules = true
+		} else if !hasUnlimitedRules && limit > maxRuleLimit {
+			// Only update if no unlimited found and this limit is higher
+			maxRuleLimit = limit
+		}
 
-			// Get traffic limit
-			trafficLimit, err := planFeatures.GetTrafficLimit()
-			if err != nil {
-				uc.logger.Warnw("failed to get traffic limit", "subscription_id", sub.ID(), "error", err)
-				continue
-			}
+		// Get traffic limit
+		trafficLimit, err := planFeatures.GetTrafficLimit()
+		if err != nil {
+			uc.logger.Warnw("failed to get traffic limit", "subscription_id", sub.ID(), "error", err)
+			continue
+		}
 
-			// 0 means unlimited - once found, it cannot be overridden
-			if trafficLimit == 0 {
-				hasUnlimitedTraffic = true
-			} else if !hasUnlimitedTraffic && trafficLimit > maxTrafficLimit {
-				// Only update if no unlimited found and this limit is higher
-				maxTrafficLimit = trafficLimit
-			}
+		// 0 means unlimited - once found, it cannot be overridden
+		if trafficLimit == 0 {
+			hasUnlimitedTraffic = true
+		} else if !hasUnlimitedTraffic && trafficLimit > maxTrafficLimit {
+			// Only update if no unlimited found and this limit is higher
+			maxTrafficLimit = trafficLimit
+		}
 
-			// Collect allowed rule types
-			types, err := planFeatures.GetRuleTypes()
-			if err != nil {
-				uc.logger.Warnw("failed to get rule types", "subscription_id", sub.ID(), "error", err)
-				continue
-			}
+		// Collect allowed rule types
+		types, err := planFeatures.GetRuleTypes()
+		if err != nil {
+			uc.logger.Warnw("failed to get rule types", "subscription_id", sub.ID(), "error", err)
+			continue
+		}
 
-			// Empty means all types allowed
-			if len(types) == 0 {
-				allowedTypesSet["direct"] = true
-				allowedTypesSet["entry"] = true
-				allowedTypesSet["chain"] = true
-				allowedTypesSet["direct_chain"] = true
-			} else {
-				for _, t := range types {
-					allowedTypesSet[t] = true
-				}
+		// Empty means all types allowed
+		if len(types) == 0 {
+			allowedTypesSet["direct"] = true
+			allowedTypesSet["entry"] = true
+			allowedTypesSet["chain"] = true
+			allowedTypesSet["direct_chain"] = true
+		} else {
+			for _, t := range types {
+				allowedTypesSet[t] = true
 			}
 		}
 	}

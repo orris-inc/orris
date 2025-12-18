@@ -33,20 +33,16 @@ type PlanDTO struct {
 	Name         string                 `json:"name"`
 	Slug         string                 `json:"slug"`
 	Description  string                 `json:"description"`
-	Price        uint64                 `json:"price"`         // Deprecated: use Pricings array, kept for backward compatibility
-	Currency     string                 `json:"currency"`      // Deprecated: use Pricings array, kept for backward compatibility
-	BillingCycle string                 `json:"billing_cycle"` // Deprecated: use Pricings array, kept for backward compatibility
 	TrialDays    int                    `json:"trial_days"`
 	Status       string                 `json:"status"`
 	PlanType     string                 `json:"plan_type"` // Plan type: node or forward
-	Features     []string               `json:"features"`
 	Limits       map[string]interface{} `json:"limits"`
 	APIRateLimit uint                   `json:"api_rate_limit"`
 	MaxUsers     uint                   `json:"max_users"`
 	MaxProjects  uint                   `json:"max_projects"`
 	IsPublic     bool                   `json:"is_public"`
 	SortOrder    int                    `json:"sort_order"`
-	Pricings     []*PricingOptionDTO    `json:"pricings,omitempty"` // Multiple pricing options for different billing cycles
+	Pricings     []*PricingOptionDTO    `json:"pricings"` // Multiple pricing options for different billing cycles
 	CreatedAt    time.Time              `json:"created_at"`
 	UpdatedAt    time.Time              `json:"updated_at"`
 }
@@ -154,11 +150,8 @@ func ToPlanDTO(plan *subscription.Plan) *PlanDTO {
 		return nil
 	}
 
-	var features []string
 	var limits map[string]interface{}
-
 	if plan.Features() != nil {
-		features = plan.Features().Features
 		limits = plan.Features().Limits
 	}
 
@@ -167,13 +160,9 @@ func ToPlanDTO(plan *subscription.Plan) *PlanDTO {
 		Name:         plan.Name(),
 		Slug:         plan.Slug(),
 		Description:  plan.Description(),
-		Price:        plan.Price(),
-		Currency:     plan.Currency(),
-		BillingCycle: plan.BillingCycle().String(),
 		TrialDays:    plan.TrialDays(),
 		Status:       string(plan.Status()),
 		PlanType:     plan.PlanType().String(),
-		Features:     features,
 		Limits:       limits,
 		APIRateLimit: plan.APIRateLimit(),
 		MaxUsers:     plan.MaxUsers(),

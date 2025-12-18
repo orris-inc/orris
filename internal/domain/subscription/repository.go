@@ -48,13 +48,12 @@ type PlanRepository interface {
 }
 
 type PlanFilter struct {
-	Status       *string
-	IsPublic     *bool
-	BillingCycle *string
-	PlanType     *string // Optional: filter by plan type ("node" or "forward")
-	Page         int
-	PageSize     int
-	SortBy       string
+	Status   *string
+	IsPublic *bool
+	PlanType *string // Optional: filter by plan type ("node" or "forward")
+	Page     int
+	PageSize int
+	SortBy   string
 }
 
 type SubscriptionTokenRepository interface {

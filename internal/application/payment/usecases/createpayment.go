@@ -15,6 +15,7 @@ import (
 type CreatePaymentCommand struct {
 	SubscriptionID uint
 	UserID         uint
+	BillingCycle   string // Required: billing cycle to determine price
 	PaymentMethod  string
 	ReturnURL      string
 }
@@ -29,6 +30,7 @@ type CreatePaymentUseCase struct {
 	paymentRepo      payment.PaymentRepository
 	subscriptionRepo subscription.SubscriptionRepository
 	planRepo         subscription.PlanRepository
+	pricingRepo      subscription.PlanPricingRepository
 	gateway          paymentgateway.PaymentGateway
 	logger           logger.Interface
 	config           PaymentConfig
@@ -42,6 +44,7 @@ func NewCreatePaymentUseCase(
 	paymentRepo payment.PaymentRepository,
 	subscriptionRepo subscription.SubscriptionRepository,
 	planRepo subscription.PlanRepository,
+	pricingRepo subscription.PlanPricingRepository,
 	gateway paymentgateway.PaymentGateway,
 	logger logger.Interface,
 	config PaymentConfig,
@@ -50,6 +53,7 @@ func NewCreatePaymentUseCase(
 		paymentRepo:      paymentRepo,
 		subscriptionRepo: subscriptionRepo,
 		planRepo:         planRepo,
+		pricingRepo:      pricingRepo,
 		gateway:          gateway,
 		logger:           logger,
 		config:           config,
@@ -78,7 +82,30 @@ func (uc *CreatePaymentUseCase) Execute(ctx context.Context, cmd CreatePaymentCo
 		return nil, fmt.Errorf("pending payment already exists")
 	}
 
-	amount := vo.NewMoney(int64(plan.Price()), plan.Currency())
+	// BillingCycle is required to determine the price
+	if cmd.BillingCycle == "" {
+		return nil, fmt.Errorf("billing cycle is required")
+	}
+
+	// Parse and validate the billing cycle
+	billingCycle, err := subscriptionVO.ParseBillingCycle(cmd.BillingCycle)
+	if err != nil {
+		uc.logger.Warnw("invalid billing cycle", "error", err, "billing_cycle", cmd.BillingCycle)
+		return nil, fmt.Errorf("invalid billing cycle: %w", err)
+	}
+
+	// Get pricing for the specified billing cycle
+	pricing, err := uc.pricingRepo.GetByPlanAndCycle(ctx, sub.PlanID(), billingCycle)
+	if err != nil {
+		uc.logger.Warnw("failed to get pricing", "error", err, "plan_id", sub.PlanID(), "billing_cycle", billingCycle)
+		return nil, fmt.Errorf("failed to get pricing: %w", err)
+	}
+
+	if pricing == nil {
+		return nil, fmt.Errorf("pricing not found for selected billing cycle")
+	}
+
+	amount := vo.NewMoney(int64(pricing.Price()), pricing.Currency())
 	method, err := vo.NewPaymentMethod(cmd.PaymentMethod)
 	if err != nil {
 		return nil, fmt.Errorf("invalid payment method: %w", err)

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/orris-inc/orris/internal/shared/constants"
 	vo "github.com/orris-inc/orris/internal/domain/ticket/valueobjects"
+	"github.com/orris-inc/orris/internal/shared/constants"
 )
 
 type Ticket struct {

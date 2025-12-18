@@ -18,12 +18,8 @@ type PlanModel struct {
 	Slug         string `gorm:"uniqueIndex;not null;size:50"`
 	PlanType     string `gorm:"not null;size:20;default:node"`
 	Description  string `gorm:"size:500"`
-	Price        uint64 `gorm:"not null"`
-	Currency     string `gorm:"not null;size:3"`
-	BillingCycle string `gorm:"not null;size:20"`
 	TrialDays    int    `gorm:"default:0"`
 	Status       string `gorm:"not null;size:20;default:active"`
-	Features     datatypes.JSON
 	Limits       datatypes.JSON
 	APIRateLimit uint `gorm:"default:60"`
 	MaxUsers     uint `gorm:"default:1"`
@@ -46,9 +42,6 @@ func (PlanModel) TableName() string {
 func (p *PlanModel) BeforeCreate(tx *gorm.DB) error {
 	if p.Status == "" {
 		p.Status = string(subscription.PlanStatusActive)
-	}
-	if p.Currency == "" {
-		p.Currency = constants.DefaultCurrency
 	}
 	return nil
 }

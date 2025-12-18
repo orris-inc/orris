@@ -12,23 +12,27 @@ import (
 
 type RenewSubscriptionCommand struct {
 	SubscriptionID uint
+	BillingCycle   string // Required: billing cycle for renewal period
 	IsAutoRenew    bool
 }
 
 type RenewSubscriptionUseCase struct {
 	subscriptionRepo subscription.SubscriptionRepository
 	planRepo         subscription.PlanRepository
+	pricingRepo      subscription.PlanPricingRepository
 	logger           logger.Interface
 }
 
 func NewRenewSubscriptionUseCase(
 	subscriptionRepo subscription.SubscriptionRepository,
 	planRepo subscription.PlanRepository,
+	pricingRepo subscription.PlanPricingRepository,
 	logger logger.Interface,
 ) *RenewSubscriptionUseCase {
 	return &RenewSubscriptionUseCase{
 		subscriptionRepo: subscriptionRepo,
 		planRepo:         planRepo,
+		pricingRepo:      pricingRepo,
 		logger:           logger,
 	}
 }
@@ -50,7 +54,31 @@ func (uc *RenewSubscriptionUseCase) Execute(ctx context.Context, cmd RenewSubscr
 		return fmt.Errorf("plan is not active")
 	}
 
-	newEndDate := uc.calculateNewEndDate(sub.EndDate(), plan.BillingCycle())
+	// BillingCycle is required for renewal
+	if cmd.BillingCycle == "" {
+		return fmt.Errorf("billing cycle is required for renewal")
+	}
+
+	// Parse and validate the billing cycle
+	billingCycle, err := vo.ParseBillingCycle(cmd.BillingCycle)
+	if err != nil {
+		uc.logger.Warnw("invalid billing cycle for renewal", "error", err, "billing_cycle", cmd.BillingCycle)
+		return fmt.Errorf("invalid billing cycle: %w", err)
+	}
+
+	// Verify that pricing exists for this plan and billing cycle
+	pricing, err := uc.pricingRepo.GetByPlanAndCycle(ctx, sub.PlanID(), billingCycle)
+	if err != nil {
+		uc.logger.Warnw("failed to get pricing for billing cycle", "error", err, "plan_id", sub.PlanID(), "billing_cycle", billingCycle)
+		return fmt.Errorf("pricing not available for selected billing cycle: %w", err)
+	}
+
+	if pricing == nil {
+		uc.logger.Warnw("pricing not found for billing cycle", "plan_id", sub.PlanID(), "billing_cycle", billingCycle)
+		return fmt.Errorf("pricing not found for selected billing cycle")
+	}
+
+	newEndDate := uc.calculateNewEndDate(sub.EndDate(), billingCycle)
 
 	if err := sub.Renew(newEndDate); err != nil {
 		uc.logger.Errorw("failed to renew subscription", "error", err, "subscription_id", cmd.SubscriptionID)

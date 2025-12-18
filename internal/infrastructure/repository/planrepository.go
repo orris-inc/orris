@@ -85,12 +85,8 @@ func (r *PlanRepositoryImpl) Update(ctx context.Context, plan *subscription.Plan
 		Updates(map[string]interface{}{
 			"name":           model.Name,
 			"description":    model.Description,
-			"price":          model.Price,
-			"currency":       model.Currency,
-			"billing_cycle":  model.BillingCycle,
 			"trial_days":     model.TrialDays,
 			"status":         model.Status,
-			"features":       model.Features,
 			"limits":         model.Limits,
 			"api_rate_limit": model.APIRateLimit,
 			"max_users":      model.MaxUsers,
@@ -169,10 +165,6 @@ func (r *PlanRepositoryImpl) List(ctx context.Context, filter subscription.PlanF
 		query = query.Where("is_public = ?", *filter.IsPublic)
 	}
 
-	if filter.BillingCycle != nil && *filter.BillingCycle != "" {
-		query = query.Where("billing_cycle = ?", *filter.BillingCycle)
-	}
-
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
 		r.logger.Errorw("failed to count subscription plans", "error", err)
@@ -233,40 +225,14 @@ func (r *PlanRepositoryImpl) toEntity(model *models.PlanModel) (*subscription.Pl
 		return nil, nil
 	}
 
-	billingCycle, err := vo.NewBillingCycle(model.BillingCycle)
-	if err != nil {
-		r.logger.Errorw("invalid billing cycle", "error", err, "value", model.BillingCycle)
-		return nil, fmt.Errorf("invalid billing cycle: %w", err)
-	}
-
 	var features *vo.PlanFeatures
-	if model.Features != nil {
-		var featuresData map[string]interface{}
-		if err := json.Unmarshal(model.Features, &featuresData); err != nil {
-			r.logger.Errorw("failed to unmarshal features", "error", err)
-			return nil, fmt.Errorf("failed to unmarshal features: %w", err)
-		}
-
-		var featuresList []string
-		if featuresRaw, ok := featuresData["features"]; ok {
-			if featuresArray, ok := featuresRaw.([]interface{}); ok {
-				for _, f := range featuresArray {
-					if str, ok := f.(string); ok {
-						featuresList = append(featuresList, str)
-					}
-				}
-			}
-		}
-
+	if model.Limits != nil {
 		var limits map[string]interface{}
-		if model.Limits != nil {
-			if err := json.Unmarshal(model.Limits, &limits); err != nil {
-				r.logger.Errorw("failed to unmarshal limits", "error", err)
-				return nil, fmt.Errorf("failed to unmarshal limits: %w", err)
-			}
+		if err := json.Unmarshal(model.Limits, &limits); err != nil {
+			r.logger.Errorw("failed to unmarshal limits", "error", err)
+			return nil, fmt.Errorf("failed to unmarshal limits: %w", err)
 		}
-
-		features = vo.NewPlanFeatures(featuresList, limits)
+		features = vo.NewPlanFeatures(limits)
 	}
 
 	var metadata map[string]interface{}
@@ -282,9 +248,6 @@ func (r *PlanRepositoryImpl) toEntity(model *models.PlanModel) (*subscription.Pl
 		model.Name,
 		model.Slug,
 		model.Description,
-		model.Price,
-		model.Currency,
-		*billingCycle,
 		model.TrialDays,
 		model.Status,
 		model.PlanType,
@@ -306,23 +269,12 @@ func (r *PlanRepositoryImpl) toModel(plan *subscription.Plan) (*models.PlanModel
 		return nil, nil
 	}
 
-	var featuresJSON []byte
 	var limitsJSON []byte
-	if plan.Features() != nil {
+	if plan.Features() != nil && plan.Features().Limits != nil {
 		var err error
-		featuresData := map[string]interface{}{
-			"features": plan.Features().Features,
-		}
-		featuresJSON, err = json.Marshal(featuresData)
+		limitsJSON, err = json.Marshal(plan.Features().Limits)
 		if err != nil {
-			return nil, fmt.Errorf("failed to marshal features: %w", err)
-		}
-
-		if plan.Features().Limits != nil {
-			limitsJSON, err = json.Marshal(plan.Features().Limits)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal limits: %w", err)
-			}
+			return nil, fmt.Errorf("failed to marshal limits: %w", err)
 		}
 	}
 
@@ -339,13 +291,10 @@ func (r *PlanRepositoryImpl) toModel(plan *subscription.Plan) (*models.PlanModel
 		ID:           plan.ID(),
 		Name:         plan.Name(),
 		Slug:         plan.Slug(),
+		PlanType:     plan.PlanType().String(),
 		Description:  plan.Description(),
-		Price:        plan.Price(),
-		Currency:     plan.Currency(),
-		BillingCycle: plan.BillingCycle().String(),
 		TrialDays:    plan.TrialDays(),
 		Status:       string(plan.Status()),
-		Features:     featuresJSON,
 		Limits:       limitsJSON,
 		APIRateLimit: plan.APIRateLimit(),
 		MaxUsers:     plan.MaxUsers(),

@@ -22,14 +22,14 @@ var (
 
 // SubscriptionHandler handles user subscription operations
 type SubscriptionHandler struct {
-	createUseCase         *usecases.CreateSubscriptionUseCase
-	getUseCase            *usecases.GetSubscriptionUseCase
-	listUserUseCase       *usecases.ListUserSubscriptionsUseCase
-	cancelUseCase         *usecases.CancelSubscriptionUseCase
-	changePlanUseCase     *usecases.ChangePlanUseCase
-	getUsageStatsUseCase  *usecases.GetSubscriptionUsageStatsUseCase
-	resetLinkUseCase      *usecases.ResetSubscriptionLinkUseCase
-	logger                logger.Interface
+	createUseCase        *usecases.CreateSubscriptionUseCase
+	getUseCase           *usecases.GetSubscriptionUseCase
+	listUserUseCase      *usecases.ListUserSubscriptionsUseCase
+	cancelUseCase        *usecases.CancelSubscriptionUseCase
+	changePlanUseCase    *usecases.ChangePlanUseCase
+	getUsageStatsUseCase *usecases.GetSubscriptionUsageStatsUseCase
+	resetLinkUseCase     *usecases.ResetSubscriptionLinkUseCase
+	logger               logger.Interface
 }
 
 // NewSubscriptionHandler creates a new user subscription handler
