@@ -7,13 +7,13 @@ import (
 
 type Service struct {
 	subscriptionRepo subscription.SubscriptionRepository
-	planRepo         subscription.SubscriptionPlanRepository
+	planRepo         subscription.PlanRepository
 	logger           logger.Interface
 }
 
 func NewService(
 	subscriptionRepo subscription.SubscriptionRepository,
-	planRepo subscription.SubscriptionPlanRepository,
+	planRepo subscription.PlanRepository,
 	logger logger.Interface,
 ) *Service {
 	return &Service{

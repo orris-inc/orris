@@ -22,7 +22,7 @@ var validCurrencies = map[string]bool{
 	"JPY": true,
 }
 
-type SubscriptionPlan struct {
+type Plan struct {
 	id           uint
 	name         string
 	slug         string
@@ -44,8 +44,8 @@ type SubscriptionPlan struct {
 	updatedAt    time.Time
 }
 
-func NewSubscriptionPlan(name, slug, description string, price uint64, currency string,
-	billingCycle vo.BillingCycle, trialDays int) (*SubscriptionPlan, error) {
+func NewPlan(name, slug, description string, price uint64, currency string,
+	billingCycle vo.BillingCycle, trialDays int) (*Plan, error) {
 
 	if name == "" {
 		return nil, fmt.Errorf("plan name is required")
@@ -70,7 +70,7 @@ func NewSubscriptionPlan(name, slug, description string, price uint64, currency 
 	}
 
 	now := time.Now()
-	return &SubscriptionPlan{
+	return &Plan{
 		name:         name,
 		slug:         slug,
 		description:  description,
@@ -92,11 +92,11 @@ func NewSubscriptionPlan(name, slug, description string, price uint64, currency 
 	}, nil
 }
 
-func ReconstructSubscriptionPlan(id uint, name, slug, description string, price uint64,
+func ReconstructPlan(id uint, name, slug, description string, price uint64,
 	currency string, billingCycle vo.BillingCycle, trialDays int, status string,
 	features *vo.PlanFeatures, apiRateLimit, maxUsers, maxProjects uint,
 	isPublic bool, sortOrder int, metadata map[string]interface{}, version int,
-	createdAt, updatedAt time.Time) (*SubscriptionPlan, error) {
+	createdAt, updatedAt time.Time) (*Plan, error) {
 
 	if id == 0 {
 		return nil, fmt.Errorf("plan ID cannot be zero")
@@ -111,7 +111,7 @@ func ReconstructSubscriptionPlan(id uint, name, slug, description string, price 
 		metadata = make(map[string]interface{})
 	}
 
-	return &SubscriptionPlan{
+	return &Plan{
 		id:           id,
 		name:         name,
 		slug:         slug,
@@ -134,11 +134,11 @@ func ReconstructSubscriptionPlan(id uint, name, slug, description string, price 
 	}, nil
 }
 
-func (p *SubscriptionPlan) ID() uint {
+func (p *Plan) ID() uint {
 	return p.id
 }
 
-func (p *SubscriptionPlan) SetID(id uint) error {
+func (p *Plan) SetID(id uint) error {
 	if p.id != 0 {
 		return fmt.Errorf("plan ID is already set")
 	}
@@ -149,85 +149,85 @@ func (p *SubscriptionPlan) SetID(id uint) error {
 	return nil
 }
 
-func (p *SubscriptionPlan) Name() string {
+func (p *Plan) Name() string {
 	return p.name
 }
 
-func (p *SubscriptionPlan) Slug() string {
+func (p *Plan) Slug() string {
 	return p.slug
 }
 
-func (p *SubscriptionPlan) Description() string {
+func (p *Plan) Description() string {
 	return p.description
 }
 
-func (p *SubscriptionPlan) Price() uint64 {
+func (p *Plan) Price() uint64 {
 	return p.price
 }
 
-func (p *SubscriptionPlan) Currency() string {
+func (p *Plan) Currency() string {
 	return p.currency
 }
 
-func (p *SubscriptionPlan) BillingCycle() vo.BillingCycle {
+func (p *Plan) BillingCycle() vo.BillingCycle {
 	return p.billingCycle
 }
 
-func (p *SubscriptionPlan) TrialDays() int {
+func (p *Plan) TrialDays() int {
 	return p.trialDays
 }
 
-func (p *SubscriptionPlan) Status() PlanStatus {
+func (p *Plan) Status() PlanStatus {
 	return p.status
 }
 
-func (p *SubscriptionPlan) Features() *vo.PlanFeatures {
+func (p *Plan) Features() *vo.PlanFeatures {
 	return p.features
 }
 
-func (p *SubscriptionPlan) APIRateLimit() uint {
+func (p *Plan) APIRateLimit() uint {
 	return p.apiRateLimit
 }
 
-func (p *SubscriptionPlan) MaxUsers() uint {
+func (p *Plan) MaxUsers() uint {
 	return p.maxUsers
 }
 
-func (p *SubscriptionPlan) MaxProjects() uint {
+func (p *Plan) MaxProjects() uint {
 	return p.maxProjects
 }
 
-func (p *SubscriptionPlan) IsPublic() bool {
+func (p *Plan) IsPublic() bool {
 	return p.isPublic
 }
 
-func (p *SubscriptionPlan) SortOrder() int {
+func (p *Plan) SortOrder() int {
 	return p.sortOrder
 }
 
-func (p *SubscriptionPlan) Metadata() map[string]interface{} {
+func (p *Plan) Metadata() map[string]interface{} {
 	return p.metadata
 }
 
-func (p *SubscriptionPlan) CreatedAt() time.Time {
+func (p *Plan) CreatedAt() time.Time {
 	return p.createdAt
 }
 
-func (p *SubscriptionPlan) UpdatedAt() time.Time {
+func (p *Plan) UpdatedAt() time.Time {
 	return p.updatedAt
 }
 
 // Version returns the aggregate version for optimistic locking
-func (p *SubscriptionPlan) Version() int {
+func (p *Plan) Version() int {
 	return p.version
 }
 
 // IncrementVersion increments the version for optimistic locking
-func (p *SubscriptionPlan) IncrementVersion() {
+func (p *Plan) IncrementVersion() {
 	p.version++
 }
 
-func (p *SubscriptionPlan) Activate() error {
+func (p *Plan) Activate() error {
 	if p.status == PlanStatusActive {
 		return nil
 	}
@@ -237,7 +237,7 @@ func (p *SubscriptionPlan) Activate() error {
 	return nil
 }
 
-func (p *SubscriptionPlan) Deactivate() error {
+func (p *Plan) Deactivate() error {
 	if p.status == PlanStatusInactive {
 		return nil
 	}
@@ -247,7 +247,7 @@ func (p *SubscriptionPlan) Deactivate() error {
 	return nil
 }
 
-func (p *SubscriptionPlan) UpdatePrice(price uint64, currency string) error {
+func (p *Plan) UpdatePrice(price uint64, currency string) error {
 	if !validCurrencies[currency] {
 		return fmt.Errorf("invalid currency code: %s", currency)
 	}
@@ -258,13 +258,13 @@ func (p *SubscriptionPlan) UpdatePrice(price uint64, currency string) error {
 	return nil
 }
 
-func (p *SubscriptionPlan) UpdateDescription(description string) {
+func (p *Plan) UpdateDescription(description string) {
 	p.description = description
 	p.updatedAt = time.Now()
 	p.version++
 }
 
-func (p *SubscriptionPlan) UpdateFeatures(features *vo.PlanFeatures) error {
+func (p *Plan) UpdateFeatures(features *vo.PlanFeatures) error {
 	if features == nil {
 		return fmt.Errorf("features cannot be nil")
 	}
@@ -274,7 +274,7 @@ func (p *SubscriptionPlan) UpdateFeatures(features *vo.PlanFeatures) error {
 	return nil
 }
 
-func (p *SubscriptionPlan) SetAPIRateLimit(limit uint) error {
+func (p *Plan) SetAPIRateLimit(limit uint) error {
 	if limit == 0 {
 		return fmt.Errorf("API rate limit must be greater than 0")
 	}
@@ -284,51 +284,51 @@ func (p *SubscriptionPlan) SetAPIRateLimit(limit uint) error {
 	return nil
 }
 
-func (p *SubscriptionPlan) SetMaxUsers(max uint) {
+func (p *Plan) SetMaxUsers(max uint) {
 	p.maxUsers = max
 	p.updatedAt = time.Now()
 	p.version++
 }
 
-func (p *SubscriptionPlan) SetMaxProjects(max uint) {
+func (p *Plan) SetMaxProjects(max uint) {
 	p.maxProjects = max
 	p.updatedAt = time.Now()
 	p.version++
 }
 
-func (p *SubscriptionPlan) SetSortOrder(order int) {
+func (p *Plan) SetSortOrder(order int) {
 	p.sortOrder = order
 	p.updatedAt = time.Now()
 	p.version++
 }
 
-func (p *SubscriptionPlan) SetPublic(isPublic bool) {
+func (p *Plan) SetPublic(isPublic bool) {
 	p.isPublic = isPublic
 	p.updatedAt = time.Now()
 	p.version++
 }
 
-func (p *SubscriptionPlan) HasFeature(feature string) bool {
+func (p *Plan) HasFeature(feature string) bool {
 	if p.features == nil {
 		return false
 	}
 	return p.features.HasFeature(feature)
 }
 
-func (p *SubscriptionPlan) GetLimit(key string) (interface{}, bool) {
+func (p *Plan) GetLimit(key string) (interface{}, bool) {
 	if p.features == nil {
 		return nil, false
 	}
 	return p.features.GetLimit(key)
 }
 
-func (p *SubscriptionPlan) IsActive() bool {
+func (p *Plan) IsActive() bool {
 	return p.status == PlanStatusActive
 }
 
 // GetTrafficLimit returns the monthly traffic limit in bytes from features
 // Returns 0 if unlimited or features not set
-func (p *SubscriptionPlan) GetTrafficLimit() (uint64, error) {
+func (p *Plan) GetTrafficLimit() (uint64, error) {
 	if p.features == nil {
 		return 0, nil // unlimited if no features configured
 	}
@@ -336,7 +336,7 @@ func (p *SubscriptionPlan) GetTrafficLimit() (uint64, error) {
 }
 
 // IsUnlimitedTraffic checks if the plan has unlimited traffic
-func (p *SubscriptionPlan) IsUnlimitedTraffic() bool {
+func (p *Plan) IsUnlimitedTraffic() bool {
 	if p.features == nil {
 		return true // unlimited if no features configured
 	}
@@ -344,7 +344,7 @@ func (p *SubscriptionPlan) IsUnlimitedTraffic() bool {
 }
 
 // HasTrafficRemaining checks if the used traffic is within the plan limit
-func (p *SubscriptionPlan) HasTrafficRemaining(usedBytes uint64) (bool, error) {
+func (p *Plan) HasTrafficRemaining(usedBytes uint64) (bool, error) {
 	if p.features == nil {
 		return true, nil // unlimited if no features configured
 	}

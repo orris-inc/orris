@@ -10,7 +10,7 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
-type UpdateSubscriptionPlanCommand struct {
+type UpdatePlanCommand struct {
 	PlanID       uint
 	Description  *string
 	Price        *uint64
@@ -25,35 +25,35 @@ type UpdateSubscriptionPlanCommand struct {
 	Pricings     *[]dto.PricingOptionInput // Optional: update pricing options
 }
 
-type UpdateSubscriptionPlanUseCase struct {
-	planRepo    subscription.SubscriptionPlanRepository
+type UpdatePlanUseCase struct {
+	planRepo    subscription.PlanRepository
 	pricingRepo subscription.PlanPricingRepository
 	logger      logger.Interface
 }
 
-func NewUpdateSubscriptionPlanUseCase(
-	planRepo subscription.SubscriptionPlanRepository,
+func NewUpdatePlanUseCase(
+	planRepo subscription.PlanRepository,
 	pricingRepo subscription.PlanPricingRepository,
 	logger logger.Interface,
-) *UpdateSubscriptionPlanUseCase {
-	return &UpdateSubscriptionPlanUseCase{
+) *UpdatePlanUseCase {
+	return &UpdatePlanUseCase{
 		planRepo:    planRepo,
 		pricingRepo: pricingRepo,
 		logger:      logger,
 	}
 }
 
-func (uc *UpdateSubscriptionPlanUseCase) Execute(
+func (uc *UpdatePlanUseCase) Execute(
 	ctx context.Context,
-	cmd UpdateSubscriptionPlanCommand,
-) (*dto.SubscriptionPlanDTO, error) {
+	cmd UpdatePlanCommand,
+) (*dto.PlanDTO, error) {
 	plan, err := uc.planRepo.GetByID(ctx, cmd.PlanID)
 	if err != nil {
-		uc.logger.Errorw("failed to get subscription plan", "error", err, "plan_id", cmd.PlanID)
-		return nil, fmt.Errorf("failed to get subscription plan: %w", err)
+		uc.logger.Errorw("failed to get plan", "error", err, "plan_id", cmd.PlanID)
+		return nil, fmt.Errorf("failed to get plan: %w", err)
 	}
 	if plan == nil {
-		return nil, fmt.Errorf("subscription plan not found: %d", cmd.PlanID)
+		return nil, fmt.Errorf("plan not found: %d", cmd.PlanID)
 	}
 
 	if cmd.Description != nil {
@@ -120,8 +120,8 @@ func (uc *UpdateSubscriptionPlanUseCase) Execute(
 	}
 
 	if err := uc.planRepo.Update(ctx, plan); err != nil {
-		uc.logger.Errorw("failed to update subscription plan", "error", err, "plan_id", cmd.PlanID)
-		return nil, fmt.Errorf("failed to update subscription plan: %w", err)
+		uc.logger.Errorw("failed to update plan", "error", err, "plan_id", cmd.PlanID)
+		return nil, fmt.Errorf("failed to update plan: %w", err)
 	}
 
 	// Sync pricing options if provided (delete old, create new)
@@ -185,7 +185,7 @@ func (uc *UpdateSubscriptionPlanUseCase) Execute(
 		return nil, fmt.Errorf("failed to reload updated plan: %w", err)
 	}
 
-	uc.logger.Infow("subscription plan updated successfully", "plan_id", updatedPlan.ID())
+	uc.logger.Infow("plan updated successfully", "plan_id", updatedPlan.ID())
 
 	// Fetch pricings to include in response
 	pricings, err := uc.pricingRepo.GetByPlanID(ctx, updatedPlan.ID())
@@ -194,8 +194,8 @@ func (uc *UpdateSubscriptionPlanUseCase) Execute(
 			"error", err,
 			"plan_id", updatedPlan.ID())
 		// Don't fail the request, just return plan without pricings
-		return dto.ToSubscriptionPlanDTO(updatedPlan), nil
+		return dto.ToPlanDTO(updatedPlan), nil
 	}
 
-	return dto.ToSubscriptionPlanDTOWithPricings(updatedPlan, pricings), nil
+	return dto.ToPlanDTOWithPricings(updatedPlan, pricings), nil
 }

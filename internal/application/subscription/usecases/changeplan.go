@@ -31,13 +31,13 @@ type ChangePlanCommand struct {
 
 type ChangePlanUseCase struct {
 	subscriptionRepo subscription.SubscriptionRepository
-	planRepo         subscription.SubscriptionPlanRepository
+	planRepo         subscription.PlanRepository
 	logger           logger.Interface
 }
 
 func NewChangePlanUseCase(
 	subscriptionRepo subscription.SubscriptionRepository,
-	planRepo subscription.SubscriptionPlanRepository,
+	planRepo subscription.PlanRepository,
 	logger logger.Interface,
 ) *ChangePlanUseCase {
 	return &ChangePlanUseCase{
@@ -120,7 +120,7 @@ func (uc *ChangePlanUseCase) Execute(ctx context.Context, cmd ChangePlanCommand)
 	return nil
 }
 
-func (uc *ChangePlanUseCase) determineChangeType(oldPlan, newPlan *subscription.SubscriptionPlan) ChangeType {
+func (uc *ChangePlanUseCase) determineChangeType(oldPlan, newPlan *subscription.Plan) ChangeType {
 	if newPlan.Price() > oldPlan.Price() {
 		return ChangeTypeUpgrade
 	}

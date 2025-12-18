@@ -9,12 +9,12 @@ import (
 )
 
 type SubscriptionDTO struct {
-	ID                 uint                 `json:"id"`
-	UserID             uint                 `json:"user_id"`
-	UUID               string               `json:"uuid"`
-	SubscribeURL       string               `json:"subscribe_url"`
-	Plan               *SubscriptionPlanDTO `json:"plan,omitempty"`
-	Status             string               `json:"status"`
+	ID                 uint     `json:"id"`
+	UserID             uint     `json:"user_id"`
+	UUID               string   `json:"uuid"`
+	SubscribeURL       string   `json:"subscribe_url"`
+	Plan               *PlanDTO `json:"plan,omitempty"`
+	Status             string   `json:"status"`
 	StartDate          time.Time            `json:"start_date"`
 	EndDate            time.Time            `json:"end_date"`
 	AutoRenew          bool                 `json:"auto_renew"`
@@ -28,7 +28,7 @@ type SubscriptionDTO struct {
 	UpdatedAt          time.Time            `json:"updated_at"`
 }
 
-type SubscriptionPlanDTO struct {
+type PlanDTO struct {
 	ID           uint                   `json:"id"`
 	Name         string                 `json:"name"`
 	Slug         string                 `json:"slug"`
@@ -89,9 +89,9 @@ var (
 		},
 	)
 
-	SubscriptionPlanMapper = mapper.New(
-		ToSubscriptionPlanDTO,
-		func(dto *SubscriptionPlanDTO) *subscription.SubscriptionPlan {
+	PlanMapper = mapper.New(
+		ToPlanDTO,
+		func(dto *PlanDTO) *subscription.Plan {
 			return nil
 		},
 	)
@@ -106,11 +106,11 @@ var (
 
 // ToSubscriptionDTO converts a domain subscription to DTO with subscribe URL.
 // baseURL is used to construct the full subscribe URL (e.g., "https://api.example.com").
-func ToSubscriptionDTO(sub *subscription.Subscription, plan *subscription.SubscriptionPlan, baseURL string) *SubscriptionDTO {
+func ToSubscriptionDTO(sub *subscription.Subscription, plan *subscription.Plan, baseURL string) *SubscriptionDTO {
 	return toSubscriptionDTOInternal(sub, plan, baseURL)
 }
 
-func toSubscriptionDTOInternal(sub *subscription.Subscription, plan *subscription.SubscriptionPlan, baseURL string) *SubscriptionDTO {
+func toSubscriptionDTOInternal(sub *subscription.Subscription, plan *subscription.Plan, baseURL string) *SubscriptionDTO {
 	if sub == nil {
 		return nil
 	}
@@ -141,14 +141,14 @@ func toSubscriptionDTOInternal(sub *subscription.Subscription, plan *subscriptio
 	}
 
 	if plan != nil {
-		dto.Plan = ToSubscriptionPlanDTO(plan)
+		dto.Plan = ToPlanDTO(plan)
 	}
 
 	return dto
 }
 
-// ToSubscriptionPlanDTO converts a domain plan to DTO
-func ToSubscriptionPlanDTO(plan *subscription.SubscriptionPlan) *SubscriptionPlanDTO {
+// ToPlanDTO converts a domain plan to DTO
+func ToPlanDTO(plan *subscription.Plan) *PlanDTO {
 	if plan == nil {
 		return nil
 	}
@@ -161,7 +161,7 @@ func ToSubscriptionPlanDTO(plan *subscription.SubscriptionPlan) *SubscriptionPla
 		limits = plan.Features().Limits
 	}
 
-	return &SubscriptionPlanDTO{
+	return &PlanDTO{
 		ID:           plan.ID(),
 		Name:         plan.Name(),
 		Slug:         plan.Slug(),

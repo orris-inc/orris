@@ -10,7 +10,7 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
-type CreateSubscriptionPlanCommand struct {
+type CreatePlanCommand struct {
 	Name         string
 	Slug         string
 	Description  string
@@ -28,35 +28,35 @@ type CreateSubscriptionPlanCommand struct {
 	Pricings     []dto.PricingOptionInput // Optional: multiple pricing options
 }
 
-type CreateSubscriptionPlanUseCase struct {
-	planRepo    subscription.SubscriptionPlanRepository
+type CreatePlanUseCase struct {
+	planRepo    subscription.PlanRepository
 	pricingRepo subscription.PlanPricingRepository
 	logger      logger.Interface
 }
 
-func NewCreateSubscriptionPlanUseCase(
-	planRepo subscription.SubscriptionPlanRepository,
+func NewCreatePlanUseCase(
+	planRepo subscription.PlanRepository,
 	pricingRepo subscription.PlanPricingRepository,
 	logger logger.Interface,
-) *CreateSubscriptionPlanUseCase {
-	return &CreateSubscriptionPlanUseCase{
+) *CreatePlanUseCase {
+	return &CreatePlanUseCase{
 		planRepo:    planRepo,
 		pricingRepo: pricingRepo,
 		logger:      logger,
 	}
 }
 
-func (uc *CreateSubscriptionPlanUseCase) Execute(
+func (uc *CreatePlanUseCase) Execute(
 	ctx context.Context,
-	cmd CreateSubscriptionPlanCommand,
-) (*dto.SubscriptionPlanDTO, error) {
+	cmd CreatePlanCommand,
+) (*dto.PlanDTO, error) {
 	exists, err := uc.planRepo.ExistsBySlug(ctx, cmd.Slug)
 	if err != nil {
 		uc.logger.Errorw("failed to check slug existence", "error", err, "slug", cmd.Slug)
 		return nil, fmt.Errorf("failed to check slug existence: %w", err)
 	}
 	if exists {
-		return nil, fmt.Errorf("subscription plan with slug %s already exists", cmd.Slug)
+		return nil, fmt.Errorf("plan with slug %s already exists", cmd.Slug)
 	}
 
 	billingCycle, err := vo.NewBillingCycle(cmd.BillingCycle)
@@ -65,7 +65,7 @@ func (uc *CreateSubscriptionPlanUseCase) Execute(
 		return nil, fmt.Errorf("invalid billing cycle: %w", err)
 	}
 
-	plan, err := subscription.NewSubscriptionPlan(
+	plan, err := subscription.NewPlan(
 		cmd.Name,
 		cmd.Slug,
 		cmd.Description,
@@ -75,8 +75,8 @@ func (uc *CreateSubscriptionPlanUseCase) Execute(
 		cmd.TrialDays,
 	)
 	if err != nil {
-		uc.logger.Errorw("failed to create subscription plan", "error", err)
-		return nil, fmt.Errorf("failed to create subscription plan: %w", err)
+		uc.logger.Errorw("failed to create plan", "error", err)
+		return nil, fmt.Errorf("failed to create plan: %w", err)
 	}
 
 	if len(cmd.Features) > 0 || cmd.Limits != nil {
@@ -109,8 +109,8 @@ func (uc *CreateSubscriptionPlanUseCase) Execute(
 	}
 
 	if err := uc.planRepo.Create(ctx, plan); err != nil {
-		uc.logger.Errorw("failed to persist subscription plan", "error", err)
-		return nil, fmt.Errorf("failed to persist subscription plan: %w", err)
+		uc.logger.Errorw("failed to persist plan", "error", err)
+		return nil, fmt.Errorf("failed to persist plan: %w", err)
 	}
 
 	// Create pricing options if provided
@@ -158,7 +158,7 @@ func (uc *CreateSubscriptionPlanUseCase) Execute(
 			"count", len(cmd.Pricings))
 	}
 
-	uc.logger.Infow("subscription plan created successfully", "plan_id", plan.ID(), "slug", plan.Slug())
+	uc.logger.Infow("plan created successfully", "plan_id", plan.ID(), "slug", plan.Slug())
 
 	// Fetch pricings to include in response
 	pricings, err := uc.pricingRepo.GetByPlanID(ctx, plan.ID())
@@ -167,8 +167,8 @@ func (uc *CreateSubscriptionPlanUseCase) Execute(
 			"error", err,
 			"plan_id", plan.ID())
 		// Don't fail the request, just return plan without pricings
-		return dto.ToSubscriptionPlanDTO(plan), nil
+		return dto.ToPlanDTO(plan), nil
 	}
 
-	return dto.ToSubscriptionPlanDTOWithPricings(plan, pricings), nil
+	return dto.ToPlanDTOWithPricings(plan, pricings), nil
 }

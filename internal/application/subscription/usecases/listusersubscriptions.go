@@ -25,14 +25,14 @@ type ListUserSubscriptionsResult struct {
 
 type ListUserSubscriptionsUseCase struct {
 	subscriptionRepo subscription.SubscriptionRepository
-	planRepo         subscription.SubscriptionPlanRepository
+	planRepo         subscription.PlanRepository
 	logger           logger.Interface
 	baseURL          string
 }
 
 func NewListUserSubscriptionsUseCase(
 	subscriptionRepo subscription.SubscriptionRepository,
-	planRepo subscription.SubscriptionPlanRepository,
+	planRepo subscription.PlanRepository,
 	logger logger.Interface,
 	baseURL string,
 ) *ListUserSubscriptionsUseCase {
@@ -75,7 +75,7 @@ func (uc *ListUserSubscriptionsUseCase) Execute(ctx context.Context, query ListU
 		planIDs[sub.PlanID()] = true
 	}
 
-	plans := make(map[uint]*subscription.SubscriptionPlan)
+	plans := make(map[uint]*subscription.Plan)
 	for planID := range planIDs {
 		plan, err := uc.planRepo.GetByID(ctx, planID)
 		if err != nil {

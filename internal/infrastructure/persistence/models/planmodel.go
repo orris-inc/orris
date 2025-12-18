@@ -7,9 +7,9 @@ import (
 	"gorm.io/gorm"
 )
 
-// SubscriptionPlanModel represents the database persistence model for subscription plans
+// PlanModel represents the database persistence model for subscription plans
 // This is the anti-corruption layer between domain and database
-type SubscriptionPlanModel struct {
+type PlanModel struct {
 	ID           uint   `gorm:"primarykey"`
 	Name         string `gorm:"not null;size:100"`
 	Slug         string `gorm:"uniqueIndex;not null;size:50"`
@@ -34,17 +34,17 @@ type SubscriptionPlanModel struct {
 }
 
 // TableName specifies the table name for GORM
-func (SubscriptionPlanModel) TableName() string {
-	return "subscription_plans"
+func (PlanModel) TableName() string {
+	return "plans"
 }
 
 // BeforeCreate hook for GORM
-func (sp *SubscriptionPlanModel) BeforeCreate(tx *gorm.DB) error {
-	if sp.Status == "" {
-		sp.Status = "active"
+func (p *PlanModel) BeforeCreate(tx *gorm.DB) error {
+	if p.Status == "" {
+		p.Status = "active"
 	}
-	if sp.Currency == "" {
-		sp.Currency = "CNY"
+	if p.Currency == "" {
+		p.Currency = "CNY"
 	}
 	return nil
 }

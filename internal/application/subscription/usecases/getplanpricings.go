@@ -15,13 +15,13 @@ type GetPlanPricingsQuery struct {
 }
 
 type GetPlanPricingsUseCase struct {
-	planRepo    subscription.SubscriptionPlanRepository
+	planRepo    subscription.PlanRepository
 	pricingRepo subscription.PlanPricingRepository
 	logger      logger.Interface
 }
 
 func NewGetPlanPricingsUseCase(
-	planRepo subscription.SubscriptionPlanRepository,
+	planRepo subscription.PlanRepository,
 	pricingRepo subscription.PlanPricingRepository,
 	logger logger.Interface,
 ) *GetPlanPricingsUseCase {

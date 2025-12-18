@@ -4,34 +4,46 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+
+	"github.com/orris-inc/orris/internal/shared/constants"
 )
 
-// SubscriptionUsageModel represents the database persistence model for subscription usage tracking
+// SubscriptionUsageModel represents the database persistence model for subscription usage statistics
 // This is the anti-corruption layer between domain and database
 type SubscriptionUsageModel struct {
 	ID             uint      `gorm:"primarykey"`
-	SubscriptionID uint      `gorm:"not null;uniqueIndex:idx_subscription_period"`
-	PeriodStart    time.Time `gorm:"not null;uniqueIndex:idx_subscription_period"`
-	PeriodEnd      time.Time `gorm:"not null;index:idx_period_end"`
-	UsersCount     uint      `gorm:"not null;default:0"`
-	LastResetAt    *time.Time
+	NodeID         uint      `gorm:"not null;index:idx_node_period"`
+	SubscriptionID *uint     `gorm:"index:idx_subscription"`
+	ResourceType   string    `gorm:"column:resource_type;not null;default:'node';size:50;index:idx_resource"`
+	ResourceID     uint      `gorm:"column:resource_id;not null;default:0;index:idx_resource"`
+	Upload         uint64    `gorm:"not null;default:0"`             // bytes uploaded
+	Download       uint64    `gorm:"not null;default:0"`             // bytes downloaded
+	Total          uint64    `gorm:"not null;default:0"`             // total bytes (upload + download)
+	Period         time.Time `gorm:"not null;index:idx_node_period"` // time period for this statistic (hourly/daily)
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
-	DeletedAt      gorm.DeletedAt `gorm:"index"`
+
+	// Note: No foreign key constraints or associations.
+	// All relationships are managed by application business logic.
 }
 
 // TableName specifies the table name for GORM
 func (SubscriptionUsageModel) TableName() string {
-	return "subscription_usages"
+	return constants.TableSubscriptionUsages
 }
 
 // BeforeCreate hook for GORM
-func (su *SubscriptionUsageModel) BeforeCreate(tx *gorm.DB) error {
+func (t *SubscriptionUsageModel) BeforeCreate(tx *gorm.DB) error {
+	// Automatically calculate total if not set
+	if t.Total == 0 {
+		t.Total = t.Upload + t.Download
+	}
 	return nil
 }
 
 // BeforeUpdate hook for GORM
-func (su *SubscriptionUsageModel) BeforeUpdate(tx *gorm.DB) error {
-	su.UpdatedAt = time.Now()
+func (t *SubscriptionUsageModel) BeforeUpdate(tx *gorm.DB) error {
+	// Automatically update total
+	t.Total = t.Upload + t.Download
 	return nil
 }

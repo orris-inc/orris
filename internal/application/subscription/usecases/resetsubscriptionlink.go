@@ -15,14 +15,14 @@ type ResetSubscriptionLinkCommand struct {
 
 type ResetSubscriptionLinkUseCase struct {
 	subscriptionRepo subscription.SubscriptionRepository
-	planRepo         subscription.SubscriptionPlanRepository
+	planRepo         subscription.PlanRepository
 	logger           logger.Interface
 	baseURL          string
 }
 
 func NewResetSubscriptionLinkUseCase(
 	subscriptionRepo subscription.SubscriptionRepository,
-	planRepo subscription.SubscriptionPlanRepository,
+	planRepo subscription.PlanRepository,
 	logger logger.Interface,
 	baseURL string,
 ) *ResetSubscriptionLinkUseCase {

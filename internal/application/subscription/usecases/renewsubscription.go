@@ -17,13 +17,13 @@ type RenewSubscriptionCommand struct {
 
 type RenewSubscriptionUseCase struct {
 	subscriptionRepo subscription.SubscriptionRepository
-	planRepo         subscription.SubscriptionPlanRepository
+	planRepo         subscription.PlanRepository
 	logger           logger.Interface
 }
 
 func NewRenewSubscriptionUseCase(
 	subscriptionRepo subscription.SubscriptionRepository,
-	planRepo subscription.SubscriptionPlanRepository,
+	planRepo subscription.PlanRepository,
 	logger logger.Interface,
 ) *RenewSubscriptionUseCase {
 	return &RenewSubscriptionUseCase{
@@ -42,12 +42,12 @@ func (uc *RenewSubscriptionUseCase) Execute(ctx context.Context, cmd RenewSubscr
 
 	plan, err := uc.planRepo.GetByID(ctx, sub.PlanID())
 	if err != nil {
-		uc.logger.Errorw("failed to get subscription plan", "error", err, "plan_id", sub.PlanID())
-		return fmt.Errorf("failed to get subscription plan: %w", err)
+		uc.logger.Errorw("failed to get plan", "error", err, "plan_id", sub.PlanID())
+		return fmt.Errorf("failed to get plan: %w", err)
 	}
 
 	if !plan.IsActive() {
-		return fmt.Errorf("subscription plan is not active")
+		return fmt.Errorf("plan is not active")
 	}
 
 	newEndDate := uc.calculateNewEndDate(sub.EndDate(), plan.BillingCycle())

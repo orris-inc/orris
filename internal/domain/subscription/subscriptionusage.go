@@ -1,112 +1,201 @@
 package subscription
 
 import (
-	"errors"
+	"fmt"
 	"time"
 )
 
-var (
-	ErrInvalidPeriod = errors.New("period cannot be zero")
-)
-
+// SubscriptionUsage represents usage statistics entity for a subscription
 type SubscriptionUsage struct {
 	id             uint
-	subscriptionID uint
+	resourceType   string
+	resourceID     uint
+	subscriptionID *uint
+	upload         uint64
+	download       uint64
+	total          uint64
 	period         time.Time
-	usersCount     uint
+	createdAt      time.Time
 	updatedAt      time.Time
 }
 
-func NewSubscriptionUsage(subscriptionID uint, period time.Time) (*SubscriptionUsage, error) {
-	if subscriptionID == 0 {
-		return nil, errors.New("subscription ID cannot be zero")
+// NewSubscriptionUsage creates a new subscription usage record
+func NewSubscriptionUsage(resourceType string, resourceID uint, subscriptionID *uint, period time.Time) (*SubscriptionUsage, error) {
+	if resourceType == "" {
+		return nil, fmt.Errorf("resource type is required")
+	}
+	if resourceID == 0 {
+		return nil, fmt.Errorf("resource ID is required")
 	}
 
-	if period.IsZero() {
-		return nil, ErrInvalidPeriod
-	}
-
+	now := time.Now()
 	return &SubscriptionUsage{
+		resourceType:   resourceType,
+		resourceID:     resourceID,
 		subscriptionID: subscriptionID,
+		upload:         0,
+		download:       0,
+		total:          0,
 		period:         period,
-		usersCount:     0,
-		updatedAt:      time.Now(),
+		createdAt:      now,
+		updatedAt:      now,
 	}, nil
 }
 
+// ReconstructSubscriptionUsage reconstructs a subscription usage entity from persistence
 func ReconstructSubscriptionUsage(
 	id uint,
-	subscriptionID uint,
-	period time.Time,
-	usersCount uint,
-	updatedAt time.Time,
+	resourceType string,
+	resourceID uint,
+	subscriptionID *uint,
+	upload, download, total uint64,
+	period, createdAt, updatedAt time.Time,
 ) (*SubscriptionUsage, error) {
 	if id == 0 {
-		return nil, errors.New("usage ID cannot be zero")
+		return nil, fmt.Errorf("subscription usage ID cannot be zero")
 	}
-
-	if subscriptionID == 0 {
-		return nil, errors.New("subscription ID cannot be zero")
+	if resourceType == "" {
+		return nil, fmt.Errorf("resource type is required")
 	}
-
-	if period.IsZero() {
-		return nil, ErrInvalidPeriod
+	if resourceID == 0 {
+		return nil, fmt.Errorf("resource ID is required")
 	}
 
 	return &SubscriptionUsage{
 		id:             id,
+		resourceType:   resourceType,
+		resourceID:     resourceID,
 		subscriptionID: subscriptionID,
+		upload:         upload,
+		download:       download,
+		total:          total,
 		period:         period,
-		usersCount:     usersCount,
+		createdAt:      createdAt,
 		updatedAt:      updatedAt,
 	}, nil
 }
 
-func (u *SubscriptionUsage) IncrementUsersCount() {
-	u.usersCount++
-	u.updatedAt = time.Now()
+// ID returns the usage record ID
+func (su *SubscriptionUsage) ID() uint {
+	return su.id
 }
 
-func (u *SubscriptionUsage) DecrementUsersCount() {
-	if u.usersCount > 0 {
-		u.usersCount--
-		u.updatedAt = time.Now()
+// ResourceType returns the resource type ("node" or "forward_rule")
+func (su *SubscriptionUsage) ResourceType() string {
+	return su.resourceType
+}
+
+// ResourceID returns the resource ID (node_id or forward_rule_id)
+func (su *SubscriptionUsage) ResourceID() uint {
+	return su.resourceID
+}
+
+// SubscriptionID returns the subscription ID
+func (su *SubscriptionUsage) SubscriptionID() *uint {
+	return su.subscriptionID
+}
+
+// Upload returns the upload traffic in bytes
+func (su *SubscriptionUsage) Upload() uint64 {
+	return su.upload
+}
+
+// Download returns the download traffic in bytes
+func (su *SubscriptionUsage) Download() uint64 {
+	return su.download
+}
+
+// Total returns the total traffic in bytes
+func (su *SubscriptionUsage) Total() uint64 {
+	return su.total
+}
+
+// Period returns the period timestamp
+func (su *SubscriptionUsage) Period() time.Time {
+	return su.period
+}
+
+// CreatedAt returns when the usage record was created
+func (su *SubscriptionUsage) CreatedAt() time.Time {
+	return su.createdAt
+}
+
+// UpdatedAt returns when the usage record was last updated
+func (su *SubscriptionUsage) UpdatedAt() time.Time {
+	return su.updatedAt
+}
+
+// SetID sets the usage record ID (only for persistence layer use)
+func (su *SubscriptionUsage) SetID(id uint) error {
+	if su.id != 0 {
+		return fmt.Errorf("subscription usage ID is already set")
 	}
-}
-
-func (u *SubscriptionUsage) Reset() {
-	u.usersCount = 0
-	u.updatedAt = time.Now()
-}
-
-func (u *SubscriptionUsage) ID() uint {
-	return u.id
-}
-
-func (u *SubscriptionUsage) SubscriptionID() uint {
-	return u.subscriptionID
-}
-
-func (u *SubscriptionUsage) Period() time.Time {
-	return u.period
-}
-
-func (u *SubscriptionUsage) UsersCount() uint {
-	return u.usersCount
-}
-
-func (u *SubscriptionUsage) UpdatedAt() time.Time {
-	return u.updatedAt
-}
-
-func (u *SubscriptionUsage) HasUsage() bool {
-	return u.usersCount > 0
-}
-
-func (u *SubscriptionUsage) SetID(id uint) error {
 	if id == 0 {
-		return errors.New("usage ID cannot be zero")
+		return fmt.Errorf("subscription usage ID cannot be zero")
 	}
-	u.id = id
+	su.id = id
+	return nil
+}
+
+// Accumulate adds upload and download traffic to the current record
+func (su *SubscriptionUsage) Accumulate(upload, download uint64) error {
+	if upload == 0 && download == 0 {
+		return nil
+	}
+
+	su.upload += upload
+	su.download += download
+	su.total = su.upload + su.download
+	su.updatedAt = time.Now()
+
+	return nil
+}
+
+// TotalTraffic returns the total traffic (upload + download)
+func (su *SubscriptionUsage) TotalTraffic() uint64 {
+	return su.total
+}
+
+// UploadRatio calculates the ratio of upload traffic to total traffic
+func (su *SubscriptionUsage) UploadRatio() float64 {
+	if su.total == 0 {
+		return 0.0
+	}
+	return float64(su.upload) / float64(su.total)
+}
+
+// DownloadRatio calculates the ratio of download traffic to total traffic
+func (su *SubscriptionUsage) DownloadRatio() float64 {
+	if su.total == 0 {
+		return 0.0
+	}
+	return float64(su.download) / float64(su.total)
+}
+
+// IsEmpty checks if the usage record has no data
+func (su *SubscriptionUsage) IsEmpty() bool {
+	return su.upload == 0 && su.download == 0
+}
+
+// Reset resets all traffic counters to zero
+func (su *SubscriptionUsage) Reset() error {
+	su.upload = 0
+	su.download = 0
+	su.total = 0
+	su.updatedAt = time.Now()
+	return nil
+}
+
+// Validate performs domain-level validation
+func (su *SubscriptionUsage) Validate() error {
+	if su.resourceType == "" {
+		return fmt.Errorf("resource type is required")
+	}
+	if su.resourceID == 0 {
+		return fmt.Errorf("resource ID is required")
+	}
+	if su.total != su.upload+su.download {
+		return fmt.Errorf("total traffic must equal upload + download")
+	}
 	return nil
 }

@@ -43,13 +43,13 @@ const (
 	TableNodes               = "nodes"
 	TableShadowsocksConfigs  = "shadowsocks_configs"
 	TableTrojanConfigs       = "trojan_configs"
-	TableNodeGroups          = "node_groups"
-	TableNodeGroupNodes      = "node_group_nodes"
-	TableNodeGroupPlans      = "node_group_plans"
-	TableSubscriptionTraffic = "subscription_traffic"
-	TableForwardRules        = "forward_rules"
-	TableForwardAgents       = "forward_agents"
-	// TableUserTraffic removed - traffic is now tracked via subscription_traffic with subscription_id
+	TablePlans              = "plans"
+	TablePlanPricings       = "plan_pricings"
+	TableEntitlements       = "entitlements"
+	TableSubscriptionUsages = "subscription_usages"
+	TableForwardRules       = "forward_rules"
+	TableForwardAgents      = "forward_agents"
+	// TableSubscriptionTraffic removed - renamed to subscription_usages to reflect broader resource usage tracking
 
 	// Default values
 	DefaultUserStatus = UserStatusActive

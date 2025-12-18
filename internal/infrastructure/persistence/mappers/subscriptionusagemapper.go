@@ -36,19 +36,25 @@ func (m *subscriptionUsageMapper) ToEntity(model *models.SubscriptionUsageModel)
 		return nil, nil
 	}
 
-	// Reconstruct subscription usage using domain factory method
-	entity, err := subscription.ReconstructSubscriptionUsage(
+	// Reconstruct the domain entity
+	usageEntity, err := subscription.ReconstructSubscriptionUsage(
 		model.ID,
+		model.NodeID,
 		model.SubscriptionID,
-		model.PeriodStart,
-		model.UsersCount,
+		model.ResourceType,
+		model.ResourceID,
+		model.Upload,
+		model.Download,
+		model.Total,
+		model.Period,
+		model.CreatedAt,
 		model.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to reconstruct subscription usage entity: %w", err)
 	}
 
-	return entity, nil
+	return usageEntity, nil
 }
 
 // ToModel converts a domain entity to a persistence model
@@ -59,10 +65,15 @@ func (m *subscriptionUsageMapper) ToModel(entity *subscription.SubscriptionUsage
 
 	model := &models.SubscriptionUsageModel{
 		ID:             entity.ID(),
+		NodeID:         entity.NodeID(),
 		SubscriptionID: entity.SubscriptionID(),
-		PeriodStart:    entity.Period(),
-		PeriodEnd:      entity.Period(),
-		UsersCount:     entity.UsersCount(),
+		ResourceType:   entity.ResourceType(),
+		ResourceID:     entity.ResourceID(),
+		Upload:         entity.Upload(),
+		Download:       entity.Download(),
+		Total:          entity.Total(),
+		Period:         entity.Period(),
+		CreatedAt:      entity.CreatedAt(),
 		UpdatedAt:      entity.UpdatedAt(),
 	}
 
@@ -73,10 +84,10 @@ func (m *subscriptionUsageMapper) ToModel(entity *subscription.SubscriptionUsage
 func (m *subscriptionUsageMapper) ToEntities(models []*models.SubscriptionUsageModel) ([]*subscription.SubscriptionUsage, error) {
 	entities := make([]*subscription.SubscriptionUsage, 0, len(models))
 
-	for i, model := range models {
+	for _, model := range models {
 		entity, err := m.ToEntity(model)
 		if err != nil {
-			return nil, fmt.Errorf("failed to map model at index %d (ID %d): %w", i, model.ID, err)
+			return nil, fmt.Errorf("failed to map model ID %d: %w", model.ID, err)
 		}
 		if entity != nil {
 			entities = append(entities, entity)
@@ -90,10 +101,10 @@ func (m *subscriptionUsageMapper) ToEntities(models []*models.SubscriptionUsageM
 func (m *subscriptionUsageMapper) ToModels(entities []*subscription.SubscriptionUsage) ([]*models.SubscriptionUsageModel, error) {
 	models := make([]*models.SubscriptionUsageModel, 0, len(entities))
 
-	for i, entity := range entities {
+	for _, entity := range entities {
 		model, err := m.ToModel(entity)
 		if err != nil {
-			return nil, fmt.Errorf("failed to map entity at index %d (ID %d): %w", i, entity.ID(), err)
+			return nil, fmt.Errorf("failed to map entity ID %d: %w", entity.ID(), err)
 		}
 		if model != nil {
 			models = append(models, model)

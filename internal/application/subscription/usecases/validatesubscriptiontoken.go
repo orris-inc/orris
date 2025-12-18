@@ -17,13 +17,13 @@ type ValidateSubscriptionTokenCommand struct {
 type ValidateSubscriptionTokenResult struct {
 	Token        *subscription.SubscriptionToken
 	Subscription *subscription.Subscription
-	Plan         *subscription.SubscriptionPlan
+	Plan         *subscription.Plan
 }
 
 type ValidateSubscriptionTokenUseCase struct {
 	tokenRepo        subscription.SubscriptionTokenRepository
 	subscriptionRepo subscription.SubscriptionRepository
-	planRepo         subscription.SubscriptionPlanRepository
+	planRepo         subscription.PlanRepository
 	tokenGenerator   TokenGenerator
 	logger           logger.Interface
 }
@@ -31,7 +31,7 @@ type ValidateSubscriptionTokenUseCase struct {
 func NewValidateSubscriptionTokenUseCase(
 	tokenRepo subscription.SubscriptionTokenRepository,
 	subscriptionRepo subscription.SubscriptionRepository,
-	planRepo subscription.SubscriptionPlanRepository,
+	planRepo subscription.PlanRepository,
 	tokenGenerator TokenGenerator,
 	logger logger.Interface,
 ) *ValidateSubscriptionTokenUseCase {

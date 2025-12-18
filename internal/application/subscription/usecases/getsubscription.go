@@ -15,14 +15,14 @@ type GetSubscriptionQuery struct {
 
 type GetSubscriptionUseCase struct {
 	subscriptionRepo subscription.SubscriptionRepository
-	planRepo         subscription.SubscriptionPlanRepository
+	planRepo         subscription.PlanRepository
 	logger           logger.Interface
 	baseURL          string
 }
 
 func NewGetSubscriptionUseCase(
 	subscriptionRepo subscription.SubscriptionRepository,
-	planRepo subscription.SubscriptionPlanRepository,
+	planRepo subscription.PlanRepository,
 	logger logger.Interface,
 	baseURL string,
 ) *GetSubscriptionUseCase {

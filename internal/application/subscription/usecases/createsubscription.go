@@ -28,7 +28,7 @@ type CreateSubscriptionResult struct {
 
 type CreateSubscriptionUseCase struct {
 	subscriptionRepo subscription.SubscriptionRepository
-	planRepo         subscription.SubscriptionPlanRepository
+	planRepo         subscription.PlanRepository
 	tokenRepo        subscription.SubscriptionTokenRepository
 	pricingRepo      subscription.PlanPricingRepository
 	userRepo         user.Repository
@@ -38,7 +38,7 @@ type CreateSubscriptionUseCase struct {
 
 func NewCreateSubscriptionUseCase(
 	subscriptionRepo subscription.SubscriptionRepository,
-	planRepo subscription.SubscriptionPlanRepository,
+	planRepo subscription.PlanRepository,
 	tokenRepo subscription.SubscriptionTokenRepository,
 	pricingRepo subscription.PlanPricingRepository,
 	userRepo user.Repository,
@@ -70,12 +70,12 @@ func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, cmd CreateSubs
 
 	plan, err := uc.planRepo.GetByID(ctx, cmd.PlanID)
 	if err != nil {
-		uc.logger.Errorw("failed to get subscription plan", "error", err, "plan_id", cmd.PlanID)
-		return nil, fmt.Errorf("failed to get subscription plan: %w", err)
+		uc.logger.Errorw("failed to get plan", "error", err, "plan_id", cmd.PlanID)
+		return nil, fmt.Errorf("failed to get plan: %w", err)
 	}
 
 	if !plan.IsActive() {
-		return nil, fmt.Errorf("subscription plan is not active")
+		return nil, fmt.Errorf("plan is not active")
 	}
 
 	// Determine the billing cycle to use

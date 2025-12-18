@@ -6,10 +6,10 @@ import (
 	"gorm.io/gorm"
 )
 
-// SubscriptionPlanPricingModel represents the subscription_plan_pricing table
-type SubscriptionPlanPricingModel struct {
+// PlanPricingModel represents the plan_pricings table
+type PlanPricingModel struct {
 	ID           uint           `gorm:"primarykey"`
-	PlanID       uint           `gorm:"not null;index:idx_plan_id;comment:Reference to subscription_plans table"`
+	PlanID       uint           `gorm:"not null;index:idx_plan_id;comment:Reference to plans table"`
 	BillingCycle string         `gorm:"not null;size:20;index:idx_billing_cycle;comment:Billing cycle: weekly, monthly, quarterly, semi_annual, yearly, lifetime"`
 	Price        uint64         `gorm:"not null;comment:Price in smallest currency unit (cents)"`
 	Currency     string         `gorm:"not null;size:3;default:CNY;comment:Currency code: CNY, USD, EUR, GBP, JPY"`
@@ -23,12 +23,12 @@ type SubscriptionPlanPricingModel struct {
 }
 
 // TableName specifies the table name for GORM
-func (SubscriptionPlanPricingModel) TableName() string {
-	return "subscription_plan_pricing"
+func (PlanPricingModel) TableName() string {
+	return "plan_pricings"
 }
 
 // BeforeCreate hook to set timestamps
-func (m *SubscriptionPlanPricingModel) BeforeCreate(tx *gorm.DB) error {
+func (m *PlanPricingModel) BeforeCreate(tx *gorm.DB) error {
 	now := time.Now()
 	if m.CreatedAt.IsZero() {
 		m.CreatedAt = now
@@ -40,7 +40,7 @@ func (m *SubscriptionPlanPricingModel) BeforeCreate(tx *gorm.DB) error {
 }
 
 // BeforeUpdate hook to update timestamp
-func (m *SubscriptionPlanPricingModel) BeforeUpdate(tx *gorm.DB) error {
+func (m *PlanPricingModel) BeforeUpdate(tx *gorm.DB) error {
 	m.UpdatedAt = time.Now()
 	return nil
 }

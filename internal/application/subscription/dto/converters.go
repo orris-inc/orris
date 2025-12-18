@@ -38,16 +38,16 @@ func ToPricingOptionDTOList(pricings []*vo.PlanPricing) []*PricingOptionDTO {
 	return dtos
 }
 
-// ToSubscriptionPlanDTOWithPricings converts a SubscriptionPlan and its pricing options to SubscriptionPlanDTO
+// ToPlanDTOWithPricings converts a Plan and its pricing options to PlanDTO
 // This function enriches the basic plan information with flexible pricing options
 // The Pricings field will contain all available pricing options for different billing cycles
-func ToSubscriptionPlanDTOWithPricings(plan *subscription.SubscriptionPlan, pricings []*vo.PlanPricing) *SubscriptionPlanDTO {
+func ToPlanDTOWithPricings(plan *subscription.Plan, pricings []*vo.PlanPricing) *PlanDTO {
 	if plan == nil {
 		return nil
 	}
 
 	// Start with the basic plan DTO
-	planDTO := ToSubscriptionPlanDTO(plan)
+	planDTO := ToPlanDTO(plan)
 
 	// Add pricing options
 	planDTO.Pricings = ToPricingOptionDTOList(pricings)

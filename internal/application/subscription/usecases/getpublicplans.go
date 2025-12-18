@@ -11,13 +11,13 @@ import (
 )
 
 type GetPublicPlansUseCase struct {
-	planRepo    subscription.SubscriptionPlanRepository
+	planRepo    subscription.PlanRepository
 	pricingRepo subscription.PlanPricingRepository
 	logger      logger.Interface
 }
 
 func NewGetPublicPlansUseCase(
-	planRepo subscription.SubscriptionPlanRepository,
+	planRepo subscription.PlanRepository,
 	pricingRepo subscription.PlanPricingRepository,
 	logger logger.Interface,
 ) *GetPublicPlansUseCase {
@@ -28,7 +28,7 @@ func NewGetPublicPlansUseCase(
 	}
 }
 
-func (uc *GetPublicPlansUseCase) Execute(ctx context.Context) ([]*dto.SubscriptionPlanDTO, error) {
+func (uc *GetPublicPlansUseCase) Execute(ctx context.Context) ([]*dto.PlanDTO, error) {
 	plans, err := uc.planRepo.GetActivePublicPlans(ctx)
 	if err != nil {
 		uc.logger.Errorw("failed to get active public plans", "error", err)
@@ -50,14 +50,14 @@ func (uc *GetPublicPlansUseCase) Execute(ctx context.Context) ([]*dto.Subscripti
 	}
 
 	// Build DTOs with pricings from the batch result
-	planDTOs := make([]*dto.SubscriptionPlanDTO, 0, len(plans))
+	planDTOs := make([]*dto.PlanDTO, 0, len(plans))
 	for _, plan := range plans {
 		pricings, hasPricings := pricingsByPlanID[plan.ID()]
 		if hasPricings && len(pricings) > 0 {
-			planDTOs = append(planDTOs, dto.ToSubscriptionPlanDTOWithPricings(plan, pricings))
+			planDTOs = append(planDTOs, dto.ToPlanDTOWithPricings(plan, pricings))
 		} else {
 			// No pricings found for this plan
-			planDTOs = append(planDTOs, dto.ToSubscriptionPlanDTO(plan))
+			planDTOs = append(planDTOs, dto.ToPlanDTO(plan))
 		}
 	}
 

@@ -34,16 +34,16 @@ type SubscriptionFilter struct {
 	SortDesc bool
 }
 
-type SubscriptionPlanRepository interface {
-	Create(ctx context.Context, plan *SubscriptionPlan) error
-	GetByID(ctx context.Context, id uint) (*SubscriptionPlan, error)
-	GetBySlug(ctx context.Context, slug string) (*SubscriptionPlan, error)
-	Update(ctx context.Context, plan *SubscriptionPlan) error
+type PlanRepository interface {
+	Create(ctx context.Context, plan *Plan) error
+	GetByID(ctx context.Context, id uint) (*Plan, error)
+	GetBySlug(ctx context.Context, slug string) (*Plan, error)
+	Update(ctx context.Context, plan *Plan) error
 	Delete(ctx context.Context, id uint) error
 
-	GetActivePublicPlans(ctx context.Context) ([]*SubscriptionPlan, error)
-	GetAllActive(ctx context.Context) ([]*SubscriptionPlan, error)
-	List(ctx context.Context, filter PlanFilter) ([]*SubscriptionPlan, int64, error)
+	GetActivePublicPlans(ctx context.Context) ([]*Plan, error)
+	GetAllActive(ctx context.Context) ([]*Plan, error)
+	List(ctx context.Context, filter PlanFilter) ([]*Plan, int64, error)
 
 	ExistsBySlug(ctx context.Context, slug string) (bool, error)
 }
@@ -71,12 +71,6 @@ type SubscriptionTokenRepository interface {
 	DeleteExpiredTokens(ctx context.Context) error
 }
 
-type SubscriptionUsageRepository interface {
-	GetCurrentUsage(ctx context.Context, subscriptionID uint) (*SubscriptionUsage, error)
-	Upsert(ctx context.Context, usage *SubscriptionUsage) error
-	GetUsageHistory(ctx context.Context, subscriptionID uint, from, to time.Time) ([]*SubscriptionUsage, error)
-	ResetUsage(ctx context.Context, subscriptionID uint, period time.Time) error
-}
 
 // PlanPricingRepository handles plan pricing persistence
 type PlanPricingRepository interface {
