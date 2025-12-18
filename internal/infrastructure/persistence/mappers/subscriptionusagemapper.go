@@ -39,10 +39,9 @@ func (m *subscriptionUsageMapper) ToEntity(model *models.SubscriptionUsageModel)
 	// Reconstruct the domain entity
 	usageEntity, err := subscription.ReconstructSubscriptionUsage(
 		model.ID,
-		model.NodeID,
-		model.SubscriptionID,
 		model.ResourceType,
 		model.ResourceID,
+		model.SubscriptionID,
 		model.Upload,
 		model.Download,
 		model.Total,
@@ -65,7 +64,6 @@ func (m *subscriptionUsageMapper) ToModel(entity *subscription.SubscriptionUsage
 
 	model := &models.SubscriptionUsageModel{
 		ID:             entity.ID(),
-		NodeID:         entity.NodeID(),
 		SubscriptionID: entity.SubscriptionID(),
 		ResourceType:   entity.ResourceType(),
 		ResourceID:     entity.ResourceID(),

@@ -48,11 +48,10 @@ type Router struct {
 	profileHandler              *handlers.ProfileHandler
 	subscriptionHandler         *handlers.SubscriptionHandler
 	adminSubscriptionHandler    *adminHandlers.SubscriptionHandler
-	subscriptionPlanHandler     *handlers.SubscriptionPlanHandler
+	planHandler                 *handlers.PlanHandler
 	subscriptionTokenHandler    *handlers.SubscriptionTokenHandler
 	paymentHandler              *handlers.PaymentHandler
 	nodeHandler                 *handlers.NodeHandler
-	nodeGroupHandler            *handlers.NodeGroupHandler
 	nodeSubscriptionHandler     *handlers.NodeSubscriptionHandler
 	agentHandler                *nodeHandlers.AgentHandler
 	ticketHandler               *ticketHandlers.TicketHandler
@@ -207,9 +206,9 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	rateLimiter := middleware.NewRateLimiter(100, 1*time.Minute)
 
 	subscriptionRepo := repository.NewSubscriptionRepository(db, log)
-	subscriptionPlanRepo := repository.NewSubscriptionPlanRepository(db, log)
+	subscriptionPlanRepo := repository.NewPlanRepository(db, log)
 	subscriptionTokenRepo := repository.NewSubscriptionTokenRepository(db, log)
-	subscriptionTrafficRepo := repository.NewSubscriptionTrafficRepository(db, log)
+	subscriptionUsageRepo := repository.NewSubscriptionUsageRepository(db, log)
 	planPricingRepo := repository.NewPlanPricingRepository(db, log)
 	paymentRepo := repository.NewPaymentRepository(db)
 
@@ -237,32 +236,32 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	changePlanUC := subscriptionUsecases.NewChangePlanUseCase(
 		subscriptionRepo, subscriptionPlanRepo, log,
 	)
-	getSubscriptionTrafficStatsUC := subscriptionUsecases.NewGetSubscriptionTrafficStatsUseCase(
-		subscriptionTrafficRepo, log,
+	getSubscriptionUsageStatsUC := subscriptionUsecases.NewGetSubscriptionUsageStatsUseCase(
+		subscriptionUsageRepo, log,
 	)
 	resetSubscriptionLinkUC := subscriptionUsecases.NewResetSubscriptionLinkUseCase(
 		subscriptionRepo, subscriptionPlanRepo, log, subscriptionBaseURL,
 	)
 
-	createPlanUC := subscriptionUsecases.NewCreateSubscriptionPlanUseCase(
+	createPlanUC := subscriptionUsecases.NewCreatePlanUseCase(
 		subscriptionPlanRepo, planPricingRepo, log,
 	)
-	updatePlanUC := subscriptionUsecases.NewUpdateSubscriptionPlanUseCase(
+	updatePlanUC := subscriptionUsecases.NewUpdatePlanUseCase(
 		subscriptionPlanRepo, planPricingRepo, log,
 	)
-	getPlanUC := subscriptionUsecases.NewGetSubscriptionPlanUseCase(
+	getPlanUC := subscriptionUsecases.NewGetPlanUseCase(
 		subscriptionPlanRepo, log,
 	)
-	listPlansUC := subscriptionUsecases.NewListSubscriptionPlansUseCase(
+	listPlansUC := subscriptionUsecases.NewListPlansUseCase(
 		subscriptionPlanRepo, log,
 	)
 	getPublicPlansUC := subscriptionUsecases.NewGetPublicPlansUseCase(
 		subscriptionPlanRepo, planPricingRepo, log,
 	)
-	activatePlanUC := subscriptionUsecases.NewActivateSubscriptionPlanUseCase(
+	activatePlanUC := subscriptionUsecases.NewActivatePlanUseCase(
 		subscriptionPlanRepo, log,
 	)
-	deactivatePlanUC := subscriptionUsecases.NewDeactivateSubscriptionPlanUseCase(
+	deactivatePlanUC := subscriptionUsecases.NewDeactivatePlanUseCase(
 		subscriptionPlanRepo, log,
 	)
 	getPlanPricingsUC := subscriptionUsecases.NewGetPlanPricingsUseCase(
@@ -284,7 +283,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	subscriptionHandler := handlers.NewSubscriptionHandler(
 		createSubscriptionUC, getSubscriptionUC, listUserSubscriptionsUC,
-		cancelSubscriptionUC, changePlanUC, getSubscriptionTrafficStatsUC,
+		cancelSubscriptionUC, changePlanUC, getSubscriptionUsageStatsUC,
 		resetSubscriptionLinkUC, log,
 	)
 	adminSubscriptionHandler := adminHandlers.NewSubscriptionHandler(
@@ -293,7 +292,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		activateSubscriptionUC, log,
 	)
 	subscriptionOwnerMiddleware := middleware.NewSubscriptionOwnerMiddleware(subscriptionRepo, log)
-	subscriptionPlanHandler := handlers.NewSubscriptionPlanHandler(
+	planHandler := handlers.NewPlanHandler(
 		createPlanUC, updatePlanUC, getPlanUC, listPlansUC,
 		getPublicPlansUC, activatePlanUC, deactivatePlanUC, getPlanPricingsUC,
 	)
@@ -303,7 +302,6 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	nodeRepoImpl := repository.NewNodeRepository(db, log)
 	nodeRepo := adapters.NewNodeRepositoryAdapter(nodeRepoImpl, db, log)
-	nodeGroupRepoImpl := repository.NewNodeGroupRepository(db, log)
 	tokenValidator := adapters.NewSubscriptionTokenValidatorAdapter(db, log)
 
 	// Initialize subscription template loader
@@ -326,7 +324,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	createNodeUC := nodeUsecases.NewCreateNodeUseCase(nodeRepoImpl, log)
 	getNodeUC := nodeUsecases.NewGetNodeUseCase(nodeRepoImpl, nodeStatusQuerier, log)
 	updateNodeUC := nodeUsecases.NewUpdateNodeUseCase(log, nodeRepoImpl)
-	deleteNodeUC := nodeUsecases.NewDeleteNodeUseCase(nodeRepoImpl, nodeGroupRepoImpl, log)
+	deleteNodeUC := nodeUsecases.NewDeleteNodeUseCase(nodeRepoImpl, log)
 	listNodesUC := nodeUsecases.NewListNodesUseCase(nodeRepoImpl, nodeStatusQuerier, log)
 	generateNodeTokenUC := nodeUsecases.NewGenerateNodeTokenUseCase(nodeRepoImpl, log)
 	generateNodeInstallScriptUC := nodeUsecases.NewGenerateNodeInstallScriptUseCase(nodeRepoImpl, log)
@@ -335,38 +333,10 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	validateNodeTokenUC := nodeUsecases.NewValidateNodeTokenUseCase(nodeRepo, log)
 	nodeTokenMiddleware := middleware.NewNodeTokenMiddleware(validateNodeTokenUC, log)
 
-	// Initialize NodeGroup use cases
-	createNodeGroupUC := nodeUsecases.NewCreateNodeGroupUseCase(nodeGroupRepoImpl, log)
-	getNodeGroupUC := nodeUsecases.NewGetNodeGroupUseCase(nodeGroupRepoImpl, log)
-	updateNodeGroupUC := nodeUsecases.NewUpdateNodeGroupUseCase(nodeGroupRepoImpl, log)
-	deleteNodeGroupUC := nodeUsecases.NewDeleteNodeGroupUseCase(nodeGroupRepoImpl, log)
-	listNodeGroupsUC := nodeUsecases.NewListNodeGroupsUseCase(nodeGroupRepoImpl, log)
-	addNodeToGroupUC := nodeUsecases.NewAddNodeToGroupUseCase(nodeRepoImpl, nodeGroupRepoImpl, log)
-	removeNodeFromGroupUC := nodeUsecases.NewRemoveNodeFromGroupUseCase(nodeRepoImpl, nodeGroupRepoImpl, log)
-	batchAddNodesToGroupUC := nodeUsecases.NewBatchAddNodesToGroupUseCase(nodeRepoImpl, nodeGroupRepoImpl, log)
-	batchRemoveNodesFromGroupUC := nodeUsecases.NewBatchRemoveNodesFromGroupUseCase(nodeGroupRepoImpl, log)
-	listGroupNodesUC := nodeUsecases.NewListGroupNodesUseCase(nodeRepoImpl, nodeGroupRepoImpl, log)
-	associateGroupWithPlanUC := nodeUsecases.NewAssociateGroupWithPlanUseCase(nodeGroupRepoImpl, subscriptionPlanRepo, log)
-	disassociateGroupFromPlanUC := nodeUsecases.NewDisassociateGroupFromPlanUseCase(nodeGroupRepoImpl, log)
-
 	// Initialize handlers
 	// API URL for node install script generation
 	apiBaseURL := cfg.Server.GetBaseURL()
 	nodeHandler := handlers.NewNodeHandler(createNodeUC, getNodeUC, updateNodeUC, deleteNodeUC, listNodesUC, generateNodeTokenUC, generateNodeInstallScriptUC, apiBaseURL)
-	nodeGroupHandler := handlers.NewNodeGroupHandler(
-		createNodeGroupUC,
-		getNodeGroupUC,
-		updateNodeGroupUC,
-		deleteNodeGroupUC,
-		listNodeGroupsUC,
-		addNodeToGroupUC,
-		removeNodeFromGroupUC,
-		batchAddNodesToGroupUC,
-		batchRemoveNodesFromGroupUC,
-		listGroupNodesUC,
-		associateGroupWithPlanUC,
-		disassociateGroupFromPlanUC,
-	)
 	nodeSubscriptionHandler := handlers.NewNodeSubscriptionHandler(generateSubscriptionUC)
 
 	ticketHandler := ticketHandlers.NewTicketHandler(nil, nil, nil, nil, nil, nil, nil, nil, nil)
@@ -427,10 +397,10 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	getNodeSubscriptionsUC := nodeUsecases.NewGetNodeSubscriptionsUseCase(subscriptionRepo, nodeRepoImpl, log)
 
 	// Initialize agent report use cases with adapters
-	subscriptionTrafficRecorder := adapters.NewSubscriptionTrafficRecorderAdapter(subscriptionTrafficRepo, log)
+	subscriptionUsageRecorder := adapters.NewSubscriptionUsageRecorderAdapter(subscriptionUsageRepo, log)
 	systemStatusUpdater := adapters.NewNodeSystemStatusUpdaterAdapter(redisClient, log)
 	onlineSubscriptionTracker := adapters.NewOnlineSubscriptionTrackerAdapter(log)
-	reportSubscriptionTrafficUC := nodeUsecases.NewReportSubscriptionTrafficUseCase(subscriptionTrafficRecorder, log)
+	reportSubscriptionUsageUC := nodeUsecases.NewReportSubscriptionUsageUseCase(subscriptionUsageRecorder, log)
 	reportNodeStatusUC := nodeUsecases.NewReportNodeStatusUseCase(systemStatusUpdater, nodeRepoImpl, log)
 	reportOnlineSubscriptionsUC := nodeUsecases.NewReportOnlineSubscriptionsUseCase(onlineSubscriptionTracker, log)
 
@@ -438,7 +408,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	agentHandler := nodeHandlers.NewAgentHandler(
 		getNodeConfigUC,
 		getNodeSubscriptionsUC,
-		reportSubscriptionTrafficUC,
+		reportSubscriptionUsageUC,
 		reportNodeStatusUC,
 		reportOnlineSubscriptionsUC,
 		log,
@@ -617,11 +587,10 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		profileHandler:              profileHandler,
 		subscriptionHandler:         subscriptionHandler,
 		adminSubscriptionHandler:    adminSubscriptionHandler,
-		subscriptionPlanHandler:     subscriptionPlanHandler,
+		planHandler:                 planHandler,
 		subscriptionTokenHandler:    subscriptionTokenHandler,
 		paymentHandler:              paymentHandler,
 		nodeHandler:                 nodeHandler,
-		nodeGroupHandler:            nodeGroupHandler,
 		nodeSubscriptionHandler:     nodeSubscriptionHandler,
 		agentHandler:                agentHandler,
 		ticketHandler:               ticketHandler,
@@ -740,36 +709,35 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		}
 	}
 
-	plans := r.engine.Group("/subscription-plans")
+	plans := r.engine.Group("/plans")
 	{
 		// IMPORTANT: Register specific paths BEFORE parameterized paths to avoid route conflicts
 		// e.g., /public must come before /:id, /activate before /:id, etc.
 
 		// Public endpoints (no authentication required)
-		plans.GET("/public", r.subscriptionPlanHandler.GetPublicPlans)
+		plans.GET("/public", r.planHandler.GetPublicPlans)
 
 		// Protected endpoints
 		plansProtected := plans.Group("")
 		plansProtected.Use(r.authMiddleware.RequireAuth())
 		{
 			// Collection operations (no ID parameter)
-			plansProtected.POST("", r.subscriptionPlanHandler.CreatePlan)
-			plansProtected.GET("", r.subscriptionPlanHandler.ListPlans)
+			plansProtected.POST("", r.planHandler.CreatePlan)
+			plansProtected.GET("", r.planHandler.ListPlans)
 
 			// Specific action endpoints (must come BEFORE /:id to avoid conflicts)
 			// Using PATCH for state changes as per RESTful best practices
-			plansProtected.PATCH("/:id/status", r.subscriptionPlanHandler.UpdatePlanStatus)
-			plansProtected.GET("/:id/pricings", r.subscriptionPlanHandler.GetPlanPricings)
+			plansProtected.PATCH("/:id/status", r.planHandler.UpdatePlanStatus)
+			plansProtected.GET("/:id/pricings", r.planHandler.GetPlanPricings)
 
 			// Generic parameterized routes (must come LAST)
-			plansProtected.GET("/:id", r.subscriptionPlanHandler.GetPlan)
-			plansProtected.PUT("/:id", r.subscriptionPlanHandler.UpdatePlan)
+			plansProtected.GET("/:id", r.planHandler.GetPlan)
+			plansProtected.PUT("/:id", r.planHandler.UpdatePlan)
 		}
 	}
 
 	routes.SetupNodeRoutes(r.engine, &routes.NodeRouteConfig{
 		NodeHandler:         r.nodeHandler,
-		NodeGroupHandler:    r.nodeGroupHandler,
 		SubscriptionHandler: r.nodeSubscriptionHandler,
 		AuthMiddleware:      r.authMiddleware,
 		NodeTokenMW:         r.nodeTokenMiddleware,

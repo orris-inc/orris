@@ -38,7 +38,7 @@ func (r *SubscriptionUsageRepositoryImpl) RecordUsage(ctx context.Context, usage
 	}
 
 	if err := r.db.WithContext(ctx).Create(model).Error; err != nil {
-		r.logger.Errorw("failed to record subscription usage", "node_id", model.NodeID, "error", err)
+		r.logger.Errorw("failed to record subscription usage", "resource_type", model.ResourceType, "resource_id", model.ResourceID, "error", err)
 		return fmt.Errorf("failed to record subscription usage: %w", err)
 	}
 
@@ -47,7 +47,7 @@ func (r *SubscriptionUsageRepositoryImpl) RecordUsage(ctx context.Context, usage
 		return fmt.Errorf("failed to set subscription usage ID: %w", err)
 	}
 
-	r.logger.Infow("subscription usage recorded successfully", "id", model.ID, "node_id", model.NodeID)
+	r.logger.Infow("subscription usage recorded successfully", "id", model.ID, "resource_type", model.ResourceType, "resource_id", model.ResourceID)
 	return nil
 }
 
@@ -56,8 +56,11 @@ func (r *SubscriptionUsageRepositoryImpl) GetUsageStats(ctx context.Context, fil
 	query := r.db.WithContext(ctx).Model(&models.SubscriptionUsageModel{})
 
 	// Apply filters
-	if filter.NodeID != nil {
-		query = query.Where("node_id = ?", *filter.NodeID)
+	if filter.ResourceType != nil {
+		query = query.Where("resource_type = ?", *filter.ResourceType)
+	}
+	if filter.ResourceID != nil {
+		query = query.Where("resource_id = ?", *filter.ResourceID)
 	}
 	if filter.SubscriptionID != nil {
 		query = query.Where("subscription_id = ?", *filter.SubscriptionID)
@@ -95,8 +98,8 @@ func (r *SubscriptionUsageRepositoryImpl) GetUsageStats(ctx context.Context, fil
 	return entities, nil
 }
 
-// GetTotalUsage retrieves the total usage for a node within a time range
-func (r *SubscriptionUsageRepositoryImpl) GetTotalUsage(ctx context.Context, nodeID uint, from, to time.Time) (*subscription.UsageSummary, error) {
+// GetTotalUsage retrieves the total usage for a resource within a time range
+func (r *SubscriptionUsageRepositoryImpl) GetTotalUsage(ctx context.Context, resourceType string, resourceID uint, from, to time.Time) (*subscription.UsageSummary, error) {
 	var result struct {
 		TotalUpload   uint64
 		TotalDownload uint64
@@ -105,7 +108,7 @@ func (r *SubscriptionUsageRepositoryImpl) GetTotalUsage(ctx context.Context, nod
 
 	query := r.db.WithContext(ctx).Model(&models.SubscriptionUsageModel{}).
 		Select("COALESCE(SUM(upload), 0) as total_upload, COALESCE(SUM(download), 0) as total_download, COALESCE(SUM(total), 0) as total_usage").
-		Where("node_id = ?", nodeID)
+		Where("resource_type = ? AND resource_id = ?", resourceType, resourceID)
 
 	if !from.IsZero() {
 		query = query.Where("period >= ?", from)
@@ -115,17 +118,18 @@ func (r *SubscriptionUsageRepositoryImpl) GetTotalUsage(ctx context.Context, nod
 	}
 
 	if err := query.Scan(&result).Error; err != nil {
-		r.logger.Errorw("failed to get total usage", "node_id", nodeID, "error", err)
+		r.logger.Errorw("failed to get total usage", "resource_type", resourceType, "resource_id", resourceID, "error", err)
 		return nil, fmt.Errorf("failed to get total usage: %w", err)
 	}
 
 	summary := &subscription.UsageSummary{
-		NodeID:   nodeID,
-		Upload:   result.TotalUpload,
-		Download: result.TotalDownload,
-		Total:    result.TotalUsage,
-		From:     from,
-		To:       to,
+		ResourceType: resourceType,
+		ResourceID:   resourceID,
+		Upload:       result.TotalUpload,
+		Download:     result.TotalDownload,
+		Total:        result.TotalUsage,
+		From:         from,
+		To:           to,
 	}
 
 	return summary, nil
@@ -139,9 +143,10 @@ func (r *SubscriptionUsageRepositoryImpl) AggregateDaily(ctx context.Context, da
 		startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
 		endOfDay := startOfDay.Add(24 * time.Hour)
 
-		// Aggregate usage by node_id for the day
+		// Aggregate usage by resource_type and resource_id for the day
 		var aggregatedRecords []struct {
-			NodeID         uint
+			ResourceType   string
+			ResourceID     uint
 			SubscriptionID *uint
 			TotalUpload    uint64
 			TotalDownload  uint64
@@ -149,9 +154,9 @@ func (r *SubscriptionUsageRepositoryImpl) AggregateDaily(ctx context.Context, da
 		}
 
 		err := tx.Model(&models.SubscriptionUsageModel{}).
-			Select("node_id, subscription_id, SUM(upload) as total_upload, SUM(download) as total_download, SUM(total) as total_usage").
+			Select("resource_type, resource_id, subscription_id, SUM(upload) as total_upload, SUM(download) as total_download, SUM(total) as total_usage").
 			Where("period >= ? AND period < ?", startOfDay, endOfDay).
-			Group("node_id, subscription_id").
+			Group("resource_type, resource_id, subscription_id").
 			Scan(&aggregatedRecords).Error
 
 		if err != nil {
@@ -162,7 +167,8 @@ func (r *SubscriptionUsageRepositoryImpl) AggregateDaily(ctx context.Context, da
 		// Create or update daily records
 		for _, record := range aggregatedRecords {
 			dailyRecord := &models.SubscriptionUsageModel{
-				NodeID:         record.NodeID,
+				ResourceType:   record.ResourceType,
+				ResourceID:     record.ResourceID,
 				SubscriptionID: record.SubscriptionID,
 				Upload:         record.TotalUpload,
 				Download:       record.TotalDownload,
@@ -171,15 +177,15 @@ func (r *SubscriptionUsageRepositoryImpl) AggregateDaily(ctx context.Context, da
 			}
 
 			// Upsert: create or update if exists
-			if err := tx.Where("node_id = ? AND period = ? AND subscription_id <=> ?",
-				record.NodeID, startOfDay, record.SubscriptionID).
+			if err := tx.Where("resource_type = ? AND resource_id = ? AND period = ? AND subscription_id <=> ?",
+				record.ResourceType, record.ResourceID, startOfDay, record.SubscriptionID).
 				Assign(map[string]interface{}{
 					"upload":   record.TotalUpload,
 					"download": record.TotalDownload,
 					"total":    record.TotalUsage,
 				}).
 				FirstOrCreate(dailyRecord).Error; err != nil {
-				r.logger.Errorw("failed to upsert daily usage record", "node_id", record.NodeID, "error", err)
+				r.logger.Errorw("failed to upsert daily usage record", "resource_type", record.ResourceType, "resource_id", record.ResourceID, "error", err)
 				return fmt.Errorf("failed to upsert daily usage record: %w", err)
 			}
 		}
@@ -197,9 +203,10 @@ func (r *SubscriptionUsageRepositoryImpl) AggregateMonthly(ctx context.Context, 
 		startOfMonth := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
 		endOfMonth := startOfMonth.AddDate(0, 1, 0)
 
-		// Aggregate usage by node_id for the month
+		// Aggregate usage by resource_type and resource_id for the month
 		var aggregatedRecords []struct {
-			NodeID         uint
+			ResourceType   string
+			ResourceID     uint
 			SubscriptionID *uint
 			TotalUpload    uint64
 			TotalDownload  uint64
@@ -207,9 +214,9 @@ func (r *SubscriptionUsageRepositoryImpl) AggregateMonthly(ctx context.Context, 
 		}
 
 		err := tx.Model(&models.SubscriptionUsageModel{}).
-			Select("node_id, subscription_id, SUM(upload) as total_upload, SUM(download) as total_download, SUM(total) as total_usage").
+			Select("resource_type, resource_id, subscription_id, SUM(upload) as total_upload, SUM(download) as total_download, SUM(total) as total_usage").
 			Where("period >= ? AND period < ?", startOfMonth, endOfMonth).
-			Group("node_id, subscription_id").
+			Group("resource_type, resource_id, subscription_id").
 			Scan(&aggregatedRecords).Error
 
 		if err != nil {
@@ -220,7 +227,8 @@ func (r *SubscriptionUsageRepositoryImpl) AggregateMonthly(ctx context.Context, 
 		// Create or update monthly records
 		for _, record := range aggregatedRecords {
 			monthlyRecord := &models.SubscriptionUsageModel{
-				NodeID:         record.NodeID,
+				ResourceType:   record.ResourceType,
+				ResourceID:     record.ResourceID,
 				SubscriptionID: record.SubscriptionID,
 				Upload:         record.TotalUpload,
 				Download:       record.TotalDownload,
@@ -229,15 +237,15 @@ func (r *SubscriptionUsageRepositoryImpl) AggregateMonthly(ctx context.Context, 
 			}
 
 			// Upsert: create or update if exists
-			if err := tx.Where("node_id = ? AND period = ? AND subscription_id <=> ?",
-				record.NodeID, startOfMonth, record.SubscriptionID).
+			if err := tx.Where("resource_type = ? AND resource_id = ? AND period = ? AND subscription_id <=> ?",
+				record.ResourceType, record.ResourceID, startOfMonth, record.SubscriptionID).
 				Assign(map[string]interface{}{
 					"upload":   record.TotalUpload,
 					"download": record.TotalDownload,
 					"total":    record.TotalUsage,
 				}).
 				FirstOrCreate(monthlyRecord).Error; err != nil {
-				r.logger.Errorw("failed to upsert monthly usage record", "node_id", record.NodeID, "error", err)
+				r.logger.Errorw("failed to upsert monthly usage record", "resource_type", record.ResourceType, "resource_id", record.ResourceID, "error", err)
 				return fmt.Errorf("failed to upsert monthly usage record: %w", err)
 			}
 		}
@@ -247,10 +255,10 @@ func (r *SubscriptionUsageRepositoryImpl) AggregateMonthly(ctx context.Context, 
 	})
 }
 
-// GetDailyStats retrieves daily usage statistics for a node
-func (r *SubscriptionUsageRepositoryImpl) GetDailyStats(ctx context.Context, nodeID uint, from, to time.Time) ([]*subscription.SubscriptionUsage, error) {
+// GetDailyStats retrieves daily usage statistics for a resource
+func (r *SubscriptionUsageRepositoryImpl) GetDailyStats(ctx context.Context, resourceType string, resourceID uint, from, to time.Time) ([]*subscription.SubscriptionUsage, error) {
 	query := r.db.WithContext(ctx).Model(&models.SubscriptionUsageModel{}).
-		Where("node_id = ?", nodeID)
+		Where("resource_type = ? AND resource_id = ?", resourceType, resourceID)
 
 	if !from.IsZero() {
 		query = query.Where("period >= ?", from)
@@ -261,7 +269,7 @@ func (r *SubscriptionUsageRepositoryImpl) GetDailyStats(ctx context.Context, nod
 
 	var usageModels []*models.SubscriptionUsageModel
 	if err := query.Order("period ASC").Find(&usageModels).Error; err != nil {
-		r.logger.Errorw("failed to get daily stats", "node_id", nodeID, "error", err)
+		r.logger.Errorw("failed to get daily stats", "resource_type", resourceType, "resource_id", resourceID, "error", err)
 		return nil, fmt.Errorf("failed to get daily stats: %w", err)
 	}
 
@@ -275,17 +283,17 @@ func (r *SubscriptionUsageRepositoryImpl) GetDailyStats(ctx context.Context, nod
 	return entities, nil
 }
 
-// GetMonthlyStats retrieves monthly usage statistics for a node
-func (r *SubscriptionUsageRepositoryImpl) GetMonthlyStats(ctx context.Context, nodeID uint, year int) ([]*subscription.SubscriptionUsage, error) {
+// GetMonthlyStats retrieves monthly usage statistics for a resource
+func (r *SubscriptionUsageRepositoryImpl) GetMonthlyStats(ctx context.Context, resourceType string, resourceID uint, year int) ([]*subscription.SubscriptionUsage, error) {
 	startOfYear := time.Date(year, 1, 1, 0, 0, 0, 0, time.UTC)
 	endOfYear := startOfYear.AddDate(1, 0, 0)
 
 	var usageModels []*models.SubscriptionUsageModel
 	if err := r.db.WithContext(ctx).Model(&models.SubscriptionUsageModel{}).
-		Where("node_id = ? AND period >= ? AND period < ?", nodeID, startOfYear, endOfYear).
+		Where("resource_type = ? AND resource_id = ? AND period >= ? AND period < ?", resourceType, resourceID, startOfYear, endOfYear).
 		Order("period ASC").
 		Find(&usageModels).Error; err != nil {
-		r.logger.Errorw("failed to get monthly stats", "node_id", nodeID, "year", year, "error", err)
+		r.logger.Errorw("failed to get monthly stats", "resource_type", resourceType, "resource_id", resourceID, "year", year, "error", err)
 		return nil, fmt.Errorf("failed to get monthly stats: %w", err)
 	}
 

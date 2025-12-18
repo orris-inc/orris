@@ -14,33 +14,33 @@ import (
 )
 
 var (
-	_ = subdto.SubscriptionPlanDTO{}
+	_ = subdto.PlanDTO{}
 	_ = subdto.PricingOptionDTO{}
 )
 
-type SubscriptionPlanHandler struct {
-	createPlanUC      *usecases.CreateSubscriptionPlanUseCase
-	updatePlanUC      *usecases.UpdateSubscriptionPlanUseCase
-	getPlanUC         *usecases.GetSubscriptionPlanUseCase
-	listPlansUC       *usecases.ListSubscriptionPlansUseCase
+type PlanHandler struct {
+	createPlanUC      *usecases.CreatePlanUseCase
+	updatePlanUC      *usecases.UpdatePlanUseCase
+	getPlanUC         *usecases.GetPlanUseCase
+	listPlansUC       *usecases.ListPlansUseCase
 	getPublicPlansUC  *usecases.GetPublicPlansUseCase
-	activatePlanUC    *usecases.ActivateSubscriptionPlanUseCase
-	deactivatePlanUC  *usecases.DeactivateSubscriptionPlanUseCase
+	activatePlanUC    *usecases.ActivatePlanUseCase
+	deactivatePlanUC  *usecases.DeactivatePlanUseCase
 	getPlanPricingsUC *usecases.GetPlanPricingsUseCase
 	logger            logger.Interface
 }
 
-func NewSubscriptionPlanHandler(
-	createPlanUC *usecases.CreateSubscriptionPlanUseCase,
-	updatePlanUC *usecases.UpdateSubscriptionPlanUseCase,
-	getPlanUC *usecases.GetSubscriptionPlanUseCase,
-	listPlansUC *usecases.ListSubscriptionPlansUseCase,
+func NewPlanHandler(
+	createPlanUC *usecases.CreatePlanUseCase,
+	updatePlanUC *usecases.UpdatePlanUseCase,
+	getPlanUC *usecases.GetPlanUseCase,
+	listPlansUC *usecases.ListPlansUseCase,
 	getPublicPlansUC *usecases.GetPublicPlansUseCase,
-	activatePlanUC *usecases.ActivateSubscriptionPlanUseCase,
-	deactivatePlanUC *usecases.DeactivateSubscriptionPlanUseCase,
+	activatePlanUC *usecases.ActivatePlanUseCase,
+	deactivatePlanUC *usecases.DeactivatePlanUseCase,
 	getPlanPricingsUC *usecases.GetPlanPricingsUseCase,
-) *SubscriptionPlanHandler {
-	return &SubscriptionPlanHandler{
+) *PlanHandler {
+	return &PlanHandler{
 		createPlanUC:      createPlanUC,
 		updatePlanUC:      updatePlanUC,
 		getPlanUC:         getPlanUC,
@@ -90,7 +90,7 @@ type UpdatePlanStatusRequest struct {
 	Status string `json:"status" binding:"required,oneof=active inactive"`
 }
 
-func (h *SubscriptionPlanHandler) CreatePlan(c *gin.Context) {
+func (h *PlanHandler) CreatePlan(c *gin.Context) {
 	var req CreatePlanRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Warnw("invalid request body for create plan", "error", err)
@@ -98,7 +98,7 @@ func (h *SubscriptionPlanHandler) CreatePlan(c *gin.Context) {
 		return
 	}
 
-	cmd := usecases.CreateSubscriptionPlanCommand{
+	cmd := usecases.CreatePlanCommand{
 		Name:         req.Name,
 		Slug:         req.Slug,
 		Description:  req.Description,
@@ -122,10 +122,10 @@ func (h *SubscriptionPlanHandler) CreatePlan(c *gin.Context) {
 		return
 	}
 
-	utils.CreatedResponse(c, result, "Subscription plan created successfully")
+	utils.CreatedResponse(c, result, "Plan created successfully")
 }
 
-func (h *SubscriptionPlanHandler) UpdatePlan(c *gin.Context) {
+func (h *PlanHandler) UpdatePlan(c *gin.Context) {
 	planID, err := parsePlanID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
@@ -141,7 +141,7 @@ func (h *SubscriptionPlanHandler) UpdatePlan(c *gin.Context) {
 		return
 	}
 
-	cmd := usecases.UpdateSubscriptionPlanCommand{
+	cmd := usecases.UpdatePlanCommand{
 		PlanID:       planID,
 		Description:  req.Description,
 		Price:        req.Price,
@@ -162,10 +162,10 @@ func (h *SubscriptionPlanHandler) UpdatePlan(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "Subscription plan updated successfully", result)
+	utils.SuccessResponse(c, http.StatusOK, "Plan updated successfully", result)
 }
 
-func (h *SubscriptionPlanHandler) GetPlan(c *gin.Context) {
+func (h *PlanHandler) GetPlan(c *gin.Context) {
 	planID, err := parsePlanID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
@@ -181,7 +181,7 @@ func (h *SubscriptionPlanHandler) GetPlan(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "", result)
 }
 
-func (h *SubscriptionPlanHandler) ListPlans(c *gin.Context) {
+func (h *PlanHandler) ListPlans(c *gin.Context) {
 	query, err := parseListPlansQuery(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
@@ -197,7 +197,7 @@ func (h *SubscriptionPlanHandler) ListPlans(c *gin.Context) {
 	utils.ListSuccessResponse(c, result.Plans, result.Total, query.Page, query.PageSize)
 }
 
-func (h *SubscriptionPlanHandler) GetPublicPlans(c *gin.Context) {
+func (h *PlanHandler) GetPublicPlans(c *gin.Context) {
 	result, err := h.getPublicPlansUC.Execute(c.Request.Context())
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
@@ -207,7 +207,7 @@ func (h *SubscriptionPlanHandler) GetPublicPlans(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "", result)
 }
 
-func (h *SubscriptionPlanHandler) UpdatePlanStatus(c *gin.Context) {
+func (h *PlanHandler) UpdatePlanStatus(c *gin.Context) {
 	planID, err := parsePlanID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
@@ -227,21 +227,21 @@ func (h *SubscriptionPlanHandler) UpdatePlanStatus(c *gin.Context) {
 			utils.ErrorResponseWithError(c, err)
 			return
 		}
-		utils.SuccessResponse(c, http.StatusOK, "Subscription plan activated successfully", nil)
+		utils.SuccessResponse(c, http.StatusOK, "Plan activated successfully", nil)
 
 	case "inactive":
 		if err := h.deactivatePlanUC.Execute(c.Request.Context(), planID); err != nil {
 			utils.ErrorResponseWithError(c, err)
 			return
 		}
-		utils.SuccessResponse(c, http.StatusOK, "Subscription plan deactivated successfully", nil)
+		utils.SuccessResponse(c, http.StatusOK, "Plan deactivated successfully", nil)
 
 	default:
 		utils.ErrorResponse(c, http.StatusBadRequest, "invalid status value")
 	}
 }
 
-func (h *SubscriptionPlanHandler) GetPlanPricings(c *gin.Context) {
+func (h *PlanHandler) GetPlanPricings(c *gin.Context) {
 	planID, err := parsePlanID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
@@ -280,8 +280,8 @@ func parsePlanID(c *gin.Context) (uint, error) {
 	return uint(id), nil
 }
 
-func parseListPlansQuery(c *gin.Context) (*usecases.ListSubscriptionPlansQuery, error) {
-	query := &usecases.ListSubscriptionPlansQuery{
+func parseListPlansQuery(c *gin.Context) (*usecases.ListPlansQuery, error) {
+	query := &usecases.ListPlansQuery{
 		Page:     1,
 		PageSize: 20,
 	}

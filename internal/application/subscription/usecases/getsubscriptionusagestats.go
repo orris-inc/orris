@@ -9,8 +9,8 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
-// GetSubscriptionTrafficStatsQuery represents the query parameters for subscription traffic stats
-type GetSubscriptionTrafficStatsQuery struct {
+// GetSubscriptionUsageStatsQuery represents the query parameters for subscription usage stats
+type GetSubscriptionUsageStatsQuery struct {
 	SubscriptionID uint
 	From           time.Time
 	To             time.Time
@@ -19,54 +19,55 @@ type GetSubscriptionTrafficStatsQuery struct {
 	PageSize       int
 }
 
-// SubscriptionTrafficStatsRecord represents a single traffic stats record
-type SubscriptionTrafficStatsRecord struct {
-	NodeID   uint      `json:"node_id"`
-	Upload   uint64    `json:"upload"`
-	Download uint64    `json:"download"`
-	Total    uint64    `json:"total"`
-	Period   time.Time `json:"period"`
+// SubscriptionUsageStatsRecord represents a single usage stats record
+type SubscriptionUsageStatsRecord struct {
+	ResourceType string    `json:"resource_type"`
+	ResourceID   uint      `json:"resource_id"`
+	Upload       uint64    `json:"upload"`
+	Download     uint64    `json:"download"`
+	Total        uint64    `json:"total"`
+	Period       time.Time `json:"period"`
 }
 
-// SubscriptionTrafficSummary represents aggregated traffic summary
-type SubscriptionTrafficSummary struct {
+// SubscriptionUsageSummary represents aggregated usage summary
+type SubscriptionUsageSummary struct {
 	TotalUpload   uint64 `json:"total_upload"`
 	TotalDownload uint64 `json:"total_download"`
 	Total         uint64 `json:"total"`
 }
 
-// GetSubscriptionTrafficStatsResponse represents the response for subscription traffic stats
-type GetSubscriptionTrafficStatsResponse struct {
-	Records  []*SubscriptionTrafficStatsRecord `json:"records"`
-	Summary  *SubscriptionTrafficSummary       `json:"summary"`
-	Total    int                               `json:"total"`
-	Page     int                               `json:"page"`
-	PageSize int                               `json:"page_size"`
+// GetSubscriptionUsageStatsResponse represents the response for subscription usage stats
+type GetSubscriptionUsageStatsResponse struct {
+	Records  []*SubscriptionUsageStatsRecord `json:"records"`
+	Summary  *SubscriptionUsageSummary       `json:"summary"`
+	Total    int                             `json:"total"`
+	Page     int                             `json:"page"`
+	PageSize int                             `json:"page_size"`
 }
 
-// GetSubscriptionTrafficStatsUseCase handles retrieving traffic statistics for a subscription
-type GetSubscriptionTrafficStatsUseCase struct {
-	trafficRepo subscription.SubscriptionTrafficRepository
-	logger      logger.Interface
+// GetSubscriptionUsageStatsUseCase handles retrieving usage statistics for a subscription
+type GetSubscriptionUsageStatsUseCase struct {
+	usageRepo subscription.SubscriptionUsageRepository
+	logger    logger.Interface
 }
 
-// NewGetSubscriptionTrafficStatsUseCase creates a new GetSubscriptionTrafficStatsUseCase
-func NewGetSubscriptionTrafficStatsUseCase(
-	trafficRepo subscription.SubscriptionTrafficRepository,
+// NewGetSubscriptionUsageStatsUseCase creates a new GetSubscriptionUsageStatsUseCase
+func NewGetSubscriptionUsageStatsUseCase(
+	usageRepo subscription.SubscriptionUsageRepository,
 	logger logger.Interface,
-) *GetSubscriptionTrafficStatsUseCase {
-	return &GetSubscriptionTrafficStatsUseCase{
-		trafficRepo: trafficRepo,
-		logger:      logger,
+) *GetSubscriptionUsageStatsUseCase {
+	return &GetSubscriptionUsageStatsUseCase{
+		usageRepo: usageRepo,
+		logger:    logger,
 	}
 }
 
-// Execute retrieves traffic statistics for a subscription
-func (uc *GetSubscriptionTrafficStatsUseCase) Execute(
+// Execute retrieves usage statistics for a subscription
+func (uc *GetSubscriptionUsageStatsUseCase) Execute(
 	ctx context.Context,
-	query GetSubscriptionTrafficStatsQuery,
-) (*GetSubscriptionTrafficStatsResponse, error) {
-	uc.logger.Infow("fetching subscription traffic stats",
+	query GetSubscriptionUsageStatsQuery,
+) (*GetSubscriptionUsageStatsResponse, error) {
+	uc.logger.Infow("fetching subscription usage stats",
 		"subscription_id", query.SubscriptionID,
 		"from", query.From,
 		"to", query.To,
@@ -74,36 +75,37 @@ func (uc *GetSubscriptionTrafficStatsUseCase) Execute(
 	)
 
 	if err := uc.validateQuery(query); err != nil {
-		uc.logger.Errorw("invalid subscription traffic stats query", "error", err)
+		uc.logger.Errorw("invalid subscription usage stats query", "error", err)
 		return nil, err
 	}
 
 	filter := uc.buildFilter(query)
 
-	trafficRecords, err := uc.trafficRepo.GetTrafficStats(ctx, filter)
+	usageRecords, err := uc.usageRepo.GetUsageStats(ctx, filter)
 	if err != nil {
-		uc.logger.Errorw("failed to fetch subscription traffic stats", "error", err)
-		return nil, errors.NewInternalError("failed to fetch traffic statistics")
+		uc.logger.Errorw("failed to fetch subscription usage stats", "error", err)
+		return nil, errors.NewInternalError("failed to fetch usage statistics")
 	}
 
 	// Convert records and calculate summary
-	records := make([]*SubscriptionTrafficStatsRecord, 0, len(trafficRecords))
-	summary := &SubscriptionTrafficSummary{}
+	records := make([]*SubscriptionUsageStatsRecord, 0, len(usageRecords))
+	summary := &SubscriptionUsageSummary{}
 
-	for _, record := range trafficRecords {
-		records = append(records, &SubscriptionTrafficStatsRecord{
-			NodeID:   record.NodeID(),
-			Upload:   record.Upload(),
-			Download: record.Download(),
-			Total:    record.Total(),
-			Period:   record.Period(),
+	for _, record := range usageRecords {
+		records = append(records, &SubscriptionUsageStatsRecord{
+			ResourceType: record.ResourceType(),
+			ResourceID:   record.ResourceID(),
+			Upload:       record.Upload(),
+			Download:     record.Download(),
+			Total:        record.Total(),
+			Period:       record.Period(),
 		})
 		summary.TotalUpload += record.Upload()
 		summary.TotalDownload += record.Download()
 		summary.Total += record.Total()
 	}
 
-	response := &GetSubscriptionTrafficStatsResponse{
+	response := &GetSubscriptionUsageStatsResponse{
 		Records:  records,
 		Summary:  summary,
 		Total:    len(records),
@@ -111,7 +113,7 @@ func (uc *GetSubscriptionTrafficStatsUseCase) Execute(
 		PageSize: filter.PageSize,
 	}
 
-	uc.logger.Infow("subscription traffic stats fetched successfully",
+	uc.logger.Infow("subscription usage stats fetched successfully",
 		"subscription_id", query.SubscriptionID,
 		"count", len(records),
 	)
@@ -119,7 +121,7 @@ func (uc *GetSubscriptionTrafficStatsUseCase) Execute(
 	return response, nil
 }
 
-func (uc *GetSubscriptionTrafficStatsUseCase) validateQuery(query GetSubscriptionTrafficStatsQuery) error {
+func (uc *GetSubscriptionUsageStatsUseCase) validateQuery(query GetSubscriptionUsageStatsQuery) error {
 	if query.SubscriptionID == 0 {
 		return errors.NewValidationError("subscription_id is required")
 	}
@@ -154,7 +156,7 @@ func (uc *GetSubscriptionTrafficStatsUseCase) validateQuery(query GetSubscriptio
 	return nil
 }
 
-func (uc *GetSubscriptionTrafficStatsUseCase) buildFilter(query GetSubscriptionTrafficStatsQuery) subscription.TrafficStatsFilter {
+func (uc *GetSubscriptionUsageStatsUseCase) buildFilter(query GetSubscriptionUsageStatsQuery) subscription.UsageStatsFilter {
 	page := query.Page
 	if page == 0 {
 		page = 1
@@ -165,7 +167,7 @@ func (uc *GetSubscriptionTrafficStatsUseCase) buildFilter(query GetSubscriptionT
 		pageSize = 100
 	}
 
-	filter := subscription.TrafficStatsFilter{
+	filter := subscription.UsageStatsFilter{
 		SubscriptionID: &query.SubscriptionID,
 		From:           query.From,
 		To:             query.To,

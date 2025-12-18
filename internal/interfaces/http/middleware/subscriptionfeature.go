@@ -31,7 +31,7 @@ func (m *SubscriptionFeatureMiddleware) RequireSubscriptionFeature(feature strin
 			return
 		}
 
-		plan, ok := planValue.(*subscription.SubscriptionPlan)
+		plan, ok := planValue.(*subscription.Plan)
 		if !ok {
 			m.logger.Errorw("invalid subscription plan type in context", "feature", feature)
 			utils.ErrorResponse(c, http.StatusInternalServerError, "invalid subscription plan")
@@ -65,7 +65,7 @@ func (m *SubscriptionFeatureMiddleware) RequireAnyFeature(features ...string) gi
 			return
 		}
 
-		plan, ok := planValue.(*subscription.SubscriptionPlan)
+		plan, ok := planValue.(*subscription.Plan)
 		if !ok {
 			m.logger.Errorw("invalid subscription plan type in context", "features", features)
 			utils.ErrorResponse(c, http.StatusInternalServerError, "invalid subscription plan")
@@ -101,7 +101,7 @@ func (m *SubscriptionFeatureMiddleware) RequireAllFeatures(features ...string) g
 			return
 		}
 
-		plan, ok := planValue.(*subscription.SubscriptionPlan)
+		plan, ok := planValue.(*subscription.Plan)
 		if !ok {
 			m.logger.Errorw("invalid subscription plan type in context", "features", features)
 			utils.ErrorResponse(c, http.StatusInternalServerError, "invalid subscription plan")

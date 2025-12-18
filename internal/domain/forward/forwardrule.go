@@ -15,7 +15,8 @@ type ForwardRule struct {
 	id                uint
 	shortID           string // external API identifier (Stripe-style)
 	agentID           uint
-	userID            *uint // user ID for user-owned rules (nil for admin-created rules)
+	userID            *uint  // user ID for user-owned rules (nil for admin-created rules)
+	planIDs           []uint // subscription plans that can access this forward rule
 	ruleType          vo.ForwardRuleType
 	exitAgentID       uint            // exit agent ID (required for entry type)
 	chainAgentIDs     []uint          // ordered array of intermediate agent IDs for chain forwarding
@@ -246,6 +247,7 @@ func NewForwardRule(
 		shortID:           shortID,
 		agentID:           agentID,
 		userID:            userID,
+		planIDs:           []uint{},
 		ruleType:          ruleType,
 		exitAgentID:       exitAgentID,
 		chainAgentIDs:     chainAgentIDs,
@@ -275,6 +277,7 @@ func ReconstructForwardRule(
 	shortID string,
 	agentID uint,
 	userID *uint,
+	planIDs []uint,
 	ruleType vo.ForwardRuleType,
 	exitAgentID uint,
 	chainAgentIDs []uint,
@@ -331,11 +334,17 @@ func ReconstructForwardRule(
 		ipVersion = vo.IPVersionAuto
 	}
 
+	// Initialize planIDs if nil
+	if planIDs == nil {
+		planIDs = []uint{}
+	}
+
 	rule := &ForwardRule{
 		id:                id,
 		shortID:           shortID,
 		agentID:           agentID,
 		userID:            userID,
+		planIDs:           planIDs,
 		ruleType:          ruleType,
 		exitAgentID:       exitAgentID,
 		chainAgentIDs:     chainAgentIDs,
@@ -417,6 +426,13 @@ func (r *ForwardRule) UserID() *uint {
 // IsUserOwned returns true if the rule is owned by a user.
 func (r *ForwardRule) IsUserOwned() bool {
 	return r.userID != nil && *r.userID != 0
+}
+
+// PlanIDs returns a copy of subscription plan IDs that can access this forward rule.
+func (r *ForwardRule) PlanIDs() []uint {
+	ids := make([]uint, len(r.planIDs))
+	copy(ids, r.planIDs)
+	return ids
 }
 
 // RuleType returns the rule type.
@@ -716,6 +732,67 @@ func (r *ForwardRule) Disable() error {
 	r.status = vo.ForwardStatusDisabled
 	r.updatedAt = time.Now()
 	return nil
+}
+
+// SetPlanIDs sets the subscription plan IDs for this forward rule.
+func (r *ForwardRule) SetPlanIDs(ids []uint) {
+	if ids == nil {
+		r.planIDs = []uint{}
+	} else {
+		r.planIDs = make([]uint, len(ids))
+		copy(r.planIDs, ids)
+	}
+	r.updatedAt = time.Now()
+}
+
+// AddSubscriptionPlan adds a subscription plan to this forward rule.
+func (r *ForwardRule) AddSubscriptionPlan(planID uint) {
+	if planID == 0 {
+		return
+	}
+	// Check if already exists
+	for _, id := range r.planIDs {
+		if id == planID {
+			return
+		}
+	}
+	r.planIDs = append(r.planIDs, planID)
+	r.updatedAt = time.Now()
+}
+
+// RemoveSubscriptionPlan removes a subscription plan from this forward rule.
+func (r *ForwardRule) RemoveSubscriptionPlan(planID uint) {
+	for i, id := range r.planIDs {
+		if id == planID {
+			r.planIDs = append(r.planIDs[:i], r.planIDs[i+1:]...)
+			r.updatedAt = time.Now()
+			return
+		}
+	}
+}
+
+// HasSubscriptionPlan checks if this forward rule belongs to a specific subscription plan.
+func (r *ForwardRule) HasSubscriptionPlan(planID uint) bool {
+	for _, id := range r.planIDs {
+		if id == planID {
+			return true
+		}
+	}
+	return false
+}
+
+// HasAnySubscriptionPlan checks if this forward rule belongs to any of the given subscription plans.
+func (r *ForwardRule) HasAnySubscriptionPlan(planIDs []uint) bool {
+	planSet := make(map[uint]bool)
+	for _, id := range planIDs {
+		planSet[id] = true
+	}
+	for _, id := range r.planIDs {
+		if planSet[id] {
+			return true
+		}
+	}
+	return false
 }
 
 // UpdateName updates the rule name.

@@ -15,19 +15,19 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
-type SubscriptionPlanRepositoryImpl struct {
+type PlanRepositoryImpl struct {
 	db     *gorm.DB
 	logger logger.Interface
 }
 
-func NewSubscriptionPlanRepository(db *gorm.DB, logger logger.Interface) subscription.SubscriptionPlanRepository {
-	return &SubscriptionPlanRepositoryImpl{
+func NewPlanRepository(db *gorm.DB, logger logger.Interface) subscription.PlanRepository {
+	return &PlanRepositoryImpl{
 		db:     db,
 		logger: logger,
 	}
 }
 
-func (r *SubscriptionPlanRepositoryImpl) Create(ctx context.Context, plan *subscription.SubscriptionPlan) error {
+func (r *PlanRepositoryImpl) Create(ctx context.Context, plan *subscription.Plan) error {
 	model, err := r.toModel(plan)
 	if err != nil {
 		r.logger.Errorw("failed to convert plan to model", "error", err)
@@ -47,8 +47,8 @@ func (r *SubscriptionPlanRepositoryImpl) Create(ctx context.Context, plan *subsc
 	return nil
 }
 
-func (r *SubscriptionPlanRepositoryImpl) GetByID(ctx context.Context, id uint) (*subscription.SubscriptionPlan, error) {
-	var model models.SubscriptionPlanModel
+func (r *PlanRepositoryImpl) GetByID(ctx context.Context, id uint) (*subscription.Plan, error) {
+	var model models.PlanModel
 	if err := r.db.WithContext(ctx).First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
@@ -60,8 +60,8 @@ func (r *SubscriptionPlanRepositoryImpl) GetByID(ctx context.Context, id uint) (
 	return r.toEntity(&model)
 }
 
-func (r *SubscriptionPlanRepositoryImpl) GetBySlug(ctx context.Context, slug string) (*subscription.SubscriptionPlan, error) {
-	var model models.SubscriptionPlanModel
+func (r *PlanRepositoryImpl) GetBySlug(ctx context.Context, slug string) (*subscription.Plan, error) {
+	var model models.PlanModel
 	if err := r.db.WithContext(ctx).Where("slug = ?", slug).First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
@@ -73,14 +73,14 @@ func (r *SubscriptionPlanRepositoryImpl) GetBySlug(ctx context.Context, slug str
 	return r.toEntity(&model)
 }
 
-func (r *SubscriptionPlanRepositoryImpl) Update(ctx context.Context, plan *subscription.SubscriptionPlan) error {
+func (r *PlanRepositoryImpl) Update(ctx context.Context, plan *subscription.Plan) error {
 	model, err := r.toModel(plan)
 	if err != nil {
 		r.logger.Errorw("failed to convert plan to model", "error", err)
 		return fmt.Errorf("failed to convert plan to model: %w", err)
 	}
 
-	result := r.db.WithContext(ctx).Model(&models.SubscriptionPlanModel{}).
+	result := r.db.WithContext(ctx).Model(&models.PlanModel{}).
 		Where("id = ?", plan.ID()).
 		Updates(map[string]interface{}{
 			"name":           model.Name,
@@ -113,8 +113,8 @@ func (r *SubscriptionPlanRepositoryImpl) Update(ctx context.Context, plan *subsc
 	return nil
 }
 
-func (r *SubscriptionPlanRepositoryImpl) Delete(ctx context.Context, id uint) error {
-	result := r.db.WithContext(ctx).Delete(&models.SubscriptionPlanModel{}, id)
+func (r *PlanRepositoryImpl) Delete(ctx context.Context, id uint) error {
+	result := r.db.WithContext(ctx).Delete(&models.PlanModel{}, id)
 	if result.Error != nil {
 		r.logger.Errorw("failed to delete subscription plan", "error", result.Error, "plan_id", id)
 		return fmt.Errorf("failed to delete subscription plan: %w", result.Error)
@@ -128,8 +128,8 @@ func (r *SubscriptionPlanRepositoryImpl) Delete(ctx context.Context, id uint) er
 	return nil
 }
 
-func (r *SubscriptionPlanRepositoryImpl) GetActivePublicPlans(ctx context.Context) ([]*subscription.SubscriptionPlan, error) {
-	var planModels []*models.SubscriptionPlanModel
+func (r *PlanRepositoryImpl) GetActivePublicPlans(ctx context.Context) ([]*subscription.Plan, error) {
+	var planModels []*models.PlanModel
 	err := r.db.WithContext(ctx).
 		Where("status = ? AND is_public = ?", "active", true).
 		Order("sort_order ASC, created_at DESC").
@@ -143,8 +143,8 @@ func (r *SubscriptionPlanRepositoryImpl) GetActivePublicPlans(ctx context.Contex
 	return r.toEntities(planModels)
 }
 
-func (r *SubscriptionPlanRepositoryImpl) GetAllActive(ctx context.Context) ([]*subscription.SubscriptionPlan, error) {
-	var planModels []*models.SubscriptionPlanModel
+func (r *PlanRepositoryImpl) GetAllActive(ctx context.Context) ([]*subscription.Plan, error) {
+	var planModels []*models.PlanModel
 	err := r.db.WithContext(ctx).
 		Where("status = ?", "active").
 		Order("sort_order ASC, created_at DESC").
@@ -158,8 +158,8 @@ func (r *SubscriptionPlanRepositoryImpl) GetAllActive(ctx context.Context) ([]*s
 	return r.toEntities(planModels)
 }
 
-func (r *SubscriptionPlanRepositoryImpl) List(ctx context.Context, filter subscription.PlanFilter) ([]*subscription.SubscriptionPlan, int64, error) {
-	query := r.db.WithContext(ctx).Model(&models.SubscriptionPlanModel{})
+func (r *PlanRepositoryImpl) List(ctx context.Context, filter subscription.PlanFilter) ([]*subscription.Plan, int64, error) {
+	query := r.db.WithContext(ctx).Model(&models.PlanModel{})
 
 	if filter.Status != nil && *filter.Status != "" {
 		query = query.Where("status = ?", *filter.Status)
@@ -200,7 +200,7 @@ func (r *SubscriptionPlanRepositoryImpl) List(ctx context.Context, filter subscr
 
 	query = query.Offset(offset).Limit(pageSize).Order(sortBy)
 
-	var planModels []*models.SubscriptionPlanModel
+	var planModels []*models.PlanModel
 	if err := query.Find(&planModels).Error; err != nil {
 		r.logger.Errorw("failed to list subscription plans", "error", err)
 		return nil, 0, fmt.Errorf("failed to list subscription plans: %w", err)
@@ -214,9 +214,9 @@ func (r *SubscriptionPlanRepositoryImpl) List(ctx context.Context, filter subscr
 	return plans, total, nil
 }
 
-func (r *SubscriptionPlanRepositoryImpl) ExistsBySlug(ctx context.Context, slug string) (bool, error) {
+func (r *PlanRepositoryImpl) ExistsBySlug(ctx context.Context, slug string) (bool, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Model(&models.SubscriptionPlanModel{}).
+	err := r.db.WithContext(ctx).Model(&models.PlanModel{}).
 		Where("slug = ?", slug).
 		Count(&count).Error
 
@@ -228,7 +228,7 @@ func (r *SubscriptionPlanRepositoryImpl) ExistsBySlug(ctx context.Context, slug 
 	return count > 0, nil
 }
 
-func (r *SubscriptionPlanRepositoryImpl) toEntity(model *models.SubscriptionPlanModel) (*subscription.SubscriptionPlan, error) {
+func (r *PlanRepositoryImpl) toEntity(model *models.PlanModel) (*subscription.Plan, error) {
 	if model == nil {
 		return nil, nil
 	}
@@ -277,7 +277,7 @@ func (r *SubscriptionPlanRepositoryImpl) toEntity(model *models.SubscriptionPlan
 		}
 	}
 
-	return subscription.ReconstructSubscriptionPlan(
+	return subscription.ReconstructPlan(
 		model.ID,
 		model.Name,
 		model.Slug,
@@ -300,7 +300,7 @@ func (r *SubscriptionPlanRepositoryImpl) toEntity(model *models.SubscriptionPlan
 	)
 }
 
-func (r *SubscriptionPlanRepositoryImpl) toModel(plan *subscription.SubscriptionPlan) (*models.SubscriptionPlanModel, error) {
+func (r *PlanRepositoryImpl) toModel(plan *subscription.Plan) (*models.PlanModel, error) {
 	if plan == nil {
 		return nil, nil
 	}
@@ -334,7 +334,7 @@ func (r *SubscriptionPlanRepositoryImpl) toModel(plan *subscription.Subscription
 		}
 	}
 
-	return &models.SubscriptionPlanModel{
+	return &models.PlanModel{
 		ID:           plan.ID(),
 		Name:         plan.Name(),
 		Slug:         plan.Slug(),
@@ -358,8 +358,8 @@ func (r *SubscriptionPlanRepositoryImpl) toModel(plan *subscription.Subscription
 	}, nil
 }
 
-func (r *SubscriptionPlanRepositoryImpl) toEntities(models []*models.SubscriptionPlanModel) ([]*subscription.SubscriptionPlan, error) {
-	plans := make([]*subscription.SubscriptionPlan, 0, len(models))
+func (r *PlanRepositoryImpl) toEntities(models []*models.PlanModel) ([]*subscription.Plan, error) {
+	plans := make([]*subscription.Plan, 0, len(models))
 
 	for _, model := range models {
 		plan, err := r.toEntity(model)

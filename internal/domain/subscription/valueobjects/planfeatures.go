@@ -266,8 +266,6 @@ const (
 	LimitKeySpeedLimit = "speed_limit"
 	// LimitKeyConnectionLimit represents maximum concurrent connections
 	LimitKeyConnectionLimit = "connection_limit"
-	// LimitKeyNodeAccess represents accessible node group IDs
-	LimitKeyNodeAccess = "node_access"
 )
 
 // Standard feature keys for plan capabilities
@@ -423,49 +421,6 @@ func (p *PlanFeatures) SetConnectionLimit(count int) error {
 	}
 	p.SetLimit(LimitKeyConnectionLimit, count)
 	return nil
-}
-
-// GetNodeAccess returns the list of accessible node group IDs
-// Returns empty slice if all nodes are accessible
-func (p *PlanFeatures) GetNodeAccess() ([]uint, error) {
-	value, exists := p.GetLimit(LimitKeyNodeAccess)
-	if !exists {
-		return []uint{}, nil // empty means all nodes accessible
-	}
-
-	switch v := value.(type) {
-	case []uint:
-		return v, nil
-	case []interface{}:
-		result := make([]uint, 0, len(v))
-		for _, item := range v {
-			switch id := item.(type) {
-			case uint:
-				result = append(result, id)
-			case int:
-				if id < 0 {
-					return nil, fmt.Errorf("node group ID cannot be negative")
-				}
-				result = append(result, uint(id))
-			case float64:
-				if id < 0 {
-					return nil, fmt.Errorf("node group ID cannot be negative")
-				}
-				result = append(result, uint(id))
-			default:
-				return nil, fmt.Errorf("invalid node group ID type: %T", item)
-			}
-		}
-		return result, nil
-	default:
-		return nil, fmt.Errorf("invalid node access type: %T", v)
-	}
-}
-
-// SetNodeAccess sets the list of accessible node group IDs
-// Use empty slice for all nodes accessible
-func (p *PlanFeatures) SetNodeAccess(nodeGroupIDs []uint) {
-	p.SetLimit(LimitKeyNodeAccess, nodeGroupIDs)
 }
 
 // IsUnlimitedTraffic checks if the plan has unlimited traffic

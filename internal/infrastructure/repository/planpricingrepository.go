@@ -56,7 +56,7 @@ func (r *PlanPricingRepositoryImpl) Create(ctx context.Context, pricing *vo.Plan
 
 // GetByID retrieves a pricing record by ID
 func (r *PlanPricingRepositoryImpl) GetByID(ctx context.Context, id uint) (*vo.PlanPricing, error) {
-	var model models.SubscriptionPlanPricingModel
+	var model models.PlanPricingModel
 
 	if err := r.db.WithContext(ctx).First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -77,7 +77,7 @@ func (r *PlanPricingRepositoryImpl) GetByID(ctx context.Context, id uint) (*vo.P
 
 // GetByPlanAndCycle retrieves pricing for a specific plan and billing cycle
 func (r *PlanPricingRepositoryImpl) GetByPlanAndCycle(ctx context.Context, planID uint, cycle vo.BillingCycle) (*vo.PlanPricing, error) {
-	var model models.SubscriptionPlanPricingModel
+	var model models.PlanPricingModel
 
 	err := r.db.WithContext(ctx).
 		Where("plan_id = ? AND billing_cycle = ? AND is_active = ?", planID, cycle.String(), true).
@@ -108,7 +108,7 @@ func (r *PlanPricingRepositoryImpl) GetByPlanAndCycle(ctx context.Context, planI
 
 // GetByPlanID retrieves all pricing records for a plan
 func (r *PlanPricingRepositoryImpl) GetByPlanID(ctx context.Context, planID uint) ([]*vo.PlanPricing, error) {
-	var modelList []*models.SubscriptionPlanPricingModel
+	var modelList []*models.PlanPricingModel
 
 	err := r.db.WithContext(ctx).
 		Where("plan_id = ?", planID).
@@ -132,7 +132,7 @@ func (r *PlanPricingRepositoryImpl) GetByPlanID(ctx context.Context, planID uint
 
 // GetActivePricings retrieves all active pricing records for a plan
 func (r *PlanPricingRepositoryImpl) GetActivePricings(ctx context.Context, planID uint) ([]*vo.PlanPricing, error) {
-	var modelList []*models.SubscriptionPlanPricingModel
+	var modelList []*models.PlanPricingModel
 
 	err := r.db.WithContext(ctx).
 		Where("plan_id = ? AND is_active = ?", planID, true).
@@ -161,7 +161,7 @@ func (r *PlanPricingRepositoryImpl) GetActivePricingsByPlanIDs(ctx context.Conte
 		return make(map[uint][]*vo.PlanPricing), nil
 	}
 
-	var modelList []*models.SubscriptionPlanPricingModel
+	var modelList []*models.PlanPricingModel
 
 	err := r.db.WithContext(ctx).
 		Where("plan_id IN ? AND is_active = ?", planIDs, true).
@@ -206,7 +206,7 @@ func (r *PlanPricingRepositoryImpl) Update(ctx context.Context, pricing *vo.Plan
 	}
 
 	result := r.db.WithContext(ctx).
-		Model(&models.SubscriptionPlanPricingModel{}).
+		Model(&models.PlanPricingModel{}).
 		Where("id = ?", model.ID).
 		Updates(map[string]interface{}{
 			"price":      model.Price,
@@ -236,7 +236,7 @@ func (r *PlanPricingRepositoryImpl) Update(ctx context.Context, pricing *vo.Plan
 
 // Delete soft deletes a pricing record
 func (r *PlanPricingRepositoryImpl) Delete(ctx context.Context, id uint) error {
-	result := r.db.WithContext(ctx).Delete(&models.SubscriptionPlanPricingModel{}, id)
+	result := r.db.WithContext(ctx).Delete(&models.PlanPricingModel{}, id)
 
 	if result.Error != nil {
 		r.logger.Errorw("failed to delete pricing", "id", id, "error", result.Error)
@@ -256,7 +256,7 @@ func (r *PlanPricingRepositoryImpl) Delete(ctx context.Context, id uint) error {
 func (r *PlanPricingRepositoryImpl) DeleteByPlanID(ctx context.Context, planID uint) error {
 	result := r.db.WithContext(ctx).
 		Where("plan_id = ?", planID).
-		Delete(&models.SubscriptionPlanPricingModel{})
+		Delete(&models.PlanPricingModel{})
 
 	if result.Error != nil {
 		r.logger.Errorw("failed to delete pricings by plan ID",

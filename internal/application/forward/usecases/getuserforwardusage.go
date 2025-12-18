@@ -28,7 +28,7 @@ type GetUserForwardUsageResult struct {
 type GetUserForwardUsageUseCase struct {
 	repo             forward.Repository
 	subscriptionRepo subscription.SubscriptionRepository
-	planRepo         subscription.SubscriptionPlanRepository
+	planRepo         subscription.PlanRepository
 	logger           logger.Interface
 }
 
@@ -36,7 +36,7 @@ type GetUserForwardUsageUseCase struct {
 func NewGetUserForwardUsageUseCase(
 	repo forward.Repository,
 	subscriptionRepo subscription.SubscriptionRepository,
-	planRepo subscription.SubscriptionPlanRepository,
+	planRepo subscription.PlanRepository,
 	logger logger.Interface,
 ) *GetUserForwardUsageUseCase {
 	return &GetUserForwardUsageUseCase{

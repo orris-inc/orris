@@ -109,48 +109,19 @@ func (r *SubscriptionRepositoryImpl) GetActiveByUserID(ctx context.Context, user
 }
 
 func (r *SubscriptionRepositoryImpl) GetActiveSubscriptionsByNodeID(ctx context.Context, nodeID uint) ([]*subscription.Subscription, error) {
-	// Query node groups that contain this node
-	var nodeGroupNodeModels []models.NodeGroupNodeModel
+	// Query subscription plan IDs that have this node as a resource
+	var planIDs []uint
 	if err := r.db.WithContext(ctx).
-		Where("node_id = ?", nodeID).
-		Find(&nodeGroupNodeModels).Error; err != nil {
-		r.logger.Errorw("failed to query node groups for node", "node_id", nodeID, "error", err)
-		return nil, fmt.Errorf("failed to query node groups: %w", err)
+		Model(&models.EntitlementModel{}).
+		Where("resource_type = ? AND resource_id = ?", "node", nodeID).
+		Pluck("subscription_id", &planIDs).Error; err != nil {
+		r.logger.Errorw("failed to query subscription resources for node", "node_id", nodeID, "error", err)
+		return nil, fmt.Errorf("failed to query subscription resources: %w", err)
 	}
 
-	if len(nodeGroupNodeModels) == 0 {
-		r.logger.Infow("no node groups found for node", "node_id", nodeID)
+	if len(planIDs) == 0 {
+		r.logger.Infow("no subscription plans found for node", "node_id", nodeID)
 		return []*subscription.Subscription{}, nil
-	}
-
-	// Extract node group IDs
-	nodeGroupIDs := make([]uint, len(nodeGroupNodeModels))
-	for i, ngn := range nodeGroupNodeModels {
-		nodeGroupIDs[i] = ngn.NodeGroupID
-	}
-
-	// Query subscription plans associated with these node groups
-	var nodeGroupPlanModels []models.NodeGroupPlanModel
-	if err := r.db.WithContext(ctx).
-		Where("node_group_id IN ?", nodeGroupIDs).
-		Find(&nodeGroupPlanModels).Error; err != nil {
-		r.logger.Errorw("failed to query plans for node groups", "node_group_ids", nodeGroupIDs, "error", err)
-		return nil, fmt.Errorf("failed to query subscription plans: %w", err)
-	}
-
-	if len(nodeGroupPlanModels) == 0 {
-		r.logger.Infow("no subscription plans found for node groups", "node_group_ids", nodeGroupIDs)
-		return []*subscription.Subscription{}, nil
-	}
-
-	// Extract unique plan IDs
-	planIDsMap := make(map[uint]bool)
-	for _, ngp := range nodeGroupPlanModels {
-		planIDsMap[ngp.SubscriptionPlanID] = true
-	}
-	planIDs := make([]uint, 0, len(planIDsMap))
-	for planID := range planIDsMap {
-		planIDs = append(planIDs, planID)
 	}
 
 	// Query active subscriptions for these plans
@@ -171,7 +142,6 @@ func (r *SubscriptionRepositoryImpl) GetActiveSubscriptionsByNodeID(ctx context.
 
 	r.logger.Infow("retrieved active subscriptions for node",
 		"node_id", nodeID,
-		"node_group_count", len(nodeGroupIDs),
 		"plan_count", len(planIDs),
 		"subscription_count", len(entities),
 	)

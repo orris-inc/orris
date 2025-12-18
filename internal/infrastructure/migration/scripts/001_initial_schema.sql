@@ -1,6 +1,6 @@
 -- +goose Up
 -- Migration: Consolidated initial database schema
--- Created: 2025-12-16
+-- Created: 2025-12-18
 -- Description: Complete database schema with all tables and final structures
 
 -- ============================================================================
@@ -98,7 +98,7 @@ INSERT INTO oauth_providers (name, display_name, auth_url, token_url, user_info_
 -- Section 2: Subscription Management Tables
 -- ============================================================================
 
-CREATE TABLE subscription_plans (
+CREATE TABLE plans (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     slug VARCHAR(50) NOT NULL UNIQUE,
@@ -126,6 +126,34 @@ CREATE TABLE subscription_plans (
     INDEX idx_status (status),
     INDEX idx_is_public (is_public),
     INDEX idx_deleted_at (deleted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE plan_pricings (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    plan_id BIGINT UNSIGNED NOT NULL,
+    billing_cycle VARCHAR(20) NOT NULL,
+    price BIGINT UNSIGNED NOT NULL,
+    currency VARCHAR(3) NOT NULL DEFAULT 'CNY',
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL DEFAULT NULL,
+    UNIQUE KEY uk_plan_billing_cycle (plan_id, billing_cycle),
+    INDEX idx_plan_id (plan_id),
+    INDEX idx_billing_cycle (billing_cycle),
+    INDEX idx_is_active (is_active),
+    INDEX idx_deleted_at (deleted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE entitlements (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    plan_id BIGINT UNSIGNED NOT NULL,
+    resource_type VARCHAR(50) NOT NULL,
+    resource_id BIGINT UNSIGNED NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_plan_resource (plan_id, resource_type, resource_id),
+    INDEX idx_plan_id (plan_id),
+    INDEX idx_resource (resource_type, resource_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE subscriptions (
@@ -202,41 +230,16 @@ CREATE TABLE subscription_histories (
 CREATE TABLE subscription_usages (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     subscription_id BIGINT UNSIGNED NOT NULL,
-    period_start DATETIME NOT NULL,
-    period_end DATETIME NOT NULL,
-    api_requests BIGINT UNSIGNED NOT NULL DEFAULT 0,
-    api_data_out BIGINT UNSIGNED NOT NULL DEFAULT 0,
-    api_data_in BIGINT UNSIGNED NOT NULL DEFAULT 0,
-    storage_used BIGINT UNSIGNED NOT NULL DEFAULT 0,
-    users_count INT UNSIGNED NOT NULL DEFAULT 0,
-    projects_count INT UNSIGNED NOT NULL DEFAULT 0,
-    webhook_calls BIGINT UNSIGNED NOT NULL DEFAULT 0,
-    emails_sent BIGINT UNSIGNED NOT NULL DEFAULT 0,
-    reports_generated INT UNSIGNED NOT NULL DEFAULT 0,
-    last_reset_at DATETIME NULL,
+    resource_type VARCHAR(50) NOT NULL COMMENT 'Resource type: node / forward_rule',
+    resource_id BIGINT UNSIGNED NOT NULL COMMENT 'Resource ID',
+    upload BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    download BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    total BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    period TIMESTAMP NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP NULL,
-    UNIQUE KEY idx_subscription_period (subscription_id, period_start),
-    INDEX idx_period_end (period_end),
-    INDEX idx_deleted_at (deleted_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-CREATE TABLE subscription_plan_pricing (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    plan_id BIGINT UNSIGNED NOT NULL,
-    billing_cycle VARCHAR(20) NOT NULL,
-    price BIGINT UNSIGNED NOT NULL,
-    currency VARCHAR(3) NOT NULL DEFAULT 'CNY',
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP NULL DEFAULT NULL,
-    UNIQUE KEY uk_plan_billing_cycle (plan_id, billing_cycle),
-    INDEX idx_plan_id (plan_id),
-    INDEX idx_billing_cycle (billing_cycle),
-    INDEX idx_is_active (is_active),
-    INDEX idx_deleted_at (deleted_at)
+    INDEX idx_subscription_period (subscription_id, period),
+    INDEX idx_resource (resource_type, resource_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- ============================================================================
@@ -312,6 +315,7 @@ CREATE TABLE nodes (
     status VARCHAR(20) NOT NULL DEFAULT 'inactive',
     region VARCHAR(100),
     tags JSON,
+    plan_ids JSON,
     sort_order INT NOT NULL DEFAULT 0,
     maintenance_reason VARCHAR(500),
     token_hash VARCHAR(255) NOT NULL,
@@ -329,51 +333,6 @@ CREATE TABLE nodes (
     UNIQUE INDEX idx_token_hash (token_hash),
     INDEX idx_nodes_last_seen_at (last_seen_at),
     INDEX idx_deleted_at (deleted_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-CREATE TABLE node_groups (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100) NOT NULL UNIQUE,
-    description VARCHAR(500),
-    is_public BOOLEAN NOT NULL DEFAULT FALSE,
-    sort_order INT NOT NULL DEFAULT 0,
-    metadata JSON,
-    version INT NOT NULL DEFAULT 1,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP NULL,
-    INDEX idx_is_public (is_public),
-    INDEX idx_deleted_at (deleted_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-CREATE TABLE node_group_nodes (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    node_group_id BIGINT UNSIGNED NOT NULL,
-    node_id BIGINT UNSIGNED NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE INDEX idx_node_group_node_unique (node_group_id, node_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-CREATE TABLE node_group_plans (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    node_group_id BIGINT UNSIGNED NOT NULL,
-    subscription_plan_id BIGINT UNSIGNED NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE INDEX idx_node_group_plan_unique (node_group_id, subscription_plan_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-CREATE TABLE subscription_traffic (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    node_id BIGINT UNSIGNED NOT NULL,
-    subscription_id BIGINT UNSIGNED,
-    upload BIGINT UNSIGNED NOT NULL DEFAULT 0,
-    download BIGINT UNSIGNED NOT NULL DEFAULT 0,
-    total BIGINT UNSIGNED NOT NULL DEFAULT 0,
-    period TIMESTAMP NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_node_period (node_id, period),
-    INDEX idx_subscription (subscription_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE shadowsocks_configs (
@@ -416,6 +375,7 @@ CREATE TABLE forward_agents (
     api_token VARCHAR(255) DEFAULT NULL,
     public_address VARCHAR(255) NULL DEFAULT NULL,
     tunnel_address VARCHAR(255) DEFAULT NULL,
+    plan_ids JSON,
     status VARCHAR(20) NOT NULL DEFAULT 'enabled',
     remark VARCHAR(500) DEFAULT '',
     last_seen_at DATETIME NULL DEFAULT NULL,
@@ -434,6 +394,7 @@ CREATE TABLE forward_rules (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     short_id VARCHAR(16) NOT NULL,
     agent_id BIGINT UNSIGNED NOT NULL,
+    user_id BIGINT UNSIGNED NULL,
     name VARCHAR(100) NOT NULL,
     listen_port SMALLINT UNSIGNED NOT NULL,
     target_address VARCHAR(255) DEFAULT '',
@@ -446,6 +407,7 @@ CREATE TABLE forward_rules (
     chain_agent_ids JSON DEFAULT NULL,
     chain_port_config JSON DEFAULT NULL,
     ip_version VARCHAR(10) NOT NULL DEFAULT 'auto',
+    plan_ids JSON,
     traffic_multiplier DECIMAL(10,4) NULL DEFAULT NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'disabled',
     remark VARCHAR(500) DEFAULT '',
@@ -463,6 +425,8 @@ CREATE TABLE forward_rules (
     INDEX idx_forward_protocol (protocol),
     INDEX idx_forward_status (status),
     INDEX idx_forward_rules_traffic_multiplier (traffic_multiplier),
+    INDEX idx_forward_rules_user_id (user_id),
+    INDEX idx_forward_rules_user_status (user_id, status),
     INDEX idx_deleted_at (deleted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -474,20 +438,17 @@ DROP TABLE IF EXISTS forward_rules;
 DROP TABLE IF EXISTS forward_agents;
 DROP TABLE IF EXISTS trojan_configs;
 DROP TABLE IF EXISTS shadowsocks_configs;
-DROP TABLE IF EXISTS subscription_traffic;
-DROP TABLE IF EXISTS node_group_plans;
-DROP TABLE IF EXISTS node_group_nodes;
-DROP TABLE IF EXISTS node_groups;
 DROP TABLE IF EXISTS nodes;
 DROP TABLE IF EXISTS notification_templates;
 DROP TABLE IF EXISTS announcements;
 DROP TABLE IF EXISTS notifications;
-DROP TABLE IF EXISTS subscription_plan_pricing;
 DROP TABLE IF EXISTS subscription_usages;
 DROP TABLE IF EXISTS subscription_histories;
 DROP TABLE IF EXISTS subscription_tokens;
 DROP TABLE IF EXISTS subscriptions;
-DROP TABLE IF EXISTS subscription_plans;
+DROP TABLE IF EXISTS entitlements;
+DROP TABLE IF EXISTS plan_pricings;
+DROP TABLE IF EXISTS plans;
 DROP TABLE IF EXISTS oauth_providers;
 DROP TABLE IF EXISTS sessions;
 DROP TABLE IF EXISTS oauth_accounts;

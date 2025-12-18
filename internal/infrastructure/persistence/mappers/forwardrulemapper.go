@@ -68,6 +68,14 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 		targetNodeID = model.TargetNodeID
 	}
 
+	// Parse plan_ids JSON
+	var planIDs []uint
+	if model.PlanIDs != nil && len(model.PlanIDs) > 0 {
+		if err := json.Unmarshal(model.PlanIDs, &planIDs); err != nil {
+			return nil, fmt.Errorf("failed to parse plan_ids: %w", err)
+		}
+	}
+
 	// Parse chain_agent_ids JSON
 	var chainAgentIDs []uint
 	if model.ChainAgentIDs != nil && len(model.ChainAgentIDs) > 0 {
@@ -102,6 +110,7 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 		model.ShortID,
 		model.AgentID,
 		userID,
+		planIDs,
 		ruleType,
 		exitAgentID,
 		chainAgentIDs,
@@ -152,6 +161,18 @@ func (m *ForwardRuleMapperImpl) ToModel(entity *forward.ForwardRule) (*models.Fo
 		targetNodeID = entity.TargetNodeID()
 	}
 
+	// Serialize plan_ids to JSON
+	var planIDsJSON datatypes.JSON
+	if len(entity.PlanIDs()) > 0 {
+		jsonBytes, err := json.Marshal(entity.PlanIDs())
+		if err != nil {
+			return nil, fmt.Errorf("failed to serialize plan_ids: %w", err)
+		}
+		planIDsJSON = jsonBytes
+	} else {
+		planIDsJSON = []byte("[]")
+	}
+
 	// Serialize chain_agent_ids to JSON
 	var chainAgentIDsJSON datatypes.JSON
 	if len(entity.ChainAgentIDs()) > 0 {
@@ -182,6 +203,7 @@ func (m *ForwardRuleMapperImpl) ToModel(entity *forward.ForwardRule) (*models.Fo
 		ShortID:           entity.ShortID(),
 		AgentID:           entity.AgentID(),
 		UserID:            userID,
+		PlanIDs:           planIDsJSON,
 		RuleType:          entity.RuleType().String(),
 		ExitAgentID:       exitAgentID,
 		ChainAgentIDs:     chainAgentIDsJSON,

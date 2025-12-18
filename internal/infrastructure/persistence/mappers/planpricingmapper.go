@@ -16,7 +16,7 @@ func NewPlanPricingMapper() *PlanPricingMapper {
 }
 
 // ToDomain converts database model to domain value object
-func (m *PlanPricingMapper) ToDomain(model *models.SubscriptionPlanPricingModel) (*valueobjects.PlanPricing, error) {
+func (m *PlanPricingMapper) ToDomain(model *models.PlanPricingModel) (*valueobjects.PlanPricing, error) {
 	if model == nil {
 		return nil, fmt.Errorf("pricing model cannot be nil")
 	}
@@ -43,12 +43,12 @@ func (m *PlanPricingMapper) ToDomain(model *models.SubscriptionPlanPricingModel)
 }
 
 // ToModel converts domain value object to database model
-func (m *PlanPricingMapper) ToModel(pricing *valueobjects.PlanPricing) (*models.SubscriptionPlanPricingModel, error) {
+func (m *PlanPricingMapper) ToModel(pricing *valueobjects.PlanPricing) (*models.PlanPricingModel, error) {
 	if pricing == nil {
 		return nil, fmt.Errorf("pricing cannot be nil")
 	}
 
-	model := &models.SubscriptionPlanPricingModel{
+	model := &models.PlanPricingModel{
 		ID:           pricing.ID(),
 		PlanID:       pricing.PlanID(),
 		BillingCycle: pricing.BillingCycle().String(),
@@ -63,7 +63,7 @@ func (m *PlanPricingMapper) ToModel(pricing *valueobjects.PlanPricing) (*models.
 }
 
 // ToDomainList converts a list of database models to domain value objects
-func (m *PlanPricingMapper) ToDomainList(models []*models.SubscriptionPlanPricingModel) ([]*valueobjects.PlanPricing, error) {
+func (m *PlanPricingMapper) ToDomainList(models []*models.PlanPricingModel) ([]*valueobjects.PlanPricing, error) {
 	if models == nil {
 		return []*valueobjects.PlanPricing{}, nil
 	}
@@ -81,12 +81,12 @@ func (m *PlanPricingMapper) ToDomainList(models []*models.SubscriptionPlanPricin
 }
 
 // ToModelList converts a list of domain value objects to database models
-func (m *PlanPricingMapper) ToModelList(pricings []*valueobjects.PlanPricing) ([]*models.SubscriptionPlanPricingModel, error) {
+func (m *PlanPricingMapper) ToModelList(pricings []*valueobjects.PlanPricing) ([]*models.PlanPricingModel, error) {
 	if pricings == nil {
-		return []*models.SubscriptionPlanPricingModel{}, nil
+		return []*models.PlanPricingModel{}, nil
 	}
 
-	modelList := make([]*models.SubscriptionPlanPricingModel, 0, len(pricings))
+	modelList := make([]*models.PlanPricingModel, 0, len(pricings))
 	for _, pricing := range pricings {
 		model, err := m.ToModel(pricing)
 		if err != nil {

@@ -24,9 +24,9 @@ type GetNodeSubscriptionsExecutor interface {
 	Execute(ctx context.Context, cmd usecases.GetNodeSubscriptionsCommand) (*usecases.GetNodeSubscriptionsResult, error)
 }
 
-// ReportSubscriptionTrafficExecutor defines the interface for executing ReportSubscriptionTraffic use case
-type ReportSubscriptionTrafficExecutor interface {
-	Execute(ctx context.Context, cmd usecases.ReportSubscriptionTrafficCommand) (*usecases.ReportSubscriptionTrafficResult, error)
+// ReportSubscriptionUsageExecutor defines the interface for executing ReportSubscriptionUsage use case
+type ReportSubscriptionUsageExecutor interface {
+	Execute(ctx context.Context, cmd usecases.ReportSubscriptionUsageCommand) (*usecases.ReportSubscriptionUsageResult, error)
 }
 
 // ReportNodeStatusExecutor defines the interface for executing ReportNodeStatus use case
@@ -43,7 +43,7 @@ type ReportOnlineSubscriptionsExecutor interface {
 type AgentHandler struct {
 	getNodeConfigUC             GetNodeConfigExecutor
 	getNodeSubscriptionsUC      GetNodeSubscriptionsExecutor
-	reportSubscriptionTrafficUC ReportSubscriptionTrafficExecutor
+	reportSubscriptionUsageUC   ReportSubscriptionUsageExecutor
 	reportNodeStatusUC          ReportNodeStatusExecutor
 	reportOnlineSubscriptionsUC ReportOnlineSubscriptionsExecutor
 	logger                      logger.Interface
@@ -53,7 +53,7 @@ type AgentHandler struct {
 func NewAgentHandler(
 	getNodeConfigUC GetNodeConfigExecutor,
 	getNodeSubscriptionsUC GetNodeSubscriptionsExecutor,
-	reportSubscriptionTrafficUC ReportSubscriptionTrafficExecutor,
+	reportSubscriptionUsageUC ReportSubscriptionUsageExecutor,
 	reportNodeStatusUC ReportNodeStatusExecutor,
 	reportOnlineSubscriptionsUC ReportOnlineSubscriptionsExecutor,
 	logger logger.Interface,
@@ -61,7 +61,7 @@ func NewAgentHandler(
 	return &AgentHandler{
 		getNodeConfigUC:             getNodeConfigUC,
 		getNodeSubscriptionsUC:      getNodeSubscriptionsUC,
-		reportSubscriptionTrafficUC: reportSubscriptionTrafficUC,
+		reportSubscriptionUsageUC:   reportSubscriptionUsageUC,
 		reportNodeStatusUC:          reportNodeStatusUC,
 		reportOnlineSubscriptionsUC: reportOnlineSubscriptionsUC,
 		logger:                      logger,
@@ -222,9 +222,9 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 	}
 
 	// Parse request body
-	var subscriptions []dto.SubscriptionTrafficItem
+	var subscriptions []dto.SubscriptionUsageItem
 	if err := c.ShouldBindJSON(&subscriptions); err != nil {
-		h.logger.Warnw("invalid traffic report request body",
+		h.logger.Warnw("invalid usage report request body",
 			"error", err,
 			"node_id", nodeID,
 			"ip", c.ClientIP(),
@@ -233,36 +233,36 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 		return
 	}
 
-	h.logger.Infow("traffic report received",
+	h.logger.Infow("usage report received",
 		"node_id", nodeID,
 		"subscription_count", len(subscriptions),
 		"ip", c.ClientIP(),
 	)
 
 	// Execute use case
-	cmd := usecases.ReportSubscriptionTrafficCommand{
+	cmd := usecases.ReportSubscriptionUsageCommand{
 		NodeID:        nodeID,
 		Subscriptions: subscriptions,
 	}
 
-	result, err := h.reportSubscriptionTrafficUC.Execute(ctx, cmd)
+	result, err := h.reportSubscriptionUsageUC.Execute(ctx, cmd)
 	if err != nil {
-		h.logger.Errorw("failed to report subscription traffic",
+		h.logger.Errorw("failed to report subscription usage",
 			"error", err,
 			"node_id", nodeID,
 		)
-		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to process traffic report")
+		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to process usage report")
 		return
 	}
 
-	h.logger.Infow("traffic reported successfully",
+	h.logger.Infow("usage reported successfully",
 		"node_id", nodeID,
 		"subscriptions_updated", result.SubscriptionsUpdated,
 		"ip", c.ClientIP(),
 	)
 
 	// Return success response
-	utils.SuccessResponse(c, http.StatusOK, "traffic reported successfully", map[string]any{
+	utils.SuccessResponse(c, http.StatusOK, "usage reported successfully", map[string]any{
 		"subscriptions_updated": result.SubscriptionsUpdated,
 	})
 }

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 )
 
 // ErrorType represents the type of error
@@ -166,4 +167,21 @@ func IsNotFoundError(err error) bool {
 func IsValidationError(err error) bool {
 	appErr := GetAppError(err)
 	return appErr != nil && appErr.Type == ErrorTypeValidation
+}
+
+// IsDuplicateError checks if the error is a database duplicate key error
+func IsDuplicateError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	// MySQL duplicate entry error
+	if strings.Contains(errStr, "Duplicate entry") || strings.Contains(errStr, "duplicate key") {
+		return true
+	}
+	// PostgreSQL unique violation
+	if strings.Contains(errStr, "unique constraint") || strings.Contains(errStr, "violates unique constraint") {
+		return true
+	}
+	return false
 }

@@ -46,49 +46,19 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, subs
 		return nil, err
 	}
 
-	// Query node groups associated with this plan
-	var nodeGroupPlanModels []models.NodeGroupPlanModel
+	// Query node IDs directly from entitlements
+	var nodeIDs []uint
 	if err := r.db.WithContext(ctx).
-		Where("subscription_plan_id = ?", subscriptionModel.PlanID).
-		Find(&nodeGroupPlanModels).Error; err != nil {
-		r.logger.Errorw("failed to query node group plans", "error", err, "plan_id", subscriptionModel.PlanID)
+		Table("entitlements").
+		Where("plan_id = ? AND resource_type = ?", subscriptionModel.PlanID, "node").
+		Pluck("resource_id", &nodeIDs).Error; err != nil {
+		r.logger.Errorw("failed to query entitlements", "error", err, "plan_id", subscriptionModel.PlanID)
 		return nil, err
 	}
 
-	if len(nodeGroupPlanModels) == 0 {
-		r.logger.Infow("no node groups associated with plan", "plan_id", subscriptionModel.PlanID)
+	if len(nodeIDs) == 0 {
+		r.logger.Infow("no nodes associated with plan", "plan_id", subscriptionModel.PlanID)
 		return []*usecases.Node{}, nil
-	}
-
-	// Extract node group IDs
-	nodeGroupIDs := make([]uint, len(nodeGroupPlanModels))
-	for i, gp := range nodeGroupPlanModels {
-		nodeGroupIDs[i] = gp.NodeGroupID
-	}
-
-	// Query node group associations
-	var nodeGroupNodeModels []models.NodeGroupNodeModel
-	if err := r.db.WithContext(ctx).
-		Where("node_group_id IN ?", nodeGroupIDs).
-		Find(&nodeGroupNodeModels).Error; err != nil {
-		r.logger.Errorw("failed to query node group nodes", "error", err)
-		return nil, err
-	}
-
-	if len(nodeGroupNodeModels) == 0 {
-		r.logger.Infow("no nodes found in node groups", "node_group_ids", nodeGroupIDs)
-		return []*usecases.Node{}, nil
-	}
-
-	// Extract unique node IDs
-	nodeIDSet := make(map[uint]bool)
-	for _, ngn := range nodeGroupNodeModels {
-		nodeIDSet[ngn.NodeID] = true
-	}
-
-	nodeIDs := make([]uint, 0, len(nodeIDSet))
-	for nodeID := range nodeIDSet {
-		nodeIDs = append(nodeIDs, nodeID)
 	}
 
 	// Query nodes manually (no foreign key associations)

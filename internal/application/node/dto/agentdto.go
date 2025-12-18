@@ -56,16 +56,16 @@ type NodeSubscriptionsResponse struct {
 	Subscriptions []NodeSubscriptionInfo `json:"subscriptions" binding:"required"` // List of subscriptions authorized for this node
 }
 
-// SubscriptionTrafficItem represents traffic data for a single subscription
-type SubscriptionTrafficItem struct {
-	SubscriptionID int   `json:"subscription_id" binding:"required"` // Subscription ID for traffic tracking
-	Upload         int64 `json:"upload" binding:"min=0"`             // Upload traffic in bytes
-	Download       int64 `json:"download" binding:"min=0"`           // Download traffic in bytes
+// SubscriptionUsageItem represents usage data for a single subscription
+type SubscriptionUsageItem struct {
+	SubscriptionID int   `json:"subscription_id" binding:"required"` // Subscription ID for usage tracking
+	Upload         int64 `json:"upload" binding:"min=0"`             // Upload usage in bytes
+	Download       int64 `json:"download" binding:"min=0"`           // Download usage in bytes
 }
 
-// ReportSubscriptionTrafficRequest represents subscription traffic report request
-type ReportSubscriptionTrafficRequest struct {
-	Subscriptions []SubscriptionTrafficItem `json:"subscriptions" binding:"required,dive"` // Array of subscription traffic data
+// ReportSubscriptionUsageRequest represents subscription usage report request
+type ReportSubscriptionUsageRequest struct {
+	Subscriptions []SubscriptionUsageItem `json:"subscriptions" binding:"required,dive"` // Array of subscription usage data
 }
 
 // ReportNodeStatusRequest represents node status report request

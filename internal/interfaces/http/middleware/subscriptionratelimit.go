@@ -55,7 +55,7 @@ func (m *SubscriptionRateLimitMiddleware) LimitBySubscription() gin.HandlerFunc 
 			return
 		}
 
-		plan, ok := planValue.(*subscription.SubscriptionPlan)
+		plan, ok := planValue.(*subscription.Plan)
 		if !ok {
 			m.logger.Errorw("invalid subscription plan type in context", "subscription_id", subscriptionID)
 			utils.ErrorResponse(c, http.StatusInternalServerError, "invalid subscription plan")

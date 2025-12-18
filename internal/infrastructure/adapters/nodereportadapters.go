@@ -12,36 +12,36 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
-// SubscriptionTrafficRecorderAdapter adapts to record subscription-based traffic
-// This adapter records traffic by subscription_id for proper traffic tracking
+// SubscriptionUsageRecorderAdapter adapts to record subscription-based usage
+// This adapter records usage by subscription_id for proper usage tracking
 //
 // Architecture: Agent → Adapter → MySQL
-type SubscriptionTrafficRecorderAdapter struct {
-	subscriptionTrafficRepo subscription.SubscriptionTrafficRepository
-	logger                  logger.Interface
+type SubscriptionUsageRecorderAdapter struct {
+	subscriptionUsageRepo subscription.SubscriptionUsageRepository
+	logger                logger.Interface
 }
 
-// NewSubscriptionTrafficRecorderAdapter creates a new subscription traffic recorder adapter
+// NewSubscriptionUsageRecorderAdapter creates a new subscription usage recorder adapter
 // Note: Directly writes to database for simplicity and reliability
-func NewSubscriptionTrafficRecorderAdapter(
-	subscriptionTrafficRepo subscription.SubscriptionTrafficRepository,
+func NewSubscriptionUsageRecorderAdapter(
+	subscriptionUsageRepo subscription.SubscriptionUsageRepository,
 	logger logger.Interface,
-) nodeUsecases.SubscriptionTrafficRecorder {
-	return &SubscriptionTrafficRecorderAdapter{
-		subscriptionTrafficRepo: subscriptionTrafficRepo,
-		logger:                  logger,
+) nodeUsecases.SubscriptionUsageRecorder {
+	return &SubscriptionUsageRecorderAdapter{
+		subscriptionUsageRepo: subscriptionUsageRepo,
+		logger:                logger,
 	}
 }
 
-// RecordSubscriptionTraffic records subscription traffic data directly to database
-func (a *SubscriptionTrafficRecorderAdapter) RecordSubscriptionTraffic(ctx context.Context, nodeID uint, subscriptionID int, upload, download int64) error {
+// RecordSubscriptionUsage records subscription usage data directly to database
+func (a *SubscriptionUsageRecorderAdapter) RecordSubscriptionUsage(ctx context.Context, nodeID uint, subscriptionID int, upload, download int64) error {
 	// Validate subscription ID
 	if subscriptionID <= 0 {
 		a.logger.Warnw("invalid subscription ID", "subscription_id", subscriptionID)
 		return nil // Skip invalid subscription IDs
 	}
 
-	// Skip zero traffic
+	// Skip zero usage
 	if upload == 0 && download == 0 {
 		return nil
 	}
@@ -51,9 +51,9 @@ func (a *SubscriptionTrafficRecorderAdapter) RecordSubscriptionTraffic(ctx conte
 
 	// Create domain entity
 	subIDUint := uint(subscriptionID)
-	traffic, err := subscription.NewSubscriptionTraffic(nodeID, &subIDUint, period)
+	usage, err := subscription.NewSubscriptionUsage("node", nodeID, &subIDUint, period)
 	if err != nil {
-		a.logger.Errorw("failed to create subscription traffic entity",
+		a.logger.Errorw("failed to create subscription usage entity",
 			"error", err,
 			"node_id", nodeID,
 			"subscription_id", subscriptionID,
@@ -61,9 +61,9 @@ func (a *SubscriptionTrafficRecorderAdapter) RecordSubscriptionTraffic(ctx conte
 		return err
 	}
 
-	// Accumulate traffic
-	if err := traffic.Accumulate(uint64(upload), uint64(download)); err != nil {
-		a.logger.Errorw("failed to accumulate traffic",
+	// Accumulate usage
+	if err := usage.Accumulate(uint64(upload), uint64(download)); err != nil {
+		a.logger.Errorw("failed to accumulate usage",
 			"error", err,
 			"node_id", nodeID,
 			"subscription_id", subscriptionID,
@@ -72,8 +72,8 @@ func (a *SubscriptionTrafficRecorderAdapter) RecordSubscriptionTraffic(ctx conte
 	}
 
 	// Record in repository
-	if err := a.subscriptionTrafficRepo.RecordTraffic(ctx, traffic); err != nil {
-		a.logger.Errorw("failed to record subscription traffic",
+	if err := a.subscriptionUsageRepo.RecordUsage(ctx, usage); err != nil {
+		a.logger.Errorw("failed to record subscription usage",
 			"error", err,
 			"subscription_id", subscriptionID,
 			"node_id", nodeID,
@@ -81,7 +81,7 @@ func (a *SubscriptionTrafficRecorderAdapter) RecordSubscriptionTraffic(ctx conte
 		return err
 	}
 
-	a.logger.Debugw("subscription traffic recorded",
+	a.logger.Debugw("subscription usage recorded",
 		"subscription_id", subscriptionID,
 		"node_id", nodeID,
 		"upload", upload,
@@ -91,8 +91,8 @@ func (a *SubscriptionTrafficRecorderAdapter) RecordSubscriptionTraffic(ctx conte
 	return nil
 }
 
-// BatchRecordSubscriptionTraffic records multiple subscriptions' traffic data directly to database
-func (a *SubscriptionTrafficRecorderAdapter) BatchRecordSubscriptionTraffic(ctx context.Context, nodeID uint, items []nodeUsecases.SubscriptionTrafficItem) error {
+// BatchRecordSubscriptionUsage records multiple subscriptions' usage data directly to database
+func (a *SubscriptionUsageRecorderAdapter) BatchRecordSubscriptionUsage(ctx context.Context, nodeID uint, items []nodeUsecases.SubscriptionUsageItem) error {
 	if len(items) == 0 {
 		return nil
 	}
@@ -114,16 +114,16 @@ func (a *SubscriptionTrafficRecorderAdapter) BatchRecordSubscriptionTraffic(ctx 
 			continue
 		}
 
-		// Skip zero traffic
+		// Skip zero usage
 		if item.Upload == 0 && item.Download == 0 {
 			continue
 		}
 
 		// Create domain entity
 		subIDUint := uint(item.SubscriptionID)
-		traffic, err := subscription.NewSubscriptionTraffic(nodeID, &subIDUint, period)
+		usage, err := subscription.NewSubscriptionUsage("node", nodeID, &subIDUint, period)
 		if err != nil {
-			a.logger.Errorw("failed to create subscription traffic entity in batch",
+			a.logger.Errorw("failed to create subscription usage entity in batch",
 				"error", err,
 				"node_id", nodeID,
 				"subscription_id", item.SubscriptionID,
@@ -132,9 +132,9 @@ func (a *SubscriptionTrafficRecorderAdapter) BatchRecordSubscriptionTraffic(ctx 
 			continue
 		}
 
-		// Accumulate traffic
-		if err := traffic.Accumulate(uint64(item.Upload), uint64(item.Download)); err != nil {
-			a.logger.Errorw("failed to accumulate traffic in batch",
+		// Accumulate usage
+		if err := usage.Accumulate(uint64(item.Upload), uint64(item.Download)); err != nil {
+			a.logger.Errorw("failed to accumulate usage in batch",
 				"error", err,
 				"node_id", nodeID,
 				"subscription_id", item.SubscriptionID,
@@ -144,8 +144,8 @@ func (a *SubscriptionTrafficRecorderAdapter) BatchRecordSubscriptionTraffic(ctx 
 		}
 
 		// Record in repository
-		if err := a.subscriptionTrafficRepo.RecordTraffic(ctx, traffic); err != nil {
-			a.logger.Errorw("failed to record subscription traffic in batch",
+		if err := a.subscriptionUsageRepo.RecordUsage(ctx, usage); err != nil {
+			a.logger.Errorw("failed to record subscription usage in batch",
 				"error", err,
 				"node_id", nodeID,
 				"subscription_id", item.SubscriptionID,
@@ -157,7 +157,7 @@ func (a *SubscriptionTrafficRecorderAdapter) BatchRecordSubscriptionTraffic(ctx 
 		validCount++
 	}
 
-	a.logger.Infow("subscription traffic batch processed",
+	a.logger.Infow("subscription usage batch processed",
 		"node_id", nodeID,
 		"success_count", validCount,
 		"error_count", errorCount,
@@ -166,7 +166,7 @@ func (a *SubscriptionTrafficRecorderAdapter) BatchRecordSubscriptionTraffic(ctx 
 
 	// Return error if all items failed
 	if validCount == 0 && errorCount > 0 {
-		return fmt.Errorf("failed to record any traffic in batch")
+		return fmt.Errorf("failed to record any usage in batch")
 	}
 
 	return nil

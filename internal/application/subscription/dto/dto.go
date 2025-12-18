@@ -9,23 +9,23 @@ import (
 )
 
 type SubscriptionDTO struct {
-	ID                 uint     `json:"id"`
-	UserID             uint     `json:"user_id"`
-	UUID               string   `json:"uuid"`
-	SubscribeURL       string   `json:"subscribe_url"`
-	Plan               *PlanDTO `json:"plan,omitempty"`
-	Status             string   `json:"status"`
-	StartDate          time.Time            `json:"start_date"`
-	EndDate            time.Time            `json:"end_date"`
-	AutoRenew          bool                 `json:"auto_renew"`
-	CurrentPeriodStart time.Time            `json:"current_period_start"`
-	CurrentPeriodEnd   time.Time            `json:"current_period_end"`
-	IsExpired          bool                 `json:"is_expired"`
-	IsActive           bool                 `json:"is_active"`
-	CancelledAt        *time.Time           `json:"cancelled_at,omitempty"`
-	CancelReason       *string              `json:"cancel_reason,omitempty"`
-	CreatedAt          time.Time            `json:"created_at"`
-	UpdatedAt          time.Time            `json:"updated_at"`
+	ID                 uint       `json:"id"`
+	UserID             uint       `json:"user_id"`
+	UUID               string     `json:"uuid"`
+	SubscribeURL       string     `json:"subscribe_url"`
+	Plan               *PlanDTO   `json:"plan,omitempty"`
+	Status             string     `json:"status"`
+	StartDate          time.Time  `json:"start_date"`
+	EndDate            time.Time  `json:"end_date"`
+	AutoRenew          bool       `json:"auto_renew"`
+	CurrentPeriodStart time.Time  `json:"current_period_start"`
+	CurrentPeriodEnd   time.Time  `json:"current_period_end"`
+	IsExpired          bool       `json:"is_expired"`
+	IsActive           bool       `json:"is_active"`
+	CancelledAt        *time.Time `json:"cancelled_at,omitempty"`
+	CancelReason       *string    `json:"cancel_reason,omitempty"`
+	CreatedAt          time.Time  `json:"created_at"`
+	UpdatedAt          time.Time  `json:"updated_at"`
 }
 
 type PlanDTO struct {

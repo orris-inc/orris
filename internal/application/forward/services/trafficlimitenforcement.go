@@ -15,7 +15,7 @@ import (
 type TrafficLimitEnforcementService struct {
 	forwardRuleRepo  forward.Repository
 	subscriptionRepo subscription.SubscriptionRepository
-	planRepo         subscription.SubscriptionPlanRepository
+	planRepo         subscription.PlanRepository
 	logger           logger.Interface
 }
 
@@ -23,7 +23,7 @@ type TrafficLimitEnforcementService struct {
 func NewTrafficLimitEnforcementService(
 	forwardRuleRepo forward.Repository,
 	subscriptionRepo subscription.SubscriptionRepository,
-	planRepo subscription.SubscriptionPlanRepository,
+	planRepo subscription.PlanRepository,
 	logger logger.Interface,
 ) *TrafficLimitEnforcementService {
 	return &TrafficLimitEnforcementService{
@@ -299,7 +299,7 @@ func (s *TrafficLimitEnforcementService) getHighestTrafficLimit(ctx context.Cont
 // getForwardTrafficLimit extracts the forward traffic limit from a plan.
 // It first checks for forward-specific traffic limit, then falls back to general traffic limit.
 // Returns 0 if unlimited or not set.
-func (s *TrafficLimitEnforcementService) getForwardTrafficLimit(plan *subscription.SubscriptionPlan) (uint64, error) {
+func (s *TrafficLimitEnforcementService) getForwardTrafficLimit(plan *subscription.Plan) (uint64, error) {
 	features := plan.Features()
 	if features == nil {
 		return 0, nil // No features = unlimited

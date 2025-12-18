@@ -358,10 +358,10 @@ func (r *NodeRepositoryImpl) Delete(ctx context.Context, id uint) error {
 			return fmt.Errorf("failed to delete trojan config: %w", err)
 		}
 
-		// Delete node group associations
-		if err := tx.Where("node_id = ?", id).Delete(&models.NodeGroupNodeModel{}).Error; err != nil {
-			r.logger.Errorw("failed to delete node group associations", "node_id", id, "error", err)
-			return fmt.Errorf("failed to delete node group associations: %w", err)
+		// Delete subscription resource associations
+		if err := tx.Where("resource_type = ? AND resource_id = ?", "node", id).Delete(&models.EntitlementModel{}).Error; err != nil {
+			r.logger.Errorw("failed to delete subscription resource associations", "node_id", id, "error", err)
+			return fmt.Errorf("failed to delete subscription resource associations: %w", err)
 		}
 
 		// Delete node

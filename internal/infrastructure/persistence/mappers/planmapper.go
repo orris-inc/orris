@@ -11,31 +11,31 @@ import (
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 )
 
-// SubscriptionPlanMapper handles the conversion between domain entities and persistence models
-type SubscriptionPlanMapper interface {
+// PlanMapper handles the conversion between domain entities and persistence models
+type PlanMapper interface {
 	// ToEntity converts a persistence model to a domain entity
-	ToEntity(model *models.SubscriptionPlanModel) (*subscription.SubscriptionPlan, error)
+	ToEntity(model *models.PlanModel) (*subscription.Plan, error)
 
 	// ToModel converts a domain entity to a persistence model
-	ToModel(entity *subscription.SubscriptionPlan) (*models.SubscriptionPlanModel, error)
+	ToModel(entity *subscription.Plan) (*models.PlanModel, error)
 
 	// ToEntities converts multiple persistence models to domain entities
-	ToEntities(models []*models.SubscriptionPlanModel) ([]*subscription.SubscriptionPlan, error)
+	ToEntities(models []*models.PlanModel) ([]*subscription.Plan, error)
 
 	// ToModels converts multiple domain entities to persistence models
-	ToModels(entities []*subscription.SubscriptionPlan) ([]*models.SubscriptionPlanModel, error)
+	ToModels(entities []*subscription.Plan) ([]*models.PlanModel, error)
 }
 
-// subscriptionPlanMapper is the concrete implementation of SubscriptionPlanMapper
-type subscriptionPlanMapper struct{}
+// planMapper is the concrete implementation of PlanMapper
+type planMapper struct{}
 
-// NewSubscriptionPlanMapper creates a new subscription plan mapper
-func NewSubscriptionPlanMapper() SubscriptionPlanMapper {
-	return &subscriptionPlanMapper{}
+// NewPlanMapper creates a new plan mapper
+func NewPlanMapper() PlanMapper {
+	return &planMapper{}
 }
 
 // ToEntity converts a persistence model to a domain entity
-func (m *subscriptionPlanMapper) ToEntity(model *models.SubscriptionPlanModel) (*subscription.SubscriptionPlan, error) {
+func (m *planMapper) ToEntity(model *models.PlanModel) (*subscription.Plan, error) {
 	if model == nil {
 		return nil, nil
 	}
@@ -66,8 +66,8 @@ func (m *subscriptionPlanMapper) ToEntity(model *models.SubscriptionPlanModel) (
 		metadata = make(map[string]interface{})
 	}
 
-	// Reconstruct subscription plan using domain factory method
-	entity, err := subscription.ReconstructSubscriptionPlan(
+	// Reconstruct plan using domain factory method
+	entity, err := subscription.ReconstructPlan(
 		model.ID,
 		model.Name,
 		model.Slug,
@@ -89,14 +89,14 @@ func (m *subscriptionPlanMapper) ToEntity(model *models.SubscriptionPlanModel) (
 		model.UpdatedAt,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to reconstruct subscription plan entity: %w", err)
+		return nil, fmt.Errorf("failed to reconstruct plan entity: %w", err)
 	}
 
 	return entity, nil
 }
 
 // ToModel converts a domain entity to a persistence model
-func (m *subscriptionPlanMapper) ToModel(entity *subscription.SubscriptionPlan) (*models.SubscriptionPlanModel, error) {
+func (m *planMapper) ToModel(entity *subscription.Plan) (*models.PlanModel, error) {
 	if entity == nil {
 		return nil, nil
 	}
@@ -121,7 +121,7 @@ func (m *subscriptionPlanMapper) ToModel(entity *subscription.SubscriptionPlan) 
 		metadataJSON = data
 	}
 
-	model := &models.SubscriptionPlanModel{
+	model := &models.PlanModel{
 		ID:           entity.ID(),
 		Name:         entity.Name(),
 		Slug:         entity.Slug(),
@@ -147,8 +147,8 @@ func (m *subscriptionPlanMapper) ToModel(entity *subscription.SubscriptionPlan) 
 }
 
 // ToEntities converts multiple persistence models to domain entities
-func (m *subscriptionPlanMapper) ToEntities(models []*models.SubscriptionPlanModel) ([]*subscription.SubscriptionPlan, error) {
-	entities := make([]*subscription.SubscriptionPlan, 0, len(models))
+func (m *planMapper) ToEntities(models []*models.PlanModel) ([]*subscription.Plan, error) {
+	entities := make([]*subscription.Plan, 0, len(models))
 
 	for i, model := range models {
 		entity, err := m.ToEntity(model)
@@ -164,8 +164,8 @@ func (m *subscriptionPlanMapper) ToEntities(models []*models.SubscriptionPlanMod
 }
 
 // ToModels converts multiple domain entities to persistence models
-func (m *subscriptionPlanMapper) ToModels(entities []*subscription.SubscriptionPlan) ([]*models.SubscriptionPlanModel, error) {
-	models := make([]*models.SubscriptionPlanModel, 0, len(entities))
+func (m *planMapper) ToModels(entities []*subscription.Plan) ([]*models.PlanModel, error) {
+	models := make([]*models.PlanModel, 0, len(entities))
 
 	for i, entity := range entities {
 		model, err := m.ToModel(entity)

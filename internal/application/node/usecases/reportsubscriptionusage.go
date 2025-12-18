@@ -8,80 +8,80 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
-// ReportSubscriptionTrafficCommand represents the command to report subscription traffic data
-type ReportSubscriptionTrafficCommand struct {
+// ReportSubscriptionUsageCommand represents the command to report subscription usage data
+type ReportSubscriptionUsageCommand struct {
 	NodeID        uint
-	Subscriptions []dto.SubscriptionTrafficItem
+	Subscriptions []dto.SubscriptionUsageItem
 }
 
-// ReportSubscriptionTrafficResult contains the result of traffic reporting
-type ReportSubscriptionTrafficResult struct {
+// ReportSubscriptionUsageResult contains the result of usage reporting
+type ReportSubscriptionUsageResult struct {
 	Success              bool
 	SubscriptionsUpdated int
 }
 
-// SubscriptionTrafficItem represents a single subscription's traffic data for batch recording
-type SubscriptionTrafficItem struct {
+// SubscriptionUsageItem represents a single subscription's usage data for batch recording
+type SubscriptionUsageItem struct {
 	SubscriptionID int
 	Upload         int64
 	Download       int64
 }
 
-// SubscriptionTrafficRecorder defines the interface for recording subscription traffic
-type SubscriptionTrafficRecorder interface {
-	RecordSubscriptionTraffic(ctx context.Context, nodeID uint, subscriptionID int, upload, download int64) error
-	BatchRecordSubscriptionTraffic(ctx context.Context, nodeID uint, items []SubscriptionTrafficItem) error
+// SubscriptionUsageRecorder defines the interface for recording subscription usage
+type SubscriptionUsageRecorder interface {
+	RecordSubscriptionUsage(ctx context.Context, nodeID uint, subscriptionID int, upload, download int64) error
+	BatchRecordSubscriptionUsage(ctx context.Context, nodeID uint, items []SubscriptionUsageItem) error
 }
 
-// ReportSubscriptionTrafficUseCase handles reporting subscription traffic from node agents
-type ReportSubscriptionTrafficUseCase struct {
-	trafficRecorder SubscriptionTrafficRecorder
-	logger          logger.Interface
+// ReportSubscriptionUsageUseCase handles reporting subscription usage from node agents
+type ReportSubscriptionUsageUseCase struct {
+	usageRecorder SubscriptionUsageRecorder
+	logger        logger.Interface
 }
 
-// NewReportSubscriptionTrafficUseCase creates a new instance of ReportSubscriptionTrafficUseCase
-func NewReportSubscriptionTrafficUseCase(
-	trafficRecorder SubscriptionTrafficRecorder,
+// NewReportSubscriptionUsageUseCase creates a new instance of ReportSubscriptionUsageUseCase
+func NewReportSubscriptionUsageUseCase(
+	usageRecorder SubscriptionUsageRecorder,
 	logger logger.Interface,
-) *ReportSubscriptionTrafficUseCase {
-	return &ReportSubscriptionTrafficUseCase{
-		trafficRecorder: trafficRecorder,
-		logger:          logger,
+) *ReportSubscriptionUsageUseCase {
+	return &ReportSubscriptionUsageUseCase{
+		usageRecorder: usageRecorder,
+		logger:        logger,
 	}
 }
 
-// Execute processes subscription traffic report from node agent
-func (uc *ReportSubscriptionTrafficUseCase) Execute(ctx context.Context, cmd ReportSubscriptionTrafficCommand) (*ReportSubscriptionTrafficResult, error) {
+// Execute processes subscription usage report from node agent
+func (uc *ReportSubscriptionUsageUseCase) Execute(ctx context.Context, cmd ReportSubscriptionUsageCommand) (*ReportSubscriptionUsageResult, error) {
 	if cmd.NodeID == 0 {
 		return nil, fmt.Errorf("node_id is required")
 	}
 
 	if len(cmd.Subscriptions) == 0 {
-		uc.logger.Infow("no subscription traffic data to report",
+		uc.logger.Infow("no subscription usage data to report",
 			"node_id", cmd.NodeID,
 		)
-		return &ReportSubscriptionTrafficResult{
+		return &ReportSubscriptionUsageResult{
 			Success:              true,
 			SubscriptionsUpdated: 0,
 		}, nil
 	}
 
-	// Collect valid traffic items for batch processing
-	validItems := make([]SubscriptionTrafficItem, 0, len(cmd.Subscriptions))
+	// Collect valid usage items for batch processing
+	validItems := make([]SubscriptionUsageItem, 0, len(cmd.Subscriptions))
 	for _, subscription := range cmd.Subscriptions {
 		if subscription.SubscriptionID == 0 {
-			uc.logger.Warnw("skipping subscription traffic with invalid subscription_id",
+			uc.logger.Warnw("skipping subscription usage with invalid subscription_id",
 				"node_id", cmd.NodeID,
 			)
 			continue
 		}
 
-		// Skip if no traffic to report
+		// Skip if no usage to report
 		if subscription.Upload == 0 && subscription.Download == 0 {
 			continue
 		}
 
-		validItems = append(validItems, SubscriptionTrafficItem{
+		validItems = append(validItems, SubscriptionUsageItem{
 			SubscriptionID: subscription.SubscriptionID,
 			Upload:         subscription.Upload,
 			Download:       subscription.Download,
@@ -90,33 +90,33 @@ func (uc *ReportSubscriptionTrafficUseCase) Execute(ctx context.Context, cmd Rep
 
 	// If no valid items, return early
 	if len(validItems) == 0 {
-		uc.logger.Infow("no valid subscription traffic data to report",
+		uc.logger.Infow("no valid subscription usage data to report",
 			"node_id", cmd.NodeID,
 			"total_subscriptions", len(cmd.Subscriptions),
 		)
-		return &ReportSubscriptionTrafficResult{
+		return &ReportSubscriptionUsageResult{
 			Success:              true,
 			SubscriptionsUpdated: 0,
 		}, nil
 	}
 
-	// Batch record subscription traffic for improved performance
-	if err := uc.trafficRecorder.BatchRecordSubscriptionTraffic(ctx, cmd.NodeID, validItems); err != nil {
-		uc.logger.Errorw("failed to batch record subscription traffic",
+	// Batch record subscription usage for improved performance
+	if err := uc.usageRecorder.BatchRecordSubscriptionUsage(ctx, cmd.NodeID, validItems); err != nil {
+		uc.logger.Errorw("failed to batch record subscription usage",
 			"error", err,
 			"node_id", cmd.NodeID,
 			"subscription_count", len(validItems),
 		)
-		return nil, fmt.Errorf("failed to batch record subscription traffic: %w", err)
+		return nil, fmt.Errorf("failed to batch record subscription usage: %w", err)
 	}
 
-	uc.logger.Infow("subscription traffic reported successfully",
+	uc.logger.Infow("subscription usage reported successfully",
 		"node_id", cmd.NodeID,
 		"total_subscriptions", len(cmd.Subscriptions),
 		"subscriptions_recorded", len(validItems),
 	)
 
-	return &ReportSubscriptionTrafficResult{
+	return &ReportSubscriptionUsageResult{
 		Success:              true,
 		SubscriptionsUpdated: len(validItems),
 	}, nil

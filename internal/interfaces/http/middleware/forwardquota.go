@@ -17,7 +17,7 @@ import (
 type ForwardQuotaMiddleware struct {
 	forwardRuleRepo  forward.Repository
 	subscriptionRepo subscription.SubscriptionRepository
-	planRepo         subscription.SubscriptionPlanRepository
+	planRepo         subscription.PlanRepository
 	logger           logger.Interface
 }
 
@@ -25,7 +25,7 @@ type ForwardQuotaMiddleware struct {
 func NewForwardQuotaMiddleware(
 	forwardRuleRepo forward.Repository,
 	subscriptionRepo subscription.SubscriptionRepository,
-	planRepo subscription.SubscriptionPlanRepository,
+	planRepo subscription.PlanRepository,
 	logger logger.Interface,
 ) *ForwardQuotaMiddleware {
 	return &ForwardQuotaMiddleware{

@@ -20,14 +20,14 @@ var (
 
 // SubscriptionHandler handles user subscription operations
 type SubscriptionHandler struct {
-	createUseCase          *usecases.CreateSubscriptionUseCase
-	getUseCase             *usecases.GetSubscriptionUseCase
-	listUserUseCase        *usecases.ListUserSubscriptionsUseCase
-	cancelUseCase          *usecases.CancelSubscriptionUseCase
-	changePlanUseCase      *usecases.ChangePlanUseCase
-	getTrafficStatsUseCase *usecases.GetSubscriptionTrafficStatsUseCase
-	resetLinkUseCase       *usecases.ResetSubscriptionLinkUseCase
-	logger                 logger.Interface
+	createUseCase         *usecases.CreateSubscriptionUseCase
+	getUseCase            *usecases.GetSubscriptionUseCase
+	listUserUseCase       *usecases.ListUserSubscriptionsUseCase
+	cancelUseCase         *usecases.CancelSubscriptionUseCase
+	changePlanUseCase     *usecases.ChangePlanUseCase
+	getUsageStatsUseCase  *usecases.GetSubscriptionUsageStatsUseCase
+	resetLinkUseCase      *usecases.ResetSubscriptionLinkUseCase
+	logger                logger.Interface
 }
 
 // NewSubscriptionHandler creates a new user subscription handler
@@ -37,19 +37,19 @@ func NewSubscriptionHandler(
 	listUserUC *usecases.ListUserSubscriptionsUseCase,
 	cancelUC *usecases.CancelSubscriptionUseCase,
 	changePlanUC *usecases.ChangePlanUseCase,
-	getTrafficStatsUC *usecases.GetSubscriptionTrafficStatsUseCase,
+	getUsageStatsUC *usecases.GetSubscriptionUsageStatsUseCase,
 	resetLinkUC *usecases.ResetSubscriptionLinkUseCase,
 	logger logger.Interface,
 ) *SubscriptionHandler {
 	return &SubscriptionHandler{
-		createUseCase:          createUC,
-		getUseCase:             getUC,
-		listUserUseCase:        listUserUC,
-		cancelUseCase:          cancelUC,
-		changePlanUseCase:      changePlanUC,
-		getTrafficStatsUseCase: getTrafficStatsUC,
-		resetLinkUseCase:       resetLinkUC,
-		logger:                 logger,
+		createUseCase:        createUC,
+		getUseCase:           getUC,
+		listUserUseCase:      listUserUC,
+		cancelUseCase:        cancelUC,
+		changePlanUseCase:    changePlanUC,
+		getUsageStatsUseCase: getUsageStatsUC,
+		resetLinkUseCase:     resetLinkUC,
+		logger:               logger,
 	}
 }
 
@@ -336,7 +336,7 @@ func (h *SubscriptionHandler) GetTrafficStats(c *gin.Context) {
 		}
 	}
 
-	query := usecases.GetSubscriptionTrafficStatsQuery{
+	query := usecases.GetSubscriptionUsageStatsQuery{
 		SubscriptionID: subscriptionID.(uint),
 		From:           from,
 		To:             to,
@@ -345,7 +345,7 @@ func (h *SubscriptionHandler) GetTrafficStats(c *gin.Context) {
 		PageSize:       pageSize,
 	}
 
-	result, err := h.getTrafficStatsUseCase.Execute(c.Request.Context(), query)
+	result, err := h.getUsageStatsUseCase.Execute(c.Request.Context(), query)
 	if err != nil {
 		h.logger.Errorw("failed to get subscription traffic stats", "error", err, "subscription_id", subscriptionID)
 		utils.ErrorResponseWithError(c, err)

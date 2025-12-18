@@ -31,17 +31,17 @@ type NodeTrafficStatsResult struct {
 }
 
 type GetNodeTrafficStatsUseCase struct {
-	trafficRepo subscription.SubscriptionTrafficRepository
-	logger      logger.Interface
+	usageRepo subscription.SubscriptionUsageRepository
+	logger    logger.Interface
 }
 
 func NewGetNodeTrafficStatsUseCase(
-	trafficRepo subscription.SubscriptionTrafficRepository,
+	usageRepo subscription.SubscriptionUsageRepository,
 	logger logger.Interface,
 ) *GetNodeTrafficStatsUseCase {
 	return &GetNodeTrafficStatsUseCase{
-		trafficRepo: trafficRepo,
-		logger:      logger,
+		usageRepo: usageRepo,
+		logger:    logger,
 	}
 }
 
@@ -63,16 +63,16 @@ func (uc *GetNodeTrafficStatsUseCase) Execute(
 
 	filter := uc.buildFilter(query)
 
-	trafficRecords, err := uc.trafficRepo.GetTrafficStats(ctx, filter)
+	usageRecords, err := uc.usageRepo.GetUsageStats(ctx, filter)
 	if err != nil {
 		uc.logger.Errorw("failed to fetch traffic stats", "error", err)
 		return nil, errors.NewInternalError("failed to fetch traffic statistics")
 	}
 
-	results := make([]*NodeTrafficStatsResult, 0, len(trafficRecords))
-	for _, record := range trafficRecords {
+	results := make([]*NodeTrafficStatsResult, 0, len(usageRecords))
+	for _, record := range usageRecords {
 		results = append(results, &NodeTrafficStatsResult{
-			NodeID:         record.NodeID(),
+			NodeID:         record.ResourceID(),
 			SubscriptionID: record.SubscriptionID(),
 			Upload:         record.Upload(),
 			Download:       record.Download(),
@@ -121,7 +121,7 @@ func (uc *GetNodeTrafficStatsUseCase) validateQuery(query GetNodeTrafficStatsQue
 	return nil
 }
 
-func (uc *GetNodeTrafficStatsUseCase) buildFilter(query GetNodeTrafficStatsQuery) subscription.TrafficStatsFilter {
+func (uc *GetNodeTrafficStatsUseCase) buildFilter(query GetNodeTrafficStatsQuery) subscription.UsageStatsFilter {
 	page := query.Page
 	if page == 0 {
 		page = 1
@@ -132,8 +132,10 @@ func (uc *GetNodeTrafficStatsUseCase) buildFilter(query GetNodeTrafficStatsQuery
 		pageSize = 100
 	}
 
-	filter := subscription.TrafficStatsFilter{
-		NodeID:         query.NodeID,
+	resourceType := "node"
+	filter := subscription.UsageStatsFilter{
+		ResourceType:   &resourceType,
+		ResourceID:     query.NodeID,
 		SubscriptionID: query.SubscriptionID,
 		From:           query.From,
 		To:             query.To,

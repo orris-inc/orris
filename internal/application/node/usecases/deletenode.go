@@ -21,20 +21,17 @@ type DeleteNodeResult struct {
 }
 
 type DeleteNodeUseCase struct {
-	nodeRepo      node.NodeRepository
-	nodeGroupRepo node.NodeGroupRepository
-	logger        logger.Interface
+	nodeRepo node.NodeRepository
+	logger   logger.Interface
 }
 
 func NewDeleteNodeUseCase(
 	nodeRepo node.NodeRepository,
-	nodeGroupRepo node.NodeGroupRepository,
 	logger logger.Interface,
 ) *DeleteNodeUseCase {
 	return &DeleteNodeUseCase{
-		nodeRepo:      nodeRepo,
-		nodeGroupRepo: nodeGroupRepo,
-		logger:        logger,
+		nodeRepo: nodeRepo,
+		logger:   logger,
 	}
 }
 
@@ -55,16 +52,7 @@ func (uc *DeleteNodeUseCase) Execute(ctx context.Context, cmd DeleteNodeCommand)
 
 	nodeID := existingNode.ID()
 
-	// Check if node is part of any node groups (business validation)
-	if !cmd.Force {
-		if err := uc.checkNodeGroupAssociations(ctx, nodeID); err != nil {
-			return nil, err
-		}
-	}
-
 	// Soft delete the node
-	// Note: Foreign key constraints have been removed to support soft deletes.
-	// Associated records in node_group_nodes will remain but queries should filter by deleted_at.
 	if err := uc.nodeRepo.Delete(ctx, nodeID); err != nil {
 		uc.logger.Errorw("failed to delete node from database", "error", err, "short_id", cmd.ShortID)
 		return nil, fmt.Errorf("failed to delete node: %w", err)
@@ -87,19 +75,5 @@ func (uc *DeleteNodeUseCase) validateCommand(cmd DeleteNodeCommand) error {
 		return errors.NewValidationError("short ID must be provided")
 	}
 
-	return nil
-}
-
-// checkNodeGroupAssociations checks if the node is part of any node groups
-// This provides business-level protection against accidentally deleting nodes that are in use
-func (uc *DeleteNodeUseCase) checkNodeGroupAssociations(ctx context.Context, nodeID uint) error {
-	inGroup, err := uc.nodeGroupRepo.IsNodeInAnyGroup(ctx, nodeID)
-	if err != nil {
-		uc.logger.Errorw("failed to check node group associations", "error", err, "node_id", nodeID)
-		return fmt.Errorf("failed to check node group associations: %w", err)
-	}
-	if inGroup {
-		return errors.NewValidationError("cannot delete node that is part of a node group. Use force=true to override")
-	}
 	return nil
 }

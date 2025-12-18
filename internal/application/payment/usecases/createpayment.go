@@ -28,7 +28,7 @@ type CreatePaymentResult struct {
 type CreatePaymentUseCase struct {
 	paymentRepo      payment.PaymentRepository
 	subscriptionRepo subscription.SubscriptionRepository
-	planRepo         subscription.SubscriptionPlanRepository
+	planRepo         subscription.PlanRepository
 	gateway          paymentgateway.PaymentGateway
 	logger           logger.Interface
 	config           PaymentConfig
@@ -41,7 +41,7 @@ type PaymentConfig struct {
 func NewCreatePaymentUseCase(
 	paymentRepo payment.PaymentRepository,
 	subscriptionRepo subscription.SubscriptionRepository,
-	planRepo subscription.SubscriptionPlanRepository,
+	planRepo subscription.PlanRepository,
 	gateway paymentgateway.PaymentGateway,
 	logger logger.Interface,
 	config PaymentConfig,

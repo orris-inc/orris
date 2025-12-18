@@ -31,7 +31,6 @@ func ExampleStandardPlan() *PlanFeatures {
 		LimitKeyDeviceCount:     5,                                // 5 concurrent devices
 		LimitKeySpeedLimit:      500,                              // 500 Mbps
 		LimitKeyConnectionLimit: 100,                              // 100 concurrent connections
-		LimitKeyNodeAccess:      []uint{1, 2, 3},                  // Access to node groups 1, 2, 3
 	}
 
 	return NewPlanFeatures(features, limits)
@@ -72,9 +71,6 @@ func ExampleDynamicFeatureManagement() {
 	pf.SetSpeedLimit(200)                        // Set 200 Mbps
 	pf.SetConnectionLimit(50)                    // Set 50 connections
 
-	// Add node access restrictions
-	pf.SetNodeAccess([]uint{1, 2, 3, 4, 5})
-
 	// Add additional features
 	pf.AddFeature("advanced_feature")
 	pf.AddFeature("premium_support")
@@ -113,12 +109,6 @@ func ExampleDynamicFeatureManagement() {
 	}
 	_ = deviceLimit
 
-	// Get node access
-	nodeGroups, err := pf.GetNodeAccess()
-	if err != nil {
-		// Handle error
-	}
-	_ = nodeGroups
 }
 
 // ExampleTrafficLimitValidation demonstrates traffic limit validation

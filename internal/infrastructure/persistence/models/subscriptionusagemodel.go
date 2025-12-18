@@ -12,14 +12,13 @@ import (
 // This is the anti-corruption layer between domain and database
 type SubscriptionUsageModel struct {
 	ID             uint      `gorm:"primarykey"`
-	NodeID         uint      `gorm:"not null;index:idx_node_period"`
 	SubscriptionID *uint     `gorm:"index:idx_subscription"`
-	ResourceType   string    `gorm:"column:resource_type;not null;default:'node';size:50;index:idx_resource"`
-	ResourceID     uint      `gorm:"column:resource_id;not null;default:0;index:idx_resource"`
-	Upload         uint64    `gorm:"not null;default:0"`             // bytes uploaded
-	Download       uint64    `gorm:"not null;default:0"`             // bytes downloaded
-	Total          uint64    `gorm:"not null;default:0"`             // total bytes (upload + download)
-	Period         time.Time `gorm:"not null;index:idx_node_period"` // time period for this statistic (hourly/daily)
+	ResourceType   string    `gorm:"column:resource_type;not null;default:'node';size:50;index:idx_resource,priority:1"`
+	ResourceID     uint      `gorm:"column:resource_id;not null;default:0;index:idx_resource,priority:2"`
+	Upload         uint64    `gorm:"not null;default:0"`                                    // bytes uploaded
+	Download       uint64    `gorm:"not null;default:0"`                                    // bytes downloaded
+	Total          uint64    `gorm:"not null;default:0"`                                    // total bytes (upload + download)
+	Period         time.Time `gorm:"not null;index:idx_resource_period,priority:2"`         // time period for this statistic (hourly/daily)
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 

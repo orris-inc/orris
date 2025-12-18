@@ -1,18 +1,17 @@
 # Node API Documentation
 
-Node management API for proxy node configuration, node group management, and subscription generation.
+Node management API for proxy node configuration and subscription generation.
 
 ## Base URL
 
 ```
 /nodes          - Node management
-/node-groups    - Node group management
 /s              - Subscription endpoints
 ```
 
 ## Authentication
 
-### Admin API (Node & Node Group Management)
+### Admin API (Node Management)
 
 All management endpoints require JWT Bearer token authentication with admin role.
 
@@ -395,436 +394,11 @@ Authorization: Bearer <jwt_token>
 
 ---
 
-## 2. Node Group Management
-
-### 2.1 Create Node Group
-
-Create a new node group for organizing nodes.
-
-**Request**
-
-```
-POST /node-groups
-Authorization: Bearer <jwt_token>
-Content-Type: application/json
-```
-
-**Request Body**
-
-```json
-{
-  "name": "Premium Nodes",
-  "description": "High-speed premium nodes",
-  "is_public": true,
-  "sort_order": 1
-}
-```
-
-**Request Fields**
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | Yes | Group name (unique) |
-| `description` | string | No | Group description |
-| `is_public` | bool | No | Public visibility (default: false) |
-| `sort_order` | int | No | Display order |
-
-**Response**
-
-**Success (201)**
-
-```json
-{
-  "success": true,
-  "message": "Node group created successfully",
-  "data": {
-    "id": 1,
-    "name": "Premium Nodes",
-    "description": "High-speed premium nodes",
-    "node_ids": [],
-    "subscription_plan_ids": [],
-    "is_public": true,
-    "sort_order": 1,
-    "node_count": 0,
-    "version": 1,
-    "created_at": "2024-01-15T10:30:00Z",
-    "updated_at": "2024-01-15T10:30:00Z"
-  }
-}
-```
-
----
-
-### 2.2 List Node Groups
-
-Get a paginated list of node groups.
-
-**Request**
-
-```
-GET /node-groups?page=1&page_size=20&is_public=true
-Authorization: Bearer <jwt_token>
-```
-
-**Query Parameters**
-
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `page` | int | 1 | Page number |
-| `page_size` | int | 20 | Items per page (max: 100) |
-| `is_public` | bool | - | Filter by public visibility |
-
-**Response**
-
-**Success (200)**
-
-```json
-{
-  "success": true,
-  "data": {
-    "items": [
-      {
-        "id": 1,
-        "name": "Premium Nodes",
-        "description": "High-speed premium nodes",
-        "node_ids": [1, 2, 3],
-        "subscription_plan_ids": [1, 2],
-        "is_public": true,
-        "sort_order": 1,
-        "node_count": 3,
-        "version": 1,
-        "created_at": "2024-01-15T10:30:00Z",
-        "updated_at": "2024-01-15T14:20:00Z"
-      }
-    ],
-    "total": 10,
-    "page": 1,
-    "page_size": 20,
-    "total_pages": 1
-  }
-}
-```
-
----
-
-### 2.3 Get Node Group
-
-Get details of a specific node group.
-
-**Request**
-
-```
-GET /node-groups/{id}
-Authorization: Bearer <jwt_token>
-```
-
-**Response**
-
-**Success (200)**
-
-```json
-{
-  "success": true,
-  "data": {
-    "id": 1,
-    "name": "Premium Nodes",
-    "description": "High-speed premium nodes",
-    "node_ids": [1, 2, 3],
-    "subscription_plan_ids": [1, 2],
-    "is_public": true,
-    "sort_order": 1,
-    "node_count": 3,
-    "version": 1,
-    "created_at": "2024-01-15T10:30:00Z",
-    "updated_at": "2024-01-15T14:20:00Z"
-  }
-}
-```
-
----
-
-### 2.4 Update Node Group
-
-Update node group information.
-
-**Request**
-
-```
-PUT /node-groups/{id}?version=1
-Authorization: Bearer <jwt_token>
-Content-Type: application/json
-```
-
-**Request Body** (all fields optional)
-
-```json
-{
-  "name": "Premium Nodes Updated",
-  "description": "Updated description",
-  "is_public": false,
-  "sort_order": 2
-}
-```
-
-> **Note**: Pass `version` query parameter for optimistic locking.
-
-**Response**
-
-**Success (200)**
-
-```json
-{
-  "success": true,
-  "message": "Node group updated successfully",
-  "data": {
-    "id": 1,
-    "name": "Premium Nodes Updated",
-    "version": 2
-  }
-}
-```
-
----
-
-### 2.5 Delete Node Group
-
-Delete a node group.
-
-**Request**
-
-```
-DELETE /node-groups/{id}
-Authorization: Bearer <jwt_token>
-```
-
-**Response**
-
-**Success (204)**: No content
-
----
-
-### 2.6 List Group Nodes
-
-Get all nodes in a specific group.
-
-**Request**
-
-```
-GET /node-groups/{id}/nodes
-Authorization: Bearer <jwt_token>
-```
-
-**Response**
-
-**Success (200)**
-
-```json
-{
-  "success": true,
-  "data": [
-    {
-      "id": 1,
-      "name": "US-Node-01",
-      "server_address": "proxy.example.com",
-      "server_port": 8388,
-      "protocol": "shadowsocks",
-      "status": "active",
-      "region": "us-west"
-    }
-  ]
-}
-```
-
----
-
-### 2.7 Add Node to Group
-
-Add a single node to a group.
-
-**Request**
-
-```
-POST /node-groups/{id}/nodes
-Authorization: Bearer <jwt_token>
-Content-Type: application/json
-```
-
-**Request Body**
-
-```json
-{
-  "node_id": 1
-}
-```
-
-**Response**
-
-**Success (200)**
-
-```json
-{
-  "success": true,
-  "message": "Node added to group successfully",
-  "data": {
-    "group_id": 1,
-    "node_id": 1
-  }
-}
-```
-
----
-
-### 2.8 Remove Node from Group
-
-Remove a node from a group.
-
-**Request**
-
-```
-DELETE /node-groups/{id}/nodes/{node_id}
-Authorization: Bearer <jwt_token>
-```
-
-**Response**
-
-**Success (204)**: No content
-
----
-
-### 2.9 Batch Add Nodes to Group
-
-Add multiple nodes to a group in a single operation.
-
-**Request**
-
-```
-POST /node-groups/{id}/nodes/batch
-Authorization: Bearer <jwt_token>
-Content-Type: application/json
-```
-
-**Request Body**
-
-```json
-{
-  "node_ids": [1, 2, 3, 4, 5]
-}
-```
-
-> **Note**: Maximum 100 nodes per request.
-
-**Response**
-
-**Success (200)**
-
-```json
-{
-  "success": true,
-  "message": "5 nodes added to group successfully",
-  "data": {
-    "added_count": 5,
-    "skipped_count": 0
-  }
-}
-```
-
----
-
-### 2.10 Batch Remove Nodes from Group
-
-Remove multiple nodes from a group.
-
-**Request**
-
-```
-DELETE /node-groups/{id}/nodes/batch
-Authorization: Bearer <jwt_token>
-Content-Type: application/json
-```
-
-**Request Body**
-
-```json
-{
-  "node_ids": [1, 2, 3]
-}
-```
-
-**Response**
-
-**Success (200)**
-
-```json
-{
-  "success": true,
-  "message": "3 nodes removed from group successfully",
-  "data": {
-    "removed_count": 3
-  }
-}
-```
-
----
-
-### 2.11 Associate Subscription Plan
-
-Associate a subscription plan with a node group.
-
-**Request**
-
-```
-POST /node-groups/{id}/plans
-Authorization: Bearer <jwt_token>
-Content-Type: application/json
-```
-
-**Request Body**
-
-```json
-{
-  "plan_id": 1
-}
-```
-
-**Response**
-
-**Success (200)**
-
-```json
-{
-  "success": true,
-  "message": "Plan associated successfully",
-  "data": {
-    "group_id": 1,
-    "plan_id": 1
-  }
-}
-```
-
----
-
-### 2.12 Disassociate Subscription Plan
-
-Remove association between a plan and a group.
-
-**Request**
-
-```
-DELETE /node-groups/{id}/plans/{plan_id}
-Authorization: Bearer <jwt_token>
-```
-
-**Response**
-
-**Success (204)**: No content
-
----
-
-## 3. Subscription Endpoints
+## 2. Subscription Endpoints
 
 Public endpoints for fetching subscription configurations in various formats.
 
-### 3.1 Base64 Subscription (Default)
+### 2.1 Base64 Subscription (Default)
 
 Get subscription in Base64-encoded format.
 
@@ -852,7 +426,7 @@ ss://YWVzLTI1Ni1nY20KaG5hcHB5Mi5leGFtcGxlLmNvbTo4Mzg5
 
 ---
 
-### 3.2 Clash Subscription
+### 2.2 Clash Subscription
 
 Get subscription in Clash YAML format.
 
@@ -890,7 +464,7 @@ proxy-groups:
 
 ---
 
-### 3.3 V2Ray Subscription
+### 2.3 V2Ray Subscription
 
 Get subscription in V2Ray JSON format.
 
@@ -929,7 +503,7 @@ Content-Type: application/json
 
 ---
 
-### 3.4 SIP008 Subscription
+### 2.4 SIP008 Subscription
 
 Get subscription in Shadowsocks SIP008 format.
 
@@ -967,7 +541,7 @@ Content-Type: application/json
 
 ---
 
-### 3.5 Surge Subscription
+### 2.5 Surge Subscription
 
 Get subscription in Surge configuration format.
 
@@ -990,7 +564,7 @@ US-Node-01 = ss, proxy.example.com, 8388, encrypt-method=aes-256-gcm, password=s
 
 ---
 
-## 4. Response Data Structures
+## 3. Response Data Structures
 
 ### NodeDTO
 
@@ -1025,25 +599,9 @@ US-Node-01 = ss, proxy.example.com, 8388, encrypt-method=aes-256-gcm, password=s
 | `uptime` | int | Uptime in seconds |
 | `updated_at` | int64 | Last update timestamp (Unix) |
 
-### NodeGroupDTO
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | uint | Unique group identifier |
-| `name` | string | Group name |
-| `description` | string | Group description |
-| `node_ids` | array | List of node IDs in group |
-| `subscription_plan_ids` | array | Associated plan IDs |
-| `is_public` | bool | Public visibility |
-| `sort_order` | int | Display order |
-| `node_count` | int | Number of nodes |
-| `version` | int | Version for optimistic locking |
-| `created_at` | string | Creation timestamp (ISO 8601) |
-| `updated_at` | string | Last update timestamp (ISO 8601) |
-
 ---
 
-## 5. Error Codes
+## 4. Error Codes
 
 | HTTP Status | Code | Description |
 |-------------|------|-------------|
@@ -1069,7 +627,7 @@ US-Node-01 = ss, proxy.example.com, 8388, encrypt-method=aes-256-gcm, password=s
 
 ---
 
-## 6. Node Token Authentication
+## 5. Node Token Authentication
 
 For node status reporting and heartbeat, nodes authenticate using API tokens.
 
@@ -1105,7 +663,7 @@ X-Node-Token: node_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 ---
 
-## 7. Client Implementation Example
+## 6. Client Implementation Example
 
 ### Go Client
 
@@ -1295,7 +853,7 @@ func main() {
 
 ---
 
-## 8. Notes
+## 7. Notes
 
 1. **Password Handling**: For Shadowsocks nodes, an HMAC-SHA256 signed password (derived from subscription UUID) is used when generating subscription URIs. The original UUID is never exposed to agents.
 2. **Rate Limiting**: Subscription endpoints have rate limiting enabled to prevent abuse

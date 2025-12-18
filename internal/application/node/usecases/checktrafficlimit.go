@@ -24,20 +24,20 @@ type TrafficLimitResult struct {
 }
 
 type CheckTrafficLimitUseCase struct {
-	trafficRepo      subscription.SubscriptionTrafficRepository
+	usageRepo        subscription.SubscriptionUsageRepository
 	subscriptionRepo subscription.SubscriptionRepository
-	planRepo         subscription.SubscriptionPlanRepository
+	planRepo         subscription.PlanRepository
 	logger           logger.Interface
 }
 
 func NewCheckTrafficLimitUseCase(
-	trafficRepo subscription.SubscriptionTrafficRepository,
+	usageRepo subscription.SubscriptionUsageRepository,
 	subscriptionRepo subscription.SubscriptionRepository,
-	planRepo subscription.SubscriptionPlanRepository,
+	planRepo subscription.PlanRepository,
 	logger logger.Interface,
 ) *CheckTrafficLimitUseCase {
 	return &CheckTrafficLimitUseCase{
-		trafficRepo:      trafficRepo,
+		usageRepo:        usageRepo,
 		subscriptionRepo: subscriptionRepo,
 		planRepo:         planRepo,
 		logger:           logger,
@@ -92,7 +92,7 @@ func (uc *CheckTrafficLimitUseCase) Execute(
 	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
 	endOfMonth := startOfMonth.AddDate(0, 1, 0)
 
-	summary, err := uc.trafficRepo.GetTotalTraffic(ctx, query.NodeID, startOfMonth, endOfMonth)
+	summary, err := uc.usageRepo.GetTotalUsage(ctx, "node", query.NodeID, startOfMonth, endOfMonth)
 	if err != nil {
 		uc.logger.Errorw("failed to get total traffic", "error", err)
 		return nil, errors.NewInternalError("failed to get traffic statistics")

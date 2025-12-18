@@ -640,6 +640,7 @@ func TestVerifyAPIToken_InitializesGenerator(t *testing.T) {
 		"203.0.113.1",
 		"198.51.100.1",
 		"",
+		[]uint{},
 		time.Now(),
 		time.Now(),
 	)
@@ -1356,6 +1357,7 @@ func TestValidate_ComprehensiveCheck(t *testing.T) {
 		invalidAgent, _ := ReconstructForwardAgent(
 			1, "test_id", "", "hash", "token",
 			AgentStatusEnabled, "", "", "",
+			[]uint{},
 			time.Now(), time.Now(),
 		)
 		if invalidAgent != nil {
@@ -1370,6 +1372,7 @@ func TestValidate_ComprehensiveCheck(t *testing.T) {
 		invalidAgent, _ := ReconstructForwardAgent(
 			1, "test_id", "name", "", "token",
 			AgentStatusEnabled, "", "", "",
+			[]uint{},
 			time.Now(), time.Now(),
 		)
 		if invalidAgent != nil {
@@ -1384,6 +1387,7 @@ func TestValidate_ComprehensiveCheck(t *testing.T) {
 		invalidAgent, _ := ReconstructForwardAgent(
 			1, "test_id", "name", "hash", "token",
 			AgentStatus("invalid"), "", "", "",
+			[]uint{},
 			time.Now(), time.Now(),
 		)
 		if invalidAgent != nil {
@@ -1413,6 +1417,7 @@ func TestReconstructForwardAgent_ValidData(t *testing.T) {
 		"203.0.113.1",
 		"198.51.100.1",
 		"test remark",
+		[]uint{},
 		now,
 		now,
 	)
@@ -1469,6 +1474,7 @@ func TestReconstructForwardAgent_ZeroID(t *testing.T) {
 		"203.0.113.1",
 		"",
 		"",
+		[]uint{},
 		now,
 		now,
 	)
@@ -1499,6 +1505,7 @@ func TestReconstructForwardAgent_EmptyShortID(t *testing.T) {
 		"203.0.113.1",
 		"",
 		"",
+		[]uint{},
 		now,
 		now,
 	)
@@ -1529,6 +1536,7 @@ func TestReconstructForwardAgent_EmptyName(t *testing.T) {
 		"203.0.113.1",
 		"",
 		"",
+		[]uint{},
 		now,
 		now,
 	)
@@ -1559,6 +1567,7 @@ func TestReconstructForwardAgent_EmptyTokenHash(t *testing.T) {
 		"203.0.113.1",
 		"",
 		"",
+		[]uint{},
 		now,
 		now,
 	)
@@ -1589,6 +1598,7 @@ func TestReconstructForwardAgent_InvalidStatus(t *testing.T) {
 		"203.0.113.1",
 		"",
 		"",
+		[]uint{},
 		now,
 		now,
 	)
@@ -1615,6 +1625,7 @@ func TestReconstructForwardAgent_InvalidPublicAddress(t *testing.T) {
 		"invalid!!!", // invalid public address
 		"",
 		"",
+		[]uint{},
 		now,
 		now,
 	)
@@ -1652,6 +1663,7 @@ func TestReconstructForwardAgent_InvalidTunnelAddress(t *testing.T) {
 				"",
 				tt.address, // invalid tunnel address
 				"",
+				[]uint{},
 				now,
 				now,
 			)
@@ -1805,6 +1817,7 @@ func TestVerifyAPIToken_WithRealTokenGenerator(t *testing.T) {
 		agent.PublicAddress(),
 		agent.TunnelAddress(),
 		agent.Remark(),
+		agent.PlanIDs(),
 		agent.CreatedAt(),
 		agent.UpdatedAt(),
 	)
@@ -1816,4 +1829,68 @@ func TestVerifyAPIToken_WithRealTokenGenerator(t *testing.T) {
 	// Note: This will fail with mock hash, but should not panic
 	result := reconstructed.VerifyAPIToken(token)
 	t.Logf("Real token generator verification result: %v (expected to fail with mock hash)", result)
+}
+
+// ===========================
+// Subscription Plan Management Tests
+// ===========================
+
+// TestSubscriptionPlanManagement verifies subscription plan operations.
+// Business rule: Agent can be associated with multiple subscription plans.
+func TestSubscriptionPlanManagement(t *testing.T) {
+	params := validAgentParams()
+	agent, err := newTestAgent(params)
+	if err != nil {
+		t.Fatalf("Failed to create test agent: %v", err)
+	}
+
+	// Initial state should have no plans
+	plans := agent.PlanIDs()
+	if len(plans) != 0 {
+		t.Errorf("New agent PlanIDs() length = %d, want 0", len(plans))
+	}
+
+	// Add a plan
+	agent.AddSubscriptionPlan(1)
+	plans = agent.PlanIDs()
+	if len(plans) != 1 {
+		t.Errorf("After AddSubscriptionPlan(1), length = %d, want 1", len(plans))
+	}
+	if !agent.HasSubscriptionPlan(1) {
+		t.Error("HasSubscriptionPlan(1) = false, want true")
+	}
+
+	// Add another plan
+	agent.AddSubscriptionPlan(2)
+	plans = agent.PlanIDs()
+	if len(plans) != 2 {
+		t.Errorf("After adding two plans, length = %d, want 2", len(plans))
+	}
+
+	// Remove a plan
+	agent.RemoveSubscriptionPlan(1)
+	if agent.HasSubscriptionPlan(1) {
+		t.Error("HasSubscriptionPlan(1) = true after removal, want false")
+	}
+	if !agent.HasSubscriptionPlan(2) {
+		t.Error("HasSubscriptionPlan(2) = false, want true")
+	}
+
+	// Test HasAnySubscriptionPlan
+	if !agent.HasAnySubscriptionPlan([]uint{2, 3, 4}) {
+		t.Error("HasAnySubscriptionPlan([2,3,4]) = false, want true (has 2)")
+	}
+	if agent.HasAnySubscriptionPlan([]uint{5, 6}) {
+		t.Error("HasAnySubscriptionPlan([5,6]) = true, want false")
+	}
+
+	// Test SetPlanIDs
+	agent.SetPlanIDs([]uint{10, 20, 30})
+	plans = agent.PlanIDs()
+	if len(plans) != 3 {
+		t.Errorf("After SetPlanIDs([10,20,30]), length = %d, want 3", len(plans))
+	}
+	if !agent.HasSubscriptionPlan(20) {
+		t.Error("HasSubscriptionPlan(20) = false, want true")
+	}
 }
