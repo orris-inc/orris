@@ -29,6 +29,7 @@ type PlanHandler struct {
 	activatePlanUC    *usecases.ActivatePlanUseCase
 	deactivatePlanUC  *usecases.DeactivatePlanUseCase
 	getPlanPricingsUC *usecases.GetPlanPricingsUseCase
+	managePlanNodesUC *usecases.ManagePlanNodesUseCase
 	logger            logger.Interface
 }
 
@@ -41,6 +42,7 @@ func NewPlanHandler(
 	activatePlanUC *usecases.ActivatePlanUseCase,
 	deactivatePlanUC *usecases.DeactivatePlanUseCase,
 	getPlanPricingsUC *usecases.GetPlanPricingsUseCase,
+	managePlanNodesUC *usecases.ManagePlanNodesUseCase,
 ) *PlanHandler {
 	return &PlanHandler{
 		createPlanUC:      createPlanUC,
@@ -51,6 +53,7 @@ func NewPlanHandler(
 		activatePlanUC:    activatePlanUC,
 		deactivatePlanUC:  deactivatePlanUC,
 		getPlanPricingsUC: getPlanPricingsUC,
+		managePlanNodesUC: managePlanNodesUC,
 		logger:            logger.NewLogger(),
 	}
 }
@@ -312,4 +315,122 @@ func parseListPlansQuery(c *gin.Context) (*usecases.ListPlansQuery, error) {
 	}
 
 	return query, nil
+}
+
+// BindNodesRequest represents the request to bind nodes to a plan
+type BindNodesRequest struct {
+	NodeIDs []uint `json:"node_ids" binding:"required,min=1"`
+}
+
+// UnbindNodesRequest represents the request to unbind nodes from a plan
+type UnbindNodesRequest struct {
+	NodeIDs []uint `json:"node_ids" binding:"required,min=1"`
+}
+
+// GetPlanNodes returns all nodes associated with a plan
+// @Summary Get plan nodes
+// @Description Get all nodes associated with a subscription plan
+// @Tags Plans
+// @Accept json
+// @Produce json
+// @Param id path int true "Plan ID"
+// @Success 200 {object} utils.Response{data=usecases.GetPlanNodesResult}
+// @Failure 400 {object} utils.Response
+// @Failure 404 {object} utils.Response
+// @Router /admin/plans/{id}/nodes [get]
+func (h *PlanHandler) GetPlanNodes(c *gin.Context) {
+	planID, err := parsePlanID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	result, err := h.managePlanNodesUC.GetPlanNodes(c.Request.Context(), planID)
+	if err != nil {
+		h.logger.Errorw("failed to get plan nodes", "plan_id", planID, "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "", result)
+}
+
+// BindNodes binds nodes to a plan
+// @Summary Bind nodes to plan
+// @Description Bind multiple nodes to a subscription plan (node type only)
+// @Tags Plans
+// @Accept json
+// @Produce json
+// @Param id path int true "Plan ID"
+// @Param request body BindNodesRequest true "Node IDs to bind"
+// @Success 200 {object} utils.Response
+// @Failure 400 {object} utils.Response
+// @Failure 404 {object} utils.Response
+// @Router /admin/plans/{id}/nodes [post]
+func (h *PlanHandler) BindNodes(c *gin.Context) {
+	planID, err := parsePlanID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	var req BindNodesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid request body for bind nodes", "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	cmd := usecases.BindNodesCommand{
+		PlanID:  planID,
+		NodeIDs: req.NodeIDs,
+	}
+
+	if err := h.managePlanNodesUC.BindNodes(c.Request.Context(), cmd); err != nil {
+		h.logger.Errorw("failed to bind nodes to plan", "plan_id", planID, "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Nodes bound to plan successfully", nil)
+}
+
+// UnbindNodes unbinds nodes from a plan
+// @Summary Unbind nodes from plan
+// @Description Unbind multiple nodes from a subscription plan
+// @Tags Plans
+// @Accept json
+// @Produce json
+// @Param id path int true "Plan ID"
+// @Param request body UnbindNodesRequest true "Node IDs to unbind"
+// @Success 200 {object} utils.Response
+// @Failure 400 {object} utils.Response
+// @Failure 404 {object} utils.Response
+// @Router /admin/plans/{id}/nodes [delete]
+func (h *PlanHandler) UnbindNodes(c *gin.Context) {
+	planID, err := parsePlanID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	var req UnbindNodesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid request body for unbind nodes", "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	cmd := usecases.UnbindNodesCommand{
+		PlanID:  planID,
+		NodeIDs: req.NodeIDs,
+	}
+
+	if err := h.managePlanNodesUC.UnbindNodes(c.Request.Context(), cmd); err != nil {
+		h.logger.Errorw("failed to unbind nodes from plan", "plan_id", planID, "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Nodes unbound from plan successfully", nil)
 }

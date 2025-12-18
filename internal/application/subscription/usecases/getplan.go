@@ -10,17 +10,20 @@ import (
 )
 
 type GetPlanUseCase struct {
-	planRepo subscription.PlanRepository
-	logger   logger.Interface
+	planRepo    subscription.PlanRepository
+	pricingRepo subscription.PlanPricingRepository
+	logger      logger.Interface
 }
 
 func NewGetPlanUseCase(
 	planRepo subscription.PlanRepository,
+	pricingRepo subscription.PlanPricingRepository,
 	logger logger.Interface,
 ) *GetPlanUseCase {
 	return &GetPlanUseCase{
-		planRepo: planRepo,
-		logger:   logger,
+		planRepo:    planRepo,
+		pricingRepo: pricingRepo,
+		logger:      logger,
 	}
 }
 
@@ -34,7 +37,13 @@ func (uc *GetPlanUseCase) ExecuteByID(ctx context.Context, planID uint) (*dto.Pl
 		return nil, fmt.Errorf("plan not found: %d", planID)
 	}
 
-	return dto.ToPlanDTO(plan), nil
+	pricings, err := uc.pricingRepo.GetActivePricings(ctx, planID)
+	if err != nil {
+		uc.logger.Warnw("failed to get pricings for plan", "error", err, "plan_id", planID)
+		return dto.ToPlanDTO(plan), nil
+	}
+
+	return dto.ToPlanDTOWithPricings(plan, pricings), nil
 }
 
 func (uc *GetPlanUseCase) ExecuteBySlug(ctx context.Context, slug string) (*dto.PlanDTO, error) {
@@ -47,5 +56,11 @@ func (uc *GetPlanUseCase) ExecuteBySlug(ctx context.Context, slug string) (*dto.
 		return nil, fmt.Errorf("plan not found: %s", slug)
 	}
 
-	return dto.ToPlanDTO(plan), nil
+	pricings, err := uc.pricingRepo.GetActivePricings(ctx, plan.ID())
+	if err != nil {
+		uc.logger.Warnw("failed to get pricings for plan", "error", err, "plan_id", plan.ID())
+		return dto.ToPlanDTO(plan), nil
+	}
+
+	return dto.ToPlanDTOWithPricings(plan, pricings), nil
 }

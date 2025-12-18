@@ -49,7 +49,21 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, subs
 		return nil, err
 	}
 
-	// Query node IDs directly from entitlements
+	// Query plan to check plan type
+	var planModel models.PlanModel
+	if err := r.db.WithContext(ctx).
+		Where("id = ?", subscriptionModel.PlanID).
+		First(&planModel).Error; err != nil {
+		r.logger.Errorw("failed to query plan", "error", err, "plan_id", subscriptionModel.PlanID)
+		return nil, err
+	}
+
+	// For forward plan, return user's forward rules as nodes
+	if planModel.PlanType == "forward" {
+		return r.getForwardPlanNodes(ctx, subscriptionModel.UserID, mode)
+	}
+
+	// For node plan, query node IDs from entitlements
 	var nodeIDs []uint
 	if err := r.db.WithContext(ctx).
 		Table("entitlements").
@@ -320,6 +334,205 @@ func (r *NodeRepositoryAdapter) getForwardedNodes(ctx context.Context, nodeIDs [
 	}
 
 	return forwardedNodes
+}
+
+// getForwardPlanNodes returns nodes for forward plan subscriptions
+// For forward plans, users see their own forward rules as subscription nodes
+func (r *NodeRepositoryAdapter) getForwardPlanNodes(ctx context.Context, userID uint, mode string) ([]*usecases.Node, error) {
+	// Query user's enabled forward rules with target nodes
+	var forwardRules []models.ForwardRuleModel
+	if err := r.db.WithContext(ctx).
+		Where("user_id = ?", userID).
+		Where("status = ?", "enabled").
+		Where("target_node_id IS NOT NULL").
+		Where("rule_type IN ?", []string{"direct", "entry", "chain", "direct_chain"}).
+		Find(&forwardRules).Error; err != nil {
+		r.logger.Errorw("failed to query user forward rules", "user_id", userID, "error", err)
+		return nil, err
+	}
+
+	if len(forwardRules) == 0 {
+		r.logger.Infow("no forward rules found for user", "user_id", userID)
+		return []*usecases.Node{}, nil
+	}
+
+	// Collect target node IDs and agent IDs
+	nodeIDSet := make(map[uint]bool)
+	agentIDSet := make(map[uint]bool)
+	for _, rule := range forwardRules {
+		if rule.TargetNodeID != nil {
+			nodeIDSet[*rule.TargetNodeID] = true
+		}
+		agentIDSet[rule.AgentID] = true
+	}
+
+	// Convert to slices
+	nodeIDs := make([]uint, 0, len(nodeIDSet))
+	for id := range nodeIDSet {
+		nodeIDs = append(nodeIDs, id)
+	}
+	agentIDs := make([]uint, 0, len(agentIDSet))
+	for id := range agentIDSet {
+		agentIDs = append(agentIDs, id)
+	}
+
+	// Query target nodes
+	var nodeModels []models.NodeModel
+	if len(nodeIDs) > 0 {
+		if err := r.db.WithContext(ctx).
+			Where("id IN ?", nodeIDs).
+			Where("status = ?", string(nodevo.NodeStatusActive)).
+			Find(&nodeModels).Error; err != nil {
+			r.logger.Errorw("failed to query target nodes", "error", err)
+			return nil, err
+		}
+	}
+
+	// Build node map
+	nodeMap := make(map[uint]*models.NodeModel)
+	for i := range nodeModels {
+		nodeMap[nodeModels[i].ID] = &nodeModels[i]
+	}
+
+	// Load trojan configs for target nodes
+	var trojanNodeIDs []uint
+	for _, nm := range nodeModels {
+		if nm.Protocol == "trojan" {
+			trojanNodeIDs = append(trojanNodeIDs, nm.ID)
+		}
+	}
+	trojanConfigMap := make(map[uint]*models.TrojanConfigModel)
+	if len(trojanNodeIDs) > 0 {
+		var trojanConfigs []models.TrojanConfigModel
+		if err := r.db.WithContext(ctx).
+			Where("node_id IN ?", trojanNodeIDs).
+			Find(&trojanConfigs).Error; err != nil {
+			r.logger.Warnw("failed to query trojan configs", "error", err)
+		} else {
+			for i := range trojanConfigs {
+				trojanConfigMap[trojanConfigs[i].NodeID] = &trojanConfigs[i]
+			}
+		}
+	}
+
+	// Load shadowsocks configs for target nodes
+	var ssNodeIDs []uint
+	for _, nm := range nodeModels {
+		if nm.Protocol == "shadowsocks" || nm.Protocol == "" {
+			ssNodeIDs = append(ssNodeIDs, nm.ID)
+		}
+	}
+	ssConfigMap := make(map[uint]*models.ShadowsocksConfigModel)
+	if len(ssNodeIDs) > 0 {
+		var ssConfigs []models.ShadowsocksConfigModel
+		if err := r.db.WithContext(ctx).
+			Where("node_id IN ?", ssNodeIDs).
+			Find(&ssConfigs).Error; err != nil {
+			r.logger.Warnw("failed to query shadowsocks configs", "error", err)
+		} else {
+			for i := range ssConfigs {
+				ssConfigMap[ssConfigs[i].NodeID] = &ssConfigs[i]
+			}
+		}
+	}
+
+	// Query forward agents
+	var agents []models.ForwardAgentModel
+	if len(agentIDs) > 0 {
+		if err := r.db.WithContext(ctx).
+			Where("id IN ?", agentIDs).
+			Where("status = ?", "enabled").
+			Find(&agents).Error; err != nil {
+			r.logger.Warnw("failed to query forward agents", "error", err)
+			return nil, err
+		}
+	}
+
+	// Build agent map
+	agentMap := make(map[uint]*models.ForwardAgentModel)
+	for i := range agents {
+		agentMap[agents[i].ID] = &agents[i]
+	}
+
+	// Generate forwarded node entries
+	var forwardedNodes []*usecases.Node
+	for _, rule := range forwardRules {
+		agent, ok := agentMap[rule.AgentID]
+		if !ok || agent.PublicAddress == "" {
+			continue
+		}
+
+		if rule.TargetNodeID == nil {
+			continue
+		}
+
+		targetNode, ok := nodeMap[*rule.TargetNodeID]
+		if !ok {
+			continue
+		}
+
+		// Determine protocol
+		protocol := targetNode.Protocol
+		if protocol == "" {
+			protocol = "shadowsocks"
+		}
+
+		// Build forwarded node
+		forwardedNode := &usecases.Node{
+			ID:               targetNode.ID,
+			Name:             rule.Name,
+			ServerAddress:    agent.PublicAddress,
+			SubscriptionPort: rule.ListenPort,
+			Protocol:         protocol,
+			Password:         "", // Will be filled with subscription UUID
+		}
+
+		// Load Shadowsocks config
+		if protocol == "shadowsocks" {
+			if sc, ok := ssConfigMap[targetNode.ID]; ok {
+				forwardedNode.EncryptionMethod = sc.EncryptionMethod
+				if sc.Plugin != nil {
+					forwardedNode.Plugin = *sc.Plugin
+				}
+				if len(sc.PluginOpts) > 0 {
+					pluginOpts := make(map[string]string)
+					var optsMap map[string]interface{}
+					if err := json.Unmarshal(sc.PluginOpts, &optsMap); err == nil {
+						for key, val := range optsMap {
+							if strVal, ok := val.(string); ok {
+								pluginOpts[key] = strVal
+							}
+						}
+					}
+					forwardedNode.PluginOpts = pluginOpts
+				}
+			}
+		}
+
+		// Load Trojan config
+		if protocol == "trojan" {
+			if tc, ok := trojanConfigMap[targetNode.ID]; ok {
+				forwardedNode.TransportProtocol = tc.TransportProtocol
+				forwardedNode.Host = tc.Host
+				forwardedNode.Path = tc.Path
+				forwardedNode.SNI = tc.SNI
+				forwardedNode.AllowInsecure = tc.AllowInsecure
+			} else {
+				forwardedNode.TransportProtocol = "tcp"
+			}
+		}
+
+		forwardedNodes = append(forwardedNodes, forwardedNode)
+	}
+
+	r.logger.Infow("retrieved forward plan nodes for user",
+		"user_id", userID,
+		"forward_rule_count", len(forwardRules),
+		"forwarded_node_count", len(forwardedNodes),
+		"mode", mode,
+	)
+
+	return forwardedNodes, nil
 }
 
 // resolveServerAddress returns the effective server address for subscription

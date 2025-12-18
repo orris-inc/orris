@@ -58,6 +58,7 @@ type CreateSubscriptionRequest struct {
 	StartDate    *time.Time             `json:"start_date"`
 	AutoRenew    *bool                  `json:"auto_renew"`
 	PaymentInfo  map[string]interface{} `json:"payment_info"`
+	Activate     *bool                  `json:"activate"` // Whether to activate immediately, defaults to true for admin
 }
 
 // UpdateStatusRequest represents the request to update subscription status
@@ -87,18 +88,25 @@ func (h *SubscriptionHandler) Create(c *gin.Context) {
 		autoRenew = *req.AutoRenew
 	}
 
+	// Admin-created subscriptions are activated by default
+	activate := true
+	if req.Activate != nil {
+		activate = *req.Activate
+	}
+
 	startDate := time.Now()
 	if req.StartDate != nil {
 		startDate = *req.StartDate
 	}
 
 	cmd := usecases.CreateSubscriptionCommand{
-		UserID:       req.UserID,
-		PlanID:       req.PlanID,
-		BillingCycle: req.BillingCycle,
-		StartDate:    startDate,
-		AutoRenew:    autoRenew,
-		PaymentInfo:  req.PaymentInfo,
+		UserID:              req.UserID,
+		PlanID:              req.PlanID,
+		BillingCycle:        req.BillingCycle,
+		StartDate:           startDate,
+		AutoRenew:           autoRenew,
+		PaymentInfo:         req.PaymentInfo,
+		ActivateImmediately: activate,
 	}
 
 	result, err := h.createUseCase.Execute(c.Request.Context(), cmd)

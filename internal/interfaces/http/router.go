@@ -250,10 +250,10 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		subscriptionPlanRepo, planPricingRepo, log,
 	)
 	getPlanUC := subscriptionUsecases.NewGetPlanUseCase(
-		subscriptionPlanRepo, log,
+		subscriptionPlanRepo, planPricingRepo, log,
 	)
 	listPlansUC := subscriptionUsecases.NewListPlansUseCase(
-		subscriptionPlanRepo, log,
+		subscriptionPlanRepo, planPricingRepo, log,
 	)
 	getPublicPlansUC := subscriptionUsecases.NewGetPublicPlansUseCase(
 		subscriptionPlanRepo, planPricingRepo, log,
@@ -292,9 +292,18 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		activateSubscriptionUC, log,
 	)
 	subscriptionOwnerMiddleware := middleware.NewSubscriptionOwnerMiddleware(subscriptionRepo, log)
+
+	// Initialize entitlement repository and manage plan nodes use case
+	entitlementRepo := repository.NewEntitlementRepository(db, log)
+	nodeRepoForPlan := repository.NewNodeRepository(db, log)
+	managePlanNodesUC := subscriptionUsecases.NewManagePlanNodesUseCase(
+		subscriptionPlanRepo, entitlementRepo, nodeRepoForPlan,
+	)
+
 	planHandler := handlers.NewPlanHandler(
 		createPlanUC, updatePlanUC, getPlanUC, listPlansUC,
 		getPublicPlansUC, activatePlanUC, deactivatePlanUC, getPlanPricingsUC,
+		managePlanNodesUC,
 	)
 	subscriptionTokenHandler := handlers.NewSubscriptionTokenHandler(
 		generateTokenUC, listTokensUC, revokeTokenUC, refreshSubscriptionTokenUC,
@@ -730,6 +739,11 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 			// Using PATCH for state changes as per RESTful best practices
 			plansProtected.PATCH("/:id/status", r.planHandler.UpdatePlanStatus)
 			plansProtected.GET("/:id/pricings", r.planHandler.GetPlanPricings)
+
+			// Plan-Node entitlement management
+			plansProtected.GET("/:id/nodes", r.planHandler.GetPlanNodes)
+			plansProtected.POST("/:id/nodes", r.planHandler.BindNodes)
+			plansProtected.DELETE("/:id/nodes", r.planHandler.UnbindNodes)
 
 			// Generic parameterized routes (must come LAST)
 			plansProtected.GET("/:id", r.planHandler.GetPlan)

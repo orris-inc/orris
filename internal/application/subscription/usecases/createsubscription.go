@@ -12,12 +12,13 @@ import (
 )
 
 type CreateSubscriptionCommand struct {
-	UserID       uint
-	PlanID       uint
-	StartDate    time.Time
-	AutoRenew    bool
-	PaymentInfo  map[string]interface{}
-	BillingCycle string // User selected billing cycle
+	UserID              uint
+	PlanID              uint
+	StartDate           time.Time
+	AutoRenew           bool
+	PaymentInfo         map[string]interface{}
+	BillingCycle        string // User selected billing cycle
+	ActivateImmediately bool   // If true, activate subscription immediately (for admin use)
 }
 
 type CreateSubscriptionResult struct {
@@ -127,6 +128,19 @@ func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, cmd CreateSubs
 	if err := uc.subscriptionRepo.Create(ctx, sub); err != nil {
 		uc.logger.Errorw("failed to create subscription in database", "error", err)
 		return nil, fmt.Errorf("failed to create subscription: %w", err)
+	}
+
+	// Activate subscription immediately if requested (typically for admin-created subscriptions)
+	if cmd.ActivateImmediately {
+		if err := sub.Activate(); err != nil {
+			uc.logger.Errorw("failed to activate subscription", "error", err, "subscription_id", sub.ID())
+			return nil, fmt.Errorf("failed to activate subscription: %w", err)
+		}
+		if err := uc.subscriptionRepo.Update(ctx, sub); err != nil {
+			uc.logger.Errorw("failed to update subscription after activation", "error", err, "subscription_id", sub.ID())
+			return nil, fmt.Errorf("failed to update subscription: %w", err)
+		}
+		uc.logger.Infow("subscription activated immediately", "subscription_id", sub.ID())
 	}
 
 	token, plainToken, err := uc.createDefaultToken(ctx, sub.ID())

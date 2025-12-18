@@ -93,6 +93,11 @@ func (m *ForwardQuotaMiddleware) CheckRuleLimit() gin.HandlerFunc {
 				continue
 			}
 
+			// Skip non-forward plans
+			if !plan.PlanType().IsForward() {
+				continue
+			}
+
 			planFeatures := plan.Features()
 			if planFeatures == nil {
 				continue
@@ -209,6 +214,11 @@ func (m *ForwardQuotaMiddleware) CheckTrafficLimit() gin.HandlerFunc {
 			}
 
 			if plan == nil {
+				continue
+			}
+
+			// Skip non-forward plans
+			if !plan.PlanType().IsForward() {
 				continue
 			}
 
@@ -360,6 +370,11 @@ func (m *ForwardQuotaMiddleware) CheckRuleTypeAllowed() gin.HandlerFunc {
 			}
 
 			if plan == nil {
+				continue
+			}
+
+			// Skip non-forward plans
+			if !plan.PlanType().IsForward() {
 				continue
 			}
 
