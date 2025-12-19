@@ -94,18 +94,11 @@ func (uc *GetUserForwardUsageUseCase) Execute(ctx context.Context, query GetUser
 			continue
 		}
 
-		// Get rule limit (try unified key first, then fallback to forward-specific key)
+		// Get rule limit using unified key
 		limit, err := planFeatures.GetRuleLimit()
 		if err != nil {
 			uc.logger.Warnw("failed to get rule limit", "subscription_id", sub.ID(), "error", err)
 			continue
-		}
-		// Fallback to forward_rule_limit if rule_limit is not set
-		if limit == 0 {
-			forwardLimit, fwErr := planFeatures.GetForwardRuleLimit()
-			if fwErr == nil && forwardLimit > 0 {
-				limit = forwardLimit
-			}
 		}
 
 		// 0 means unlimited - once found, it cannot be overridden
@@ -116,18 +109,11 @@ func (uc *GetUserForwardUsageUseCase) Execute(ctx context.Context, query GetUser
 			maxRuleLimit = limit
 		}
 
-		// Get traffic limit (try unified key first, then fallback to forward-specific key)
+		// Get traffic limit using unified key
 		trafficLimit, err := planFeatures.GetTrafficLimit()
 		if err != nil {
 			uc.logger.Warnw("failed to get traffic limit", "subscription_id", sub.ID(), "error", err)
 			continue
-		}
-		// Fallback to forward_traffic_limit if traffic_limit is not set
-		if trafficLimit == 0 {
-			forwardTrafficLimit, fwErr := planFeatures.GetForwardTrafficLimit()
-			if fwErr == nil && forwardTrafficLimit > 0 {
-				trafficLimit = forwardTrafficLimit
-			}
 		}
 
 		// 0 means unlimited - once found, it cannot be overridden
@@ -138,18 +124,11 @@ func (uc *GetUserForwardUsageUseCase) Execute(ctx context.Context, query GetUser
 			maxTrafficLimit = trafficLimit
 		}
 
-		// Collect allowed rule types (try unified key first, then fallback to forward-specific key)
+		// Collect allowed rule types using unified key
 		types, err := planFeatures.GetRuleTypes()
 		if err != nil {
 			uc.logger.Warnw("failed to get rule types", "subscription_id", sub.ID(), "error", err)
 			continue
-		}
-		// Fallback to forward_rule_types if rule_types is not set
-		if len(types) == 0 {
-			forwardTypes, fwErr := planFeatures.GetAllowedForwardRuleTypes()
-			if fwErr == nil && len(forwardTypes) > 0 {
-				types = forwardTypes
-			}
 		}
 
 		// Empty means all types allowed

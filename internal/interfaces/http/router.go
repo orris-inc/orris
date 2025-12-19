@@ -500,8 +500,16 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		log,
 	)
 
+	// Initialize forward traffic recorder adapter for writing forward traffic to subscription_usages table
+	forwardTrafficRecorder := adapters.NewForwardTrafficRecorderAdapter(
+		subscriptionUsageRepo,
+		subscriptionRepo,
+		subscriptionPlanRepo,
+		log,
+	)
+
 	// Initialize forward agent API handler for client to fetch rules and report traffic
-	forwardAgentAPIHandler := forwardHandlers.NewAgentHandler(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, reportAgentStatusUC, forwardAgentStatusAdapter, cfg.Forward.TokenSigningSecret, log)
+	forwardAgentAPIHandler := forwardHandlers.NewAgentHandler(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, reportAgentStatusUC, forwardAgentStatusAdapter, cfg.Forward.TokenSigningSecret, forwardTrafficRecorder, log)
 
 	// Initialize forward agent token middleware
 	forwardAgentTokenMiddleware := middleware.NewForwardAgentTokenMiddleware(validateForwardAgentTokenUC, log)
@@ -559,6 +567,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	trafficLimitEnforcementSvc := forwardServices.NewTrafficLimitEnforcementService(
 		forwardRuleRepo,
 		subscriptionRepo,
+		subscriptionUsageRepo,
 		subscriptionPlanRepo,
 		log,
 	)
@@ -595,6 +604,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	forwardQuotaMiddleware := middleware.NewForwardQuotaMiddleware(
 		forwardRuleRepo,
 		subscriptionRepo,
+		subscriptionUsageRepo,
 		subscriptionPlanRepo,
 		log,
 	)

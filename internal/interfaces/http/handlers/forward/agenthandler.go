@@ -11,6 +11,7 @@ import (
 	"github.com/orris-inc/orris/internal/application/forward/usecases"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/infrastructure/adapters"
 	"github.com/orris-inc/orris/internal/infrastructure/auth"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -26,6 +27,7 @@ type AgentHandler struct {
 	statusQuerier      usecases.AgentStatusQuerier
 	tokenSigningSecret string
 	agentTokenService  *auth.AgentTokenService
+	trafficRecorder    adapters.ForwardTrafficRecorder
 	logger             logger.Interface
 }
 
@@ -37,6 +39,7 @@ func NewAgentHandler(
 	reportStatusUC *usecases.ReportAgentStatusUseCase,
 	statusQuerier usecases.AgentStatusQuerier,
 	tokenSigningSecret string,
+	trafficRecorder adapters.ForwardTrafficRecorder,
 	logger logger.Interface,
 ) *AgentHandler {
 	return &AgentHandler{
@@ -47,6 +50,7 @@ func NewAgentHandler(
 		statusQuerier:      statusQuerier,
 		tokenSigningSecret: tokenSigningSecret,
 		agentTokenService:  auth.NewAgentTokenService(tokenSigningSecret),
+		trafficRecorder:    trafficRecorder,
 		logger:             logger,
 	}
 }
@@ -860,19 +864,25 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 		return
 	}
 
+	// ruleInfo holds rule ID and user ID for traffic recording
+	type ruleInfo struct {
+		id     uint
+		userID *uint
+	}
+
 	// Merge all rules into validRuleIDs map (use rule.ID() to deduplicate)
-	validRuleIDs := make(map[string]uint) // Stripe-style ID -> internal uint ID
+	validRuleIDs := make(map[string]ruleInfo) // Stripe-style ID -> ruleInfo
 	for _, rule := range agentRules {
 		stripeID := rule.SID()
-		validRuleIDs[stripeID] = rule.ID()
+		validRuleIDs[stripeID] = ruleInfo{id: rule.ID(), userID: rule.UserID()}
 	}
 	for _, rule := range exitRules {
 		stripeID := rule.SID()
-		validRuleIDs[stripeID] = rule.ID()
+		validRuleIDs[stripeID] = ruleInfo{id: rule.ID(), userID: rule.UserID()}
 	}
 	for _, rule := range chainRules {
 		stripeID := rule.SID()
-		validRuleIDs[stripeID] = rule.ID()
+		validRuleIDs[stripeID] = ruleInfo{id: rule.ID(), userID: rule.UserID()}
 	}
 
 	h.logger.Debugw("validated rule sources for traffic report",
@@ -894,7 +904,7 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 
 	for _, item := range req.Rules {
 		// Validate rule belongs to this agent and get internal ID
-		internalID, valid := validRuleIDs[item.RuleID]
+		info, valid := validRuleIDs[item.RuleID]
 		if !valid {
 			h.logger.Warnw("traffic report for unauthorized rule",
 				"rule_id", item.RuleID,
@@ -937,11 +947,12 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 			continue
 		}
 
-		err := h.repo.UpdateTraffic(ctx, internalID, item.UploadBytes, item.DownloadBytes)
+		// Update traffic in forward_rules table
+		err := h.repo.UpdateTraffic(ctx, info.id, item.UploadBytes, item.DownloadBytes)
 		if err != nil {
 			h.logger.Errorw("failed to update rule traffic",
 				"rule_id", item.RuleID,
-				"internal_id", internalID,
+				"internal_id", info.id,
 				"agent_id", agentID,
 				"upload", item.UploadBytes,
 				"download", item.DownloadBytes,
@@ -949,6 +960,19 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 			)
 			errorCount++
 			continue
+		}
+
+		// Also record traffic to subscription_usages table (for unified traffic tracking)
+		if h.trafficRecorder != nil && info.userID != nil {
+			if err := h.trafficRecorder.RecordForwardTraffic(ctx, info.id, *info.userID, item.UploadBytes, item.DownloadBytes); err != nil {
+				// Log warning but don't fail the request - forward_rules update already succeeded
+				h.logger.Warnw("failed to record forward traffic to subscription_usages",
+					"rule_id", item.RuleID,
+					"internal_id", info.id,
+					"user_id", *info.userID,
+					"error", err,
+				)
+			}
 		}
 
 		successCount++

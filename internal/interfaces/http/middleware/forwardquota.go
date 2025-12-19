@@ -3,6 +3,7 @@ package middleware
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
@@ -16,24 +17,27 @@ import (
 
 // ForwardQuotaMiddleware enforces forward rule quotas based on user's subscription plan
 type ForwardQuotaMiddleware struct {
-	forwardRuleRepo  forward.Repository
-	subscriptionRepo subscription.SubscriptionRepository
-	planRepo         subscription.PlanRepository
-	logger           logger.Interface
+	forwardRuleRepo       forward.Repository
+	subscriptionRepo      subscription.SubscriptionRepository
+	subscriptionUsageRepo subscription.SubscriptionUsageRepository
+	planRepo              subscription.PlanRepository
+	logger                logger.Interface
 }
 
 // NewForwardQuotaMiddleware creates a new forward quota middleware
 func NewForwardQuotaMiddleware(
 	forwardRuleRepo forward.Repository,
 	subscriptionRepo subscription.SubscriptionRepository,
+	subscriptionUsageRepo subscription.SubscriptionUsageRepository,
 	planRepo subscription.PlanRepository,
 	logger logger.Interface,
 ) *ForwardQuotaMiddleware {
 	return &ForwardQuotaMiddleware{
-		forwardRuleRepo:  forwardRuleRepo,
-		subscriptionRepo: subscriptionRepo,
-		planRepo:         planRepo,
-		logger:           logger,
+		forwardRuleRepo:       forwardRuleRepo,
+		subscriptionRepo:      subscriptionRepo,
+		subscriptionUsageRepo: subscriptionUsageRepo,
+		planRepo:              planRepo,
+		logger:                logger,
 	}
 }
 
@@ -103,9 +107,9 @@ func (m *ForwardQuotaMiddleware) CheckRuleLimit() gin.HandlerFunc {
 				continue
 			}
 
-			limit, err := planFeatures.GetForwardRuleLimit()
+			limit, err := planFeatures.GetRuleLimit()
 			if err != nil {
-				m.logger.Warnw("failed to get forward rule limit from plan",
+				m.logger.Warnw("failed to get rule limit from plan",
 					"subscription_id", sub.ID(),
 					"error", err,
 				)
@@ -200,8 +204,20 @@ func (m *ForwardQuotaMiddleware) CheckTrafficLimit() gin.HandlerFunc {
 			return
 		}
 
-		// Find the highest traffic limit among all active subscriptions
+		// If no subscriptions, deny access
+		if len(subscriptions) == 0 {
+			m.logger.Warnw("user has no active subscription for forward traffic",
+				"user_id", currentUserID,
+			)
+			utils.ErrorResponse(c, http.StatusForbidden, "no active subscription with forward feature")
+			c.Abort()
+			return
+		}
+
+		// Find the highest traffic limit among all active Forward-type subscriptions
+		// and collect their subscription IDs for traffic query
 		var maxTrafficLimit uint64
+		var forwardSubscriptionIDs []uint
 		for _, sub := range subscriptions {
 			plan, err := m.planRepo.GetByID(c.Request.Context(), sub.PlanID())
 			if err != nil {
@@ -222,14 +238,17 @@ func (m *ForwardQuotaMiddleware) CheckTrafficLimit() gin.HandlerFunc {
 				continue
 			}
 
+			// Collect Forward-type subscription ID
+			forwardSubscriptionIDs = append(forwardSubscriptionIDs, sub.ID())
+
 			planFeatures := plan.Features()
 			if planFeatures == nil {
 				continue
 			}
 
-			limit, err := planFeatures.GetForwardTrafficLimit()
+			limit, err := planFeatures.GetTrafficLimit()
 			if err != nil {
-				m.logger.Warnw("failed to get forward traffic limit from plan",
+				m.logger.Warnw("failed to get traffic limit from plan",
 					"subscription_id", sub.ID(),
 					"error", err,
 				)
@@ -247,9 +266,9 @@ func (m *ForwardQuotaMiddleware) CheckTrafficLimit() gin.HandlerFunc {
 			}
 		}
 
-		// If no subscriptions, deny access
-		if len(subscriptions) == 0 {
-			m.logger.Warnw("user has no active subscription for forward traffic",
+		// If no Forward-type subscriptions found, deny access
+		if len(forwardSubscriptionIDs) == 0 {
+			m.logger.Warnw("user has no active forward subscription",
 				"user_id", currentUserID,
 			)
 			utils.ErrorResponse(c, http.StatusForbidden, "no active subscription with forward feature")
@@ -263,11 +282,18 @@ func (m *ForwardQuotaMiddleware) CheckTrafficLimit() gin.HandlerFunc {
 			return
 		}
 
-		// Get total traffic used by the user
-		totalTraffic, err := m.forwardRuleRepo.GetTotalTrafficByUserID(c.Request.Context(), currentUserID)
+		// Get total forward traffic from subscription_usages table
+		usageSummary, err := m.subscriptionUsageRepo.GetTotalUsageBySubscriptionIDs(
+			c.Request.Context(),
+			subscription.ResourceTypeForwardRule.String(),
+			forwardSubscriptionIDs,
+			time.Time{}, // No time range limit - get all historical usage
+			time.Time{},
+		)
 		if err != nil {
-			m.logger.Errorw("failed to get user's total forward traffic",
+			m.logger.Errorw("failed to get user's total forward traffic from subscription_usages",
 				"user_id", currentUserID,
+				"subscription_ids", forwardSubscriptionIDs,
 				"error", err,
 			)
 			utils.ErrorResponse(c, http.StatusInternalServerError, "failed to check traffic quota")
@@ -275,8 +301,10 @@ func (m *ForwardQuotaMiddleware) CheckTrafficLimit() gin.HandlerFunc {
 			return
 		}
 
+		totalTraffic := usageSummary.Total
+
 		// Check if traffic limit exceeded
-		if uint64(totalTraffic) >= maxTrafficLimit {
+		if totalTraffic >= maxTrafficLimit {
 			m.logger.Warnw("user exceeded forward traffic limit",
 				"user_id", currentUserID,
 				"total_traffic", totalTraffic,
@@ -383,7 +411,7 @@ func (m *ForwardQuotaMiddleware) CheckRuleTypeAllowed() gin.HandlerFunc {
 				continue
 			}
 
-			isAllowed, err := planFeatures.IsForwardRuleTypeAllowed(requestBody.RuleType)
+			isAllowed, err := planFeatures.IsRuleTypeAllowed(requestBody.RuleType)
 			if err != nil {
 				m.logger.Warnw("failed to check if rule type is allowed",
 					"subscription_id", sub.ID(),

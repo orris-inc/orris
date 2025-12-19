@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/subscription"
@@ -13,24 +14,27 @@ import (
 // When a user's total forward traffic exceeds their subscription plan limit,
 // this service automatically disables all of their forward rules.
 type TrafficLimitEnforcementService struct {
-	forwardRuleRepo  forward.Repository
-	subscriptionRepo subscription.SubscriptionRepository
-	planRepo         subscription.PlanRepository
-	logger           logger.Interface
+	forwardRuleRepo       forward.Repository
+	subscriptionRepo      subscription.SubscriptionRepository
+	subscriptionUsageRepo subscription.SubscriptionUsageRepository
+	planRepo              subscription.PlanRepository
+	logger                logger.Interface
 }
 
 // NewTrafficLimitEnforcementService creates a new traffic limit enforcement service.
 func NewTrafficLimitEnforcementService(
 	forwardRuleRepo forward.Repository,
 	subscriptionRepo subscription.SubscriptionRepository,
+	subscriptionUsageRepo subscription.SubscriptionUsageRepository,
 	planRepo subscription.PlanRepository,
 	logger logger.Interface,
 ) *TrafficLimitEnforcementService {
 	return &TrafficLimitEnforcementService{
-		forwardRuleRepo:  forwardRuleRepo,
-		subscriptionRepo: subscriptionRepo,
-		planRepo:         planRepo,
-		logger:           logger,
+		forwardRuleRepo:       forwardRuleRepo,
+		subscriptionRepo:      subscriptionRepo,
+		subscriptionUsageRepo: subscriptionUsageRepo,
+		planRepo:              planRepo,
+		logger:                logger,
 	}
 }
 
@@ -41,16 +45,6 @@ func (s *TrafficLimitEnforcementService) CheckAndEnforceLimit(ctx context.Contex
 	s.logger.Debugw("checking traffic limit enforcement",
 		"user_id", userID,
 	)
-
-	// Get user's total forward traffic
-	totalTraffic, err := s.forwardRuleRepo.GetTotalTrafficByUserID(ctx, userID)
-	if err != nil {
-		s.logger.Errorw("failed to get total traffic for user",
-			"user_id", userID,
-			"error", err,
-		)
-		return fmt.Errorf("failed to get total traffic: %w", err)
-	}
 
 	// Get user's active subscriptions
 	activeSubscriptions, err := s.subscriptionRepo.GetActiveByUserID(ctx, userID)
@@ -70,14 +64,23 @@ func (s *TrafficLimitEnforcementService) CheckAndEnforceLimit(ctx context.Contex
 		return nil
 	}
 
-	// Find the highest traffic limit across all subscriptions
-	trafficLimit, hasLimit, err := s.getHighestTrafficLimit(ctx, activeSubscriptions)
+	// Find the highest traffic limit across all Forward-type subscriptions
+	// and collect their subscription IDs for traffic query
+	trafficLimit, hasLimit, forwardSubscriptionIDs, err := s.getHighestTrafficLimitAndIDs(ctx, activeSubscriptions)
 	if err != nil {
 		s.logger.Errorw("failed to determine traffic limit",
 			"user_id", userID,
 			"error", err,
 		)
 		return fmt.Errorf("failed to determine traffic limit: %w", err)
+	}
+
+	// If no Forward-type subscriptions found, don't enforce
+	if len(forwardSubscriptionIDs) == 0 {
+		s.logger.Debugw("no forward subscriptions found, skipping limit enforcement",
+			"user_id", userID,
+		)
+		return nil
 	}
 
 	// If any subscription has unlimited traffic (limit = 0), don't enforce
@@ -88,12 +91,24 @@ func (s *TrafficLimitEnforcementService) CheckAndEnforceLimit(ctx context.Contex
 		return nil
 	}
 
-	// Check if traffic exceeds limit
-	// Convert to uint64 for safe comparison (totalTraffic should never be negative)
-	var usedTraffic uint64
-	if totalTraffic > 0 {
-		usedTraffic = uint64(totalTraffic)
+	// Get user's total forward traffic from subscription_usages table
+	usageSummary, err := s.subscriptionUsageRepo.GetTotalUsageBySubscriptionIDs(
+		ctx,
+		subscription.ResourceTypeForwardRule.String(),
+		forwardSubscriptionIDs,
+		time.Time{}, // No time range limit - get all historical usage
+		time.Time{},
+	)
+	if err != nil {
+		s.logger.Errorw("failed to get total traffic for user from subscription_usages",
+			"user_id", userID,
+			"subscription_ids", forwardSubscriptionIDs,
+			"error", err,
+		)
+		return fmt.Errorf("failed to get total traffic: %w", err)
 	}
+
+	usedTraffic := usageSummary.Total
 	if usedTraffic <= trafficLimit {
 		s.logger.Debugw("traffic within limit",
 			"user_id", userID,
@@ -179,7 +194,7 @@ func (s *TrafficLimitEnforcementService) CheckAndEnforceLimit(ctx context.Contex
 	s.logger.Warnw("traffic limit enforcement completed",
 		"user_id", userID,
 		"rules_disabled", disabledCount,
-		"traffic_used", totalTraffic,
+		"traffic_used", usedTraffic,
 		"traffic_limit", trafficLimit,
 	)
 
@@ -226,28 +241,22 @@ func (s *TrafficLimitEnforcementService) OnTrafficUpdate(ctx context.Context, ru
 	return s.CheckAndEnforceLimit(ctx, userID)
 }
 
-// getHighestTrafficLimit returns the highest traffic limit across all subscriptions.
-// Returns (limit, hasLimit, error) where hasLimit is false if any subscription has unlimited traffic.
-func (s *TrafficLimitEnforcementService) getHighestTrafficLimit(ctx context.Context, subscriptions []*subscription.Subscription) (uint64, bool, error) {
+// getHighestTrafficLimitAndIDs returns the highest traffic limit across all Forward-type subscriptions
+// and collects their subscription IDs for traffic query.
+// Returns (limit, hasLimit, subscriptionIDs, error) where hasLimit is false if any subscription has unlimited traffic.
+// Only considers subscriptions with PlanType = "forward".
+func (s *TrafficLimitEnforcementService) getHighestTrafficLimitAndIDs(ctx context.Context, subscriptions []*subscription.Subscription) (uint64, bool, []uint, error) {
 	var highestLimit uint64
 	hasLimit := false
+	var forwardSubscriptionIDs []uint
 
-	// Collect all unique plan IDs
-	planIDs := make([]uint, 0, len(subscriptions))
-	planIDSet := make(map[uint]bool)
+	// Process each subscription
 	for _, sub := range subscriptions {
-		if !planIDSet[sub.PlanID()] {
-			planIDs = append(planIDs, sub.PlanID())
-			planIDSet[sub.PlanID()] = true
-		}
-	}
-
-	// Fetch all plans
-	for _, planID := range planIDs {
-		plan, err := s.planRepo.GetByID(ctx, planID)
+		plan, err := s.planRepo.GetByID(ctx, sub.PlanID())
 		if err != nil {
 			s.logger.Warnw("failed to get plan for subscription",
-				"plan_id", planID,
+				"subscription_id", sub.ID(),
+				"plan_id", sub.PlanID(),
 				"error", err,
 			)
 			continue
@@ -255,24 +264,40 @@ func (s *TrafficLimitEnforcementService) getHighestTrafficLimit(ctx context.Cont
 
 		if plan == nil {
 			s.logger.Warnw("plan not found",
-				"plan_id", planID,
+				"subscription_id", sub.ID(),
+				"plan_id", sub.PlanID(),
 			)
 			continue
 		}
 
-		// Check if plan has unlimited traffic
-		if plan.IsUnlimitedTraffic() {
-			s.logger.Debugw("plan has unlimited traffic",
-				"plan_id", planID,
+		// Only check Forward-type plans for forward traffic limits
+		if !plan.PlanType().IsForward() {
+			s.logger.Debugw("skipping non-forward plan for traffic limit check",
+				"subscription_id", sub.ID(),
+				"plan_id", sub.PlanID(),
+				"plan_type", plan.PlanType().String(),
 			)
-			return 0, false, nil // Unlimited traffic - don't enforce
+			continue
 		}
 
-		// Get the forward traffic limit from plan features
+		// Collect Forward-type subscription ID
+		forwardSubscriptionIDs = append(forwardSubscriptionIDs, sub.ID())
+
+		// Check if plan has unlimited traffic
+		if plan.IsUnlimitedTraffic() {
+			s.logger.Debugw("forward plan has unlimited traffic",
+				"subscription_id", sub.ID(),
+				"plan_id", sub.PlanID(),
+			)
+			return 0, false, forwardSubscriptionIDs, nil // Unlimited traffic - don't enforce
+		}
+
+		// Get the traffic limit from plan features
 		limit, err := s.getForwardTrafficLimit(plan)
 		if err != nil {
-			s.logger.Warnw("failed to get forward traffic limit from plan",
-				"plan_id", planID,
+			s.logger.Warnw("failed to get traffic limit from plan",
+				"subscription_id", sub.ID(),
+				"plan_id", sub.PlanID(),
 				"error", err,
 			)
 			continue
@@ -280,10 +305,11 @@ func (s *TrafficLimitEnforcementService) getHighestTrafficLimit(ctx context.Cont
 
 		// If limit is 0, it means unlimited
 		if limit == 0 {
-			s.logger.Debugw("plan has unlimited forward traffic",
-				"plan_id", planID,
+			s.logger.Debugw("forward plan has unlimited traffic",
+				"subscription_id", sub.ID(),
+				"plan_id", sub.PlanID(),
 			)
-			return 0, false, nil
+			return 0, false, forwardSubscriptionIDs, nil
 		}
 
 		// Track the highest limit
@@ -293,7 +319,7 @@ func (s *TrafficLimitEnforcementService) getHighestTrafficLimit(ctx context.Cont
 		}
 	}
 
-	return highestLimit, hasLimit, nil
+	return highestLimit, hasLimit, forwardSubscriptionIDs, nil
 }
 
 // getForwardTrafficLimit extracts the traffic limit from a plan.

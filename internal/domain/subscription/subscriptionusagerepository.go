@@ -11,6 +11,8 @@ type SubscriptionUsageRepository interface {
 	RecordUsage(ctx context.Context, usage *SubscriptionUsage) error
 	GetUsageStats(ctx context.Context, filter UsageStatsFilter) ([]*SubscriptionUsage, error)
 	GetTotalUsage(ctx context.Context, resourceType string, resourceID uint, from, to time.Time) (*UsageSummary, error)
+	// GetTotalUsageBySubscriptionIDs retrieves total usage for a resource type across multiple subscriptions
+	GetTotalUsageBySubscriptionIDs(ctx context.Context, resourceType string, subscriptionIDs []uint, from, to time.Time) (*UsageSummary, error)
 	AggregateDaily(ctx context.Context, date time.Time) error
 	AggregateMonthly(ctx context.Context, year int, month int) error
 	GetDailyStats(ctx context.Context, resourceType string, resourceID uint, from, to time.Time) ([]*SubscriptionUsage, error)

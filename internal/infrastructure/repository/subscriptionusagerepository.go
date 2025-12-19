@@ -307,6 +307,57 @@ func (r *SubscriptionUsageRepositoryImpl) GetMonthlyStats(ctx context.Context, r
 	return entities, nil
 }
 
+// GetTotalUsageBySubscriptionIDs retrieves total usage for a resource type across multiple subscriptions
+func (r *SubscriptionUsageRepositoryImpl) GetTotalUsageBySubscriptionIDs(ctx context.Context, resourceType string, subscriptionIDs []uint, from, to time.Time) (*subscription.UsageSummary, error) {
+	if len(subscriptionIDs) == 0 {
+		return &subscription.UsageSummary{
+			ResourceType: resourceType,
+			Upload:       0,
+			Download:     0,
+			Total:        0,
+			From:         from,
+			To:           to,
+		}, nil
+	}
+
+	var result struct {
+		TotalUpload   uint64
+		TotalDownload uint64
+		TotalUsage    uint64
+	}
+
+	query := r.db.WithContext(ctx).Model(&models.SubscriptionUsageModel{}).
+		Select("COALESCE(SUM(upload), 0) as total_upload, COALESCE(SUM(download), 0) as total_download, COALESCE(SUM(total), 0) as total_usage").
+		Where("resource_type = ? AND subscription_id IN ?", resourceType, subscriptionIDs)
+
+	if !from.IsZero() {
+		query = query.Where("period >= ?", from)
+	}
+	if !to.IsZero() {
+		query = query.Where("period <= ?", to)
+	}
+
+	if err := query.Scan(&result).Error; err != nil {
+		r.logger.Errorw("failed to get total usage by subscription IDs",
+			"resource_type", resourceType,
+			"subscription_ids_count", len(subscriptionIDs),
+			"error", err,
+		)
+		return nil, fmt.Errorf("failed to get total usage by subscription IDs: %w", err)
+	}
+
+	summary := &subscription.UsageSummary{
+		ResourceType: resourceType,
+		Upload:       result.TotalUpload,
+		Download:     result.TotalDownload,
+		Total:        result.TotalUsage,
+		From:         from,
+		To:           to,
+	}
+
+	return summary, nil
+}
+
 // DeleteOldRecords deletes usage records older than the specified time
 func (r *SubscriptionUsageRepositoryImpl) DeleteOldRecords(ctx context.Context, before time.Time) error {
 	result := r.db.WithContext(ctx).Where("period < ?", before).Delete(&models.SubscriptionUsageModel{})
