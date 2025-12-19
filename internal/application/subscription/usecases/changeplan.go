@@ -24,7 +24,8 @@ const (
 
 type ChangePlanCommand struct {
 	SubscriptionID uint
-	NewPlanID      uint
+	NewPlanID      uint   // Internal plan ID (used if NewPlanSID is empty)
+	NewPlanSID     string // Stripe-style plan SID (takes precedence over NewPlanID)
 	ChangeType     ChangeType
 	EffectiveDate  EffectiveDate
 }
@@ -60,10 +61,27 @@ func (uc *ChangePlanUseCase) Execute(ctx context.Context, cmd ChangePlanCommand)
 		return fmt.Errorf("failed to get old plan: %w", err)
 	}
 
-	newPlan, err := uc.planRepo.GetByID(ctx, cmd.NewPlanID)
-	if err != nil {
-		uc.logger.Errorw("failed to get new plan", "error", err, "plan_id", cmd.NewPlanID)
-		return fmt.Errorf("failed to get new plan: %w", err)
+	// Resolve new plan: prefer SID over internal ID
+	var newPlan *subscription.Plan
+	newPlanID := cmd.NewPlanID
+
+	if cmd.NewPlanSID != "" {
+		newPlan, err = uc.planRepo.GetBySID(ctx, cmd.NewPlanSID)
+		if err != nil {
+			uc.logger.Errorw("failed to get new plan by SID", "error", err, "plan_sid", cmd.NewPlanSID)
+			return fmt.Errorf("failed to get new plan: %w", err)
+		}
+		if newPlan == nil {
+			uc.logger.Warnw("new plan not found by SID", "plan_sid", cmd.NewPlanSID)
+			return fmt.Errorf("new plan not found")
+		}
+		newPlanID = newPlan.ID()
+	} else {
+		newPlan, err = uc.planRepo.GetByID(ctx, cmd.NewPlanID)
+		if err != nil {
+			uc.logger.Errorw("failed to get new plan", "error", err, "plan_id", cmd.NewPlanID)
+			return fmt.Errorf("failed to get new plan: %w", err)
+		}
 	}
 
 	if !newPlan.IsActive() {
@@ -78,7 +96,7 @@ func (uc *ChangePlanUseCase) Execute(ctx context.Context, cmd ChangePlanCommand)
 			metadata = make(map[string]interface{})
 		}
 		metadata["pending_plan_change"] = map[string]interface{}{
-			"new_plan_id":    cmd.NewPlanID,
+			"new_plan_id":    newPlanID,
 			"change_type":    string(cmd.ChangeType),
 			"effective_date": string(cmd.EffectiveDate),
 		}
@@ -86,11 +104,11 @@ func (uc *ChangePlanUseCase) Execute(ctx context.Context, cmd ChangePlanCommand)
 		uc.logger.Infow("plan change scheduled for period end",
 			"subscription_id", cmd.SubscriptionID,
 			"old_plan_id", sub.PlanID(),
-			"new_plan_id", cmd.NewPlanID,
+			"new_plan_id", newPlanID,
 			"change_type", cmd.ChangeType,
 		)
 	} else {
-		if err := uc.applyPlanChange(sub, cmd.NewPlanID, cmd.ChangeType); err != nil {
+		if err := uc.applyPlanChange(sub, newPlanID, cmd.ChangeType); err != nil {
 			uc.logger.Errorw("failed to apply plan change", "error", err)
 			return fmt.Errorf("failed to apply plan change: %w", err)
 		}
@@ -98,7 +116,7 @@ func (uc *ChangePlanUseCase) Execute(ctx context.Context, cmd ChangePlanCommand)
 		uc.logger.Infow("plan changed immediately",
 			"subscription_id", cmd.SubscriptionID,
 			"old_plan_id", oldPlan.ID(),
-			"new_plan_id", cmd.NewPlanID,
+			"new_plan_id", newPlanID,
 			"change_type", cmd.ChangeType,
 		)
 	}

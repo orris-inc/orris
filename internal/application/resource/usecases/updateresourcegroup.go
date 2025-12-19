@@ -28,12 +28,26 @@ func NewUpdateResourceGroupUseCase(repo resource.Repository, planRepo subscripti
 
 // Execute updates a resource group by its internal ID
 func (uc *UpdateResourceGroupUseCase) Execute(ctx context.Context, id uint, req dto.UpdateResourceGroupRequest) (*dto.ResourceGroupResponse, error) {
-	// Get existing resource group
 	group, err := uc.repo.GetByID(ctx, id)
 	if err != nil {
 		uc.logger.Errorw("failed to get resource group", "error", err, "id", id)
 		return nil, fmt.Errorf("failed to get resource group: %w", err)
 	}
+	return uc.executeUpdate(ctx, group, req)
+}
+
+// ExecuteBySID updates a resource group by its Stripe-style SID
+func (uc *UpdateResourceGroupUseCase) ExecuteBySID(ctx context.Context, sid string, req dto.UpdateResourceGroupRequest) (*dto.ResourceGroupResponse, error) {
+	group, err := uc.repo.GetBySID(ctx, sid)
+	if err != nil {
+		uc.logger.Errorw("failed to get resource group by SID", "error", err, "sid", sid)
+		return nil, fmt.Errorf("failed to get resource group: %w", err)
+	}
+	return uc.executeUpdate(ctx, group, req)
+}
+
+// executeUpdate performs the actual update logic
+func (uc *UpdateResourceGroupUseCase) executeUpdate(ctx context.Context, group *resource.ResourceGroup, req dto.UpdateResourceGroupRequest) (*dto.ResourceGroupResponse, error) {
 	if group == nil {
 		return nil, resource.ErrGroupNotFound
 	}
@@ -61,11 +75,11 @@ func (uc *UpdateResourceGroupUseCase) Execute(ctx context.Context, id uint, req 
 
 	// Save changes
 	if err := uc.repo.Update(ctx, group); err != nil {
-		uc.logger.Errorw("failed to update resource group", "error", err, "id", id)
+		uc.logger.Errorw("failed to update resource group", "error", err, "id", group.ID(), "sid", group.SID())
 		return nil, fmt.Errorf("failed to update resource group: %w", err)
 	}
 
-	uc.logger.Infow("resource group updated successfully", "id", id, "sid", group.SID())
+	uc.logger.Infow("resource group updated successfully", "id", group.ID(), "sid", group.SID())
 
 	// Get plan SID
 	planSID := ""

@@ -11,6 +11,7 @@ import (
 	"github.com/orris-inc/orris/internal/application/subscription/usecases"
 	"github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
 	"github.com/orris-inc/orris/internal/shared/constants"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
@@ -57,7 +58,7 @@ func NewSubscriptionHandler(
 
 // CreateSubscriptionRequest represents the request to create a subscription for self
 type CreateSubscriptionRequest struct {
-	PlanID       uint                   `json:"plan_id" binding:"required"`
+	PlanID       string                 `json:"plan_id" binding:"required"` // Stripe-style plan SID (plan_xxx)
 	BillingCycle string                 `json:"billing_cycle" binding:"required,oneof=weekly monthly quarterly semi_annual yearly lifetime"`
 	StartDate    *time.Time             `json:"start_date"`
 	AutoRenew    *bool                  `json:"auto_renew"`
@@ -73,7 +74,7 @@ type UpdateStatusRequest struct {
 
 // ChangePlanRequest represents the request to change subscription plan
 type ChangePlanRequest struct {
-	NewPlanID     uint   `json:"new_plan_id" binding:"required"`
+	NewPlanID     string `json:"new_plan_id" binding:"required"` // Stripe-style plan SID (plan_xxx)
 	ChangeType    string `json:"change_type" binding:"required,oneof=upgrade downgrade"`
 	EffectiveDate string `json:"effective_date" binding:"required,oneof=immediate period_end"`
 }
@@ -108,9 +109,16 @@ func (h *SubscriptionHandler) CreateSubscription(c *gin.Context) {
 		startDate = *req.StartDate
 	}
 
+	// Validate plan SID format
+	if err := id.ValidatePrefix(req.PlanID, id.PrefixPlan); err != nil {
+		h.logger.Warnw("invalid plan ID format", "plan_id", req.PlanID, "error", err)
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid plan ID format, expected plan_xxxxx")
+		return
+	}
+
 	cmd := usecases.CreateSubscriptionCommand{
 		UserID:       userID.(uint),
-		PlanID:       req.PlanID,
+		PlanSID:      req.PlanID,
 		BillingCycle: req.BillingCycle,
 		StartDate:    startDate,
 		AutoRenew:    autoRenew,
@@ -134,12 +142,21 @@ func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 	// Ownership already verified by middleware, subscription stored in context
 	subscriptionID, exists := c.Get("subscription_id")
 	if !exists {
-		subscriptionID64, err := strconv.ParseUint(c.Param("id"), 10, 64)
-		if err != nil {
-			utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID")
+		// Fallback: parse SID from URL parameter
+		sidStr := c.Param("id")
+		if err := id.ValidatePrefix(sidStr, id.PrefixSubscription); err != nil {
+			utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID format, expected sub_xxxxx")
 			return
 		}
-		subscriptionID = uint(subscriptionID64)
+		// Use SID-based query
+		subscription, err := h.getUseCase.ExecuteBySID(c.Request.Context(), sidStr)
+		if err != nil {
+			h.logger.Errorw("failed to get subscription by SID", "error", err, "subscription_sid", sidStr)
+			utils.ErrorResponseWithError(c, err)
+			return
+		}
+		utils.SuccessResponse(c, http.StatusOK, "", subscription)
+		return
 	}
 
 	query := usecases.GetSubscriptionQuery{
@@ -204,12 +221,16 @@ func (h *SubscriptionHandler) UpdateStatus(c *gin.Context) {
 	// Ownership already verified by middleware
 	subscriptionID, exists := c.Get("subscription_id")
 	if !exists {
-		subscriptionID64, err := strconv.ParseUint(c.Param("id"), 10, 64)
-		if err != nil {
-			utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID")
+		// Fallback: parse SID from URL parameter
+		sidStr := c.Param("id")
+		if err := id.ValidatePrefix(sidStr, id.PrefixSubscription); err != nil {
+			utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID format, expected sub_xxxxx")
 			return
 		}
-		subscriptionID = uint(subscriptionID64)
+		// We need to resolve the internal ID from SID for the use case
+		h.logger.Warnw("subscription ownership middleware not applied, falling back to SID resolution", "sid", sidStr)
+		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error: ownership middleware required")
+		return
 	}
 
 	var req UpdateStatusRequest
@@ -257,12 +278,15 @@ func (h *SubscriptionHandler) ChangePlan(c *gin.Context) {
 	// Ownership already verified by middleware
 	subscriptionID, exists := c.Get("subscription_id")
 	if !exists {
-		subscriptionID64, err := strconv.ParseUint(c.Param("id"), 10, 64)
-		if err != nil {
-			utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID")
+		// Fallback: parse SID from URL parameter
+		sidStr := c.Param("id")
+		if err := id.ValidatePrefix(sidStr, id.PrefixSubscription); err != nil {
+			utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID format, expected sub_xxxxx")
 			return
 		}
-		subscriptionID = uint(subscriptionID64)
+		h.logger.Warnw("subscription ownership middleware not applied, falling back to SID resolution", "sid", sidStr)
+		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error: ownership middleware required")
+		return
 	}
 
 	var req ChangePlanRequest
@@ -272,9 +296,16 @@ func (h *SubscriptionHandler) ChangePlan(c *gin.Context) {
 		return
 	}
 
+	// Validate new plan SID format
+	if err := id.ValidatePrefix(req.NewPlanID, id.PrefixPlan); err != nil {
+		h.logger.Warnw("invalid new plan ID format", "new_plan_id", req.NewPlanID, "error", err)
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid new_plan_id format, expected plan_xxxxx")
+		return
+	}
+
 	cmd := usecases.ChangePlanCommand{
 		SubscriptionID: subscriptionID.(uint),
-		NewPlanID:      req.NewPlanID,
+		NewPlanSID:     req.NewPlanID,
 		ChangeType:     usecases.ChangeType(req.ChangeType),
 		EffectiveDate:  usecases.EffectiveDate(req.EffectiveDate),
 	}
@@ -293,12 +324,15 @@ func (h *SubscriptionHandler) GetTrafficStats(c *gin.Context) {
 	// Ownership already verified by middleware
 	subscriptionID, exists := c.Get("subscription_id")
 	if !exists {
-		subscriptionID64, err := strconv.ParseUint(c.Param("id"), 10, 64)
-		if err != nil {
-			utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID")
+		// Fallback: parse SID from URL parameter
+		sidStr := c.Param("id")
+		if err := id.ValidatePrefix(sidStr, id.PrefixSubscription); err != nil {
+			utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID format, expected sub_xxxxx")
 			return
 		}
-		subscriptionID = uint(subscriptionID64)
+		h.logger.Warnw("subscription ownership middleware not applied, falling back to SID resolution", "sid", sidStr)
+		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error: ownership middleware required")
+		return
 	}
 
 	// Parse query parameters
@@ -363,12 +397,15 @@ func (h *SubscriptionHandler) ResetLink(c *gin.Context) {
 	// Ownership already verified by middleware
 	subscriptionID, exists := c.Get("subscription_id")
 	if !exists {
-		subscriptionID64, err := strconv.ParseUint(c.Param("id"), 10, 64)
-		if err != nil {
-			utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID")
+		// Fallback: parse SID from URL parameter
+		sidStr := c.Param("id")
+		if err := id.ValidatePrefix(sidStr, id.PrefixSubscription); err != nil {
+			utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID format, expected sub_xxxxx")
 			return
 		}
-		subscriptionID = uint(subscriptionID64)
+		h.logger.Warnw("subscription ownership middleware not applied, falling back to SID resolution", "sid", sidStr)
+		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error: ownership middleware required")
+		return
 	}
 
 	cmd := usecases.ResetSubscriptionLinkCommand{

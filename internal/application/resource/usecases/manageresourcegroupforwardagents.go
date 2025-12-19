@@ -35,14 +35,28 @@ func NewManageResourceGroupForwardAgentsUseCase(
 	}
 }
 
-// AddAgents adds forward agents to a resource group
+// AddAgents adds forward agents to a resource group by internal ID
 func (uc *ManageResourceGroupForwardAgentsUseCase) AddAgents(ctx context.Context, groupID uint, agentSIDs []string) (*dto.BatchOperationResult, error) {
-	// Verify the resource group exists
 	group, err := uc.resourceGroupRepo.GetByID(ctx, groupID)
 	if err != nil {
 		uc.logger.Errorw("failed to get resource group", "error", err, "group_id", groupID)
 		return nil, fmt.Errorf("failed to get resource group: %w", err)
 	}
+	return uc.executeAddAgents(ctx, group, agentSIDs)
+}
+
+// AddAgentsBySID adds forward agents to a resource group by Stripe-style SID
+func (uc *ManageResourceGroupForwardAgentsUseCase) AddAgentsBySID(ctx context.Context, groupSID string, agentSIDs []string) (*dto.BatchOperationResult, error) {
+	group, err := uc.resourceGroupRepo.GetBySID(ctx, groupSID)
+	if err != nil {
+		uc.logger.Errorw("failed to get resource group by SID", "error", err, "group_sid", groupSID)
+		return nil, fmt.Errorf("failed to get resource group: %w", err)
+	}
+	return uc.executeAddAgents(ctx, group, agentSIDs)
+}
+
+// executeAddAgents performs the actual add agents logic
+func (uc *ManageResourceGroupForwardAgentsUseCase) executeAddAgents(ctx context.Context, group *resource.ResourceGroup, agentSIDs []string) (*dto.BatchOperationResult, error) {
 	if group == nil {
 		return nil, resource.ErrGroupNotFound
 	}
@@ -58,7 +72,7 @@ func (uc *ManageResourceGroupForwardAgentsUseCase) AddAgents(ctx context.Context
 	}
 	if !plan.PlanType().IsForward() {
 		uc.logger.Warnw("attempted to add forward agents to non-forward plan resource group",
-			"group_id", groupID,
+			"group_id", group.ID(),
 			"plan_id", group.PlanID(),
 			"plan_type", plan.PlanType().String())
 		return nil, resource.ErrGroupPlanTypeMismatchForward
@@ -69,6 +83,7 @@ func (uc *ManageResourceGroupForwardAgentsUseCase) AddAgents(ctx context.Context
 		Failed:    make([]dto.BatchOperationErr, 0),
 	}
 
+	groupID := group.ID()
 	for _, agentSID := range agentSIDs {
 		// Validate the SID format (fa_xxx)
 		if err := id.ValidatePrefix(agentSID, id.PrefixForwardAgent); err != nil {
@@ -121,20 +136,35 @@ func (uc *ManageResourceGroupForwardAgentsUseCase) AddAgents(ctx context.Context
 
 	uc.logger.Infow("added forward agents to resource group",
 		"group_id", groupID,
+		"group_sid", group.SID(),
 		"succeeded_count", len(result.Succeeded),
 		"failed_count", len(result.Failed))
 
 	return result, nil
 }
 
-// RemoveAgents removes forward agents from a resource group
+// RemoveAgents removes forward agents from a resource group by internal ID
 func (uc *ManageResourceGroupForwardAgentsUseCase) RemoveAgents(ctx context.Context, groupID uint, agentSIDs []string) (*dto.BatchOperationResult, error) {
-	// Verify the resource group exists
 	group, err := uc.resourceGroupRepo.GetByID(ctx, groupID)
 	if err != nil {
 		uc.logger.Errorw("failed to get resource group", "error", err, "group_id", groupID)
 		return nil, fmt.Errorf("failed to get resource group: %w", err)
 	}
+	return uc.executeRemoveAgents(ctx, group, agentSIDs)
+}
+
+// RemoveAgentsBySID removes forward agents from a resource group by Stripe-style SID
+func (uc *ManageResourceGroupForwardAgentsUseCase) RemoveAgentsBySID(ctx context.Context, groupSID string, agentSIDs []string) (*dto.BatchOperationResult, error) {
+	group, err := uc.resourceGroupRepo.GetBySID(ctx, groupSID)
+	if err != nil {
+		uc.logger.Errorw("failed to get resource group by SID", "error", err, "group_sid", groupSID)
+		return nil, fmt.Errorf("failed to get resource group: %w", err)
+	}
+	return uc.executeRemoveAgents(ctx, group, agentSIDs)
+}
+
+// executeRemoveAgents performs the actual remove agents logic
+func (uc *ManageResourceGroupForwardAgentsUseCase) executeRemoveAgents(ctx context.Context, group *resource.ResourceGroup, agentSIDs []string) (*dto.BatchOperationResult, error) {
 	if group == nil {
 		return nil, resource.ErrGroupNotFound
 	}
@@ -144,6 +174,7 @@ func (uc *ManageResourceGroupForwardAgentsUseCase) RemoveAgents(ctx context.Cont
 		Failed:    make([]dto.BatchOperationErr, 0),
 	}
 
+	groupID := group.ID()
 	for _, agentSID := range agentSIDs {
 		// Validate the SID format (fa_xxx)
 		if err := id.ValidatePrefix(agentSID, id.PrefixForwardAgent); err != nil {
@@ -197,20 +228,35 @@ func (uc *ManageResourceGroupForwardAgentsUseCase) RemoveAgents(ctx context.Cont
 
 	uc.logger.Infow("removed forward agents from resource group",
 		"group_id", groupID,
+		"group_sid", group.SID(),
 		"succeeded_count", len(result.Succeeded),
 		"failed_count", len(result.Failed))
 
 	return result, nil
 }
 
-// ListAgents lists all forward agents in a resource group with pagination
+// ListAgents lists all forward agents in a resource group with pagination by internal ID
 func (uc *ManageResourceGroupForwardAgentsUseCase) ListAgents(ctx context.Context, groupID uint, page, pageSize int) (*dto.ListGroupForwardAgentsResponse, error) {
-	// Verify the resource group exists
 	group, err := uc.resourceGroupRepo.GetByID(ctx, groupID)
 	if err != nil {
 		uc.logger.Errorw("failed to get resource group", "error", err, "group_id", groupID)
 		return nil, fmt.Errorf("failed to get resource group: %w", err)
 	}
+	return uc.executeListAgents(ctx, group, page, pageSize)
+}
+
+// ListAgentsBySID lists all forward agents in a resource group with pagination by Stripe-style SID
+func (uc *ManageResourceGroupForwardAgentsUseCase) ListAgentsBySID(ctx context.Context, groupSID string, page, pageSize int) (*dto.ListGroupForwardAgentsResponse, error) {
+	group, err := uc.resourceGroupRepo.GetBySID(ctx, groupSID)
+	if err != nil {
+		uc.logger.Errorw("failed to get resource group by SID", "error", err, "group_sid", groupSID)
+		return nil, fmt.Errorf("failed to get resource group: %w", err)
+	}
+	return uc.executeListAgents(ctx, group, page, pageSize)
+}
+
+// executeListAgents performs the actual list agents logic
+func (uc *ManageResourceGroupForwardAgentsUseCase) executeListAgents(ctx context.Context, group *resource.ResourceGroup, page, pageSize int) (*dto.ListGroupForwardAgentsResponse, error) {
 	if group == nil {
 		return nil, resource.ErrGroupNotFound
 	}
@@ -219,12 +265,12 @@ func (uc *ManageResourceGroupForwardAgentsUseCase) ListAgents(ctx context.Contex
 	filter := forward.AgentListFilter{
 		Page:     page,
 		PageSize: pageSize,
-		GroupIDs: []uint{groupID},
+		GroupIDs: []uint{group.ID()},
 	}
 
 	agents, total, err := uc.agentRepo.List(ctx, filter)
 	if err != nil {
-		uc.logger.Errorw("failed to list forward agents", "error", err, "group_id", groupID)
+		uc.logger.Errorw("failed to list forward agents", "error", err, "group_id", group.ID())
 		return nil, fmt.Errorf("failed to list forward agents: %w", err)
 	}
 

@@ -34,17 +34,33 @@ func NewManageResourceGroupNodesUseCase(
 	}
 }
 
-// AddNodes adds nodes to a resource group
+// AddNodes adds nodes to a resource group by its internal ID
 func (uc *ManageResourceGroupNodesUseCase) AddNodes(ctx context.Context, groupID uint, nodeSIDs []string) (*dto.BatchOperationResult, error) {
-	// Verify the resource group exists
 	group, err := uc.resourceGroupRepo.GetByID(ctx, groupID)
 	if err != nil {
 		uc.logger.Errorw("failed to get resource group", "error", err, "group_id", groupID)
 		return nil, fmt.Errorf("failed to get resource group: %w", err)
 	}
+	return uc.executeAddNodes(ctx, group, nodeSIDs)
+}
+
+// AddNodesBySID adds nodes to a resource group by its Stripe-style SID
+func (uc *ManageResourceGroupNodesUseCase) AddNodesBySID(ctx context.Context, groupSID string, nodeSIDs []string) (*dto.BatchOperationResult, error) {
+	group, err := uc.resourceGroupRepo.GetBySID(ctx, groupSID)
+	if err != nil {
+		uc.logger.Errorw("failed to get resource group by SID", "error", err, "group_sid", groupSID)
+		return nil, fmt.Errorf("failed to get resource group: %w", err)
+	}
+	return uc.executeAddNodes(ctx, group, nodeSIDs)
+}
+
+// executeAddNodes performs the actual add nodes logic
+func (uc *ManageResourceGroupNodesUseCase) executeAddNodes(ctx context.Context, group *resource.ResourceGroup, nodeSIDs []string) (*dto.BatchOperationResult, error) {
 	if group == nil {
 		return nil, resource.ErrGroupNotFound
 	}
+
+	groupID := group.ID()
 
 	// Verify the plan type is node
 	plan, err := uc.planRepo.GetByID(ctx, group.PlanID())
@@ -110,23 +126,40 @@ func (uc *ManageResourceGroupNodesUseCase) AddNodes(ctx context.Context, groupID
 
 	uc.logger.Infow("added nodes to resource group",
 		"group_id", groupID,
+		"group_sid", group.SID(),
 		"succeeded_count", len(result.Succeeded),
 		"failed_count", len(result.Failed))
 
 	return result, nil
 }
 
-// RemoveNodes removes nodes from a resource group
+// RemoveNodes removes nodes from a resource group by its internal ID
 func (uc *ManageResourceGroupNodesUseCase) RemoveNodes(ctx context.Context, groupID uint, nodeSIDs []string) (*dto.BatchOperationResult, error) {
-	// Verify the resource group exists
 	group, err := uc.resourceGroupRepo.GetByID(ctx, groupID)
 	if err != nil {
 		uc.logger.Errorw("failed to get resource group", "error", err, "group_id", groupID)
 		return nil, fmt.Errorf("failed to get resource group: %w", err)
 	}
+	return uc.executeRemoveNodes(ctx, group, nodeSIDs)
+}
+
+// RemoveNodesBySID removes nodes from a resource group by its Stripe-style SID
+func (uc *ManageResourceGroupNodesUseCase) RemoveNodesBySID(ctx context.Context, groupSID string, nodeSIDs []string) (*dto.BatchOperationResult, error) {
+	group, err := uc.resourceGroupRepo.GetBySID(ctx, groupSID)
+	if err != nil {
+		uc.logger.Errorw("failed to get resource group by SID", "error", err, "group_sid", groupSID)
+		return nil, fmt.Errorf("failed to get resource group: %w", err)
+	}
+	return uc.executeRemoveNodes(ctx, group, nodeSIDs)
+}
+
+// executeRemoveNodes performs the actual remove nodes logic
+func (uc *ManageResourceGroupNodesUseCase) executeRemoveNodes(ctx context.Context, group *resource.ResourceGroup, nodeSIDs []string) (*dto.BatchOperationResult, error) {
 	if group == nil {
 		return nil, resource.ErrGroupNotFound
 	}
+
+	groupID := group.ID()
 
 	result := &dto.BatchOperationResult{
 		Succeeded: make([]string, 0),
@@ -177,23 +210,40 @@ func (uc *ManageResourceGroupNodesUseCase) RemoveNodes(ctx context.Context, grou
 
 	uc.logger.Infow("removed nodes from resource group",
 		"group_id", groupID,
+		"group_sid", group.SID(),
 		"succeeded_count", len(result.Succeeded),
 		"failed_count", len(result.Failed))
 
 	return result, nil
 }
 
-// ListNodes lists all nodes in a resource group with pagination
+// ListNodes lists all nodes in a resource group with pagination by its internal ID
 func (uc *ManageResourceGroupNodesUseCase) ListNodes(ctx context.Context, groupID uint, page, pageSize int) (*dto.ListGroupNodesResponse, error) {
-	// Verify the resource group exists
 	group, err := uc.resourceGroupRepo.GetByID(ctx, groupID)
 	if err != nil {
 		uc.logger.Errorw("failed to get resource group", "error", err, "group_id", groupID)
 		return nil, fmt.Errorf("failed to get resource group: %w", err)
 	}
+	return uc.executeListNodes(ctx, group, page, pageSize)
+}
+
+// ListNodesBySID lists all nodes in a resource group with pagination by its Stripe-style SID
+func (uc *ManageResourceGroupNodesUseCase) ListNodesBySID(ctx context.Context, groupSID string, page, pageSize int) (*dto.ListGroupNodesResponse, error) {
+	group, err := uc.resourceGroupRepo.GetBySID(ctx, groupSID)
+	if err != nil {
+		uc.logger.Errorw("failed to get resource group by SID", "error", err, "group_sid", groupSID)
+		return nil, fmt.Errorf("failed to get resource group: %w", err)
+	}
+	return uc.executeListNodes(ctx, group, page, pageSize)
+}
+
+// executeListNodes performs the actual list nodes logic
+func (uc *ManageResourceGroupNodesUseCase) executeListNodes(ctx context.Context, group *resource.ResourceGroup, page, pageSize int) (*dto.ListGroupNodesResponse, error) {
 	if group == nil {
 		return nil, resource.ErrGroupNotFound
 	}
+
+	groupID := group.ID()
 
 	// List nodes with group filter
 	filter := node.NodeFilter{

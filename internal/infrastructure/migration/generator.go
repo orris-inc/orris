@@ -150,17 +150,35 @@ func (g *Generator) generateUserTableUpMigration() string {
 
 CREATE TABLE IF NOT EXISTS users (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    sid VARCHAR(50) NOT NULL UNIQUE,
     email VARCHAR(255) NOT NULL UNIQUE,
     name VARCHAR(100) NOT NULL,
-    phone VARCHAR(20),
+    role VARCHAR(20) NOT NULL DEFAULT 'user',
+    avatar_url VARCHAR(500),
+    email_verified BOOLEAN DEFAULT FALSE,
+    locale VARCHAR(10) DEFAULT 'en',
+    password_hash VARCHAR(255),
+    email_verification_token VARCHAR(255),
+    email_verification_expires_at TIMESTAMP NULL,
+    password_reset_token VARCHAR(255),
+    password_reset_expires_at TIMESTAMP NULL,
+    last_password_change_at TIMESTAMP NULL,
+    failed_login_attempts INT UNSIGNED DEFAULT 0,
+    locked_until TIMESTAMP NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'active',
+    version INT NOT NULL DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP NULL,
+    INDEX idx_users_sid (sid),
     INDEX idx_users_email (email),
+    INDEX idx_users_role (role),
     INDEX idx_users_status (status),
-    INDEX idx_users_deleted_at (deleted_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    INDEX idx_users_deleted_at (deleted_at),
+    INDEX idx_email_verified (email_verified),
+    INDEX idx_password_reset_token (password_reset_token),
+    INDEX idx_email_verification_token (email_verification_token)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 `
 }
 

@@ -723,7 +723,6 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		adminResourceGroups.POST("", r.adminResourceGroupHandler.Create)
 		adminResourceGroups.GET("", r.adminResourceGroupHandler.List)
 		adminResourceGroups.GET("/:id", r.adminResourceGroupHandler.Get)
-		adminResourceGroups.GET("/sid/:sid", r.adminResourceGroupHandler.GetBySID)
 		adminResourceGroups.PATCH("/:id", r.adminResourceGroupHandler.Update)
 		adminResourceGroups.DELETE("/:id", r.adminResourceGroupHandler.Delete)
 		adminResourceGroups.POST("/:id/activate", r.adminResourceGroupHandler.Activate)

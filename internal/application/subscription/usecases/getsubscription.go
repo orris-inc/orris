@@ -57,3 +57,29 @@ func (uc *GetSubscriptionUseCase) Execute(ctx context.Context, query GetSubscrip
 
 	return result, nil
 }
+
+// ExecuteBySID retrieves a subscription by its Stripe-style SID
+func (uc *GetSubscriptionUseCase) ExecuteBySID(ctx context.Context, sid string) (*dto.SubscriptionDTO, error) {
+	sub, err := uc.subscriptionRepo.GetBySID(ctx, sid)
+	if err != nil {
+		uc.logger.Errorw("failed to get subscription by SID", "error", err, "subscription_sid", sid)
+		return nil, fmt.Errorf("failed to get subscription: %w", err)
+	}
+
+	plan, err := uc.planRepo.GetByID(ctx, sub.PlanID())
+	if err != nil {
+		uc.logger.Errorw("failed to get subscription plan", "error", err, "plan_id", sub.PlanID())
+		return nil, fmt.Errorf("failed to get subscription plan: %w", err)
+	}
+
+	result := dto.ToSubscriptionDTO(sub, plan, uc.baseURL)
+
+	uc.logger.Debugw("subscription retrieved successfully by SID",
+		"subscription_sid", sid,
+		"subscription_id", sub.ID(),
+		"user_id", sub.UserID(),
+		"status", sub.Status(),
+	)
+
+	return result, nil
+}

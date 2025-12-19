@@ -13,6 +13,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/resource"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/shared/constants"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
@@ -158,33 +159,11 @@ func (h *ResourceGroupHandler) List(c *gin.Context) {
 	utils.ListSuccessResponse(c, result.Items, int64(result.Total), result.Page, result.PageSize)
 }
 
-// Get retrieves a resource group by ID
+// Get retrieves a resource group by SID (Stripe-style ID: rg_xxx)
 func (h *ResourceGroupHandler) Get(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID")
-		return
-	}
-
-	result, err := h.getUseCase.ExecuteByID(c.Request.Context(), uint(id))
-	if err != nil {
-		if err == resource.ErrGroupNotFound {
-			utils.ErrorResponse(c, http.StatusNotFound, "resource group not found")
-			return
-		}
-		h.logger.Errorw("failed to get resource group", "error", err, "id", id)
-		utils.ErrorResponseWithError(c, err)
-		return
-	}
-
-	utils.SuccessResponse(c, http.StatusOK, "", result)
-}
-
-// GetBySID retrieves a resource group by Stripe-style ID
-func (h *ResourceGroupHandler) GetBySID(c *gin.Context) {
-	sid := c.Param("sid")
-	if sid == "" {
-		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group SID")
+	sid := c.Param("id")
+	if err := id.ValidatePrefix(sid, id.PrefixResourceGroup); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID format, expected rg_xxxxx")
 		return
 	}
 
@@ -194,7 +173,7 @@ func (h *ResourceGroupHandler) GetBySID(c *gin.Context) {
 			utils.ErrorResponse(c, http.StatusNotFound, "resource group not found")
 			return
 		}
-		h.logger.Errorw("failed to get resource group by SID", "error", err, "sid", sid)
+		h.logger.Errorw("failed to get resource group", "error", err, "sid", sid)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
@@ -202,11 +181,11 @@ func (h *ResourceGroupHandler) GetBySID(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "", result)
 }
 
-// Update updates a resource group
+// Update updates a resource group by SID (Stripe-style ID: rg_xxx)
 func (h *ResourceGroupHandler) Update(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID")
+	sid := c.Param("id")
+	if err := id.ValidatePrefix(sid, id.PrefixResourceGroup); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID format, expected rg_xxxxx")
 		return
 	}
 
@@ -222,7 +201,7 @@ func (h *ResourceGroupHandler) Update(c *gin.Context) {
 		Description: req.Description,
 	}
 
-	result, err := h.updateUseCase.Execute(c.Request.Context(), uint(id), dtoReq)
+	result, err := h.updateUseCase.ExecuteBySID(c.Request.Context(), sid, dtoReq)
 	if err != nil {
 		if err == resource.ErrGroupNotFound {
 			utils.ErrorResponse(c, http.StatusNotFound, "resource group not found")
@@ -232,7 +211,7 @@ func (h *ResourceGroupHandler) Update(c *gin.Context) {
 			utils.ErrorResponse(c, http.StatusConflict, "resource group name already exists")
 			return
 		}
-		h.logger.Errorw("failed to update resource group", "error", err, "id", id)
+		h.logger.Errorw("failed to update resource group", "error", err, "sid", sid)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
@@ -240,15 +219,15 @@ func (h *ResourceGroupHandler) Update(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "Resource group updated successfully", result)
 }
 
-// Delete deletes a resource group
+// Delete deletes a resource group by SID (Stripe-style ID: rg_xxx)
 func (h *ResourceGroupHandler) Delete(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID")
+	sid := c.Param("id")
+	if err := id.ValidatePrefix(sid, id.PrefixResourceGroup); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID format, expected rg_xxxxx")
 		return
 	}
 
-	if err := h.deleteUseCase.Execute(c.Request.Context(), uint(id)); err != nil {
+	if err := h.deleteUseCase.ExecuteBySID(c.Request.Context(), sid); err != nil {
 		if err == resource.ErrGroupNotFound {
 			utils.ErrorResponse(c, http.StatusNotFound, "resource group not found")
 			return
@@ -257,7 +236,7 @@ func (h *ResourceGroupHandler) Delete(c *gin.Context) {
 			utils.ErrorResponse(c, http.StatusConflict, "resource group has associated resources")
 			return
 		}
-		h.logger.Errorw("failed to delete resource group", "error", err, "id", id)
+		h.logger.Errorw("failed to delete resource group", "error", err, "sid", sid)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
@@ -265,21 +244,21 @@ func (h *ResourceGroupHandler) Delete(c *gin.Context) {
 	utils.NoContentResponse(c)
 }
 
-// Activate activates a resource group
+// Activate activates a resource group by SID (Stripe-style ID: rg_xxx)
 func (h *ResourceGroupHandler) Activate(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID")
+	sid := c.Param("id")
+	if err := id.ValidatePrefix(sid, id.PrefixResourceGroup); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID format, expected rg_xxxxx")
 		return
 	}
 
-	result, err := h.updateStatusUseCase.Activate(c.Request.Context(), uint(id))
+	result, err := h.updateStatusUseCase.ActivateBySID(c.Request.Context(), sid)
 	if err != nil {
 		if err == resource.ErrGroupNotFound {
 			utils.ErrorResponse(c, http.StatusNotFound, "resource group not found")
 			return
 		}
-		h.logger.Errorw("failed to activate resource group", "error", err, "id", id)
+		h.logger.Errorw("failed to activate resource group", "error", err, "sid", sid)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
@@ -287,21 +266,21 @@ func (h *ResourceGroupHandler) Activate(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "Resource group activated successfully", result)
 }
 
-// Deactivate deactivates a resource group
+// Deactivate deactivates a resource group by SID (Stripe-style ID: rg_xxx)
 func (h *ResourceGroupHandler) Deactivate(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID")
+	sid := c.Param("id")
+	if err := id.ValidatePrefix(sid, id.PrefixResourceGroup); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID format, expected rg_xxxxx")
 		return
 	}
 
-	result, err := h.updateStatusUseCase.Deactivate(c.Request.Context(), uint(id))
+	result, err := h.updateStatusUseCase.DeactivateBySID(c.Request.Context(), sid)
 	if err != nil {
 		if err == resource.ErrGroupNotFound {
 			utils.ErrorResponse(c, http.StatusNotFound, "resource group not found")
 			return
 		}
-		h.logger.Errorw("failed to deactivate resource group", "error", err, "id", id)
+		h.logger.Errorw("failed to deactivate resource group", "error", err, "sid", sid)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
@@ -309,11 +288,11 @@ func (h *ResourceGroupHandler) Deactivate(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "Resource group deactivated successfully", result)
 }
 
-// AddNodes adds nodes to a resource group
+// AddNodes adds nodes to a resource group by SID (Stripe-style ID: rg_xxx)
 func (h *ResourceGroupHandler) AddNodes(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID")
+	sid := c.Param("id")
+	if err := id.ValidatePrefix(sid, id.PrefixResourceGroup); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID format, expected rg_xxxxx")
 		return
 	}
 
@@ -324,13 +303,13 @@ func (h *ResourceGroupHandler) AddNodes(c *gin.Context) {
 		return
 	}
 
-	result, err := h.manageNodesUseCase.AddNodes(c.Request.Context(), uint(id), req.NodeSIDs)
+	result, err := h.manageNodesUseCase.AddNodesBySID(c.Request.Context(), sid, req.NodeSIDs)
 	if err != nil {
 		if err == resource.ErrGroupNotFound {
 			utils.ErrorResponse(c, http.StatusNotFound, "resource group not found")
 			return
 		}
-		h.logger.Errorw("failed to add nodes to resource group", "error", err, "id", id)
+		h.logger.Errorw("failed to add nodes to resource group", "error", err, "sid", sid)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
@@ -338,11 +317,11 @@ func (h *ResourceGroupHandler) AddNodes(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "Nodes added to resource group", result)
 }
 
-// RemoveNodes removes nodes from a resource group
+// RemoveNodes removes nodes from a resource group by SID (Stripe-style ID: rg_xxx)
 func (h *ResourceGroupHandler) RemoveNodes(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID")
+	sid := c.Param("id")
+	if err := id.ValidatePrefix(sid, id.PrefixResourceGroup); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID format, expected rg_xxxxx")
 		return
 	}
 
@@ -353,13 +332,13 @@ func (h *ResourceGroupHandler) RemoveNodes(c *gin.Context) {
 		return
 	}
 
-	result, err := h.manageNodesUseCase.RemoveNodes(c.Request.Context(), uint(id), req.NodeSIDs)
+	result, err := h.manageNodesUseCase.RemoveNodesBySID(c.Request.Context(), sid, req.NodeSIDs)
 	if err != nil {
 		if err == resource.ErrGroupNotFound {
 			utils.ErrorResponse(c, http.StatusNotFound, "resource group not found")
 			return
 		}
-		h.logger.Errorw("failed to remove nodes from resource group", "error", err, "id", id)
+		h.logger.Errorw("failed to remove nodes from resource group", "error", err, "sid", sid)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
@@ -367,11 +346,11 @@ func (h *ResourceGroupHandler) RemoveNodes(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "Nodes removed from resource group", result)
 }
 
-// ListNodes lists all nodes in a resource group
+// ListNodes lists all nodes in a resource group by SID (Stripe-style ID: rg_xxx)
 func (h *ResourceGroupHandler) ListNodes(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID")
+	sid := c.Param("id")
+	if err := id.ValidatePrefix(sid, id.PrefixResourceGroup); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID format, expected rg_xxxxx")
 		return
 	}
 
@@ -389,13 +368,13 @@ func (h *ResourceGroupHandler) ListNodes(c *gin.Context) {
 		}
 	}
 
-	result, err := h.manageNodesUseCase.ListNodes(c.Request.Context(), uint(id), page, pageSize)
+	result, err := h.manageNodesUseCase.ListNodesBySID(c.Request.Context(), sid, page, pageSize)
 	if err != nil {
 		if err == resource.ErrGroupNotFound {
 			utils.ErrorResponse(c, http.StatusNotFound, "resource group not found")
 			return
 		}
-		h.logger.Errorw("failed to list nodes in resource group", "error", err, "id", id)
+		h.logger.Errorw("failed to list nodes in resource group", "error", err, "sid", sid)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
@@ -403,11 +382,11 @@ func (h *ResourceGroupHandler) ListNodes(c *gin.Context) {
 	utils.ListSuccessResponse(c, result.Items, result.Total, result.Page, result.PageSize)
 }
 
-// AddForwardAgents adds forward agents to a resource group
+// AddForwardAgents adds forward agents to a resource group by SID (Stripe-style ID: rg_xxx)
 func (h *ResourceGroupHandler) AddForwardAgents(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID")
+	sid := c.Param("id")
+	if err := id.ValidatePrefix(sid, id.PrefixResourceGroup); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID format, expected rg_xxxxx")
 		return
 	}
 
@@ -418,13 +397,13 @@ func (h *ResourceGroupHandler) AddForwardAgents(c *gin.Context) {
 		return
 	}
 
-	result, err := h.manageAgentsUseCase.AddAgents(c.Request.Context(), uint(id), req.AgentSIDs)
+	result, err := h.manageAgentsUseCase.AddAgentsBySID(c.Request.Context(), sid, req.AgentSIDs)
 	if err != nil {
 		if err == resource.ErrGroupNotFound {
 			utils.ErrorResponse(c, http.StatusNotFound, "resource group not found")
 			return
 		}
-		h.logger.Errorw("failed to add forward agents to resource group", "error", err, "id", id)
+		h.logger.Errorw("failed to add forward agents to resource group", "error", err, "sid", sid)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
@@ -432,11 +411,11 @@ func (h *ResourceGroupHandler) AddForwardAgents(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "Forward agents added to resource group", result)
 }
 
-// RemoveForwardAgents removes forward agents from a resource group
+// RemoveForwardAgents removes forward agents from a resource group by SID (Stripe-style ID: rg_xxx)
 func (h *ResourceGroupHandler) RemoveForwardAgents(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID")
+	sid := c.Param("id")
+	if err := id.ValidatePrefix(sid, id.PrefixResourceGroup); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID format, expected rg_xxxxx")
 		return
 	}
 
@@ -447,13 +426,13 @@ func (h *ResourceGroupHandler) RemoveForwardAgents(c *gin.Context) {
 		return
 	}
 
-	result, err := h.manageAgentsUseCase.RemoveAgents(c.Request.Context(), uint(id), req.AgentSIDs)
+	result, err := h.manageAgentsUseCase.RemoveAgentsBySID(c.Request.Context(), sid, req.AgentSIDs)
 	if err != nil {
 		if err == resource.ErrGroupNotFound {
 			utils.ErrorResponse(c, http.StatusNotFound, "resource group not found")
 			return
 		}
-		h.logger.Errorw("failed to remove forward agents from resource group", "error", err, "id", id)
+		h.logger.Errorw("failed to remove forward agents from resource group", "error", err, "sid", sid)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
@@ -461,11 +440,11 @@ func (h *ResourceGroupHandler) RemoveForwardAgents(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "Forward agents removed from resource group", result)
 }
 
-// ListForwardAgents lists all forward agents in a resource group
+// ListForwardAgents lists all forward agents in a resource group by SID (Stripe-style ID: rg_xxx)
 func (h *ResourceGroupHandler) ListForwardAgents(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
-	if err != nil {
-		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID")
+	sid := c.Param("id")
+	if err := id.ValidatePrefix(sid, id.PrefixResourceGroup); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID format, expected rg_xxxxx")
 		return
 	}
 
@@ -483,13 +462,13 @@ func (h *ResourceGroupHandler) ListForwardAgents(c *gin.Context) {
 		}
 	}
 
-	result, err := h.manageAgentsUseCase.ListAgents(c.Request.Context(), uint(id), page, pageSize)
+	result, err := h.manageAgentsUseCase.ListAgentsBySID(c.Request.Context(), sid, page, pageSize)
 	if err != nil {
 		if err == resource.ErrGroupNotFound {
 			utils.ErrorResponse(c, http.StatusNotFound, "resource group not found")
 			return
 		}
-		h.logger.Errorw("failed to list forward agents in resource group", "error", err, "id", id)
+		h.logger.Errorw("failed to list forward agents in resource group", "error", err, "sid", sid)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
