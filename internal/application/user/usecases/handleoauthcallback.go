@@ -157,7 +157,7 @@ func (uc *HandleOAuthCallbackUseCase) Execute(ctx context.Context, cmd HandleOAu
 				return nil, fmt.Errorf("invalid name: %w", err)
 			}
 
-			existingUser, err = user.NewUser(email, name, id.NewUserIDWithPrefix)
+			existingUser, err = user.NewUser(email, name, id.NewUserID)
 			if err != nil {
 				uc.logger.Errorw("failed to create user", "error", err)
 				return nil, fmt.Errorf("failed to create user: %w", err)

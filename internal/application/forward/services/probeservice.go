@@ -93,7 +93,7 @@ func (s *ProbeService) HandleMessage(agentID uint, msgType string, data any) boo
 // ipVersionOverride allows overriding the rule's IP version for this probe only.
 func (s *ProbeService) ProbeRuleByShortID(ctx context.Context, shortID string, ipVersionOverride string) (*dto.RuleProbeResponse, error) {
 	// Get the rule
-	rule, err := s.repo.GetByShortID(ctx, shortID)
+	rule, err := s.repo.GetBySID(ctx, shortID)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +132,7 @@ func (s *ProbeService) probeRule(ctx context.Context, rule *forward.ForwardRule,
 
 	ruleType := rule.RuleType().String()
 	response := &dto.RuleProbeResponse{
-		RuleID:   id.FormatForwardRuleID(rule.ShortID()),
+		RuleID:   rule.SID(),
 		RuleType: ruleType,
 	}
 
@@ -217,7 +217,7 @@ func (s *ProbeService) probeDirectRule(ctx context.Context, rule *forward.Forwar
 	}
 
 	// Probe target using TCP for reliable connectivity check
-	ruleStripeID := id.FormatForwardRuleID(rule.ShortID())
+	ruleStripeID := rule.SID()
 	targetLatency, err := s.sendProbeTask(ctx, agentID, ruleStripeID, dto.ProbeTaskTypeTarget,
 		targetAddress, targetPort, "tcp")
 	if err != nil {
@@ -274,7 +274,7 @@ func (s *ProbeService) probeEntryRule(ctx context.Context, rule *forward.Forward
 		return response, nil
 	}
 
-	ruleStripeID := id.FormatForwardRuleID(rule.ShortID())
+	ruleStripeID := rule.SID()
 	tunnelLatency, err := s.sendProbeTask(ctx, entryAgentID, ruleStripeID, dto.ProbeTaskTypeTunnel,
 		tunnelAddr, exitStatus.WsListenPort, "tcp")
 	if err != nil {
@@ -348,7 +348,7 @@ func (s *ProbeService) probeChainRule(ctx context.Context, rule *forward.Forward
 		"chain_agent_ids", fullChain,
 	)
 
-	ruleStripeID := id.FormatForwardRuleID(rule.ShortID())
+	ruleStripeID := rule.SID()
 	chainLatencies := make([]*dto.ChainHopLatency, 0, len(fullChain))
 	var totalLatency int64
 	allSuccess := true
@@ -362,7 +362,7 @@ func (s *ProbeService) probeChainRule(ctx context.Context, rule *forward.Forward
 		currentAgent, err := s.agentRepo.GetByID(ctx, currentAgentID)
 		if err != nil || currentAgent == nil {
 			hopLatency := &dto.ChainHopLatency{
-				From:    id.FormatForwardAgentID(fmt.Sprintf("unknown_%d", currentAgentID)),
+				From:    id.FormatWithPrefix(id.PrefixForwardAgent, fmt.Sprintf("unknown_%d", currentAgentID)),
 				To:      "unknown",
 				Success: false,
 				Online:  false,
@@ -373,7 +373,7 @@ func (s *ProbeService) probeChainRule(ctx context.Context, rule *forward.Forward
 			continue
 		}
 
-		fromAgentStripeID := id.FormatForwardAgentID(currentAgent.ShortID())
+		fromAgentStripeID := currentAgent.SID()
 		isOnline := s.hub.IsAgentOnline(currentAgentID)
 
 		if isLastAgent {
@@ -467,7 +467,7 @@ func (s *ProbeService) probeChainRule(ctx context.Context, rule *forward.Forward
 			if err != nil || nextStatus == nil || nextStatus.WsListenPort == 0 {
 				hopLatency := &dto.ChainHopLatency{
 					From:    fromAgentStripeID,
-					To:      id.FormatForwardAgentID(nextAgent.ShortID()),
+					To:      nextAgent.SID(),
 					Success: false,
 					Online:  isOnline,
 					Error:   "next agent status not found or ws_listen_port not configured",
@@ -479,7 +479,7 @@ func (s *ProbeService) probeChainRule(ctx context.Context, rule *forward.Forward
 
 			hopLatency := &dto.ChainHopLatency{
 				From:   fromAgentStripeID,
-				To:     id.FormatForwardAgentID(nextAgent.ShortID()),
+				To:     nextAgent.SID(),
 				Online: isOnline,
 			}
 
@@ -538,7 +538,7 @@ func (s *ProbeService) probeDirectChainRule(ctx context.Context, rule *forward.F
 		"chain_agent_ids", fullChain,
 	)
 
-	ruleStripeID := id.FormatForwardRuleID(rule.ShortID())
+	ruleStripeID := rule.SID()
 	chainLatencies := make([]*dto.ChainHopLatency, 0, len(fullChain))
 	var totalLatency int64
 	allSuccess := true
@@ -552,7 +552,7 @@ func (s *ProbeService) probeDirectChainRule(ctx context.Context, rule *forward.F
 		currentAgent, err := s.agentRepo.GetByID(ctx, currentAgentID)
 		if err != nil || currentAgent == nil {
 			hopLatency := &dto.ChainHopLatency{
-				From:    id.FormatForwardAgentID(fmt.Sprintf("unknown_%d", currentAgentID)),
+				From:    id.FormatWithPrefix(id.PrefixForwardAgent, fmt.Sprintf("unknown_%d", currentAgentID)),
 				To:      "unknown",
 				Success: false,
 				Online:  false,
@@ -563,7 +563,7 @@ func (s *ProbeService) probeDirectChainRule(ctx context.Context, rule *forward.F
 			continue
 		}
 
-		fromAgentStripeID := id.FormatForwardAgentID(currentAgent.ShortID())
+		fromAgentStripeID := currentAgent.SID()
 		isOnline := s.hub.IsAgentOnline(currentAgentID)
 
 		if isLastAgent {
@@ -657,7 +657,7 @@ func (s *ProbeService) probeDirectChainRule(ctx context.Context, rule *forward.F
 			if nextPort == 0 {
 				hopLatency := &dto.ChainHopLatency{
 					From:    fromAgentStripeID,
-					To:      id.FormatForwardAgentID(nextAgent.ShortID()),
+					To:      nextAgent.SID(),
 					Success: false,
 					Online:  isOnline,
 					Error:   "listen port not configured for next agent",
@@ -669,7 +669,7 @@ func (s *ProbeService) probeDirectChainRule(ctx context.Context, rule *forward.F
 
 			hopLatency := &dto.ChainHopLatency{
 				From:   fromAgentStripeID,
-				To:     id.FormatForwardAgentID(nextAgent.ShortID()),
+				To:     nextAgent.SID(),
 				Online: isOnline,
 			}
 
@@ -762,7 +762,7 @@ func (s *ProbeService) sendProbeTask(
 
 	msg := &dto.HubMessage{
 		Type:      dto.MsgTypeProbeTask,
-		AgentID:   id.FormatForwardAgentID(agent.ShortID()),
+		AgentID:   agent.SID(),
 		Timestamp: time.Now().Unix(),
 		Data:      task,
 	}

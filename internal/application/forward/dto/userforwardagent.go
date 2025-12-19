@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/orris-inc/orris/internal/domain/forward"
-	"github.com/orris-inc/orris/internal/shared/id"
 )
 
 // UserForwardAgentDTO represents a forward agent from user's perspective.
@@ -36,7 +35,7 @@ func ToUserForwardAgentDTO(agent *forward.ForwardAgent, groupInfo *GroupInfo) *U
 	}
 
 	dto := &UserForwardAgentDTO{
-		ID:            id.FormatForwardAgentID(agent.ShortID()),
+		ID:            agent.SID(),
 		Name:          agent.Name(),
 		PublicAddress: agent.PublicAddress(),
 		Status:        string(agent.Status()),

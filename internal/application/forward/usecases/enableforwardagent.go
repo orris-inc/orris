@@ -39,7 +39,7 @@ func (uc *EnableForwardAgentUseCase) Execute(ctx context.Context, cmd EnableForw
 
 	uc.logger.Infow("executing enable forward agent use case", "short_id", cmd.ShortID)
 
-	agent, err := uc.repo.GetByShortID(ctx, cmd.ShortID)
+	agent, err := uc.repo.GetBySID(ctx, cmd.ShortID)
 	if err != nil {
 		uc.logger.Errorw("failed to get forward agent", "short_id", cmd.ShortID, "error", err)
 		return fmt.Errorf("failed to get forward agent: %w", err)
@@ -50,16 +50,16 @@ func (uc *EnableForwardAgentUseCase) Execute(ctx context.Context, cmd EnableForw
 
 	// Enable the agent
 	if err := agent.Enable(); err != nil {
-		uc.logger.Errorw("failed to enable forward agent", "id", agent.ID(), "short_id", agent.ShortID(), "error", err)
+		uc.logger.Errorw("failed to enable forward agent", "id", agent.ID(), "short_id", agent.SID(), "error", err)
 		return fmt.Errorf("failed to enable forward agent: %w", err)
 	}
 
 	// Persist changes
 	if err := uc.repo.Update(ctx, agent); err != nil {
-		uc.logger.Errorw("failed to update forward agent status", "id", agent.ID(), "short_id", agent.ShortID(), "error", err)
+		uc.logger.Errorw("failed to update forward agent status", "id", agent.ID(), "short_id", agent.SID(), "error", err)
 		return fmt.Errorf("failed to update forward agent: %w", err)
 	}
 
-	uc.logger.Infow("forward agent enabled successfully", "id", agent.ID(), "short_id", agent.ShortID())
+	uc.logger.Infow("forward agent enabled successfully", "id", agent.ID(), "short_id", agent.SID())
 	return nil
 }

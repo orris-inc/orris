@@ -83,7 +83,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	if cmd.AgentShortID == "" {
 		return nil, errors.NewValidationError("agent_id is required")
 	}
-	agent, err := uc.agentRepo.GetByShortID(ctx, cmd.AgentShortID)
+	agent, err := uc.agentRepo.GetBySID(ctx, cmd.AgentShortID)
 	if err != nil {
 		uc.logger.Errorw("failed to get agent", "agent_short_id", cmd.AgentShortID, "error", err)
 		return nil, fmt.Errorf("failed to validate agent: %w", err)
@@ -96,7 +96,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	// Resolve ExitAgentShortID to internal ID (if provided)
 	var exitAgentID uint
 	if cmd.ExitAgentShortID != "" {
-		exitAgent, err := uc.agentRepo.GetByShortID(ctx, cmd.ExitAgentShortID)
+		exitAgent, err := uc.agentRepo.GetBySID(ctx, cmd.ExitAgentShortID)
 		if err != nil {
 			uc.logger.Errorw("failed to get exit agent", "exit_agent_short_id", cmd.ExitAgentShortID, "error", err)
 			return nil, fmt.Errorf("failed to validate exit agent: %w", err)
@@ -112,7 +112,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	if len(cmd.ChainAgentShortIDs) > 0 {
 		chainAgentIDs = make([]uint, len(cmd.ChainAgentShortIDs))
 		for i, shortID := range cmd.ChainAgentShortIDs {
-			chainAgent, err := uc.agentRepo.GetByShortID(ctx, shortID)
+			chainAgent, err := uc.agentRepo.GetBySID(ctx, shortID)
 			if err != nil {
 				uc.logger.Errorw("failed to get chain agent", "chain_agent_short_id", shortID, "error", err)
 				return nil, fmt.Errorf("failed to validate chain agent: %w", err)
@@ -129,7 +129,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	if len(cmd.ChainPortConfig) > 0 {
 		chainPortConfig = make(map[uint]uint16, len(cmd.ChainPortConfig))
 		for shortID, port := range cmd.ChainPortConfig {
-			chainAgent, err := uc.agentRepo.GetByShortID(ctx, shortID)
+			chainAgent, err := uc.agentRepo.GetBySID(ctx, shortID)
 			if err != nil {
 				uc.logger.Errorw("failed to get chain agent for port config", "chain_agent_short_id", shortID, "error", err)
 				return nil, fmt.Errorf("failed to validate chain agent in chain_port_config: %w", err)
@@ -208,7 +208,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	}
 
 	result := &CreateForwardRuleResult{
-		ID:            id.FormatForwardRuleID(rule.ShortID()),
+		ID:            rule.SID(),
 		AgentID:       rule.AgentID(),
 		RuleType:      rule.RuleType().String(),
 		ExitAgentID:   rule.ExitAgentID(),
@@ -228,8 +228,8 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	// Notify config sync asynchronously if rule is enabled (failure only logs warning, doesn't block)
 	if rule.IsEnabled() && uc.configSyncSvc != nil {
 		go func() {
-			if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), rule.AgentID(), rule.ShortID(), "added"); err != nil {
-				uc.logger.Warnw("failed to notify config sync", "rule_id", rule.ShortID(), "error", err)
+			if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), rule.AgentID(), rule.SID(), "added"); err != nil {
+				uc.logger.Warnw("failed to notify config sync", "rule_id", rule.SID(), "error", err)
 			}
 		}()
 	}

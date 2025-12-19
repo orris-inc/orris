@@ -6,7 +6,6 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/shared/services"
-	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -60,7 +59,7 @@ func (uc *ValidateForwardAgentTokenUseCase) Execute(
 		return nil, fmt.Errorf("invalid token")
 	}
 
-	agentStripeID := id.FormatForwardAgentID(agent.ShortID())
+	agentStripeID := agent.SID()
 
 	// Verify token using constant-time comparison
 	if !agent.VerifyAPIToken(cmd.PlainToken) {

@@ -3,7 +3,6 @@ package dto
 
 import (
 	"github.com/orris-inc/orris/internal/domain/forward"
-	"github.com/orris-inc/orris/internal/shared/id"
 )
 
 // ForwardRuleDTO represents the data transfer object for forward rules.
@@ -80,7 +79,7 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 	isAuto := rule.GetTrafficMultiplier() == nil
 
 	return &ForwardRuleDTO{
-		ID:                         id.FormatForwardRuleID(rule.ShortID()),
+		ID:                         rule.SID(),
 		AgentID:                    "", // populated later via PopulateAgentInfo
 		UserID:                     rule.UserID(),
 		RuleType:                   rule.RuleType().String(),
@@ -130,17 +129,17 @@ func (d *ForwardRuleDTO) PopulateTargetNodeInfo(info *TargetNodeInfo) {
 	d.TargetNodePublicIPv6 = info.PublicIPv6
 }
 
-// AgentShortIDMap maps internal agent ID to short ID.
-type AgentShortIDMap map[uint]string
+// AgentSIDMap maps internal agent ID to SID.
+type AgentSIDMap map[uint]string
 
-// PopulateAgentInfo fills in the agent ID fields using the short ID map.
-func (d *ForwardRuleDTO) PopulateAgentInfo(agentMap AgentShortIDMap) {
-	if shortID, ok := agentMap[d.internalAgentID]; ok {
-		d.AgentID = id.FormatForwardAgentID(shortID)
+// PopulateAgentInfo fills in the agent ID fields using the SID map.
+func (d *ForwardRuleDTO) PopulateAgentInfo(agentMap AgentSIDMap) {
+	if sid, ok := agentMap[d.internalAgentID]; ok {
+		d.AgentID = sid
 	}
 	if d.internalExitAgentID != 0 {
-		if shortID, ok := agentMap[d.internalExitAgentID]; ok {
-			d.ExitAgentID = id.FormatForwardAgentID(shortID)
+		if sid, ok := agentMap[d.internalExitAgentID]; ok {
+			d.ExitAgentID = sid
 		}
 	}
 	// Populate chain agent IDs
@@ -150,16 +149,16 @@ func (d *ForwardRuleDTO) PopulateAgentInfo(agentMap AgentShortIDMap) {
 		fullChain := append([]uint{d.internalAgentID}, d.internalChainAgents...)
 		d.ChainAgentIDs = make([]string, len(fullChain))
 		for i, agentID := range fullChain {
-			if shortID, ok := agentMap[agentID]; ok {
-				d.ChainAgentIDs[i] = id.FormatForwardAgentID(shortID)
+			if sid, ok := agentMap[agentID]; ok {
+				d.ChainAgentIDs[i] = sid
 			}
 		}
 	} else if len(d.internalChainAgents) > 0 {
 		// Fallback for other types (shouldn't happen)
 		d.ChainAgentIDs = make([]string, len(d.internalChainAgents))
 		for i, agentID := range d.internalChainAgents {
-			if shortID, ok := agentMap[agentID]; ok {
-				d.ChainAgentIDs[i] = id.FormatForwardAgentID(shortID)
+			if sid, ok := agentMap[agentID]; ok {
+				d.ChainAgentIDs[i] = sid
 			}
 		}
 	}
@@ -167,8 +166,8 @@ func (d *ForwardRuleDTO) PopulateAgentInfo(agentMap AgentShortIDMap) {
 	if len(d.internalChainPortConfig) > 0 {
 		d.ChainPortConfig = make(map[string]uint16, len(d.internalChainPortConfig))
 		for agentID, port := range d.internalChainPortConfig {
-			if shortID, ok := agentMap[agentID]; ok {
-				d.ChainPortConfig[id.FormatForwardAgentID(shortID)] = port
+			if sid, ok := agentMap[agentID]; ok {
+				d.ChainPortConfig[sid] = port
 			}
 		}
 	}

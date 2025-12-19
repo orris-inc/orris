@@ -168,14 +168,14 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 	agentIDs := dto.CollectAgentIDs(ruleDTOs)
 	if len(agentIDs) > 0 {
 		// Batch fetch agent short IDs
-		agentMap, err := h.agentRepo.GetShortIDsByIDs(ctx, agentIDs)
+		agentMap, err := h.agentRepo.GetSIDsByIDs(ctx, agentIDs)
 		if err != nil {
 			h.logger.Warnw("failed to get agent short IDs",
 				"agent_ids", agentIDs,
 				"error", err,
 			)
 			// Continue with empty map
-			agentMap = make(dto.AgentShortIDMap)
+			agentMap = make(dto.AgentSIDMap)
 		}
 		// Populate agent info (AgentID and ExitAgentID) for all DTOs
 		for _, ruleDTO := range ruleDTOs {
@@ -243,7 +243,7 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 						"error", err,
 					)
 				} else if exitAgent != nil {
-					ruleDTO.NextHopAgentID = id.FormatForwardAgentID(exitAgent.ShortID())
+					ruleDTO.NextHopAgentID = exitAgent.SID()
 					// Use effective tunnel address (prefers tunnel_address over public_address)
 					ruleDTO.NextHopAddress = exitAgent.GetEffectiveTunnelAddress()
 
@@ -310,7 +310,7 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 						"error", err,
 					)
 				} else if nextAgent != nil {
-					ruleDTO.NextHopAgentID = id.FormatForwardAgentID(nextAgent.ShortID())
+					ruleDTO.NextHopAgentID = nextAgent.SID()
 					// Use effective tunnel address (prefers tunnel_address over public_address)
 					ruleDTO.NextHopAddress = nextAgent.GetEffectiveTunnelAddress()
 
@@ -430,13 +430,13 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 						"error", err,
 					)
 				} else if nextAgent != nil {
-					ruleDTO.NextHopAgentID = id.FormatForwardAgentID(nextAgent.ShortID())
+					ruleDTO.NextHopAgentID = nextAgent.SID()
 					// Use effective tunnel address (prefers tunnel_address over public_address)
 					ruleDTO.NextHopAddress = nextAgent.GetEffectiveTunnelAddress()
 					ruleDTO.NextHopPort = nextHopPort
 
 					// Generate connection token for next hop authentication
-					nextHopToken, _ := h.agentTokenService.Generate(nextAgent.ShortID())
+					nextHopToken, _ := h.agentTokenService.Generate(nextAgent.SID())
 					ruleDTO.NextHopConnectionToken = nextHopToken
 
 					h.logger.Debugw("populated next hop info for direct_chain rule",
@@ -526,10 +526,10 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 		)
 	} else if requestingAgent != nil {
 		// Generate token using agentTokenService to ensure correct format (fwd_xxx_xxx)
-		clientToken, _ = h.agentTokenService.Generate(requestingAgent.ShortID())
+		clientToken, _ = h.agentTokenService.Generate(requestingAgent.SID())
 		h.logger.Infow("generated client token for agent",
 			"agent_id", agentID,
-			"short_id", requestingAgent.ShortID(),
+			"short_id", requestingAgent.SID(),
 			"client_token", clientToken,
 		)
 	}
@@ -576,7 +576,7 @@ func (h *AgentHandler) RefreshRule(c *gin.Context) {
 	}
 
 	// Look up the rule by short ID
-	rule, err := h.repo.GetByShortID(ctx, shortID)
+	rule, err := h.repo.GetBySID(ctx, shortID)
 	if err != nil {
 		h.logger.Warnw("rule not found",
 			"rule_id", ruleIDStr,
@@ -624,13 +624,13 @@ func (h *AgentHandler) RefreshRule(c *gin.Context) {
 	// Populate agent info
 	agentIDs := dto.CollectAgentIDs([]*dto.ForwardRuleDTO{ruleDTO})
 	if len(agentIDs) > 0 {
-		agentMap, err := h.agentRepo.GetShortIDsByIDs(ctx, agentIDs)
+		agentMap, err := h.agentRepo.GetSIDsByIDs(ctx, agentIDs)
 		if err != nil {
 			h.logger.Warnw("failed to get agent short IDs",
 				"agent_ids", agentIDs,
 				"error", err,
 			)
-			agentMap = make(dto.AgentShortIDMap)
+			agentMap = make(dto.AgentSIDMap)
 		}
 		ruleDTO.PopulateAgentInfo(agentMap)
 	}
@@ -655,7 +655,7 @@ func (h *AgentHandler) RefreshRule(c *gin.Context) {
 			if exitAgentID != 0 {
 				exitAgent, err := h.agentRepo.GetByID(ctx, exitAgentID)
 				if err == nil && exitAgent != nil {
-					ruleDTO.NextHopAgentID = id.FormatForwardAgentID(exitAgent.ShortID())
+					ruleDTO.NextHopAgentID = exitAgent.SID()
 					ruleDTO.NextHopAddress = exitAgent.GetEffectiveTunnelAddress()
 
 					exitStatus, err := h.statusQuerier.GetStatus(ctx, exitAgentID)
@@ -676,12 +676,12 @@ func (h *AgentHandler) RefreshRule(c *gin.Context) {
 		// Populate ChainAgentIDs (full chain: entry + chain_agents)
 		fullChainIDs := append([]uint{rule.AgentID()}, rule.ChainAgentIDs()...)
 		if len(fullChainIDs) > 0 {
-			agentMap, err := h.agentRepo.GetShortIDsByIDs(ctx, fullChainIDs)
+			agentMap, err := h.agentRepo.GetSIDsByIDs(ctx, fullChainIDs)
 			if err == nil {
 				ruleDTO.ChainAgentIDs = make([]string, len(fullChainIDs))
 				for i, chainAgentID := range fullChainIDs {
-					if shortID, ok := agentMap[chainAgentID]; ok {
-						ruleDTO.ChainAgentIDs[i] = id.FormatForwardAgentID(shortID)
+					if sid, ok := agentMap[chainAgentID]; ok {
+						ruleDTO.ChainAgentIDs[i] = sid
 					}
 				}
 			}
@@ -702,7 +702,7 @@ func (h *AgentHandler) RefreshRule(c *gin.Context) {
 			if nextHopAgentID != 0 {
 				nextAgent, err := h.agentRepo.GetByID(ctx, nextHopAgentID)
 				if err == nil && nextAgent != nil {
-					ruleDTO.NextHopAgentID = id.FormatForwardAgentID(nextAgent.ShortID())
+					ruleDTO.NextHopAgentID = nextAgent.SID()
 					ruleDTO.NextHopAddress = nextAgent.GetEffectiveTunnelAddress()
 
 					nextStatus, err := h.statusQuerier.GetStatus(ctx, nextHopAgentID)
@@ -726,12 +726,12 @@ func (h *AgentHandler) RefreshRule(c *gin.Context) {
 		// Populate ChainAgentIDs (full chain: entry + chain_agents)
 		fullChainIDs := append([]uint{rule.AgentID()}, rule.ChainAgentIDs()...)
 		if len(fullChainIDs) > 0 {
-			agentMap, err := h.agentRepo.GetShortIDsByIDs(ctx, fullChainIDs)
+			agentMap, err := h.agentRepo.GetSIDsByIDs(ctx, fullChainIDs)
 			if err == nil {
 				ruleDTO.ChainAgentIDs = make([]string, len(fullChainIDs))
 				for i, chainAgentID := range fullChainIDs {
-					if shortID, ok := agentMap[chainAgentID]; ok {
-						ruleDTO.ChainAgentIDs[i] = id.FormatForwardAgentID(shortID)
+					if sid, ok := agentMap[chainAgentID]; ok {
+						ruleDTO.ChainAgentIDs[i] = sid
 					}
 				}
 			}
@@ -765,12 +765,12 @@ func (h *AgentHandler) RefreshRule(c *gin.Context) {
 			if nextHopAgentID != 0 {
 				nextAgent, err := h.agentRepo.GetByID(ctx, nextHopAgentID)
 				if err == nil && nextAgent != nil {
-					ruleDTO.NextHopAgentID = id.FormatForwardAgentID(nextAgent.ShortID())
+					ruleDTO.NextHopAgentID = nextAgent.SID()
 					ruleDTO.NextHopAddress = nextAgent.GetEffectiveTunnelAddress()
 					ruleDTO.NextHopPort = nextHopPort
 
 					// Generate connection token for next hop authentication
-					nextHopToken, _ := h.agentTokenService.Generate(nextAgent.ShortID())
+					nextHopToken, _ := h.agentTokenService.Generate(nextAgent.SID())
 					ruleDTO.NextHopConnectionToken = nextHopToken
 				}
 			}
@@ -863,15 +863,15 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 	// Merge all rules into validRuleIDs map (use rule.ID() to deduplicate)
 	validRuleIDs := make(map[string]uint) // Stripe-style ID -> internal uint ID
 	for _, rule := range agentRules {
-		stripeID := id.FormatForwardRuleID(rule.ShortID())
+		stripeID := rule.SID()
 		validRuleIDs[stripeID] = rule.ID()
 	}
 	for _, rule := range exitRules {
-		stripeID := id.FormatForwardRuleID(rule.ShortID())
+		stripeID := rule.SID()
 		validRuleIDs[stripeID] = rule.ID()
 	}
 	for _, rule := range chainRules {
-		stripeID := id.FormatForwardRuleID(rule.ShortID())
+		stripeID := rule.SID()
 		validRuleIDs[stripeID] = rule.ID()
 	}
 
@@ -1005,7 +1005,7 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 	}
 
 	// Look up the internal agent ID by short ID
-	exitAgent, err := h.agentRepo.GetByShortID(ctx, shortID)
+	exitAgent, err := h.agentRepo.GetBySID(ctx, shortID)
 	if err != nil {
 		h.logger.Warnw("exit agent not found",
 			"agent_id", exitAgentIDStr,
@@ -1065,7 +1065,7 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 		return
 	}
 
-	// exitAgent was already retrieved by GetByShortID above
+	// exitAgent was already retrieved by GetBySID above
 	if exitAgent == nil {
 		h.logger.Warnw("forward agent not found",
 			"exit_agent_id", exitAgentID,
@@ -1353,7 +1353,7 @@ func (h *AgentHandler) VerifyTunnelHandshake(c *gin.Context) {
 	}
 
 	// Look up the rule by short ID
-	rule, err := h.repo.GetByShortID(ctx, ruleShortID)
+	rule, err := h.repo.GetBySID(ctx, ruleShortID)
 	if err != nil {
 		h.logger.Warnw("rule not found for handshake verification",
 			"rule_id", req.RuleID,
@@ -1411,8 +1411,8 @@ func (h *AgentHandler) VerifyTunnelHandshake(c *gin.Context) {
 		return
 	}
 
-	// Format the full entry agent ID (with prefix)
-	entryAgentIDStr := id.FormatForwardAgentID(entryAgentShortID)
+	// Use the entry agent SID directly (already contains prefix)
+	entryAgentIDStr := entryAgentShortID
 
 	// Verify that the entry agent has permission to access this rule
 	hasEntryAccess := false
@@ -1420,7 +1420,7 @@ func (h *AgentHandler) VerifyTunnelHandshake(c *gin.Context) {
 	switch ruleType {
 	case "entry":
 		// For entry rules, entry agent must be the owner (agent_id)
-		entryAgent, err := h.agentRepo.GetByShortID(ctx, entryAgentShortID)
+		entryAgent, err := h.agentRepo.GetBySID(ctx, entryAgentShortID)
 		if err == nil && entryAgent != nil && entryAgent.ID() == rule.AgentID() {
 			hasEntryAccess = true
 		}
@@ -1437,7 +1437,7 @@ func (h *AgentHandler) VerifyTunnelHandshake(c *gin.Context) {
 			prevAgentID := fullChainIDs[exitPosition-1]
 
 			// Lookup entry agent by short ID to get internal ID
-			entryAgent, err := h.agentRepo.GetByShortID(ctx, entryAgentShortID)
+			entryAgent, err := h.agentRepo.GetBySID(ctx, entryAgentShortID)
 			if err == nil && entryAgent != nil && entryAgent.ID() == prevAgentID {
 				hasEntryAccess = true
 			}

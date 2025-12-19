@@ -76,53 +76,53 @@ func (r *ForwardAgentRepositoryImpl) GetByID(ctx context.Context, id uint) (*for
 	return entity, nil
 }
 
-// GetByShortID retrieves a forward agent by its short ID.
-func (r *ForwardAgentRepositoryImpl) GetByShortID(ctx context.Context, shortID string) (*forward.ForwardAgent, error) {
+// GetBySID retrieves a forward agent by its SID.
+func (r *ForwardAgentRepositoryImpl) GetBySID(ctx context.Context, sid string) (*forward.ForwardAgent, error) {
 	var model models.ForwardAgentModel
 
-	if err := r.db.WithContext(ctx).Where("short_id = ?", shortID).First(&model).Error; err != nil {
+	if err := r.db.WithContext(ctx).Where("sid = ?", sid).First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
 		}
-		r.logger.Errorw("failed to get forward agent by short ID", "short_id", shortID, "error", err)
+		r.logger.Errorw("failed to get forward agent by SID", "sid", sid, "error", err)
 		return nil, fmt.Errorf("failed to get forward agent: %w", err)
 	}
 
 	entity, err := r.mapper.ToEntity(&model)
 	if err != nil {
-		r.logger.Errorw("failed to map forward agent model to entity", "short_id", shortID, "error", err)
+		r.logger.Errorw("failed to map forward agent model to entity", "sid", sid, "error", err)
 		return nil, fmt.Errorf("failed to map forward agent: %w", err)
 	}
 
 	return entity, nil
 }
 
-// GetShortIDsByIDs retrieves short IDs for multiple agents by their internal IDs.
-func (r *ForwardAgentRepositoryImpl) GetShortIDsByIDs(ctx context.Context, ids []uint) (map[uint]string, error) {
+// GetSIDsByIDs retrieves SIDs for multiple agents by their internal IDs.
+func (r *ForwardAgentRepositoryImpl) GetSIDsByIDs(ctx context.Context, ids []uint) (map[uint]string, error) {
 	if len(ids) == 0 {
 		return make(map[uint]string), nil
 	}
 
 	var results []struct {
-		ID      uint
-		ShortID string
+		ID  uint
+		SID string
 	}
 
 	if err := r.db.WithContext(ctx).
 		Model(&models.ForwardAgentModel{}).
-		Select("id, short_id").
+		Select("id, sid").
 		Where("id IN ?", ids).
 		Find(&results).Error; err != nil {
-		r.logger.Errorw("failed to get forward agent short IDs", "ids", ids, "error", err)
-		return nil, fmt.Errorf("failed to get forward agent short IDs: %w", err)
+		r.logger.Errorw("failed to get forward agent SIDs", "ids", ids, "error", err)
+		return nil, fmt.Errorf("failed to get forward agent SIDs: %w", err)
 	}
 
-	shortIDMap := make(map[uint]string, len(results))
+	sidMap := make(map[uint]string, len(results))
 	for _, r := range results {
-		shortIDMap[r.ID] = r.ShortID
+		sidMap[r.ID] = r.SID
 	}
 
-	return shortIDMap, nil
+	return sidMap, nil
 }
 
 // GetByTokenHash retrieves a forward agent by token hash.

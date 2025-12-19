@@ -41,7 +41,7 @@ func (uc *DeleteForwardRuleUseCase) Execute(ctx context.Context, cmd DeleteForwa
 	}
 
 	uc.logger.Infow("executing delete forward rule use case", "short_id", cmd.ShortID)
-	rule, err := uc.repo.GetByShortID(ctx, cmd.ShortID)
+	rule, err := uc.repo.GetBySID(ctx, cmd.ShortID)
 	if err != nil {
 		uc.logger.Errorw("failed to get forward rule", "short_id", cmd.ShortID, "error", err)
 		return fmt.Errorf("failed to get forward rule: %w", err)
@@ -52,7 +52,7 @@ func (uc *DeleteForwardRuleUseCase) Execute(ctx context.Context, cmd DeleteForwa
 
 	// Store info for notification before deletion
 	agentID := rule.AgentID()
-	ruleShortID := rule.ShortID()
+	ruleShortID := rule.SID()
 	wasEnabled := rule.IsEnabled()
 
 	// Delete the rule using the internal ID

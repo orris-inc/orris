@@ -95,7 +95,7 @@ func (uc *ListForwardRulesUseCase) Execute(ctx context.Context, query ListForwar
 	// Populate agent info (AgentID and ExitAgentID)
 	agentIDs := dto.CollectAgentIDs(dtos)
 	if len(agentIDs) > 0 && uc.agentRepo != nil {
-		agentShortIDs, err := uc.agentRepo.GetShortIDsByIDs(ctx, agentIDs)
+		agentShortIDs, err := uc.agentRepo.GetSIDsByIDs(ctx, agentIDs)
 		if err != nil {
 			uc.logger.Warnw("failed to fetch agent short IDs", "error", err)
 			// Continue without agent info

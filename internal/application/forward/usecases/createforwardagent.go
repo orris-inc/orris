@@ -87,7 +87,7 @@ func (uc *CreateForwardAgentUseCase) Execute(ctx context.Context, cmd CreateForw
 	plainToken := agent.GetAPIToken()
 
 	result := &CreateForwardAgentResult{
-		ID:            id.FormatForwardAgentID(agent.ShortID()),
+		ID:            agent.SID(),
 		Name:          agent.Name(),
 		PublicAddress: agent.PublicAddress(),
 		TunnelAddress: agent.TunnelAddress(),

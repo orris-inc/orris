@@ -12,7 +12,7 @@ import (
 // ForwardRuleModel represents the database persistence model for forward rules.
 type ForwardRuleModel struct {
 	ID                uint           `gorm:"primarykey"`
-	ShortID           string         `gorm:"not null;size:16;uniqueIndex:idx_forward_rule_short_id"` // external API identifier
+	SID               string         `gorm:"column:sid;not null;size:20;uniqueIndex:idx_forward_rule_sid"` // Stripe-style prefixed ID (fr_xxx)
 	AgentID           uint           `gorm:"not null;index:idx_forward_agent_id;uniqueIndex:idx_listen_port_agent"`
 	UserID            *uint          `gorm:"index:idx_forward_rules_user_id;index:idx_forward_rules_user_status"` // user ID for user-owned rules (nullable)
 	RuleType          string         `gorm:"not null;default:direct;size:20"`                                     // direct, chain, direct_chain, websocket

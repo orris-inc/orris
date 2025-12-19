@@ -13,7 +13,6 @@ import (
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/infrastructure/auth"
-	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -117,7 +116,7 @@ func (s *ConfigSyncService) NotifyRuleChange(ctx context.Context, agentID uint, 
 	switch changeType {
 	case "added", "updated":
 		// Fetch the rule to include in sync
-		rule, err := s.repo.GetByShortID(ctx, ruleShortID)
+		rule, err := s.repo.GetBySID(ctx, ruleShortID)
 		if err != nil {
 			s.logger.Errorw("failed to get rule for sync",
 				"rule_short_id", ruleShortID,
@@ -149,7 +148,7 @@ func (s *ConfigSyncService) NotifyRuleChange(ctx context.Context, agentID uint, 
 		}
 
 	case "removed":
-		syncData.Removed = []string{id.FormatForwardRuleID(ruleShortID)}
+		syncData.Removed = []string{ruleShortID}
 
 	default:
 		s.logger.Warnw("unknown change type for rule sync",
@@ -177,7 +176,7 @@ func (s *ConfigSyncService) NotifyRuleChange(ctx context.Context, agentID uint, 
 	// Send sync message
 	msg := &dto.HubMessage{
 		Type:      dto.MsgTypeConfigSync,
-		AgentID:   id.FormatForwardAgentID(agent.ShortID()),
+		AgentID:   agent.SID(),
 		Timestamp: time.Now().Unix(),
 		Data:      syncData,
 	}
@@ -293,11 +292,11 @@ func (s *ConfigSyncService) FullSyncToAgent(ctx context.Context, agentID uint) e
 	}
 
 	// Generate client token for this agent
-	clientToken, _ := s.agentTokenService.Generate(agent.ShortID())
+	clientToken, _ := s.agentTokenService.Generate(agent.SID())
 
 	s.logger.Infow("generated client token for full sync",
 		"agent_id", agentID,
-		"short_id", agent.ShortID(),
+		"short_id", agent.SID(),
 		"client_token", clientToken,
 	)
 
@@ -314,7 +313,7 @@ func (s *ConfigSyncService) FullSyncToAgent(ctx context.Context, agentID uint) e
 	// Send sync message
 	msg := &dto.HubMessage{
 		Type:      dto.MsgTypeConfigSync,
-		AgentID:   id.FormatForwardAgentID(agent.ShortID()),
+		AgentID:   agent.SID(),
 		Timestamp: time.Now().Unix(),
 		Data:      syncData,
 	}
@@ -386,8 +385,8 @@ func (s *ConfigSyncService) getEnabledRulesForAgent(ctx context.Context, agentID
 // This mirrors the logic in AgentHandler.GetEnabledRules for building rule DTOs.
 func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *forward.ForwardRule, agentID uint) (*dto.RuleSyncData, error) {
 	syncData := &dto.RuleSyncData{
-		ID:         id.FormatForwardRuleID(rule.ShortID()),
-		ShortID:    rule.ShortID(),
+		ID:         rule.SID(),
+		ShortID:    rule.SID(),
 		RuleType:   rule.RuleType().String(),
 		ListenPort: rule.ListenPort(),
 		Protocol:   rule.Protocol().String(),
@@ -439,7 +438,7 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 						"error", err,
 					)
 				} else if exitAgent != nil {
-					syncData.NextHopAgentID = id.FormatForwardAgentID(exitAgent.ShortID())
+					syncData.NextHopAgentID = exitAgent.SID()
 					syncData.NextHopAddress = exitAgent.GetEffectiveTunnelAddress()
 
 					// Get ws_listen_port from cached agent status
@@ -477,7 +476,7 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 						"error", err,
 					)
 				} else if entryAgent != nil {
-					syncData.AgentID = id.FormatForwardAgentID(entryAgent.ShortID())
+					syncData.AgentID = entryAgent.SID()
 				}
 			}
 		}
@@ -494,7 +493,7 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 		// Full chain: [entry_agent] + chain_agents (matches GetChainPosition calculation)
 		fullChainIDs := append([]uint{rule.AgentID()}, rule.ChainAgentIDs()...)
 		if len(fullChainIDs) > 0 {
-			agentMap, err := s.agentRepo.GetShortIDsByIDs(ctx, fullChainIDs)
+			agentMap, err := s.agentRepo.GetSIDsByIDs(ctx, fullChainIDs)
 			if err != nil {
 				s.logger.Warnw("failed to get chain agent short IDs",
 					"rule_id", rule.ID(),
@@ -503,8 +502,8 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 			} else {
 				syncData.ChainAgentIDs = make([]string, len(fullChainIDs))
 				for i, chainAgentID := range fullChainIDs {
-					if shortID, ok := agentMap[chainAgentID]; ok {
-						syncData.ChainAgentIDs[i] = id.FormatForwardAgentID(shortID)
+					if sid, ok := agentMap[chainAgentID]; ok {
+						syncData.ChainAgentIDs[i] = sid
 					}
 				}
 			}
@@ -532,7 +531,7 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 						"error", err,
 					)
 				} else if nextAgent != nil {
-					syncData.NextHopAgentID = id.FormatForwardAgentID(nextAgent.ShortID())
+					syncData.NextHopAgentID = nextAgent.SID()
 					syncData.NextHopAddress = nextAgent.GetEffectiveTunnelAddress()
 
 					// Get ws_listen_port from cached agent status
@@ -593,7 +592,7 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 		)
 		fullChainIDs := append([]uint{entryAgentID}, chainAgentIDs...)
 
-		agentMap, err := s.agentRepo.GetShortIDsByIDs(ctx, fullChainIDs)
+		agentMap, err := s.agentRepo.GetSIDsByIDs(ctx, fullChainIDs)
 		if err != nil {
 			s.logger.Warnw("failed to get chain agent short IDs",
 				"rule_id", rule.ID(),
@@ -602,8 +601,8 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 		} else {
 			syncData.ChainAgentIDs = make([]string, len(fullChainIDs))
 			for i, chainAgentID := range fullChainIDs {
-				if shortID, ok := agentMap[chainAgentID]; ok {
-					syncData.ChainAgentIDs[i] = id.FormatForwardAgentID(shortID)
+				if sid, ok := agentMap[chainAgentID]; ok {
+					syncData.ChainAgentIDs[i] = sid
 				} else {
 					s.logger.Warnw("chain agent ID not found in agent map",
 						"rule_id", rule.ID(),
@@ -656,17 +655,17 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 						"error", err,
 					)
 				} else if nextAgent != nil {
-					syncData.NextHopAgentID = id.FormatForwardAgentID(nextAgent.ShortID())
+					syncData.NextHopAgentID = nextAgent.SID()
 					syncData.NextHopAddress = nextAgent.GetEffectiveTunnelAddress()
 					syncData.NextHopPort = nextHopPort
 
 					// Generate connection token for next hop authentication
-					nextHopToken, _ := s.agentTokenService.Generate(nextAgent.ShortID())
+					nextHopToken, _ := s.agentTokenService.Generate(nextAgent.SID())
 					syncData.NextHopConnectionToken = nextHopToken
 
 					s.logger.Infow("direct_chain next hop token generated",
 						"current_agent_id", agentID,
-						"next_hop_short_id", nextAgent.ShortID(),
+						"next_hop_short_id", nextAgent.SID(),
 						"next_hop_token", nextHopToken,
 					)
 				}
@@ -919,7 +918,7 @@ func (s *ConfigSyncService) NotifyExitPortChange(ctx context.Context, exitAgentI
 		// Send sync message
 		msg := &dto.HubMessage{
 			Type:      dto.MsgTypeConfigSync,
-			AgentID:   id.FormatForwardAgentID(entryAgent.ShortID()),
+			AgentID:   entryAgent.SID(),
 			Timestamp: time.Now().Unix(),
 			Data:      syncData,
 		}

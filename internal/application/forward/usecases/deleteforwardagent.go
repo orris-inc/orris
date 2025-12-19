@@ -39,7 +39,7 @@ func (uc *DeleteForwardAgentUseCase) Execute(ctx context.Context, cmd DeleteForw
 
 	uc.logger.Infow("executing delete forward agent use case", "short_id", cmd.ShortID)
 
-	agent, err := uc.repo.GetByShortID(ctx, cmd.ShortID)
+	agent, err := uc.repo.GetBySID(ctx, cmd.ShortID)
 	if err != nil {
 		uc.logger.Errorw("failed to get forward agent", "short_id", cmd.ShortID, "error", err)
 		return fmt.Errorf("failed to get forward agent: %w", err)
@@ -50,10 +50,10 @@ func (uc *DeleteForwardAgentUseCase) Execute(ctx context.Context, cmd DeleteForw
 
 	// Delete the agent using internal ID
 	if err := uc.repo.Delete(ctx, agent.ID()); err != nil {
-		uc.logger.Errorw("failed to delete forward agent", "id", agent.ID(), "short_id", agent.ShortID(), "error", err)
+		uc.logger.Errorw("failed to delete forward agent", "id", agent.ID(), "short_id", agent.SID(), "error", err)
 		return fmt.Errorf("failed to delete forward agent: %w", err)
 	}
 
-	uc.logger.Infow("forward agent deleted successfully", "id", agent.ID(), "short_id", agent.ShortID())
+	uc.logger.Infow("forward agent deleted successfully", "id", agent.ID(), "short_id", agent.SID())
 	return nil
 }

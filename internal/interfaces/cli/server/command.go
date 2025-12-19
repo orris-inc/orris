@@ -230,7 +230,7 @@ func seedAdminUser(cfg *config.Config, userRepo user.Repository, hasher *auth.Bc
 	}
 
 	// Create user domain object
-	adminUser, err := user.NewUser(email, name, id.NewUserIDWithPrefix)
+	adminUser, err := user.NewUser(email, name, id.NewUserID)
 	if err != nil {
 		return fmt.Errorf("failed to create admin user object: %w", err)
 	}

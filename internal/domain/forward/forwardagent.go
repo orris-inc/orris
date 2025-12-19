@@ -35,7 +35,7 @@ var domainNameRegex = regexp.MustCompile(`^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-
 // The role is determined by the rule configuration, not the agent itself.
 type ForwardAgent struct {
 	id             uint
-	shortID        string // external API identifier (Stripe-style)
+	sid            string // Stripe-style prefixed ID (fa_xxx)
 	name           string
 	tokenHash      string
 	apiToken       string // stored token for retrieval
@@ -54,7 +54,7 @@ type ForwardAgent struct {
 type TokenGenerator func(shortID string) (string, string)
 
 // NewForwardAgent creates a new forward agent with the given token generator.
-func NewForwardAgent(name string, publicAddress string, tunnelAddress string, remark string, shortIDGenerator func() (string, error), tokenGenerator TokenGenerator) (*ForwardAgent, error) {
+func NewForwardAgent(name string, publicAddress string, tunnelAddress string, remark string, sidGenerator func() (string, error), tokenGenerator TokenGenerator) (*ForwardAgent, error) {
 	if name == "" {
 		return nil, fmt.Errorf("agent name is required")
 	}
@@ -73,18 +73,18 @@ func NewForwardAgent(name string, publicAddress string, tunnelAddress string, re
 		}
 	}
 
-	// Generate short ID for external API use
-	shortID, err := shortIDGenerator()
+	// Generate SID for external API use
+	sid, err := sidGenerator()
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate short ID: %w", err)
+		return nil, fmt.Errorf("failed to generate SID: %w", err)
 	}
 
 	// Generate token using the provided generator
-	plainToken, tokenHash := tokenGenerator(shortID)
+	plainToken, tokenHash := tokenGenerator(sid)
 
 	now := time.Now()
 	agent := &ForwardAgent{
-		shortID:        shortID,
+		sid:            sid,
 		name:           name,
 		tokenHash:      tokenHash,
 		apiToken:       plainToken,
@@ -103,7 +103,7 @@ func NewForwardAgent(name string, publicAddress string, tunnelAddress string, re
 // ReconstructForwardAgent reconstructs a forward agent from persistence
 func ReconstructForwardAgent(
 	id uint,
-	shortID string,
+	sid string,
 	name string,
 	tokenHash string,
 	apiToken string,
@@ -117,8 +117,8 @@ func ReconstructForwardAgent(
 	if id == 0 {
 		return nil, fmt.Errorf("agent ID cannot be zero")
 	}
-	if shortID == "" {
-		return nil, fmt.Errorf("agent short ID is required")
+	if sid == "" {
+		return nil, fmt.Errorf("agent SID is required")
 	}
 	if name == "" {
 		return nil, fmt.Errorf("agent name is required")
@@ -146,7 +146,7 @@ func ReconstructForwardAgent(
 
 	return &ForwardAgent{
 		id:             id,
-		shortID:        shortID,
+		sid:            sid,
 		name:           name,
 		tokenHash:      tokenHash,
 		apiToken:       apiToken,
@@ -166,9 +166,9 @@ func (a *ForwardAgent) ID() uint {
 	return a.id
 }
 
-// ShortID returns the external API identifier
-func (a *ForwardAgent) ShortID() string {
-	return a.shortID
+// SID returns the Stripe-style prefixed ID (fa_xxx)
+func (a *ForwardAgent) SID() string {
+	return a.sid
 }
 
 // Name returns the agent name

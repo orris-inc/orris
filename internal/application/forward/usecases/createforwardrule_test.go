@@ -37,7 +37,7 @@ func TestCreateForwardRule_Direct_Success(t *testing.T) {
 
 	// Create command
 	cmd := CreateForwardRuleCommand{
-		AgentShortID:  agent.ShortID(),
+		AgentShortID:  agent.SID(),
 		RuleType:      "direct",
 		Name:          "test-direct-rule",
 		ListenPort:    8080,
@@ -120,9 +120,9 @@ func TestCreateForwardRule_Entry_Success(t *testing.T) {
 
 	// Create command
 	cmd := CreateForwardRuleCommand{
-		AgentShortID:     agent.ShortID(),
+		AgentShortID:     agent.SID(),
 		RuleType:         "entry",
-		ExitAgentShortID: exitAgent.ShortID(),
+		ExitAgentShortID: exitAgent.SID(),
 		Name:             "test-entry-rule",
 		ListenPort:       8081,
 		TargetAddress:    "10.0.0.10",
@@ -178,9 +178,9 @@ func TestCreateForwardRule_Chain_Success(t *testing.T) {
 
 	// Create command
 	cmd := CreateForwardRuleCommand{
-		AgentShortID:       entryAgent.ShortID(),
+		AgentShortID:       entryAgent.SID(),
 		RuleType:           "chain",
-		ChainAgentShortIDs: []string{chainAgent1.ShortID(), chainAgent2.ShortID()},
+		ChainAgentShortIDs: []string{chainAgent1.SID(), chainAgent2.SID()},
 		Name:               "test-chain-rule",
 		ListenPort:         8082,
 		TargetAddress:      "172.16.0.1",
@@ -242,12 +242,12 @@ func TestCreateForwardRule_DirectChain_Success(t *testing.T) {
 
 	// Create command with chain port config
 	cmd := CreateForwardRuleCommand{
-		AgentShortID:       entryAgent.ShortID(),
+		AgentShortID:       entryAgent.SID(),
 		RuleType:           "direct_chain",
-		ChainAgentShortIDs: []string{chainAgent1.ShortID(), chainAgent2.ShortID()},
+		ChainAgentShortIDs: []string{chainAgent1.SID(), chainAgent2.SID()},
 		ChainPortConfig: map[string]uint16{
-			chainAgent1.ShortID(): 8001,
-			chainAgent2.ShortID(): 8002,
+			chainAgent1.SID(): 8001,
+			chainAgent2.SID(): 8002,
 		},
 		Name:          "test-direct-chain-rule",
 		ListenPort:    8083,
@@ -681,7 +681,7 @@ func TestCreateForwardRule_PortConflict(t *testing.T) {
 
 	// Create command with same port
 	cmd := CreateForwardRuleCommand{
-		AgentShortID:  agent.ShortID(),
+		AgentShortID:  agent.SID(),
 		RuleType:      "direct",
 		Name:          "new-rule",
 		ListenPort:    8080, // Conflicts with existing rule
@@ -862,7 +862,7 @@ func TestCreateForwardRule_ConfigSyncNotification(t *testing.T) {
 
 			// Create command
 			cmd := CreateForwardRuleCommand{
-				AgentShortID:  agent.ShortID(),
+				AgentShortID:  agent.SID(),
 				RuleType:      "direct",
 				Name:          "test-rule",
 				ListenPort:    8080,
@@ -887,7 +887,7 @@ func TestCreateForwardRule_ConfigSyncNotification(t *testing.T) {
 					_ = savedRule.Enable()
 					_ = ruleRepo.Update(context.Background(), savedRule)
 					// Manually trigger notification since we're testing
-					_ = notifier.NotifyRuleChange(context.Background(), savedRule.AgentID(), savedRule.ShortID(), "added")
+					_ = notifier.NotifyRuleChange(context.Background(), savedRule.AgentID(), savedRule.SID(), "added")
 				}
 			}
 

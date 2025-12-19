@@ -82,22 +82,22 @@ func (r *ForwardRuleRepositoryImpl) GetByID(ctx context.Context, id uint) (*forw
 	return entity, nil
 }
 
-// GetByShortID retrieves a forward rule by its short ID.
-func (r *ForwardRuleRepositoryImpl) GetByShortID(ctx context.Context, shortID string) (*forward.ForwardRule, error) {
+// GetBySID retrieves a forward rule by its SID.
+func (r *ForwardRuleRepositoryImpl) GetBySID(ctx context.Context, sid string) (*forward.ForwardRule, error) {
 	var model models.ForwardRuleModel
 
 	tx := db.GetTxFromContext(ctx, r.db)
-	if err := tx.Where("short_id = ?", shortID).First(&model).Error; err != nil {
+	if err := tx.Where("sid = ?", sid).First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
 		}
-		r.logger.Errorw("failed to get forward rule by short ID", "short_id", shortID, "error", err)
+		r.logger.Errorw("failed to get forward rule by SID", "sid", sid, "error", err)
 		return nil, fmt.Errorf("failed to get forward rule: %w", err)
 	}
 
 	entity, err := r.mapper.ToEntity(&model)
 	if err != nil {
-		r.logger.Errorw("failed to map forward rule model to entity", "short_id", shortID, "error", err)
+		r.logger.Errorw("failed to map forward rule model to entity", "sid", sid, "error", err)
 		return nil, fmt.Errorf("failed to map forward rule: %w", err)
 	}
 

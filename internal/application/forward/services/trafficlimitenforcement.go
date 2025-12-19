@@ -172,7 +172,7 @@ func (s *TrafficLimitEnforcementService) CheckAndEnforceLimit(ctx context.Contex
 		s.logger.Infow("disabled forward rule due to traffic limit",
 			"user_id", userID,
 			"rule_id", rule.ID(),
-			"rule_short_id", rule.ShortID(),
+			"rule_short_id", rule.SID(),
 		)
 	}
 

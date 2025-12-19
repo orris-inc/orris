@@ -63,7 +63,7 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 	}
 
 	uc.logger.Infow("executing update forward rule use case", "short_id", cmd.ShortID)
-	rule, err := uc.repo.GetByShortID(ctx, cmd.ShortID)
+	rule, err := uc.repo.GetBySID(ctx, cmd.ShortID)
 	if err != nil {
 		uc.logger.Errorw("failed to get forward rule", "short_id", cmd.ShortID, "error", err)
 		return fmt.Errorf("failed to get forward rule: %w", err)
@@ -86,7 +86,7 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 
 	// Update entry agent ID
 	if cmd.AgentShortID != nil {
-		agent, err := uc.agentRepo.GetByShortID(ctx, *cmd.AgentShortID)
+		agent, err := uc.agentRepo.GetBySID(ctx, *cmd.AgentShortID)
 		if err != nil {
 			uc.logger.Errorw("failed to get agent", "agent_short_id", *cmd.AgentShortID, "error", err)
 			return fmt.Errorf("failed to validate agent: %w", err)
@@ -101,7 +101,7 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 
 	// Update exit agent ID (for entry type rules)
 	if cmd.ExitAgentShortID != nil {
-		exitAgent, err := uc.agentRepo.GetByShortID(ctx, *cmd.ExitAgentShortID)
+		exitAgent, err := uc.agentRepo.GetBySID(ctx, *cmd.ExitAgentShortID)
 		if err != nil {
 			uc.logger.Errorw("failed to get exit agent", "exit_agent_short_id", *cmd.ExitAgentShortID, "error", err)
 			return fmt.Errorf("failed to validate exit agent: %w", err)
@@ -118,7 +118,7 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 	if cmd.ChainAgentShortIDs != nil {
 		chainAgentIDs := make([]uint, len(cmd.ChainAgentShortIDs))
 		for i, shortID := range cmd.ChainAgentShortIDs {
-			chainAgent, err := uc.agentRepo.GetByShortID(ctx, shortID)
+			chainAgent, err := uc.agentRepo.GetBySID(ctx, shortID)
 			if err != nil {
 				uc.logger.Errorw("failed to get chain agent", "chain_agent_short_id", shortID, "error", err)
 				return fmt.Errorf("failed to validate chain agent: %w", err)
@@ -137,7 +137,7 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 	if cmd.ChainPortConfig != nil {
 		chainPortConfig := make(map[uint]uint16, len(cmd.ChainPortConfig))
 		for shortID, port := range cmd.ChainPortConfig {
-			chainAgent, err := uc.agentRepo.GetByShortID(ctx, shortID)
+			chainAgent, err := uc.agentRepo.GetBySID(ctx, shortID)
 			if err != nil {
 				uc.logger.Errorw("failed to get chain agent for port config", "chain_agent_short_id", shortID, "error", err)
 				return fmt.Errorf("failed to validate chain agent in chain_port_config: %w", err)

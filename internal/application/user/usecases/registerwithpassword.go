@@ -72,7 +72,7 @@ func (uc *RegisterWithPasswordUseCase) Execute(ctx context.Context, cmd Register
 		return nil, fmt.Errorf("invalid password: %w", err)
 	}
 
-	newUser, err := user.NewUser(email, name, id.NewUserIDWithPrefix)
+	newUser, err := user.NewUser(email, name, id.NewUserID)
 	if err != nil {
 		uc.logger.Errorw("failed to create user aggregate", "error", err)
 		return nil, fmt.Errorf("failed to create user: %w", err)

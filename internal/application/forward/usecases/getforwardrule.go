@@ -46,7 +46,7 @@ func (uc *GetForwardRuleUseCase) Execute(ctx context.Context, query GetForwardRu
 	}
 
 	uc.logger.Infow("executing get forward rule use case", "short_id", query.ShortID)
-	rule, err := uc.repo.GetByShortID(ctx, query.ShortID)
+	rule, err := uc.repo.GetBySID(ctx, query.ShortID)
 	if err != nil {
 		uc.logger.Errorw("failed to get forward rule", "short_id", query.ShortID, "error", err)
 		return nil, fmt.Errorf("failed to get forward rule: %w", err)
@@ -60,7 +60,7 @@ func (uc *GetForwardRuleUseCase) Execute(ctx context.Context, query GetForwardRu
 	// Populate agent info (AgentID and ExitAgentID)
 	agentIDs := dto.CollectAgentIDs([]*dto.ForwardRuleDTO{ruleDTO})
 	if len(agentIDs) > 0 && uc.agentRepo != nil {
-		agentShortIDs, err := uc.agentRepo.GetShortIDsByIDs(ctx, agentIDs)
+		agentShortIDs, err := uc.agentRepo.GetSIDsByIDs(ctx, agentIDs)
 		if err != nil {
 			uc.logger.Warnw("failed to fetch agent short IDs", "error", err)
 			// Continue without agent info

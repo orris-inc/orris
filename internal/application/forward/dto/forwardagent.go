@@ -3,7 +3,6 @@ package dto
 
 import (
 	"github.com/orris-inc/orris/internal/domain/forward"
-	"github.com/orris-inc/orris/internal/shared/id"
 )
 
 // ForwardAgentDTO represents the data transfer object for forward agents.
@@ -28,7 +27,7 @@ func ToForwardAgentDTO(agent *forward.ForwardAgent) *ForwardAgentDTO {
 	}
 
 	return &ForwardAgentDTO{
-		ID:            id.FormatForwardAgentID(agent.ShortID()),
+		ID:            agent.SID(),
 		Name:          agent.Name(),
 		PublicAddress: agent.PublicAddress(),
 		TunnelAddress: agent.TunnelAddress(),

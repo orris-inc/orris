@@ -7,7 +7,6 @@ import (
 	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/shared/errors"
-	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -56,7 +55,7 @@ func (uc *GetForwardAgentUseCase) Execute(ctx context.Context, query GetForwardA
 
 	uc.logger.Infow("executing get forward agent use case", "short_id", query.ShortID)
 
-	agent, err := uc.repo.GetByShortID(ctx, query.ShortID)
+	agent, err := uc.repo.GetBySID(ctx, query.ShortID)
 	if err != nil {
 		uc.logger.Errorw("failed to get forward agent", "short_id", query.ShortID, "error", err)
 		return nil, fmt.Errorf("failed to get forward agent: %w", err)
@@ -66,7 +65,7 @@ func (uc *GetForwardAgentUseCase) Execute(ctx context.Context, query GetForwardA
 	}
 
 	result := &GetForwardAgentResult{
-		ID:            id.FormatForwardAgentID(agent.ShortID()),
+		ID:            agent.SID(),
 		Name:          agent.Name(),
 		PublicAddress: agent.PublicAddress(),
 		Status:        string(agent.Status()),
@@ -81,7 +80,7 @@ func (uc *GetForwardAgentUseCase) Execute(ctx context.Context, query GetForwardA
 		if err != nil {
 			uc.logger.Warnw("failed to get agent system status, continuing without it",
 				"agent_id", agent.ID(),
-				"short_id", agent.ShortID(),
+				"short_id", agent.SID(),
 				"error", err,
 			)
 		} else if systemStatus != nil {
@@ -89,6 +88,6 @@ func (uc *GetForwardAgentUseCase) Execute(ctx context.Context, query GetForwardA
 		}
 	}
 
-	uc.logger.Infow("forward agent retrieved successfully", "short_id", agent.ShortID())
+	uc.logger.Infow("forward agent retrieved successfully", "short_id", agent.SID())
 	return result, nil
 }

@@ -70,9 +70,8 @@ func (uc *ManageResourceGroupForwardAgentsUseCase) AddAgents(ctx context.Context
 	}
 
 	for _, agentSID := range agentSIDs {
-		// Parse the short ID from the prefixed SID (fa_xxx -> xxx)
-		shortID, err := id.ParseForwardAgentID(agentSID)
-		if err != nil {
+		// Validate the SID format (fa_xxx)
+		if err := id.ValidatePrefix(agentSID, id.PrefixForwardAgent); err != nil {
 			result.Failed = append(result.Failed, dto.BatchOperationErr{
 				ID:     agentSID,
 				Reason: "invalid agent ID format",
@@ -80,8 +79,8 @@ func (uc *ManageResourceGroupForwardAgentsUseCase) AddAgents(ctx context.Context
 			continue
 		}
 
-		// Get agent by short ID
-		agent, err := uc.agentRepo.GetByShortID(ctx, shortID)
+		// Get agent by SID
+		agent, err := uc.agentRepo.GetBySID(ctx, agentSID)
 		if err != nil {
 			uc.logger.Warnw("failed to get forward agent", "error", err, "agent_sid", agentSID)
 			result.Failed = append(result.Failed, dto.BatchOperationErr{
@@ -146,9 +145,8 @@ func (uc *ManageResourceGroupForwardAgentsUseCase) RemoveAgents(ctx context.Cont
 	}
 
 	for _, agentSID := range agentSIDs {
-		// Parse the short ID from the prefixed SID (fa_xxx -> xxx)
-		shortID, err := id.ParseForwardAgentID(agentSID)
-		if err != nil {
+		// Validate the SID format (fa_xxx)
+		if err := id.ValidatePrefix(agentSID, id.PrefixForwardAgent); err != nil {
 			result.Failed = append(result.Failed, dto.BatchOperationErr{
 				ID:     agentSID,
 				Reason: "invalid agent ID format",
@@ -156,8 +154,8 @@ func (uc *ManageResourceGroupForwardAgentsUseCase) RemoveAgents(ctx context.Cont
 			continue
 		}
 
-		// Get agent by short ID
-		agent, err := uc.agentRepo.GetByShortID(ctx, shortID)
+		// Get agent by SID
+		agent, err := uc.agentRepo.GetBySID(ctx, agentSID)
 		if err != nil {
 			uc.logger.Warnw("failed to get forward agent", "error", err, "agent_sid", agentSID)
 			result.Failed = append(result.Failed, dto.BatchOperationErr{
@@ -235,7 +233,7 @@ func (uc *ManageResourceGroupForwardAgentsUseCase) ListAgents(ctx context.Contex
 	groupSID := group.SID()
 	for _, agent := range agents {
 		items = append(items, dto.ForwardAgentSummaryResponse{
-			ID:        id.FormatForwardAgentID(agent.ShortID()),
+			ID:        agent.SID(),
 			Name:      agent.Name(),
 			Status:    string(agent.Status()),
 			GroupSID:  &groupSID,

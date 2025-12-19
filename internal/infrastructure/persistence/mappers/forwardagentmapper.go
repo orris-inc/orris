@@ -40,7 +40,7 @@ func (m *ForwardAgentMapperImpl) ToEntity(model *models.ForwardAgentModel) (*for
 
 	entity, err := forward.ReconstructForwardAgent(
 		model.ID,
-		model.ShortID,
+		model.SID,
 		model.Name,
 		model.TokenHash,
 		model.APIToken,
@@ -67,7 +67,7 @@ func (m *ForwardAgentMapperImpl) ToModel(entity *forward.ForwardAgent) (*models.
 
 	return &models.ForwardAgentModel{
 		ID:            entity.ID(),
-		ShortID:       entity.ShortID(),
+		SID:           entity.SID(),
 		Name:          entity.Name(),
 		TokenHash:     entity.TokenHash(),
 		APIToken:      entity.GetAPIToken(),

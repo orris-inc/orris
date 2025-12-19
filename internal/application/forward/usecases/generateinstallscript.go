@@ -59,7 +59,7 @@ func (uc *GenerateInstallScriptUseCase) Execute(ctx context.Context, query Gener
 
 	uc.logger.Infow("executing generate install script use case", "short_id", query.ShortID)
 
-	agent, err := uc.repo.GetByShortID(ctx, query.ShortID)
+	agent, err := uc.repo.GetBySID(ctx, query.ShortID)
 	if err != nil {
 		uc.logger.Errorw("failed to get forward agent", "short_id", query.ShortID, "error", err)
 		return nil, fmt.Errorf("failed to get forward agent: %w", err)
@@ -89,6 +89,6 @@ func (uc *GenerateInstallScriptUseCase) Execute(ctx context.Context, query Gener
 		Token:            token,
 	}
 
-	uc.logger.Infow("install command generated successfully", "agent_id", agent.ID(), "short_id", agent.ShortID())
+	uc.logger.Infow("install command generated successfully", "agent_id", agent.ID(), "short_id", agent.SID())
 	return result, nil
 }

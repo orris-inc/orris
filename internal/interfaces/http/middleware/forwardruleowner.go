@@ -59,7 +59,7 @@ func (m *ForwardRuleOwnerMiddleware) RequireOwnership() gin.HandlerFunc {
 			return
 		}
 
-		rule, err := m.forwardRuleRepo.GetByShortID(c.Request.Context(), shortID)
+		rule, err := m.forwardRuleRepo.GetBySID(c.Request.Context(), shortID)
 		if err != nil {
 			m.logger.Warnw("failed to get forward rule for ownership check",
 				"forward_rule_short_id", shortID,

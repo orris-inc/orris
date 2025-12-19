@@ -57,8 +57,8 @@ func TestMockForwardRuleRepository(t *testing.T) {
 		t.Errorf("expected ID %d, got %d", rule.ID(), retrieved.ID())
 	}
 
-	// Test GetByShortID
-	retrieved, err = repo.GetByShortID(ctx, rule.ShortID())
+	// Test GetBySID
+	retrieved, err = repo.GetBySID(ctx, rule.SID())
 	if err != nil {
 		t.Fatalf("failed to get rule by short ID: %v", err)
 	}
@@ -202,13 +202,13 @@ func TestMockForwardAgentRepository(t *testing.T) {
 		t.Error("expected agent to exist")
 	}
 
-	// Test GetShortIDsByIDs
-	shortIDs, err := repo.GetShortIDsByIDs(ctx, []uint{agent.ID()})
+	// Test GetSIDsByIDs
+	shortIDs, err := repo.GetSIDsByIDs(ctx, []uint{agent.ID()})
 	if err != nil {
 		t.Fatalf("failed to get short IDs: %v", err)
 	}
-	if shortIDs[agent.ID()] != agent.ShortID() {
-		t.Errorf("expected short ID %s, got %s", agent.ShortID(), shortIDs[agent.ID()])
+	if shortIDs[agent.ID()] != agent.SID() {
+		t.Errorf("expected short ID %s, got %s", agent.SID(), shortIDs[agent.ID()])
 	}
 }
 

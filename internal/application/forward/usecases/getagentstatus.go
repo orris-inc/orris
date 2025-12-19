@@ -47,7 +47,7 @@ func (uc *GetAgentStatusUseCase) Execute(ctx context.Context, query GetAgentStat
 		return nil, fmt.Errorf("short_id is required")
 	}
 
-	agent, err := uc.agentRepo.GetByShortID(ctx, query.ShortID)
+	agent, err := uc.agentRepo.GetBySID(ctx, query.ShortID)
 	if err != nil {
 		uc.logger.Errorw("failed to get agent", "short_id", query.ShortID, "error", err)
 		return nil, fmt.Errorf("get agent: %w", err)
@@ -59,7 +59,7 @@ func (uc *GetAgentStatusUseCase) Execute(ctx context.Context, query GetAgentStat
 	// Get status from Redis using internal ID
 	status, err := uc.statusQuerier.GetStatus(ctx, agent.ID())
 	if err != nil {
-		uc.logger.Errorw("failed to get agent status", "agent_id", agent.ID(), "short_id", agent.ShortID(), "error", err)
+		uc.logger.Errorw("failed to get agent status", "agent_id", agent.ID(), "short_id", agent.SID(), "error", err)
 		return nil, fmt.Errorf("get status: %w", err)
 	}
 

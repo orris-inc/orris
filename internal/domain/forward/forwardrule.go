@@ -13,7 +13,7 @@ import (
 // ForwardRule represents the forward rule aggregate root.
 type ForwardRule struct {
 	id                uint
-	shortID           string // external API identifier (Stripe-style)
+	sid               string // Stripe-style prefixed ID (fr_xxx)
 	agentID           uint
 	userID            *uint // user ID for user-owned rules (nil for admin-created rules)
 	ruleType          vo.ForwardRuleType
@@ -235,15 +235,15 @@ func NewForwardRule(
 		return nil, fmt.Errorf("invalid IP version: %s", ipVersion)
 	}
 
-	// Generate short ID for external API use
-	shortID, err := shortIDGenerator()
+	// Generate SID for external API use
+	sid, err := shortIDGenerator()
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate short ID: %w", err)
+		return nil, fmt.Errorf("failed to generate SID: %w", err)
 	}
 
 	now := time.Now()
 	return &ForwardRule{
-		shortID:           shortID,
+		sid:               sid,
 		agentID:           agentID,
 		userID:            userID,
 		ruleType:          ruleType,
@@ -272,7 +272,7 @@ func NewForwardRule(
 // It performs full validation to ensure data integrity, even for persisted data.
 func ReconstructForwardRule(
 	id uint,
-	shortID string,
+	sid string,
 	agentID uint,
 	userID *uint,
 	ruleType vo.ForwardRuleType,
@@ -297,8 +297,8 @@ func ReconstructForwardRule(
 	if id == 0 {
 		return nil, fmt.Errorf("forward rule ID cannot be zero")
 	}
-	if shortID == "" {
-		return nil, fmt.Errorf("forward rule short ID is required")
+	if sid == "" {
+		return nil, fmt.Errorf("forward rule SID is required")
 	}
 	if agentID == 0 {
 		return nil, fmt.Errorf("agent ID is required")
@@ -333,7 +333,7 @@ func ReconstructForwardRule(
 
 	rule := &ForwardRule{
 		id:                id,
-		shortID:           shortID,
+		sid:               sid,
 		agentID:           agentID,
 		userID:            userID,
 		ruleType:          ruleType,
@@ -399,9 +399,9 @@ func (r *ForwardRule) ID() uint {
 	return r.id
 }
 
-// ShortID returns the external API identifier.
-func (r *ForwardRule) ShortID() string {
-	return r.shortID
+// SID returns the Stripe-style prefixed ID (fr_xxx).
+func (r *ForwardRule) SID() string {
+	return r.sid
 }
 
 // AgentID returns the forward agent ID.

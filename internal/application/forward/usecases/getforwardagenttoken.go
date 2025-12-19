@@ -6,7 +6,6 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/shared/errors"
-	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -47,7 +46,7 @@ func (uc *GetForwardAgentTokenUseCase) Execute(ctx context.Context, query GetFor
 
 	uc.logger.Infow("executing get forward agent token use case", "short_id", query.ShortID)
 
-	agent, err := uc.repo.GetByShortID(ctx, query.ShortID)
+	agent, err := uc.repo.GetBySID(ctx, query.ShortID)
 	if err != nil {
 		uc.logger.Errorw("failed to get forward agent", "short_id", query.ShortID, "error", err)
 		return nil, fmt.Errorf("failed to get forward agent: %w", err)
@@ -57,11 +56,11 @@ func (uc *GetForwardAgentTokenUseCase) Execute(ctx context.Context, query GetFor
 	}
 
 	result := &GetForwardAgentTokenResult{
-		ID:       id.FormatForwardAgentID(agent.ShortID()),
+		ID:       agent.SID(),
 		Token:    agent.GetAPIToken(),
 		HasToken: agent.HasToken(),
 	}
 
-	uc.logger.Infow("forward agent token retrieved successfully", "id", agent.ID(), "short_id", agent.ShortID(), "has_token", result.HasToken)
+	uc.logger.Infow("forward agent token retrieved successfully", "id", agent.ID(), "short_id", agent.SID(), "has_token", result.HasToken)
 	return result, nil
 }

@@ -38,7 +38,7 @@ func (uc *ResetForwardRuleTrafficUseCase) Execute(ctx context.Context, cmd Reset
 	}
 
 	uc.logger.Infow("executing reset forward rule traffic use case", "short_id", cmd.ShortID)
-	rule, err := uc.repo.GetByShortID(ctx, cmd.ShortID)
+	rule, err := uc.repo.GetBySID(ctx, cmd.ShortID)
 	if err != nil {
 		uc.logger.Errorw("failed to get forward rule", "short_id", cmd.ShortID, "error", err)
 		return fmt.Errorf("failed to get forward rule: %w", err)

@@ -59,8 +59,8 @@ func (uc *CreateUserUseCase) Execute(ctx context.Context, request dto.CreateUser
 		return nil, fmt.Errorf("invalid name: %w", err)
 	}
 
-	// Create user using constructor with short ID generator
-	userEntity, err := domainUser.NewUser(email, name, id.NewUserIDWithPrefix)
+	// Create user using constructor with SID generator
+	userEntity, err := domainUser.NewUser(email, name, id.NewUserID)
 	if err != nil {
 		uc.logger.Errorw("failed to create user entity", "error", err)
 		return nil, fmt.Errorf("failed to create user: %w", err)

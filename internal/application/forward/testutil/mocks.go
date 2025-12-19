@@ -58,7 +58,7 @@ func (m *MockForwardRuleRepository) Create(ctx context.Context, rule *forward.Fo
 	}
 
 	m.rules[rule.ID()] = rule
-	m.rulesByShortID[rule.ShortID()] = rule
+	m.rulesByShortID[rule.SID()] = rule
 	m.rulesByPort[rule.ListenPort()] = rule
 
 	return nil
@@ -81,8 +81,8 @@ func (m *MockForwardRuleRepository) GetByID(ctx context.Context, id uint) (*forw
 	return rule, nil
 }
 
-// GetByShortID retrieves a forward rule by short ID.
-func (m *MockForwardRuleRepository) GetByShortID(ctx context.Context, shortID string) (*forward.ForwardRule, error) {
+// GetBySID retrieves a forward rule by short ID.
+func (m *MockForwardRuleRepository) GetBySID(ctx context.Context, shortID string) (*forward.ForwardRule, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -137,7 +137,7 @@ func (m *MockForwardRuleRepository) Update(ctx context.Context, rule *forward.Fo
 	}
 
 	m.rules[rule.ID()] = rule
-	m.rulesByShortID[rule.ShortID()] = rule
+	m.rulesByShortID[rule.SID()] = rule
 	m.rulesByPort[rule.ListenPort()] = rule
 
 	return nil
@@ -158,7 +158,7 @@ func (m *MockForwardRuleRepository) Delete(ctx context.Context, id uint) error {
 	}
 
 	delete(m.rules, id)
-	delete(m.rulesByShortID, rule.ShortID())
+	delete(m.rulesByShortID, rule.SID())
 	delete(m.rulesByPort, rule.ListenPort())
 
 	return nil
@@ -458,7 +458,7 @@ func (m *MockForwardRuleRepository) AddRule(rule *forward.ForwardRule) {
 	}
 
 	m.rules[rule.ID()] = rule
-	m.rulesByShortID[rule.ShortID()] = rule
+	m.rulesByShortID[rule.SID()] = rule
 	m.rulesByPort[rule.ListenPort()] = rule
 }
 
@@ -575,7 +575,7 @@ func (m *MockForwardAgentRepository) Create(ctx context.Context, agent *forward.
 	}
 
 	m.agents[agent.ID()] = agent
-	m.agentsByShortID[agent.ShortID()] = agent
+	m.agentsByShortID[agent.SID()] = agent
 	m.agentsByToken[agent.TokenHash()] = agent
 
 	return nil
@@ -598,8 +598,8 @@ func (m *MockForwardAgentRepository) GetByID(ctx context.Context, id uint) (*for
 	return agent, nil
 }
 
-// GetByShortID retrieves a forward agent by short ID.
-func (m *MockForwardAgentRepository) GetByShortID(ctx context.Context, shortID string) (*forward.ForwardAgent, error) {
+// GetBySID retrieves a forward agent by short ID.
+func (m *MockForwardAgentRepository) GetBySID(ctx context.Context, shortID string) (*forward.ForwardAgent, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -632,8 +632,8 @@ func (m *MockForwardAgentRepository) GetByTokenHash(ctx context.Context, tokenHa
 	return agent, nil
 }
 
-// GetShortIDsByIDs retrieves short IDs for multiple agents by their internal IDs.
-func (m *MockForwardAgentRepository) GetShortIDsByIDs(ctx context.Context, ids []uint) (map[uint]string, error) {
+// GetSIDsByIDs retrieves short IDs for multiple agents by their internal IDs.
+func (m *MockForwardAgentRepository) GetSIDsByIDs(ctx context.Context, ids []uint) (map[uint]string, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -644,7 +644,7 @@ func (m *MockForwardAgentRepository) GetShortIDsByIDs(ctx context.Context, ids [
 	result := make(map[uint]string)
 	for _, id := range ids {
 		if agent, exists := m.agents[id]; exists {
-			result[id] = agent.ShortID()
+			result[id] = agent.SID()
 		}
 	}
 
@@ -673,7 +673,7 @@ func (m *MockForwardAgentRepository) Update(ctx context.Context, agent *forward.
 	}
 
 	m.agents[agent.ID()] = agent
-	m.agentsByShortID[agent.ShortID()] = agent
+	m.agentsByShortID[agent.SID()] = agent
 	m.agentsByToken[agent.TokenHash()] = agent
 
 	return nil
@@ -694,7 +694,7 @@ func (m *MockForwardAgentRepository) Delete(ctx context.Context, id uint) error 
 	}
 
 	delete(m.agents, id)
-	delete(m.agentsByShortID, agent.ShortID())
+	delete(m.agentsByShortID, agent.SID())
 	delete(m.agentsByToken, agent.TokenHash())
 
 	return nil
@@ -808,7 +808,7 @@ func (m *MockForwardAgentRepository) AddAgent(agent *forward.ForwardAgent) {
 	}
 
 	m.agents[agent.ID()] = agent
-	m.agentsByShortID[agent.ShortID()] = agent
+	m.agentsByShortID[agent.SID()] = agent
 	m.agentsByToken[agent.TokenHash()] = agent
 }
 
@@ -861,7 +861,7 @@ func (m *MockForwardAgentRepository) SetLastSeenError(err error) {
 	m.lastSeenError = err
 }
 
-// SetShortIDsError sets the error to return on GetShortIDsByIDs calls.
+// SetShortIDsError sets the error to return on GetSIDsByIDs calls.
 func (m *MockForwardAgentRepository) SetShortIDsError(err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()

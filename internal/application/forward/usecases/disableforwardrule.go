@@ -41,7 +41,7 @@ func (uc *DisableForwardRuleUseCase) Execute(ctx context.Context, cmd DisableFor
 	}
 
 	uc.logger.Infow("executing disable forward rule use case", "short_id", cmd.ShortID)
-	rule, err := uc.repo.GetByShortID(ctx, cmd.ShortID)
+	rule, err := uc.repo.GetBySID(ctx, cmd.ShortID)
 	if err != nil {
 		uc.logger.Errorw("failed to get forward rule", "short_id", cmd.ShortID, "error", err)
 		return fmt.Errorf("failed to get forward rule: %w", err)
