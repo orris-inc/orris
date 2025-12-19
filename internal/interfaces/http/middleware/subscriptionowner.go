@@ -3,11 +3,12 @@ package middleware
 
 import (
 	"net/http"
-	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
@@ -46,19 +47,35 @@ func (m *SubscriptionOwnerMiddleware) RequireOwnership() gin.HandlerFunc {
 			return
 		}
 
-		subscriptionID, err := strconv.ParseUint(subscriptionIDStr, 10, 64)
-		if err != nil {
-			utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID")
+		var sub *subscription.Subscription
+		var err error
+
+		// Check if ID is Stripe-style (sub_xxx) or numeric
+		if strings.HasPrefix(subscriptionIDStr, id.PrefixSubscription+"_") {
+			// Parse Stripe-style ID to extract SID
+			sid, parseErr := id.ParseSubscriptionID(subscriptionIDStr)
+			if parseErr != nil {
+				utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID format")
+				c.Abort()
+				return
+			}
+			sub, err = m.subscriptionRepo.GetBySID(c.Request.Context(), subscriptionIDStr)
+			if err != nil {
+				m.logger.Warnw("failed to get subscription by SID for ownership check",
+					"sid", sid,
+					"error", err,
+				)
+				utils.ErrorResponse(c, http.StatusNotFound, "subscription not found")
+				c.Abort()
+				return
+			}
+		} else {
+			utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID format, expected sub_xxxxx")
 			c.Abort()
 			return
 		}
 
-		sub, err := m.subscriptionRepo.GetByID(c.Request.Context(), uint(subscriptionID))
-		if err != nil {
-			m.logger.Warnw("failed to get subscription for ownership check",
-				"subscription_id", subscriptionID,
-				"error", err,
-			)
+		if sub == nil {
 			utils.ErrorResponse(c, http.StatusNotFound, "subscription not found")
 			c.Abort()
 			return
@@ -75,7 +92,7 @@ func (m *SubscriptionOwnerMiddleware) RequireOwnership() gin.HandlerFunc {
 			m.logger.Warnw("user attempted to access another user's subscription",
 				"current_user_id", currentUserID,
 				"subscription_owner_id", sub.UserID(),
-				"subscription_id", subscriptionID,
+				"subscription_sid", sub.SID(),
 			)
 			utils.ErrorResponse(c, http.StatusForbidden, "access denied")
 			c.Abort()
@@ -84,7 +101,7 @@ func (m *SubscriptionOwnerMiddleware) RequireOwnership() gin.HandlerFunc {
 
 		// Store subscription in context for handler reuse
 		c.Set("subscription", sub)
-		c.Set("subscription_id", uint(subscriptionID))
+		c.Set("subscription_id", sub.ID())
 
 		c.Next()
 	}

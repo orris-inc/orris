@@ -289,7 +289,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		resetSubscriptionLinkUC, log,
 	)
 	adminSubscriptionHandler := adminHandlers.NewSubscriptionHandler(
-		createSubscriptionUC, getSubscriptionUC, listUserSubscriptionsUC,
+		subscriptionRepo, createSubscriptionUC, getSubscriptionUC, listUserSubscriptionsUC,
 		cancelSubscriptionUC, renewSubscriptionUC, changePlanUC,
 		activateSubscriptionUC, log,
 	)

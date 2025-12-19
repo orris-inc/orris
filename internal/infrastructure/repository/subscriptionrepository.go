@@ -73,6 +73,26 @@ func (r *SubscriptionRepositoryImpl) GetByID(ctx context.Context, id uint) (*sub
 	return entity, nil
 }
 
+func (r *SubscriptionRepositoryImpl) GetBySID(ctx context.Context, sid string) (*subscription.Subscription, error) {
+	var model models.SubscriptionModel
+
+	if err := r.db.WithContext(ctx).Where("sid = ?", sid).First(&model).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		r.logger.Errorw("failed to get subscription by SID", "sid", sid, "error", err)
+		return nil, fmt.Errorf("failed to get subscription: %w", err)
+	}
+
+	entity, err := r.mapper.ToEntity(&model)
+	if err != nil {
+		r.logger.Errorw("failed to map subscription model to entity", "sid", sid, "error", err)
+		return nil, fmt.Errorf("failed to map subscription: %w", err)
+	}
+
+	return entity, nil
+}
+
 func (r *SubscriptionRepositoryImpl) GetByUserID(ctx context.Context, userID uint) ([]*subscription.Subscription, error) {
 	var models []*models.SubscriptionModel
 

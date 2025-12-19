@@ -4,19 +4,23 @@ package admin
 import (
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/orris-inc/orris/internal/application/subscription/usecases"
+	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
 	"github.com/orris-inc/orris/internal/shared/constants"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 // SubscriptionHandler handles admin subscription operations
 type SubscriptionHandler struct {
+	subscriptionRepo  subscription.SubscriptionRepository
 	createUseCase     *usecases.CreateSubscriptionUseCase
 	getUseCase        *usecases.GetSubscriptionUseCase
 	listUseCase       *usecases.ListUserSubscriptionsUseCase
@@ -29,6 +33,7 @@ type SubscriptionHandler struct {
 
 // NewSubscriptionHandler creates a new admin subscription handler
 func NewSubscriptionHandler(
+	subscriptionRepo subscription.SubscriptionRepository,
 	createUC *usecases.CreateSubscriptionUseCase,
 	getUC *usecases.GetSubscriptionUseCase,
 	listUC *usecases.ListUserSubscriptionsUseCase,
@@ -39,6 +44,7 @@ func NewSubscriptionHandler(
 	logger logger.Interface,
 ) *SubscriptionHandler {
 	return &SubscriptionHandler{
+		subscriptionRepo:  subscriptionRepo,
 		createUseCase:     createUC,
 		getUseCase:        getUC,
 		listUseCase:       listUC,
@@ -167,31 +173,63 @@ func (h *SubscriptionHandler) List(c *gin.Context) {
 	utils.ListSuccessResponse(c, result.Subscriptions, result.Total, result.Page, result.PageSize)
 }
 
+// parseSubscriptionID parses subscription ID from URL parameter, supporting both Stripe-style (sub_xxx) and numeric IDs
+func (h *SubscriptionHandler) parseSubscriptionID(c *gin.Context) (uint, error) {
+	idStr := c.Param("id")
+
+	// Check if ID is Stripe-style (sub_xxx)
+	if strings.HasPrefix(idStr, id.PrefixSubscription+"_") {
+		sub, err := h.subscriptionRepo.GetBySID(c.Request.Context(), idStr)
+		if err != nil {
+			return 0, err
+		}
+		if sub == nil {
+			return 0, nil
+		}
+		return sub.ID(), nil
+	}
+
+	// Try parsing as numeric ID
+	subscriptionID, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	return uint(subscriptionID), nil
+}
+
 func (h *SubscriptionHandler) Get(c *gin.Context) {
-	subscriptionID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	subscriptionID, err := h.parseSubscriptionID(c)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID")
 		return
 	}
-
-	query := usecases.GetSubscriptionQuery{
-		SubscriptionID: uint(subscriptionID),
+	if subscriptionID == 0 {
+		utils.ErrorResponse(c, http.StatusNotFound, "subscription not found")
+		return
 	}
 
-	subscription, err := h.getUseCase.Execute(c.Request.Context(), query)
+	query := usecases.GetSubscriptionQuery{
+		SubscriptionID: subscriptionID,
+	}
+
+	sub, err := h.getUseCase.Execute(c.Request.Context(), query)
 	if err != nil {
 		h.logger.Errorw("failed to get subscription", "error", err, "subscription_id", subscriptionID)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "", subscription)
+	utils.SuccessResponse(c, http.StatusOK, "", sub)
 }
 
 func (h *SubscriptionHandler) UpdateStatus(c *gin.Context) {
-	subscriptionID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	subscriptionID, err := h.parseSubscriptionID(c)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID")
+		return
+	}
+	if subscriptionID == 0 {
+		utils.ErrorResponse(c, http.StatusNotFound, "subscription not found")
 		return
 	}
 
@@ -205,7 +243,7 @@ func (h *SubscriptionHandler) UpdateStatus(c *gin.Context) {
 	switch req.Status {
 	case string(valueobjects.StatusActive):
 		cmd := usecases.ActivateSubscriptionCommand{
-			SubscriptionID: uint(subscriptionID),
+			SubscriptionID: subscriptionID,
 		}
 		if err := h.activateUseCase.Execute(c.Request.Context(), cmd); err != nil {
 			h.logger.Errorw("failed to activate subscription", "error", err, "subscription_id", subscriptionID)
@@ -224,7 +262,7 @@ func (h *SubscriptionHandler) UpdateStatus(c *gin.Context) {
 			immediate = *req.Immediate
 		}
 		cmd := usecases.CancelSubscriptionCommand{
-			SubscriptionID: uint(subscriptionID),
+			SubscriptionID: subscriptionID,
 			Reason:         *req.Reason,
 			Immediate:      immediate,
 		}
@@ -237,7 +275,7 @@ func (h *SubscriptionHandler) UpdateStatus(c *gin.Context) {
 
 	case "renewed":
 		cmd := usecases.RenewSubscriptionCommand{
-			SubscriptionID: uint(subscriptionID),
+			SubscriptionID: subscriptionID,
 			IsAutoRenew:    false,
 		}
 		if err := h.renewUseCase.Execute(c.Request.Context(), cmd); err != nil {
@@ -253,9 +291,13 @@ func (h *SubscriptionHandler) UpdateStatus(c *gin.Context) {
 }
 
 func (h *SubscriptionHandler) ChangePlan(c *gin.Context) {
-	subscriptionID, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	subscriptionID, err := h.parseSubscriptionID(c)
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID")
+		return
+	}
+	if subscriptionID == 0 {
+		utils.ErrorResponse(c, http.StatusNotFound, "subscription not found")
 		return
 	}
 
@@ -267,7 +309,7 @@ func (h *SubscriptionHandler) ChangePlan(c *gin.Context) {
 	}
 
 	cmd := usecases.ChangePlanCommand{
-		SubscriptionID: uint(subscriptionID),
+		SubscriptionID: subscriptionID,
 		NewPlanID:      req.NewPlanID,
 		ChangeType:     usecases.ChangeType(req.ChangeType),
 		EffectiveDate:  usecases.EffectiveDate(req.EffectiveDate),
