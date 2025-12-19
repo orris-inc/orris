@@ -27,6 +27,7 @@ const (
 	TableNodeTrojanConfigs      = "node_trojan_configs"
 	TablePlans                  = "plans"
 	TablePlanPricings           = "plan_pricings"
+	TablePlanEntitlements       = "plan_entitlements"
 	TableEntitlements           = "entitlements"
 	TableSubscriptions          = "subscriptions"
 	TableSubscriptionTokens     = "subscription_tokens"

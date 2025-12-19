@@ -15,7 +15,9 @@ import (
 type Subscription struct {
 	id                 uint
 	uuid               string // unique identifier used for node authentication
-	userID             uint
+	userID             uint   // Deprecated: use subjectID instead. Kept for backward compatibility
+	subjectType        string // Type of subject (user, user_group, etc.)
+	subjectID          uint   // ID of the subject
 	planID             uint
 	status             vo.SubscriptionStatus
 	startDate          time.Time
@@ -32,9 +34,18 @@ type Subscription struct {
 }
 
 // NewSubscription creates a new subscription
+// For backward compatibility, this defaults to user subject type
 func NewSubscription(userID, planID uint, startDate, endDate time.Time, autoRenew bool) (*Subscription, error) {
-	if userID == 0 {
-		return nil, fmt.Errorf("user ID is required")
+	return NewSubscriptionWithSubject("user", userID, planID, startDate, endDate, autoRenew)
+}
+
+// NewSubscriptionWithSubject creates a new subscription with specific subject type
+func NewSubscriptionWithSubject(subjectType string, subjectID, planID uint, startDate, endDate time.Time, autoRenew bool) (*Subscription, error) {
+	if subjectType == "" {
+		return nil, fmt.Errorf("subject type is required")
+	}
+	if subjectID == 0 {
+		return nil, fmt.Errorf("subject ID is required")
 	}
 	if planID == 0 {
 		return nil, fmt.Errorf("plan ID is required")
@@ -49,7 +60,9 @@ func NewSubscription(userID, planID uint, startDate, endDate time.Time, autoRene
 	now := time.Now()
 	s := &Subscription{
 		uuid:               subscriptionUUID,
-		userID:             userID,
+		userID:             subjectID, // For backward compatibility
+		subjectType:        subjectType,
+		subjectID:          subjectID,
 		planID:             planID,
 		status:             vo.StatusInactive,
 		startDate:          startDate,
@@ -67,8 +80,41 @@ func NewSubscription(userID, planID uint, startDate, endDate time.Time, autoRene
 }
 
 // ReconstructSubscription reconstructs a subscription from persistence
+// Deprecated: Use ReconstructSubscriptionWithSubject for new code
 func ReconstructSubscription(
 	id, userID, planID uint,
+	uuid string,
+	status vo.SubscriptionStatus,
+	startDate, endDate time.Time,
+	autoRenew bool,
+	currentPeriodStart, currentPeriodEnd time.Time,
+	cancelledAt *time.Time,
+	cancelReason *string,
+	metadata map[string]interface{},
+	version int,
+	createdAt, updatedAt time.Time,
+) (*Subscription, error) {
+	return ReconstructSubscriptionWithSubject(
+		id, userID, planID,
+		"user", userID, // Default to user subject type
+		uuid,
+		status,
+		startDate, endDate,
+		autoRenew,
+		currentPeriodStart, currentPeriodEnd,
+		cancelledAt,
+		cancelReason,
+		metadata,
+		version,
+		createdAt, updatedAt,
+	)
+}
+
+// ReconstructSubscriptionWithSubject reconstructs a subscription from persistence with subject fields
+func ReconstructSubscriptionWithSubject(
+	id, userID, planID uint,
+	subjectType string,
+	subjectID uint,
 	uuid string,
 	status vo.SubscriptionStatus,
 	startDate, endDate time.Time,
@@ -86,8 +132,11 @@ func ReconstructSubscription(
 	if uuid == "" {
 		return nil, fmt.Errorf("subscription UUID is required")
 	}
-	if userID == 0 {
-		return nil, fmt.Errorf("user ID is required")
+	if subjectType == "" {
+		return nil, fmt.Errorf("subject type is required")
+	}
+	if subjectID == 0 {
+		return nil, fmt.Errorf("subject ID is required")
 	}
 	if planID == 0 {
 		return nil, fmt.Errorf("plan ID is required")
@@ -104,6 +153,8 @@ func ReconstructSubscription(
 		id:                 id,
 		uuid:               uuid,
 		userID:             userID,
+		subjectType:        subjectType,
+		subjectID:          subjectID,
 		planID:             planID,
 		status:             status,
 		startDate:          startDate,
@@ -131,8 +182,19 @@ func (s *Subscription) UUID() string {
 }
 
 // UserID returns the user ID
+// Deprecated: use SubjectID instead
 func (s *Subscription) UserID() uint {
 	return s.userID
+}
+
+// SubjectType returns the subject type
+func (s *Subscription) SubjectType() string {
+	return s.subjectType
+}
+
+// SubjectID returns the subject ID
+func (s *Subscription) SubjectID() uint {
+	return s.subjectID
 }
 
 // PlanID returns the plan ID
@@ -366,8 +428,11 @@ func (s *Subscription) UpdateCurrentPeriod(start, end time.Time) error {
 
 // Validate performs domain-level validation
 func (s *Subscription) Validate() error {
-	if s.userID == 0 {
-		return fmt.Errorf("user ID is required")
+	if s.subjectType == "" {
+		return fmt.Errorf("subject type is required")
+	}
+	if s.subjectID == 0 {
+		return fmt.Errorf("subject ID is required")
 	}
 	if s.planID == 0 {
 		return fmt.Errorf("plan ID is required")

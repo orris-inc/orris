@@ -45,10 +45,12 @@ func (m *SubscriptionMapperImpl) ToEntity(model *models.SubscriptionModel) (*sub
 		metadata = make(map[string]interface{})
 	}
 
-	entity, err := subscription.ReconstructSubscription(
+	entity, err := subscription.ReconstructSubscriptionWithSubject(
 		model.ID,
 		model.UserID,
 		model.PlanID,
+		model.SubjectType,
+		model.SubjectID,
 		model.UUID,
 		status,
 		model.StartDate,
@@ -88,6 +90,8 @@ func (m *SubscriptionMapperImpl) ToModel(entity *subscription.Subscription) (*mo
 		ID:                 entity.ID(),
 		UUID:               entity.UUID(),
 		UserID:             entity.UserID(),
+		SubjectType:        entity.SubjectType(),
+		SubjectID:          entity.SubjectID(),
 		PlanID:             entity.PlanID(),
 		Status:             entity.Status().String(),
 		StartDate:          entity.StartDate(),

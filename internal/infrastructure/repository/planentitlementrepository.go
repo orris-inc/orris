@@ -7,28 +7,31 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
-// EntitlementRepositoryImpl implements the subscription.EntitlementRepository interface
-type EntitlementRepositoryImpl struct {
+// PlanEntitlementRepositoryImpl implements the subscription.EntitlementRepository interface
+type PlanEntitlementRepositoryImpl struct {
 	db     *gorm.DB
+	mapper mappers.PlanEntitlementMapper
 	logger logger.Interface
 }
 
-// NewEntitlementRepository creates a new entitlement repository instance
-func NewEntitlementRepository(db *gorm.DB, logger logger.Interface) subscription.EntitlementRepository {
-	return &EntitlementRepositoryImpl{
+// NewPlanEntitlementRepository creates a new plan entitlement repository instance
+func NewPlanEntitlementRepository(db *gorm.DB, logger logger.Interface) subscription.EntitlementRepository {
+	return &PlanEntitlementRepositoryImpl{
 		db:     db,
+		mapper: mappers.NewPlanEntitlementMapper(),
 		logger: logger,
 	}
 }
 
 // Create creates a new entitlement association
-func (r *EntitlementRepositoryImpl) Create(ctx context.Context, resource *subscription.Entitlement) error {
-	model := &models.EntitlementModel{
+func (r *PlanEntitlementRepositoryImpl) Create(ctx context.Context, resource *subscription.Entitlement) error {
+	model := &models.PlanEntitlementModel{
 		PlanID:       resource.PlanID(),
 		ResourceType: string(resource.ResourceType()),
 		ResourceID:   resource.ResourceID(),
@@ -62,8 +65,8 @@ func (r *EntitlementRepositoryImpl) Create(ctx context.Context, resource *subscr
 }
 
 // Delete removes an entitlement association by ID
-func (r *EntitlementRepositoryImpl) Delete(ctx context.Context, id uint) error {
-	result := r.db.WithContext(ctx).Delete(&models.EntitlementModel{}, id)
+func (r *PlanEntitlementRepositoryImpl) Delete(ctx context.Context, id uint) error {
+	result := r.db.WithContext(ctx).Delete(&models.PlanEntitlementModel{}, id)
 	if result.Error != nil {
 		r.logger.Errorw("failed to delete entitlement", "id", id, "error", result.Error)
 		return fmt.Errorf("failed to delete entitlement: %w", result.Error)
@@ -77,10 +80,10 @@ func (r *EntitlementRepositoryImpl) Delete(ctx context.Context, id uint) error {
 }
 
 // DeleteByPlanAndResource removes a specific association
-func (r *EntitlementRepositoryImpl) DeleteByPlanAndResource(ctx context.Context, planID uint, resourceType subscription.EntitlementResourceType, resourceID uint) error {
+func (r *PlanEntitlementRepositoryImpl) DeleteByPlanAndResource(ctx context.Context, planID uint, resourceType subscription.EntitlementResourceType, resourceID uint) error {
 	result := r.db.WithContext(ctx).
 		Where("plan_id = ? AND resource_type = ? AND resource_id = ?", planID, string(resourceType), resourceID).
-		Delete(&models.EntitlementModel{})
+		Delete(&models.PlanEntitlementModel{})
 
 	if result.Error != nil {
 		r.logger.Errorw("failed to delete entitlement",
@@ -102,8 +105,8 @@ func (r *EntitlementRepositoryImpl) DeleteByPlanAndResource(ctx context.Context,
 }
 
 // GetByPlan returns all resources for a subscription plan
-func (r *EntitlementRepositoryImpl) GetByPlan(ctx context.Context, planID uint) ([]*subscription.Entitlement, error) {
-	var models []models.EntitlementModel
+func (r *PlanEntitlementRepositoryImpl) GetByPlan(ctx context.Context, planID uint) ([]*subscription.Entitlement, error) {
+	var models []models.PlanEntitlementModel
 	if err := r.db.WithContext(ctx).
 		Where("plan_id = ?", planID).
 		Find(&models).Error; err != nil {
@@ -131,8 +134,8 @@ func (r *EntitlementRepositoryImpl) GetByPlan(ctx context.Context, planID uint) 
 }
 
 // GetByPlanAndType returns resources of a specific type for a subscription plan
-func (r *EntitlementRepositoryImpl) GetByPlanAndType(ctx context.Context, planID uint, resourceType subscription.EntitlementResourceType) ([]*subscription.Entitlement, error) {
-	var models []models.EntitlementModel
+func (r *PlanEntitlementRepositoryImpl) GetByPlanAndType(ctx context.Context, planID uint, resourceType subscription.EntitlementResourceType) ([]*subscription.Entitlement, error) {
+	var models []models.PlanEntitlementModel
 	if err := r.db.WithContext(ctx).
 		Where("plan_id = ? AND resource_type = ?", planID, string(resourceType)).
 		Find(&models).Error; err != nil {
@@ -163,10 +166,10 @@ func (r *EntitlementRepositoryImpl) GetByPlanAndType(ctx context.Context, planID
 }
 
 // GetResourceIDs returns resource IDs of a specific type for a subscription plan
-func (r *EntitlementRepositoryImpl) GetResourceIDs(ctx context.Context, planID uint, resourceType subscription.EntitlementResourceType) ([]uint, error) {
+func (r *PlanEntitlementRepositoryImpl) GetResourceIDs(ctx context.Context, planID uint, resourceType subscription.EntitlementResourceType) ([]uint, error) {
 	var resourceIDs []uint
 	if err := r.db.WithContext(ctx).
-		Model(&models.EntitlementModel{}).
+		Model(&models.PlanEntitlementModel{}).
 		Where("plan_id = ? AND resource_type = ?", planID, string(resourceType)).
 		Pluck("resource_id", &resourceIDs).Error; err != nil {
 		r.logger.Errorw("failed to get resource IDs",
@@ -180,10 +183,10 @@ func (r *EntitlementRepositoryImpl) GetResourceIDs(ctx context.Context, planID u
 }
 
 // Exists checks if a specific association exists
-func (r *EntitlementRepositoryImpl) Exists(ctx context.Context, planID uint, resourceType subscription.EntitlementResourceType, resourceID uint) (bool, error) {
+func (r *PlanEntitlementRepositoryImpl) Exists(ctx context.Context, planID uint, resourceType subscription.EntitlementResourceType, resourceID uint) (bool, error) {
 	var count int64
 	if err := r.db.WithContext(ctx).
-		Model(&models.EntitlementModel{}).
+		Model(&models.PlanEntitlementModel{}).
 		Where("plan_id = ? AND resource_type = ? AND resource_id = ?", planID, string(resourceType), resourceID).
 		Count(&count).Error; err != nil {
 		r.logger.Errorw("failed to check entitlement existence",
@@ -198,14 +201,14 @@ func (r *EntitlementRepositoryImpl) Exists(ctx context.Context, planID uint, res
 }
 
 // BatchCreate creates multiple entitlement associations
-func (r *EntitlementRepositoryImpl) BatchCreate(ctx context.Context, resources []*subscription.Entitlement) error {
+func (r *PlanEntitlementRepositoryImpl) BatchCreate(ctx context.Context, resources []*subscription.Entitlement) error {
 	if len(resources) == 0 {
 		return nil
 	}
 
-	resourceModels := make([]models.EntitlementModel, len(resources))
+	resourceModels := make([]models.PlanEntitlementModel, len(resources))
 	for i, resource := range resources {
-		resourceModels[i] = models.EntitlementModel{
+		resourceModels[i] = models.PlanEntitlementModel{
 			PlanID:       resource.PlanID(),
 			ResourceType: string(resource.ResourceType()),
 			ResourceID:   resource.ResourceID(),
@@ -233,12 +236,12 @@ func (r *EntitlementRepositoryImpl) BatchCreate(ctx context.Context, resources [
 }
 
 // BatchDelete removes multiple entitlement associations by IDs
-func (r *EntitlementRepositoryImpl) BatchDelete(ctx context.Context, ids []uint) error {
+func (r *PlanEntitlementRepositoryImpl) BatchDelete(ctx context.Context, ids []uint) error {
 	if len(ids) == 0 {
 		return nil
 	}
 
-	result := r.db.WithContext(ctx).Delete(&models.EntitlementModel{}, ids)
+	result := r.db.WithContext(ctx).Delete(&models.PlanEntitlementModel{}, ids)
 	if result.Error != nil {
 		r.logger.Errorw("failed to batch delete entitlements", "ids", ids, "error", result.Error)
 		return fmt.Errorf("failed to batch delete entitlements: %w", result.Error)
@@ -249,10 +252,10 @@ func (r *EntitlementRepositoryImpl) BatchDelete(ctx context.Context, ids []uint)
 }
 
 // DeleteAllByPlan removes all resources for a subscription plan
-func (r *EntitlementRepositoryImpl) DeleteAllByPlan(ctx context.Context, planID uint) error {
+func (r *PlanEntitlementRepositoryImpl) DeleteAllByPlan(ctx context.Context, planID uint) error {
 	result := r.db.WithContext(ctx).
 		Where("plan_id = ?", planID).
-		Delete(&models.EntitlementModel{})
+		Delete(&models.PlanEntitlementModel{})
 
 	if result.Error != nil {
 		r.logger.Errorw("failed to delete all entitlements", "plan_id", planID, "error", result.Error)
@@ -264,10 +267,10 @@ func (r *EntitlementRepositoryImpl) DeleteAllByPlan(ctx context.Context, planID 
 }
 
 // DeleteAllByResource removes all associations for a specific resource
-func (r *EntitlementRepositoryImpl) DeleteAllByResource(ctx context.Context, resourceType subscription.EntitlementResourceType, resourceID uint) error {
+func (r *PlanEntitlementRepositoryImpl) DeleteAllByResource(ctx context.Context, resourceType subscription.EntitlementResourceType, resourceID uint) error {
 	result := r.db.WithContext(ctx).
 		Where("resource_type = ? AND resource_id = ?", string(resourceType), resourceID).
-		Delete(&models.EntitlementModel{})
+		Delete(&models.PlanEntitlementModel{})
 
 	if result.Error != nil {
 		r.logger.Errorw("failed to delete all resource associations",

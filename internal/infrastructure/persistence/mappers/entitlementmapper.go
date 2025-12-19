@@ -1,48 +1,91 @@
 package mappers
 
 import (
+	"encoding/json"
 	"fmt"
 
-	"github.com/orris-inc/orris/internal/domain/subscription"
+	"gorm.io/datatypes"
+
+	"github.com/orris-inc/orris/internal/domain/entitlement"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 )
 
 // EntitlementMapper handles the conversion between domain entities and persistence models
 type EntitlementMapper interface {
 	// ToEntity converts a persistence model to a domain entity
-	ToEntity(model *models.EntitlementModel) (*subscription.Entitlement, error)
+	ToEntity(model *models.EntitlementModel) (*entitlement.Entitlement, error)
 
 	// ToModel converts a domain entity to a persistence model
-	ToModel(entity *subscription.Entitlement) (*models.EntitlementModel, error)
+	ToModel(entity *entitlement.Entitlement) (*models.EntitlementModel, error)
 
 	// ToEntities converts multiple persistence models to domain entities
-	ToEntities(models []*models.EntitlementModel) ([]*subscription.Entitlement, error)
+	ToEntities(models []*models.EntitlementModel) ([]*entitlement.Entitlement, error)
 
 	// ToModels converts multiple domain entities to persistence models
-	ToModels(entities []*subscription.Entitlement) ([]*models.EntitlementModel, error)
+	ToModels(entities []*entitlement.Entitlement) ([]*models.EntitlementModel, error)
 }
 
-// entitlementMapper is the concrete implementation of EntitlementMapper
-type entitlementMapper struct{}
+// EntitlementMapperImpl is the concrete implementation of EntitlementMapper
+type EntitlementMapperImpl struct{}
 
 // NewEntitlementMapper creates a new entitlement mapper
 func NewEntitlementMapper() EntitlementMapper {
-	return &entitlementMapper{}
+	return &EntitlementMapperImpl{}
 }
 
 // ToEntity converts a persistence model to a domain entity
-func (m *entitlementMapper) ToEntity(model *models.EntitlementModel) (*subscription.Entitlement, error) {
+func (m *EntitlementMapperImpl) ToEntity(model *models.EntitlementModel) (*entitlement.Entitlement, error) {
 	if model == nil {
 		return nil, nil
 	}
 
+	// Parse value objects
+	subjectType := entitlement.SubjectType(model.SubjectType)
+	if !subjectType.IsValid() {
+		return nil, fmt.Errorf("invalid subject type: %s", model.SubjectType)
+	}
+
+	resourceType := entitlement.ResourceType(model.ResourceType)
+	if !resourceType.IsValid() {
+		return nil, fmt.Errorf("invalid resource type: %s", model.ResourceType)
+	}
+
+	sourceType := entitlement.SourceType(model.SourceType)
+	if !sourceType.IsValid() {
+		return nil, fmt.Errorf("invalid source type: %s", model.SourceType)
+	}
+
+	status := entitlement.EntitlementStatus(model.Status)
+	if !status.IsValid() {
+		return nil, fmt.Errorf("invalid entitlement status: %s", model.Status)
+	}
+
+	// Unmarshal metadata
+	var metadata map[string]any
+	if model.Metadata != nil {
+		if err := json.Unmarshal(model.Metadata, &metadata); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal metadata: %w", err)
+		}
+	}
+	if metadata == nil {
+		metadata = make(map[string]any)
+	}
+
 	// Reconstruct entitlement using domain factory method
-	entity, err := subscription.ReconstructEntitlement(
+	entity, err := entitlement.ReconstructEntitlement(
 		model.ID,
-		model.PlanID,
-		model.ResourceType,
+		subjectType,
+		model.SubjectID,
+		resourceType,
 		model.ResourceID,
+		sourceType,
+		model.SourceID,
+		status,
+		model.ExpiresAt,
+		metadata,
 		model.CreatedAt,
+		model.UpdatedAt,
+		model.Version,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to reconstruct entitlement entity: %w", err)
@@ -52,25 +95,43 @@ func (m *entitlementMapper) ToEntity(model *models.EntitlementModel) (*subscript
 }
 
 // ToModel converts a domain entity to a persistence model
-func (m *entitlementMapper) ToModel(entity *subscription.Entitlement) (*models.EntitlementModel, error) {
+func (m *EntitlementMapperImpl) ToModel(entity *entitlement.Entitlement) (*models.EntitlementModel, error) {
 	if entity == nil {
 		return nil, nil
 	}
 
+	// Marshal metadata
+	var metadataJSON datatypes.JSON
+	if metadata := entity.Metadata(); len(metadata) > 0 {
+		data, err := json.Marshal(metadata)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal metadata: %w", err)
+		}
+		metadataJSON = data
+	}
+
 	model := &models.EntitlementModel{
 		ID:           entity.ID(),
-		PlanID:       entity.PlanID(),
-		ResourceType: string(entity.ResourceType()),
+		SubjectType:  entity.SubjectType().String(),
+		SubjectID:    entity.SubjectID(),
+		ResourceType: entity.ResourceType().String(),
 		ResourceID:   entity.ResourceID(),
+		SourceType:   entity.SourceType().String(),
+		SourceID:     entity.SourceID(),
+		Status:       entity.Status().String(),
+		ExpiresAt:    entity.ExpiresAt(),
+		Metadata:     metadataJSON,
 		CreatedAt:    entity.CreatedAt(),
+		UpdatedAt:    entity.UpdatedAt(),
+		Version:      entity.Version(),
 	}
 
 	return model, nil
 }
 
 // ToEntities converts multiple persistence models to domain entities
-func (m *entitlementMapper) ToEntities(models []*models.EntitlementModel) ([]*subscription.Entitlement, error) {
-	entities := make([]*subscription.Entitlement, 0, len(models))
+func (m *EntitlementMapperImpl) ToEntities(models []*models.EntitlementModel) ([]*entitlement.Entitlement, error) {
+	entities := make([]*entitlement.Entitlement, 0, len(models))
 
 	for i, model := range models {
 		entity, err := m.ToEntity(model)
@@ -86,7 +147,7 @@ func (m *entitlementMapper) ToEntities(models []*models.EntitlementModel) ([]*su
 }
 
 // ToModels converts multiple domain entities to persistence models
-func (m *entitlementMapper) ToModels(entities []*subscription.Entitlement) ([]*models.EntitlementModel, error) {
+func (m *EntitlementMapperImpl) ToModels(entities []*entitlement.Entitlement) ([]*models.EntitlementModel, error) {
 	models := make([]*models.EntitlementModel, 0, len(entities))
 
 	for i, entity := range entities {
