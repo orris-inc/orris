@@ -16,6 +16,7 @@ const (
 
 type Plan struct {
 	id           uint
+	sid          string // Stripe-style ID: plan_xxx
 	name         string
 	slug         string
 	description  string
@@ -123,6 +124,16 @@ func ReconstructPlan(id uint, name, slug, description string,
 
 func (p *Plan) ID() uint {
 	return p.id
+}
+
+// SID returns the Stripe-style ID
+func (p *Plan) SID() string {
+	return p.sid
+}
+
+// SetSID sets the Stripe-style ID (only for persistence layer use)
+func (p *Plan) SetSID(sid string) {
+	p.sid = sid
 }
 
 func (p *Plan) SetID(id uint) error {

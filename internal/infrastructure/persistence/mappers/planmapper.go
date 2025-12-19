@@ -91,6 +91,9 @@ func (m *planMapper) ToEntity(model *models.PlanModel) (*subscription.Plan, erro
 		return nil, fmt.Errorf("failed to reconstruct plan entity: %w", err)
 	}
 
+	// Set SID from model
+	entity.SetSID(model.SID)
+
 	return entity, nil
 }
 
@@ -122,6 +125,7 @@ func (m *planMapper) ToModel(entity *subscription.Plan) (*models.PlanModel, erro
 
 	model := &models.PlanModel{
 		ID:           entity.ID(),
+		SID:          entity.SID(),
 		Name:         entity.Name(),
 		Slug:         entity.Slug(),
 		PlanType:     entity.PlanType().String(),

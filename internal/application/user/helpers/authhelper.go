@@ -119,9 +119,10 @@ func (h *AuthHelper) CreateSessionWithTokens(
 // It accepts a token generator function to avoid dependency issues
 func (h *AuthHelper) CreateAndSaveSessionWithTokens(
 	userID uint,
+	userUUID string,
 	deviceInfo DeviceInfo,
 	sessionDuration time.Duration,
-	generateTokens func(userID uint, sessionID string) (accessToken, refreshToken string, expiresIn int64, err error),
+	generateTokens func(userUUID string, sessionID string) (accessToken, refreshToken string, expiresIn int64, err error),
 ) (*SessionWithTokens, error) {
 	// Step 1: Create new session domain object
 	expiresAt := time.Now().Add(sessionDuration)
@@ -138,8 +139,8 @@ func (h *AuthHelper) CreateAndSaveSessionWithTokens(
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
 
-	// Step 2: Generate JWT tokens using the session ID
-	accessToken, refreshToken, expiresIn, err := generateTokens(userID, session.ID)
+	// Step 2: Generate JWT tokens using the user UUID and session ID
+	accessToken, refreshToken, expiresIn, err := generateTokens(userUUID, session.ID)
 	if err != nil {
 		h.logger.Errorw("failed to generate JWT tokens", "error", err, "user_id", userID, "session_id", session.ID)
 		return nil, fmt.Errorf("failed to generate tokens: %w", err)

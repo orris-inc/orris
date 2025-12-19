@@ -22,9 +22,9 @@ type CreateForwardRuleCommand struct {
 	ChainPortConfig    map[string]uint16 // required for direct_chain type (agent short_id -> listen port)
 	Name               string
 	ListenPort         uint16 // required for all types (direct, entry, chain, direct_chain)
-	TargetAddress      string // required for all types (mutually exclusive with TargetNodeShortID)
-	TargetPort         uint16 // required for all types (mutually exclusive with TargetNodeShortID)
-	TargetNodeShortID  string // optional for all types (Stripe-style short ID without prefix)
+	TargetAddress      string // required for all types (mutually exclusive with TargetNodeSID)
+	TargetPort         uint16 // required for all types (mutually exclusive with TargetNodeSID)
+	TargetNodeSID      string // optional for all types (Stripe-style short ID without prefix)
 	BindIP             string // optional bind IP address for outbound connections
 	IPVersion          string // auto, ipv4, ipv6 (default: auto)
 	Protocol           string
@@ -141,16 +141,16 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		}
 	}
 
-	// Resolve TargetNodeShortID to internal ID (if provided)
+	// Resolve TargetNodeSID to internal ID (if provided)
 	var targetNodeID *uint
-	if cmd.TargetNodeShortID != "" {
-		targetNode, err := uc.nodeRepo.GetByShortID(ctx, cmd.TargetNodeShortID)
+	if cmd.TargetNodeSID != "" {
+		targetNode, err := uc.nodeRepo.GetBySID(ctx, cmd.TargetNodeSID)
 		if err != nil {
-			uc.logger.Errorw("failed to get target node", "target_node_short_id", cmd.TargetNodeShortID, "error", err)
+			uc.logger.Errorw("failed to get target node", "target_node_sid", cmd.TargetNodeSID, "error", err)
 			return nil, fmt.Errorf("failed to validate target node: %w", err)
 		}
 		if targetNode == nil {
-			return nil, errors.NewNotFoundError("target node", cmd.TargetNodeShortID)
+			return nil, errors.NewNotFoundError("target node", cmd.TargetNodeSID)
 		}
 		nodeID := targetNode.ID()
 		targetNodeID = &nodeID
@@ -267,7 +267,7 @@ func (uc *CreateForwardRuleUseCase) validateCommand(_ context.Context, cmd Creat
 		if cmd.ListenPort == 0 {
 			return errors.NewValidationError("listen_port is required for direct forward")
 		}
-		// Either targetAddress+targetPort OR targetNodeShortID must be provided
+		// Either targetAddress+targetPort OR targetNodeSID must be provided
 		hasTarget := cmd.TargetAddress != "" && cmd.TargetPort != 0
 		hasTargetNode := targetNodeID != nil && *targetNodeID != 0
 		if !hasTarget && !hasTargetNode {

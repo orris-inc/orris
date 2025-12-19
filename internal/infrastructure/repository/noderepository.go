@@ -135,15 +135,15 @@ func (r *NodeRepositoryImpl) GetByID(ctx context.Context, id uint) (*node.Node, 
 	return entity, nil
 }
 
-// GetByShortID retrieves a node by its short ID
-func (r *NodeRepositoryImpl) GetByShortID(ctx context.Context, shortID string) (*node.Node, error) {
+// GetBySID retrieves a node by its SID
+func (r *NodeRepositoryImpl) GetBySID(ctx context.Context, sid string) (*node.Node, error) {
 	var model models.NodeModel
 
-	if err := r.db.WithContext(ctx).Where("short_id = ?", shortID).First(&model).Error; err != nil {
+	if err := r.db.WithContext(ctx).Where("sid = ?", sid).First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, errors.NewNotFoundError("node not found")
 		}
-		r.logger.Errorw("failed to get node by short ID", "short_id", shortID, "error", err)
+		r.logger.Errorw("failed to get node by SID", "sid", sid, "error", err)
 		return nil, fmt.Errorf("failed to get node: %w", err)
 	}
 
@@ -171,7 +171,7 @@ func (r *NodeRepositoryImpl) GetByShortID(ctx context.Context, shortID string) (
 
 	entity, err := r.mapper.ToEntity(&model, encryptionConfig, pluginConfig, trojanConfig)
 	if err != nil {
-		r.logger.Errorw("failed to map node model to entity", "short_id", shortID, "error", err)
+		r.logger.Errorw("failed to map node model to entity", "sid", sid, "error", err)
 		return nil, fmt.Errorf("failed to map node: %w", err)
 	}
 

@@ -11,8 +11,8 @@ import (
 )
 
 type DeleteNodeCommand struct {
-	ShortID string // External API identifier
-	Force   bool
+	SID   string // External API identifier
+	Force bool
 }
 
 type DeleteNodeResult struct {
@@ -36,17 +36,17 @@ func NewDeleteNodeUseCase(
 }
 
 func (uc *DeleteNodeUseCase) Execute(ctx context.Context, cmd DeleteNodeCommand) (*DeleteNodeResult, error) {
-	uc.logger.Infow("executing delete node use case", "short_id", cmd.ShortID, "force", cmd.Force)
+	uc.logger.Infow("executing delete node use case", "sid", cmd.SID, "force", cmd.Force)
 
 	if err := uc.validateCommand(cmd); err != nil {
-		uc.logger.Errorw("invalid delete node command", "error", err, "short_id", cmd.ShortID)
+		uc.logger.Errorw("invalid delete node command", "error", err, "sid", cmd.SID)
 		return nil, err
 	}
 
 	// Retrieve the node
-	existingNode, err := uc.nodeRepo.GetByShortID(ctx, cmd.ShortID)
+	existingNode, err := uc.nodeRepo.GetBySID(ctx, cmd.SID)
 	if err != nil {
-		uc.logger.Errorw("failed to get node by short ID", "short_id", cmd.ShortID, "error", err)
+		uc.logger.Errorw("failed to get node by SID", "sid", cmd.SID, "error", err)
 		return nil, fmt.Errorf("failed to get node: %w", err)
 	}
 
@@ -54,12 +54,12 @@ func (uc *DeleteNodeUseCase) Execute(ctx context.Context, cmd DeleteNodeCommand)
 
 	// Soft delete the node
 	if err := uc.nodeRepo.Delete(ctx, nodeID); err != nil {
-		uc.logger.Errorw("failed to delete node from database", "error", err, "short_id", cmd.ShortID)
+		uc.logger.Errorw("failed to delete node from database", "error", err, "sid", cmd.SID)
 		return nil, fmt.Errorf("failed to delete node: %w", err)
 	}
 
 	uc.logger.Infow("node deleted successfully",
-		"short_id", cmd.ShortID,
+		"sid", cmd.SID,
 		"name", existingNode.Name(),
 		"address", existingNode.ServerAddress().Value(),
 	)
@@ -71,8 +71,8 @@ func (uc *DeleteNodeUseCase) Execute(ctx context.Context, cmd DeleteNodeCommand)
 }
 
 func (uc *DeleteNodeUseCase) validateCommand(cmd DeleteNodeCommand) error {
-	if cmd.ShortID == "" {
-		return errors.NewValidationError("short ID must be provided")
+	if cmd.SID == "" {
+		return errors.NewValidationError("SID must be provided")
 	}
 
 	return nil

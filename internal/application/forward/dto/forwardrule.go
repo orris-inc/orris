@@ -69,7 +69,7 @@ type ForwardRuleDTO struct {
 // Note: TargetNode* fields are NOT populated by this function.
 // Use PopulateTargetNodeInfo to fill them after getting node data.
 // Note: AgentID and ExitAgentID will be empty strings. Use PopulateAgentInfo to fill them.
-// Note: TargetNodeID requires PopulateTargetNodeShortID to be called for Stripe-style ID.
+// Note: TargetNodeID requires PopulateTargetNodeSID to be called for Stripe-style ID.
 func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 	if rule == nil {
 		return nil
@@ -90,7 +90,7 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 		ListenPort:                 rule.ListenPort(),
 		TargetAddress:              rule.TargetAddress(),
 		TargetPort:                 rule.TargetPort(),
-		TargetNodeID:               "", // populated later via PopulateTargetNodeShortID
+		TargetNodeID:               "", // populated later via PopulateTargetNodeSID
 		BindIP:                     rule.BindIP(),
 		IPVersion:                  rule.IPVersion().String(),
 		Protocol:                   rule.Protocol().String(),
@@ -194,16 +194,16 @@ func (d *ForwardRuleDTO) InternalTargetNodeID() *uint {
 	return d.internalTargetNode
 }
 
-// NodeShortIDMap maps internal node ID to short ID.
-type NodeShortIDMap map[uint]string
+// NodeSIDMap maps internal node ID to SID.
+type NodeSIDMap map[uint]string
 
-// PopulateTargetNodeShortID fills in the target node ID field using the short ID map.
-func (d *ForwardRuleDTO) PopulateTargetNodeShortID(nodeMap NodeShortIDMap) {
+// PopulateTargetNodeSID fills in the target node ID field using the SID map.
+func (d *ForwardRuleDTO) PopulateTargetNodeSID(nodeMap NodeSIDMap) {
 	if d.internalTargetNode == nil || *d.internalTargetNode == 0 {
 		return
 	}
-	if shortID, ok := nodeMap[*d.internalTargetNode]; ok {
-		d.TargetNodeID = id.FormatNodeID(shortID)
+	if sid, ok := nodeMap[*d.internalTargetNode]; ok {
+		d.TargetNodeID = sid
 	}
 }
 

@@ -92,21 +92,17 @@ func ParseListUsersRequest(c *gin.Context) (*dto.ListUsersRequest, error) {
 	return req, nil
 }
 
-// ParseUserID parses user ID from URL parameter
-func ParseUserID(c *gin.Context) (uint, error) {
+// ParseUserID parses user ID from URL parameter (expects Stripe-style ID like usr_xxx)
+func ParseUserID(c *gin.Context) (string, error) {
 	idStr := c.Param("id")
 	if idStr == "" {
-		return 0, errors.NewValidationError("User ID is required")
+		return "", errors.NewValidationError("User ID is required")
 	}
 
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		return 0, errors.NewValidationError("Invalid user ID format")
+	// Validate the Stripe-style ID format (usr_xxx)
+	if len(idStr) < 5 || idStr[:4] != "usr_" {
+		return "", errors.NewValidationError("Invalid user ID format")
 	}
 
-	if id == 0 {
-		return 0, errors.NewValidationError("User ID cannot be zero")
-	}
-
-	return uint(id), nil
+	return idStr, nil
 }

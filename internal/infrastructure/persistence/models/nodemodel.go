@@ -17,7 +17,7 @@ import (
 // - node_trojan_configs for Trojan protocol
 type NodeModel struct {
 	ID                uint    `gorm:"primarykey"`
-	ShortID           string  `gorm:"uniqueIndex;size:20"` // Stripe-style prefixed ID (node_xxx)
+	SID               string  `gorm:"uniqueIndex;size:50;column:sid"` // Stripe-style prefixed ID (node_xxx)
 	Name              string  `gorm:"uniqueIndex;not null;size:100"`
 	ServerAddress     string  `gorm:"not null;size:255;index:idx_agent_address"`
 	AgentPort         uint16  `gorm:"not null;index:idx_agent_address"`                        // port for agent connections

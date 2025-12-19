@@ -97,7 +97,7 @@ func (uc *UpdateProfileUseCase) mapToResponse(userEntity *domainUser.User) *dto.
 	displayInfo := userEntity.GetDisplayInfo()
 
 	return &dto.UserResponse{
-		ID:          userEntity.ID(),
+		ID:          userEntity.SID(),
 		Email:       userEntity.Email().String(),
 		Name:        userEntity.Name().String(),
 		DisplayName: displayInfo.DisplayName,

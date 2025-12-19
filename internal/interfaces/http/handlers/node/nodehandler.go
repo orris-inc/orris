@@ -70,13 +70,13 @@ func (h *NodeHandler) CreateNode(c *gin.Context) {
 
 // GetNode handles GET /nodes/:id
 func (h *NodeHandler) GetNode(c *gin.Context) {
-	shortID, err := parseNodeShortID(c)
+	sid, err := parseNodeSID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	query := usecases.GetNodeQuery{ShortID: shortID}
+	query := usecases.GetNodeQuery{SID: sid}
 	result, err := h.getNodeUC.Execute(c.Request.Context(), query)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
@@ -88,7 +88,7 @@ func (h *NodeHandler) GetNode(c *gin.Context) {
 
 // UpdateNode handles PUT /nodes/:id
 func (h *NodeHandler) UpdateNode(c *gin.Context) {
-	shortID, err := parseNodeShortID(c)
+	sid, err := parseNodeSID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -97,13 +97,13 @@ func (h *NodeHandler) UpdateNode(c *gin.Context) {
 	var req UpdateNodeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Warnw("invalid request body for update node",
-			"short_id", shortID,
+			"sid", sid,
 			"error", err)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	cmd := req.ToCommand(shortID)
+	cmd := req.ToCommand(sid)
 	result, err := h.updateNodeUC.Execute(c.Request.Context(), cmd)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
@@ -115,13 +115,13 @@ func (h *NodeHandler) UpdateNode(c *gin.Context) {
 
 // DeleteNode handles DELETE /nodes/:id
 func (h *NodeHandler) DeleteNode(c *gin.Context) {
-	shortID, err := parseNodeShortID(c)
+	sid, err := parseNodeSID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	cmd := usecases.DeleteNodeCommand{ShortID: shortID}
+	cmd := usecases.DeleteNodeCommand{SID: sid}
 	_, err = h.deleteNodeUC.Execute(c.Request.Context(), cmd)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
@@ -151,13 +151,13 @@ func (h *NodeHandler) ListNodes(c *gin.Context) {
 
 // GenerateToken handles POST /nodes/:id/tokens
 func (h *NodeHandler) GenerateToken(c *gin.Context) {
-	shortID, err := parseNodeShortID(c)
+	sid, err := parseNodeSID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	cmd := usecases.GenerateNodeTokenCommand{ShortID: shortID}
+	cmd := usecases.GenerateNodeTokenCommand{SID: sid}
 	result, err := h.generateTokenUC.Execute(c.Request.Context(), cmd)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
@@ -172,7 +172,7 @@ func (h *NodeHandler) GenerateToken(c *gin.Context) {
 //   - token (optional): API token. If not provided, uses node's current stored token
 //   - api_url (optional): Override the default API URL
 func (h *NodeHandler) GetInstallScript(c *gin.Context) {
-	shortID, err := parseNodeShortID(c)
+	sid, err := parseNodeSID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -188,9 +188,9 @@ func (h *NodeHandler) GetInstallScript(c *gin.Context) {
 	}
 
 	query := usecases.GenerateNodeInstallScriptQuery{
-		ShortID: shortID,
-		APIURL:  apiURL,
-		Token:   token,
+		SID:    sid,
+		APIURL: apiURL,
+		Token:  token,
 	}
 
 	result, err := h.generateInstallScriptUC.Execute(c.Request.Context(), query)
@@ -209,7 +209,7 @@ type UpdateNodeStatusRequest struct {
 
 // UpdateNodeStatus handles PATCH /nodes/:id/status
 func (h *NodeHandler) UpdateNodeStatus(c *gin.Context) {
-	shortID, err := parseNodeShortID(c)
+	sid, err := parseNodeSID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -223,8 +223,8 @@ func (h *NodeHandler) UpdateNodeStatus(c *gin.Context) {
 	}
 
 	cmd := usecases.UpdateNodeCommand{
-		ShortID: shortID,
-		Status:  &req.Status,
+		SID:    sid,
+		Status: &req.Status,
 	}
 	result, err := h.updateNodeUC.Execute(c.Request.Context(), cmd)
 	if err != nil {
@@ -235,33 +235,19 @@ func (h *NodeHandler) UpdateNodeStatus(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "Node status updated successfully", result)
 }
 
-// parseNodeShortID extracts the short ID from a prefixed node ID (e.g., "node_xK9mP2vL3nQ" -> "xK9mP2vL3nQ").
-func parseNodeShortID(c *gin.Context) (string, error) {
+// parseNodeSID extracts the SID from a prefixed node ID (e.g., "node_xK9mP2vL3nQ" -> "xK9mP2vL3nQ").
+func parseNodeSID(c *gin.Context) (string, error) {
 	prefixedID := c.Param("id")
 	if prefixedID == "" {
 		return "", errors.NewValidationError("node ID is required")
 	}
 
-	shortID, err := id.ParseNodeID(prefixedID)
+	sid, err := id.ParseNodeID(prefixedID)
 	if err != nil {
 		return "", errors.NewValidationError("invalid node ID format, expected node_xxxxx")
 	}
 
-	return shortID, nil
-}
-
-// parseNodeID is deprecated, use parseNodeShortID instead.
-// Kept for backward compatibility with internal routes.
-func parseNodeID(c *gin.Context) (uint, error) {
-	idStr := c.Param("id")
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		return 0, errors.NewValidationError("Invalid node ID")
-	}
-	if id == 0 {
-		return 0, errors.NewValidationError("Node ID must be greater than 0")
-	}
-	return uint(id), nil
+	return sid, nil
 }
 
 type CreateNodeRequest struct {
@@ -328,9 +314,9 @@ type UpdateNodeRequest struct {
 	AllowInsecure     *bool   `json:"allow_insecure,omitempty" example:"false" comment:"Allow insecure TLS connection"`
 }
 
-func (r *UpdateNodeRequest) ToCommand(shortID string) usecases.UpdateNodeCommand {
+func (r *UpdateNodeRequest) ToCommand(sid string) usecases.UpdateNodeCommand {
 	return usecases.UpdateNodeCommand{
-		ShortID:                 shortID,
+		SID:                     sid,
 		Name:                    r.Name,
 		ServerAddress:           r.ServerAddress,
 		AgentPort:               r.AgentPort,

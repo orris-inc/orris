@@ -13,6 +13,7 @@ import (
 // User represents the user aggregate root (pure domain model without persistence concerns)
 type User struct {
 	id                         uint
+	sid                        string // external API identifier (Stripe-style)
 	email                      *vo.Email
 	name                       *vo.Name
 	role                       authorization.UserRole
@@ -32,7 +33,7 @@ type User struct {
 }
 
 // NewUser creates a new user aggregate with initial values
-func NewUser(email *vo.Email, name *vo.Name) (*User, error) {
+func NewUser(email *vo.Email, name *vo.Name, shortIDGenerator func() (string, error)) (*User, error) {
 	if email == nil {
 		return nil, fmt.Errorf("email is required")
 	}
@@ -40,8 +41,15 @@ func NewUser(email *vo.Email, name *vo.Name) (*User, error) {
 		return nil, fmt.Errorf("name is required")
 	}
 
+	// Generate short ID for external API use
+	sid, err := shortIDGenerator()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate short ID: %w", err)
+	}
+
 	now := time.Now()
 	user := &User{
+		sid:       sid,
 		email:     email,
 		name:      name,
 		role:      authorization.RoleUser,
@@ -55,9 +63,12 @@ func NewUser(email *vo.Email, name *vo.Name) (*User, error) {
 }
 
 // ReconstructUser reconstructs a user from persistence
-func ReconstructUser(id uint, email *vo.Email, name *vo.Name, role authorization.UserRole, status vo.Status, createdAt, updatedAt time.Time, version int) (*User, error) {
+func ReconstructUser(id uint, sid string, email *vo.Email, name *vo.Name, role authorization.UserRole, status vo.Status, createdAt, updatedAt time.Time, version int) (*User, error) {
 	if id == 0 {
 		return nil, fmt.Errorf("user ID cannot be zero")
+	}
+	if sid == "" {
+		return nil, fmt.Errorf("user SID is required")
 	}
 	if email == nil {
 		return nil, fmt.Errorf("email is required")
@@ -68,6 +79,7 @@ func ReconstructUser(id uint, email *vo.Email, name *vo.Name, role authorization
 
 	return &User{
 		id:        id,
+		sid:       sid,
 		email:     email,
 		name:      name,
 		role:      role,
@@ -90,8 +102,8 @@ type UserAuthData struct {
 	LockedUntil                *time.Time
 }
 
-func ReconstructUserWithAuth(id uint, email *vo.Email, name *vo.Name, role authorization.UserRole, status vo.Status, createdAt, updatedAt time.Time, version int, authData *UserAuthData) (*User, error) {
-	u, err := ReconstructUser(id, email, name, role, status, createdAt, updatedAt, version)
+func ReconstructUserWithAuth(id uint, sid string, email *vo.Email, name *vo.Name, role authorization.UserRole, status vo.Status, createdAt, updatedAt time.Time, version int, authData *UserAuthData) (*User, error) {
+	u, err := ReconstructUser(id, sid, email, name, role, status, createdAt, updatedAt, version)
 	if err != nil {
 		return nil, err
 	}
@@ -128,6 +140,11 @@ func (u *User) GetAuthData() *UserAuthData {
 // ID returns the user ID
 func (u *User) ID() uint {
 	return u.id
+}
+
+// SID returns the external API identifier (Stripe-style)
+func (u *User) SID() string {
+	return u.sid
 }
 
 // Email returns the user's email
@@ -317,7 +334,7 @@ func (u *User) IsBusinessEmail() bool {
 // GetDisplayInfo returns formatted display information
 func (u *User) GetDisplayInfo() UserDisplayInfo {
 	return UserDisplayInfo{
-		ID:          u.id,
+		ID:          u.sid,
 		Email:       u.email.String(),
 		DisplayName: u.name.DisplayName(),
 		Initials:    u.name.Initials(),
@@ -329,7 +346,7 @@ func (u *User) GetDisplayInfo() UserDisplayInfo {
 
 // UserDisplayInfo represents user information for display purposes
 type UserDisplayInfo struct {
-	ID          uint      `json:"id" example:"1"`
+	ID          string    `json:"id" example:"usr_xK9mP2vL3nQ1"`
 	Email       string    `json:"email" example:"user@example.com"`
 	DisplayName string    `json:"display_name" example:"John Doe"`
 	Initials    string    `json:"initials" example:"JD"`

@@ -888,10 +888,10 @@ func (m *MockForwardAgentRepository) Reset() {
 
 // MockNodeRepository is a mock implementation of node.Repository for testing.
 type MockNodeRepository struct {
-	mu             sync.RWMutex
-	nodes          map[uint]*node.Node
-	nodesByShortID map[string]*node.Node
-	nextID         uint
+	mu         sync.RWMutex
+	nodes      map[uint]*node.Node
+	nodesBySID map[string]*node.Node
+	nextID     uint
 
 	// Error injection for testing
 	getError    error
@@ -901,9 +901,9 @@ type MockNodeRepository struct {
 // NewMockNodeRepository creates a new mock node repository.
 func NewMockNodeRepository() *MockNodeRepository {
 	return &MockNodeRepository{
-		nodes:          make(map[uint]*node.Node),
-		nodesByShortID: make(map[string]*node.Node),
-		nextID:         0,
+		nodes:      make(map[uint]*node.Node),
+		nodesBySID: make(map[string]*node.Node),
+		nextID:     0,
 	}
 }
 
@@ -925,7 +925,7 @@ func (m *MockNodeRepository) Create(ctx context.Context, n *node.Node) error {
 	}
 
 	m.nodes[n.ID()] = n
-	m.nodesByShortID[n.ShortID()] = n
+	m.nodesBySID[n.SID()] = n
 
 	return nil
 }
@@ -947,8 +947,8 @@ func (m *MockNodeRepository) GetByID(ctx context.Context, id uint) (*node.Node, 
 	return n, nil
 }
 
-// GetByShortID retrieves a node by short ID.
-func (m *MockNodeRepository) GetByShortID(ctx context.Context, shortID string) (*node.Node, error) {
+// GetBySID retrieves a node by SID.
+func (m *MockNodeRepository) GetBySID(ctx context.Context, sid string) (*node.Node, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -956,7 +956,7 @@ func (m *MockNodeRepository) GetByShortID(ctx context.Context, shortID string) (
 		return nil, m.getError
 	}
 
-	n, exists := m.nodesByShortID[shortID]
+	n, exists := m.nodesBySID[sid]
 	if !exists {
 		return nil, nil
 	}
@@ -1019,7 +1019,7 @@ func (m *MockNodeRepository) AddNode(n *node.Node) {
 	}
 
 	m.nodes[n.ID()] = n
-	m.nodesByShortID[n.ShortID()] = n
+	m.nodesBySID[n.SID()] = n
 }
 
 // SetGetError sets the error to return on Get calls.
@@ -1041,7 +1041,7 @@ func (m *MockNodeRepository) Reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.nodes = make(map[uint]*node.Node)
-	m.nodesByShortID = make(map[string]*node.Node)
+	m.nodesBySID = make(map[string]*node.Node)
 	m.nextID = 0
 	m.getError = nil
 	m.createError = nil

@@ -31,18 +31,18 @@ func NewUpdateUserUseCase(
 }
 
 // Execute executes the update user use case
-func (uc *UpdateUserUseCase) Execute(ctx context.Context, id uint, request dto.UpdateUserRequest) (*dto.UserResponse, error) {
+func (uc *UpdateUserUseCase) Execute(ctx context.Context, sid string, request dto.UpdateUserRequest) (*dto.UserResponse, error) {
 	// Log the start of the use case
-	uc.logger.Infow("executing update user use case", "id", id)
+	uc.logger.Infow("executing update user use case", "sid", sid)
 
 	// Retrieve the existing user
-	userEntity, err := uc.userRepo.GetByID(ctx, id)
+	userEntity, err := uc.userRepo.GetBySID(ctx, sid)
 	if err != nil {
-		uc.logger.Errorw("failed to get user", "id", id, "error", err)
+		uc.logger.Errorw("failed to get user", "sid", sid, "error", err)
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 	if userEntity == nil {
-		uc.logger.Warnw("user not found", "id", id)
+		uc.logger.Warnw("user not found", "sid", sid)
 		return nil, errors.NewNotFoundError("user not found")
 	}
 
@@ -54,7 +54,7 @@ func (uc *UpdateUserUseCase) Execute(ctx context.Context, id uint, request dto.U
 			uc.logger.Errorw("failed to check email existence", "email", *request.Email, "error", err)
 			return nil, fmt.Errorf("failed to check email: %w", err)
 		}
-		if existingUser != nil && existingUser.ID() != id {
+		if existingUser != nil && existingUser.SID() != sid {
 			return nil, errors.NewConflictError("email already in use", *request.Email)
 		}
 
@@ -132,13 +132,13 @@ func (uc *UpdateUserUseCase) Execute(ctx context.Context, id uint, request dto.U
 
 	// Persist the updated user
 	if err := uc.userRepo.Update(ctx, userEntity); err != nil {
-		uc.logger.Errorw("failed to persist user updates", "id", id, "error", err)
+		uc.logger.Errorw("failed to persist user updates", "sid", sid, "error", err)
 		return nil, fmt.Errorf("failed to save user updates: %w", err)
 	}
 
-	// Map to response DTO
+	// Map to response DTO with external SID
 	response := &dto.UserResponse{
-		ID:        userEntity.ID(),
+		ID:        userEntity.SID(),
 		Email:     userEntity.Email().String(),
 		Name:      userEntity.Name().String(),
 		Role:      string(userEntity.Role()),

@@ -15,6 +15,7 @@ var (
 
 type SubscriptionToken struct {
 	id             uint
+	sid            string // Stripe-style ID: stoken_xxx
 	subscriptionID uint
 	name           string
 	tokenHash      string
@@ -162,6 +163,16 @@ func (t *SubscriptionToken) IsValid() bool {
 
 func (t *SubscriptionToken) ID() uint {
 	return t.id
+}
+
+// SID returns the Stripe-style ID
+func (t *SubscriptionToken) SID() string {
+	return t.sid
+}
+
+// SetSID sets the Stripe-style ID (only for persistence layer use)
+func (t *SubscriptionToken) SetSID(sid string) {
+	t.sid = sid
 }
 
 func (t *SubscriptionToken) SubscriptionID() uint {

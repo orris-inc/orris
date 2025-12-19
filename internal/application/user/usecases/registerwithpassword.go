@@ -7,6 +7,7 @@ import (
 	"github.com/orris-inc/orris/internal/application/user/helpers"
 	"github.com/orris-inc/orris/internal/domain/user"
 	vo "github.com/orris-inc/orris/internal/domain/user/valueobjects"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -71,7 +72,7 @@ func (uc *RegisterWithPasswordUseCase) Execute(ctx context.Context, cmd Register
 		return nil, fmt.Errorf("invalid password: %w", err)
 	}
 
-	newUser, err := user.NewUser(email, name)
+	newUser, err := user.NewUser(email, name, id.NewUserIDWithPrefix)
 	if err != nil {
 		uc.logger.Errorw("failed to create user aggregate", "error", err)
 		return nil, fmt.Errorf("failed to create user: %w", err)

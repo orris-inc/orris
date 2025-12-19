@@ -156,9 +156,9 @@ func (h *ForwardHandler) CreateRule(c *gin.Context) {
 		}
 	}
 
-	var targetNodeShortID string
+	var targetNodeSID string
 	if req.TargetNodeID != "" {
-		targetNodeShortID, err = id.ParseNodeID(req.TargetNodeID)
+		targetNodeSID, err = id.ParseNodeID(req.TargetNodeID)
 		if err != nil {
 			h.logger.Warnw("invalid target_node_id format", "target_node_id", req.TargetNodeID, "error", err)
 			utils.ErrorResponseWithError(c, errors.NewValidationError("invalid target_node_id format, expected node_xxxxx"))
@@ -176,7 +176,7 @@ func (h *ForwardHandler) CreateRule(c *gin.Context) {
 		ListenPort:         req.ListenPort,
 		TargetAddress:      req.TargetAddress,
 		TargetPort:         req.TargetPort,
-		TargetNodeShortID:  targetNodeShortID,
+		TargetNodeSID:      targetNodeSID,
 		BindIP:             req.BindIP,
 		IPVersion:          req.IPVersion,
 		Protocol:           req.Protocol,
@@ -282,12 +282,12 @@ func (h *ForwardHandler) UpdateRule(c *gin.Context) {
 	}
 
 	// Parse target_node_id if provided
-	var targetNodeShortID *string
+	var targetNodeSID *string
 	if req.TargetNodeID != nil {
 		if *req.TargetNodeID == "" {
 			// Empty string means clear the target node
 			emptyStr := ""
-			targetNodeShortID = &emptyStr
+			targetNodeSID = &emptyStr
 		} else {
 			// Parse Stripe-style ID
 			nodeShortID, err := id.ParseNodeID(*req.TargetNodeID)
@@ -296,7 +296,7 @@ func (h *ForwardHandler) UpdateRule(c *gin.Context) {
 				utils.ErrorResponseWithError(c, errors.NewValidationError("invalid target_node_id format, expected node_xxxxx"))
 				return
 			}
-			targetNodeShortID = &nodeShortID
+			targetNodeSID = &nodeShortID
 		}
 	}
 
@@ -310,7 +310,7 @@ func (h *ForwardHandler) UpdateRule(c *gin.Context) {
 		ListenPort:         req.ListenPort,
 		TargetAddress:      req.TargetAddress,
 		TargetPort:         req.TargetPort,
-		TargetNodeShortID:  targetNodeShortID,
+		TargetNodeSID:      targetNodeSID,
 		BindIP:             req.BindIP,
 		IPVersion:          req.IPVersion,
 		Protocol:           req.Protocol,

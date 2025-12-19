@@ -48,6 +48,19 @@ func (r *UserRepository) GetByID(ctx context.Context, id uint) (*user.User, erro
 	return &u, nil
 }
 
+// GetBySID retrieves a user by external SID (Stripe-style ID)
+func (r *UserRepository) GetBySID(ctx context.Context, sid string) (*user.User, error) {
+	var u user.User
+	err := r.db.WithContext(ctx).Where("sid = ?", sid).First(&u).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get user by SID: %w", err)
+	}
+	return &u, nil
+}
+
 // GetByEmail retrieves a user by email
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*user.User, error) {
 	var u user.User
@@ -76,9 +89,21 @@ func (r *UserRepository) Update(ctx context.Context, u *user.User) error {
 	return nil
 }
 
-// Delete soft deletes a user
+// Delete soft deletes a user by internal ID
 func (r *UserRepository) Delete(ctx context.Context, id uint) error {
 	result := r.db.WithContext(ctx).Delete(&user.User{}, id)
+	if result.Error != nil {
+		return fmt.Errorf("failed to delete user: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return errors.NewNotFoundError("User not found")
+	}
+	return nil
+}
+
+// DeleteBySID soft deletes a user by external SID
+func (r *UserRepository) DeleteBySID(ctx context.Context, sid string) error {
+	result := r.db.WithContext(ctx).Where("sid = ?", sid).Delete(&user.User{})
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete user: %w", result.Error)
 	}

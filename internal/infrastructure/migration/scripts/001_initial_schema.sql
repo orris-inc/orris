@@ -9,6 +9,7 @@
 
 CREATE TABLE users (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    sid VARCHAR(50) NOT NULL UNIQUE,
     email VARCHAR(255) NOT NULL UNIQUE,
     name VARCHAR(100) NOT NULL,
     role VARCHAR(20) NOT NULL DEFAULT 'user',
@@ -28,6 +29,7 @@ CREATE TABLE users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP NULL,
+    INDEX idx_users_sid (sid),
     INDEX idx_users_email (email),
     INDEX idx_users_role (role),
     INDEX idx_users_status (status),
@@ -100,6 +102,7 @@ INSERT INTO oauth_providers (name, display_name, auth_url, token_url, user_info_
 
 CREATE TABLE plans (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    sid VARCHAR(50) NOT NULL UNIQUE COMMENT 'Stripe-style ID: plan_xxxxxxxx',
     name VARCHAR(100) NOT NULL,
     slug VARCHAR(50) NOT NULL UNIQUE,
     plan_type VARCHAR(20) NOT NULL DEFAULT 'node',
@@ -117,6 +120,7 @@ CREATE TABLE plans (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     version INT NOT NULL DEFAULT 1,
     deleted_at TIMESTAMP NULL,
+    INDEX idx_plan_sid (sid),
     INDEX idx_slug (slug),
     INDEX idx_plan_type (plan_type),
     INDEX idx_status (status),
@@ -126,6 +130,7 @@ CREATE TABLE plans (
 
 CREATE TABLE plan_pricings (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    sid VARCHAR(50) NOT NULL UNIQUE COMMENT 'Stripe-style ID: price_xxxxxxxx',
     plan_id BIGINT UNSIGNED NOT NULL,
     billing_cycle VARCHAR(20) NOT NULL,
     price BIGINT UNSIGNED NOT NULL,
@@ -135,6 +140,7 @@ CREATE TABLE plan_pricings (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP NULL DEFAULT NULL,
     UNIQUE KEY uk_plan_billing_cycle (plan_id, billing_cycle),
+    INDEX idx_plan_pricing_sid (sid),
     INDEX idx_plan_id (plan_id),
     INDEX idx_billing_cycle (billing_cycle),
     INDEX idx_is_active (is_active),
@@ -161,7 +167,7 @@ CREATE TABLE resource_groups (
 
 CREATE TABLE subscriptions (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    uuid VARCHAR(36) NOT NULL,
+    sid VARCHAR(50) NOT NULL UNIQUE COMMENT 'Stripe-style ID: sub_xxxxxxxx',
     user_id BIGINT UNSIGNED NOT NULL,
     plan_id BIGINT UNSIGNED NOT NULL,
     status VARCHAR(20) NOT NULL,
@@ -177,7 +183,7 @@ CREATE TABLE subscriptions (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP NULL,
-    UNIQUE INDEX idx_uuid (uuid),
+    INDEX idx_subscription_sid (sid),
     INDEX idx_user_subscription (user_id),
     INDEX idx_plan_subscription (plan_id),
     INDEX idx_status (status),
@@ -187,6 +193,7 @@ CREATE TABLE subscriptions (
 
 CREATE TABLE subscription_tokens (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    sid VARCHAR(50) NOT NULL UNIQUE COMMENT 'Stripe-style ID: stoken_xxxxxxxx',
     subscription_id BIGINT UNSIGNED NOT NULL,
     name VARCHAR(100) NOT NULL,
     token_hash VARCHAR(64) NOT NULL UNIQUE,
@@ -199,6 +206,7 @@ CREATE TABLE subscription_tokens (
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     revoked_at DATETIME NULL,
+    INDEX idx_subscription_token_sid (sid),
     INDEX idx_subscription_token (subscription_id),
     INDEX idx_expires_at (expires_at),
     INDEX idx_active (is_active),
@@ -232,6 +240,7 @@ CREATE TABLE subscription_histories (
 
 CREATE TABLE subscription_usages (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    sid VARCHAR(50) NOT NULL UNIQUE COMMENT 'Stripe-style ID: usage_xxxxxxxx',
     subscription_id BIGINT UNSIGNED NOT NULL,
     resource_type VARCHAR(50) NOT NULL COMMENT 'Resource type: node / forward_rule',
     resource_id BIGINT UNSIGNED NOT NULL COMMENT 'Resource ID',
@@ -241,6 +250,7 @@ CREATE TABLE subscription_usages (
     period TIMESTAMP NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_subscription_usage_sid (sid),
     INDEX idx_subscription_period (subscription_id, period),
     INDEX idx_resource (resource_type, resource_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -309,7 +319,7 @@ CREATE TABLE notification_templates (
 
 CREATE TABLE nodes (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    short_id VARCHAR(20) NOT NULL UNIQUE,
+    sid VARCHAR(50) NOT NULL UNIQUE,
     name VARCHAR(100) NOT NULL UNIQUE,
     server_address VARCHAR(255) NOT NULL,
     agent_port SMALLINT UNSIGNED NOT NULL,

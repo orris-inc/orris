@@ -101,17 +101,17 @@ func (m *NodeMapperImpl) ToEntity(model *models.NodeModel, encryptionConfig vo.E
 	// Create NodeMetadata value object
 	metadata := vo.NewNodeMetadata(region, tags, "")
 
-	// Generate shortID if not present (for legacy nodes without short_id)
-	shortID := model.ShortID
-	if shortID == "" {
-		shortID = id.MustGenerate(id.DefaultLength)
+	// Generate SID if not present (for legacy nodes without sid)
+	sid := model.SID
+	if sid == "" {
+		sid = id.MustGenerate(id.DefaultLength)
 	}
 
 	// Reconstruct the domain entity
 	// Protocol-specific configs are passed from caller
 	nodeEntity, err := node.ReconstructNode(
 		model.ID,
-		shortID,
+		sid,
 		model.Name,
 		serverAddress,
 		model.AgentPort,
@@ -182,7 +182,7 @@ func (m *NodeMapperImpl) ToModel(entity *node.Node) (*models.NodeModel, error) {
 
 	model := &models.NodeModel{
 		ID:                entity.ID(),
-		ShortID:           entity.ShortID(),
+		SID:               entity.SID(),
 		Name:              entity.Name(),
 		ServerAddress:     entity.ServerAddress().Value(),
 		AgentPort:         entity.AgentPort(),

@@ -23,6 +23,7 @@ func (r ResourceType) String() string {
 // SubscriptionUsage represents usage statistics entity for a subscription
 type SubscriptionUsage struct {
 	id             uint
+	sid            string // Stripe-style ID: usage_xxx
 	resourceType   string
 	resourceID     uint
 	subscriptionID *uint
@@ -93,6 +94,16 @@ func ReconstructSubscriptionUsage(
 // ID returns the usage record ID
 func (su *SubscriptionUsage) ID() uint {
 	return su.id
+}
+
+// SID returns the Stripe-style ID
+func (su *SubscriptionUsage) SID() string {
+	return su.sid
+}
+
+// SetSID sets the Stripe-style ID (only for persistence layer use)
+func (su *SubscriptionUsage) SetSID(sid string) {
+	su.sid = sid
 }
 
 // ResourceType returns the resource type ("node" or "forward_rule")

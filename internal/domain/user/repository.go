@@ -7,8 +7,11 @@ type Repository interface {
 	// Create creates a new user
 	Create(ctx context.Context, user *User) error
 
-	// GetByID retrieves a user by ID
+	// GetByID retrieves a user by internal ID
 	GetByID(ctx context.Context, id uint) (*User, error)
+
+	// GetBySID retrieves a user by external SID (Stripe-style ID)
+	GetBySID(ctx context.Context, sid string) (*User, error)
 
 	// GetByEmail retrieves a user by email
 	GetByEmail(ctx context.Context, email string) (*User, error)
@@ -16,13 +19,16 @@ type Repository interface {
 	// Update updates an existing user
 	Update(ctx context.Context, user *User) error
 
-	// Delete soft deletes a user
+	// Delete soft deletes a user by internal ID
 	Delete(ctx context.Context, id uint) error
+
+	// DeleteBySID soft deletes a user by external SID
+	DeleteBySID(ctx context.Context, sid string) error
 
 	// List retrieves a paginated list of users
 	List(ctx context.Context, filter ListFilter) ([]*User, int64, error)
 
-	// Exists checks if a user exists by ID
+	// Exists checks if a user exists by internal ID
 	Exists(ctx context.Context, id uint) (bool, error)
 
 	// ExistsByEmail checks if a user exists by email

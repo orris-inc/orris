@@ -116,16 +116,16 @@ func (uc *ListForwardRulesUseCase) Execute(ctx context.Context, query ListForwar
 			uc.logger.Warnw("failed to fetch target nodes", "error", err)
 			// Continue without node info
 		} else {
-			// Build node map for info and short ID map
+			// Build node map for info and SID map
 			nodeMap := make(map[uint]*node.Node)
-			nodeShortIDMap := make(dto.NodeShortIDMap)
+			nodeSIDMap := make(dto.NodeSIDMap)
 			for _, n := range nodes {
 				nodeMap[n.ID()] = n
-				nodeShortIDMap[n.ID()] = n.ShortID()
+				nodeSIDMap[n.ID()] = n.SID()
 			}
-			// Populate target node short ID and info
+			// Populate target node SID and info
 			for _, ruleDTO := range dtos {
-				ruleDTO.PopulateTargetNodeShortID(nodeShortIDMap)
+				ruleDTO.PopulateTargetNodeSID(nodeSIDMap)
 				if targetNodeID := ruleDTO.InternalTargetNodeID(); targetNodeID != nil {
 					if n, ok := nodeMap[*targetNodeID]; ok {
 						ruleDTO.PopulateTargetNodeInfo(&dto.TargetNodeInfo{

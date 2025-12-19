@@ -12,7 +12,7 @@ import (
 
 // GetNodeQuery represents the query for getting a node
 type GetNodeQuery struct {
-	ShortID string // External API identifier
+	SID string // External API identifier
 }
 
 // GetNodeResult represents the result of getting a node
@@ -56,9 +56,9 @@ func NewGetNodeUseCase(
 	}
 }
 
-// Execute retrieves a node by ShortID
+// Execute retrieves a node by SID
 func (uc *GetNodeUseCase) Execute(ctx context.Context, query GetNodeQuery) (*GetNodeResult, error) {
-	uc.logger.Infow("executing get node use case", "short_id", query.ShortID)
+	uc.logger.Infow("executing get node use case", "sid", query.SID)
 
 	// Validate query
 	if err := uc.validateQuery(query); err != nil {
@@ -67,14 +67,14 @@ func (uc *GetNodeUseCase) Execute(ctx context.Context, query GetNodeQuery) (*Get
 	}
 
 	// Retrieve the node
-	nodeEntity, err := uc.nodeRepo.GetByShortID(ctx, query.ShortID)
+	nodeEntity, err := uc.nodeRepo.GetBySID(ctx, query.SID)
 	if err != nil {
-		uc.logger.Errorw("failed to get node by short ID", "short_id", query.ShortID, "error", err)
+		uc.logger.Errorw("failed to get node by SID", "sid", query.SID, "error", err)
 		return nil, fmt.Errorf("failed to get node: %w", err)
 	}
 
 	if nodeEntity == nil {
-		uc.logger.Warnw("node not found", "short_id", query.ShortID)
+		uc.logger.Warnw("node not found", "sid", query.SID)
 		return nil, errors.NewNotFoundError("node not found")
 	}
 
@@ -101,7 +101,7 @@ func (uc *GetNodeUseCase) Execute(ctx context.Context, query GetNodeQuery) (*Get
 		}
 	}
 
-	uc.logger.Infow("node retrieved successfully", "node_id", nodeEntity.ID(), "short_id", nodeEntity.ShortID(), "name", nodeEntity.Name())
+	uc.logger.Infow("node retrieved successfully", "node_id", nodeEntity.ID(), "sid", nodeEntity.SID(), "name", nodeEntity.Name())
 
 	return &GetNodeResult{
 		Node: nodeDTO,
@@ -110,8 +110,8 @@ func (uc *GetNodeUseCase) Execute(ctx context.Context, query GetNodeQuery) (*Get
 
 // validateQuery validates the get node query
 func (uc *GetNodeUseCase) validateQuery(query GetNodeQuery) error {
-	if query.ShortID == "" {
-		return errors.NewValidationError("short ID must be provided")
+	if query.SID == "" {
+		return errors.NewValidationError("SID must be provided")
 	}
 
 	return nil

@@ -39,6 +39,9 @@ func (m *PlanPricingMapper) ToDomain(model *models.PlanPricingModel) (*valueobje
 		model.UpdatedAt,
 	)
 
+	// Set SID from model
+	pricing.SetSID(model.SID)
+
 	return pricing, nil
 }
 
@@ -50,6 +53,7 @@ func (m *PlanPricingMapper) ToModel(pricing *valueobjects.PlanPricing) (*models.
 
 	model := &models.PlanPricingModel{
 		ID:           pricing.ID(),
+		SID:          pricing.SID(),
 		PlanID:       pricing.PlanID(),
 		BillingCycle: pricing.BillingCycle().String(),
 		Price:        pricing.Price(),

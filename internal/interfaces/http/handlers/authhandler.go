@@ -118,7 +118,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusCreated, "registration successful, please verify your email", gin.H{
-		"user_id": newUser.ID(),
+		"user_id": newUser.SID(),
 		"email":   newUser.Email().String(),
 	})
 }

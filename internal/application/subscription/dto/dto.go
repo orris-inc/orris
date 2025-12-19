@@ -9,9 +9,9 @@ import (
 )
 
 type SubscriptionDTO struct {
-	ID                 uint       `json:"id"`
-	UserID             uint       `json:"user_id"`
-	UUID               string     `json:"uuid"`
+	SID                string     `json:"id"`      // Stripe-style ID: sub_xxx
+	UserSID            string     `json:"user_id"` // User's Stripe-style ID
+	UUID               string     `json:"uuid"`    // UUID for node authentication (kept for backward compatibility)
 	SubscribeURL       string     `json:"subscribe_url"`
 	Plan               *PlanDTO   `json:"plan,omitempty"`
 	Status             string     `json:"status"`
@@ -29,7 +29,7 @@ type SubscriptionDTO struct {
 }
 
 type PlanDTO struct {
-	ID           uint                   `json:"id"`
+	SID          string                 `json:"id"` // Stripe-style ID: plan_xxx
 	Name         string                 `json:"name"`
 	Slug         string                 `json:"slug"`
 	Description  string                 `json:"description"`
@@ -64,16 +64,16 @@ type PricingOptionInput struct {
 }
 
 type SubscriptionTokenDTO struct {
-	ID             uint       `json:"id"`
-	SubscriptionID uint       `json:"subscription_id"`
-	Name           string     `json:"name"`
-	Prefix         string     `json:"prefix"`
-	Scope          string     `json:"scope"`
-	ExpiresAt      *time.Time `json:"expires_at,omitempty"`
-	LastUsedAt     *time.Time `json:"last_used_at,omitempty"`
-	UsageCount     uint64     `json:"usage_count"`
-	IsActive       bool       `json:"is_active"`
-	CreatedAt      time.Time  `json:"created_at"`
+	SID             string     `json:"id"`              // Stripe-style ID: stoken_xxx
+	SubscriptionSID string     `json:"subscription_id"` // Subscription's Stripe-style ID
+	Name            string     `json:"name"`
+	Prefix          string     `json:"prefix"`
+	Scope           string     `json:"scope"`
+	ExpiresAt       *time.Time `json:"expires_at,omitempty"`
+	LastUsedAt      *time.Time `json:"last_used_at,omitempty"`
+	UsageCount      uint64     `json:"usage_count"`
+	IsActive        bool       `json:"is_active"`
+	CreatedAt       time.Time  `json:"created_at"`
 }
 
 var (
@@ -118,9 +118,13 @@ func toSubscriptionDTOInternal(sub *subscription.Subscription, plan *subscriptio
 		subscribeURL = fmt.Sprintf("%s/s/%s", baseURL, sub.UUID())
 	}
 
+	// User SID will be set by the use case layer
+	// Use case should fetch user's SID and set it
+	userSID := ""
+
 	dto := &SubscriptionDTO{
-		ID:                 sub.ID(),
-		UserID:             sub.UserID(),
+		SID:                sub.SID(),
+		UserSID:            userSID,
 		UUID:               sub.UUID(),
 		SubscribeURL:       subscribeURL,
 		Status:             sub.Status().String(),
@@ -156,7 +160,7 @@ func ToPlanDTO(plan *subscription.Plan) *PlanDTO {
 	}
 
 	return &PlanDTO{
-		ID:           plan.ID(),
+		SID:          plan.SID(),
 		Name:         plan.Name(),
 		Slug:         plan.Slug(),
 		Description:  plan.Description(),
@@ -179,16 +183,19 @@ func ToSubscriptionTokenDTO(token *subscription.SubscriptionToken) *Subscription
 		return nil
 	}
 
+	// Subscription SID will be set by the use case layer
+	subscriptionSID := ""
+
 	return &SubscriptionTokenDTO{
-		ID:             token.ID(),
-		SubscriptionID: token.SubscriptionID(),
-		Name:           token.Name(),
-		Prefix:         token.Prefix(),
-		Scope:          token.Scope().String(),
-		ExpiresAt:      token.ExpiresAt(),
-		LastUsedAt:     token.LastUsedAt(),
-		UsageCount:     token.UsageCount(),
-		IsActive:       token.IsActive(),
-		CreatedAt:      token.CreatedAt(),
+		SID:             token.SID(),
+		SubscriptionSID: subscriptionSID,
+		Name:            token.Name(),
+		Prefix:          token.Prefix(),
+		Scope:           token.Scope().String(),
+		ExpiresAt:       token.ExpiresAt(),
+		LastUsedAt:      token.LastUsedAt(),
+		UsageCount:      token.UsageCount(),
+		IsActive:        token.IsActive(),
+		CreatedAt:       token.CreatedAt(),
 	}
 }

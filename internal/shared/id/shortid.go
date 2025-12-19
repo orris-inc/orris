@@ -17,9 +17,15 @@ const (
 
 // Prefixes for different entity types (Stripe-style)
 const (
-	PrefixForwardAgent = "fa"
-	PrefixForwardRule  = "fr"
-	PrefixNode         = "node"
+	PrefixForwardAgent      = "fa"
+	PrefixForwardRule       = "fr"
+	PrefixNode              = "node"
+	PrefixUser              = "usr"
+	PrefixSubscription      = "sub"
+	PrefixPlan              = "plan"
+	PrefixSubscriptionToken = "stoken"
+	PrefixSubscriptionUsage = "usage"
+	PrefixPlanPricing       = "price"
 )
 
 // Generate creates a random short ID with the specified length using Base62 encoding.
@@ -143,9 +149,9 @@ func ParseForwardRuleID(prefixedID string) (string, error) {
 	return ExtractShortID(prefixedID, PrefixForwardRule)
 }
 
-// NewNodeID generates a new Node ID.
+// NewNodeID generates a new Node ID with prefix.
 func NewNodeID() (string, error) {
-	return Generate(DefaultLength)
+	return GenerateWithPrefix(PrefixNode, DefaultLength)
 }
 
 // FormatNodeID formats a short ID as a Node prefixed ID.
@@ -156,4 +162,99 @@ func FormatNodeID(shortID string) string {
 // ParseNodeID extracts the short ID from a Node prefixed ID.
 func ParseNodeID(prefixedID string) (string, error) {
 	return ExtractShortID(prefixedID, PrefixNode)
+}
+
+// NewUserID generates a new User ID (without prefix, for internal use).
+func NewUserID() (string, error) {
+	return Generate(DefaultLength)
+}
+
+// NewUserIDWithPrefix generates a new User ID with usr_ prefix (for storage).
+func NewUserIDWithPrefix() (string, error) {
+	return GenerateWithPrefix(PrefixUser, DefaultLength)
+}
+
+// FormatUserID formats a short ID as a User prefixed ID.
+func FormatUserID(shortID string) string {
+	return FormatWithPrefix(PrefixUser, shortID)
+}
+
+// ParseUserID extracts the short ID from a User prefixed ID.
+func ParseUserID(prefixedID string) (string, error) {
+	return ExtractShortID(prefixedID, PrefixUser)
+}
+
+// NewSubscriptionID generates a new Subscription ID.
+func NewSubscriptionID() (string, error) {
+	return Generate(DefaultLength)
+}
+
+// FormatSubscriptionID formats a short ID as a Subscription prefixed ID.
+func FormatSubscriptionID(shortID string) string {
+	return FormatWithPrefix(PrefixSubscription, shortID)
+}
+
+// ParseSubscriptionID extracts the short ID from a Subscription prefixed ID.
+func ParseSubscriptionID(prefixedID string) (string, error) {
+	return ExtractShortID(prefixedID, PrefixSubscription)
+}
+
+// NewPlanID generates a new Plan ID.
+func NewPlanID() (string, error) {
+	return Generate(DefaultLength)
+}
+
+// FormatPlanID formats a short ID as a Plan prefixed ID.
+func FormatPlanID(shortID string) string {
+	return FormatWithPrefix(PrefixPlan, shortID)
+}
+
+// ParsePlanID extracts the short ID from a Plan prefixed ID.
+func ParsePlanID(prefixedID string) (string, error) {
+	return ExtractShortID(prefixedID, PrefixPlan)
+}
+
+// NewSubscriptionTokenID generates a new Subscription Token ID.
+func NewSubscriptionTokenID() (string, error) {
+	return Generate(DefaultLength)
+}
+
+// FormatSubscriptionTokenID formats a short ID as a Subscription Token prefixed ID.
+func FormatSubscriptionTokenID(shortID string) string {
+	return FormatWithPrefix(PrefixSubscriptionToken, shortID)
+}
+
+// ParseSubscriptionTokenID extracts the short ID from a Subscription Token prefixed ID.
+func ParseSubscriptionTokenID(prefixedID string) (string, error) {
+	return ExtractShortID(prefixedID, PrefixSubscriptionToken)
+}
+
+// NewSubscriptionUsageID generates a new Subscription Usage ID.
+func NewSubscriptionUsageID() (string, error) {
+	return Generate(DefaultLength)
+}
+
+// FormatSubscriptionUsageID formats a short ID as a Subscription Usage prefixed ID.
+func FormatSubscriptionUsageID(shortID string) string {
+	return FormatWithPrefix(PrefixSubscriptionUsage, shortID)
+}
+
+// ParseSubscriptionUsageID extracts the short ID from a Subscription Usage prefixed ID.
+func ParseSubscriptionUsageID(prefixedID string) (string, error) {
+	return ExtractShortID(prefixedID, PrefixSubscriptionUsage)
+}
+
+// NewPlanPricingID generates a new Plan Pricing ID.
+func NewPlanPricingID() (string, error) {
+	return Generate(DefaultLength)
+}
+
+// FormatPlanPricingID formats a short ID as a Plan Pricing prefixed ID.
+func FormatPlanPricingID(shortID string) string {
+	return FormatWithPrefix(PrefixPlanPricing, shortID)
+}
+
+// ParsePlanPricingID extracts the short ID from a Plan Pricing prefixed ID.
+func ParsePlanPricingID(prefixedID string) (string, error) {
+	return ExtractShortID(prefixedID, PrefixPlanPricing)
 }

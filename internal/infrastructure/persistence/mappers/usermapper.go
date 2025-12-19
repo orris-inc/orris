@@ -71,6 +71,7 @@ func (m *UserMapperImpl) ToEntity(model *models.UserModel) (*user.User, error) {
 
 	userEntity, err := user.ReconstructUserWithAuth(
 		model.ID,
+		model.SID,
 		email,
 		name,
 		role,
@@ -97,6 +98,7 @@ func (m *UserMapperImpl) ToModel(entity *user.User) (*models.UserModel, error) {
 
 	model := &models.UserModel{
 		ID:                         entity.ID(),
+		SID:                        entity.SID(),
 		Email:                      entity.Email().String(),
 		Name:                       entity.Name().String(),
 		Role:                       entity.Role().String(),

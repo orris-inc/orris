@@ -22,7 +22,7 @@ type UpdateForwardRuleCommand struct {
 	ListenPort         *uint16
 	TargetAddress      *string
 	TargetPort         *uint16
-	TargetNodeShortID  *string // nil means no update, empty string means clear, non-empty means set to this node
+	TargetNodeSID      *string // nil means no update, empty string means clear, non-empty means set to this node
 	BindIP             *string // nil means no update, empty string means clear
 	IPVersion          *string // auto, ipv4, ipv6
 	Protocol           *string
@@ -170,19 +170,19 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 	}
 
 	// Handle target updates
-	// Priority: if TargetNodeShortID is provided, use it; otherwise use TargetAddress/TargetPort
-	if cmd.TargetNodeShortID != nil {
+	// Priority: if TargetNodeSID is provided, use it; otherwise use TargetAddress/TargetPort
+	if cmd.TargetNodeSID != nil {
 		var targetNodeID *uint
-		// If non-empty, resolve short ID to internal ID
-		if *cmd.TargetNodeShortID != "" {
-			targetNode, err := uc.nodeRepo.GetByShortID(ctx, *cmd.TargetNodeShortID)
+		// If non-empty, resolve SID to internal ID
+		if *cmd.TargetNodeSID != "" {
+			targetNode, err := uc.nodeRepo.GetBySID(ctx, *cmd.TargetNodeSID)
 			if err != nil {
-				uc.logger.Errorw("failed to get target node", "node_short_id", *cmd.TargetNodeShortID, "error", err)
+				uc.logger.Errorw("failed to get target node", "node_sid", *cmd.TargetNodeSID, "error", err)
 				return fmt.Errorf("failed to validate target node: %w", err)
 			}
 			if targetNode == nil {
-				uc.logger.Warnw("target node not found", "node_short_id", *cmd.TargetNodeShortID)
-				return errors.NewNotFoundError("node", *cmd.TargetNodeShortID)
+				uc.logger.Warnw("target node not found", "node_sid", *cmd.TargetNodeSID)
+				return errors.NewNotFoundError("node", *cmd.TargetNodeSID)
 			}
 			nodeID := targetNode.ID()
 			targetNodeID = &nodeID

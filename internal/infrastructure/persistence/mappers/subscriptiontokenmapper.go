@@ -63,6 +63,9 @@ func (m *subscriptionTokenMapper) ToEntity(model *models.SubscriptionTokenModel)
 		return nil, fmt.Errorf("failed to reconstruct subscription token entity: %w", err)
 	}
 
+	// Set SID from model
+	entity.SetSID(model.SID)
+
 	return entity, nil
 }
 
@@ -74,6 +77,7 @@ func (m *subscriptionTokenMapper) ToModel(entity *subscription.SubscriptionToken
 
 	model := &models.SubscriptionTokenModel{
 		ID:             entity.ID(),
+		SID:            entity.SID(),
 		SubscriptionID: entity.SubscriptionID(),
 		Name:           entity.Name(),
 		TokenHash:      entity.TokenHash(),

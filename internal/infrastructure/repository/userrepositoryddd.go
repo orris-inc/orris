@@ -77,6 +77,28 @@ func (r *UserRepositoryDDD) GetByID(ctx context.Context, id uint) (*user.User, e
 	return entity, nil
 }
 
+// GetBySID retrieves a user by external SID (Stripe-style ID)
+func (r *UserRepositoryDDD) GetBySID(ctx context.Context, sid string) (*user.User, error) {
+	var model models.UserModel
+
+	if err := r.db.WithContext(ctx).Where("sid = ?", sid).First(&model).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		r.logger.Errorw("failed to get user by SID", "sid", sid, "error", err)
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+
+	// Convert persistence model to domain entity
+	entity, err := r.mapper.ToEntity(&model)
+	if err != nil {
+		r.logger.Errorw("failed to map user model to entity", "sid", sid, "error", err)
+		return nil, fmt.Errorf("failed to map user: %w", err)
+	}
+
+	return entity, nil
+}
+
 // GetByEmail retrieves a user by email
 func (r *UserRepositoryDDD) GetByEmail(ctx context.Context, email string) (*user.User, error) {
 	var model models.UserModel
@@ -140,7 +162,7 @@ func (r *UserRepositoryDDD) Update(ctx context.Context, userEntity *user.User) e
 	return nil
 }
 
-// Delete soft deletes a user
+// Delete soft deletes a user by internal ID
 func (r *UserRepositoryDDD) Delete(ctx context.Context, id uint) error {
 	// Soft delete in database - updates both status and deleted_at
 	result := r.db.WithContext(ctx).
@@ -161,6 +183,30 @@ func (r *UserRepositoryDDD) Delete(ctx context.Context, id uint) error {
 	}
 
 	r.logger.Infow("user deleted successfully", "id", id)
+	return nil
+}
+
+// DeleteBySID soft deletes a user by external SID
+func (r *UserRepositoryDDD) DeleteBySID(ctx context.Context, sid string) error {
+	// Soft delete in database - updates both status and deleted_at
+	result := r.db.WithContext(ctx).
+		Model(&models.UserModel{}).
+		Where("sid = ?", sid).
+		Updates(map[string]interface{}{
+			"status":     "deleted",
+			"deleted_at": r.db.NowFunc(),
+		})
+
+	if result.Error != nil {
+		r.logger.Errorw("failed to delete user", "sid", sid, "error", result.Error)
+		return fmt.Errorf("failed to delete user: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("user not found")
+	}
+
+	r.logger.Infow("user deleted successfully", "sid", sid)
 	return nil
 }
 

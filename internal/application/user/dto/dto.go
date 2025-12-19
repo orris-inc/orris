@@ -32,7 +32,7 @@ type ListUsersRequest struct {
 
 // UserResponse represents the response for a user
 type UserResponse struct {
-	ID          uint         `json:"id"`
+	ID          string       `json:"id"`
 	Email       string       `json:"email"`
 	Name        string       `json:"name"`
 	DisplayName string       `json:"display_name"`

@@ -53,6 +53,9 @@ func (m *subscriptionUsageMapper) ToEntity(model *models.SubscriptionUsageModel)
 		return nil, fmt.Errorf("failed to reconstruct subscription usage entity: %w", err)
 	}
 
+	// Set SID from model
+	usageEntity.SetSID(model.SID)
+
 	return usageEntity, nil
 }
 
@@ -64,6 +67,7 @@ func (m *subscriptionUsageMapper) ToModel(entity *subscription.SubscriptionUsage
 
 	model := &models.SubscriptionUsageModel{
 		ID:             entity.ID(),
+		SID:            entity.SID(),
 		SubscriptionID: entity.SubscriptionID(),
 		ResourceType:   entity.ResourceType(),
 		ResourceID:     entity.ResourceID(),

@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/orris-inc/orris/internal/domain/node"
-	"github.com/orris-inc/orris/internal/shared/id"
 )
 
 type NodeDTO struct {
@@ -107,7 +106,7 @@ func ToNodeDTO(n *node.Node) *NodeDTO {
 	}
 
 	dto := &NodeDTO{
-		ID:                id.FormatNodeID(n.ShortID()),
+		ID:                n.SID(),
 		Name:              n.Name(),
 		ServerAddress:     n.ServerAddress().Value(),
 		AgentPort:         n.AgentPort(),

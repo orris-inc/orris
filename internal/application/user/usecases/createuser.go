@@ -8,6 +8,7 @@ import (
 	domainUser "github.com/orris-inc/orris/internal/domain/user"
 	vo "github.com/orris-inc/orris/internal/domain/user/valueobjects"
 	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -58,8 +59,8 @@ func (uc *CreateUserUseCase) Execute(ctx context.Context, request dto.CreateUser
 		return nil, fmt.Errorf("invalid name: %w", err)
 	}
 
-	// Create user using constructor
-	userEntity, err := domainUser.NewUser(email, name)
+	// Create user using constructor with short ID generator
+	userEntity, err := domainUser.NewUser(email, name, id.NewUserIDWithPrefix)
 	if err != nil {
 		uc.logger.Errorw("failed to create user entity", "error", err)
 		return nil, fmt.Errorf("failed to create user: %w", err)
@@ -71,9 +72,9 @@ func (uc *CreateUserUseCase) Execute(ctx context.Context, request dto.CreateUser
 		return nil, fmt.Errorf("failed to save user: %w", err)
 	}
 
-	// Map to response DTO
+	// Map to response DTO with external SID
 	response := &dto.UserResponse{
-		ID:        userEntity.ID(),
+		ID:        userEntity.SID(),
 		Email:     userEntity.Email().String(),
 		Name:      userEntity.Name().String(),
 		Role:      string(userEntity.Role()),

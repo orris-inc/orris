@@ -9,6 +9,7 @@ import (
 // It's a value object that encapsulates pricing details for a subscription plan
 type PlanPricing struct {
 	id           uint
+	sid          string // Stripe-style ID: price_xxx
 	planID       uint
 	billingCycle BillingCycle
 	price        uint64
@@ -87,6 +88,16 @@ func ReconstructPlanPricing(id, planID uint, cycle BillingCycle, price uint64, c
 // ID returns the pricing ID
 func (p *PlanPricing) ID() uint {
 	return p.id
+}
+
+// SID returns the Stripe-style ID
+func (p *PlanPricing) SID() string {
+	return p.sid
+}
+
+// SetSID sets the Stripe-style ID (only for persistence layer use)
+func (p *PlanPricing) SetSID(sid string) {
+	p.sid = sid
 }
 
 // PlanID returns the associated plan ID

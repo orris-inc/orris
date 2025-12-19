@@ -57,15 +57,15 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 
 // GetUser handles GET /users/:id
 func (h *UserHandler) GetUser(c *gin.Context) {
-	// Parse user ID
-	userID, err := dto.ParseUserID(c)
+	// Parse user UUID (Stripe-style ID)
+	userUUID, err := dto.ParseUserID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	// Get user
-	userResp, err := h.userService.GetUserByID(c.Request.Context(), userID)
+	// Get user by UUID
+	userResp, err := h.userService.GetUserByUUID(c.Request.Context(), userUUID)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -80,8 +80,8 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	currentUserID, _ := c.Get("user_id")
 	userRole := c.GetString(constants.ContextKeyUserRole)
 
-	// Parse user ID
-	userID, err := dto.ParseUserID(c)
+	// Parse user UUID (Stripe-style ID)
+	userUUID, err := dto.ParseUserID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -90,12 +90,12 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	h.logger.Infow("update user request",
 		"current_user_id", currentUserID,
 		constants.ContextKeyUserRole, userRole,
-		"target_user_id", userID)
+		"target_user_uuid", userUUID)
 
 	var req dto.UpdateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Warnw("invalid request body for update user",
-			"user_id", userID,
+			"user_uuid", userUUID,
 			"error", err)
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -104,8 +104,8 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	// Convert to application request
 	appReq := req.ToApplicationRequest()
 
-	// Update user
-	userResp, err := h.userService.UpdateUser(c.Request.Context(), userID, *appReq)
+	// Update user by UUID
+	userResp, err := h.userService.UpdateUser(c.Request.Context(), userUUID, *appReq)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -116,15 +116,15 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 
 // DeleteUser handles DELETE /users/:id
 func (h *UserHandler) DeleteUser(c *gin.Context) {
-	// Parse user ID
-	userID, err := dto.ParseUserID(c)
+	// Parse user UUID (Stripe-style ID)
+	userUUID, err := dto.ParseUserID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	// Delete user
-	if err := h.userService.DeleteUser(c.Request.Context(), userID); err != nil {
+	// Delete user by UUID
+	if err := h.userService.DeleteUser(c.Request.Context(), userUUID); err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
@@ -171,8 +171,8 @@ func (h *UserHandler) GetUserByEmail(c *gin.Context) {
 
 // AdminResetPassword handles PATCH /users/:id/password
 func (h *UserHandler) AdminResetPassword(c *gin.Context) {
-	// Parse user ID
-	userID, err := dto.ParseUserID(c)
+	// Parse user UUID (Stripe-style ID)
+	userUUID, err := dto.ParseUserID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -180,13 +180,13 @@ func (h *UserHandler) AdminResetPassword(c *gin.Context) {
 
 	var req dto.AdminResetPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Warnw("invalid request body for admin reset password", "user_id", userID, "error", err)
+		h.logger.Warnw("invalid request body for admin reset password", "user_uuid", userUUID, "error", err)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
 	cmd := usecases.AdminResetPasswordCommand{
-		UserID:      userID,
+		UserSID:     userUUID,
 		NewPassword: req.Password,
 	}
 

@@ -9,6 +9,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/user"
 	vo "github.com/orris-inc/orris/internal/domain/user/valueobjects"
 	"github.com/orris-inc/orris/internal/shared/config"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -156,7 +157,7 @@ func (uc *HandleOAuthCallbackUseCase) Execute(ctx context.Context, cmd HandleOAu
 				return nil, fmt.Errorf("invalid name: %w", err)
 			}
 
-			existingUser, err = user.NewUser(email, name)
+			existingUser, err = user.NewUser(email, name, id.NewUserIDWithPrefix)
 			if err != nil {
 				uc.logger.Errorw("failed to create user", "error", err)
 				return nil, fmt.Errorf("failed to create user: %w", err)
@@ -202,6 +203,7 @@ func (uc *HandleOAuthCallbackUseCase) Execute(ctx context.Context, cmd HandleOAu
 	// Create session with tokens using unified helper
 	sessionWithTokens, err := uc.authHelper.CreateAndSaveSessionWithTokens(
 		existingUser.ID(),
+		existingUser.SID(),
 		helpers.DeviceInfo{
 			DeviceName: cmd.DeviceName,
 			DeviceType: cmd.DeviceType,
@@ -209,8 +211,8 @@ func (uc *HandleOAuthCallbackUseCase) Execute(ctx context.Context, cmd HandleOAu
 			UserAgent:  cmd.UserAgent,
 		},
 		sessionDuration,
-		func(userID uint, sessionID string) (string, string, int64, error) {
-			tokens, err := uc.jwtService.Generate(userID, sessionID, existingUser.Role())
+		func(userUUID string, sessionID string) (string, string, int64, error) {
+			tokens, err := uc.jwtService.Generate(userUUID, sessionID, existingUser.Role())
 			if err != nil {
 				return "", "", 0, err
 			}

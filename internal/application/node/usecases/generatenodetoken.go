@@ -11,7 +11,7 @@ import (
 )
 
 type GenerateNodeTokenCommand struct {
-	ShortID   string // External API identifier
+	SID       string // External API identifier
 	ExpiresAt *time.Time
 }
 
@@ -39,30 +39,30 @@ func NewGenerateNodeTokenUseCase(
 }
 
 func (uc *GenerateNodeTokenUseCase) Execute(ctx context.Context, cmd GenerateNodeTokenCommand) (*GenerateNodeTokenResult, error) {
-	uc.logger.Infow("executing generate node token use case", "short_id", cmd.ShortID)
+	uc.logger.Infow("executing generate node token use case", "sid", cmd.SID)
 
 	// Validate command
 	if err := uc.validateCommand(cmd); err != nil {
-		uc.logger.Errorw("invalid generate node token command", "error", err, "short_id", cmd.ShortID)
+		uc.logger.Errorw("invalid generate node token command", "error", err, "sid", cmd.SID)
 		return nil, err
 	}
 
 	if cmd.ExpiresAt != nil && cmd.ExpiresAt.Before(time.Now()) {
-		uc.logger.Warnw("expiration time is in the past", "short_id", cmd.ShortID, "expires_at", cmd.ExpiresAt)
+		uc.logger.Warnw("expiration time is in the past", "sid", cmd.SID, "expires_at", cmd.ExpiresAt)
 		return nil, errors.NewValidationError("expiration time cannot be in the past")
 	}
 
 	// Retrieve the node from repository
-	n, err := uc.nodeRepo.GetByShortID(ctx, cmd.ShortID)
+	n, err := uc.nodeRepo.GetBySID(ctx, cmd.SID)
 	if err != nil {
-		uc.logger.Errorw("failed to get node by short ID", "short_id", cmd.ShortID, "error", err)
+		uc.logger.Errorw("failed to get node by SID", "sid", cmd.SID, "error", err)
 		return nil, fmt.Errorf("failed to get node: %w", err)
 	}
 
 	// Generate new API token using domain method
 	plainToken, err := n.GenerateAPIToken()
 	if err != nil {
-		uc.logger.Errorw("failed to generate API token", "error", err, "short_id", cmd.ShortID)
+		uc.logger.Errorw("failed to generate API token", "error", err, "sid", cmd.SID)
 		return nil, fmt.Errorf("failed to generate API token: %w", err)
 	}
 
@@ -74,11 +74,11 @@ func (uc *GenerateNodeTokenUseCase) Execute(ctx context.Context, cmd GenerateNod
 
 	// Update node in repository
 	if err := uc.nodeRepo.Update(ctx, n); err != nil {
-		uc.logger.Errorw("failed to update node", "error", err, "short_id", cmd.ShortID)
+		uc.logger.Errorw("failed to update node", "error", err, "sid", cmd.SID)
 		return nil, fmt.Errorf("failed to update node: %w", err)
 	}
 
-	uc.logger.Infow("node token generated successfully", "short_id", cmd.ShortID)
+	uc.logger.Infow("node token generated successfully", "sid", cmd.SID)
 
 	return &GenerateNodeTokenResult{
 		NodeID:      n.ID(),
@@ -90,8 +90,8 @@ func (uc *GenerateNodeTokenUseCase) Execute(ctx context.Context, cmd GenerateNod
 }
 
 func (uc *GenerateNodeTokenUseCase) validateCommand(cmd GenerateNodeTokenCommand) error {
-	if cmd.ShortID == "" {
-		return errors.NewValidationError("short ID must be provided")
+	if cmd.SID == "" {
+		return errors.NewValidationError("SID must be provided")
 	}
 
 	return nil

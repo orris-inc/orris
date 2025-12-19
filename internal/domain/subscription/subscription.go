@@ -14,6 +14,7 @@ import (
 // Subscription represents the subscription aggregate root
 type Subscription struct {
 	id                 uint
+	sid                string // Stripe-style ID: sub_xxx
 	uuid               string // unique identifier used for node authentication
 	userID             uint   // Deprecated: use subjectID instead. Kept for backward compatibility
 	subjectType        string // Type of subject (user, user_group, etc.)
@@ -174,6 +175,16 @@ func ReconstructSubscriptionWithSubject(
 // ID returns the subscription ID
 func (s *Subscription) ID() uint {
 	return s.id
+}
+
+// SID returns the Stripe-style ID
+func (s *Subscription) SID() string {
+	return s.sid
+}
+
+// SetSID sets the Stripe-style ID (only for persistence layer use)
+func (s *Subscription) SetSID(sid string) {
+	s.sid = sid
 }
 
 // UUID returns the subscription UUID

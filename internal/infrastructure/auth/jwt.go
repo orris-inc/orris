@@ -17,7 +17,7 @@ const (
 )
 
 type Claims struct {
-	UserID    uint                   `json:"user_id"`
+	UserUUID  string                 `json:"user_uuid"`
 	SessionID string                 `json:"session_id"`
 	Role      authorization.UserRole `json:"role"`
 	TokenType TokenType              `json:"token_type"`
@@ -44,12 +44,12 @@ func NewJWTService(secret string, accessExpMinutes, refreshExpDays int) *JWTServ
 	}
 }
 
-func (s *JWTService) Generate(userID uint, sessionID string, role authorization.UserRole) (*TokenPair, error) {
+func (s *JWTService) Generate(userUUID string, sessionID string, role authorization.UserRole) (*TokenPair, error) {
 	now := time.Now()
 
 	accessExp := now.Add(time.Duration(s.accessExpMinutes) * time.Minute)
 	accessClaims := &Claims{
-		UserID:    userID,
+		UserUUID:  userUUID,
 		SessionID: sessionID,
 		Role:      role,
 		TokenType: TokenTypeAccess,
@@ -68,7 +68,7 @@ func (s *JWTService) Generate(userID uint, sessionID string, role authorization.
 
 	refreshExp := now.Add(time.Duration(s.refreshExpDays) * 24 * time.Hour)
 	refreshClaims := &Claims{
-		UserID:    userID,
+		UserUUID:  userUUID,
 		SessionID: sessionID,
 		Role:      role,
 		TokenType: TokenTypeRefresh,
@@ -125,7 +125,7 @@ func (s *JWTService) Refresh(refreshTokenString string) (string, error) {
 	accessExp := now.Add(time.Duration(s.accessExpMinutes) * time.Minute)
 
 	newClaims := &Claims{
-		UserID:    claims.UserID,
+		UserUUID:  claims.UserUUID,
 		SessionID: claims.SessionID,
 		Role:      claims.Role,
 		TokenType: TokenTypeAccess,

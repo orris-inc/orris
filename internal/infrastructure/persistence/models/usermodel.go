@@ -12,6 +12,7 @@ import (
 // This is the anti-corruption layer between domain and database
 type UserModel struct {
 	ID                         uint    `gorm:"primarykey"`
+	SID                        string  `gorm:"uniqueIndex;not null;size:50;column:sid"`
 	Email                      string  `gorm:"uniqueIndex;not null;size:255"`
 	Name                       string  `gorm:"not null;size:100"`
 	Role                       string  `gorm:"not null;default:user;size:20;index"`

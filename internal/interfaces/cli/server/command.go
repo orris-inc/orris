@@ -24,6 +24,7 @@ import (
 	"github.com/orris-inc/orris/internal/infrastructure/repository"
 	httpRouter "github.com/orris-inc/orris/internal/interfaces/http"
 	"github.com/orris-inc/orris/internal/shared/authorization"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -229,7 +230,7 @@ func seedAdminUser(cfg *config.Config, userRepo user.Repository, hasher *auth.Bc
 	}
 
 	// Create user domain object
-	adminUser, err := user.NewUser(email, name)
+	adminUser, err := user.NewUser(email, name, id.NewUserIDWithPrefix)
 	if err != nil {
 		return fmt.Errorf("failed to create admin user object: %w", err)
 	}

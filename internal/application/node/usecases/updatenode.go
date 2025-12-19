@@ -11,7 +11,7 @@ import (
 )
 
 type UpdateNodeCommand struct {
-	ShortID          string // External API identifier
+	SID              string // External API identifier
 	Name             *string
 	ServerAddress    *string
 	AgentPort        *uint16
@@ -59,34 +59,34 @@ func NewUpdateNodeUseCase(
 }
 
 func (uc *UpdateNodeUseCase) Execute(ctx context.Context, cmd UpdateNodeCommand) (*UpdateNodeResult, error) {
-	uc.logger.Infow("executing update node use case", "short_id", cmd.ShortID)
+	uc.logger.Infow("executing update node use case", "sid", cmd.SID)
 
 	// Validate command
 	if err := uc.validateCommand(cmd); err != nil {
-		uc.logger.Errorw("invalid update node command", "error", err, "short_id", cmd.ShortID)
+		uc.logger.Errorw("invalid update node command", "error", err, "sid", cmd.SID)
 		return nil, err
 	}
 
 	// Get existing node from repository
-	existingNode, err := uc.nodeRepo.GetByShortID(ctx, cmd.ShortID)
+	existingNode, err := uc.nodeRepo.GetBySID(ctx, cmd.SID)
 	if err != nil {
-		uc.logger.Errorw("failed to get node by short ID", "short_id", cmd.ShortID, "error", err)
+		uc.logger.Errorw("failed to get node by SID", "sid", cmd.SID, "error", err)
 		return nil, errors.NewNotFoundError("node not found")
 	}
 
 	// Apply updates based on command fields
 	if err := uc.applyUpdates(existingNode, cmd); err != nil {
-		uc.logger.Errorw("failed to apply updates", "error", err, "short_id", cmd.ShortID)
+		uc.logger.Errorw("failed to apply updates", "error", err, "sid", cmd.SID)
 		return nil, err
 	}
 
 	// Save updated node
 	if err := uc.nodeRepo.Update(ctx, existingNode); err != nil {
-		uc.logger.Errorw("failed to update node", "error", err, "short_id", cmd.ShortID)
+		uc.logger.Errorw("failed to update node", "error", err, "sid", cmd.SID)
 		return nil, err
 	}
 
-	uc.logger.Infow("node updated successfully", "short_id", cmd.ShortID)
+	uc.logger.Infow("node updated successfully", "sid", cmd.SID)
 
 	// Build and return result
 	return &UpdateNodeResult{
@@ -235,8 +235,8 @@ func (uc *UpdateNodeUseCase) applyUpdates(n *node.Node, cmd UpdateNodeCommand) e
 }
 
 func (uc *UpdateNodeUseCase) validateCommand(cmd UpdateNodeCommand) error {
-	if cmd.ShortID == "" {
-		return errors.NewValidationError("short ID must be provided")
+	if cmd.SID == "" {
+		return errors.NewValidationError("SID must be provided")
 	}
 
 	if cmd.Name == nil && cmd.ServerAddress == nil && cmd.AgentPort == nil &&

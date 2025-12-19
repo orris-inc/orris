@@ -24,23 +24,47 @@ func NewGetUserUseCase(userRepo domainUser.Repository, logger logger.Interface) 
 	}
 }
 
-// ExecuteByID retrieves a user by ID
-func (uc *GetUserUseCase) ExecuteByID(ctx context.Context, id uint) (*dto.UserResponse, error) {
-	uc.logger.Infow("executing get user by ID", "id", id)
+// ExecuteByID retrieves a user by internal ID (for internal use)
+func (uc *GetUserUseCase) ExecuteByID(ctx context.Context, internalID uint) (*dto.UserResponse, error) {
+	uc.logger.Infow("executing get user by internal ID", "id", internalID)
 
-	if id == 0 {
+	if internalID == 0 {
 		return nil, errors.NewValidationError("user ID cannot be zero")
 	}
 
 	// Retrieve the user
-	userEntity, err := uc.userRepo.GetByID(ctx, id)
+	userEntity, err := uc.userRepo.GetByID(ctx, internalID)
 	if err != nil {
-		uc.logger.Errorw("failed to get user", "id", id, "error", err)
+		uc.logger.Errorw("failed to get user", "id", internalID, "error", err)
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 
 	if userEntity == nil {
-		uc.logger.Warnw("user not found", "id", id)
+		uc.logger.Warnw("user not found", "id", internalID)
+		return nil, errors.NewNotFoundError("user not found")
+	}
+
+	// Map to response DTO
+	return uc.mapToResponse(userEntity), nil
+}
+
+// ExecuteBySID retrieves a user by external SID (Stripe-style ID)
+func (uc *GetUserUseCase) ExecuteBySID(ctx context.Context, sid string) (*dto.UserResponse, error) {
+	uc.logger.Infow("executing get user by SID", "sid", sid)
+
+	if sid == "" {
+		return nil, errors.NewValidationError("user SID cannot be empty")
+	}
+
+	// Retrieve the user
+	userEntity, err := uc.userRepo.GetBySID(ctx, sid)
+	if err != nil {
+		uc.logger.Errorw("failed to get user", "sid", sid, "error", err)
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+
+	if userEntity == nil {
+		uc.logger.Warnw("user not found", "sid", sid)
 		return nil, errors.NewNotFoundError("user not found")
 	}
 
@@ -134,7 +158,7 @@ func (uc *GetUserUseCase) mapToResponse(userEntity *domainUser.User) *dto.UserRe
 	displayInfo := userEntity.GetDisplayInfo()
 
 	return &dto.UserResponse{
-		ID:          userEntity.ID(),
+		ID:          userEntity.SID(),
 		Email:       userEntity.Email().String(),
 		Name:        userEntity.Name().String(),
 		DisplayName: displayInfo.DisplayName,

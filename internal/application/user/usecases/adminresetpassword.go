@@ -11,7 +11,7 @@ import (
 )
 
 type AdminResetPasswordCommand struct {
-	UserID      uint
+	UserSID     string
 	NewPassword string
 }
 
@@ -40,9 +40,9 @@ func NewAdminResetPasswordUseCase(
 }
 
 func (uc *AdminResetPasswordUseCase) Execute(ctx context.Context, cmd AdminResetPasswordCommand) error {
-	existingUser, err := uc.userRepo.GetByID(ctx, cmd.UserID)
+	existingUser, err := uc.userRepo.GetBySID(ctx, cmd.UserSID)
 	if err != nil {
-		uc.logger.Errorw("failed to get user", "error", err, "user_id", cmd.UserID)
+		uc.logger.Errorw("failed to get user", "error", err, "user_sid", cmd.UserSID)
 		return fmt.Errorf("failed to get user: %w", err)
 	}
 	if existingUser == nil {

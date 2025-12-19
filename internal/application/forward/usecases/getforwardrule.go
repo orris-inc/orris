@@ -77,9 +77,9 @@ func (uc *GetForwardRuleUseCase) Execute(ctx context.Context, query GetForwardRu
 			// Continue without node info
 		} else if len(nodes) > 0 {
 			n := nodes[0]
-			// Populate target node short ID
-			nodeShortIDMap := dto.NodeShortIDMap{n.ID(): n.ShortID()}
-			ruleDTO.PopulateTargetNodeShortID(nodeShortIDMap)
+			// Populate target node SID
+			nodeSIDMap := dto.NodeSIDMap{n.ID(): n.SID()}
+			ruleDTO.PopulateTargetNodeSID(nodeSIDMap)
 			// Populate target node info
 			ruleDTO.PopulateTargetNodeInfo(&dto.TargetNodeInfo{
 				ServerAddress: n.ServerAddress().Value(),

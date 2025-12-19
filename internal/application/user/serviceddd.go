@@ -6,6 +6,8 @@ import (
 	"github.com/orris-inc/orris/internal/application/user/dto"
 	"github.com/orris-inc/orris/internal/application/user/usecases"
 	domainUser "github.com/orris-inc/orris/internal/domain/user"
+	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -46,15 +48,31 @@ func (s *ServiceDDD) CreateUser(ctx context.Context, request dto.CreateUserReque
 	return s.createUserUC.Execute(ctx, request)
 }
 
-// UpdateUser updates an existing user
-func (s *ServiceDDD) UpdateUser(ctx context.Context, id uint, request dto.UpdateUserRequest) (*dto.UserResponse, error) {
+// UpdateUser updates an existing user by external UUID (Stripe-style ID)
+func (s *ServiceDDD) UpdateUser(ctx context.Context, uuid string, request dto.UpdateUserRequest) (*dto.UserResponse, error) {
+	// Extract short ID from prefixed UUID (usr_xxx -> xxx)
+	shortID, err := id.ParseUserID(uuid)
+	if err != nil {
+		return nil, errors.NewValidationError("invalid user ID format")
+	}
+
 	if err := s.updateUserUC.ValidateRequest(request); err != nil {
 		return nil, err
 	}
-	return s.updateUserUC.Execute(ctx, id, request)
+	return s.updateUserUC.Execute(ctx, shortID, request)
 }
 
-// GetUserByID retrieves a user by ID
+// GetUserByUUID retrieves a user by external UUID (Stripe-style ID)
+func (s *ServiceDDD) GetUserByUUID(ctx context.Context, uuid string) (*dto.UserResponse, error) {
+	// Extract short ID from prefixed UUID (usr_xxx -> xxx)
+	shortID, err := id.ParseUserID(uuid)
+	if err != nil {
+		return nil, errors.NewValidationError("invalid user ID format")
+	}
+	return s.getUserUC.ExecuteBySID(ctx, shortID)
+}
+
+// GetUserByID retrieves a user by internal ID (for internal use)
 func (s *ServiceDDD) GetUserByID(ctx context.Context, id uint) (*dto.UserResponse, error) {
 	return s.getUserUC.ExecuteByID(ctx, id)
 }
@@ -69,9 +87,10 @@ func (s *ServiceDDD) ListUsers(ctx context.Context, request dto.ListUsersRequest
 	return s.getUserUC.ExecuteList(ctx, request)
 }
 
-// DeleteUser deletes a user by ID
-func (s *ServiceDDD) DeleteUser(ctx context.Context, id uint) error {
-	return s.userRepo.Delete(ctx, id)
+// DeleteUser deletes a user by external SID (Stripe-style ID)
+func (s *ServiceDDD) DeleteUser(ctx context.Context, sid string) error {
+	// SID is stored with prefix (usr_xxx), use directly
+	return s.userRepo.DeleteBySID(ctx, sid)
 }
 
 // UpdateProfile updates the current user's profile (name, email)

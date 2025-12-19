@@ -16,9 +16,9 @@ const (
 
 // GenerateNodeInstallScriptQuery represents the input for generating node install script.
 type GenerateNodeInstallScriptQuery struct {
-	ShortID string // External API identifier
-	APIURL  string // API server URL (e.g., https://api.example.com)
-	Token   string // Optional: API token for the node. If not provided, uses node's current token
+	SID    string // External API identifier
+	APIURL string // API server URL (e.g., https://api.example.com)
+	Token  string // Optional: API token for the node. If not provided, uses node's current token
 }
 
 // GenerateNodeInstallScriptResult represents the output of generating node install script.
@@ -55,22 +55,22 @@ func NewGenerateNodeInstallScriptUseCase(
 
 // Execute generates the install command for a node.
 func (uc *GenerateNodeInstallScriptUseCase) Execute(ctx context.Context, query GenerateNodeInstallScriptQuery) (*GenerateNodeInstallScriptResult, error) {
-	uc.logger.Infow("executing generate node install script use case", "short_id", query.ShortID)
+	uc.logger.Infow("executing generate node install script use case", "sid", query.SID)
 
 	if err := uc.validateQuery(query); err != nil {
-		uc.logger.Errorw("invalid generate node install script query", "error", err, "short_id", query.ShortID)
+		uc.logger.Errorw("invalid generate node install script query", "error", err, "sid", query.SID)
 		return nil, err
 	}
 
 	// Get the node
-	n, err := uc.repo.GetByShortID(ctx, query.ShortID)
+	n, err := uc.repo.GetBySID(ctx, query.SID)
 	if err != nil {
-		uc.logger.Errorw("failed to get node by short ID", "short_id", query.ShortID, "error", err)
+		uc.logger.Errorw("failed to get node by SID", "sid", query.SID, "error", err)
 		return nil, fmt.Errorf("failed to get node: %w", err)
 	}
 
 	if n == nil {
-		return nil, errors.NewNotFoundError("node", query.ShortID)
+		return nil, errors.NewNotFoundError("node", query.SID)
 	}
 
 	// Use provided token or fall back to node's stored token
@@ -99,13 +99,13 @@ func (uc *GenerateNodeInstallScriptUseCase) Execute(ctx context.Context, query G
 		Token:            token,
 	}
 
-	uc.logger.Infow("node install command generated successfully", "short_id", query.ShortID)
+	uc.logger.Infow("node install command generated successfully", "sid", query.SID)
 	return result, nil
 }
 
 func (uc *GenerateNodeInstallScriptUseCase) validateQuery(query GenerateNodeInstallScriptQuery) error {
-	if query.ShortID == "" {
-		return errors.NewValidationError("short ID must be provided")
+	if query.SID == "" {
+		return errors.NewValidationError("SID must be provided")
 	}
 	if query.APIURL == "" {
 		return errors.NewValidationError("API URL is required")

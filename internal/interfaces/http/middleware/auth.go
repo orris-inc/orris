@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/orris-inc/orris/internal/domain/user"
 	"github.com/orris-inc/orris/internal/infrastructure/auth"
 	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -14,12 +15,14 @@ import (
 
 type AuthMiddleware struct {
 	jwtService *auth.JWTService
+	userRepo   user.Repository
 	logger     logger.Interface
 }
 
-func NewAuthMiddleware(jwtService *auth.JWTService, logger logger.Interface) *AuthMiddleware {
+func NewAuthMiddleware(jwtService *auth.JWTService, userRepo user.Repository, logger logger.Interface) *AuthMiddleware {
 	return &AuthMiddleware{
 		jwtService: jwtService,
+		userRepo:   userRepo,
 		logger:     logger,
 	}
 }
@@ -62,7 +65,17 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 			return
 		}
 
-		c.Set("user_id", claims.UserID)
+		// Look up user by SID to get internal ID
+		foundUser, err := m.userRepo.GetBySID(c.Request.Context(), claims.UserUUID)
+		if err != nil || foundUser == nil {
+			m.logger.Warnw("user not found by uuid", "user_uuid", claims.UserUUID, "error", err)
+			utils.ErrorResponse(c, http.StatusUnauthorized, "user not found")
+			c.Abort()
+			return
+		}
+
+		c.Set("user_id", foundUser.ID())
+		c.Set("user_uuid", claims.UserUUID)
 		c.Set("session_id", claims.SessionID)
 		c.Set(constants.ContextKeyUserRole, string(claims.Role))
 
@@ -94,9 +107,14 @@ func (m *AuthMiddleware) OptionalAuth() gin.HandlerFunc {
 
 		claims, err := m.jwtService.Verify(token)
 		if err == nil && claims.TokenType == auth.TokenTypeAccess {
-			c.Set("user_id", claims.UserID)
-			c.Set("session_id", claims.SessionID)
-			c.Set(constants.ContextKeyUserRole, string(claims.Role))
+			// Look up user by SID to get internal ID
+			foundUser, lookupErr := m.userRepo.GetBySID(c.Request.Context(), claims.UserUUID)
+			if lookupErr == nil && foundUser != nil {
+				c.Set("user_id", foundUser.ID())
+				c.Set("user_uuid", claims.UserUUID)
+				c.Set("session_id", claims.SessionID)
+				c.Set(constants.ContextKeyUserRole, string(claims.Role))
+			}
 		}
 
 		c.Next()

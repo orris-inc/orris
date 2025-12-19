@@ -79,8 +79,8 @@ type jwtServiceAdapter struct {
 	*auth.JWTService
 }
 
-func (a *jwtServiceAdapter) Generate(userID uint, sessionID string, role authorization.UserRole) (*usecases.TokenPair, error) {
-	pair, err := a.JWTService.Generate(userID, sessionID, role)
+func (a *jwtServiceAdapter) Generate(userUUID string, sessionID string, role authorization.UserRole) (*usecases.TokenPair, error) {
+	pair, err := a.JWTService.Generate(userUUID, sessionID, role)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +204,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	userHandler := handlers.NewUserHandler(userService, adminResetPasswordUC)
 
-	authMiddleware := middleware.NewAuthMiddleware(jwtSvc, log)
+	authMiddleware := middleware.NewAuthMiddleware(jwtSvc, userRepo, log)
 	rateLimiter := middleware.NewRateLimiter(100, 1*time.Minute)
 
 	subscriptionRepo := repository.NewSubscriptionRepository(db, log)

@@ -14,6 +14,7 @@ import (
 // This is the anti-corruption layer between domain and database
 type PlanModel struct {
 	ID           uint   `gorm:"primarykey"`
+	SID          string `gorm:"uniqueIndex;not null;size:50;comment:Stripe-style ID: plan_xxx"`
 	Name         string `gorm:"not null;size:100"`
 	Slug         string `gorm:"uniqueIndex;not null;size:50"`
 	PlanType     string `gorm:"not null;size:20;default:node"`

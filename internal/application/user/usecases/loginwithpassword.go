@@ -19,7 +19,7 @@ type TokenPair struct {
 }
 
 type JWTService interface {
-	Generate(userID uint, sessionID string, role authorization.UserRole) (*TokenPair, error)
+	Generate(userUUID string, sessionID string, role authorization.UserRole) (*TokenPair, error)
 	Refresh(refreshToken string) (string, error)
 }
 
@@ -103,6 +103,7 @@ func (uc *LoginWithPasswordUseCase) Execute(ctx context.Context, cmd LoginWithPa
 	// Create session with tokens using unified helper
 	sessionWithTokens, err := uc.authHelper.CreateAndSaveSessionWithTokens(
 		existingUser.ID(),
+		existingUser.SID(),
 		helpers.DeviceInfo{
 			DeviceName: cmd.DeviceName,
 			DeviceType: cmd.DeviceType,
@@ -110,8 +111,8 @@ func (uc *LoginWithPasswordUseCase) Execute(ctx context.Context, cmd LoginWithPa
 			UserAgent:  cmd.UserAgent,
 		},
 		sessionDuration,
-		func(userID uint, sessionID string) (string, string, int64, error) {
-			tokens, err := uc.jwtService.Generate(userID, sessionID, existingUser.Role())
+		func(userUUID string, sessionID string) (string, string, int64, error) {
+			tokens, err := uc.jwtService.Generate(userUUID, sessionID, existingUser.Role())
 			if err != nil {
 				return "", "", 0, err
 			}
