@@ -24,9 +24,10 @@ type NodeModel struct {
 	SubscriptionPort  *uint16 `gorm:"default:null"`                                            // port for client subscriptions (if nil, use AgentPort)
 	Protocol          string  `gorm:"not null;default:shadowsocks;size:20;index:idx_protocol"` // shadowsocks, trojan
 	Status            string  `gorm:"not null;default:inactive;size:20;index:idx_status"`      // active, inactive, maintenance
+	GroupID           *uint   `gorm:"index:idx_node_group_id"`                                 // resource group ID
 	Region            *string `gorm:"size:100"`
 	Tags              datatypes.JSON
-	PlanIDs           datatypes.JSON `gorm:"column:plan_ids;default:'[]'"` // JSON array of subscription plan IDs
+	PlanIDs           datatypes.JSON `gorm:"column:plan_ids;default:'[]'"` // JSON array of subscription plan IDs (deprecated)
 	SortOrder         int            `gorm:"not null;default:0"`
 	MaintenanceReason *string        `gorm:"size:500"`
 	TokenHash         string         `gorm:"not null;uniqueIndex:idx_token_hash;size:255"` // hashed API token for node authentication

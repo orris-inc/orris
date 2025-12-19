@@ -25,7 +25,8 @@ type Node struct {
 	trojanConfig      *vo.TrojanConfig
 	status            vo.NodeStatus
 	metadata          vo.NodeMetadata
-	planIDs           []uint // subscription plans that can access this node
+	groupID           *uint  // resource group ID (new: replaces planIDs)
+	planIDs           []uint // subscription plans that can access this node (deprecated: use groupID)
 	apiToken          string
 	tokenHash         string
 	sortOrder         int
@@ -123,6 +124,7 @@ func ReconstructNode(
 	trojanConfig *vo.TrojanConfig,
 	status vo.NodeStatus,
 	metadata vo.NodeMetadata,
+	groupID *uint,
 	planIDs []uint,
 	tokenHash string,
 	apiToken string,
@@ -171,6 +173,7 @@ func ReconstructNode(
 		trojanConfig:      trojanConfig,
 		status:            status,
 		metadata:          metadata,
+		groupID:           groupID,
 		planIDs:           planIDs,
 		tokenHash:         tokenHash,
 		apiToken:          apiToken,
@@ -255,7 +258,20 @@ func (n *Node) Metadata() vo.NodeMetadata {
 	return n.metadata
 }
 
+// GroupID returns the resource group ID
+func (n *Node) GroupID() *uint {
+	return n.groupID
+}
+
+// SetGroupID sets the resource group ID
+func (n *Node) SetGroupID(groupID *uint) {
+	n.groupID = groupID
+	n.updatedAt = time.Now()
+	n.version++
+}
+
 // PlanIDs returns a copy of subscription plan IDs that can access this node
+// Deprecated: Use GroupID instead
 func (n *Node) PlanIDs() []uint {
 	ids := make([]uint, len(n.planIDs))
 	copy(ids, n.planIDs)

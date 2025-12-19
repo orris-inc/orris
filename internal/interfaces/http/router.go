@@ -8,14 +8,13 @@ import (
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
-	entitlementApp "github.com/orris-inc/orris/internal/application/entitlement"
-	entitlementUsecases "github.com/orris-inc/orris/internal/application/entitlement/usecases"
 	forwardServices "github.com/orris-inc/orris/internal/application/forward/services"
 	forwardUsecases "github.com/orris-inc/orris/internal/application/forward/usecases"
 	nodeUsecases "github.com/orris-inc/orris/internal/application/node/usecases"
 	notificationApp "github.com/orris-inc/orris/internal/application/notification"
 	paymentGateway "github.com/orris-inc/orris/internal/application/payment/paymentgateway"
 	paymentUsecases "github.com/orris-inc/orris/internal/application/payment/usecases"
+	resourceUsecases "github.com/orris-inc/orris/internal/application/resource/usecases"
 	subscriptionUsecases "github.com/orris-inc/orris/internal/application/subscription/usecases"
 	"github.com/orris-inc/orris/internal/application/user"
 	"github.com/orris-inc/orris/internal/application/user/helpers"
@@ -50,6 +49,7 @@ type Router struct {
 	profileHandler              *handlers.ProfileHandler
 	subscriptionHandler         *handlers.SubscriptionHandler
 	adminSubscriptionHandler    *adminHandlers.SubscriptionHandler
+	adminResourceGroupHandler   *adminHandlers.ResourceGroupHandler
 	planHandler                 *handlers.PlanHandler
 	subscriptionTokenHandler    *handlers.SubscriptionTokenHandler
 	paymentHandler              *handlers.PaymentHandler
@@ -58,8 +58,6 @@ type Router struct {
 	agentHandler                *nodeHandlers.AgentHandler
 	ticketHandler               *ticketHandlers.TicketHandler
 	notificationHandler         *handlers.NotificationHandler
-	entitlementHandler          *handlers.EntitlementHandler
-	adminEntitlementHandler     *adminHandlers.AdminEntitlementHandler
 	forwardRuleHandler          *forwardHandlers.ForwardHandler
 	forwardAgentHandler         *forwardHandlers.ForwardAgentHandler
 	forwardAgentAPIHandler      *forwardHandlers.AgentHandler
@@ -218,28 +216,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	tokenGenerator := token.NewTokenGenerator()
 
-	// Initialize entitlement repositories
-	// Plan entitlement: manages plan -> resource mappings (which resources belong to which plans)
-	planEntitlementRepo := repository.NewPlanEntitlementRepository(db, log)
-	// User entitlement: manages user -> resource mappings (which resources users can access)
-	userEntitlementRepo := repository.NewUserEntitlementRepository(db, log)
-
-	// Initialize entitlement service
-	entitlementService := entitlementApp.NewService(userEntitlementRepo, log)
-
-	// Initialize entitlement use cases
-	grantEntitlementUC := entitlementUsecases.NewGrantEntitlementUseCase(userEntitlementRepo, log)
-	revokeEntitlementUC := entitlementUsecases.NewRevokeEntitlementUseCase(userEntitlementRepo, log)
-	listEntitlementsUC := entitlementUsecases.NewListEntitlementsUseCase(userEntitlementRepo, log)
-	getEntitlementUC := entitlementUsecases.NewGetEntitlementUseCase(userEntitlementRepo, log)
-	getUserEntitlementsUC := entitlementUsecases.NewGetUserEntitlementsUseCase(entitlementService, log)
-
-	// Initialize entitlement handlers
-	entitlementHandler := handlers.NewEntitlementHandler(getUserEntitlementsUC, entitlementService, log)
-	adminEntitlementHandler := adminHandlers.NewAdminEntitlementHandler(grantEntitlementUC, revokeEntitlementUC, listEntitlementsUC, getEntitlementUC, log)
-
 	createSubscriptionUC := subscriptionUsecases.NewCreateSubscriptionUseCase(
-		subscriptionRepo, subscriptionPlanRepo, subscriptionTokenRepo, planPricingRepo, userRepo, tokenGenerator, planEntitlementRepo, userEntitlementRepo, log,
+		subscriptionRepo, subscriptionPlanRepo, subscriptionTokenRepo, planPricingRepo, userRepo, tokenGenerator, log,
 	)
 	activateSubscriptionUC := subscriptionUsecases.NewActivateSubscriptionUseCase(
 		subscriptionRepo, log,
@@ -252,7 +230,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		subscriptionRepo, subscriptionPlanRepo, log, subscriptionBaseURL,
 	)
 	cancelSubscriptionUC := subscriptionUsecases.NewCancelSubscriptionUseCase(
-		subscriptionRepo, subscriptionTokenRepo, userEntitlementRepo, log,
+		subscriptionRepo, subscriptionTokenRepo, log,
 	)
 	renewSubscriptionUC := subscriptionUsecases.NewRenewSubscriptionUseCase(
 		subscriptionRepo, subscriptionPlanRepo, planPricingRepo, log,
@@ -316,6 +294,19 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		activateSubscriptionUC, log,
 	)
 	subscriptionOwnerMiddleware := middleware.NewSubscriptionOwnerMiddleware(subscriptionRepo, log)
+
+	// Initialize resource group components
+	resourceGroupRepo := repository.NewResourceGroupRepository(db, log)
+	createResourceGroupUC := resourceUsecases.NewCreateResourceGroupUseCase(resourceGroupRepo, log)
+	getResourceGroupUC := resourceUsecases.NewGetResourceGroupUseCase(resourceGroupRepo, log)
+	listResourceGroupsUC := resourceUsecases.NewListResourceGroupsUseCase(resourceGroupRepo, log)
+	updateResourceGroupUC := resourceUsecases.NewUpdateResourceGroupUseCase(resourceGroupRepo, log)
+	deleteResourceGroupUC := resourceUsecases.NewDeleteResourceGroupUseCase(resourceGroupRepo, log)
+	updateResourceGroupStatusUC := resourceUsecases.NewUpdateResourceGroupStatusUseCase(resourceGroupRepo, log)
+	adminResourceGroupHandler := adminHandlers.NewResourceGroupHandler(
+		createResourceGroupUC, getResourceGroupUC, listResourceGroupsUC,
+		updateResourceGroupUC, deleteResourceGroupUC, updateResourceGroupStatusUC, log,
+	)
 
 	planHandler := handlers.NewPlanHandler(
 		createPlanUC, updatePlanUC, getPlanUC, listPlansUC,
@@ -613,6 +604,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		profileHandler:              profileHandler,
 		subscriptionHandler:         subscriptionHandler,
 		adminSubscriptionHandler:    adminSubscriptionHandler,
+		adminResourceGroupHandler:   adminResourceGroupHandler,
 		planHandler:                 planHandler,
 		subscriptionTokenHandler:    subscriptionTokenHandler,
 		paymentHandler:              paymentHandler,
@@ -621,8 +613,6 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		agentHandler:                agentHandler,
 		ticketHandler:               ticketHandler,
 		notificationHandler:         notificationHandler,
-		entitlementHandler:          entitlementHandler,
-		adminEntitlementHandler:     adminEntitlementHandler,
 		forwardRuleHandler:          forwardRuleHandler,
 		forwardAgentHandler:         forwardAgentHandler,
 		forwardAgentAPIHandler:      forwardAgentAPIHandler,
@@ -678,7 +668,6 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		// Specific named endpoints (must come BEFORE /:id to avoid conflicts)
 		users.PATCH("/me", r.profileHandler.UpdateProfile)
 		users.PUT("/me/password", r.profileHandler.ChangePassword)
-		users.GET("/me/entitlements", r.entitlementHandler.GetMyEntitlements)
 		users.GET("/email/:email", authorization.RequireAdmin(), r.userHandler.GetUserByEmail)
 
 		// Generic parameterized routes (must come LAST)
@@ -699,14 +688,18 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		adminSubscriptions.PATCH("/:id/plan", r.adminSubscriptionHandler.ChangePlan)
 	}
 
-	// Admin entitlement routes - manage user entitlements
-	adminEntitlements := r.engine.Group("/admin/entitlements")
-	adminEntitlements.Use(r.authMiddleware.RequireAuth(), authorization.RequireAdmin())
+	// Admin resource group routes - full CRUD for resource groups
+	adminResourceGroups := r.engine.Group("/admin/resource-groups")
+	adminResourceGroups.Use(r.authMiddleware.RequireAuth(), authorization.RequireAdmin())
 	{
-		adminEntitlements.POST("", r.adminEntitlementHandler.GrantEntitlement)
-		adminEntitlements.GET("", r.adminEntitlementHandler.ListEntitlements)
-		adminEntitlements.GET("/:id", r.adminEntitlementHandler.GetEntitlement)
-		adminEntitlements.DELETE("/:id", r.adminEntitlementHandler.RevokeEntitlement)
+		adminResourceGroups.POST("", r.adminResourceGroupHandler.Create)
+		adminResourceGroups.GET("", r.adminResourceGroupHandler.List)
+		adminResourceGroups.GET("/:id", r.adminResourceGroupHandler.Get)
+		adminResourceGroups.GET("/sid/:sid", r.adminResourceGroupHandler.GetBySID)
+		adminResourceGroups.PATCH("/:id", r.adminResourceGroupHandler.Update)
+		adminResourceGroups.DELETE("/:id", r.adminResourceGroupHandler.Delete)
+		adminResourceGroups.POST("/:id/activate", r.adminResourceGroupHandler.Activate)
+		adminResourceGroups.POST("/:id/deactivate", r.adminResourceGroupHandler.Deactivate)
 	}
 
 	// User subscription routes - only own subscriptions

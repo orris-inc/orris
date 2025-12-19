@@ -26,10 +26,8 @@ const (
 	TableNodeShadowsocksConfigs = "node_shadowsocks_configs"
 	TableNodeTrojanConfigs      = "node_trojan_configs"
 	TablePlans                  = "plans"
-	TablePlanPricings           = "plan_pricings"
-	TablePlanEntitlements       = "plan_entitlements"
-	TableEntitlements           = "entitlements"
-	TableSubscriptions          = "subscriptions"
+	TablePlanPricings  = "plan_pricings"
+	TableSubscriptions = "subscriptions"
 	TableSubscriptionTokens     = "subscription_tokens"
 	TableSubscriptionUsages     = "subscription_usages"
 	TablePayments               = "payments"
@@ -40,6 +38,7 @@ const (
 	TableTicketComments         = "ticket_comments"
 	TableForwardRules           = "forward_rules"
 	TableForwardAgents          = "forward_agents"
+	TableResourceGroups         = "resource_groups"
 
 	// Default values
 	DefaultCurrency = "CNY"

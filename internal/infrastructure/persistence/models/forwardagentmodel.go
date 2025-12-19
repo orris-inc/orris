@@ -20,7 +20,8 @@ type ForwardAgentModel struct {
 	TunnelAddress string         `gorm:"size:255"`                  // tunnel address for entry to connect to exit (nullable, overrides public_address)
 	Status        string         `gorm:"not null;default:enabled;size:20;index:idx_forward_agent_status"`
 	Remark        string         `gorm:"size:500"`
-	PlanIDs       datatypes.JSON `gorm:"column:plan_ids;default:'[]'"` // JSON array of subscription plan IDs
+	GroupID       *uint          `gorm:"index:idx_forward_agent_group_id"` // resource group ID for internal join
+	PlanIDs       datatypes.JSON `gorm:"column:plan_ids;default:'[]'"`     // JSON array of subscription plan IDs (deprecated)
 	LastSeenAt    *time.Time
 	CreatedAt     time.Time
 	UpdatedAt     time.Time

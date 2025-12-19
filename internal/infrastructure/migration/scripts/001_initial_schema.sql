@@ -102,19 +102,14 @@ CREATE TABLE plans (
     id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     slug VARCHAR(50) NOT NULL UNIQUE,
+    plan_type VARCHAR(20) NOT NULL DEFAULT 'node',
     description VARCHAR(500),
-    price BIGINT UNSIGNED NOT NULL,
-    currency VARCHAR(3) NOT NULL DEFAULT 'CNY',
-    billing_cycle VARCHAR(20) NOT NULL,
     trial_days INT DEFAULT 0,
     status VARCHAR(20) NOT NULL DEFAULT 'active',
-    features JSON,
     limits JSON,
-    custom_endpoint VARCHAR(200),
     api_rate_limit INT UNSIGNED DEFAULT 60,
     max_users INT UNSIGNED DEFAULT 1,
     max_projects INT UNSIGNED DEFAULT 1,
-    storage_limit BIGINT UNSIGNED DEFAULT 1073741824,
     is_public BOOLEAN DEFAULT TRUE,
     sort_order INT DEFAULT 0,
     metadata JSON,
@@ -123,6 +118,7 @@ CREATE TABLE plans (
     version INT NOT NULL DEFAULT 1,
     deleted_at TIMESTAMP NULL,
     INDEX idx_slug (slug),
+    INDEX idx_plan_type (plan_type),
     INDEX idx_status (status),
     INDEX idx_is_public (is_public),
     INDEX idx_deleted_at (deleted_at)
@@ -145,15 +141,22 @@ CREATE TABLE plan_pricings (
     INDEX idx_deleted_at (deleted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
-CREATE TABLE entitlements (
-    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    plan_id BIGINT UNSIGNED NOT NULL,
-    resource_type VARCHAR(50) NOT NULL,
-    resource_id BIGINT UNSIGNED NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_plan_resource (plan_id, resource_type, resource_id),
-    INDEX idx_plan_id (plan_id),
-    INDEX idx_resource (resource_type, resource_id)
+CREATE TABLE resource_groups (
+    id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+    sid VARCHAR(32) NOT NULL COMMENT 'Stripe-style ID: rg_xxxxxxxx',
+    name VARCHAR(100) NOT NULL,
+    plan_id BIGINT UNSIGNED NOT NULL COMMENT 'Associated plan ID',
+    description VARCHAR(500),
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP NULL,
+    version INT NOT NULL DEFAULT 1,
+    UNIQUE INDEX idx_resource_group_sid (sid),
+    INDEX idx_resource_group_name (name),
+    INDEX idx_resource_group_plan_id (plan_id),
+    INDEX idx_resource_group_status (status),
+    INDEX idx_resource_group_deleted_at (deleted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 CREATE TABLE subscriptions (
@@ -313,6 +316,7 @@ CREATE TABLE nodes (
     subscription_port SMALLINT UNSIGNED DEFAULT NULL,
     protocol VARCHAR(20) NOT NULL DEFAULT 'shadowsocks',
     status VARCHAR(20) NOT NULL DEFAULT 'inactive',
+    group_id BIGINT UNSIGNED NULL,
     region VARCHAR(100),
     tags JSON,
     plan_ids JSON,
@@ -329,6 +333,7 @@ CREATE TABLE nodes (
     deleted_at TIMESTAMP NULL,
     INDEX idx_status (status),
     INDEX idx_protocol (protocol),
+    INDEX idx_node_group_id (group_id),
     INDEX idx_agent_address (server_address, agent_port),
     UNIQUE INDEX idx_token_hash (token_hash),
     INDEX idx_nodes_last_seen_at (last_seen_at),
@@ -375,9 +380,10 @@ CREATE TABLE forward_agents (
     api_token VARCHAR(255) DEFAULT NULL,
     public_address VARCHAR(255) NULL DEFAULT NULL,
     tunnel_address VARCHAR(255) DEFAULT NULL,
-    plan_ids JSON,
     status VARCHAR(20) NOT NULL DEFAULT 'enabled',
     remark VARCHAR(500) DEFAULT '',
+    group_id BIGINT UNSIGNED NULL,
+    plan_ids JSON,
     last_seen_at DATETIME NULL DEFAULT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -386,6 +392,7 @@ CREATE TABLE forward_agents (
     INDEX idx_forward_agent_name (name),
     INDEX idx_forward_agent_token_hash (token_hash),
     INDEX idx_forward_agent_status (status),
+    INDEX idx_forward_agent_group_id (group_id),
     INDEX idx_forward_agent_last_seen_at (last_seen_at),
     INDEX idx_deleted_at (deleted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -446,7 +453,7 @@ DROP TABLE IF EXISTS subscription_usages;
 DROP TABLE IF EXISTS subscription_histories;
 DROP TABLE IF EXISTS subscription_tokens;
 DROP TABLE IF EXISTS subscriptions;
-DROP TABLE IF EXISTS entitlements;
+DROP TABLE IF EXISTS resource_groups;
 DROP TABLE IF EXISTS plan_pricings;
 DROP TABLE IF EXISTS plans;
 DROP TABLE IF EXISTS oauth_providers;

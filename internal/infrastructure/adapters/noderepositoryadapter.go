@@ -9,7 +9,6 @@ import (
 	"github.com/orris-inc/orris/internal/application/node/usecases"
 	"github.com/orris-inc/orris/internal/domain/node"
 	nodevo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
-	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -63,18 +62,34 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, subs
 		return r.getForwardPlanNodes(ctx, subscriptionModel.UserID, mode)
 	}
 
-	// For node plan, query node IDs from entitlements
+	// For node plan, query nodes via resource_groups
+	// Step 1: Get resource group IDs for this plan
+	var groupIDs []uint
+	if err := r.db.WithContext(ctx).
+		Table("resource_groups").
+		Where("plan_id = ? AND status = ?", subscriptionModel.PlanID, "active").
+		Pluck("id", &groupIDs).Error; err != nil {
+		r.logger.Errorw("failed to query resource groups", "error", err, "plan_id", subscriptionModel.PlanID)
+		return nil, err
+	}
+
+	if len(groupIDs) == 0 {
+		r.logger.Infow("no resource groups associated with plan", "plan_id", subscriptionModel.PlanID)
+		return []*usecases.Node{}, nil
+	}
+
+	// Step 2: Get node IDs that belong to these resource groups
 	var nodeIDs []uint
 	if err := r.db.WithContext(ctx).
-		Table("entitlements").
-		Where("plan_id = ? AND resource_type = ?", subscriptionModel.PlanID, string(subscription.EntitlementResourceTypeNode)).
-		Pluck("resource_id", &nodeIDs).Error; err != nil {
-		r.logger.Errorw("failed to query entitlements", "error", err, "plan_id", subscriptionModel.PlanID)
+		Table("nodes").
+		Where("group_id IN ? AND deleted_at IS NULL", groupIDs).
+		Pluck("id", &nodeIDs).Error; err != nil {
+		r.logger.Errorw("failed to query nodes by group", "error", err, "group_ids", groupIDs)
 		return nil, err
 	}
 
 	if len(nodeIDs) == 0 {
-		r.logger.Infow("no nodes associated with plan", "plan_id", subscriptionModel.PlanID)
+		r.logger.Infow("no nodes in resource groups for plan", "plan_id", subscriptionModel.PlanID)
 		return []*usecases.Node{}, nil
 	}
 

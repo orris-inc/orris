@@ -43,7 +43,8 @@ type ForwardAgent struct {
 	publicAddress  string // optional public address for Entry to obtain Exit connection information
 	tunnelAddress  string // IP or hostname only (no port), configure if agent may serve as relay/exit in any rule
 	remark         string
-	planIDs        []uint // subscription plans that can access this forward agent
+	groupID        *uint  // resource group ID for internal join (replaces planIDs)
+	planIDs        []uint // subscription plans that can access this forward agent (deprecated: use groupID)
 	createdAt      time.Time
 	updatedAt      time.Time
 	tokenGenerator services.TokenGenerator
@@ -112,6 +113,7 @@ func ReconstructForwardAgent(
 	publicAddress string,
 	tunnelAddress string,
 	remark string,
+	groupID *uint,
 	planIDs []uint,
 	createdAt, updatedAt time.Time,
 ) (*ForwardAgent, error) {
@@ -160,6 +162,7 @@ func ReconstructForwardAgent(
 		publicAddress:  publicAddress,
 		tunnelAddress:  tunnelAddress,
 		remark:         remark,
+		groupID:        groupID,
 		planIDs:        planIDs,
 		createdAt:      createdAt,
 		updatedAt:      updatedAt,
@@ -282,6 +285,17 @@ func (a *ForwardAgent) HasAnySubscriptionPlan(planIDs []uint) bool {
 		}
 	}
 	return false
+}
+
+// GroupID returns the resource group ID
+func (a *ForwardAgent) GroupID() *uint {
+	return a.groupID
+}
+
+// SetGroupID sets the resource group ID
+func (a *ForwardAgent) SetGroupID(groupID *uint) {
+	a.groupID = groupID
+	a.updatedAt = time.Now()
 }
 
 // CreatedAt returns when the agent was created

@@ -133,7 +133,7 @@ func (uc *GetNodeTrafficStatsUseCase) buildFilter(query GetNodeTrafficStatsQuery
 		pageSize = constants.MaxPageSize
 	}
 
-	resourceType := string(subscription.EntitlementResourceTypeNode)
+	resourceType := subscription.ResourceTypeNode.String()
 	filter := subscription.UsageStatsFilter{
 		ResourceType:   &resourceType,
 		ResourceID:     query.NodeID,

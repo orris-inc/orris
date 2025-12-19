@@ -5,6 +5,21 @@ import (
 	"time"
 )
 
+// ResourceType represents the type of resource for usage tracking
+type ResourceType string
+
+const (
+	// ResourceTypeNode represents a node resource
+	ResourceTypeNode ResourceType = "node"
+	// ResourceTypeForwardRule represents a forward rule resource
+	ResourceTypeForwardRule ResourceType = "forward_rule"
+)
+
+// String returns the string representation of ResourceType
+func (r ResourceType) String() string {
+	return string(r)
+}
+
 // SubscriptionUsage represents usage statistics entity for a subscription
 type SubscriptionUsage struct {
 	id             uint

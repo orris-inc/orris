@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/orris-inc/orris/internal/domain/entitlement"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	vo "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/user"
@@ -29,15 +28,13 @@ type CreateSubscriptionResult struct {
 }
 
 type CreateSubscriptionUseCase struct {
-	subscriptionRepo    subscription.SubscriptionRepository
-	planRepo            subscription.PlanRepository
-	tokenRepo           subscription.SubscriptionTokenRepository
-	pricingRepo         subscription.PlanPricingRepository
-	userRepo            user.Repository
-	tokenGenerator      TokenGenerator
-	planEntitlementRepo subscription.EntitlementRepository
-	entitlementRepo     entitlement.Repository
-	logger              logger.Interface
+	subscriptionRepo subscription.SubscriptionRepository
+	planRepo         subscription.PlanRepository
+	tokenRepo        subscription.SubscriptionTokenRepository
+	pricingRepo      subscription.PlanPricingRepository
+	userRepo         user.Repository
+	tokenGenerator   TokenGenerator
+	logger           logger.Interface
 }
 
 func NewCreateSubscriptionUseCase(
@@ -47,20 +44,16 @@ func NewCreateSubscriptionUseCase(
 	pricingRepo subscription.PlanPricingRepository,
 	userRepo user.Repository,
 	tokenGenerator TokenGenerator,
-	planEntitlementRepo subscription.EntitlementRepository,
-	entitlementRepo entitlement.Repository,
 	logger logger.Interface,
 ) *CreateSubscriptionUseCase {
 	return &CreateSubscriptionUseCase{
-		subscriptionRepo:    subscriptionRepo,
-		planRepo:            planRepo,
-		tokenRepo:           tokenRepo,
-		pricingRepo:         pricingRepo,
-		userRepo:            userRepo,
-		tokenGenerator:      tokenGenerator,
-		planEntitlementRepo: planEntitlementRepo,
-		entitlementRepo:     entitlementRepo,
-		logger:              logger,
+		subscriptionRepo: subscriptionRepo,
+		planRepo:         planRepo,
+		tokenRepo:        tokenRepo,
+		pricingRepo:      pricingRepo,
+		userRepo:         userRepo,
+		tokenGenerator:   tokenGenerator,
+		logger:           logger,
 	}
 }
 
@@ -148,12 +141,6 @@ func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, cmd CreateSubs
 			return nil, fmt.Errorf("failed to update subscription: %w", err)
 		}
 		uc.logger.Infow("subscription activated immediately", "subscription_id", sub.ID())
-
-		// Grant entitlements based on the plan's resources
-		if err := uc.grantPlanEntitlements(ctx, cmd.UserID, sub.ID(), cmd.PlanID, endDate); err != nil {
-			uc.logger.Errorw("failed to grant plan entitlements", "error", err, "subscription_id", sub.ID(), "user_id", cmd.UserID)
-			return nil, fmt.Errorf("failed to grant entitlements: %w", err)
-		}
 	}
 
 	token, plainToken, err := uc.createDefaultToken(ctx, sub.ID())
@@ -207,81 +194,4 @@ func (uc *CreateSubscriptionUseCase) createDefaultToken(ctx context.Context, sub
 	}
 
 	return token, plainToken, nil
-}
-
-// grantPlanEntitlements grants entitlements to the user based on the plan's associated resources
-func (uc *CreateSubscriptionUseCase) grantPlanEntitlements(
-	ctx context.Context,
-	userID uint,
-	subscriptionID uint,
-	planID uint,
-	expiresAt time.Time,
-) error {
-	// Get all plan entitlements (plan-resource associations)
-	planEntitlements, err := uc.planEntitlementRepo.GetByPlan(ctx, planID)
-	if err != nil {
-		return fmt.Errorf("failed to get plan entitlements: %w", err)
-	}
-
-	if len(planEntitlements) == 0 {
-		uc.logger.Infow("no plan entitlements to grant", "plan_id", planID)
-		return nil
-	}
-
-	// Create user entitlements for each plan resource
-	userEntitlements := make([]*entitlement.Entitlement, 0, len(planEntitlements))
-	for _, planEnt := range planEntitlements {
-		// Map subscription.EntitlementResourceType to entitlement.ResourceType
-		var resourceType entitlement.ResourceType
-		switch planEnt.ResourceType() {
-		case subscription.EntitlementResourceTypeNode:
-			resourceType = entitlement.ResourceTypeNode
-		case subscription.EntitlementResourceTypeForwardAgent:
-			resourceType = entitlement.ResourceTypeForwardAgent
-		default:
-			uc.logger.Warnw("unknown plan resource type, skipping",
-				"resource_type", planEnt.ResourceType(),
-				"resource_id", planEnt.ResourceID(),
-			)
-			continue
-		}
-
-		// Create user entitlement with subscription as source
-		userEnt, err := entitlement.NewEntitlement(
-			entitlement.SubjectTypeUser,
-			userID,
-			resourceType,
-			planEnt.ResourceID(),
-			entitlement.SourceTypeSubscription,
-			subscriptionID,
-			&expiresAt,
-		)
-		if err != nil {
-			uc.logger.Errorw("failed to create user entitlement",
-				"error", err,
-				"user_id", userID,
-				"resource_type", resourceType,
-				"resource_id", planEnt.ResourceID(),
-			)
-			return fmt.Errorf("failed to create user entitlement: %w", err)
-		}
-
-		userEntitlements = append(userEntitlements, userEnt)
-	}
-
-	// Batch create user entitlements
-	if len(userEntitlements) > 0 {
-		if err := uc.entitlementRepo.BatchCreate(ctx, userEntitlements); err != nil {
-			return fmt.Errorf("failed to batch create user entitlements: %w", err)
-		}
-
-		uc.logger.Infow("granted plan entitlements to user",
-			"user_id", userID,
-			"subscription_id", subscriptionID,
-			"plan_id", planID,
-			"entitlement_count", len(userEntitlements),
-		)
-	}
-
-	return nil
 }
