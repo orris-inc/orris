@@ -60,6 +60,19 @@ func (r *PlanRepositoryImpl) GetByID(ctx context.Context, id uint) (*subscriptio
 	return r.toEntity(&model)
 }
 
+func (r *PlanRepositoryImpl) GetBySID(ctx context.Context, sid string) (*subscription.Plan, error) {
+	var model models.PlanModel
+	if err := r.db.WithContext(ctx).Where("sid = ?", sid).First(&model).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		r.logger.Errorw("failed to get subscription plan by SID", "error", err, "sid", sid)
+		return nil, fmt.Errorf("failed to get subscription plan by SID: %w", err)
+	}
+
+	return r.toEntity(&model)
+}
+
 func (r *PlanRepositoryImpl) GetBySlug(ctx context.Context, slug string) (*subscription.Plan, error) {
 	var model models.PlanModel
 	if err := r.db.WithContext(ctx).Where("slug = ?", slug).First(&model).Error; err != nil {
@@ -245,6 +258,7 @@ func (r *PlanRepositoryImpl) toEntity(model *models.PlanModel) (*subscription.Pl
 
 	return subscription.ReconstructPlan(
 		model.ID,
+		model.SID,
 		model.Name,
 		model.Slug,
 		model.Description,
@@ -289,6 +303,7 @@ func (r *PlanRepositoryImpl) toModel(plan *subscription.Plan) (*models.PlanModel
 
 	return &models.PlanModel{
 		ID:           plan.ID(),
+		SID:          plan.SID(),
 		Name:         plan.Name(),
 		Slug:         plan.Slug(),
 		PlanType:     plan.PlanType().String(),

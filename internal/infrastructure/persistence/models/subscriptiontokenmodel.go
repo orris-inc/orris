@@ -12,7 +12,7 @@ import (
 // This is the anti-corruption layer between domain and database
 type SubscriptionTokenModel struct {
 	ID             uint       `gorm:"primarykey"`
-	SID            string     `gorm:"uniqueIndex;not null;size:50;comment:Stripe-style ID: stoken_xxx"`
+	SID            string     `gorm:"column:sid;uniqueIndex;not null;size:50;comment:Stripe-style ID: stoken_xxx"`
 	SubscriptionID uint       `gorm:"not null;index:idx_subscription_token"`
 	Name           string     `gorm:"not null;size:100"`
 	TokenHash      string     `gorm:"uniqueIndex;not null;size:64"` // SHA256 hash

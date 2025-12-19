@@ -5,7 +5,7 @@ import "time"
 // CreateResourceGroupRequest represents a request to create a new resource group
 type CreateResourceGroupRequest struct {
 	Name        string `json:"name" binding:"required,min=1,max=100"`
-	PlanID      uint   `json:"plan_id" binding:"required"`
+	PlanSID     string `json:"plan_id" binding:"required"`
 	Description string `json:"description,omitempty" binding:"max=500"`
 }
 

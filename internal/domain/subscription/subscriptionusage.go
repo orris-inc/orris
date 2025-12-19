@@ -44,8 +44,15 @@ func NewSubscriptionUsage(resourceType string, resourceID uint, subscriptionID *
 		return nil, fmt.Errorf("resource ID is required")
 	}
 
+	// Generate Stripe-style SID
+	sid, err := generateSID("usage")
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate SID: %w", err)
+	}
+
 	now := time.Now()
 	return &SubscriptionUsage{
+		sid:            sid,
 		resourceType:   resourceType,
 		resourceID:     resourceID,
 		subscriptionID: subscriptionID,
@@ -61,6 +68,7 @@ func NewSubscriptionUsage(resourceType string, resourceID uint, subscriptionID *
 // ReconstructSubscriptionUsage reconstructs a subscription usage entity from persistence
 func ReconstructSubscriptionUsage(
 	id uint,
+	sid string,
 	resourceType string,
 	resourceID uint,
 	subscriptionID *uint,
@@ -69,6 +77,9 @@ func ReconstructSubscriptionUsage(
 ) (*SubscriptionUsage, error) {
 	if id == 0 {
 		return nil, fmt.Errorf("subscription usage ID cannot be zero")
+	}
+	if sid == "" {
+		return nil, fmt.Errorf("subscription usage SID is required")
 	}
 	if resourceType == "" {
 		return nil, fmt.Errorf("resource type is required")
@@ -79,6 +90,7 @@ func ReconstructSubscriptionUsage(
 
 	return &SubscriptionUsage{
 		id:             id,
+		sid:            sid,
 		resourceType:   resourceType,
 		resourceID:     resourceID,
 		subscriptionID: subscriptionID,

@@ -3,6 +3,7 @@ package subscription
 import (
 	"crypto/subtle"
 	"errors"
+	"fmt"
 	"time"
 
 	vo "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
@@ -62,7 +63,14 @@ func NewSubscriptionToken(
 		return nil, errors.New("expiration time cannot be in the past")
 	}
 
+	// Generate Stripe-style SID
+	sid, err := generateSID("stoken")
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate SID: %w", err)
+	}
+
 	return &SubscriptionToken{
+		sid:            sid,
 		subscriptionID: subscriptionID,
 		name:           name,
 		tokenHash:      tokenHash,
@@ -77,6 +85,7 @@ func NewSubscriptionToken(
 
 func ReconstructSubscriptionToken(
 	id uint,
+	sid string,
 	subscriptionID uint,
 	name string,
 	tokenHash string,
@@ -94,6 +103,10 @@ func ReconstructSubscriptionToken(
 		return nil, errors.New("token ID cannot be zero")
 	}
 
+	if sid == "" {
+		return nil, errors.New("token SID is required")
+	}
+
 	if subscriptionID == 0 {
 		return nil, errors.New("subscription ID cannot be zero")
 	}
@@ -108,6 +121,7 @@ func ReconstructSubscriptionToken(
 
 	return &SubscriptionToken{
 		id:             id,
+		sid:            sid,
 		subscriptionID: subscriptionID,
 		name:           name,
 		tokenHash:      tokenHash,

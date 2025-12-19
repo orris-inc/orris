@@ -56,8 +56,15 @@ func NewPlan(name, slug, description string, trialDays int, planType vo.PlanType
 		return nil, fmt.Errorf("invalid plan type: %s", planType)
 	}
 
+	// Generate Stripe-style SID
+	sid, err := generateSID("plan")
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate SID: %w", err)
+	}
+
 	now := time.Now()
 	return &Plan{
+		sid:          sid,
 		name:         name,
 		slug:         slug,
 		description:  description,
@@ -77,7 +84,7 @@ func NewPlan(name, slug, description string, trialDays int, planType vo.PlanType
 	}, nil
 }
 
-func ReconstructPlan(id uint, name, slug, description string,
+func ReconstructPlan(id uint, sid string, name, slug, description string,
 	trialDays int, status string, planType string, features *vo.PlanFeatures,
 	apiRateLimit, maxUsers, maxProjects uint, isPublic bool, sortOrder int,
 	metadata map[string]interface{}, version int,
@@ -85,6 +92,9 @@ func ReconstructPlan(id uint, name, slug, description string,
 
 	if id == 0 {
 		return nil, fmt.Errorf("plan ID cannot be zero")
+	}
+	if sid == "" {
+		return nil, fmt.Errorf("plan SID is required")
 	}
 
 	planStatus := PlanStatus(status)
@@ -103,6 +113,7 @@ func ReconstructPlan(id uint, name, slug, description string,
 
 	return &Plan{
 		id:           id,
+		sid:          sid,
 		name:         name,
 		slug:         slug,
 		description:  description,

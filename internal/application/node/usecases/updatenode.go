@@ -6,6 +6,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/node"
 	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
+	"github.com/orris-inc/orris/internal/domain/resource"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -24,6 +25,7 @@ type UpdateNodeCommand struct {
 	Description      *string
 	SortOrder        *int
 	Status           *string
+	GroupSID         *string // Resource group SID (empty string to remove association)
 	// Trojan specific fields
 	TrojanTransportProtocol *string
 	TrojanHost              *string
@@ -44,17 +46,20 @@ type UpdateNodeResult struct {
 }
 
 type UpdateNodeUseCase struct {
-	logger   logger.Interface
-	nodeRepo node.NodeRepository
+	logger            logger.Interface
+	nodeRepo          node.NodeRepository
+	resourceGroupRepo resource.Repository
 }
 
 func NewUpdateNodeUseCase(
 	logger logger.Interface,
 	nodeRepo node.NodeRepository,
+	resourceGroupRepo resource.Repository,
 ) *UpdateNodeUseCase {
 	return &UpdateNodeUseCase{
-		logger:   logger,
-		nodeRepo: nodeRepo,
+		logger:            logger,
+		nodeRepo:          nodeRepo,
+		resourceGroupRepo: resourceGroupRepo,
 	}
 }
 
@@ -72,6 +77,26 @@ func (uc *UpdateNodeUseCase) Execute(ctx context.Context, cmd UpdateNodeCommand)
 	if err != nil {
 		uc.logger.Errorw("failed to get node by SID", "sid", cmd.SID, "error", err)
 		return nil, errors.NewNotFoundError("node not found")
+	}
+
+	// Handle GroupSID update (resolve SID to internal ID)
+	if cmd.GroupSID != nil {
+		if *cmd.GroupSID == "" {
+			// Empty string means remove the association
+			existingNode.SetGroupID(nil)
+		} else {
+			// Resolve group SID to internal ID
+			group, err := uc.resourceGroupRepo.GetBySID(ctx, *cmd.GroupSID)
+			if err != nil {
+				uc.logger.Errorw("failed to get resource group by SID", "group_sid", *cmd.GroupSID, "error", err)
+				return nil, errors.NewNotFoundError("resource group not found")
+			}
+			if group == nil {
+				return nil, errors.NewNotFoundError("resource group not found")
+			}
+			groupID := group.ID()
+			existingNode.SetGroupID(&groupID)
+		}
 	}
 
 	// Apply updates based on command fields
@@ -243,6 +268,7 @@ func (uc *UpdateNodeUseCase) validateCommand(cmd UpdateNodeCommand) error {
 		cmd.SubscriptionPort == nil && cmd.Method == nil && cmd.Plugin == nil &&
 		cmd.PluginOpts == nil && cmd.Region == nil && cmd.Tags == nil &&
 		cmd.Description == nil && cmd.SortOrder == nil && cmd.Status == nil &&
+		cmd.GroupSID == nil &&
 		cmd.TrojanTransportProtocol == nil && cmd.TrojanHost == nil &&
 		cmd.TrojanPath == nil && cmd.TrojanSNI == nil && cmd.TrojanAllowInsecure == nil {
 		return errors.NewValidationError("at least one field must be provided for update")

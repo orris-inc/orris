@@ -6,25 +6,39 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/resource/dto"
 	"github.com/orris-inc/orris/internal/domain/resource"
+	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // CreateResourceGroupUseCase handles the creation of a new resource group
 type CreateResourceGroupUseCase struct {
-	repo   resource.Repository
-	logger logger.Interface
+	repo     resource.Repository
+	planRepo subscription.PlanRepository
+	logger   logger.Interface
 }
 
 // NewCreateResourceGroupUseCase creates a new CreateResourceGroupUseCase
-func NewCreateResourceGroupUseCase(repo resource.Repository, logger logger.Interface) *CreateResourceGroupUseCase {
+func NewCreateResourceGroupUseCase(repo resource.Repository, planRepo subscription.PlanRepository, logger logger.Interface) *CreateResourceGroupUseCase {
 	return &CreateResourceGroupUseCase{
-		repo:   repo,
-		logger: logger,
+		repo:     repo,
+		planRepo: planRepo,
+		logger:   logger,
 	}
 }
 
 // Execute creates a new resource group
 func (uc *CreateResourceGroupUseCase) Execute(ctx context.Context, req dto.CreateResourceGroupRequest) (*dto.ResourceGroupResponse, error) {
+	// Resolve plan SID to internal ID
+	plan, err := uc.planRepo.GetBySID(ctx, req.PlanSID)
+	if err != nil {
+		uc.logger.Errorw("failed to get plan by SID", "error", err, "plan_sid", req.PlanSID)
+		return nil, fmt.Errorf("failed to get plan: %w", err)
+	}
+	if plan == nil {
+		uc.logger.Warnw("plan not found by SID", "plan_sid", req.PlanSID)
+		return nil, subscription.ErrPlanNotFound
+	}
+
 	// Check if name already exists
 	exists, err := uc.repo.ExistsByName(ctx, req.Name)
 	if err != nil {
@@ -36,7 +50,7 @@ func (uc *CreateResourceGroupUseCase) Execute(ctx context.Context, req dto.Creat
 	}
 
 	// Create new resource group
-	group, err := resource.NewResourceGroup(req.Name, req.PlanID, req.Description)
+	group, err := resource.NewResourceGroup(req.Name, plan.ID(), req.Description)
 	if err != nil {
 		uc.logger.Errorw("failed to create resource group entity", "error", err)
 		return nil, fmt.Errorf("failed to create resource group: %w", err)

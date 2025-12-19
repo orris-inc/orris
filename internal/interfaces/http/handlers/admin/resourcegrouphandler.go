@@ -10,6 +10,7 @@ import (
 	"github.com/orris-inc/orris/internal/application/resource/dto"
 	"github.com/orris-inc/orris/internal/application/resource/usecases"
 	"github.com/orris-inc/orris/internal/domain/resource"
+	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
@@ -50,7 +51,7 @@ func NewResourceGroupHandler(
 // CreateRequest represents the request to create a resource group
 type CreateResourceGroupRequest struct {
 	Name        string `json:"name" binding:"required,min=1,max=100"`
-	PlanID      uint   `json:"plan_id" binding:"required"`
+	PlanSID     string `json:"plan_id" binding:"required"`
 	Description string `json:"description" binding:"max=500"`
 }
 
@@ -71,7 +72,7 @@ func (h *ResourceGroupHandler) Create(c *gin.Context) {
 
 	dtoReq := dto.CreateResourceGroupRequest{
 		Name:        req.Name,
-		PlanID:      req.PlanID,
+		PlanSID:     req.PlanSID,
 		Description: req.Description,
 	}
 
@@ -79,6 +80,10 @@ func (h *ResourceGroupHandler) Create(c *gin.Context) {
 	if err != nil {
 		if err == resource.ErrGroupNameExists {
 			utils.ErrorResponse(c, http.StatusConflict, "resource group name already exists")
+			return
+		}
+		if err == subscription.ErrPlanNotFound {
+			utils.ErrorResponse(c, http.StatusBadRequest, "plan not found")
 			return
 		}
 		h.logger.Errorw("failed to create resource group", "error", err, "name", req.Name)

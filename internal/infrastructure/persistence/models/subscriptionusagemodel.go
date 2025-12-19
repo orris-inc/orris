@@ -12,7 +12,7 @@ import (
 // This is the anti-corruption layer between domain and database
 type SubscriptionUsageModel struct {
 	ID             uint      `gorm:"primarykey"`
-	SID            string    `gorm:"uniqueIndex;not null;size:50;comment:Stripe-style ID: usage_xxx"`
+	SID            string    `gorm:"column:sid;uniqueIndex;not null;size:50;comment:Stripe-style ID: usage_xxx"`
 	SubscriptionID *uint     `gorm:"index:idx_subscription"`
 	ResourceType   string    `gorm:"column:resource_type;not null;default:'node';size:50;index:idx_resource,priority:1"`
 	ResourceID     uint      `gorm:"column:resource_id;not null;default:0;index:idx_resource,priority:2"`

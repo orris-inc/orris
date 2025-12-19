@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/domain/resource"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -16,22 +17,26 @@ type UpdateForwardAgentCommand struct {
 	PublicAddress *string
 	TunnelAddress *string
 	Remark        *string
+	GroupSID      *string // Resource group SID (empty string to remove association)
 }
 
 // UpdateForwardAgentUseCase handles forward agent updates.
 type UpdateForwardAgentUseCase struct {
-	repo   forward.AgentRepository
-	logger logger.Interface
+	repo              forward.AgentRepository
+	resourceGroupRepo resource.Repository
+	logger            logger.Interface
 }
 
 // NewUpdateForwardAgentUseCase creates a new UpdateForwardAgentUseCase.
 func NewUpdateForwardAgentUseCase(
 	repo forward.AgentRepository,
+	resourceGroupRepo resource.Repository,
 	logger logger.Interface,
 ) *UpdateForwardAgentUseCase {
 	return &UpdateForwardAgentUseCase{
-		repo:   repo,
-		logger: logger,
+		repo:              repo,
+		resourceGroupRepo: resourceGroupRepo,
+		logger:            logger,
 	}
 }
 
@@ -74,6 +79,26 @@ func (uc *UpdateForwardAgentUseCase) Execute(ctx context.Context, cmd UpdateForw
 	if cmd.Remark != nil {
 		if err := agent.UpdateRemark(*cmd.Remark); err != nil {
 			return errors.NewValidationError(err.Error())
+		}
+	}
+
+	// Handle GroupSID update (resolve SID to internal ID)
+	if cmd.GroupSID != nil {
+		if *cmd.GroupSID == "" {
+			// Empty string means remove the association
+			agent.SetGroupID(nil)
+		} else {
+			// Resolve group SID to internal ID
+			group, err := uc.resourceGroupRepo.GetBySID(ctx, *cmd.GroupSID)
+			if err != nil {
+				uc.logger.Errorw("failed to get resource group by SID", "group_sid", *cmd.GroupSID, "error", err)
+				return errors.NewNotFoundError("resource group", *cmd.GroupSID)
+			}
+			if group == nil {
+				return errors.NewNotFoundError("resource group", *cmd.GroupSID)
+			}
+			groupID := group.ID()
+			agent.SetGroupID(&groupID)
 		}
 	}
 

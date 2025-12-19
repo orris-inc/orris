@@ -79,6 +79,7 @@ type UpdateForwardAgentRequest struct {
 	PublicAddress *string `json:"public_address,omitempty" example:"203.0.113.2"`
 	TunnelAddress *string `json:"tunnel_address,omitempty" example:"192.168.1.100"` // IP or hostname only (no port), configure if agent may serve as relay/exit in any rule
 	Remark        *string `json:"remark,omitempty" example:"Updated remark"`
+	GroupSID      *string `json:"group_sid,omitempty" example:"rg_xK9mP2vL3nQ"` // Resource group SID to associate with (use empty string to remove)
 }
 
 // UpdateAgentStatusRequest represents a request to update forward agent status.
@@ -180,6 +181,7 @@ func (h *ForwardAgentHandler) UpdateAgent(c *gin.Context) {
 		PublicAddress: req.PublicAddress,
 		TunnelAddress: req.TunnelAddress,
 		Remark:        req.Remark,
+		GroupSID:      req.GroupSID,
 	}
 
 	if err := h.updateAgentUC.Execute(c.Request.Context(), cmd); err != nil {

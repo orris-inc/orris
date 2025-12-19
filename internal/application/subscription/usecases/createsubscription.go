@@ -12,8 +12,10 @@ import (
 )
 
 type CreateSubscriptionCommand struct {
-	UserID              uint
-	PlanID              uint
+	UserID              uint   // Internal user ID (used if UserSID is empty)
+	UserSID             string // Stripe-style user SID (takes precedence over UserID)
+	PlanID              uint   // Internal plan ID (used if PlanSID is empty)
+	PlanSID             string // Stripe-style plan SID (takes precedence over PlanID)
 	StartDate           time.Time
 	AutoRenew           bool
 	PaymentInfo         map[string]interface{}
@@ -58,21 +60,59 @@ func NewCreateSubscriptionUseCase(
 }
 
 func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, cmd CreateSubscriptionCommand) (*CreateSubscriptionResult, error) {
-	// Verify target user exists
-	targetUser, err := uc.userRepo.GetByID(ctx, cmd.UserID)
-	if err != nil {
-		uc.logger.Errorw("failed to get target user", "error", err, "user_id", cmd.UserID)
-		return nil, fmt.Errorf("failed to get target user: %w", err)
-	}
-	if targetUser == nil {
-		uc.logger.Warnw("target user not found", "user_id", cmd.UserID)
-		return nil, fmt.Errorf("user not found")
+	// Resolve user: prefer SID over internal ID
+	var targetUser *user.User
+	var err error
+	userID := cmd.UserID
+
+	if cmd.UserSID != "" {
+		targetUser, err = uc.userRepo.GetBySID(ctx, cmd.UserSID)
+		if err != nil {
+			uc.logger.Errorw("failed to get user by SID", "error", err, "user_sid", cmd.UserSID)
+			return nil, fmt.Errorf("failed to get user: %w", err)
+		}
+		if targetUser == nil {
+			uc.logger.Warnw("user not found by SID", "user_sid", cmd.UserSID)
+			return nil, fmt.Errorf("user not found")
+		}
+		userID = targetUser.ID()
+	} else {
+		targetUser, err = uc.userRepo.GetByID(ctx, cmd.UserID)
+		if err != nil {
+			uc.logger.Errorw("failed to get target user", "error", err, "user_id", cmd.UserID)
+			return nil, fmt.Errorf("failed to get target user: %w", err)
+		}
+		if targetUser == nil {
+			uc.logger.Warnw("target user not found", "user_id", cmd.UserID)
+			return nil, fmt.Errorf("user not found")
+		}
 	}
 
-	plan, err := uc.planRepo.GetByID(ctx, cmd.PlanID)
-	if err != nil {
-		uc.logger.Errorw("failed to get plan", "error", err, "plan_id", cmd.PlanID)
-		return nil, fmt.Errorf("failed to get plan: %w", err)
+	// Resolve plan: prefer SID over internal ID
+	var plan *subscription.Plan
+	planID := cmd.PlanID
+
+	if cmd.PlanSID != "" {
+		plan, err = uc.planRepo.GetBySID(ctx, cmd.PlanSID)
+		if err != nil {
+			uc.logger.Errorw("failed to get plan by SID", "error", err, "plan_sid", cmd.PlanSID)
+			return nil, fmt.Errorf("failed to get plan: %w", err)
+		}
+		if plan == nil {
+			uc.logger.Warnw("plan not found by SID", "plan_sid", cmd.PlanSID)
+			return nil, fmt.Errorf("plan not found")
+		}
+		planID = plan.ID()
+	} else {
+		plan, err = uc.planRepo.GetByID(ctx, cmd.PlanID)
+		if err != nil {
+			uc.logger.Errorw("failed to get plan", "error", err, "plan_id", cmd.PlanID)
+			return nil, fmt.Errorf("failed to get plan: %w", err)
+		}
+		if plan == nil {
+			uc.logger.Warnw("plan not found", "plan_id", cmd.PlanID)
+			return nil, fmt.Errorf("plan not found")
+		}
 	}
 
 	if !plan.IsActive() {
@@ -92,18 +132,18 @@ func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, cmd CreateSubs
 	}
 
 	// Verify that pricing exists for this plan and billing cycle
-	pricing, err := uc.pricingRepo.GetByPlanAndCycle(ctx, cmd.PlanID, billingCycle)
+	pricing, err := uc.pricingRepo.GetByPlanAndCycle(ctx, planID, billingCycle)
 	if err != nil {
-		uc.logger.Warnw("failed to get pricing for billing cycle", "error", err, "plan_id", cmd.PlanID, "billing_cycle", billingCycle)
+		uc.logger.Warnw("failed to get pricing for billing cycle", "error", err, "plan_id", planID, "billing_cycle", billingCycle)
 		return nil, fmt.Errorf("pricing not available for selected billing cycle: %w", err)
 	}
 
 	if pricing == nil {
-		uc.logger.Warnw("pricing not found for billing cycle", "plan_id", cmd.PlanID, "billing_cycle", billingCycle)
+		uc.logger.Warnw("pricing not found for billing cycle", "plan_id", planID, "billing_cycle", billingCycle)
 		return nil, fmt.Errorf("pricing not found for selected billing cycle")
 	}
 
-	uc.logger.Infow("pricing selected for billing cycle", "plan_id", cmd.PlanID, "billing_cycle", billingCycle, "price", pricing.Price())
+	uc.logger.Infow("pricing selected for billing cycle", "plan_id", planID, "billing_cycle", billingCycle, "price", pricing.Price())
 
 	// Allow multiple active subscriptions per user
 	// No restriction on creating new subscriptions
@@ -115,7 +155,7 @@ func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, cmd CreateSubs
 
 	endDate := uc.calculateEndDate(startDate, billingCycle)
 
-	sub, err := subscription.NewSubscription(cmd.UserID, cmd.PlanID, startDate, endDate, cmd.AutoRenew)
+	sub, err := subscription.NewSubscription(userID, planID, startDate, endDate, cmd.AutoRenew)
 	if err != nil {
 		uc.logger.Errorw("failed to create subscription aggregate", "error", err)
 		return nil, fmt.Errorf("failed to create subscription: %w", err)
@@ -150,8 +190,8 @@ func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, cmd CreateSubs
 
 	uc.logger.Infow("subscription created successfully",
 		"subscription_id", sub.ID(),
-		"user_id", cmd.UserID,
-		"plan_id", cmd.PlanID,
+		"user_id", userID,
+		"plan_id", planID,
 		"billing_cycle", billingCycle,
 		"status", sub.Status(),
 	)

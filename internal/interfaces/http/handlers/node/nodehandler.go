@@ -235,19 +235,21 @@ func (h *NodeHandler) UpdateNodeStatus(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "Node status updated successfully", result)
 }
 
-// parseNodeSID extracts the SID from a prefixed node ID (e.g., "node_xK9mP2vL3nQ" -> "xK9mP2vL3nQ").
+// parseNodeSID validates and returns the full SID from a prefixed node ID (e.g., "node_xK9mP2vL3nQ").
+// The SID is stored with prefix in the database as per Stripe-style ID convention.
 func parseNodeSID(c *gin.Context) (string, error) {
 	prefixedID := c.Param("id")
 	if prefixedID == "" {
 		return "", errors.NewValidationError("node ID is required")
 	}
 
-	sid, err := id.ParseNodeID(prefixedID)
-	if err != nil {
+	// Validate the prefix format, but return the full prefixed ID for database queries
+	// since sid field stores the complete Stripe-style ID with prefix
+	if err := id.ValidatePrefix(prefixedID, id.PrefixNode); err != nil {
 		return "", errors.NewValidationError("invalid node ID format, expected node_xxxxx")
 	}
 
-	return sid, nil
+	return prefixedID, nil
 }
 
 type CreateNodeRequest struct {
@@ -306,6 +308,7 @@ type UpdateNodeRequest struct {
 	Tags             []string          `json:"tags,omitempty" example:"premium,low-latency"`
 	Description      *string           `json:"description,omitempty" example:"Updated description"`
 	SortOrder        *int              `json:"sort_order,omitempty" example:"2"`
+	GroupSID         *string           `json:"group_sid,omitempty" example:"rg_xK9mP2vL3nQ" comment:"Resource group SID to associate with (use empty string to remove)"`
 	// Trojan specific fields
 	TransportProtocol *string `json:"transport_protocol,omitempty" binding:"omitempty,oneof=tcp ws grpc" example:"ws" comment:"Transport protocol for Trojan (tcp, ws, grpc)"`
 	Host              *string `json:"host,omitempty" example:"cdn.example.com" comment:"WebSocket host header or gRPC service name"`
@@ -329,6 +332,7 @@ func (r *UpdateNodeRequest) ToCommand(sid string) usecases.UpdateNodeCommand {
 		Tags:                    r.Tags,
 		Description:             r.Description,
 		SortOrder:               r.SortOrder,
+		GroupSID:                r.GroupSID,
 		TrojanTransportProtocol: r.TransportProtocol,
 		TrojanHost:              r.Host,
 		TrojanPath:              r.Path,

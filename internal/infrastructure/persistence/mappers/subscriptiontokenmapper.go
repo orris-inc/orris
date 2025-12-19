@@ -46,6 +46,7 @@ func (m *subscriptionTokenMapper) ToEntity(model *models.SubscriptionTokenModel)
 	// Reconstruct subscription token using domain factory method
 	entity, err := subscription.ReconstructSubscriptionToken(
 		model.ID,
+		model.SID,
 		model.SubscriptionID,
 		model.Name,
 		model.TokenHash,
@@ -62,9 +63,6 @@ func (m *subscriptionTokenMapper) ToEntity(model *models.SubscriptionTokenModel)
 	if err != nil {
 		return nil, fmt.Errorf("failed to reconstruct subscription token entity: %w", err)
 	}
-
-	// Set SID from model
-	entity.SetSID(model.SID)
 
 	return entity, nil
 }

@@ -51,6 +51,7 @@ func (m *SubscriptionMapperImpl) ToEntity(model *models.SubscriptionModel) (*sub
 		model.PlanID,
 		model.SubjectType,
 		model.SubjectID,
+		model.SID,
 		model.UUID,
 		status,
 		model.StartDate,
@@ -68,9 +69,6 @@ func (m *SubscriptionMapperImpl) ToEntity(model *models.SubscriptionModel) (*sub
 	if err != nil {
 		return nil, fmt.Errorf("failed to reconstruct subscription entity: %w", err)
 	}
-
-	// Set SID from model
-	entity.SetSID(model.SID)
 
 	return entity, nil
 }

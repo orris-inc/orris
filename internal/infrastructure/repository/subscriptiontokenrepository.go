@@ -198,6 +198,7 @@ func (r *SubscriptionTokenRepositoryImpl) toEntity(model *models.SubscriptionTok
 
 	return subscription.ReconstructSubscriptionToken(
 		model.ID,
+		model.SID,
 		model.SubscriptionID,
 		model.Name,
 		model.TokenHash,

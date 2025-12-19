@@ -70,6 +70,7 @@ func (m *planMapper) ToEntity(model *models.PlanModel) (*subscription.Plan, erro
 	// Reconstruct plan using domain factory method
 	entity, err := subscription.ReconstructPlan(
 		model.ID,
+		model.SID,
 		model.Name,
 		model.Slug,
 		model.Description,
@@ -90,9 +91,6 @@ func (m *planMapper) ToEntity(model *models.PlanModel) (*subscription.Plan, erro
 	if err != nil {
 		return nil, fmt.Errorf("failed to reconstruct plan entity: %w", err)
 	}
-
-	// Set SID from model
-	entity.SetSID(model.SID)
 
 	return entity, nil
 }

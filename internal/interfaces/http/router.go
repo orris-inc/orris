@@ -297,7 +297,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	// Initialize resource group components
 	resourceGroupRepo := repository.NewResourceGroupRepository(db, log)
-	createResourceGroupUC := resourceUsecases.NewCreateResourceGroupUseCase(resourceGroupRepo, log)
+	createResourceGroupUC := resourceUsecases.NewCreateResourceGroupUseCase(resourceGroupRepo, subscriptionPlanRepo, log)
 	getResourceGroupUC := resourceUsecases.NewGetResourceGroupUseCase(resourceGroupRepo, log)
 	listResourceGroupsUC := resourceUsecases.NewListResourceGroupsUseCase(resourceGroupRepo, log)
 	updateResourceGroupUC := resourceUsecases.NewUpdateResourceGroupUseCase(resourceGroupRepo, log)
@@ -339,7 +339,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Initialize node use cases
 	createNodeUC := nodeUsecases.NewCreateNodeUseCase(nodeRepoImpl, log)
 	getNodeUC := nodeUsecases.NewGetNodeUseCase(nodeRepoImpl, nodeStatusQuerier, log)
-	updateNodeUC := nodeUsecases.NewUpdateNodeUseCase(log, nodeRepoImpl)
+	updateNodeUC := nodeUsecases.NewUpdateNodeUseCase(log, nodeRepoImpl, resourceGroupRepo)
 	deleteNodeUC := nodeUsecases.NewDeleteNodeUseCase(nodeRepoImpl, log)
 	listNodesUC := nodeUsecases.NewListNodesUseCase(nodeRepoImpl, nodeStatusQuerier, log)
 	generateNodeTokenUC := nodeUsecases.NewGenerateNodeTokenUseCase(nodeRepoImpl, log)
@@ -453,7 +453,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Initialize forward agent status adapter early for getForwardAgentUC
 	forwardAgentStatusAdapter := adapters.NewForwardAgentStatusAdapter(redisClient, log)
 	getForwardAgentUC := forwardUsecases.NewGetForwardAgentUseCase(forwardAgentRepo, forwardAgentStatusAdapter, log)
-	updateForwardAgentUC := forwardUsecases.NewUpdateForwardAgentUseCase(forwardAgentRepo, log)
+	updateForwardAgentUC := forwardUsecases.NewUpdateForwardAgentUseCase(forwardAgentRepo, resourceGroupRepo, log)
 	deleteForwardAgentUC := forwardUsecases.NewDeleteForwardAgentUseCase(forwardAgentRepo, log)
 	listForwardAgentsUC := forwardUsecases.NewListForwardAgentsUseCase(forwardAgentRepo, forwardAgentStatusAdapter, log)
 	enableForwardAgentUC := forwardUsecases.NewEnableForwardAgentUseCase(forwardAgentRepo, log)

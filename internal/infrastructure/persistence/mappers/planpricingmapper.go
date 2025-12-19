@@ -30,6 +30,7 @@ func (m *PlanPricingMapper) ToDomain(model *models.PlanPricingModel) (*valueobje
 	// Reconstruct domain object
 	pricing := valueobjects.ReconstructPlanPricing(
 		model.ID,
+		model.SID,
 		model.PlanID,
 		cycle,
 		model.Price,
@@ -38,9 +39,6 @@ func (m *PlanPricingMapper) ToDomain(model *models.PlanPricingModel) (*valueobje
 		model.CreatedAt,
 		model.UpdatedAt,
 	)
-
-	// Set SID from model
-	pricing.SetSID(model.SID)
 
 	return pricing, nil
 }

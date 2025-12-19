@@ -52,8 +52,8 @@ func NewSubscriptionHandler(
 
 // CreateSubscriptionRequest represents the request to create a subscription
 type CreateSubscriptionRequest struct {
-	UserID       uint                   `json:"user_id" binding:"required"`
-	PlanID       uint                   `json:"plan_id" binding:"required"`
+	UserID       string                 `json:"user_id" binding:"required"` // Stripe-style SID (user_xxx)
+	PlanID       string                 `json:"plan_id" binding:"required"` // Stripe-style SID (plan_xxx)
 	BillingCycle string                 `json:"billing_cycle" binding:"required,oneof=weekly monthly quarterly semi_annual yearly lifetime"`
 	StartDate    *time.Time             `json:"start_date"`
 	AutoRenew    *bool                  `json:"auto_renew"`
@@ -100,8 +100,8 @@ func (h *SubscriptionHandler) Create(c *gin.Context) {
 	}
 
 	cmd := usecases.CreateSubscriptionCommand{
-		UserID:              req.UserID,
-		PlanID:              req.PlanID,
+		UserSID:             req.UserID,
+		PlanSID:             req.PlanID,
 		BillingCycle:        req.BillingCycle,
 		StartDate:           startDate,
 		AutoRenew:           autoRenew,

@@ -1,9 +1,21 @@
 package valueobjects
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"time"
 )
+
+// generateSID generates a Stripe-style short ID with the given prefix
+func generateSID(prefix string) (string, error) {
+	bytes := make([]byte, 12)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", fmt.Errorf("failed to generate random bytes: %w", err)
+	}
+	return prefix + "_" + base64.RawURLEncoding.EncodeToString(bytes), nil
+}
 
 // PlanPricing represents the price for a specific billing cycle
 // It's a value object that encapsulates pricing details for a subscription plan
@@ -56,8 +68,15 @@ func NewPlanPricing(planID uint, cycle BillingCycle, price uint64, currency stri
 		return nil, ErrInvalidBillingCycle
 	}
 
+	// Generate Stripe-style SID
+	sid, err := generateSID("price")
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate SID: %w", err)
+	}
+
 	now := time.Now()
 	return &PlanPricing{
+		sid:          sid,
 		planID:       planID,
 		billingCycle: cycle,
 		price:        price,
@@ -70,9 +89,10 @@ func NewPlanPricing(planID uint, cycle BillingCycle, price uint64, currency stri
 
 // ReconstructPlanPricing reconstructs a PlanPricing from persistence layer
 // Used by repository when loading from database
-func ReconstructPlanPricing(id, planID uint, cycle BillingCycle, price uint64, currency string, isActive bool, createdAt, updatedAt time.Time) *PlanPricing {
+func ReconstructPlanPricing(id uint, sid string, planID uint, cycle BillingCycle, price uint64, currency string, isActive bool, createdAt, updatedAt time.Time) *PlanPricing {
 	return &PlanPricing{
 		id:           id,
+		sid:          sid,
 		planID:       planID,
 		billingCycle: cycle,
 		price:        price,

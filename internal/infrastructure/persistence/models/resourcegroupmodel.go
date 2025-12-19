@@ -11,7 +11,7 @@ import (
 // ResourceGroupModel represents the database persistence model for resource groups.
 type ResourceGroupModel struct {
 	ID          uint   `gorm:"primarykey"`
-	SID         string `gorm:"not null;size:32;uniqueIndex:idx_resource_group_sid"` // Stripe-style ID: rg_xxxxxxxx
+	SID         string `gorm:"column:sid;not null;size:32;uniqueIndex:idx_resource_group_sid"` // Stripe-style ID: rg_xxxxxxxx
 	Name        string `gorm:"not null;size:100;index:idx_resource_group_name"`
 	PlanID      uint   `gorm:"not null;index:idx_resource_group_plan_id"`
 	Description string `gorm:"size:500"`

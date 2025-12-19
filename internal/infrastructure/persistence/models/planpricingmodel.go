@@ -11,7 +11,7 @@ import (
 // PlanPricingModel represents the plan_pricings table
 type PlanPricingModel struct {
 	ID           uint           `gorm:"primarykey"`
-	SID          string         `gorm:"uniqueIndex;not null;size:50;comment:Stripe-style ID: price_xxx"`
+	SID          string         `gorm:"column:sid;uniqueIndex;not null;size:50;comment:Stripe-style ID: price_xxx"`
 	PlanID       uint           `gorm:"not null;index:idx_plan_id;comment:Reference to plans table"`
 	BillingCycle string         `gorm:"not null;size:20;index:idx_billing_cycle;comment:Billing cycle: weekly, monthly, quarterly, semi_annual, yearly, lifetime"`
 	Price        uint64         `gorm:"not null;comment:Price in smallest currency unit (cents)"`

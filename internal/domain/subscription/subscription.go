@@ -3,6 +3,8 @@
 package subscription
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"time"
 
@@ -10,6 +12,15 @@ import (
 
 	"github.com/google/uuid"
 )
+
+// generateSID generates a Stripe-style short ID with the given prefix
+func generateSID(prefix string) (string, error) {
+	bytes := make([]byte, 12)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", fmt.Errorf("failed to generate random bytes: %w", err)
+	}
+	return prefix + "_" + base64.RawURLEncoding.EncodeToString(bytes), nil
+}
 
 // Subscription represents the subscription aggregate root
 type Subscription struct {
@@ -55,11 +66,18 @@ func NewSubscriptionWithSubject(subjectType string, subjectID, planID uint, star
 		return nil, fmt.Errorf("end date must be after start date")
 	}
 
+	// Generate Stripe-style SID
+	sid, err := generateSID("sub")
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate SID: %w", err)
+	}
+
 	// Generate unique UUID for this subscription
 	subscriptionUUID := uuid.New().String()
 
 	now := time.Now()
 	s := &Subscription{
+		sid:                sid,
 		uuid:               subscriptionUUID,
 		userID:             subjectID, // For backward compatibility
 		subjectType:        subjectType,
@@ -84,6 +102,7 @@ func NewSubscriptionWithSubject(subjectType string, subjectID, planID uint, star
 // Deprecated: Use ReconstructSubscriptionWithSubject for new code
 func ReconstructSubscription(
 	id, userID, planID uint,
+	sid string,
 	uuid string,
 	status vo.SubscriptionStatus,
 	startDate, endDate time.Time,
@@ -98,6 +117,7 @@ func ReconstructSubscription(
 	return ReconstructSubscriptionWithSubject(
 		id, userID, planID,
 		"user", userID, // Default to user subject type
+		sid,
 		uuid,
 		status,
 		startDate, endDate,
@@ -116,6 +136,7 @@ func ReconstructSubscriptionWithSubject(
 	id, userID, planID uint,
 	subjectType string,
 	subjectID uint,
+	sid string,
 	uuid string,
 	status vo.SubscriptionStatus,
 	startDate, endDate time.Time,
@@ -129,6 +150,9 @@ func ReconstructSubscriptionWithSubject(
 ) (*Subscription, error) {
 	if id == 0 {
 		return nil, fmt.Errorf("subscription ID cannot be zero")
+	}
+	if sid == "" {
+		return nil, fmt.Errorf("subscription SID is required")
 	}
 	if uuid == "" {
 		return nil, fmt.Errorf("subscription UUID is required")
@@ -152,6 +176,7 @@ func ReconstructSubscriptionWithSubject(
 
 	return &Subscription{
 		id:                 id,
+		sid:                sid,
 		uuid:               uuid,
 		userID:             userID,
 		subjectType:        subjectType,
