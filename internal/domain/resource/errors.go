@@ -17,4 +17,10 @@ var (
 
 	// ErrVersionConflict indicates an optimistic locking conflict
 	ErrVersionConflict = errors.New("version conflict: resource group was modified")
+
+	// ErrGroupPlanTypeMismatchNode indicates the resource group's plan is not node type
+	ErrGroupPlanTypeMismatchNode = errors.New("resource group's plan type is not node, cannot add node resources")
+
+	// ErrGroupPlanTypeMismatchForward indicates the resource group's plan is not forward type
+	ErrGroupPlanTypeMismatchForward = errors.New("resource group's plan type is not forward, cannot add forward agent resources")
 )

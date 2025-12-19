@@ -106,6 +106,13 @@ func SetupForwardRoutes(engine *gin.Engine, cfg *ForwardRouteConfig) {
 		}
 	}
 
+	// User forward agents API (read-only access to agents through subscriptions)
+	userForwardAgents := engine.Group("/user/forward-agents")
+	userForwardAgents.Use(cfg.AuthMiddleware.RequireAuth())
+	{
+		userForwardAgents.GET("", cfg.UserForwardHandler.ListAgents)
+	}
+
 	// Forward agent API for clients to fetch rules and report traffic
 	forwardAgentAPI := engine.Group("/forward-agent-api")
 	forwardAgentAPI.Use(cfg.ForwardAgentTokenMiddleware.RequireForwardAgentToken())

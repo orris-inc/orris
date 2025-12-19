@@ -16,7 +16,7 @@ import (
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
-// UserForwardRuleHandler handles HTTP requests for user-level forward rules.
+// UserForwardRuleHandler handles HTTP requests for user-level forward rules and agents.
 type UserForwardRuleHandler struct {
 	createRuleUC  *usecases.CreateUserForwardRuleUseCase
 	listRulesUC   *usecases.ListUserForwardRulesUseCase
@@ -26,6 +26,7 @@ type UserForwardRuleHandler struct {
 	enableRuleUC  *usecases.EnableForwardRuleUseCase
 	disableRuleUC *usecases.DisableForwardRuleUseCase
 	getRuleUC     *usecases.GetForwardRuleUseCase
+	listAgentsUC  *usecases.ListUserForwardAgentsUseCase
 	logger        logger.Interface
 }
 
@@ -39,6 +40,7 @@ func NewUserForwardRuleHandler(
 	enableRuleUC *usecases.EnableForwardRuleUseCase,
 	disableRuleUC *usecases.DisableForwardRuleUseCase,
 	getRuleUC *usecases.GetForwardRuleUseCase,
+	listAgentsUC *usecases.ListUserForwardAgentsUseCase,
 ) *UserForwardRuleHandler {
 	return &UserForwardRuleHandler{
 		createRuleUC:  createRuleUC,
@@ -49,6 +51,7 @@ func NewUserForwardRuleHandler(
 		enableRuleUC:  enableRuleUC,
 		disableRuleUC: disableRuleUC,
 		getRuleUC:     getRuleUC,
+		listAgentsUC:  listAgentsUC,
 		logger:        logger.NewLogger(),
 	}
 }
@@ -454,4 +457,50 @@ func (h *UserForwardRuleHandler) DisableRule(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "Forward rule disabled successfully", nil)
+}
+
+// ListAgents handles GET /user/forward-agents
+// Returns forward agents accessible to the user through their subscriptions.
+func (h *UserForwardRuleHandler) ListAgents(c *gin.Context) {
+	// Get user_id from context (set by auth middleware)
+	userIDInterface, exists := c.Get("user_id")
+	if !exists {
+		h.logger.Warnw("user_id not found in context")
+		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+		return
+	}
+
+	userID, ok := userIDInterface.(uint)
+	if !ok {
+		h.logger.Warnw("invalid user_id type in context", "user_id", userIDInterface)
+		utils.ErrorResponse(c, http.StatusInternalServerError, "invalid user ID type")
+		return
+	}
+
+	// Parse pagination parameters
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if page < 1 {
+		page = 1
+	}
+
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", strconv.Itoa(constants.DefaultPageSize)))
+	if pageSize < 1 || pageSize > constants.MaxPageSize {
+		pageSize = constants.DefaultPageSize
+	}
+
+	query := usecases.ListUserForwardAgentsQuery{
+		UserID:   userID,
+		Page:     page,
+		PageSize: pageSize,
+		Name:     c.Query("name"),
+		Status:   c.Query("status"),
+	}
+
+	result, err := h.listAgentsUC.Execute(c.Request.Context(), query)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.ListSuccessResponse(c, result.Agents, result.Total, page, pageSize)
 }

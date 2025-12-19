@@ -7,6 +7,7 @@ import (
 	"github.com/orris-inc/orris/internal/application/resource/dto"
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/domain/resource"
+	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -14,6 +15,7 @@ import (
 type ManageResourceGroupNodesUseCase struct {
 	resourceGroupRepo resource.Repository
 	nodeRepo          node.NodeRepository
+	planRepo          subscription.PlanRepository
 	logger            logger.Interface
 }
 
@@ -21,11 +23,13 @@ type ManageResourceGroupNodesUseCase struct {
 func NewManageResourceGroupNodesUseCase(
 	resourceGroupRepo resource.Repository,
 	nodeRepo node.NodeRepository,
+	planRepo subscription.PlanRepository,
 	logger logger.Interface,
 ) *ManageResourceGroupNodesUseCase {
 	return &ManageResourceGroupNodesUseCase{
 		resourceGroupRepo: resourceGroupRepo,
 		nodeRepo:          nodeRepo,
+		planRepo:          planRepo,
 		logger:            logger,
 	}
 }
@@ -40,6 +44,23 @@ func (uc *ManageResourceGroupNodesUseCase) AddNodes(ctx context.Context, groupID
 	}
 	if group == nil {
 		return nil, resource.ErrGroupNotFound
+	}
+
+	// Verify the plan type is node
+	plan, err := uc.planRepo.GetByID(ctx, group.PlanID())
+	if err != nil {
+		uc.logger.Errorw("failed to get plan", "error", err, "plan_id", group.PlanID())
+		return nil, fmt.Errorf("failed to get plan: %w", err)
+	}
+	if plan == nil {
+		return nil, fmt.Errorf("plan not found for resource group")
+	}
+	if !plan.PlanType().IsNode() {
+		uc.logger.Warnw("attempted to add nodes to non-node plan resource group",
+			"group_id", groupID,
+			"plan_id", group.PlanID(),
+			"plan_type", plan.PlanType().String())
+		return nil, resource.ErrGroupPlanTypeMismatchNode
 	}
 
 	result := &dto.BatchOperationResult{

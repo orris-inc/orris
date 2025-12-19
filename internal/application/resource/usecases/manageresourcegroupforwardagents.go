@@ -7,6 +7,7 @@ import (
 	"github.com/orris-inc/orris/internal/application/resource/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/resource"
+	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -15,6 +16,7 @@ import (
 type ManageResourceGroupForwardAgentsUseCase struct {
 	resourceGroupRepo resource.Repository
 	agentRepo         forward.AgentRepository
+	planRepo          subscription.PlanRepository
 	logger            logger.Interface
 }
 
@@ -22,11 +24,13 @@ type ManageResourceGroupForwardAgentsUseCase struct {
 func NewManageResourceGroupForwardAgentsUseCase(
 	resourceGroupRepo resource.Repository,
 	agentRepo forward.AgentRepository,
+	planRepo subscription.PlanRepository,
 	logger logger.Interface,
 ) *ManageResourceGroupForwardAgentsUseCase {
 	return &ManageResourceGroupForwardAgentsUseCase{
 		resourceGroupRepo: resourceGroupRepo,
 		agentRepo:         agentRepo,
+		planRepo:          planRepo,
 		logger:            logger,
 	}
 }
@@ -41,6 +45,23 @@ func (uc *ManageResourceGroupForwardAgentsUseCase) AddAgents(ctx context.Context
 	}
 	if group == nil {
 		return nil, resource.ErrGroupNotFound
+	}
+
+	// Verify the plan type is forward
+	plan, err := uc.planRepo.GetByID(ctx, group.PlanID())
+	if err != nil {
+		uc.logger.Errorw("failed to get plan", "error", err, "plan_id", group.PlanID())
+		return nil, fmt.Errorf("failed to get plan: %w", err)
+	}
+	if plan == nil {
+		return nil, fmt.Errorf("plan not found for resource group")
+	}
+	if !plan.PlanType().IsForward() {
+		uc.logger.Warnw("attempted to add forward agents to non-forward plan resource group",
+			"group_id", groupID,
+			"plan_id", group.PlanID(),
+			"plan_type", plan.PlanType().String())
+		return nil, resource.ErrGroupPlanTypeMismatchForward
 	}
 
 	result := &dto.BatchOperationResult{

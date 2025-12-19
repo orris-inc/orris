@@ -432,8 +432,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	forwardRuleRepo := repository.NewForwardRuleRepository(db, log)
 
 	// Initialize resource group membership use cases (need node and agent repos)
-	manageNodesUC := resourceUsecases.NewManageResourceGroupNodesUseCase(resourceGroupRepo, nodeRepoImpl, log)
-	manageAgentsUC := resourceUsecases.NewManageResourceGroupForwardAgentsUseCase(resourceGroupRepo, forwardAgentRepo, log)
+	manageNodesUC := resourceUsecases.NewManageResourceGroupNodesUseCase(resourceGroupRepo, nodeRepoImpl, subscriptionPlanRepo, log)
+	manageAgentsUC := resourceUsecases.NewManageResourceGroupForwardAgentsUseCase(resourceGroupRepo, forwardAgentRepo, subscriptionPlanRepo, log)
 
 	// Initialize admin resource group handler
 	adminResourceGroupHandler := adminHandlers.NewResourceGroupHandler(
@@ -563,6 +563,15 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		log,
 	)
 
+	// Initialize list user forward agents use case
+	listUserForwardAgentsUC := forwardUsecases.NewListUserForwardAgentsUseCase(
+		forwardAgentRepo,
+		subscriptionRepo,
+		subscriptionPlanRepo,
+		resourceGroupRepo,
+		log,
+	)
+
 	// Initialize user forward rule handler
 	userForwardRuleHandler := forwardHandlers.NewUserForwardRuleHandler(
 		createUserForwardRuleUC,
@@ -573,6 +582,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		enableForwardRuleUC,  // reuse existing
 		disableForwardRuleUC, // reuse existing
 		getForwardRuleUC,     // reuse existing
+		listUserForwardAgentsUC,
 	)
 
 	// Initialize forward rule owner middleware
