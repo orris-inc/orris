@@ -7,6 +7,7 @@ import (
 	"time"
 
 	vo "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
+	"github.com/orris-inc/orris/internal/shared/id"
 )
 
 var (
@@ -64,7 +65,7 @@ func NewSubscriptionToken(
 	}
 
 	// Generate Stripe-style SID
-	sid, err := generateSID("stoken")
+	sid, err := id.NewSubscriptionTokenID()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate SID: %w", err)
 	}

@@ -1,21 +1,12 @@
 package valueobjects
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"time"
-)
 
-// generateSID generates a Stripe-style short ID with the given prefix
-func generateSID(prefix string) (string, error) {
-	bytes := make([]byte, 12)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", fmt.Errorf("failed to generate random bytes: %w", err)
-	}
-	return prefix + "_" + base64.RawURLEncoding.EncodeToString(bytes), nil
-}
+	"github.com/orris-inc/orris/internal/shared/id"
+)
 
 // PlanPricing represents the price for a specific billing cycle
 // It's a value object that encapsulates pricing details for a subscription plan
@@ -69,7 +60,7 @@ func NewPlanPricing(planID uint, cycle BillingCycle, price uint64, currency stri
 	}
 
 	// Generate Stripe-style SID
-	sid, err := generateSID("price")
+	sid, err := id.NewPlanPricingID()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate SID: %w", err)
 	}

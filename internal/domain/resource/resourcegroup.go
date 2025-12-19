@@ -2,10 +2,10 @@
 package resource
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"fmt"
 	"time"
+
+	"github.com/orris-inc/orris/internal/shared/id"
 )
 
 // GroupStatus represents the status of a resource group
@@ -42,15 +42,6 @@ type ResourceGroup struct {
 	version     int
 }
 
-// generateSID generates a Stripe-style short ID with the given prefix
-func generateSID(prefix string) (string, error) {
-	bytes := make([]byte, 12)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", fmt.Errorf("failed to generate random bytes: %w", err)
-	}
-	return prefix + "_" + base64.RawURLEncoding.EncodeToString(bytes), nil
-}
-
 // NewResourceGroup creates a new resource group
 func NewResourceGroup(name string, planID uint, description string) (*ResourceGroup, error) {
 	if name == "" {
@@ -60,7 +51,7 @@ func NewResourceGroup(name string, planID uint, description string) (*ResourceGr
 		return nil, fmt.Errorf("plan ID is required")
 	}
 
-	sid, err := generateSID("rg")
+	sid, err := id.NewResourceGroupID()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate SID: %w", err)
 	}

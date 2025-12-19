@@ -3,6 +3,8 @@ package subscription
 import (
 	"fmt"
 	"time"
+
+	"github.com/orris-inc/orris/internal/shared/id"
 )
 
 // ResourceType represents the type of resource for usage tracking
@@ -45,7 +47,7 @@ func NewSubscriptionUsage(resourceType string, resourceID uint, subscriptionID *
 	}
 
 	// Generate Stripe-style SID
-	sid, err := generateSID("usage")
+	sid, err := id.NewSubscriptionUsageID()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate SID: %w", err)
 	}

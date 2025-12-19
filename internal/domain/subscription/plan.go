@@ -5,6 +5,7 @@ import (
 	"time"
 
 	vo "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
+	"github.com/orris-inc/orris/internal/shared/id"
 )
 
 type PlanStatus string
@@ -57,7 +58,7 @@ func NewPlan(name, slug, description string, trialDays int, planType vo.PlanType
 	}
 
 	// Generate Stripe-style SID
-	sid, err := generateSID("plan")
+	sid, err := id.NewPlanID()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate SID: %w", err)
 	}

@@ -26,6 +26,7 @@ const (
 	PrefixSubscriptionToken = "stoken"
 	PrefixSubscriptionUsage = "usage"
 	PrefixPlanPricing       = "price"
+	PrefixResourceGroup     = "rg"
 )
 
 // Generate creates a random short ID with the specified length using Base62 encoding.
@@ -223,4 +224,14 @@ func NewPlanPricingID() (string, error) {
 // ParsePlanPricingID extracts the short ID from a Plan Pricing prefixed ID.
 func ParsePlanPricingID(prefixedID string) (string, error) {
 	return ExtractShortID(prefixedID, PrefixPlanPricing)
+}
+
+// NewResourceGroupID generates a new Resource Group SID (rg_xxx).
+func NewResourceGroupID() (string, error) {
+	return NewSID(PrefixResourceGroup)
+}
+
+// ParseResourceGroupID extracts the short ID from a Resource Group prefixed ID.
+func ParseResourceGroupID(prefixedID string) (string, error) {
+	return ExtractShortID(prefixedID, PrefixResourceGroup)
 }

@@ -9,18 +9,10 @@ import (
 	"time"
 
 	vo "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
+	"github.com/orris-inc/orris/internal/shared/id"
 
 	"github.com/google/uuid"
 )
-
-// generateSID generates a Stripe-style short ID with the given prefix
-func generateSID(prefix string) (string, error) {
-	bytes := make([]byte, 12)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", fmt.Errorf("failed to generate random bytes: %w", err)
-	}
-	return prefix + "_" + base64.RawURLEncoding.EncodeToString(bytes), nil
-}
 
 // generateLinkToken generates a secure token for subscription link authentication
 // Uses 32 bytes (256 bits) of cryptographic random data for high security
@@ -78,7 +70,7 @@ func NewSubscriptionWithSubject(subjectType string, subjectID, planID uint, star
 	}
 
 	// Generate Stripe-style SID
-	sid, err := generateSID("sub")
+	sid, err := id.NewSubscriptionID()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate SID: %w", err)
 	}
