@@ -1,10 +1,7 @@
 package mappers
 
 import (
-	"encoding/json"
 	"fmt"
-
-	"gorm.io/datatypes"
 
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
@@ -41,14 +38,6 @@ func (m *ForwardAgentMapperImpl) ToEntity(model *models.ForwardAgentModel) (*for
 		return nil, fmt.Errorf("invalid agent status: %s", model.Status)
 	}
 
-	// Parse subscription plan IDs from JSON
-	var planIDs []uint
-	if model.PlanIDs != nil {
-		if err := json.Unmarshal(model.PlanIDs, &planIDs); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal plan_ids: %w", err)
-		}
-	}
-
 	entity, err := forward.ReconstructForwardAgent(
 		model.ID,
 		model.ShortID,
@@ -60,7 +49,6 @@ func (m *ForwardAgentMapperImpl) ToEntity(model *models.ForwardAgentModel) (*for
 		model.TunnelAddress,
 		model.Remark,
 		model.GroupID,
-		planIDs,
 		model.CreatedAt,
 		model.UpdatedAt,
 	)
@@ -77,19 +65,6 @@ func (m *ForwardAgentMapperImpl) ToModel(entity *forward.ForwardAgent) (*models.
 		return nil, nil
 	}
 
-	// Prepare subscription plan IDs JSON
-	var planIDsJSON datatypes.JSON
-	planIDs := entity.PlanIDs()
-	if len(planIDs) > 0 {
-		idsBytes, err := json.Marshal(planIDs)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal plan_ids: %w", err)
-		}
-		planIDsJSON = idsBytes
-	} else {
-		planIDsJSON = []byte("[]")
-	}
-
 	return &models.ForwardAgentModel{
 		ID:            entity.ID(),
 		ShortID:       entity.ShortID(),
@@ -101,7 +76,6 @@ func (m *ForwardAgentMapperImpl) ToModel(entity *forward.ForwardAgent) (*models.
 		Status:        string(entity.Status()),
 		Remark:        entity.Remark(),
 		GroupID:       entity.GroupID(),
-		PlanIDs:       planIDsJSON,
 		CreatedAt:     entity.CreatedAt(),
 		UpdatedAt:     entity.UpdatedAt(),
 	}, nil

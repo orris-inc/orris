@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -21,15 +22,15 @@ var (
 )
 
 type PlanHandler struct {
-	createPlanUC               *usecases.CreatePlanUseCase
-	updatePlanUC               *usecases.UpdatePlanUseCase
-	getPlanUC                  *usecases.GetPlanUseCase
-	listPlansUC                *usecases.ListPlansUseCase
-	getPublicPlansUC           *usecases.GetPublicPlansUseCase
-	activatePlanUC             *usecases.ActivatePlanUseCase
-	deactivatePlanUC           *usecases.DeactivatePlanUseCase
-	getPlanPricingsUC          *usecases.GetPlanPricingsUseCase
-	logger                     logger.Interface
+	createPlanUC      *usecases.CreatePlanUseCase
+	updatePlanUC      *usecases.UpdatePlanUseCase
+	getPlanUC         *usecases.GetPlanUseCase
+	listPlansUC       *usecases.ListPlansUseCase
+	getPublicPlansUC  *usecases.GetPublicPlansUseCase
+	activatePlanUC    *usecases.ActivatePlanUseCase
+	deactivatePlanUC  *usecases.DeactivatePlanUseCase
+	getPlanPricingsUC *usecases.GetPlanPricingsUseCase
+	logger            logger.Interface
 }
 
 func NewPlanHandler(
@@ -43,15 +44,15 @@ func NewPlanHandler(
 	getPlanPricingsUC *usecases.GetPlanPricingsUseCase,
 ) *PlanHandler {
 	return &PlanHandler{
-		createPlanUC:              createPlanUC,
-		updatePlanUC:              updatePlanUC,
-		getPlanUC:                 getPlanUC,
-		listPlansUC:               listPlansUC,
-		getPublicPlansUC:          getPublicPlansUC,
-		activatePlanUC:            activatePlanUC,
-		deactivatePlanUC:          deactivatePlanUC,
-		getPlanPricingsUC:         getPlanPricingsUC,
-		logger:                    logger.NewLogger(),
+		createPlanUC:      createPlanUC,
+		updatePlanUC:      updatePlanUC,
+		getPlanUC:         getPlanUC,
+		listPlansUC:       listPlansUC,
+		getPublicPlansUC:  getPublicPlansUC,
+		activatePlanUC:    activatePlanUC,
+		deactivatePlanUC:  deactivatePlanUC,
+		getPlanPricingsUC: getPlanPricingsUC,
+		logger:            logger.NewLogger(),
 	}
 }
 
@@ -119,7 +120,7 @@ func (h *PlanHandler) CreatePlan(c *gin.Context) {
 }
 
 func (h *PlanHandler) UpdatePlan(c *gin.Context) {
-	planID, err := parsePlanID(c)
+	planSID, err := parsePlanSID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -128,14 +129,14 @@ func (h *PlanHandler) UpdatePlan(c *gin.Context) {
 	var req UpdatePlanRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Warnw("invalid request body for update plan",
-			"plan_id", planID,
+			"plan_sid", planSID,
 			"error", err)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
 	cmd := usecases.UpdatePlanCommand{
-		PlanID:       planID,
+		PlanSID:      planSID,
 		Description:  req.Description,
 		Limits:       req.Limits,
 		APIRateLimit: req.APIRateLimit,
@@ -156,13 +157,13 @@ func (h *PlanHandler) UpdatePlan(c *gin.Context) {
 }
 
 func (h *PlanHandler) GetPlan(c *gin.Context) {
-	planID, err := parsePlanID(c)
+	planSID, err := parsePlanSID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	result, err := h.getPlanUC.ExecuteByID(c.Request.Context(), planID)
+	result, err := h.getPlanUC.ExecuteBySID(c.Request.Context(), planSID)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -198,7 +199,7 @@ func (h *PlanHandler) GetPublicPlans(c *gin.Context) {
 }
 
 func (h *PlanHandler) UpdatePlanStatus(c *gin.Context) {
-	planID, err := parsePlanID(c)
+	planSID, err := parsePlanSID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -213,14 +214,14 @@ func (h *PlanHandler) UpdatePlanStatus(c *gin.Context) {
 
 	switch req.Status {
 	case string(subscription.PlanStatusActive):
-		if err := h.activatePlanUC.Execute(c.Request.Context(), planID); err != nil {
+		if err := h.activatePlanUC.Execute(c.Request.Context(), planSID); err != nil {
 			utils.ErrorResponseWithError(c, err)
 			return
 		}
 		utils.SuccessResponse(c, http.StatusOK, "Plan activated successfully", nil)
 
 	case string(subscription.PlanStatusInactive):
-		if err := h.deactivatePlanUC.Execute(c.Request.Context(), planID); err != nil {
+		if err := h.deactivatePlanUC.Execute(c.Request.Context(), planSID); err != nil {
 			utils.ErrorResponseWithError(c, err)
 			return
 		}
@@ -232,19 +233,19 @@ func (h *PlanHandler) UpdatePlanStatus(c *gin.Context) {
 }
 
 func (h *PlanHandler) GetPlanPricings(c *gin.Context) {
-	planID, err := parsePlanID(c)
+	planSID, err := parsePlanSID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
 	query := usecases.GetPlanPricingsQuery{
-		PlanID: planID,
+		PlanSID: planSID,
 	}
 
 	result, err := h.getPlanPricingsUC.Execute(c.Request.Context(), query)
 	if err != nil {
-		h.logger.Errorw("failed to get plan pricings", "error", err, "plan_id", planID)
+		h.logger.Errorw("failed to get plan pricings", "error", err, "plan_sid", planSID)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
@@ -252,22 +253,18 @@ func (h *PlanHandler) GetPlanPricings(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "", result)
 }
 
-func parsePlanID(c *gin.Context) (uint, error) {
-	idStr := c.Param("id")
-	if idStr == "" {
-		return 0, errors.NewValidationError("Plan ID is required")
+func parsePlanSID(c *gin.Context) (string, error) {
+	sid := c.Param("id")
+	if sid == "" {
+		return "", errors.NewValidationError("Plan ID is required")
 	}
 
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		return 0, errors.NewValidationError("Invalid plan ID format")
+	// Validate SID format (should start with "plan_")
+	if !strings.HasPrefix(sid, "plan_") {
+		return "", errors.NewValidationError("Invalid plan ID format")
 	}
 
-	if id == 0 {
-		return 0, errors.NewValidationError("Plan ID cannot be zero")
-	}
-
-	return uint(id), nil
+	return sid, nil
 }
 
 func parseListPlansQuery(c *gin.Context) (*usecases.ListPlansQuery, error) {

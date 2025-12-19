@@ -6,20 +6,23 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/resource/dto"
 	"github.com/orris-inc/orris/internal/domain/resource"
+	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // GetResourceGroupUseCase handles retrieving a resource group by ID or SID
 type GetResourceGroupUseCase struct {
-	repo   resource.Repository
-	logger logger.Interface
+	repo     resource.Repository
+	planRepo subscription.PlanRepository
+	logger   logger.Interface
 }
 
 // NewGetResourceGroupUseCase creates a new GetResourceGroupUseCase
-func NewGetResourceGroupUseCase(repo resource.Repository, logger logger.Interface) *GetResourceGroupUseCase {
+func NewGetResourceGroupUseCase(repo resource.Repository, planRepo subscription.PlanRepository, logger logger.Interface) *GetResourceGroupUseCase {
 	return &GetResourceGroupUseCase{
-		repo:   repo,
-		logger: logger,
+		repo:     repo,
+		planRepo: planRepo,
+		logger:   logger,
 	}
 }
 
@@ -34,11 +37,20 @@ func (uc *GetResourceGroupUseCase) ExecuteByID(ctx context.Context, id uint) (*d
 		return nil, resource.ErrGroupNotFound
 	}
 
+	// Get plan SID
+	planSID := ""
+	plan, err := uc.planRepo.GetByID(ctx, group.PlanID())
+	if err != nil {
+		uc.logger.Warnw("failed to get plan for SID lookup", "error", err, "plan_id", group.PlanID())
+	} else if plan != nil {
+		planSID = plan.SID()
+	}
+
 	return &dto.ResourceGroupResponse{
 		ID:          group.ID(),
 		SID:         group.SID(),
 		Name:        group.Name(),
-		PlanID:      group.PlanID(),
+		PlanSID:     planSID,
 		Description: group.Description(),
 		Status:      string(group.Status()),
 		CreatedAt:   group.CreatedAt(),
@@ -57,11 +69,20 @@ func (uc *GetResourceGroupUseCase) ExecuteBySID(ctx context.Context, sid string)
 		return nil, resource.ErrGroupNotFound
 	}
 
+	// Get plan SID
+	planSID := ""
+	plan, err := uc.planRepo.GetByID(ctx, group.PlanID())
+	if err != nil {
+		uc.logger.Warnw("failed to get plan for SID lookup", "error", err, "plan_id", group.PlanID())
+	} else if plan != nil {
+		planSID = plan.SID()
+	}
+
 	return &dto.ResourceGroupResponse{
 		ID:          group.ID(),
 		SID:         group.SID(),
 		Name:        group.Name(),
-		PlanID:      group.PlanID(),
+		PlanSID:     planSID,
 		Description: group.Description(),
 		Status:      string(group.Status()),
 		CreatedAt:   group.CreatedAt(),

@@ -11,7 +11,7 @@ import (
 )
 
 type GetPlanPricingsQuery struct {
-	PlanID uint
+	PlanSID string
 }
 
 type GetPlanPricingsUseCase struct {
@@ -37,22 +37,25 @@ func (uc *GetPlanPricingsUseCase) Execute(
 	query GetPlanPricingsQuery,
 ) ([]*dto.PricingOptionDTO, error) {
 	// Validate plan exists
-	plan, err := uc.planRepo.GetByID(ctx, query.PlanID)
+	plan, err := uc.planRepo.GetBySID(ctx, query.PlanSID)
 	if err != nil {
-		uc.logger.Errorw("failed to get subscription plan", "error", err, "plan_id", query.PlanID)
+		uc.logger.Errorw("failed to get subscription plan", "error", err, "plan_sid", query.PlanSID)
 		return nil, fmt.Errorf("failed to get subscription plan: %w", err)
+	}
+	if plan == nil {
+		return nil, fmt.Errorf("plan not found: %s", query.PlanSID)
 	}
 
 	// Check if plan is active
 	if !plan.IsActive() {
-		uc.logger.Warnw("subscription plan is not active", "plan_id", query.PlanID)
+		uc.logger.Warnw("subscription plan is not active", "plan_id", plan.ID())
 		return nil, fmt.Errorf("subscription plan is not active")
 	}
 
 	// Retrieve all active pricing options for the plan
-	pricings, err := uc.pricingRepo.GetActivePricings(ctx, query.PlanID)
+	pricings, err := uc.pricingRepo.GetActivePricings(ctx, plan.ID())
 	if err != nil {
-		uc.logger.Errorw("failed to get plan pricings", "error", err, "plan_id", query.PlanID)
+		uc.logger.Errorw("failed to get plan pricings", "error", err, "plan_id", plan.ID())
 		return nil, fmt.Errorf("failed to get plan pricings: %w", err)
 	}
 
@@ -60,7 +63,7 @@ func (uc *GetPlanPricingsUseCase) Execute(
 	result := uc.toPricingOptionDTOList(pricings)
 
 	uc.logger.Infow("plan pricings retrieved successfully",
-		"plan_id", query.PlanID,
+		"plan_id", plan.ID(),
 		"pricing_count", len(result),
 	)
 

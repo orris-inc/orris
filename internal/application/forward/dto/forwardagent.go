@@ -15,6 +15,7 @@ type ForwardAgentDTO struct {
 	TunnelAddress string          `json:"tunnel_address,omitempty"` // IP or hostname only (no port), configure if agent may serve as relay/exit in any rule
 	Status        string          `json:"status"`
 	Remark        string          `json:"remark"`
+	GroupSID      *string         `json:"group_id,omitempty"` // Resource group SID this agent belongs to
 	CreatedAt     string          `json:"created_at"`
 	UpdatedAt     string          `json:"updated_at"`
 	SystemStatus  *AgentStatusDTO `json:"system_status,omitempty"`

@@ -28,7 +28,8 @@ type NodeRepository interface {
 
 type NodeFilter struct {
 	query.BaseFilter
-	Name   *string
-	Status *string
-	Tag    *string
+	Name     *string
+	Status   *string
+	Tag      *string
+	GroupIDs []uint // Filter by resource group IDs
 }

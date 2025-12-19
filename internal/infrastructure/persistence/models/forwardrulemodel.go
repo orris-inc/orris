@@ -15,7 +15,6 @@ type ForwardRuleModel struct {
 	ShortID           string         `gorm:"not null;size:16;uniqueIndex:idx_forward_rule_short_id"` // external API identifier
 	AgentID           uint           `gorm:"not null;index:idx_forward_agent_id;uniqueIndex:idx_listen_port_agent"`
 	UserID            *uint          `gorm:"index:idx_forward_rules_user_id;index:idx_forward_rules_user_status"` // user ID for user-owned rules (nullable)
-	PlanIDs           datatypes.JSON `gorm:"column:plan_ids;default:'[]'"`                                        // JSON array of subscription plan IDs
 	RuleType          string         `gorm:"not null;default:direct;size:20"`                                     // direct, chain, direct_chain, websocket
 	ExitAgentID       *uint          `gorm:"index:idx_forward_exit_agent_id"`                                     // exit agent ID for chain/websocket forward (nullable)
 	ChainAgentIDs     datatypes.JSON `gorm:"type:json;default:null"`                                              // ordered array of intermediate agent IDs for chain forwarding

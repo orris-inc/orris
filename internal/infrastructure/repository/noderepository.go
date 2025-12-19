@@ -298,6 +298,7 @@ func (r *NodeRepositoryImpl) Update(ctx context.Context, nodeEntity *node.Node) 
 				"maintenance_reason": model.MaintenanceReason,
 				"token_hash":         model.TokenHash,
 				"api_token":          model.APIToken,
+				"group_id":           model.GroupID,
 				"updated_at":         model.UpdatedAt,
 			})
 
@@ -394,6 +395,9 @@ func (r *NodeRepositoryImpl) List(ctx context.Context, filter node.NodeFilter) (
 	if filter.Tag != nil && *filter.Tag != "" {
 		// Search in JSON tags array
 		query = query.Where("JSON_CONTAINS(tags, ?)", fmt.Sprintf(`"%s"`, *filter.Tag))
+	}
+	if len(filter.GroupIDs) > 0 {
+		query = query.Where("group_id IN ?", filter.GroupIDs)
 	}
 
 	// Count total records

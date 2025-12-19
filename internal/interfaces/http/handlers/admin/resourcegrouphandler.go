@@ -4,6 +4,7 @@ package admin
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -24,6 +25,9 @@ type ResourceGroupHandler struct {
 	updateUseCase       *usecases.UpdateResourceGroupUseCase
 	deleteUseCase       *usecases.DeleteResourceGroupUseCase
 	updateStatusUseCase *usecases.UpdateResourceGroupStatusUseCase
+	manageNodesUseCase  *usecases.ManageResourceGroupNodesUseCase
+	manageAgentsUseCase *usecases.ManageResourceGroupForwardAgentsUseCase
+	planRepo            subscription.PlanRepository
 	logger              logger.Interface
 }
 
@@ -35,6 +39,9 @@ func NewResourceGroupHandler(
 	updateUC *usecases.UpdateResourceGroupUseCase,
 	deleteUC *usecases.DeleteResourceGroupUseCase,
 	updateStatusUC *usecases.UpdateResourceGroupStatusUseCase,
+	manageNodesUC *usecases.ManageResourceGroupNodesUseCase,
+	manageAgentsUC *usecases.ManageResourceGroupForwardAgentsUseCase,
+	planRepo subscription.PlanRepository,
 	logger logger.Interface,
 ) *ResourceGroupHandler {
 	return &ResourceGroupHandler{
@@ -44,6 +51,9 @@ func NewResourceGroupHandler(
 		updateUseCase:       updateUC,
 		deleteUseCase:       deleteUC,
 		updateStatusUseCase: updateStatusUC,
+		manageNodesUseCase:  manageNodesUC,
+		manageAgentsUseCase: manageAgentsUC,
+		planRepo:            planRepo,
 		logger:              logger,
 	}
 }
@@ -117,7 +127,15 @@ func (h *ResourceGroupHandler) List(c *gin.Context) {
 
 	var planID *uint
 	if planIDStr := c.Query("plan_id"); planIDStr != "" {
-		if pid, err := strconv.ParseUint(planIDStr, 10, 64); err == nil {
+		// Support both SID (plan_xxx) and internal ID
+		if strings.HasPrefix(planIDStr, "plan_") {
+			// Resolve SID to internal ID
+			plan, err := h.planRepo.GetBySID(c.Request.Context(), planIDStr)
+			if err == nil && plan != nil {
+				pid := plan.ID()
+				planID = &pid
+			}
+		} else if pid, err := strconv.ParseUint(planIDStr, 10, 64); err == nil {
 			pidVal := uint(pid)
 			planID = &pidVal
 		}
@@ -289,4 +307,192 @@ func (h *ResourceGroupHandler) Deactivate(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "Resource group deactivated successfully", result)
+}
+
+// AddNodes adds nodes to a resource group
+func (h *ResourceGroupHandler) AddNodes(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID")
+		return
+	}
+
+	var req dto.AddNodesToGroupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid request body for add nodes", "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	result, err := h.manageNodesUseCase.AddNodes(c.Request.Context(), uint(id), req.NodeSIDs)
+	if err != nil {
+		if err == resource.ErrGroupNotFound {
+			utils.ErrorResponse(c, http.StatusNotFound, "resource group not found")
+			return
+		}
+		h.logger.Errorw("failed to add nodes to resource group", "error", err, "id", id)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Nodes added to resource group", result)
+}
+
+// RemoveNodes removes nodes from a resource group
+func (h *ResourceGroupHandler) RemoveNodes(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID")
+		return
+	}
+
+	var req dto.RemoveNodesFromGroupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid request body for remove nodes", "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	result, err := h.manageNodesUseCase.RemoveNodes(c.Request.Context(), uint(id), req.NodeSIDs)
+	if err != nil {
+		if err == resource.ErrGroupNotFound {
+			utils.ErrorResponse(c, http.StatusNotFound, "resource group not found")
+			return
+		}
+		h.logger.Errorw("failed to remove nodes from resource group", "error", err, "id", id)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Nodes removed from resource group", result)
+}
+
+// ListNodes lists all nodes in a resource group
+func (h *ResourceGroupHandler) ListNodes(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID")
+		return
+	}
+
+	page := 1
+	if pageStr := c.Query("page"); pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+
+	pageSize := constants.DefaultPageSize
+	if pageSizeStr := c.Query("page_size"); pageSizeStr != "" {
+		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 && ps <= constants.MaxPageSize {
+			pageSize = ps
+		}
+	}
+
+	result, err := h.manageNodesUseCase.ListNodes(c.Request.Context(), uint(id), page, pageSize)
+	if err != nil {
+		if err == resource.ErrGroupNotFound {
+			utils.ErrorResponse(c, http.StatusNotFound, "resource group not found")
+			return
+		}
+		h.logger.Errorw("failed to list nodes in resource group", "error", err, "id", id)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.ListSuccessResponse(c, result.Items, result.Total, result.Page, result.PageSize)
+}
+
+// AddForwardAgents adds forward agents to a resource group
+func (h *ResourceGroupHandler) AddForwardAgents(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID")
+		return
+	}
+
+	var req dto.AddForwardAgentsToGroupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid request body for add forward agents", "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	result, err := h.manageAgentsUseCase.AddAgents(c.Request.Context(), uint(id), req.AgentSIDs)
+	if err != nil {
+		if err == resource.ErrGroupNotFound {
+			utils.ErrorResponse(c, http.StatusNotFound, "resource group not found")
+			return
+		}
+		h.logger.Errorw("failed to add forward agents to resource group", "error", err, "id", id)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Forward agents added to resource group", result)
+}
+
+// RemoveForwardAgents removes forward agents from a resource group
+func (h *ResourceGroupHandler) RemoveForwardAgents(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID")
+		return
+	}
+
+	var req dto.RemoveForwardAgentsFromGroupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid request body for remove forward agents", "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	result, err := h.manageAgentsUseCase.RemoveAgents(c.Request.Context(), uint(id), req.AgentSIDs)
+	if err != nil {
+		if err == resource.ErrGroupNotFound {
+			utils.ErrorResponse(c, http.StatusNotFound, "resource group not found")
+			return
+		}
+		h.logger.Errorw("failed to remove forward agents from resource group", "error", err, "id", id)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Forward agents removed from resource group", result)
+}
+
+// ListForwardAgents lists all forward agents in a resource group
+func (h *ResourceGroupHandler) ListForwardAgents(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 64)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID")
+		return
+	}
+
+	page := 1
+	if pageStr := c.Query("page"); pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+
+	pageSize := constants.DefaultPageSize
+	if pageSizeStr := c.Query("page_size"); pageSizeStr != "" {
+		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 && ps <= constants.MaxPageSize {
+			pageSize = ps
+		}
+	}
+
+	result, err := h.manageAgentsUseCase.ListAgents(c.Request.Context(), uint(id), page, pageSize)
+	if err != nil {
+		if err == resource.ErrGroupNotFound {
+			utils.ErrorResponse(c, http.StatusNotFound, "resource group not found")
+			return
+		}
+		h.logger.Errorw("failed to list forward agents in resource group", "error", err, "id", id)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.ListSuccessResponse(c, result.Items, result.Total, result.Page, result.PageSize)
 }

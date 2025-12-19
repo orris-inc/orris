@@ -295,18 +295,14 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	)
 	subscriptionOwnerMiddleware := middleware.NewSubscriptionOwnerMiddleware(subscriptionRepo, log)
 
-	// Initialize resource group components
+	// Initialize resource group repository (handler initialized later after node and agent repos)
 	resourceGroupRepo := repository.NewResourceGroupRepository(db, log)
 	createResourceGroupUC := resourceUsecases.NewCreateResourceGroupUseCase(resourceGroupRepo, subscriptionPlanRepo, log)
-	getResourceGroupUC := resourceUsecases.NewGetResourceGroupUseCase(resourceGroupRepo, log)
-	listResourceGroupsUC := resourceUsecases.NewListResourceGroupsUseCase(resourceGroupRepo, log)
-	updateResourceGroupUC := resourceUsecases.NewUpdateResourceGroupUseCase(resourceGroupRepo, log)
+	getResourceGroupUC := resourceUsecases.NewGetResourceGroupUseCase(resourceGroupRepo, subscriptionPlanRepo, log)
+	listResourceGroupsUC := resourceUsecases.NewListResourceGroupsUseCase(resourceGroupRepo, subscriptionPlanRepo, log)
+	updateResourceGroupUC := resourceUsecases.NewUpdateResourceGroupUseCase(resourceGroupRepo, subscriptionPlanRepo, log)
 	deleteResourceGroupUC := resourceUsecases.NewDeleteResourceGroupUseCase(resourceGroupRepo, log)
-	updateResourceGroupStatusUC := resourceUsecases.NewUpdateResourceGroupStatusUseCase(resourceGroupRepo, log)
-	adminResourceGroupHandler := adminHandlers.NewResourceGroupHandler(
-		createResourceGroupUC, getResourceGroupUC, listResourceGroupsUC,
-		updateResourceGroupUC, deleteResourceGroupUC, updateResourceGroupStatusUC, log,
-	)
+	updateResourceGroupStatusUC := resourceUsecases.NewUpdateResourceGroupStatusUseCase(resourceGroupRepo, subscriptionPlanRepo, log)
 
 	planHandler := handlers.NewPlanHandler(
 		createPlanUC, updatePlanUC, getPlanUC, listPlansUC,
@@ -434,6 +430,18 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Initialize forward repositories (agent repo needed by rule use cases)
 	forwardAgentRepo := repository.NewForwardAgentRepository(db, log)
 	forwardRuleRepo := repository.NewForwardRuleRepository(db, log)
+
+	// Initialize resource group membership use cases (need node and agent repos)
+	manageNodesUC := resourceUsecases.NewManageResourceGroupNodesUseCase(resourceGroupRepo, nodeRepoImpl, log)
+	manageAgentsUC := resourceUsecases.NewManageResourceGroupForwardAgentsUseCase(resourceGroupRepo, forwardAgentRepo, log)
+
+	// Initialize admin resource group handler
+	adminResourceGroupHandler := adminHandlers.NewResourceGroupHandler(
+		createResourceGroupUC, getResourceGroupUC, listResourceGroupsUC,
+		updateResourceGroupUC, deleteResourceGroupUC, updateResourceGroupStatusUC,
+		manageNodesUC, manageAgentsUC,
+		subscriptionPlanRepo, log,
+	)
 
 	// Initialize forward rule components (configSyncService will be injected after creation)
 	var createForwardRuleUC *forwardUsecases.CreateForwardRuleUseCase
@@ -700,6 +708,16 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		adminResourceGroups.DELETE("/:id", r.adminResourceGroupHandler.Delete)
 		adminResourceGroups.POST("/:id/activate", r.adminResourceGroupHandler.Activate)
 		adminResourceGroups.POST("/:id/deactivate", r.adminResourceGroupHandler.Deactivate)
+
+		// Node membership management
+		adminResourceGroups.POST("/:id/nodes", r.adminResourceGroupHandler.AddNodes)
+		adminResourceGroups.DELETE("/:id/nodes", r.adminResourceGroupHandler.RemoveNodes)
+		adminResourceGroups.GET("/:id/nodes", r.adminResourceGroupHandler.ListNodes)
+
+		// Forward agent membership management
+		adminResourceGroups.POST("/:id/forward-agents", r.adminResourceGroupHandler.AddForwardAgents)
+		adminResourceGroups.DELETE("/:id/forward-agents", r.adminResourceGroupHandler.RemoveForwardAgents)
+		adminResourceGroups.GET("/:id/forward-agents", r.adminResourceGroupHandler.ListForwardAgents)
 	}
 
 	// User subscription routes - only own subscriptions

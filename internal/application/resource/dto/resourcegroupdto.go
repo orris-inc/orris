@@ -20,7 +20,7 @@ type ResourceGroupResponse struct {
 	ID          uint      `json:"id"`
 	SID         string    `json:"sid"`
 	Name        string    `json:"name"`
-	PlanID      uint      `json:"plan_id"`
+	PlanSID     string    `json:"plan_id"` // Plan's Stripe-style ID (plan_xxx)
 	Description string    `json:"description,omitempty"`
 	Status      string    `json:"status"`
 	CreatedAt   time.Time `json:"created_at"`

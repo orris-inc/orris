@@ -46,6 +46,25 @@ func (uc *GetPlanUseCase) ExecuteByID(ctx context.Context, planID uint) (*dto.Pl
 	return dto.ToPlanDTOWithPricings(plan, pricings), nil
 }
 
+func (uc *GetPlanUseCase) ExecuteBySID(ctx context.Context, sid string) (*dto.PlanDTO, error) {
+	plan, err := uc.planRepo.GetBySID(ctx, sid)
+	if err != nil {
+		uc.logger.Errorw("failed to get plan by SID", "error", err, "sid", sid)
+		return nil, fmt.Errorf("failed to get plan: %w", err)
+	}
+	if plan == nil {
+		return nil, fmt.Errorf("plan not found: %s", sid)
+	}
+
+	pricings, err := uc.pricingRepo.GetActivePricings(ctx, plan.ID())
+	if err != nil {
+		uc.logger.Warnw("failed to get pricings for plan", "error", err, "plan_id", plan.ID())
+		return dto.ToPlanDTO(plan), nil
+	}
+
+	return dto.ToPlanDTOWithPricings(plan, pricings), nil
+}
+
 func (uc *GetPlanUseCase) ExecuteBySlug(ctx context.Context, slug string) (*dto.PlanDTO, error) {
 	plan, err := uc.planRepo.GetBySlug(ctx, slug)
 	if err != nil {

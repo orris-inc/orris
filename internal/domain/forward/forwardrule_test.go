@@ -1730,7 +1730,7 @@ func TestForwardRule_Validate_RejectsInvalidRuleType(t *testing.T) {
 	shortID, _ := generator()
 
 	_, err := ReconstructForwardRule(
-		1, shortID, 1, nil, []uint{}, // id, shortID, agentID, userID, subscriptionPlanIDs
+		1, shortID, 1, nil, // id, shortID, agentID, userID
 		vo.ForwardRuleType("invalid"),
 		0, nil, nil,
 		"test", 8080,

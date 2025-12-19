@@ -164,6 +164,7 @@ func (r *ForwardAgentRepositoryImpl) Update(ctx context.Context, agent *forward.
 			"public_address": model.PublicAddress,
 			"tunnel_address": model.TunnelAddress,
 			"remark":         model.Remark,
+			"group_id":       model.GroupID,
 			"updated_at":     model.UpdatedAt,
 		})
 
@@ -214,6 +215,9 @@ func (r *ForwardAgentRepositoryImpl) List(ctx context.Context, filter forward.Ag
 	}
 	if filter.Status != "" {
 		query = query.Where("status = ?", filter.Status)
+	}
+	if len(filter.GroupIDs) > 0 {
+		query = query.Where("group_id IN ?", filter.GroupIDs)
 	}
 
 	// Count total records

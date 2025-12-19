@@ -43,8 +43,7 @@ type ForwardAgent struct {
 	publicAddress  string // optional public address for Entry to obtain Exit connection information
 	tunnelAddress  string // IP or hostname only (no port), configure if agent may serve as relay/exit in any rule
 	remark         string
-	groupID        *uint  // resource group ID for internal join (replaces planIDs)
-	planIDs        []uint // subscription plans that can access this forward agent (deprecated: use groupID)
+	groupID        *uint // resource group ID
 	createdAt      time.Time
 	updatedAt      time.Time
 	tokenGenerator services.TokenGenerator
@@ -93,7 +92,6 @@ func NewForwardAgent(name string, publicAddress string, tunnelAddress string, re
 		publicAddress:  publicAddress,
 		tunnelAddress:  tunnelAddress,
 		remark:         remark,
-		planIDs:        []uint{},
 		createdAt:      now,
 		updatedAt:      now,
 		tokenGenerator: services.NewTokenGenerator(),
@@ -114,7 +112,6 @@ func ReconstructForwardAgent(
 	tunnelAddress string,
 	remark string,
 	groupID *uint,
-	planIDs []uint,
 	createdAt, updatedAt time.Time,
 ) (*ForwardAgent, error) {
 	if id == 0 {
@@ -147,11 +144,6 @@ func ReconstructForwardAgent(
 		}
 	}
 
-	// Initialize planIDs if nil
-	if planIDs == nil {
-		planIDs = []uint{}
-	}
-
 	return &ForwardAgent{
 		id:             id,
 		shortID:        shortID,
@@ -163,7 +155,6 @@ func ReconstructForwardAgent(
 		tunnelAddress:  tunnelAddress,
 		remark:         remark,
 		groupID:        groupID,
-		planIDs:        planIDs,
 		createdAt:      createdAt,
 		updatedAt:      updatedAt,
 		tokenGenerator: services.NewTokenGenerator(),
@@ -217,74 +208,6 @@ func (a *ForwardAgent) GetEffectiveTunnelAddress() string {
 		return a.tunnelAddress
 	}
 	return a.publicAddress
-}
-
-// PlanIDs returns a copy of subscription plan IDs that can access this forward agent
-func (a *ForwardAgent) PlanIDs() []uint {
-	ids := make([]uint, len(a.planIDs))
-	copy(ids, a.planIDs)
-	return ids
-}
-
-// SetPlanIDs sets the subscription plan IDs for this forward agent
-func (a *ForwardAgent) SetPlanIDs(ids []uint) {
-	if ids == nil {
-		a.planIDs = []uint{}
-	} else {
-		a.planIDs = make([]uint, len(ids))
-		copy(a.planIDs, ids)
-	}
-	a.updatedAt = time.Now()
-}
-
-// AddSubscriptionPlan adds a subscription plan to this forward agent
-func (a *ForwardAgent) AddSubscriptionPlan(planID uint) {
-	if planID == 0 {
-		return
-	}
-	// Check if already exists
-	for _, id := range a.planIDs {
-		if id == planID {
-			return
-		}
-	}
-	a.planIDs = append(a.planIDs, planID)
-	a.updatedAt = time.Now()
-}
-
-// RemoveSubscriptionPlan removes a subscription plan from this forward agent
-func (a *ForwardAgent) RemoveSubscriptionPlan(planID uint) {
-	for i, id := range a.planIDs {
-		if id == planID {
-			a.planIDs = append(a.planIDs[:i], a.planIDs[i+1:]...)
-			a.updatedAt = time.Now()
-			return
-		}
-	}
-}
-
-// HasSubscriptionPlan checks if this forward agent belongs to a specific subscription plan
-func (a *ForwardAgent) HasSubscriptionPlan(planID uint) bool {
-	for _, id := range a.planIDs {
-		if id == planID {
-			return true
-		}
-	}
-	return false
-}
-
-// HasAnySubscriptionPlan checks if this forward agent belongs to any of the given subscription plans
-func (a *ForwardAgent) HasAnySubscriptionPlan(planIDs []uint) bool {
-	planSet := make(map[uint]bool)
-	for _, id := range planIDs {
-		planSet[id] = true
-	}
-	for _, id := range a.planIDs {
-		if planSet[id] {
-			return true
-		}
-	}
-	return false
 }
 
 // GroupID returns the resource group ID

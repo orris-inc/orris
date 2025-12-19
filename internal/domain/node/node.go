@@ -25,8 +25,7 @@ type Node struct {
 	trojanConfig      *vo.TrojanConfig
 	status            vo.NodeStatus
 	metadata          vo.NodeMetadata
-	groupID           *uint  // resource group ID (new: replaces planIDs)
-	planIDs           []uint // subscription plans that can access this node (deprecated: use groupID)
+	groupID           *uint // resource group ID
 	apiToken          string
 	tokenHash         string
 	sortOrder         int
@@ -97,7 +96,6 @@ func NewNode(
 		trojanConfig:     trojanConfig,
 		status:           vo.NodeStatusInactive,
 		metadata:         metadata,
-		planIDs:          []uint{},
 		apiToken:         plainToken,
 		tokenHash:        tokenHash,
 		sortOrder:        sortOrder,
@@ -125,7 +123,6 @@ func ReconstructNode(
 	status vo.NodeStatus,
 	metadata vo.NodeMetadata,
 	groupID *uint,
-	planIDs []uint,
 	tokenHash string,
 	apiToken string,
 	sortOrder int,
@@ -155,11 +152,6 @@ func ReconstructNode(
 		return nil, fmt.Errorf("invalid protocol: %s", protocol)
 	}
 
-	// Initialize planIDs if nil
-	if planIDs == nil {
-		planIDs = []uint{}
-	}
-
 	return &Node{
 		id:                id,
 		sid:               sid,
@@ -174,7 +166,6 @@ func ReconstructNode(
 		status:            status,
 		metadata:          metadata,
 		groupID:           groupID,
-		planIDs:           planIDs,
 		tokenHash:         tokenHash,
 		apiToken:          apiToken,
 		sortOrder:         sortOrder,
@@ -268,78 +259,6 @@ func (n *Node) SetGroupID(groupID *uint) {
 	n.groupID = groupID
 	n.updatedAt = time.Now()
 	n.version++
-}
-
-// PlanIDs returns a copy of subscription plan IDs that can access this node
-// Deprecated: Use GroupID instead
-func (n *Node) PlanIDs() []uint {
-	ids := make([]uint, len(n.planIDs))
-	copy(ids, n.planIDs)
-	return ids
-}
-
-// SetPlanIDs sets the subscription plan IDs for this node
-func (n *Node) SetPlanIDs(ids []uint) {
-	if ids == nil {
-		n.planIDs = []uint{}
-	} else {
-		n.planIDs = make([]uint, len(ids))
-		copy(n.planIDs, ids)
-	}
-	n.updatedAt = time.Now()
-	n.version++
-}
-
-// AddSubscriptionPlan adds a subscription plan to this node
-func (n *Node) AddSubscriptionPlan(planID uint) {
-	if planID == 0 {
-		return
-	}
-	// Check if already exists
-	for _, id := range n.planIDs {
-		if id == planID {
-			return
-		}
-	}
-	n.planIDs = append(n.planIDs, planID)
-	n.updatedAt = time.Now()
-	n.version++
-}
-
-// RemoveSubscriptionPlan removes a subscription plan from this node
-func (n *Node) RemoveSubscriptionPlan(planID uint) {
-	for i, id := range n.planIDs {
-		if id == planID {
-			n.planIDs = append(n.planIDs[:i], n.planIDs[i+1:]...)
-			n.updatedAt = time.Now()
-			n.version++
-			return
-		}
-	}
-}
-
-// HasSubscriptionPlan checks if this node belongs to a specific subscription plan
-func (n *Node) HasSubscriptionPlan(planID uint) bool {
-	for _, id := range n.planIDs {
-		if id == planID {
-			return true
-		}
-	}
-	return false
-}
-
-// HasAnySubscriptionPlan checks if this node belongs to any of the given subscription plans
-func (n *Node) HasAnySubscriptionPlan(planIDs []uint) bool {
-	planSet := make(map[uint]bool)
-	for _, id := range planIDs {
-		planSet[id] = true
-	}
-	for _, id := range n.planIDs {
-		if planSet[id] {
-			return true
-		}
-	}
-	return false
 }
 
 // TokenHash returns the API token hash

@@ -73,7 +73,7 @@ func (uc *CreateResourceGroupUseCase) Execute(ctx context.Context, req dto.Creat
 		ID:          group.ID(),
 		SID:         group.SID(),
 		Name:        group.Name(),
-		PlanID:      group.PlanID(),
+		PlanSID:     plan.SID(),
 		Description: group.Description(),
 		Status:      string(group.Status()),
 		CreatedAt:   group.CreatedAt(),

@@ -84,14 +84,6 @@ func (m *NodeMapperImpl) ToEntity(model *models.NodeModel, encryptionConfig vo.E
 		}
 	}
 
-	// Parse subscription plan IDs from JSON
-	var planIDs []uint
-	if model.PlanIDs != nil {
-		if err := json.Unmarshal(model.PlanIDs, &planIDs); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal plan_ids: %w", err)
-		}
-	}
-
 	// Get region value
 	region := ""
 	if model.Region != nil {
@@ -123,7 +115,6 @@ func (m *NodeMapperImpl) ToEntity(model *models.NodeModel, encryptionConfig vo.E
 		nodeStatus,
 		metadata,
 		model.GroupID,
-		planIDs,
 		model.TokenHash,
 		model.APIToken,
 		model.SortOrder,
@@ -160,19 +151,6 @@ func (m *NodeMapperImpl) ToModel(entity *node.Node) (*models.NodeModel, error) {
 		tagsJSON = tagsBytes
 	}
 
-	// Prepare subscription plan IDs JSON
-	var planIDsJSON datatypes.JSON
-	planIDs := entity.PlanIDs()
-	if len(planIDs) > 0 {
-		idsBytes, err := json.Marshal(planIDs)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal plan_ids: %w", err)
-		}
-		planIDsJSON = idsBytes
-	} else {
-		planIDsJSON = []byte("[]")
-	}
-
 	// Prepare region
 	var region *string
 	if entity.Metadata().Region() != "" {
@@ -192,7 +170,6 @@ func (m *NodeMapperImpl) ToModel(entity *node.Node) (*models.NodeModel, error) {
 		GroupID:           entity.GroupID(),
 		Region:            region,
 		Tags:              tagsJSON,
-		PlanIDs:           planIDsJSON,
 		SortOrder:         entity.SortOrder(),
 		MaintenanceReason: entity.MaintenanceReason(),
 		TokenHash:         entity.TokenHash(),

@@ -60,6 +60,20 @@ func (r *PlanRepositoryImpl) GetByID(ctx context.Context, id uint) (*subscriptio
 	return r.toEntity(&model)
 }
 
+func (r *PlanRepositoryImpl) GetByIDs(ctx context.Context, ids []uint) ([]*subscription.Plan, error) {
+	if len(ids) == 0 {
+		return []*subscription.Plan{}, nil
+	}
+
+	var planModels []*models.PlanModel
+	if err := r.db.WithContext(ctx).Where("id IN ?", ids).Find(&planModels).Error; err != nil {
+		r.logger.Errorw("failed to get subscription plans by IDs", "error", err, "ids", ids)
+		return nil, fmt.Errorf("failed to get subscription plans by IDs: %w", err)
+	}
+
+	return r.toEntities(planModels)
+}
+
 func (r *PlanRepositoryImpl) GetBySID(ctx context.Context, sid string) (*subscription.Plan, error) {
 	var model models.PlanModel
 	if err := r.db.WithContext(ctx).Where("sid = ?", sid).First(&model).Error; err != nil {

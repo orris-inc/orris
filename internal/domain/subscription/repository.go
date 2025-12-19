@@ -36,6 +36,7 @@ type SubscriptionFilter struct {
 type PlanRepository interface {
 	Create(ctx context.Context, plan *Plan) error
 	GetByID(ctx context.Context, id uint) (*Plan, error)
+	GetByIDs(ctx context.Context, ids []uint) ([]*Plan, error)
 	GetBySID(ctx context.Context, sid string) (*Plan, error)
 	GetBySlug(ctx context.Context, slug string) (*Plan, error)
 	Update(ctx context.Context, plan *Plan) error

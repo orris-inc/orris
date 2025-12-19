@@ -3,7 +3,6 @@ package models
 import (
 	"time"
 
-	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
 	"github.com/orris-inc/orris/internal/shared/constants"
@@ -11,17 +10,16 @@ import (
 
 // ForwardAgentModel represents the database persistence model for forward agents.
 type ForwardAgentModel struct {
-	ID            uint           `gorm:"primarykey"`
-	ShortID       string         `gorm:"not null;size:16;uniqueIndex:idx_forward_agent_short_id"` // external API identifier
-	Name          string         `gorm:"not null;size:100;index:idx_forward_agent_name"`
-	TokenHash     string         `gorm:"not null;size:64;index:idx_forward_agent_token_hash"`
-	APIToken      string         `gorm:"column:api_token;size:255"` // stored token for retrieval
-	PublicAddress string         `gorm:"size:255"`                  // public address for agent access (nullable)
-	TunnelAddress string         `gorm:"size:255"`                  // tunnel address for entry to connect to exit (nullable, overrides public_address)
-	Status        string         `gorm:"not null;default:enabled;size:20;index:idx_forward_agent_status"`
-	Remark        string         `gorm:"size:500"`
-	GroupID       *uint          `gorm:"index:idx_forward_agent_group_id"` // resource group ID for internal join
-	PlanIDs       datatypes.JSON `gorm:"column:plan_ids;default:'[]'"`     // JSON array of subscription plan IDs (deprecated)
+	ID            uint   `gorm:"primarykey"`
+	ShortID       string `gorm:"not null;size:16;uniqueIndex:idx_forward_agent_short_id"` // external API identifier
+	Name          string `gorm:"not null;size:100;index:idx_forward_agent_name"`
+	TokenHash     string `gorm:"not null;size:64;index:idx_forward_agent_token_hash"`
+	APIToken      string `gorm:"column:api_token;size:255"` // stored token for retrieval
+	PublicAddress string `gorm:"size:255"`                  // public address for agent access (nullable)
+	TunnelAddress string `gorm:"size:255"`                  // tunnel address for entry to connect to exit (nullable, overrides public_address)
+	Status        string `gorm:"not null;default:enabled;size:20;index:idx_forward_agent_status"`
+	Remark        string `gorm:"size:500"`
+	GroupID       *uint  `gorm:"index:idx_forward_agent_group_id"` // resource group ID
 	LastSeenAt    *time.Time
 	CreatedAt     time.Time
 	UpdatedAt     time.Time

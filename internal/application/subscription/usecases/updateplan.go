@@ -11,7 +11,7 @@ import (
 )
 
 type UpdatePlanCommand struct {
-	PlanID       uint
+	PlanSID      string
 	Description  *string
 	Limits       *map[string]interface{}
 	APIRateLimit *uint
@@ -44,13 +44,13 @@ func (uc *UpdatePlanUseCase) Execute(
 	ctx context.Context,
 	cmd UpdatePlanCommand,
 ) (*dto.PlanDTO, error) {
-	plan, err := uc.planRepo.GetByID(ctx, cmd.PlanID)
+	plan, err := uc.planRepo.GetBySID(ctx, cmd.PlanSID)
 	if err != nil {
-		uc.logger.Errorw("failed to get plan", "error", err, "plan_id", cmd.PlanID)
+		uc.logger.Errorw("failed to get plan", "error", err, "plan_sid", cmd.PlanSID)
 		return nil, fmt.Errorf("failed to get plan: %w", err)
 	}
 	if plan == nil {
-		return nil, fmt.Errorf("plan not found: %d", cmd.PlanID)
+		return nil, fmt.Errorf("plan not found: %s", cmd.PlanSID)
 	}
 
 	if cmd.Description != nil {
@@ -100,19 +100,21 @@ func (uc *UpdatePlanUseCase) Execute(
 	}
 
 	if err := uc.planRepo.Update(ctx, plan); err != nil {
-		uc.logger.Errorw("failed to update plan", "error", err, "plan_id", cmd.PlanID)
+		uc.logger.Errorw("failed to update plan", "error", err, "plan_id", plan.ID())
 		return nil, fmt.Errorf("failed to update plan: %w", err)
 	}
 
+	planID := plan.ID()
+
 	// Sync pricing options if provided (delete old, create new)
 	if cmd.Pricings != nil {
-		uc.logger.Infow("syncing pricing options", "plan_id", cmd.PlanID, "count", len(*cmd.Pricings))
+		uc.logger.Infow("syncing pricing options", "plan_id", planID, "count", len(*cmd.Pricings))
 
 		// Delete all existing pricings for this plan
-		if err := uc.pricingRepo.DeleteByPlanID(ctx, cmd.PlanID); err != nil {
+		if err := uc.pricingRepo.DeleteByPlanID(ctx, planID); err != nil {
 			uc.logger.Errorw("failed to delete existing pricings",
 				"error", err,
-				"plan_id", cmd.PlanID)
+				"plan_id", planID)
 			return nil, fmt.Errorf("failed to delete existing pricings: %w", err)
 		}
 
@@ -124,16 +126,16 @@ func (uc *UpdatePlanUseCase) Execute(
 				uc.logger.Errorw("invalid billing cycle in pricing",
 					"error", err,
 					"billing_cycle", pricingInput.BillingCycle,
-					"plan_id", cmd.PlanID)
+					"plan_id", planID)
 				return nil, fmt.Errorf("invalid billing cycle '%s': %w", pricingInput.BillingCycle, err)
 			}
 
 			// Create pricing value object
-			pricing, err := vo.NewPlanPricing(cmd.PlanID, *cycle, pricingInput.Price, pricingInput.Currency)
+			pricing, err := vo.NewPlanPricing(planID, *cycle, pricingInput.Price, pricingInput.Currency)
 			if err != nil {
 				uc.logger.Errorw("failed to create pricing",
 					"error", err,
-					"plan_id", cmd.PlanID,
+					"plan_id", planID,
 					"billing_cycle", pricingInput.BillingCycle)
 				return nil, fmt.Errorf("failed to create pricing for cycle '%s': %w", pricingInput.BillingCycle, err)
 			}
@@ -147,21 +149,21 @@ func (uc *UpdatePlanUseCase) Execute(
 			if err := uc.pricingRepo.Create(ctx, pricing); err != nil {
 				uc.logger.Errorw("failed to persist pricing",
 					"error", err,
-					"plan_id", cmd.PlanID,
+					"plan_id", planID,
 					"billing_cycle", pricingInput.BillingCycle)
 				return nil, fmt.Errorf("failed to persist pricing: %w", err)
 			}
 		}
 
 		uc.logger.Infow("pricing options synced successfully",
-			"plan_id", cmd.PlanID,
+			"plan_id", planID,
 			"count", len(*cmd.Pricings))
 	}
 
 	// Reload the plan from database to get the accurate state after update
-	updatedPlan, err := uc.planRepo.GetByID(ctx, cmd.PlanID)
+	updatedPlan, err := uc.planRepo.GetByID(ctx, planID)
 	if err != nil {
-		uc.logger.Errorw("failed to reload updated plan", "error", err, "plan_id", cmd.PlanID)
+		uc.logger.Errorw("failed to reload updated plan", "error", err, "plan_id", planID)
 		return nil, fmt.Errorf("failed to reload updated plan: %w", err)
 	}
 

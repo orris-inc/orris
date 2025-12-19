@@ -118,4 +118,5 @@ type AgentListFilter struct {
 	Status   string
 	OrderBy  string
 	Order    string
+	GroupIDs []uint // Filter by resource group IDs
 }

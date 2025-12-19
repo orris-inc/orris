@@ -6,20 +6,23 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/resource/dto"
 	"github.com/orris-inc/orris/internal/domain/resource"
+	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // UpdateResourceGroupUseCase handles updating a resource group
 type UpdateResourceGroupUseCase struct {
-	repo   resource.Repository
-	logger logger.Interface
+	repo     resource.Repository
+	planRepo subscription.PlanRepository
+	logger   logger.Interface
 }
 
 // NewUpdateResourceGroupUseCase creates a new UpdateResourceGroupUseCase
-func NewUpdateResourceGroupUseCase(repo resource.Repository, logger logger.Interface) *UpdateResourceGroupUseCase {
+func NewUpdateResourceGroupUseCase(repo resource.Repository, planRepo subscription.PlanRepository, logger logger.Interface) *UpdateResourceGroupUseCase {
 	return &UpdateResourceGroupUseCase{
-		repo:   repo,
-		logger: logger,
+		repo:     repo,
+		planRepo: planRepo,
+		logger:   logger,
 	}
 }
 
@@ -64,11 +67,20 @@ func (uc *UpdateResourceGroupUseCase) Execute(ctx context.Context, id uint, req 
 
 	uc.logger.Infow("resource group updated successfully", "id", id, "sid", group.SID())
 
+	// Get plan SID
+	planSID := ""
+	plan, err := uc.planRepo.GetByID(ctx, group.PlanID())
+	if err != nil {
+		uc.logger.Warnw("failed to get plan for SID lookup", "error", err, "plan_id", group.PlanID())
+	} else if plan != nil {
+		planSID = plan.SID()
+	}
+
 	return &dto.ResourceGroupResponse{
 		ID:          group.ID(),
 		SID:         group.SID(),
 		Name:        group.Name(),
-		PlanID:      group.PlanID(),
+		PlanSID:     planSID,
 		Description: group.Description(),
 		Status:      string(group.Status()),
 		CreatedAt:   group.CreatedAt(),
