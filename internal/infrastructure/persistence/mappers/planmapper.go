@@ -48,7 +48,7 @@ func (m *planMapper) ToEntity(model *models.PlanModel) (*subscription.Plan, erro
 
 	// Parse limits JSON
 	var features *vo.PlanFeatures
-	if model.Limits != nil && len(model.Limits) > 0 {
+	if len(model.Limits) > 0 {
 		var limits map[string]interface{}
 		if err := json.Unmarshal(model.Limits, &limits); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal limits: %w", err)
@@ -58,7 +58,7 @@ func (m *planMapper) ToEntity(model *models.PlanModel) (*subscription.Plan, erro
 
 	// Parse metadata JSON
 	var metadata map[string]interface{}
-	if model.Metadata != nil && len(model.Metadata) > 0 {
+	if len(model.Metadata) > 0 {
 		if err := json.Unmarshal(model.Metadata, &metadata); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal metadata: %w", err)
 		}
@@ -74,7 +74,6 @@ func (m *planMapper) ToEntity(model *models.PlanModel) (*subscription.Plan, erro
 		model.Name,
 		model.Slug,
 		model.Description,
-		model.TrialDays,
 		model.Status,
 		planType,
 		features,
@@ -128,7 +127,6 @@ func (m *planMapper) ToModel(entity *subscription.Plan) (*models.PlanModel, erro
 		Slug:         entity.Slug(),
 		PlanType:     entity.PlanType().String(),
 		Description:  entity.Description(),
-		TrialDays:    entity.TrialDays(),
 		Status:       string(entity.Status()),
 		Limits:       limitsJSON,
 		APIRateLimit: entity.APIRateLimit(),

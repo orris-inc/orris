@@ -112,7 +112,6 @@ func (r *PlanRepositoryImpl) Update(ctx context.Context, plan *subscription.Plan
 		Updates(map[string]interface{}{
 			"name":           model.Name,
 			"description":    model.Description,
-			"trial_days":     model.TrialDays,
 			"status":         model.Status,
 			"limits":         model.Limits,
 			"api_rate_limit": model.APIRateLimit,
@@ -276,7 +275,6 @@ func (r *PlanRepositoryImpl) toEntity(model *models.PlanModel) (*subscription.Pl
 		model.Name,
 		model.Slug,
 		model.Description,
-		model.TrialDays,
 		model.Status,
 		model.PlanType,
 		features,
@@ -322,7 +320,6 @@ func (r *PlanRepositoryImpl) toModel(plan *subscription.Plan) (*models.PlanModel
 		Slug:         plan.Slug(),
 		PlanType:     plan.PlanType().String(),
 		Description:  plan.Description(),
-		TrialDays:    plan.TrialDays(),
 		Status:       string(plan.Status()),
 		Limits:       limitsJSON,
 		APIRateLimit: plan.APIRateLimit(),

@@ -45,10 +45,7 @@ func NewValidateSubscriptionTokenUseCase(
 }
 
 func (uc *ValidateSubscriptionTokenUseCase) Execute(ctx context.Context, cmd ValidateSubscriptionTokenCommand) (*ValidateSubscriptionTokenResult, error) {
-	_, tokenHash, err := uc.tokenGenerator.Generate("")
-	if err != nil {
-		return nil, fmt.Errorf("failed to hash token: %w", err)
-	}
+	tokenHash := uc.tokenGenerator.Hash(cmd.PlainToken)
 
 	token, err := uc.tokenRepo.GetByTokenHash(ctx, tokenHash)
 	if err != nil {

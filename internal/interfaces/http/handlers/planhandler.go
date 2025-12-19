@@ -61,7 +61,6 @@ type CreatePlanRequest struct {
 	Slug         string                      `json:"slug" binding:"required"`
 	Description  string                      `json:"description"`
 	PlanType     string                      `json:"plan_type" binding:"required,oneof=node forward"`
-	TrialDays    int                         `json:"trial_days"`
 	Limits       map[string]interface{}      `json:"limits"`
 	APIRateLimit uint                        `json:"api_rate_limit"`
 	MaxUsers     uint                        `json:"max_users"`
@@ -100,7 +99,6 @@ func (h *PlanHandler) CreatePlan(c *gin.Context) {
 		Slug:         req.Slug,
 		Description:  req.Description,
 		PlanType:     req.PlanType,
-		TrialDays:    req.TrialDays,
 		Limits:       req.Limits,
 		APIRateLimit: req.APIRateLimit,
 		MaxUsers:     req.MaxUsers,

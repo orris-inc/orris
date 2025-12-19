@@ -21,7 +21,6 @@ type Plan struct {
 	name         string
 	slug         string
 	description  string
-	trialDays    int
 	status       PlanStatus
 	planType     vo.PlanType
 	features     *vo.PlanFeatures
@@ -36,7 +35,7 @@ type Plan struct {
 	updatedAt    time.Time
 }
 
-func NewPlan(name, slug, description string, trialDays int, planType vo.PlanType) (*Plan, error) {
+func NewPlan(name, slug, description string, planType vo.PlanType) (*Plan, error) {
 
 	if name == "" {
 		return nil, fmt.Errorf("plan name is required")
@@ -49,9 +48,6 @@ func NewPlan(name, slug, description string, trialDays int, planType vo.PlanType
 	}
 	if len(slug) > 100 {
 		return nil, fmt.Errorf("plan slug too long (max 100 characters)")
-	}
-	if trialDays < 0 {
-		return nil, fmt.Errorf("trial days cannot be negative")
 	}
 	if !planType.IsValid() {
 		return nil, fmt.Errorf("invalid plan type: %s", planType)
@@ -69,7 +65,6 @@ func NewPlan(name, slug, description string, trialDays int, planType vo.PlanType
 		name:         name,
 		slug:         slug,
 		description:  description,
-		trialDays:    trialDays,
 		status:       PlanStatusActive,
 		planType:     planType,
 		features:     nil,
@@ -86,7 +81,7 @@ func NewPlan(name, slug, description string, trialDays int, planType vo.PlanType
 }
 
 func ReconstructPlan(id uint, sid string, name, slug, description string,
-	trialDays int, status string, planType string, features *vo.PlanFeatures,
+	status string, planType string, features *vo.PlanFeatures,
 	apiRateLimit, maxUsers, maxProjects uint, isPublic bool, sortOrder int,
 	metadata map[string]interface{}, version int,
 	createdAt, updatedAt time.Time) (*Plan, error) {
@@ -118,7 +113,6 @@ func ReconstructPlan(id uint, sid string, name, slug, description string,
 		name:         name,
 		slug:         slug,
 		description:  description,
-		trialDays:    trialDays,
 		status:       planStatus,
 		planType:     pt,
 		features:     features,
@@ -169,10 +163,6 @@ func (p *Plan) Slug() string {
 
 func (p *Plan) Description() string {
 	return p.description
-}
-
-func (p *Plan) TrialDays() int {
-	return p.trialDays
 }
 
 func (p *Plan) Status() PlanStatus {

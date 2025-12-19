@@ -21,7 +21,6 @@ var (
 	ErrUsageLimitExceeded      = errors.New("usage limit exceeded")
 	ErrInvalidBillingCycle     = errors.New("invalid billing cycle")
 	ErrInvalidPrice            = errors.New("invalid price")
-	ErrInvalidTrialDays        = errors.New("invalid trial days")
 )
 
 func ErrInvalidTransition(from, to string) error {

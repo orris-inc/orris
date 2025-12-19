@@ -34,7 +34,6 @@ type PlanDTO struct {
 	Name         string                 `json:"name"`
 	Slug         string                 `json:"slug"`
 	Description  string                 `json:"description"`
-	TrialDays    int                    `json:"trial_days"`
 	Status       string                 `json:"status"`
 	PlanType     string                 `json:"plan_type"` // Plan type: node or forward
 	Limits       map[string]interface{} `json:"limits"`
@@ -167,7 +166,6 @@ func ToPlanDTO(plan *subscription.Plan) *PlanDTO {
 		Name:         plan.Name(),
 		Slug:         plan.Slug(),
 		Description:  plan.Description(),
-		TrialDays:    plan.TrialDays(),
 		Status:       string(plan.Status()),
 		PlanType:     plan.PlanType().String(),
 		Limits:       limits,

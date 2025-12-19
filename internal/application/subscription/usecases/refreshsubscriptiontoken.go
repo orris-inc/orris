@@ -82,16 +82,29 @@ func (uc *RefreshSubscriptionTokenUseCase) Execute(ctx context.Context, cmd Refr
 		return nil, fmt.Errorf("failed to create token: %w", err)
 	}
 
+	// Create new token first to ensure user always has a valid token
+	// This prevents data inconsistency where old token is revoked but new token creation fails
 	if err := uc.tokenRepo.Create(ctx, newToken); err != nil {
 		uc.logger.Errorw("failed to persist new token", "error", err)
 		return nil, fmt.Errorf("failed to save token: %w", err)
 	}
 
+	// Revoke old token after new token is successfully created
+	// Brief window of two valid tokens is acceptable to prevent service disruption
 	if err := oldToken.Revoke(); err != nil {
-		uc.logger.Warnw("failed to revoke old token", "error", err, "old_token_id", cmd.OldTokenID)
+		uc.logger.Warnw("failed to revoke old token, new token still valid",
+			"error", err,
+			"old_token_id", cmd.OldTokenID,
+			"new_token_id", newToken.ID(),
+		)
+		// Continue - new token is valid, old token revocation is best-effort
 	} else {
 		if err := uc.tokenRepo.Update(ctx, oldToken); err != nil {
-			uc.logger.Warnw("failed to update old token status", "error", err, "old_token_id", cmd.OldTokenID)
+			uc.logger.Warnw("failed to update old token status, new token still valid",
+				"error", err,
+				"old_token_id", cmd.OldTokenID,
+			)
+			// Continue - new token is valid, old token status update is best-effort
 		}
 	}
 

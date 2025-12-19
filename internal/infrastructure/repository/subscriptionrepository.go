@@ -113,8 +113,9 @@ func (r *SubscriptionRepositoryImpl) GetByUserID(ctx context.Context, userID uin
 func (r *SubscriptionRepositoryImpl) GetActiveByUserID(ctx context.Context, userID uint) ([]*subscription.Subscription, error) {
 	var models []*models.SubscriptionModel
 
+	// Query both active and trialing status for compatibility
 	if err := r.db.WithContext(ctx).
-		Where("user_id = ? AND status = ?", userID, valueobjects.StatusActive).
+		Where("user_id = ? AND status IN ?", userID, []string{string(valueobjects.StatusActive), string(valueobjects.StatusTrialing)}).
 		Order("created_at DESC").
 		Find(&models).Error; err != nil {
 		r.logger.Errorw("failed to get active subscriptions by user ID", "user_id", userID, "error", err)
@@ -176,10 +177,10 @@ func (r *SubscriptionRepositoryImpl) GetActiveSubscriptionsByNodeID(ctx context.
 		return []*subscription.Subscription{}, nil
 	}
 
-	// Query active subscriptions for these plans
+	// Query active subscriptions for these plans (including trialing status for compatibility)
 	var subscriptionModels []*models.SubscriptionModel
 	if err := r.db.WithContext(ctx).
-		Where("plan_id IN ? AND status = ?", planIDs, valueobjects.StatusActive).
+		Where("plan_id IN ? AND status IN ?", planIDs, []string{string(valueobjects.StatusActive), string(valueobjects.StatusTrialing)}).
 		Order("created_at DESC").
 		Find(&subscriptionModels).Error; err != nil {
 		r.logger.Errorw("failed to query active subscriptions", "plan_ids", planIDs, "error", err)
@@ -220,6 +221,7 @@ func (r *SubscriptionRepositoryImpl) Update(ctx context.Context, subscriptionEnt
 			"auto_renew":           model.AutoRenew,
 			"current_period_start": model.CurrentPeriodStart,
 			"current_period_end":   model.CurrentPeriodEnd,
+			"link_token":           model.LinkToken,
 			"cancelled_at":         model.CancelledAt,
 			"cancel_reason":        model.CancelReason,
 			"metadata":             model.Metadata,

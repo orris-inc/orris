@@ -153,16 +153,13 @@ func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, cmd CreateSubs
 		startDate = time.Now()
 	}
 
+	// Calculate subscription end date based on billing cycle
 	endDate := uc.calculateEndDate(startDate, billingCycle)
 
 	sub, err := subscription.NewSubscription(userID, planID, startDate, endDate, cmd.AutoRenew)
 	if err != nil {
 		uc.logger.Errorw("failed to create subscription aggregate", "error", err)
 		return nil, fmt.Errorf("failed to create subscription: %w", err)
-	}
-
-	if plan.TrialDays() > 0 {
-
 	}
 
 	if err := uc.subscriptionRepo.Create(ctx, sub); err != nil {
@@ -183,9 +180,26 @@ func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, cmd CreateSubs
 		uc.logger.Infow("subscription activated immediately", "subscription_id", sub.ID())
 	}
 
+	// Create default token - this is critical for subscription usability
+	// Token creation failure should fail the entire subscription creation
 	token, plainToken, err := uc.createDefaultToken(ctx, sub.ID())
 	if err != nil {
-		uc.logger.Warnw("failed to create default token", "error", err, "subscription_id", sub.ID())
+		uc.logger.Errorw("failed to create default token", "error", err, "subscription_id", sub.ID())
+
+		// Rollback: delete the subscription to maintain data consistency
+		if deleteErr := uc.subscriptionRepo.Delete(ctx, sub.ID()); deleteErr != nil {
+			uc.logger.Errorw("failed to rollback subscription after token creation failure",
+				"error", deleteErr,
+				"subscription_id", sub.ID(),
+			)
+			// Return original error but log the rollback failure
+		} else {
+			uc.logger.Infow("subscription rolled back after token creation failure",
+				"subscription_id", sub.ID(),
+			)
+		}
+
+		return nil, fmt.Errorf("failed to create default token for subscription: %w", err)
 	}
 
 	uc.logger.Infow("subscription created successfully",

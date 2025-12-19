@@ -19,7 +19,6 @@ type PlanModel struct {
 	Slug         string `gorm:"uniqueIndex;not null;size:50"`
 	PlanType     string `gorm:"not null;size:20;default:node"`
 	Description  string `gorm:"size:500"`
-	TrialDays    int    `gorm:"default:0"`
 	Status       string `gorm:"not null;size:20;default:active"`
 	Limits       datatypes.JSON
 	APIRateLimit uint `gorm:"default:60"`

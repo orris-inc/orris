@@ -14,7 +14,6 @@ type CreatePlanCommand struct {
 	Name         string
 	Slug         string
 	Description  string
-	TrialDays    int
 	PlanType     string // Required: "node" or "forward"
 	Limits       map[string]interface{}
 	APIRateLimit uint
@@ -72,7 +71,6 @@ func (uc *CreatePlanUseCase) Execute(
 		cmd.Name,
 		cmd.Slug,
 		cmd.Description,
-		cmd.TrialDays,
 		planType,
 	)
 	if err != nil {

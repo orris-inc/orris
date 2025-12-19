@@ -70,7 +70,7 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 
 	// Parse chain_agent_ids JSON
 	var chainAgentIDs []uint
-	if model.ChainAgentIDs != nil && len(model.ChainAgentIDs) > 0 {
+	if len(model.ChainAgentIDs) > 0 {
 		if err := json.Unmarshal(model.ChainAgentIDs, &chainAgentIDs); err != nil {
 			return nil, fmt.Errorf("failed to parse chain_agent_ids: %w", err)
 		}
@@ -78,7 +78,7 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 
 	// Parse chain_port_config JSON
 	var chainPortConfig map[uint]uint16
-	if model.ChainPortConfig != nil && len(model.ChainPortConfig) > 0 {
+	if len(model.ChainPortConfig) > 0 {
 		// JSON unmarshals numeric keys as strings, so we need to handle this
 		var rawConfig map[string]uint16
 		if err := json.Unmarshal(model.ChainPortConfig, &rawConfig); err != nil {

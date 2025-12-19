@@ -338,7 +338,7 @@ func (s *Subscription) Activate() error {
 		return nil
 	}
 
-	if s.status != vo.StatusInactive && s.status != vo.StatusPendingPayment && s.status != vo.StatusTrialing {
+	if s.status != vo.StatusInactive && s.status != vo.StatusPendingPayment {
 		return fmt.Errorf("cannot activate subscription with status %s", s.status)
 	}
 
@@ -359,7 +359,7 @@ func (s *Subscription) Cancel(reason string) error {
 		return nil
 	}
 
-	if s.status != vo.StatusActive && s.status != vo.StatusTrialing {
+	if s.status != vo.StatusActive {
 		return fmt.Errorf("cannot cancel subscription with status %s", s.status)
 	}
 
@@ -413,7 +413,7 @@ func (s *Subscription) ChangePlan(newPlanID uint) error {
 		return nil
 	}
 
-	if s.status != vo.StatusActive && s.status != vo.StatusTrialing {
+	if s.status != vo.StatusActive {
 		return fmt.Errorf("cannot change plan for subscription with status %s", s.status)
 	}
 
