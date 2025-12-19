@@ -11,7 +11,8 @@ import (
 type SubscriptionDTO struct {
 	SID                string     `json:"id"`      // Stripe-style ID: sub_xxx
 	UserSID            string     `json:"user_id"` // User's Stripe-style ID
-	UUID               string     `json:"uuid"`    // UUID for node authentication (kept for backward compatibility)
+	UUID               string     `json:"uuid"`    // UUID for internal use (kept for backward compatibility)
+	LinkToken          string     `json:"link_token"`
 	SubscribeURL       string     `json:"subscribe_url"`
 	Plan               *PlanDTO   `json:"plan,omitempty"`
 	Status             string     `json:"status"`
@@ -112,10 +113,11 @@ func toSubscriptionDTOInternal(sub *subscription.Subscription, plan *subscriptio
 		return nil
 	}
 
-	// Build subscribe URL: {baseURL}/s/{uuid}
+	// Build subscribe URL: {baseURL}/s/{link_token}
+	// Using LinkToken instead of UUID for better security (256 bits vs 122 bits)
 	subscribeURL := ""
-	if baseURL != "" && sub.UUID() != "" {
-		subscribeURL = fmt.Sprintf("%s/s/%s", baseURL, sub.UUID())
+	if baseURL != "" && sub.LinkToken() != "" {
+		subscribeURL = fmt.Sprintf("%s/s/%s", baseURL, sub.LinkToken())
 	}
 
 	// User SID will be set by the use case layer
@@ -126,6 +128,7 @@ func toSubscriptionDTOInternal(sub *subscription.Subscription, plan *subscriptio
 		SID:                sub.SID(),
 		UserSID:            userSID,
 		UUID:               sub.UUID(),
+		LinkToken:          sub.LinkToken(),
 		SubscribeURL:       subscribeURL,
 		Status:             sub.Status().String(),
 		StartDate:          sub.StartDate(),

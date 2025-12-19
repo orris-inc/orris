@@ -66,16 +66,15 @@ func (uc *ManageResourceGroupNodesUseCase) AddNodes(ctx context.Context, groupID
 			continue
 		}
 
-		// Check if already in a group
-		if n.GroupID() != nil && *n.GroupID() == groupID {
+		// Check if already in this group
+		if n.HasGroupID(groupID) {
 			// Already in this group, count as success
 			result.Succeeded = append(result.Succeeded, nodeSID)
 			continue
 		}
 
-		// Set group ID and update
-		gid := groupID
-		n.SetGroupID(&gid)
+		// Add group ID and update
+		n.AddGroupID(groupID)
 		if err := uc.nodeRepo.Update(ctx, n); err != nil {
 			uc.logger.Errorw("failed to update node", "error", err, "node_sid", nodeSID)
 			result.Failed = append(result.Failed, dto.BatchOperationErr{
@@ -133,7 +132,7 @@ func (uc *ManageResourceGroupNodesUseCase) RemoveNodes(ctx context.Context, grou
 		}
 
 		// Check if the node belongs to this group
-		if n.GroupID() == nil || *n.GroupID() != groupID {
+		if !n.HasGroupID(groupID) {
 			result.Failed = append(result.Failed, dto.BatchOperationErr{
 				ID:     nodeSID,
 				Reason: "node does not belong to this group",
@@ -142,7 +141,7 @@ func (uc *ManageResourceGroupNodesUseCase) RemoveNodes(ctx context.Context, grou
 		}
 
 		// Remove group ID
-		n.SetGroupID(nil)
+		n.RemoveGroupID(groupID)
 		if err := uc.nodeRepo.Update(ctx, n); err != nil {
 			uc.logger.Errorw("failed to update node", "error", err, "node_sid", nodeSID)
 			result.Failed = append(result.Failed, dto.BatchOperationErr{
@@ -189,14 +188,37 @@ func (uc *ManageResourceGroupNodesUseCase) ListNodes(ctx context.Context, groupI
 	}
 
 	// Convert to response DTOs
-	items := make([]dto.NodeSummaryResponse, 0, len(nodes))
-	groupSID := group.SID()
+	// Build a map of groupID -> groupSID for all groups the nodes belong to
+	groupIDSet := make(map[uint]bool)
 	for _, n := range nodes {
+		for _, gid := range n.GroupIDs() {
+			groupIDSet[gid] = true
+		}
+	}
+	groupIDToSID := make(map[uint]string)
+	groupIDToSID[groupID] = group.SID() // Current group is already loaded
+	for gid := range groupIDSet {
+		if gid != groupID {
+			g, err := uc.resourceGroupRepo.GetByID(ctx, gid)
+			if err == nil && g != nil {
+				groupIDToSID[gid] = g.SID()
+			}
+		}
+	}
+
+	items := make([]dto.NodeSummaryResponse, 0, len(nodes))
+	for _, n := range nodes {
+		groupSIDs := make([]string, 0, len(n.GroupIDs()))
+		for _, gid := range n.GroupIDs() {
+			if sid, ok := groupIDToSID[gid]; ok {
+				groupSIDs = append(groupSIDs, sid)
+			}
+		}
 		items = append(items, dto.NodeSummaryResponse{
 			ID:        n.SID(),
 			Name:      n.Name(),
 			Status:    n.Status().String(),
-			GroupSID:  &groupSID,
+			GroupSIDs: groupSIDs,
 			CreatedAt: n.CreatedAt(),
 		})
 	}

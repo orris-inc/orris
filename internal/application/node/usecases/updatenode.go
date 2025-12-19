@@ -82,10 +82,10 @@ func (uc *UpdateNodeUseCase) Execute(ctx context.Context, cmd UpdateNodeCommand)
 	// Handle GroupSID update (resolve SID to internal ID)
 	if cmd.GroupSID != nil {
 		if *cmd.GroupSID == "" {
-			// Empty string means remove the association
-			existingNode.SetGroupID(nil)
+			// Empty string means remove all group associations
+			existingNode.SetGroupIDs(nil)
 		} else {
-			// Resolve group SID to internal ID
+			// Resolve group SID to internal ID and set as the only group
 			group, err := uc.resourceGroupRepo.GetBySID(ctx, *cmd.GroupSID)
 			if err != nil {
 				uc.logger.Errorw("failed to get resource group by SID", "group_sid", *cmd.GroupSID, "error", err)
@@ -94,8 +94,7 @@ func (uc *UpdateNodeUseCase) Execute(ctx context.Context, cmd UpdateNodeCommand)
 			if group == nil {
 				return nil, errors.NewNotFoundError("resource group not found")
 			}
-			groupID := group.ID()
-			existingNode.SetGroupID(&groupID)
+			existingNode.SetGroupIDs([]uint{group.ID()})
 		}
 	}
 

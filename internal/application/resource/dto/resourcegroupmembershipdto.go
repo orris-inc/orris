@@ -27,7 +27,7 @@ type NodeSummaryResponse struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
 	Status    string    `json:"status"`
-	GroupSID  *string   `json:"group_id,omitempty"`
+	GroupSIDs []string  `json:"group_ids,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 

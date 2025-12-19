@@ -6,6 +6,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/node/dto"
 	domainNode "github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/domain/resource"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -38,21 +39,24 @@ type NodeSystemStatus struct {
 
 // GetNodeUseCase handles the business logic for retrieving a node
 type GetNodeUseCase struct {
-	nodeRepo      domainNode.NodeRepository
-	statusQuerier NodeSystemStatusQuerier
-	logger        logger.Interface
+	nodeRepo          domainNode.NodeRepository
+	resourceGroupRepo resource.Repository
+	statusQuerier     NodeSystemStatusQuerier
+	logger            logger.Interface
 }
 
 // NewGetNodeUseCase creates a new get node use case
 func NewGetNodeUseCase(
 	nodeRepo domainNode.NodeRepository,
+	resourceGroupRepo resource.Repository,
 	statusQuerier NodeSystemStatusQuerier,
 	logger logger.Interface,
 ) *GetNodeUseCase {
 	return &GetNodeUseCase{
-		nodeRepo:      nodeRepo,
-		statusQuerier: statusQuerier,
-		logger:        logger,
+		nodeRepo:          nodeRepo,
+		resourceGroupRepo: resourceGroupRepo,
+		statusQuerier:     statusQuerier,
+		logger:            logger,
 	}
 }
 
@@ -80,6 +84,27 @@ func (uc *GetNodeUseCase) Execute(ctx context.Context, query GetNodeQuery) (*Get
 
 	// Map to DTO
 	nodeDTO := dto.ToNodeDTO(nodeEntity)
+
+	// Resolve GroupIDs to GroupSIDs
+	if len(nodeEntity.GroupIDs()) > 0 {
+		groupSIDs := make([]string, 0, len(nodeEntity.GroupIDs()))
+		for _, groupID := range nodeEntity.GroupIDs() {
+			group, err := uc.resourceGroupRepo.GetByID(ctx, groupID)
+			if err != nil {
+				uc.logger.Warnw("failed to get resource group, skipping",
+					"group_id", groupID,
+					"error", err,
+				)
+				continue
+			}
+			if group != nil {
+				groupSIDs = append(groupSIDs, group.SID())
+			}
+		}
+		if len(groupSIDs) > 0 {
+			nodeDTO.GroupSIDs = groupSIDs
+		}
+	}
 
 	// Query system status from Redis using internal ID
 	systemStatus, err := uc.statusQuerier.GetNodeSystemStatus(ctx, nodeEntity.ID())

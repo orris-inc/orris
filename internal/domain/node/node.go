@@ -25,7 +25,7 @@ type Node struct {
 	trojanConfig      *vo.TrojanConfig
 	status            vo.NodeStatus
 	metadata          vo.NodeMetadata
-	groupID           *uint // resource group ID
+	groupIDs          []uint // resource group IDs
 	apiToken          string
 	tokenHash         string
 	sortOrder         int
@@ -122,7 +122,7 @@ func ReconstructNode(
 	trojanConfig *vo.TrojanConfig,
 	status vo.NodeStatus,
 	metadata vo.NodeMetadata,
-	groupID *uint,
+	groupIDs []uint,
 	tokenHash string,
 	apiToken string,
 	sortOrder int,
@@ -165,7 +165,7 @@ func ReconstructNode(
 		trojanConfig:      trojanConfig,
 		status:            status,
 		metadata:          metadata,
-		groupID:           groupID,
+		groupIDs:          groupIDs,
 		tokenHash:         tokenHash,
 		apiToken:          apiToken,
 		sortOrder:         sortOrder,
@@ -249,16 +249,52 @@ func (n *Node) Metadata() vo.NodeMetadata {
 	return n.metadata
 }
 
-// GroupID returns the resource group ID
-func (n *Node) GroupID() *uint {
-	return n.groupID
+// GroupIDs returns the resource group IDs
+func (n *Node) GroupIDs() []uint {
+	return n.groupIDs
 }
 
-// SetGroupID sets the resource group ID
-func (n *Node) SetGroupID(groupID *uint) {
-	n.groupID = groupID
+// SetGroupIDs sets the resource group IDs
+func (n *Node) SetGroupIDs(groupIDs []uint) {
+	n.groupIDs = groupIDs
 	n.updatedAt = time.Now()
 	n.version++
+}
+
+// AddGroupID adds a resource group ID if not already present
+func (n *Node) AddGroupID(groupID uint) bool {
+	for _, id := range n.groupIDs {
+		if id == groupID {
+			return false // already exists
+		}
+	}
+	n.groupIDs = append(n.groupIDs, groupID)
+	n.updatedAt = time.Now()
+	n.version++
+	return true
+}
+
+// RemoveGroupID removes a resource group ID
+func (n *Node) RemoveGroupID(groupID uint) bool {
+	for i, id := range n.groupIDs {
+		if id == groupID {
+			n.groupIDs = append(n.groupIDs[:i], n.groupIDs[i+1:]...)
+			n.updatedAt = time.Now()
+			n.version++
+			return true
+		}
+	}
+	return false // not found
+}
+
+// HasGroupID checks if the node belongs to a specific resource group
+func (n *Node) HasGroupID(groupID uint) bool {
+	for _, id := range n.groupIDs {
+		if id == groupID {
+			return true
+		}
+	}
+	return false
 }
 
 // TokenHash returns the API token hash

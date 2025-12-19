@@ -5,6 +5,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/node/dto"
 	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/domain/resource"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	sharedquery "github.com/orris-inc/orris/internal/shared/query"
 )
@@ -45,20 +46,23 @@ type MultipleNodeSystemStatusQuerier interface {
 }
 
 type ListNodesUseCase struct {
-	nodeRepo      node.NodeRepository
-	statusQuerier MultipleNodeSystemStatusQuerier
-	logger        logger.Interface
+	nodeRepo          node.NodeRepository
+	resourceGroupRepo resource.Repository
+	statusQuerier     MultipleNodeSystemStatusQuerier
+	logger            logger.Interface
 }
 
 func NewListNodesUseCase(
 	nodeRepo node.NodeRepository,
+	resourceGroupRepo resource.Repository,
 	statusQuerier MultipleNodeSystemStatusQuerier,
 	logger logger.Interface,
 ) *ListNodesUseCase {
 	return &ListNodesUseCase{
-		nodeRepo:      nodeRepo,
-		statusQuerier: statusQuerier,
-		logger:        logger,
+		nodeRepo:          nodeRepo,
+		resourceGroupRepo: resourceGroupRepo,
+		statusQuerier:     statusQuerier,
+		logger:            logger,
 	}
 }
 
@@ -120,9 +124,45 @@ func (uc *ListNodesUseCase) Execute(ctx context.Context, query ListNodesQuery) (
 	// Collect node IDs for batch status query and create ID mapping
 	nodeIDs := make([]uint, 0, len(nodes))
 	idToIndexMap := make(map[uint]int, len(nodes))
+	// Collect unique group IDs for batch query
+	groupIDSet := make(map[uint]bool)
 	for i, n := range nodes {
 		nodeIDs = append(nodeIDs, n.ID())
 		idToIndexMap[n.ID()] = i
+		for _, gid := range n.GroupIDs() {
+			groupIDSet[gid] = true
+		}
+	}
+
+	// Batch query resource groups to resolve GroupID -> GroupSID
+	groupIDToSID := make(map[uint]string)
+	if len(groupIDSet) > 0 && uc.resourceGroupRepo != nil {
+		for groupID := range groupIDSet {
+			group, err := uc.resourceGroupRepo.GetByID(ctx, groupID)
+			if err != nil {
+				uc.logger.Warnw("failed to get resource group, skipping",
+					"group_id", groupID,
+					"error", err,
+				)
+				continue
+			}
+			if group != nil {
+				groupIDToSID[groupID] = group.SID()
+			}
+		}
+
+		// Set GroupSIDs for each node DTO
+		for i, n := range nodes {
+			groupSIDs := make([]string, 0, len(n.GroupIDs()))
+			for _, gid := range n.GroupIDs() {
+				if sid, ok := groupIDToSID[gid]; ok {
+					groupSIDs = append(groupSIDs, sid)
+				}
+			}
+			if len(groupSIDs) > 0 {
+				nodeDTOs[i].GroupSIDs = groupSIDs
+			}
+		}
 	}
 
 	// Query system status for all nodes from Redis

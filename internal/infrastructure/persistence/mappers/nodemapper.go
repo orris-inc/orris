@@ -99,6 +99,14 @@ func (m *NodeMapperImpl) ToEntity(model *models.NodeModel, encryptionConfig vo.E
 		sid = id.MustGenerate(id.DefaultLength)
 	}
 
+	// Parse groupIDs from JSON
+	var groupIDs []uint
+	if len(model.GroupIDs) > 0 {
+		if err := json.Unmarshal(model.GroupIDs, &groupIDs); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal group_ids: %w", err)
+		}
+	}
+
 	// Reconstruct the domain entity
 	// Protocol-specific configs are passed from caller
 	nodeEntity, err := node.ReconstructNode(
@@ -114,7 +122,7 @@ func (m *NodeMapperImpl) ToEntity(model *models.NodeModel, encryptionConfig vo.E
 		trojanConfig,
 		nodeStatus,
 		metadata,
-		model.GroupID,
+		groupIDs,
 		model.TokenHash,
 		model.APIToken,
 		model.SortOrder,
@@ -158,6 +166,17 @@ func (m *NodeMapperImpl) ToModel(entity *node.Node) (*models.NodeModel, error) {
 		region = &r
 	}
 
+	// Prepare groupIDs JSON
+	var groupIDsJSON datatypes.JSON
+	groupIDs := entity.GroupIDs()
+	if len(groupIDs) > 0 {
+		groupIDsBytes, err := json.Marshal(groupIDs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal group_ids: %w", err)
+		}
+		groupIDsJSON = groupIDsBytes
+	}
+
 	model := &models.NodeModel{
 		ID:                entity.ID(),
 		SID:               entity.SID(),
@@ -167,7 +186,7 @@ func (m *NodeMapperImpl) ToModel(entity *node.Node) (*models.NodeModel, error) {
 		SubscriptionPort:  entity.SubscriptionPort(),
 		Protocol:          entity.Protocol().String(),
 		Status:            entity.Status().String(),
-		GroupID:           entity.GroupID(),
+		GroupIDs:          groupIDsJSON,
 		Region:            region,
 		Tags:              tagsJSON,
 		SortOrder:         entity.SortOrder(),

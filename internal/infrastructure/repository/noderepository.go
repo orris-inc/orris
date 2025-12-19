@@ -283,24 +283,16 @@ func (r *NodeRepositoryImpl) Update(ctx context.Context, nodeEntity *node.Node) 
 
 	// Use transaction to update node and protocol config atomically
 	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Use Select to explicitly specify fields to update, including nullable fields like group_ids
+		// This ensures GORM updates NULL values correctly (without Select, GORM ignores nil values in map)
 		result := tx.Model(&models.NodeModel{}).
 			Where("id = ?", model.ID).
-			Updates(map[string]interface{}{
-				"name":               model.Name,
-				"server_address":     model.ServerAddress,
-				"agent_port":         model.AgentPort,
-				"subscription_port":  model.SubscriptionPort,
-				"protocol":           model.Protocol,
-				"status":             model.Status,
-				"region":             model.Region,
-				"tags":               model.Tags,
-				"sort_order":         model.SortOrder,
-				"maintenance_reason": model.MaintenanceReason,
-				"token_hash":         model.TokenHash,
-				"api_token":          model.APIToken,
-				"group_id":           model.GroupID,
-				"updated_at":         model.UpdatedAt,
-			})
+			Select(
+				"name", "server_address", "agent_port", "subscription_port",
+				"protocol", "status", "region", "tags", "sort_order",
+				"maintenance_reason", "token_hash", "api_token", "group_ids", "updated_at",
+			).
+			Updates(model)
 
 		if result.Error != nil {
 			if strings.Contains(result.Error.Error(), "Duplicate entry") || strings.Contains(result.Error.Error(), "duplicate key") {
@@ -397,7 +389,9 @@ func (r *NodeRepositoryImpl) List(ctx context.Context, filter node.NodeFilter) (
 		query = query.Where("JSON_CONTAINS(tags, ?)", fmt.Sprintf(`"%s"`, *filter.Tag))
 	}
 	if len(filter.GroupIDs) > 0 {
-		query = query.Where("group_id IN ?", filter.GroupIDs)
+		// Use JSON_OVERLAPS to check if group_ids array contains any of the filter group IDs
+		// JSON_OVERLAPS returns true if two JSON arrays have at least one element in common
+		query = query.Where("JSON_OVERLAPS(group_ids, ?)", fmt.Sprintf("[%s]", uintSliceToString(filter.GroupIDs)))
 	}
 
 	// Count total records
@@ -569,4 +563,17 @@ func (r *NodeRepositoryImpl) GetLastSeenAt(ctx context.Context, nodeID uint) (*t
 	}
 
 	return model.LastSeenAt, nil
+}
+
+// uintSliceToString converts a slice of uint to a comma-separated string
+// Used for JSON_OVERLAPS query parameter
+func uintSliceToString(ids []uint) string {
+	if len(ids) == 0 {
+		return ""
+	}
+	parts := make([]string, len(ids))
+	for i, id := range ids {
+		parts[i] = fmt.Sprintf("%d", id)
+	}
+	return strings.Join(parts, ",")
 }

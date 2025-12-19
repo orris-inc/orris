@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -110,10 +111,10 @@ func (r *SubscriptionRepositoryImpl) GetActiveByUserID(ctx context.Context, user
 }
 
 func (r *SubscriptionRepositoryImpl) GetActiveSubscriptionsByNodeID(ctx context.Context, nodeID uint) ([]*subscription.Subscription, error) {
-	// Get node's group_id from nodes table
+	// Get node's group_ids from nodes table
 	var nodeModel models.NodeModel
 	if err := r.db.WithContext(ctx).
-		Select("group_id").
+		Select("group_ids").
 		Where("id = ?", nodeID).
 		First(&nodeModel).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -124,33 +125,44 @@ func (r *SubscriptionRepositoryImpl) GetActiveSubscriptionsByNodeID(ctx context.
 		return nil, fmt.Errorf("failed to query node: %w", err)
 	}
 
-	// If node has no group_id, no subscriptions available
-	if nodeModel.GroupID == nil {
-		r.logger.Infow("node has no resource group", "node_id", nodeID)
+	// Parse group_ids from JSON
+	var groupIDs []uint
+	if len(nodeModel.GroupIDs) > 0 {
+		if err := json.Unmarshal(nodeModel.GroupIDs, &groupIDs); err != nil {
+			r.logger.Errorw("failed to unmarshal group_ids", "node_id", nodeID, "error", err)
+			return nil, fmt.Errorf("failed to parse group_ids: %w", err)
+		}
+	}
+
+	// If node has no group_ids, no subscriptions available
+	if len(groupIDs) == 0 {
+		r.logger.Infow("node has no resource groups", "node_id", nodeID)
 		return []*subscription.Subscription{}, nil
 	}
 
-	// Get the plan_id from resource_groups table
-	var resourceGroup models.ResourceGroupModel
+	// Get the plan_ids from resource_groups table
+	var planIDs []uint
 	if err := r.db.WithContext(ctx).
+		Table("resource_groups").
 		Select("plan_id").
-		Where("id = ? AND status = ?", *nodeModel.GroupID, "active").
-		First(&resourceGroup).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			r.logger.Infow("resource group not found or inactive", "group_id", *nodeModel.GroupID)
-			return []*subscription.Subscription{}, nil
-		}
-		r.logger.Errorw("failed to query resource group", "group_id", *nodeModel.GroupID, "error", err)
-		return nil, fmt.Errorf("failed to query resource group: %w", err)
+		Where("id IN ? AND status = ?", groupIDs, "active").
+		Pluck("plan_id", &planIDs).Error; err != nil {
+		r.logger.Errorw("failed to query resource groups", "group_ids", groupIDs, "error", err)
+		return nil, fmt.Errorf("failed to query resource groups: %w", err)
 	}
 
-	// Query active subscriptions for this plan
+	if len(planIDs) == 0 {
+		r.logger.Infow("no active resource groups found", "group_ids", groupIDs)
+		return []*subscription.Subscription{}, nil
+	}
+
+	// Query active subscriptions for these plans
 	var subscriptionModels []*models.SubscriptionModel
 	if err := r.db.WithContext(ctx).
-		Where("plan_id = ? AND status = ?", resourceGroup.PlanID, valueobjects.StatusActive).
+		Where("plan_id IN ? AND status = ?", planIDs, valueobjects.StatusActive).
 		Order("created_at DESC").
 		Find(&subscriptionModels).Error; err != nil {
-		r.logger.Errorw("failed to query active subscriptions", "plan_id", resourceGroup.PlanID, "error", err)
+		r.logger.Errorw("failed to query active subscriptions", "plan_ids", planIDs, "error", err)
 		return nil, fmt.Errorf("failed to query subscriptions: %w", err)
 	}
 
@@ -162,8 +174,8 @@ func (r *SubscriptionRepositoryImpl) GetActiveSubscriptionsByNodeID(ctx context.
 
 	r.logger.Infow("retrieved active subscriptions for node",
 		"node_id", nodeID,
-		"group_id", *nodeModel.GroupID,
-		"plan_id", resourceGroup.PlanID,
+		"group_ids", groupIDs,
+		"plan_ids", planIDs,
 		"subscription_count", len(entities),
 	)
 

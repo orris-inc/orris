@@ -22,11 +22,22 @@ func generateSID(prefix string) (string, error) {
 	return prefix + "_" + base64.RawURLEncoding.EncodeToString(bytes), nil
 }
 
+// generateLinkToken generates a secure token for subscription link authentication
+// Uses 32 bytes (256 bits) of cryptographic random data for high security
+func generateLinkToken() (string, error) {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", fmt.Errorf("failed to generate random bytes: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(bytes), nil
+}
+
 // Subscription represents the subscription aggregate root
 type Subscription struct {
 	id                 uint
 	sid                string // Stripe-style ID: sub_xxx
-	uuid               string // unique identifier used for node authentication
+	uuid               string // unique identifier for internal use
+	linkToken          string // secure token for subscription link authentication (256 bits, resettable)
 	userID             uint   // Deprecated: use subjectID instead. Kept for backward compatibility
 	subjectType        string // Type of subject (user, user_group, etc.)
 	subjectID          uint   // ID of the subject
@@ -75,10 +86,17 @@ func NewSubscriptionWithSubject(subjectType string, subjectID, planID uint, star
 	// Generate unique UUID for this subscription
 	subscriptionUUID := uuid.New().String()
 
+	// Generate secure link token for subscription link authentication
+	linkToken, err := generateLinkToken()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate link token: %w", err)
+	}
+
 	now := time.Now()
 	s := &Subscription{
 		sid:                sid,
 		uuid:               subscriptionUUID,
+		linkToken:          linkToken,
 		userID:             subjectID, // For backward compatibility
 		subjectType:        subjectType,
 		subjectID:          subjectID,
@@ -104,6 +122,7 @@ func ReconstructSubscription(
 	id, userID, planID uint,
 	sid string,
 	uuid string,
+	linkToken string,
 	status vo.SubscriptionStatus,
 	startDate, endDate time.Time,
 	autoRenew bool,
@@ -119,6 +138,7 @@ func ReconstructSubscription(
 		"user", userID, // Default to user subject type
 		sid,
 		uuid,
+		linkToken,
 		status,
 		startDate, endDate,
 		autoRenew,
@@ -138,6 +158,7 @@ func ReconstructSubscriptionWithSubject(
 	subjectID uint,
 	sid string,
 	uuid string,
+	linkToken string,
 	status vo.SubscriptionStatus,
 	startDate, endDate time.Time,
 	autoRenew bool,
@@ -156,6 +177,9 @@ func ReconstructSubscriptionWithSubject(
 	}
 	if uuid == "" {
 		return nil, fmt.Errorf("subscription UUID is required")
+	}
+	if linkToken == "" {
+		return nil, fmt.Errorf("subscription link token is required")
 	}
 	if subjectType == "" {
 		return nil, fmt.Errorf("subject type is required")
@@ -178,6 +202,7 @@ func ReconstructSubscriptionWithSubject(
 		id:                 id,
 		sid:                sid,
 		uuid:               uuid,
+		linkToken:          linkToken,
 		userID:             userID,
 		subjectType:        subjectType,
 		subjectID:          subjectID,
@@ -215,6 +240,11 @@ func (s *Subscription) SetSID(sid string) {
 // UUID returns the subscription UUID
 func (s *Subscription) UUID() string {
 	return s.uuid
+}
+
+// LinkToken returns the subscription link token for authentication
+func (s *Subscription) LinkToken() string {
+	return s.linkToken
 }
 
 // UserID returns the user ID
@@ -440,12 +470,25 @@ func (s *Subscription) SetAutoRenew(autoRenew bool) {
 	s.version++
 }
 
-// ResetUUID generates a new UUID for the subscription link
-// This invalidates the old subscription link
+// ResetUUID generates a new UUID for the subscription
+// Deprecated: Use ResetLinkToken for resetting subscription link authentication
 func (s *Subscription) ResetUUID() {
 	s.uuid = uuid.New().String()
 	s.updatedAt = time.Now()
 	s.version++
+}
+
+// ResetLinkToken generates a new secure link token for the subscription
+// This invalidates the old subscription link and requires users to use the new token
+func (s *Subscription) ResetLinkToken() error {
+	newToken, err := generateLinkToken()
+	if err != nil {
+		return fmt.Errorf("failed to generate new link token: %w", err)
+	}
+	s.linkToken = newToken
+	s.updatedAt = time.Now()
+	s.version++
+	return nil
 }
 
 // UpdateCurrentPeriod updates the current billing period

@@ -25,13 +25,13 @@ func NewSubscriptionTokenValidatorAdapter(db *gorm.DB, logger logger.Interface) 
 	}
 }
 
-func (v *SubscriptionTokenValidatorAdapter) Validate(ctx context.Context, subscriptionUUID string) error {
+func (v *SubscriptionTokenValidatorAdapter) Validate(ctx context.Context, linkToken string) error {
 	var subscriptionModel models.SubscriptionModel
 	if err := v.db.WithContext(ctx).
-		Where("uuid = ?", subscriptionUUID).
+		Where("link_token = ?", linkToken).
 		First(&subscriptionModel).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			v.logger.Warnw("subscription not found", "uuid", subscriptionUUID)
+			v.logger.Warnw("subscription not found", "link_token_prefix", linkToken[:8]+"...")
 			return errors.NewNotFoundError("subscription not found")
 		}
 		v.logger.Errorw("failed to query subscription", "error", err)
@@ -51,13 +51,13 @@ func (v *SubscriptionTokenValidatorAdapter) Validate(ctx context.Context, subscr
 	return nil
 }
 
-func (v *SubscriptionTokenValidatorAdapter) ValidateAndGetSubscription(ctx context.Context, subscriptionUUID string) (*nodeusecases.SubscriptionValidationResult, error) {
+func (v *SubscriptionTokenValidatorAdapter) ValidateAndGetSubscription(ctx context.Context, linkToken string) (*nodeusecases.SubscriptionValidationResult, error) {
 	var subscriptionModel models.SubscriptionModel
 	if err := v.db.WithContext(ctx).
-		Where("uuid = ?", subscriptionUUID).
+		Where("link_token = ?", linkToken).
 		First(&subscriptionModel).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			v.logger.Warnw("subscription not found", "uuid", subscriptionUUID)
+			v.logger.Warnw("subscription not found", "link_token_prefix", linkToken[:8]+"...")
 			return nil, errors.NewNotFoundError("subscription not found")
 		}
 		v.logger.Errorw("failed to query subscription", "error", err)

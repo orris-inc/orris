@@ -14,7 +14,8 @@ import (
 type SubscriptionModel struct {
 	ID                 uint      `gorm:"primarykey"`
 	SID                string    `gorm:"column:sid;uniqueIndex;not null;size:50;comment:Stripe-style ID: sub_xxx"`
-	UUID               string    `gorm:"uniqueIndex;not null;size:36;comment:unique identifier used for node authentication"`
+	UUID               string    `gorm:"column:uuid;uniqueIndex;not null;size:36;comment:unique identifier for internal use"`
+	LinkToken          string    `gorm:"column:link_token;uniqueIndex;not null;size:64;comment:secure token for subscription link authentication (256 bits)"`
 	UserID             uint      `gorm:"not null;index:idx_user_subscription"`
 	SubjectType        string    `gorm:"not null;size:20;default:user;index:idx_subject,priority:1"`
 	SubjectID          uint      `gorm:"not null;index:idx_subject,priority:2"`

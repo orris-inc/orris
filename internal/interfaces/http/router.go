@@ -334,10 +334,10 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	// Initialize node use cases
 	createNodeUC := nodeUsecases.NewCreateNodeUseCase(nodeRepoImpl, log)
-	getNodeUC := nodeUsecases.NewGetNodeUseCase(nodeRepoImpl, nodeStatusQuerier, log)
+	getNodeUC := nodeUsecases.NewGetNodeUseCase(nodeRepoImpl, resourceGroupRepo, nodeStatusQuerier, log)
 	updateNodeUC := nodeUsecases.NewUpdateNodeUseCase(log, nodeRepoImpl, resourceGroupRepo)
 	deleteNodeUC := nodeUsecases.NewDeleteNodeUseCase(nodeRepoImpl, log)
-	listNodesUC := nodeUsecases.NewListNodesUseCase(nodeRepoImpl, nodeStatusQuerier, log)
+	listNodesUC := nodeUsecases.NewListNodesUseCase(nodeRepoImpl, resourceGroupRepo, nodeStatusQuerier, log)
 	generateNodeTokenUC := nodeUsecases.NewGenerateNodeTokenUseCase(nodeRepoImpl, log)
 	generateNodeInstallScriptUC := nodeUsecases.NewGenerateNodeInstallScriptUseCase(nodeRepoImpl, log)
 

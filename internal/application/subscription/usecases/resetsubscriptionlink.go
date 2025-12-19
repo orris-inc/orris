@@ -41,8 +41,11 @@ func (uc *ResetSubscriptionLinkUseCase) Execute(ctx context.Context, cmd ResetSu
 		return nil, fmt.Errorf("failed to get subscription: %w", err)
 	}
 
-	// Reset UUID to generate new subscription link
-	sub.ResetUUID()
+	// Reset link token to generate new subscription link (invalidates old link)
+	if err := sub.ResetLinkToken(); err != nil {
+		uc.logger.Errorw("failed to reset link token", "error", err, "subscription_id", cmd.SubscriptionID)
+		return nil, fmt.Errorf("failed to reset link token: %w", err)
+	}
 
 	// Persist the change
 	if err := uc.subscriptionRepo.Update(ctx, sub); err != nil {
@@ -61,7 +64,6 @@ func (uc *ResetSubscriptionLinkUseCase) Execute(ctx context.Context, cmd ResetSu
 
 	uc.logger.Infow("subscription link reset successfully",
 		"subscription_id", cmd.SubscriptionID,
-		"new_uuid", sub.UUID(),
 	)
 
 	return result, nil

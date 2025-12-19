@@ -3,6 +3,8 @@ package adapters
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 
 	"gorm.io/gorm"
 
@@ -33,15 +35,15 @@ func NewNodeRepositoryAdapter(nodeRepo NodeRepository, db *gorm.DB, logger logge
 	}
 }
 
-func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, subscriptionUUID string, mode string) ([]*usecases.Node, error) {
+func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, linkToken string, mode string) ([]*usecases.Node, error) {
 	var subscriptionModel models.SubscriptionModel
 
-	// Query subscription by UUID
+	// Query subscription by link_token
 	if err := r.db.WithContext(ctx).
-		Where("uuid = ? AND status = ?", subscriptionUUID, valueobjects.StatusActive).
+		Where("link_token = ? AND status = ?", linkToken, valueobjects.StatusActive).
 		First(&subscriptionModel).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			r.logger.Warnw("active subscription not found", "uuid", subscriptionUUID)
+			r.logger.Warnw("active subscription not found", "link_token_prefix", linkToken[:8]+"...")
 			return []*usecases.Node{}, nil
 		}
 		r.logger.Errorw("failed to query subscription", "error", err)
@@ -79,10 +81,12 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, subs
 	}
 
 	// Step 2: Get node IDs that belong to these resource groups
+	// Use JSON_OVERLAPS to check if node's group_ids array contains any of the target group IDs
 	var nodeIDs []uint
+	groupIDsJSON := uintSliceToJSONArray(groupIDs)
 	if err := r.db.WithContext(ctx).
 		Table("nodes").
-		Where("group_id IN ? AND deleted_at IS NULL", groupIDs).
+		Where("JSON_OVERLAPS(group_ids, ?) AND deleted_at IS NULL", groupIDsJSON).
 		Pluck("id", &nodeIDs).Error; err != nil {
 		r.logger.Errorw("failed to query nodes by group", "error", err, "group_ids", groupIDs)
 		return nil, err
@@ -571,4 +575,17 @@ func resolveServerAddress(configuredAddr string, publicIPv4, publicIPv6 *string)
 	// Return empty if no address available (should not happen in practice)
 	// The value object layer allows empty addresses for this fallback scenario
 	return ""
+}
+
+// uintSliceToJSONArray converts a slice of uint to a JSON array string
+// Used for JSON_OVERLAPS query parameter
+func uintSliceToJSONArray(ids []uint) string {
+	if len(ids) == 0 {
+		return "[]"
+	}
+	parts := make([]string, len(ids))
+	for i, id := range ids {
+		parts[i] = fmt.Sprintf("%d", id)
+	}
+	return "[" + strings.Join(parts, ",") + "]"
 }
