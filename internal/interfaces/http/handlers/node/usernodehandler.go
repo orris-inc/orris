@@ -296,7 +296,7 @@ func getStringPtr(s string) *string {
 // CreateUserNodeRequest represents the request body for creating a user node
 type CreateUserNodeRequest struct {
 	Name              string            `json:"name" binding:"required,min=2,max=100" example:"My-Node-01"`
-	ServerAddress     string            `json:"server_address" binding:"required" example:"1.2.3.4"`
+	ServerAddress     string            `json:"server_address,omitempty" example:"1.2.3.4"`
 	AgentPort         uint16            `json:"agent_port" binding:"required,min=1,max=65535" example:"8388"`
 	SubscriptionPort  *uint16           `json:"subscription_port,omitempty" binding:"omitempty,min=1,max=65535" example:"8389"`
 	Protocol          string            `json:"protocol" binding:"required,oneof=shadowsocks trojan" example:"shadowsocks"`
