@@ -137,17 +137,21 @@ func (uc *ListNodesUseCase) Execute(ctx context.Context, query ListNodesQuery) (
 	// Batch query resource groups to resolve GroupID -> GroupSID
 	groupIDToSID := make(map[uint]string)
 	if len(groupIDSet) > 0 && uc.resourceGroupRepo != nil {
+		// Convert set to slice for batch query
+		groupIDs := make([]uint, 0, len(groupIDSet))
 		for groupID := range groupIDSet {
-			group, err := uc.resourceGroupRepo.GetByID(ctx, groupID)
-			if err != nil {
-				uc.logger.Warnw("failed to get resource group, skipping",
-					"group_id", groupID,
-					"error", err,
-				)
-				continue
-			}
-			if group != nil {
-				groupIDToSID[groupID] = group.SID()
+			groupIDs = append(groupIDs, groupID)
+		}
+
+		groups, err := uc.resourceGroupRepo.GetByIDs(ctx, groupIDs)
+		if err != nil {
+			uc.logger.Warnw("failed to batch get resource groups, skipping",
+				"group_ids", groupIDs,
+				"error", err,
+			)
+		} else {
+			for _, group := range groups {
+				groupIDToSID[group.ID()] = group.SID()
 			}
 		}
 

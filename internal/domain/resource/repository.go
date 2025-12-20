@@ -16,6 +16,9 @@ type Repository interface {
 	// GetByID retrieves a resource group by ID
 	GetByID(ctx context.Context, id uint) (*ResourceGroup, error)
 
+	// GetByIDs retrieves resource groups by their IDs
+	GetByIDs(ctx context.Context, ids []uint) ([]*ResourceGroup, error)
+
 	// GetBySID retrieves a resource group by Stripe-style ID
 	GetBySID(ctx context.Context, sid string) (*ResourceGroup, error)
 

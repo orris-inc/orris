@@ -11,10 +11,6 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
-// LastSeenUpdateThreshold defines how often we update last_seen_at in database
-// This is used to throttle database writes when agents report frequently
-const LastSeenUpdateThreshold = 2 * time.Minute
-
 // ReportNodeStatusCommand represents the command to report node system status
 type ReportNodeStatusCommand struct {
 	NodeID uint
@@ -104,46 +100,21 @@ func (uc *ReportNodeStatusUseCase) Execute(ctx context.Context, cmd ReportNodeSt
 	}, nil
 }
 
-// updateLastSeenAtThrottled updates last_seen_at and public IPs only if it hasn't been updated recently
-// This reduces database writes when agents report frequently (e.g., every 30 seconds)
+// updateLastSeenAtThrottled updates last_seen_at and public IPs
+// Throttling is now handled at the database layer using conditional update
+// to avoid race conditions when multiple requests arrive simultaneously
 func (uc *ReportNodeStatusUseCase) updateLastSeenAtThrottled(ctx context.Context, nodeID uint, publicIPv4, publicIPv6 string) {
 	if uc.lastSeenUpdater == nil {
 		return
 	}
 
-	// Get current last_seen_at value
-	lastSeenAt, err := uc.lastSeenUpdater.GetLastSeenAt(ctx, nodeID)
-	if err != nil {
-		uc.logger.Warnw("failed to get last_seen_at for throttle check",
+	// Database layer handles throttling with conditional update:
+	// only updates if last_seen_at is NULL or older than 2 minutes
+	if err := uc.lastSeenUpdater.UpdateLastSeenAt(ctx, nodeID, publicIPv4, publicIPv6); err != nil {
+		uc.logger.Warnw("failed to update last_seen_at",
 			"error", err,
 			"node_id", nodeID,
 		)
-		// On error, try to update anyway
-		if updateErr := uc.lastSeenUpdater.UpdateLastSeenAt(ctx, nodeID, publicIPv4, publicIPv6); updateErr != nil {
-			uc.logger.Warnw("failed to update last_seen_at",
-				"error", updateErr,
-				"node_id", nodeID,
-			)
-		}
-		return
-	}
-
-	// Check if we need to update (first time or exceeded threshold)
-	shouldUpdate := lastSeenAt == nil || time.Since(*lastSeenAt) > LastSeenUpdateThreshold
-
-	if shouldUpdate {
-		if err := uc.lastSeenUpdater.UpdateLastSeenAt(ctx, nodeID, publicIPv4, publicIPv6); err != nil {
-			uc.logger.Warnw("failed to update last_seen_at",
-				"error", err,
-				"node_id", nodeID,
-			)
-		} else {
-			uc.logger.Debugw("last_seen_at updated",
-				"node_id", nodeID,
-				"public_ipv4", publicIPv4,
-				"public_ipv6", publicIPv6,
-			)
-		}
 	}
 }
 

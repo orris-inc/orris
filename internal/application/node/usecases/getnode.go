@@ -85,24 +85,22 @@ func (uc *GetNodeUseCase) Execute(ctx context.Context, query GetNodeQuery) (*Get
 	// Map to DTO
 	nodeDTO := dto.ToNodeDTO(nodeEntity)
 
-	// Resolve GroupIDs to GroupSIDs
+	// Resolve GroupIDs to GroupSIDs using batch query
 	if len(nodeEntity.GroupIDs()) > 0 {
-		groupSIDs := make([]string, 0, len(nodeEntity.GroupIDs()))
-		for _, groupID := range nodeEntity.GroupIDs() {
-			group, err := uc.resourceGroupRepo.GetByID(ctx, groupID)
-			if err != nil {
-				uc.logger.Warnw("failed to get resource group, skipping",
-					"group_id", groupID,
-					"error", err,
-				)
-				continue
-			}
-			if group != nil {
+		groups, err := uc.resourceGroupRepo.GetByIDs(ctx, nodeEntity.GroupIDs())
+		if err != nil {
+			uc.logger.Warnw("failed to batch get resource groups, skipping",
+				"group_ids", nodeEntity.GroupIDs(),
+				"error", err,
+			)
+		} else {
+			groupSIDs := make([]string, 0, len(groups))
+			for _, group := range groups {
 				groupSIDs = append(groupSIDs, group.SID())
 			}
-		}
-		if len(groupSIDs) > 0 {
-			nodeDTO.GroupSIDs = groupSIDs
+			if len(groupSIDs) > 0 {
+				nodeDTO.GroupSIDs = groupSIDs
+			}
 		}
 	}
 

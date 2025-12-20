@@ -281,16 +281,24 @@ func (r *NodeRepositoryImpl) Update(ctx context.Context, nodeEntity *node.Node) 
 		return fmt.Errorf("failed to map node entity: %w", err)
 	}
 
+	// Calculate the expected previous version for optimistic locking
+	// Domain layer increments version on each update, so we check against version - 1
+	expectedVersion := model.Version - 1
+	if expectedVersion < 1 {
+		expectedVersion = 1
+	}
+
 	// Use transaction to update node and protocol config atomically
 	err = r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// Use Select to explicitly specify fields to update, including nullable fields like group_ids
 		// This ensures GORM updates NULL values correctly (without Select, GORM ignores nil values in map)
+		// Use optimistic locking: WHERE id = ? AND version = expectedVersion
 		result := tx.Model(&models.NodeModel{}).
-			Where("id = ?", model.ID).
+			Where("id = ? AND version = ?", model.ID, expectedVersion).
 			Select(
 				"name", "server_address", "agent_port", "subscription_port",
 				"protocol", "status", "region", "tags", "sort_order",
-				"maintenance_reason", "token_hash", "api_token", "group_ids", "updated_at",
+				"maintenance_reason", "token_hash", "api_token", "group_ids", "version", "updated_at",
 			).
 			Updates(model)
 
@@ -305,6 +313,11 @@ func (r *NodeRepositoryImpl) Update(ctx context.Context, nodeEntity *node.Node) 
 		}
 
 		if result.RowsAffected == 0 {
+			// Check if the record exists to distinguish between not found and version conflict
+			var count int64
+			if err := tx.Model(&models.NodeModel{}).Where("id = ?", model.ID).Count(&count).Error; err == nil && count > 0 {
+				return errors.NewConflictError("node was modified by another request, please retry")
+			}
 			return errors.NewNotFoundError("node not found", fmt.Sprintf("id=%d", model.ID))
 		}
 
@@ -475,6 +488,19 @@ func (r *NodeRepositoryImpl) ExistsByName(ctx context.Context, name string) (boo
 	return count > 0, nil
 }
 
+// ExistsByNameExcluding checks if a node with the given name exists, excluding a specific node ID
+func (r *NodeRepositoryImpl) ExistsByNameExcluding(ctx context.Context, name string, excludeID uint) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&models.NodeModel{}).
+		Where("name = ? AND id != ?", name, excludeID).
+		Count(&count).Error
+	if err != nil {
+		r.logger.Errorw("failed to check node existence by name", "name", name, "exclude_id", excludeID, "error", err)
+		return false, fmt.Errorf("failed to check node existence: %w", err)
+	}
+	return count > 0, nil
+}
+
 // ExistsByAddress checks if a node with the given address and port exists
 func (r *NodeRepositoryImpl) ExistsByAddress(ctx context.Context, address string, port int) (bool, error) {
 	var count int64
@@ -483,6 +509,19 @@ func (r *NodeRepositoryImpl) ExistsByAddress(ctx context.Context, address string
 		Count(&count).Error
 	if err != nil {
 		r.logger.Errorw("failed to check node existence by address", "address", address, "port", port, "error", err)
+		return false, fmt.Errorf("failed to check node existence: %w", err)
+	}
+	return count > 0, nil
+}
+
+// ExistsByAddressExcluding checks if a node with the given address and port exists, excluding a specific node ID
+func (r *NodeRepositoryImpl) ExistsByAddressExcluding(ctx context.Context, address string, port int, excludeID uint) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&models.NodeModel{}).
+		Where("server_address = ? AND agent_port = ? AND id != ?", address, port, excludeID).
+		Count(&count).Error
+	if err != nil {
+		r.logger.Errorw("failed to check node existence by address", "address", address, "port", port, "exclude_id", excludeID, "error", err)
 		return false, fmt.Errorf("failed to check node existence: %w", err)
 	}
 	return count > 0, nil
@@ -512,6 +551,9 @@ func (r *NodeRepositoryImpl) IncrementTraffic(ctx context.Context, nodeID uint, 
 }
 
 // UpdateLastSeenAt updates the last_seen_at timestamp and public IPs for a node
+// Uses conditional update to avoid race conditions: only updates if last_seen_at is NULL
+// or older than the threshold (2 minutes). This moves the throttling logic to the database
+// layer for atomic operation.
 func (r *NodeRepositoryImpl) UpdateLastSeenAt(ctx context.Context, nodeID uint, publicIPv4, publicIPv6 string) error {
 	updates := map[string]interface{}{
 		"last_seen_at": gorm.Expr("NOW()"),
@@ -525,8 +567,10 @@ func (r *NodeRepositoryImpl) UpdateLastSeenAt(ctx context.Context, nodeID uint, 
 		updates["public_ipv6"] = publicIPv6
 	}
 
+	// Use conditional update to prevent race conditions
+	// Only update if last_seen_at is NULL or older than 2 minutes
 	result := r.db.WithContext(ctx).Model(&models.NodeModel{}).
-		Where("id = ?", nodeID).
+		Where("id = ? AND (last_seen_at IS NULL OR last_seen_at < NOW() - INTERVAL 2 MINUTE)", nodeID).
 		Updates(updates)
 
 	if result.Error != nil {
@@ -534,19 +578,19 @@ func (r *NodeRepositoryImpl) UpdateLastSeenAt(ctx context.Context, nodeID uint, 
 		return fmt.Errorf("failed to update last_seen_at: %w", result.Error)
 	}
 
-	if result.RowsAffected == 0 {
-		return errors.NewNotFoundError("node not found")
+	// RowsAffected == 0 is normal when throttled, not an error
+	if result.RowsAffected > 0 {
+		r.logger.Debugw("last_seen_at updated successfully",
+			"node_id", nodeID,
+			"public_ipv4", publicIPv4,
+			"public_ipv6", publicIPv6,
+		)
 	}
-
-	r.logger.Debugw("last_seen_at updated successfully",
-		"node_id", nodeID,
-		"public_ipv4", publicIPv4,
-		"public_ipv6", publicIPv6,
-	)
 	return nil
 }
 
 // GetLastSeenAt retrieves just the last_seen_at timestamp for a node (lightweight query)
+// Returns NotFoundError if the node does not exist
 func (r *NodeRepositoryImpl) GetLastSeenAt(ctx context.Context, nodeID uint) (*time.Time, error) {
 	var model models.NodeModel
 	err := r.db.WithContext(ctx).
@@ -556,7 +600,7 @@ func (r *NodeRepositoryImpl) GetLastSeenAt(ctx context.Context, nodeID uint) (*t
 
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, nil
+			return nil, errors.NewNotFoundError("node not found")
 		}
 		r.logger.Errorw("failed to get last_seen_at", "node_id", nodeID, "error", err)
 		return nil, fmt.Errorf("failed to get last_seen_at: %w", err)

@@ -134,6 +134,28 @@ func (r *ResourceGroupRepositoryImpl) GetByID(ctx context.Context, id uint) (*re
 	return entity, nil
 }
 
+// GetByIDs retrieves resource groups by their IDs.
+func (r *ResourceGroupRepositoryImpl) GetByIDs(ctx context.Context, ids []uint) ([]*resource.ResourceGroup, error) {
+	if len(ids) == 0 {
+		return []*resource.ResourceGroup{}, nil
+	}
+
+	var modelList []*models.ResourceGroupModel
+
+	if err := r.db.WithContext(ctx).Where("id IN ?", ids).Find(&modelList).Error; err != nil {
+		r.logger.Errorw("failed to get resource groups by IDs", "ids", ids, "error", err)
+		return nil, fmt.Errorf("failed to get resource groups: %w", err)
+	}
+
+	entities, err := r.mapper.ToEntities(modelList)
+	if err != nil {
+		r.logger.Errorw("failed to map resource group models to entities", "ids", ids, "error", err)
+		return nil, fmt.Errorf("failed to map resource groups: %w", err)
+	}
+
+	return entities, nil
+}
+
 // GetBySID retrieves a resource group by its Stripe-style ID.
 func (r *ResourceGroupRepositoryImpl) GetBySID(ctx context.Context, sid string) (*resource.ResourceGroup, error) {
 	var model models.ResourceGroupModel

@@ -79,6 +79,39 @@ func (uc *UpdateNodeUseCase) Execute(ctx context.Context, cmd UpdateNodeCommand)
 		return nil, errors.NewNotFoundError("node not found")
 	}
 
+	// Check uniqueness constraints for name update
+	if cmd.Name != nil && *cmd.Name != existingNode.Name() {
+		exists, err := uc.nodeRepo.ExistsByNameExcluding(ctx, *cmd.Name, existingNode.ID())
+		if err != nil {
+			uc.logger.Errorw("failed to check name uniqueness", "error", err, "name", *cmd.Name)
+			return nil, err
+		}
+		if exists {
+			return nil, errors.NewConflictError("node with this name already exists")
+		}
+	}
+
+	// Check uniqueness constraints for address/port update
+	newAddress := existingNode.ServerAddress().Value()
+	newPort := int(existingNode.AgentPort())
+	if cmd.ServerAddress != nil {
+		newAddress = *cmd.ServerAddress
+	}
+	if cmd.AgentPort != nil {
+		newPort = int(*cmd.AgentPort)
+	}
+	// Only check if address or port actually changed
+	if newAddress != existingNode.ServerAddress().Value() || newPort != int(existingNode.AgentPort()) {
+		exists, err := uc.nodeRepo.ExistsByAddressExcluding(ctx, newAddress, newPort, existingNode.ID())
+		if err != nil {
+			uc.logger.Errorw("failed to check address uniqueness", "error", err, "address", newAddress, "port", newPort)
+			return nil, err
+		}
+		if exists {
+			return nil, errors.NewConflictError("node with this address and port already exists")
+		}
+	}
+
 	// Handle GroupSID update (resolve SID to internal ID)
 	if cmd.GroupSID != nil {
 		if *cmd.GroupSID == "" {
@@ -265,7 +298,7 @@ func (uc *UpdateNodeUseCase) validateCommand(cmd UpdateNodeCommand) error {
 
 	if cmd.Name == nil && cmd.ServerAddress == nil && cmd.AgentPort == nil &&
 		cmd.SubscriptionPort == nil && cmd.Method == nil && cmd.Plugin == nil &&
-		cmd.PluginOpts == nil && cmd.Region == nil && cmd.Tags == nil &&
+		len(cmd.PluginOpts) == 0 && cmd.Region == nil && cmd.Tags == nil &&
 		cmd.Description == nil && cmd.SortOrder == nil && cmd.Status == nil &&
 		cmd.GroupSID == nil &&
 		cmd.TrojanTransportProtocol == nil && cmd.TrojanHost == nil &&

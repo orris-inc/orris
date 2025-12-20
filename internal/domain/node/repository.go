@@ -17,7 +17,9 @@ type NodeRepository interface {
 	Delete(ctx context.Context, id uint) error
 	List(ctx context.Context, filter NodeFilter) ([]*Node, int64, error)
 	ExistsByName(ctx context.Context, name string) (bool, error)
+	ExistsByNameExcluding(ctx context.Context, name string, excludeID uint) (bool, error)
 	ExistsByAddress(ctx context.Context, address string, port int) (bool, error)
+	ExistsByAddressExcluding(ctx context.Context, address string, port int, excludeID uint) (bool, error)
 	IncrementTraffic(ctx context.Context, nodeID uint, amount uint64) error
 	// UpdateLastSeenAt updates the last_seen_at timestamp and public IPs for a node
 	// Public IPs are optional - pass empty strings to skip updating them
