@@ -6,6 +6,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/subscription/dto"
 	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/domain/user"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -26,6 +27,7 @@ type ListUserSubscriptionsResult struct {
 type ListUserSubscriptionsUseCase struct {
 	subscriptionRepo subscription.SubscriptionRepository
 	planRepo         subscription.PlanRepository
+	userRepo         user.Repository
 	logger           logger.Interface
 	baseURL          string
 }
@@ -33,12 +35,14 @@ type ListUserSubscriptionsUseCase struct {
 func NewListUserSubscriptionsUseCase(
 	subscriptionRepo subscription.SubscriptionRepository,
 	planRepo subscription.PlanRepository,
+	userRepo user.Repository,
 	logger logger.Interface,
 	baseURL string,
 ) *ListUserSubscriptionsUseCase {
 	return &ListUserSubscriptionsUseCase{
 		subscriptionRepo: subscriptionRepo,
 		planRepo:         planRepo,
+		userRepo:         userRepo,
 		logger:           logger,
 		baseURL:          baseURL,
 	}
@@ -70,11 +74,13 @@ func (uc *ListUserSubscriptionsUseCase) Execute(ctx context.Context, query ListU
 		return nil, fmt.Errorf("failed to list subscriptions: %w", err)
 	}
 
+	// Collect unique plan IDs
 	planIDs := make(map[uint]bool)
 	for _, sub := range subscriptions {
 		planIDs[sub.PlanID()] = true
 	}
 
+	// Fetch plans
 	plans := make(map[uint]*subscription.Plan)
 	for planID := range planIDs {
 		plan, err := uc.planRepo.GetByID(ctx, planID)
@@ -85,10 +91,31 @@ func (uc *ListUserSubscriptionsUseCase) Execute(ctx context.Context, query ListU
 		plans[planID] = plan
 	}
 
+	// Collect unique user IDs
+	userIDs := make(map[uint]bool)
+	for _, sub := range subscriptions {
+		if sub.UserID() > 0 {
+			userIDs[sub.UserID()] = true
+		}
+	}
+
+	// Fetch users
+	users := make(map[uint]*user.User)
+	for userID := range userIDs {
+		u, err := uc.userRepo.GetByID(ctx, userID)
+		if err != nil {
+			uc.logger.Warnw("failed to get user", "error", err, "user_id", userID)
+			continue
+		}
+		users[userID] = u
+	}
+
+	// Build DTOs with embedded user and plan info
 	dtos := make([]*dto.SubscriptionDTO, 0, len(subscriptions))
 	for _, sub := range subscriptions {
 		plan := plans[sub.PlanID()]
-		result := dto.ToSubscriptionDTO(sub, plan, uc.baseURL)
+		subscriptionUser := users[sub.UserID()]
+		result := dto.ToSubscriptionDTO(sub, plan, subscriptionUser, uc.baseURL)
 		dtos = append(dtos, result)
 	}
 

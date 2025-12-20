@@ -15,13 +15,16 @@ import (
 
 // UserNodeHandler handles user node management endpoints
 type UserNodeHandler struct {
-	createNodeUC      usecases.CreateUserNodeExecutor
-	listNodesUC       usecases.ListUserNodesExecutor
-	getNodeUC         usecases.GetUserNodeExecutor
-	updateNodeUC      usecases.UpdateUserNodeExecutor
-	deleteNodeUC      usecases.DeleteUserNodeExecutor
-	regenerateTokenUC usecases.RegenerateUserNodeTokenExecutor
-	logger            logger.Interface
+	createNodeUC       usecases.CreateUserNodeExecutor
+	listNodesUC        usecases.ListUserNodesExecutor
+	getNodeUC          usecases.GetUserNodeExecutor
+	updateNodeUC       usecases.UpdateUserNodeExecutor
+	deleteNodeUC       usecases.DeleteUserNodeExecutor
+	regenerateTokenUC  usecases.RegenerateUserNodeTokenExecutor
+	getUsageUC         usecases.GetUserNodeUsageExecutor
+	getInstallScriptUC usecases.GetUserNodeInstallScriptExecutor
+	apiURL             string
+	logger             logger.Interface
 }
 
 // NewUserNodeHandler creates a new user node handler
@@ -32,15 +35,21 @@ func NewUserNodeHandler(
 	updateNodeUC usecases.UpdateUserNodeExecutor,
 	deleteNodeUC usecases.DeleteUserNodeExecutor,
 	regenerateTokenUC usecases.RegenerateUserNodeTokenExecutor,
+	getUsageUC usecases.GetUserNodeUsageExecutor,
+	getInstallScriptUC usecases.GetUserNodeInstallScriptExecutor,
+	apiURL string,
 ) *UserNodeHandler {
 	return &UserNodeHandler{
-		createNodeUC:      createNodeUC,
-		listNodesUC:       listNodesUC,
-		getNodeUC:         getNodeUC,
-		updateNodeUC:      updateNodeUC,
-		deleteNodeUC:      deleteNodeUC,
-		regenerateTokenUC: regenerateTokenUC,
-		logger:            logger.NewLogger(),
+		createNodeUC:       createNodeUC,
+		listNodesUC:        listNodesUC,
+		getNodeUC:          getNodeUC,
+		updateNodeUC:       updateNodeUC,
+		deleteNodeUC:       deleteNodeUC,
+		regenerateTokenUC:  regenerateTokenUC,
+		getUsageUC:         getUsageUC,
+		getInstallScriptUC: getInstallScriptUC,
+		apiURL:             apiURL,
+		logger:             logger.NewLogger(),
 	}
 }
 
@@ -205,6 +214,62 @@ func (h *UserNodeHandler) RegenerateToken(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "Token regenerated successfully", result)
+}
+
+// GetUsage handles GET /user/nodes/usage
+func (h *UserNodeHandler) GetUsage(c *gin.Context) {
+	userID, err := getUserID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	query := usecases.GetUserNodeUsageQuery{
+		UserID: userID,
+	}
+
+	result, err := h.getUsageUC.Execute(c.Request.Context(), query)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "", result)
+}
+
+// GetInstallScript handles GET /user/nodes/:id/install-script
+func (h *UserNodeHandler) GetInstallScript(c *gin.Context) {
+	userID, err := getUserID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	nodeSID, err := parseNodeSID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	// Use query param to override API URL if provided
+	apiURL := c.Query("api_url")
+	if apiURL == "" {
+		apiURL = h.apiURL
+	}
+
+	query := usecases.GetUserNodeInstallScriptQuery{
+		UserID:  userID,
+		NodeSID: nodeSID,
+		APIURL:  apiURL,
+	}
+
+	result, err := h.getInstallScriptUC.Execute(c.Request.Context(), query)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Install command generated successfully", result)
 }
 
 // getUserID extracts user ID from context

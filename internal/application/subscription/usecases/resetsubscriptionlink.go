@@ -6,6 +6,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/subscription/dto"
 	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/domain/user"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -16,6 +17,7 @@ type ResetSubscriptionLinkCommand struct {
 type ResetSubscriptionLinkUseCase struct {
 	subscriptionRepo subscription.SubscriptionRepository
 	planRepo         subscription.PlanRepository
+	userRepo         user.Repository
 	logger           logger.Interface
 	baseURL          string
 }
@@ -23,12 +25,14 @@ type ResetSubscriptionLinkUseCase struct {
 func NewResetSubscriptionLinkUseCase(
 	subscriptionRepo subscription.SubscriptionRepository,
 	planRepo subscription.PlanRepository,
+	userRepo user.Repository,
 	logger logger.Interface,
 	baseURL string,
 ) *ResetSubscriptionLinkUseCase {
 	return &ResetSubscriptionLinkUseCase{
 		subscriptionRepo: subscriptionRepo,
 		planRepo:         planRepo,
+		userRepo:         userRepo,
 		logger:           logger,
 		baseURL:          baseURL,
 	}
@@ -60,7 +64,17 @@ func (uc *ResetSubscriptionLinkUseCase) Execute(ctx context.Context, cmd ResetSu
 		// Continue without plan info
 	}
 
-	result := dto.ToSubscriptionDTO(sub, plan, uc.baseURL)
+	// Fetch user information for embedding in response
+	var subscriptionUser *user.User
+	if sub.UserID() > 0 {
+		subscriptionUser, err = uc.userRepo.GetByID(ctx, sub.UserID())
+		if err != nil {
+			// Log warning but don't fail - user info is optional
+			uc.logger.Warnw("failed to get subscription user", "error", err, "user_id", sub.UserID())
+		}
+	}
+
+	result := dto.ToSubscriptionDTO(sub, plan, subscriptionUser, uc.baseURL)
 
 	uc.logger.Infow("subscription link reset successfully",
 		"subscription_id", cmd.SubscriptionID,

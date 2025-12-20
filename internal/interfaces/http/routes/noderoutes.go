@@ -76,6 +76,9 @@ func SetupNodeRoutes(engine *gin.Engine, config *NodeRouteConfig) {
 		// List user's nodes
 		userNodes.GET("", config.UserNodeHandler.ListNodes)
 
+		// Get user's node usage/quota - specific path must come BEFORE /:id
+		userNodes.GET("/usage", config.UserNodeHandler.GetUsage)
+
 		// Single node operations - require ownership check
 		nodeGroup := userNodes.Group("/:id")
 		nodeGroup.Use(config.NodeOwnerMW.RequireOwnership())
@@ -84,6 +87,7 @@ func SetupNodeRoutes(engine *gin.Engine, config *NodeRouteConfig) {
 			nodeGroup.PUT("", config.UserNodeHandler.UpdateNode)
 			nodeGroup.DELETE("", config.UserNodeHandler.DeleteNode)
 			nodeGroup.POST("/regenerate-token", config.UserNodeHandler.RegenerateToken)
+			nodeGroup.GET("/install-script", config.UserNodeHandler.GetInstallScript)
 		}
 	}
 

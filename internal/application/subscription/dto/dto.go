@@ -5,28 +5,37 @@ import (
 	"time"
 
 	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/domain/user"
 	"github.com/orris-inc/orris/internal/shared/mapper"
 )
 
+// SubscriptionUserDTO represents embedded user information in subscription responses
+type SubscriptionUserDTO struct {
+	SID   string `json:"id"`    // Stripe-style ID: usr_xxx
+	Email string `json:"email"` // User's email address
+	Name  string `json:"name"`  // User's display name
+}
+
 type SubscriptionDTO struct {
-	SID                string     `json:"id"`      // Stripe-style ID: sub_xxx
-	UserSID            string     `json:"user_id"` // User's Stripe-style ID
-	UUID               string     `json:"uuid"`    // UUID for internal use (kept for backward compatibility)
-	LinkToken          string     `json:"link_token"`
-	SubscribeURL       string     `json:"subscribe_url"`
-	Plan               *PlanDTO   `json:"plan,omitempty"`
-	Status             string     `json:"status"`
-	StartDate          time.Time  `json:"start_date"`
-	EndDate            time.Time  `json:"end_date"`
-	AutoRenew          bool       `json:"auto_renew"`
-	CurrentPeriodStart time.Time  `json:"current_period_start"`
-	CurrentPeriodEnd   time.Time  `json:"current_period_end"`
-	IsExpired          bool       `json:"is_expired"`
-	IsActive           bool       `json:"is_active"`
-	CancelledAt        *time.Time `json:"cancelled_at,omitempty"`
-	CancelReason       *string    `json:"cancel_reason,omitempty"`
-	CreatedAt          time.Time  `json:"created_at"`
-	UpdatedAt          time.Time  `json:"updated_at"`
+	SID                string               `json:"id"`             // Stripe-style ID: sub_xxx
+	UserSID            string               `json:"user_id"`        // User's Stripe-style ID (kept for backward compatibility)
+	User               *SubscriptionUserDTO `json:"user,omitempty"` // Embedded user information
+	UUID               string               `json:"uuid"`           // UUID for internal use (kept for backward compatibility)
+	LinkToken          string               `json:"link_token"`
+	SubscribeURL       string               `json:"subscribe_url"`
+	Plan               *PlanDTO             `json:"plan,omitempty"`
+	Status             string               `json:"status"`
+	StartDate          time.Time            `json:"start_date"`
+	EndDate            time.Time            `json:"end_date"`
+	AutoRenew          bool                 `json:"auto_renew"`
+	CurrentPeriodStart time.Time            `json:"current_period_start"`
+	CurrentPeriodEnd   time.Time            `json:"current_period_end"`
+	IsExpired          bool                 `json:"is_expired"`
+	IsActive           bool                 `json:"is_active"`
+	CancelledAt        *time.Time           `json:"cancelled_at,omitempty"`
+	CancelReason       *string              `json:"cancel_reason,omitempty"`
+	CreatedAt          time.Time            `json:"created_at"`
+	UpdatedAt          time.Time            `json:"updated_at"`
 }
 
 type PlanDTO struct {
@@ -79,7 +88,7 @@ type SubscriptionTokenDTO struct {
 var (
 	SubscriptionMapper = mapper.New(
 		func(sub *subscription.Subscription) *SubscriptionDTO {
-			return toSubscriptionDTOInternal(sub, nil, "")
+			return toSubscriptionDTOInternal(sub, nil, nil, "")
 		},
 		func(dto *SubscriptionDTO) *subscription.Subscription {
 			return nil
@@ -101,13 +110,27 @@ var (
 	)
 )
 
-// ToSubscriptionDTO converts a domain subscription to DTO with subscribe URL.
-// baseURL is used to construct the full subscribe URL (e.g., "https://api.example.com").
-func ToSubscriptionDTO(sub *subscription.Subscription, plan *subscription.Plan, baseURL string) *SubscriptionDTO {
-	return toSubscriptionDTOInternal(sub, plan, baseURL)
+// ToSubscriptionUserDTO converts a domain user to embedded user DTO for subscription responses.
+func ToSubscriptionUserDTO(u *user.User) *SubscriptionUserDTO {
+	if u == nil {
+		return nil
+	}
+
+	return &SubscriptionUserDTO{
+		SID:   u.SID(),
+		Email: u.Email().String(),
+		Name:  u.Name().DisplayName(),
+	}
 }
 
-func toSubscriptionDTOInternal(sub *subscription.Subscription, plan *subscription.Plan, baseURL string) *SubscriptionDTO {
+// ToSubscriptionDTO converts a domain subscription to DTO with subscribe URL.
+// baseURL is used to construct the full subscribe URL (e.g., "https://api.example.com").
+// u is the subscription owner, can be nil if user info is not available.
+func ToSubscriptionDTO(sub *subscription.Subscription, plan *subscription.Plan, u *user.User, baseURL string) *SubscriptionDTO {
+	return toSubscriptionDTOInternal(sub, plan, u, baseURL)
+}
+
+func toSubscriptionDTOInternal(sub *subscription.Subscription, plan *subscription.Plan, u *user.User, baseURL string) *SubscriptionDTO {
 	if sub == nil {
 		return nil
 	}
@@ -119,13 +142,18 @@ func toSubscriptionDTOInternal(sub *subscription.Subscription, plan *subscriptio
 		subscribeURL = fmt.Sprintf("%s/s/%s", baseURL, sub.LinkToken())
 	}
 
-	// User SID will be set by the use case layer
-	// Use case should fetch user's SID and set it
+	// Set user SID and embedded user info from the user object
 	userSID := ""
+	var userDTO *SubscriptionUserDTO
+	if u != nil {
+		userSID = u.SID()
+		userDTO = ToSubscriptionUserDTO(u)
+	}
 
 	dto := &SubscriptionDTO{
 		SID:                sub.SID(),
 		UserSID:            userSID,
+		User:               userDTO,
 		UUID:               sub.UUID(),
 		LinkToken:          sub.LinkToken(),
 		SubscribeURL:       subscribeURL,

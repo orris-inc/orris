@@ -227,10 +227,10 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	)
 	subscriptionBaseURL := cfg.Subscription.GetBaseURL(cfg.Server.GetBaseURL())
 	getSubscriptionUC := subscriptionUsecases.NewGetSubscriptionUseCase(
-		subscriptionRepo, subscriptionPlanRepo, log, subscriptionBaseURL,
+		subscriptionRepo, subscriptionPlanRepo, userRepo, log, subscriptionBaseURL,
 	)
 	listUserSubscriptionsUC := subscriptionUsecases.NewListUserSubscriptionsUseCase(
-		subscriptionRepo, subscriptionPlanRepo, log, subscriptionBaseURL,
+		subscriptionRepo, subscriptionPlanRepo, userRepo, log, subscriptionBaseURL,
 	)
 	cancelSubscriptionUC := subscriptionUsecases.NewCancelSubscriptionUseCase(
 		subscriptionRepo, subscriptionTokenRepo, log,
@@ -245,7 +245,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		subscriptionUsageRepo, log,
 	)
 	resetSubscriptionLinkUC := subscriptionUsecases.NewResetSubscriptionLinkUseCase(
-		subscriptionRepo, subscriptionPlanRepo, log, subscriptionBaseURL,
+		subscriptionRepo, subscriptionPlanRepo, userRepo, log, subscriptionBaseURL,
 	)
 
 	createPlanUC := subscriptionUsecases.NewCreatePlanUseCase(
@@ -351,6 +351,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	updateUserNodeUC := nodeUsecases.NewUpdateUserNodeUseCase(nodeRepoImpl, log)
 	deleteUserNodeUC := nodeUsecases.NewDeleteUserNodeUseCase(nodeRepoImpl, log)
 	regenerateUserNodeTokenUC := nodeUsecases.NewRegenerateUserNodeTokenUseCase(nodeRepoImpl, log)
+	getUserNodeUsageUC := nodeUsecases.NewGetUserNodeUsageUseCase(nodeRepoImpl, subscriptionRepo, subscriptionPlanRepo, log)
+	getUserNodeInstallScriptUC := nodeUsecases.NewGetUserNodeInstallScriptUseCase(nodeRepoImpl, log)
 
 	// Initialize node authentication middleware using the same node repository adapter
 	validateNodeTokenUC := nodeUsecases.NewValidateNodeTokenUseCase(nodeRepo, log)
@@ -374,6 +376,9 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		updateUserNodeUC,
 		deleteUserNodeUC,
 		regenerateUserNodeTokenUC,
+		getUserNodeUsageUC,
+		getUserNodeInstallScriptUC,
+		apiBaseURL,
 	)
 
 	ticketHandler := ticketHandlers.NewTicketHandler(nil, nil, nil, nil, nil, nil, nil, nil, nil)

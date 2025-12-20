@@ -6,6 +6,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/subscription/dto"
 	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/domain/user"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -16,6 +17,7 @@ type GetSubscriptionQuery struct {
 type GetSubscriptionUseCase struct {
 	subscriptionRepo subscription.SubscriptionRepository
 	planRepo         subscription.PlanRepository
+	userRepo         user.Repository
 	logger           logger.Interface
 	baseURL          string
 }
@@ -23,12 +25,14 @@ type GetSubscriptionUseCase struct {
 func NewGetSubscriptionUseCase(
 	subscriptionRepo subscription.SubscriptionRepository,
 	planRepo subscription.PlanRepository,
+	userRepo user.Repository,
 	logger logger.Interface,
 	baseURL string,
 ) *GetSubscriptionUseCase {
 	return &GetSubscriptionUseCase{
 		subscriptionRepo: subscriptionRepo,
 		planRepo:         planRepo,
+		userRepo:         userRepo,
 		logger:           logger,
 		baseURL:          baseURL,
 	}
@@ -47,7 +51,17 @@ func (uc *GetSubscriptionUseCase) Execute(ctx context.Context, query GetSubscrip
 		return nil, fmt.Errorf("failed to get subscription plan: %w", err)
 	}
 
-	result := dto.ToSubscriptionDTO(sub, plan, uc.baseURL)
+	// Fetch user information for embedding in response
+	var subscriptionUser *user.User
+	if sub.UserID() > 0 {
+		subscriptionUser, err = uc.userRepo.GetByID(ctx, sub.UserID())
+		if err != nil {
+			// Log warning but don't fail - user info is optional
+			uc.logger.Warnw("failed to get subscription user", "error", err, "user_id", sub.UserID())
+		}
+	}
+
+	result := dto.ToSubscriptionDTO(sub, plan, subscriptionUser, uc.baseURL)
 
 	uc.logger.Debugw("subscription retrieved successfully",
 		"subscription_id", query.SubscriptionID,
@@ -72,7 +86,17 @@ func (uc *GetSubscriptionUseCase) ExecuteBySID(ctx context.Context, sid string) 
 		return nil, fmt.Errorf("failed to get subscription plan: %w", err)
 	}
 
-	result := dto.ToSubscriptionDTO(sub, plan, uc.baseURL)
+	// Fetch user information for embedding in response
+	var subscriptionUser *user.User
+	if sub.UserID() > 0 {
+		subscriptionUser, err = uc.userRepo.GetByID(ctx, sub.UserID())
+		if err != nil {
+			// Log warning but don't fail - user info is optional
+			uc.logger.Warnw("failed to get subscription user", "error", err, "user_id", sub.UserID())
+		}
+	}
+
+	result := dto.ToSubscriptionDTO(sub, plan, subscriptionUser, uc.baseURL)
 
 	uc.logger.Debugw("subscription retrieved successfully by SID",
 		"subscription_sid", sid,
