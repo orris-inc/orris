@@ -24,6 +24,7 @@ type PlanModel struct {
 	APIRateLimit uint `gorm:"default:60"`
 	MaxUsers     uint `gorm:"default:1"`
 	MaxProjects  uint `gorm:"default:1"`
+	NodeLimit    *int `gorm:"default:null;comment:Maximum number of user nodes (null or 0 = unlimited)"`
 	IsPublic     bool `gorm:"default:true"`
 	SortOrder    int  `gorm:"default:0"`
 	Metadata     datatypes.JSON

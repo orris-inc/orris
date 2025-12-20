@@ -163,3 +163,74 @@ func ToNodeDTOList(nodes []*node.Node) []*NodeDTO {
 
 	return dtos
 }
+
+// UserNodeDTO represents a user-owned node for API responses
+// It contains fewer fields than NodeDTO, hiding admin-specific information
+type UserNodeDTO struct {
+	ID                string     `json:"id" example:"node_xK9mP2vL3nQ" description:"Unique identifier for the node"`
+	Name              string     `json:"name" example:"My-Node-01" description:"Display name of the node"`
+	ServerAddress     string     `json:"server_address" example:"proxy.example.com" description:"Server hostname or IP address"`
+	AgentPort         uint16     `json:"agent_port" example:"8388" description:"Port for agent connections"`
+	SubscriptionPort  *uint16    `json:"subscription_port,omitempty" example:"8389" description:"Port for client subscriptions"`
+	Protocol          string     `json:"protocol" example:"shadowsocks" enums:"shadowsocks,trojan" description:"Proxy protocol type"`
+	EncryptionMethod  string     `json:"encryption_method,omitempty" example:"aes-256-gcm" description:"Encryption method (Shadowsocks only)"`
+	Status            string     `json:"status" example:"active" enums:"active,inactive,maintenance" description:"Current operational status"`
+	IsOnline          bool       `json:"is_online" example:"true" description:"Indicates if the node agent is online"`
+	LastSeenAt        *time.Time `json:"last_seen_at,omitempty" example:"2024-01-15T14:20:00Z" description:"Last time the node agent reported status"`
+	TransportProtocol string     `json:"transport_protocol,omitempty" example:"tcp" description:"Transport protocol for Trojan"`
+	Host              string     `json:"host,omitempty" example:"cdn.example.com" description:"WebSocket host or gRPC service name"`
+	Path              string     `json:"path,omitempty" example:"/trojan" description:"WebSocket path"`
+	SNI               string     `json:"sni,omitempty" example:"example.com" description:"TLS SNI"`
+	AllowInsecure     bool       `json:"allow_insecure,omitempty" example:"false" description:"Allow insecure TLS"`
+	CreatedAt         time.Time  `json:"created_at" example:"2024-01-15T10:30:00Z" description:"Timestamp when the node was created"`
+	UpdatedAt         time.Time  `json:"updated_at" example:"2024-01-15T14:20:00Z" description:"Timestamp when the node was last updated"`
+}
+
+// ToUserNodeDTO converts a node entity to a user node DTO
+func ToUserNodeDTO(n *node.Node) *UserNodeDTO {
+	if n == nil {
+		return nil
+	}
+
+	dto := &UserNodeDTO{
+		ID:               n.SID(),
+		Name:             n.Name(),
+		ServerAddress:    n.ServerAddress().Value(),
+		AgentPort:        n.AgentPort(),
+		SubscriptionPort: n.SubscriptionPort(),
+		Protocol:         n.Protocol().String(),
+		EncryptionMethod: n.EncryptionConfig().Method(),
+		Status:           n.Status().String(),
+		IsOnline:         n.IsOnline(),
+		LastSeenAt:       n.LastSeenAt(),
+		CreatedAt:        n.CreatedAt(),
+		UpdatedAt:        n.UpdatedAt(),
+	}
+
+	// Map Trojan specific fields
+	if n.TrojanConfig() != nil {
+		dto.TransportProtocol = n.TrojanConfig().TransportProtocol()
+		dto.Host = n.TrojanConfig().Host()
+		dto.Path = n.TrojanConfig().Path()
+		dto.SNI = n.TrojanConfig().SNI()
+		dto.AllowInsecure = n.TrojanConfig().AllowInsecure()
+	}
+
+	return dto
+}
+
+// ToUserNodeDTOList converts a list of node entities to user node DTOs
+func ToUserNodeDTOList(nodes []*node.Node) []*UserNodeDTO {
+	if nodes == nil {
+		return nil
+	}
+
+	dtos := make([]*UserNodeDTO, 0, len(nodes))
+	for _, n := range nodes {
+		if dto := ToUserNodeDTO(n); dto != nil {
+			dtos = append(dtos, dto)
+		}
+	}
+
+	return dtos
+}

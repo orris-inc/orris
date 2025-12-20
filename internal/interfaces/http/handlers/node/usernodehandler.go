@@ -1,0 +1,338 @@
+package node
+
+import (
+	"net/http"
+	"strconv"
+
+	"github.com/gin-gonic/gin"
+
+	"github.com/orris-inc/orris/internal/application/node/usecases"
+	"github.com/orris-inc/orris/internal/shared/constants"
+	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils"
+)
+
+// UserNodeHandler handles user node management endpoints
+type UserNodeHandler struct {
+	createNodeUC      usecases.CreateUserNodeExecutor
+	listNodesUC       usecases.ListUserNodesExecutor
+	getNodeUC         usecases.GetUserNodeExecutor
+	updateNodeUC      usecases.UpdateUserNodeExecutor
+	deleteNodeUC      usecases.DeleteUserNodeExecutor
+	regenerateTokenUC usecases.RegenerateUserNodeTokenExecutor
+	logger            logger.Interface
+}
+
+// NewUserNodeHandler creates a new user node handler
+func NewUserNodeHandler(
+	createNodeUC usecases.CreateUserNodeExecutor,
+	listNodesUC usecases.ListUserNodesExecutor,
+	getNodeUC usecases.GetUserNodeExecutor,
+	updateNodeUC usecases.UpdateUserNodeExecutor,
+	deleteNodeUC usecases.DeleteUserNodeExecutor,
+	regenerateTokenUC usecases.RegenerateUserNodeTokenExecutor,
+) *UserNodeHandler {
+	return &UserNodeHandler{
+		createNodeUC:      createNodeUC,
+		listNodesUC:       listNodesUC,
+		getNodeUC:         getNodeUC,
+		updateNodeUC:      updateNodeUC,
+		deleteNodeUC:      deleteNodeUC,
+		regenerateTokenUC: regenerateTokenUC,
+		logger:            logger.NewLogger(),
+	}
+}
+
+// CreateNode handles POST /user/nodes
+func (h *UserNodeHandler) CreateNode(c *gin.Context) {
+	userID, err := getUserID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	var req CreateUserNodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid request body for create user node", "user_id", userID, "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	cmd := req.ToCommand(userID)
+	result, err := h.createNodeUC.Execute(c.Request.Context(), cmd)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.CreatedResponse(c, result, "Node created successfully")
+}
+
+// ListNodes handles GET /user/nodes
+func (h *UserNodeHandler) ListNodes(c *gin.Context) {
+	userID, err := getUserID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	req, err := parseListUserNodesRequest(c, userID)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	cmd := req.ToCommand()
+	result, err := h.listNodesUC.Execute(c.Request.Context(), cmd)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.ListSuccessResponse(c, result.Nodes, int64(result.TotalCount), req.Page, req.PageSize)
+}
+
+// GetNode handles GET /user/nodes/:id
+func (h *UserNodeHandler) GetNode(c *gin.Context) {
+	userID, err := getUserID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	nodeSID, err := parseNodeSID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	query := usecases.GetUserNodeQuery{
+		UserID:  userID,
+		NodeSID: nodeSID,
+	}
+
+	result, err := h.getNodeUC.Execute(c.Request.Context(), query)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "", result)
+}
+
+// UpdateNode handles PUT /user/nodes/:id
+func (h *UserNodeHandler) UpdateNode(c *gin.Context) {
+	userID, err := getUserID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	nodeSID, err := parseNodeSID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	var req UpdateUserNodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid request body for update user node", "user_id", userID, "node_sid", nodeSID, "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	cmd := req.ToCommand(userID, nodeSID)
+	result, err := h.updateNodeUC.Execute(c.Request.Context(), cmd)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Node updated successfully", result)
+}
+
+// DeleteNode handles DELETE /user/nodes/:id
+func (h *UserNodeHandler) DeleteNode(c *gin.Context) {
+	userID, err := getUserID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	nodeSID, err := parseNodeSID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	cmd := usecases.DeleteUserNodeCommand{
+		UserID:  userID,
+		NodeSID: nodeSID,
+	}
+
+	if err := h.deleteNodeUC.Execute(c.Request.Context(), cmd); err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.NoContentResponse(c)
+}
+
+// RegenerateToken handles POST /user/nodes/:id/regenerate-token
+func (h *UserNodeHandler) RegenerateToken(c *gin.Context) {
+	userID, err := getUserID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	nodeSID, err := parseNodeSID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	cmd := usecases.RegenerateUserNodeTokenCommand{
+		UserID:  userID,
+		NodeSID: nodeSID,
+	}
+
+	result, err := h.regenerateTokenUC.Execute(c.Request.Context(), cmd)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Token regenerated successfully", result)
+}
+
+// getUserID extracts user ID from context
+func getUserID(c *gin.Context) (uint, error) {
+	userIDInterface, exists := c.Get("user_id")
+	if !exists {
+		return 0, errors.NewUnauthorizedError("user not authenticated")
+	}
+	userID, ok := userIDInterface.(uint)
+	if !ok {
+		return 0, errors.NewUnauthorizedError("invalid user ID in context")
+	}
+	return userID, nil
+}
+
+// getStringPtr returns a pointer to the string if not empty, otherwise nil
+func getStringPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
+
+// CreateUserNodeRequest represents the request body for creating a user node
+type CreateUserNodeRequest struct {
+	Name              string            `json:"name" binding:"required,min=2,max=100" example:"My-Node-01"`
+	ServerAddress     string            `json:"server_address" binding:"required" example:"1.2.3.4"`
+	AgentPort         uint16            `json:"agent_port" binding:"required,min=1,max=65535" example:"8388"`
+	SubscriptionPort  *uint16           `json:"subscription_port,omitempty" binding:"omitempty,min=1,max=65535" example:"8389"`
+	Protocol          string            `json:"protocol" binding:"required,oneof=shadowsocks trojan" example:"shadowsocks"`
+	Method            string            `json:"method,omitempty" example:"aes-256-gcm"`
+	Plugin            *string           `json:"plugin,omitempty" example:"obfs-local"`
+	PluginOpts        map[string]string `json:"plugin_opts,omitempty"`
+	TransportProtocol string            `json:"transport_protocol,omitempty" binding:"omitempty,oneof=tcp ws grpc" example:"tcp"`
+	Host              string            `json:"host,omitempty" example:"cdn.example.com"`
+	Path              string            `json:"path,omitempty" example:"/trojan"`
+	SNI               string            `json:"sni,omitempty" example:"example.com"`
+	AllowInsecure     bool              `json:"allow_insecure,omitempty" example:"false"`
+}
+
+func (r *CreateUserNodeRequest) ToCommand(userID uint) usecases.CreateUserNodeCommand {
+	return usecases.CreateUserNodeCommand{
+		UserID:            userID,
+		Name:              r.Name,
+		ServerAddress:     r.ServerAddress,
+		AgentPort:         r.AgentPort,
+		SubscriptionPort:  r.SubscriptionPort,
+		Protocol:          r.Protocol,
+		Method:            r.Method,
+		Plugin:            r.Plugin,
+		PluginOpts:        r.PluginOpts,
+		TransportProtocol: r.TransportProtocol,
+		Host:              r.Host,
+		Path:              r.Path,
+		SNI:               r.SNI,
+		AllowInsecure:     r.AllowInsecure,
+	}
+}
+
+// UpdateUserNodeRequest represents the request body for updating a user node
+type UpdateUserNodeRequest struct {
+	Name             *string `json:"name,omitempty" binding:"omitempty,min=2,max=100" example:"My-Node-Updated"`
+	ServerAddress    *string `json:"server_address,omitempty" example:"2.3.4.5"`
+	AgentPort        *uint16 `json:"agent_port,omitempty" binding:"omitempty,min=1,max=65535" example:"8388"`
+	SubscriptionPort *uint16 `json:"subscription_port,omitempty" binding:"omitempty,min=1,max=65535" example:"8389"`
+}
+
+func (r *UpdateUserNodeRequest) ToCommand(userID uint, nodeSID string) usecases.UpdateUserNodeCommand {
+	return usecases.UpdateUserNodeCommand{
+		UserID:           userID,
+		NodeSID:          nodeSID,
+		Name:             r.Name,
+		ServerAddress:    r.ServerAddress,
+		AgentPort:        r.AgentPort,
+		SubscriptionPort: r.SubscriptionPort,
+	}
+}
+
+// ListUserNodesRequest represents the request parameters for listing user nodes
+type ListUserNodesRequest struct {
+	UserID    uint
+	Page      int
+	PageSize  int
+	Status    *string
+	Search    *string
+	SortBy    string
+	SortOrder string
+}
+
+func parseListUserNodesRequest(c *gin.Context, userID uint) (*ListUserNodesRequest, error) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if page < 1 {
+		page = 1
+	}
+
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", strconv.Itoa(constants.DefaultPageSize)))
+	if pageSize < 1 || pageSize > constants.MaxPageSize {
+		pageSize = constants.DefaultPageSize
+	}
+
+	req := &ListUserNodesRequest{
+		UserID:    userID,
+		Page:      page,
+		PageSize:  pageSize,
+		SortBy:    c.DefaultQuery("sort_by", "created_at"),
+		SortOrder: c.DefaultQuery("sort_order", "desc"),
+	}
+
+	if status := c.Query("status"); status != "" {
+		req.Status = &status
+	}
+
+	if search := c.Query("search"); search != "" {
+		req.Search = &search
+	}
+
+	return req, nil
+}
+
+func (r *ListUserNodesRequest) ToCommand() usecases.ListUserNodesQuery {
+	offset := (r.Page - 1) * r.PageSize
+	return usecases.ListUserNodesQuery{
+		UserID:    r.UserID,
+		Status:    r.Status,
+		Search:    r.Search,
+		Limit:     r.PageSize,
+		Offset:    offset,
+		SortBy:    r.SortBy,
+		SortOrder: r.SortOrder,
+	}
+}

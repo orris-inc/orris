@@ -26,6 +26,7 @@ type Node struct {
 	status            vo.NodeStatus
 	metadata          vo.NodeMetadata
 	groupIDs          []uint // resource group IDs
+	userID            *uint  // owner user ID (nil = admin created, non-nil = user created)
 	apiToken          string
 	tokenHash         string
 	sortOrder         int
@@ -123,6 +124,7 @@ func ReconstructNode(
 	status vo.NodeStatus,
 	metadata vo.NodeMetadata,
 	groupIDs []uint,
+	userID *uint,
 	tokenHash string,
 	apiToken string,
 	sortOrder int,
@@ -166,6 +168,7 @@ func ReconstructNode(
 		status:            status,
 		metadata:          metadata,
 		groupIDs:          groupIDs,
+		userID:            userID,
 		tokenHash:         tokenHash,
 		apiToken:          apiToken,
 		sortOrder:         sortOrder,
@@ -252,6 +255,18 @@ func (n *Node) Metadata() vo.NodeMetadata {
 // GroupIDs returns the resource group IDs
 func (n *Node) GroupIDs() []uint {
 	return n.groupIDs
+}
+
+// UserID returns the owner user ID (nil for admin-created nodes)
+func (n *Node) UserID() *uint {
+	return n.userID
+}
+
+// SetUserID sets the owner user ID
+func (n *Node) SetUserID(userID *uint) {
+	n.userID = userID
+	n.updatedAt = time.Now()
+	n.version++
 }
 
 // SetGroupIDs sets the resource group IDs
@@ -555,6 +570,16 @@ func (n *Node) VerifyAPIToken(plainToken string) bool {
 // IsAvailable checks if node is available for use
 func (n *Node) IsAvailable() bool {
 	return n.status == vo.NodeStatusActive
+}
+
+// IsUserOwned returns true if this node is owned by a user (not admin-created)
+func (n *Node) IsUserOwned() bool {
+	return n.userID != nil
+}
+
+// IsOwnedBy checks if the node is owned by the specified user
+func (n *Node) IsOwnedBy(userID uint) bool {
+	return n.userID != nil && *n.userID == userID
 }
 
 // LastSeenAt returns the last time the node agent reported status

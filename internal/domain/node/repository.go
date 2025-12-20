@@ -26,6 +26,18 @@ type NodeRepository interface {
 	UpdateLastSeenAt(ctx context.Context, nodeID uint, publicIPv4, publicIPv6 string) error
 	// GetLastSeenAt retrieves the last_seen_at timestamp for a node
 	GetLastSeenAt(ctx context.Context, nodeID uint) (*time.Time, error)
+	// ListByUserID returns nodes owned by a specific user
+	ListByUserID(ctx context.Context, userID uint, filter NodeFilter) ([]*Node, int64, error)
+	// CountByUserID counts nodes owned by a specific user
+	CountByUserID(ctx context.Context, userID uint) (int64, error)
+	// ExistsByNameForUser checks if a node with the given name exists for a specific user
+	ExistsByNameForUser(ctx context.Context, name string, userID uint) (bool, error)
+	// ExistsByNameForUserExcluding checks if a node with the given name exists for a user, excluding a specific node
+	ExistsByNameForUserExcluding(ctx context.Context, name string, userID uint, excludeID uint) (bool, error)
+	// ExistsByAddressForUser checks if a node with the given address and port exists for a specific user
+	ExistsByAddressForUser(ctx context.Context, address string, port int, userID uint) (bool, error)
+	// ExistsByAddressForUserExcluding checks if a node with the given address and port exists for a user, excluding a specific node
+	ExistsByAddressForUserExcluding(ctx context.Context, address string, port int, userID uint, excludeID uint) (bool, error)
 }
 
 type NodeFilter struct {
@@ -33,5 +45,6 @@ type NodeFilter struct {
 	Name     *string
 	Status   *string
 	Tag      *string
-	GroupIDs []uint // Filter by resource group IDs
+	UserID   *uint   // Filter by owner user ID
+	GroupIDs []uint  // Filter by resource group IDs
 }

@@ -157,6 +157,17 @@ func (uc *CreateUserForwardRuleUseCase) Execute(ctx context.Context, cmd CreateU
 		if targetNode == nil {
 			return nil, errors.NewNotFoundError("target node", cmd.TargetNodeSID)
 		}
+
+		// Verify user owns the target node
+		if !targetNode.IsOwnedBy(cmd.UserID) {
+			uc.logger.Warnw("user attempted to use node they don't own as target",
+				"user_id", cmd.UserID,
+				"target_node_sid", cmd.TargetNodeSID,
+				"node_owner", targetNode.UserID(),
+			)
+			return nil, errors.NewForbiddenError("cannot use this node as target")
+		}
+
 		nodeID := targetNode.ID()
 		targetNodeID = &nodeID
 	}

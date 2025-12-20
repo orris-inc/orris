@@ -55,6 +55,7 @@ type Router struct {
 	paymentHandler              *handlers.PaymentHandler
 	nodeHandler                 *handlers.NodeHandler
 	nodeSubscriptionHandler     *handlers.NodeSubscriptionHandler
+	userNodeHandler             *nodeHandlers.UserNodeHandler
 	agentHandler                *nodeHandlers.AgentHandler
 	ticketHandler               *ticketHandlers.TicketHandler
 	notificationHandler         *handlers.NotificationHandler
@@ -69,6 +70,8 @@ type Router struct {
 	authMiddleware              *middleware.AuthMiddleware
 	subscriptionOwnerMiddleware *middleware.SubscriptionOwnerMiddleware
 	nodeTokenMiddleware         *middleware.NodeTokenMiddleware
+	nodeOwnerMiddleware         *middleware.NodeOwnerMiddleware
+	nodeQuotaMiddleware         *middleware.NodeQuotaMiddleware
 	forwardAgentTokenMiddleware *middleware.ForwardAgentTokenMiddleware
 	forwardRuleOwnerMiddleware  *middleware.ForwardRuleOwnerMiddleware
 	forwardQuotaMiddleware      *middleware.ForwardQuotaMiddleware
@@ -341,15 +344,37 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	generateNodeTokenUC := nodeUsecases.NewGenerateNodeTokenUseCase(nodeRepoImpl, log)
 	generateNodeInstallScriptUC := nodeUsecases.NewGenerateNodeInstallScriptUseCase(nodeRepoImpl, log)
 
+	// Initialize user node use cases
+	createUserNodeUC := nodeUsecases.NewCreateUserNodeUseCase(nodeRepoImpl, log)
+	listUserNodesUC := nodeUsecases.NewListUserNodesUseCase(nodeRepoImpl, log)
+	getUserNodeUC := nodeUsecases.NewGetUserNodeUseCase(nodeRepoImpl, log)
+	updateUserNodeUC := nodeUsecases.NewUpdateUserNodeUseCase(nodeRepoImpl, log)
+	deleteUserNodeUC := nodeUsecases.NewDeleteUserNodeUseCase(nodeRepoImpl, log)
+	regenerateUserNodeTokenUC := nodeUsecases.NewRegenerateUserNodeTokenUseCase(nodeRepoImpl, log)
+
 	// Initialize node authentication middleware using the same node repository adapter
 	validateNodeTokenUC := nodeUsecases.NewValidateNodeTokenUseCase(nodeRepo, log)
 	nodeTokenMiddleware := middleware.NewNodeTokenMiddleware(validateNodeTokenUC, log)
+
+	// Initialize node owner middleware
+	nodeOwnerMiddleware := middleware.NewNodeOwnerMiddleware(nodeRepoImpl)
+
+	// Initialize node quota middleware
+	nodeQuotaMiddleware := middleware.NewNodeQuotaMiddleware(nodeRepoImpl, subscriptionRepo, subscriptionPlanRepo)
 
 	// Initialize handlers
 	// API URL for node install script generation
 	apiBaseURL := cfg.Server.GetBaseURL()
 	nodeHandler := handlers.NewNodeHandler(createNodeUC, getNodeUC, updateNodeUC, deleteNodeUC, listNodesUC, generateNodeTokenUC, generateNodeInstallScriptUC, apiBaseURL)
 	nodeSubscriptionHandler := handlers.NewNodeSubscriptionHandler(generateSubscriptionUC)
+	userNodeHandler := nodeHandlers.NewUserNodeHandler(
+		createUserNodeUC,
+		listUserNodesUC,
+		getUserNodeUC,
+		updateUserNodeUC,
+		deleteUserNodeUC,
+		regenerateUserNodeTokenUC,
+	)
 
 	ticketHandler := ticketHandlers.NewTicketHandler(nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
@@ -638,6 +663,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		paymentHandler:              paymentHandler,
 		nodeHandler:                 nodeHandler,
 		nodeSubscriptionHandler:     nodeSubscriptionHandler,
+		userNodeHandler:             userNodeHandler,
 		agentHandler:                agentHandler,
 		ticketHandler:               ticketHandler,
 		notificationHandler:         notificationHandler,
@@ -652,6 +678,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		authMiddleware:              authMiddleware,
 		subscriptionOwnerMiddleware: subscriptionOwnerMiddleware,
 		nodeTokenMiddleware:         nodeTokenMiddleware,
+		nodeOwnerMiddleware:         nodeOwnerMiddleware,
+		nodeQuotaMiddleware:         nodeQuotaMiddleware,
 		forwardAgentTokenMiddleware: forwardAgentTokenMiddleware,
 		forwardRuleOwnerMiddleware:  forwardRuleOwnerMiddleware,
 		forwardQuotaMiddleware:      forwardQuotaMiddleware,
@@ -807,9 +835,12 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 
 	routes.SetupNodeRoutes(r.engine, &routes.NodeRouteConfig{
 		NodeHandler:         r.nodeHandler,
+		UserNodeHandler:     r.userNodeHandler,
 		SubscriptionHandler: r.nodeSubscriptionHandler,
 		AuthMiddleware:      r.authMiddleware,
 		NodeTokenMW:         r.nodeTokenMiddleware,
+		NodeOwnerMW:         r.nodeOwnerMiddleware,
+		NodeQuotaMW:         r.nodeQuotaMiddleware,
 		RateLimiter:         r.rateLimiter,
 	})
 

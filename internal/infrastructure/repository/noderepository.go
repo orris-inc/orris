@@ -391,6 +391,9 @@ func (r *NodeRepositoryImpl) List(ctx context.Context, filter node.NodeFilter) (
 	query := r.db.WithContext(ctx).Model(&models.NodeModel{})
 
 	// Apply filters
+	if filter.UserID != nil {
+		query = query.Where("user_id = ?", *filter.UserID)
+	}
 	if filter.Name != nil && *filter.Name != "" {
 		query = query.Where("name LIKE ?", "%"+*filter.Name+"%")
 	}
@@ -620,4 +623,147 @@ func uintSliceToString(ids []uint) string {
 		parts[i] = fmt.Sprintf("%d", id)
 	}
 	return strings.Join(parts, ",")
+}
+
+// ListByUserID returns nodes owned by a specific user
+func (r *NodeRepositoryImpl) ListByUserID(ctx context.Context, userID uint, filter node.NodeFilter) ([]*node.Node, int64, error) {
+	query := r.db.WithContext(ctx).Model(&models.NodeModel{}).Where("user_id = ?", userID)
+
+	// Apply filters
+	if filter.Name != nil && *filter.Name != "" {
+		query = query.Where("name LIKE ?", "%"+*filter.Name+"%")
+	}
+	if filter.Status != nil && *filter.Status != "" {
+		query = query.Where("status = ?", *filter.Status)
+	}
+
+	// Count total records
+	var total int64
+	if err := query.Count(&total).Error; err != nil {
+		r.logger.Errorw("failed to count user nodes", "user_id", userID, "error", err)
+		return nil, 0, fmt.Errorf("failed to count user nodes: %w", err)
+	}
+
+	// Apply sorting
+	orderClause := filter.SortFilter.OrderClause()
+	if orderClause != "" {
+		query = query.Order(orderClause)
+	} else {
+		query = query.Order("created_at DESC")
+	}
+
+	// Apply pagination
+	offset := filter.PageFilter.Offset()
+	limit := filter.PageFilter.Limit()
+	query = query.Offset(offset).Limit(limit)
+
+	// Execute query
+	var nodeModels []*models.NodeModel
+	if err := query.Find(&nodeModels).Error; err != nil {
+		r.logger.Errorw("failed to list user nodes", "user_id", userID, "error", err)
+		return nil, 0, fmt.Errorf("failed to list user nodes: %w", err)
+	}
+
+	// Collect node IDs by protocol
+	var ssNodeIDs, trojanNodeIDs []uint
+	for _, m := range nodeModels {
+		switch m.Protocol {
+		case "shadowsocks":
+			ssNodeIDs = append(ssNodeIDs, m.ID)
+		case "trojan":
+			trojanNodeIDs = append(trojanNodeIDs, m.ID)
+		}
+	}
+
+	// Load protocol-specific configs
+	ssConfigsRaw, err := r.shadowsocksConfigRepo.GetByNodeIDs(ctx, ssNodeIDs)
+	if err != nil {
+		r.logger.Errorw("failed to get shadowsocks configs", "error", err)
+		return nil, 0, fmt.Errorf("failed to get shadowsocks configs: %w", err)
+	}
+
+	ssConfigs := make(map[uint]*mappers.ShadowsocksConfigData)
+	for nodeID, data := range ssConfigsRaw {
+		ssConfigs[nodeID] = &mappers.ShadowsocksConfigData{
+			EncryptionConfig: data.EncryptionConfig,
+			PluginConfig:     data.PluginConfig,
+		}
+	}
+
+	trojanConfigs, err := r.trojanConfigRepo.GetByNodeIDs(ctx, trojanNodeIDs)
+	if err != nil {
+		r.logger.Errorw("failed to get trojan configs", "error", err)
+		return nil, 0, fmt.Errorf("failed to get trojan configs: %w", err)
+	}
+
+	entities, err := r.mapper.ToEntities(nodeModels, ssConfigs, trojanConfigs)
+	if err != nil {
+		r.logger.Errorw("failed to map node models to entities", "error", err)
+		return nil, 0, fmt.Errorf("failed to map nodes: %w", err)
+	}
+
+	return entities, total, nil
+}
+
+// CountByUserID counts nodes owned by a specific user
+func (r *NodeRepositoryImpl) CountByUserID(ctx context.Context, userID uint) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&models.NodeModel{}).Where("user_id = ?", userID).Count(&count).Error
+	if err != nil {
+		r.logger.Errorw("failed to count user nodes", "user_id", userID, "error", err)
+		return 0, fmt.Errorf("failed to count user nodes: %w", err)
+	}
+	return count, nil
+}
+
+// ExistsByNameForUser checks if a node with the given name exists for a specific user
+func (r *NodeRepositoryImpl) ExistsByNameForUser(ctx context.Context, name string, userID uint) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&models.NodeModel{}).
+		Where("name = ? AND user_id = ?", name, userID).
+		Count(&count).Error
+	if err != nil {
+		r.logger.Errorw("failed to check node existence by name for user", "name", name, "user_id", userID, "error", err)
+		return false, fmt.Errorf("failed to check node existence: %w", err)
+	}
+	return count > 0, nil
+}
+
+// ExistsByNameForUserExcluding checks if a node with the given name exists for a user, excluding a specific node
+func (r *NodeRepositoryImpl) ExistsByNameForUserExcluding(ctx context.Context, name string, userID uint, excludeID uint) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&models.NodeModel{}).
+		Where("name = ? AND user_id = ? AND id != ?", name, userID, excludeID).
+		Count(&count).Error
+	if err != nil {
+		r.logger.Errorw("failed to check node existence by name for user", "name", name, "user_id", userID, "exclude_id", excludeID, "error", err)
+		return false, fmt.Errorf("failed to check node existence: %w", err)
+	}
+	return count > 0, nil
+}
+
+// ExistsByAddressForUser checks if a node with the given address and port exists for a specific user
+func (r *NodeRepositoryImpl) ExistsByAddressForUser(ctx context.Context, address string, port int, userID uint) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&models.NodeModel{}).
+		Where("server_address = ? AND agent_port = ? AND user_id = ?", address, port, userID).
+		Count(&count).Error
+	if err != nil {
+		r.logger.Errorw("failed to check node existence by address for user", "address", address, "port", port, "user_id", userID, "error", err)
+		return false, fmt.Errorf("failed to check node existence: %w", err)
+	}
+	return count > 0, nil
+}
+
+// ExistsByAddressForUserExcluding checks if a node with the given address and port exists for a user, excluding a specific node
+func (r *NodeRepositoryImpl) ExistsByAddressForUserExcluding(ctx context.Context, address string, port int, userID uint, excludeID uint) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&models.NodeModel{}).
+		Where("server_address = ? AND agent_port = ? AND user_id = ? AND id != ?", address, port, userID, excludeID).
+		Count(&count).Error
+	if err != nil {
+		r.logger.Errorw("failed to check node existence by address for user", "address", address, "port", port, "user_id", userID, "exclude_id", excludeID, "error", err)
+		return false, fmt.Errorf("failed to check node existence: %w", err)
+	}
+	return count > 0, nil
 }

@@ -27,6 +27,7 @@ type Plan struct {
 	apiRateLimit uint
 	maxUsers     uint
 	maxProjects  uint
+	nodeLimit    *int // maximum number of user nodes (nil or 0 = unlimited)
 	isPublic     bool
 	sortOrder    int
 	metadata     map[string]interface{}
@@ -82,7 +83,7 @@ func NewPlan(name, slug, description string, planType vo.PlanType) (*Plan, error
 
 func ReconstructPlan(id uint, sid string, name, slug, description string,
 	status string, planType string, features *vo.PlanFeatures,
-	apiRateLimit, maxUsers, maxProjects uint, isPublic bool, sortOrder int,
+	apiRateLimit, maxUsers, maxProjects uint, nodeLimit *int, isPublic bool, sortOrder int,
 	metadata map[string]interface{}, version int,
 	createdAt, updatedAt time.Time) (*Plan, error) {
 
@@ -119,6 +120,7 @@ func ReconstructPlan(id uint, sid string, name, slug, description string,
 		apiRateLimit: apiRateLimit,
 		maxUsers:     maxUsers,
 		maxProjects:  maxProjects,
+		nodeLimit:    nodeLimit,
 		isPublic:     isPublic,
 		sortOrder:    sortOrder,
 		metadata:     metadata,
@@ -187,6 +189,11 @@ func (p *Plan) MaxUsers() uint {
 
 func (p *Plan) MaxProjects() uint {
 	return p.maxProjects
+}
+
+// NodeLimit returns the maximum number of user nodes (nil or 0 = unlimited)
+func (p *Plan) NodeLimit() *int {
+	return p.nodeLimit
 }
 
 func (p *Plan) IsPublic() bool {
@@ -277,6 +284,13 @@ func (p *Plan) SetMaxProjects(max uint) {
 	p.version++
 }
 
+// SetNodeLimit sets the maximum number of user nodes
+func (p *Plan) SetNodeLimit(limit *int) {
+	p.nodeLimit = limit
+	p.updatedAt = time.Now()
+	p.version++
+}
+
 func (p *Plan) SetSortOrder(order int) {
 	p.sortOrder = order
 	p.updatedAt = time.Now()
@@ -323,4 +337,17 @@ func (p *Plan) HasTrafficRemaining(usedBytes uint64) (bool, error) {
 		return true, nil // unlimited if no features configured
 	}
 	return p.features.HasTrafficRemaining(usedBytes)
+}
+
+// HasNodeLimit returns true if this plan has a node limit
+func (p *Plan) HasNodeLimit() bool {
+	return p.nodeLimit != nil && *p.nodeLimit > 0
+}
+
+// GetNodeLimit returns the node limit, or 0 if unlimited
+func (p *Plan) GetNodeLimit() int {
+	if p.nodeLimit == nil {
+		return 0
+	}
+	return *p.nodeLimit
 }

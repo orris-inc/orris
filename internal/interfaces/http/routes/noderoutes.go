@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/orris-inc/orris/internal/interfaces/http/handlers"
+	nodeHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/node"
 	"github.com/orris-inc/orris/internal/interfaces/http/middleware"
 	"github.com/orris-inc/orris/internal/shared/authorization"
 )
@@ -11,10 +12,12 @@ import (
 // NodeRouteConfig holds dependencies for node routes
 type NodeRouteConfig struct {
 	NodeHandler         *handlers.NodeHandler
+	UserNodeHandler     *nodeHandlers.UserNodeHandler
 	SubscriptionHandler *handlers.NodeSubscriptionHandler
 	AuthMiddleware      *middleware.AuthMiddleware
-	SubscriptionTokenMW *middleware.SubscriptionTokenMiddleware
 	NodeTokenMW         *middleware.NodeTokenMiddleware
+	NodeOwnerMW         *middleware.NodeOwnerMiddleware
+	NodeQuotaMW         *middleware.NodeQuotaMiddleware
 	RateLimiter         *middleware.RateLimiter
 }
 
@@ -59,6 +62,29 @@ func SetupNodeRoutes(engine *gin.Engine, config *NodeRouteConfig) {
 		nodes.DELETE("/:id",
 			authorization.RequireAdmin(),
 			config.NodeHandler.DeleteNode)
+	}
+
+	// User node management routes - require authentication
+	userNodes := engine.Group("/user/nodes")
+	userNodes.Use(config.AuthMiddleware.RequireAuth())
+	{
+		// Create node - requires quota check
+		userNodes.POST("",
+			config.NodeQuotaMW.CheckNodeLimit(),
+			config.UserNodeHandler.CreateNode)
+
+		// List user's nodes
+		userNodes.GET("", config.UserNodeHandler.ListNodes)
+
+		// Single node operations - require ownership check
+		nodeGroup := userNodes.Group("/:id")
+		nodeGroup.Use(config.NodeOwnerMW.RequireOwnership())
+		{
+			nodeGroup.GET("", config.UserNodeHandler.GetNode)
+			nodeGroup.PUT("", config.UserNodeHandler.UpdateNode)
+			nodeGroup.DELETE("", config.UserNodeHandler.DeleteNode)
+			nodeGroup.POST("/regenerate-token", config.UserNodeHandler.RegenerateToken)
+		}
 	}
 
 	// Subscription routes - public access with token validation

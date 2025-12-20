@@ -20,11 +20,12 @@ type NodeModel struct {
 	SID               string         `gorm:"uniqueIndex;size:50;column:sid"` // Stripe-style prefixed ID (node_xxx)
 	Name              string         `gorm:"uniqueIndex;not null;size:100"`
 	ServerAddress     string         `gorm:"not null;size:255;index:idx_agent_address"`
-	AgentPort         uint16         `gorm:"not null;index:idx_agent_address"`                        // port for agent connections
-	SubscriptionPort  *uint16        `gorm:"default:null"`                                            // port for client subscriptions (if nil, use AgentPort)
-	Protocol          string         `gorm:"not null;default:shadowsocks;size:20;index:idx_protocol"` // shadowsocks, trojan
-	Status            string         `gorm:"not null;default:inactive;size:20;index:idx_status"`      // active, inactive, maintenance
-	GroupIDs          datatypes.JSON `gorm:"column:group_ids"`                                        // resource group IDs (JSON array)
+	AgentPort         uint16         `gorm:"not null;index:idx_agent_address"`                                     // port for agent connections
+	SubscriptionPort  *uint16        `gorm:"default:null"`                                                         // port for client subscriptions (if nil, use AgentPort)
+	Protocol          string         `gorm:"not null;default:shadowsocks;size:20;index:idx_protocol"`              // shadowsocks, trojan
+	Status            string         `gorm:"not null;default:inactive;size:20;index:idx_status"`                   // active, inactive, maintenance
+	GroupIDs          datatypes.JSON `gorm:"column:group_ids"`                                                     // resource group IDs (JSON array)
+	UserID            *uint          `gorm:"index:idx_nodes_user_id;comment:Owner user ID (NULL = admin created)"` // owner user ID
 	Region            *string        `gorm:"size:100"`
 	Tags              datatypes.JSON
 	SortOrder         int        `gorm:"not null;default:0"`
