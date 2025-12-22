@@ -119,12 +119,13 @@ func setDefaults() {
 	viper.SetDefault("auth.cookie.same_site", "Lax")
 
 	// OAuth defaults (empty by default, must be configured)
+	// redirect_url defaults to empty - will be auto-generated from server.base_url
 	viper.SetDefault("oauth.google.client_id", "")
 	viper.SetDefault("oauth.google.client_secret", "")
-	viper.SetDefault("oauth.google.redirect_url", "http://localhost:8080/api/auth/oauth/google/callback")
+	viper.SetDefault("oauth.google.redirect_url", "")
 	viper.SetDefault("oauth.github.client_id", "")
 	viper.SetDefault("oauth.github.client_secret", "")
-	viper.SetDefault("oauth.github.redirect_url", "http://localhost:8080/api/auth/oauth/github/callback")
+	viper.SetDefault("oauth.github.redirect_url", "")
 
 	// Email defaults
 	viper.SetDefault("email.smtp_host", "localhost")

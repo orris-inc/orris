@@ -144,6 +144,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		Password:    cfg.Email.SMTPPassword,
 		FromAddress: cfg.Email.FromAddress,
 		FromName:    cfg.Email.FromName,
+		BaseURL:     cfg.Server.GetBaseURL(),
 	}
 	emailService := email.NewSMTPEmailService(emailCfg)
 

@@ -13,6 +13,7 @@ type SMTPConfig struct {
 	Password    string
 	FromAddress string
 	FromName    string
+	BaseURL     string // Base URL for email links (e.g., "http://localhost:8081")
 }
 
 type SMTPEmailService struct {
@@ -30,7 +31,7 @@ func NewSMTPEmailService(config SMTPConfig) *SMTPEmailService {
 }
 
 func (s *SMTPEmailService) SendVerificationEmail(to, token string) error {
-	verificationURL := fmt.Sprintf("http://localhost:8080/api/auth/verify-email?token=%s", token)
+	verificationURL := fmt.Sprintf("%s/auth/verify-email?token=%s", s.config.BaseURL, token)
 
 	subject := "Verify Your Email Address"
 	htmlBody := fmt.Sprintf(`
@@ -62,7 +63,7 @@ If you didn't create an account, please ignore this email.
 }
 
 func (s *SMTPEmailService) SendPasswordResetEmail(to, token string) error {
-	resetURL := fmt.Sprintf("http://localhost:8080/api/auth/reset-password?token=%s", token)
+	resetURL := fmt.Sprintf("%s/auth/reset-password?token=%s", s.config.BaseURL, token)
 
 	subject := "Reset Your Password"
 	htmlBody := fmt.Sprintf(`
