@@ -1,41 +1,43 @@
 version: '3.8'
 
 services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: orris_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - orris
+
   frontend:
     image: ghcr.io/orris-inc/orris-frontend:latest
     container_name: orris_frontend
     restart: unless-stopped
-    ports:
-      - "3000:80"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    expose:
+      - "80"
     depends_on:
       - orris
-    networks:
-      - orris_network
 
   orris:
     image: ghcr.io/orris-inc/orris:latest
     container_name: orris_app
     restart: unless-stopped
-    ports:
-      - "8080:8080"
-    environment:
-      - APP_ENV=production
-      - DB_HOST=mysql
-      - DB_PORT=3306
-      - DB_USER=orris
-      - DB_PASSWORD=orris_password
-      - DB_NAME=orris
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+    expose:
+      - "8080"
+    volumes:
+      - ./configs:/app/configs:ro
     depends_on:
       mysql:
         condition: service_healthy
       redis:
         condition: service_healthy
-    networks:
-      - orris_network
 
   mysql:
     image: mysql:8.0
@@ -50,8 +52,6 @@ services:
       - "3306:3306"
     volumes:
       - ./data/mysql:/var/lib/mysql
-    networks:
-      - orris_network
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       timeout: 20s
@@ -65,8 +65,6 @@ services:
       - "6379:6379"
     volumes:
       - ./data/redis:/data
-    networks:
-      - orris_network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -74,6 +72,6 @@ services:
       retries: 5
     command: redis-server --appendonly yes
 
-networks:
-  orris_network:
-    driver: bridge
+volumes:
+  caddy_data:
+  caddy_config:

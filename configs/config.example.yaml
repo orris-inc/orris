@@ -1,129 +1,52 @@
-# ============================================================
-# Orris Configuration Example
-# ============================================================
+# Orris Configuration
 # Setup: cp config.example.yaml config.yaml
-#
-# Configuration priority: Env vars > config.yaml > defaults
-# Environment variable format: ORRIS_<SECTION>_<KEY>
-# Example: ORRIS_SERVER_PORT=8080
-#
-# ⚠️ Security: Never commit passwords to git!
-# Use environment variables for all secrets in production.
-# ============================================================
+# Env vars override config: ORRIS_<SECTION>_<KEY> (e.g. ORRIS_SERVER_PORT=8080)
 
-# ------------------------------------------------------------
-# Server
-# ------------------------------------------------------------
 server:
   host: "0.0.0.0"
-  port: 8081
-  mode: "debug"  # debug | release | test
+  port: 8080
+  mode: "debug" # debug | release | test
   allowed_origins:
     - "http://localhost:3000"
-    - "http://localhost:8080"
   frontend_callback_url: "http://localhost:3000/oauth/callback"
 
-# ------------------------------------------------------------
-# Database
-# ------------------------------------------------------------
 database:
   host: "localhost"
   port: 3306
   username: "orris"
-  password: ""           # ORRIS_DATABASE_PASSWORD (required)
-  database: "orris_dev"
-  max_idle_conns: 10
-  max_open_conns: 100
-  conn_max_lifetime: 60  # minutes
+  password: "" # ORRIS_DATABASE_PASSWORD
+  database: "orris"
 
-# ------------------------------------------------------------
-# Logger
-# ------------------------------------------------------------
 logger:
-  level: "info"          # debug | info | warn | error
-  format: "console"      # console | json
-  output_path: "stdout"  # stdout | stderr | file path
+  level: "info"   # debug | info | warn | error
+  format: "console" # console | json
 
-# ------------------------------------------------------------
-# Redis
-# ------------------------------------------------------------
 redis:
   host: "localhost"
   port: 6379
-  password: ""           # ORRIS_REDIS_PASSWORD (optional)
+  password: "" # ORRIS_REDIS_PASSWORD
   db: 0
 
-# ------------------------------------------------------------
-# Authentication
-# ------------------------------------------------------------
 auth:
-  password:
-    bcrypt_cost: 12      # 10-14 recommended
-
-  token:
-    verification_expires_hours: 24
-    reset_expires_minutes: 30
-
   jwt:
-    secret: "change-me-in-production"  # ORRIS_AUTH_JWT_SECRET (required)
+    secret: "" # ORRIS_AUTH_JWT_SECRET (required)
     access_exp_minutes: 15
     refresh_exp_days: 7
-
-  session:
-    default_exp_days: 1
-    remember_exp_days: 30
-
   cookie:
-    domain: ""           # Empty = current domain
-    path: "/"
-    secure: false        # Set true in production
-    same_site: "Lax"     # Strict | Lax | None
+    secure: false # true in production
+    same_site: "Lax"
 
-# ------------------------------------------------------------
-# Subscription
-# ------------------------------------------------------------
 subscription:
-  base_url: ""           # Custom subscription URL (optional)
   templates_path: "./configs/sub"
 
-# ------------------------------------------------------------
-# Admin Account (Optional)
-# ------------------------------------------------------------
-# Auto-create admin on first startup
-# If not set, first registered user becomes admin
 admin:
-  email: ""              # ORRIS_ADMIN_EMAIL
-  password: ""           # ORRIS_ADMIN_PASSWORD
-  name: "Admin"
+  email: ""    # ORRIS_ADMIN_EMAIL
+  password: "" # ORRIS_ADMIN_PASSWORD
 
-# ------------------------------------------------------------
-# OAuth2
-# ------------------------------------------------------------
 oauth:
   google:
-    client_id: ""        # ORRIS_OAUTH_GOOGLE_CLIENT_ID
-    client_secret: ""    # ORRIS_OAUTH_GOOGLE_CLIENT_SECRET
-    # Get credentials: https://console.cloud.google.com/apis/credentials
-
+    client_id: ""     # ORRIS_OAUTH_GOOGLE_CLIENT_ID
+    client_secret: "" # ORRIS_OAUTH_GOOGLE_CLIENT_SECRET
   github:
-    client_id: ""        # ORRIS_OAUTH_GITHUB_CLIENT_ID
-    client_secret: ""    # ORRIS_OAUTH_GITHUB_CLIENT_SECRET
-    # Get credentials: https://github.com/settings/developers
-
-# ============================================================
-# Quick Start
-# ============================================================
-#
-# Development:
-#   cp config.example.yaml config.yaml
-#   export ORRIS_DATABASE_PASSWORD=your_password
-#   export ORRIS_ADMIN_EMAIL=admin@example.com
-#   export ORRIS_ADMIN_PASSWORD=admin_password
-#   ./bin/orris server
-#
-# Production:
-#   Use environment variables for all sensitive values
-#   Set ORRIS_SERVER_MODE=release
-#   Set ORRIS_AUTH_COOKIE_SECURE=true
-#   Set ORRIS_LOGGER_FORMAT=json
-# ============================================================
+    client_id: ""     # ORRIS_OAUTH_GITHUB_CLIENT_ID
+    client_secret: "" # ORRIS_OAUTH_GITHUB_CLIENT_SECRET
