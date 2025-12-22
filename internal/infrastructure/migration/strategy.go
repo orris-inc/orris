@@ -304,3 +304,24 @@ func (s *GooseStrategy) Create(name string) error {
 	s.logger.Infow("migration created successfully", "name", name)
 	return nil
 }
+
+// IsInitialized checks if the goose version table exists in the database.
+// Returns true if the goose_db_version table exists, false otherwise.
+func (s *GooseStrategy) IsInitialized(db *gorm.DB) (bool, error) {
+	sqlDB, err := db.DB()
+	if err != nil {
+		return false, fmt.Errorf("failed to get underlying sql.DB: %w", err)
+	}
+
+	// Check if goose_db_version table exists
+	var tableName string
+	err = sqlDB.QueryRow("SELECT table_name FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'goose_db_version'").Scan(&tableName)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to check goose table: %w", err)
+	}
+
+	return true, nil
+}

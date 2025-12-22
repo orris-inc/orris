@@ -155,13 +155,33 @@ func handleMigrations(environment string) error {
 	}
 
 	strategy := migration.NewGooseStrategy(scriptsPath)
-	if gooseStrategy, ok := strategy.(*migration.GooseStrategy); ok {
+	gooseStrategy, ok := strategy.(*migration.GooseStrategy)
+	if !ok {
+		logger.Warn("failed to cast to GooseStrategy")
+		return nil
+	}
+
+	// Check if goose table exists (first startup detection)
+	initialized, err := gooseStrategy.IsInitialized(database.Get())
+	if err != nil {
+		logger.Warn("failed to check goose initialization", "error", err)
+		return nil
+	}
+
+	if !initialized {
+		// First startup: execute all migrations
+		logger.Info("first startup detected, running migrations")
+		if err := gooseStrategy.Migrate(database.Get()); err != nil {
+			return fmt.Errorf("failed to run initial migrations: %w", err)
+		}
+		logger.Info("initial migrations completed successfully")
+	} else {
+		// Already initialized: just show current version
 		version, err := gooseStrategy.GetVersion(database.Get())
 		if err != nil {
 			logger.Warn("failed to check migration status", "error", err)
 		} else {
-			logger.Info("current migration version",
-				"version", version)
+			logger.Info("current migration version", "version", version)
 		}
 	}
 
