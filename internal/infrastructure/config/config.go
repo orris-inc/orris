@@ -94,6 +94,9 @@ func setDefaults() {
 	viper.SetDefault("server.host", "0.0.0.0")
 	viper.SetDefault("server.port", 8080)
 	viper.SetDefault("server.mode", "debug")
+	viper.SetDefault("server.base_url", "")
+	viper.SetDefault("server.allowed_origins", []string{})
+	viper.SetDefault("server.frontend_callback_url", "")
 
 	// Database defaults
 	viper.SetDefault("database.host", "localhost")
@@ -151,6 +154,7 @@ func setDefaults() {
 	viper.SetDefault("forward.token_signing_secret", "change-me-in-production")
 
 	// Subscription defaults
+	viper.SetDefault("subscription.base_url", "")
 	viper.SetDefault("subscription.templates_path", "./configs/sub")
 
 	// Admin defaults (empty by default, must be configured via env vars)
