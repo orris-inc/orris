@@ -105,63 +105,61 @@ func (h *UserForwardRuleHandler) CreateRule(c *gin.Context) {
 		return
 	}
 
-	// Parse Stripe-style IDs to extract short IDs
-	agentShortID, err := id.ParseForwardAgentID(req.AgentID)
-	if err != nil {
+	// Validate Stripe-style IDs (database stores full SID with prefix)
+	if err := id.ValidatePrefix(req.AgentID, id.PrefixForwardAgent); err != nil {
 		h.logger.Warnw("invalid agent_id format", "agent_id", req.AgentID, "user_id", userID, "error", err)
 		utils.ErrorResponseWithError(c, errors.NewValidationError("invalid agent_id format, expected fa_xxxxx"))
 		return
 	}
+	agentShortID := req.AgentID
 
 	var exitAgentShortID string
 	if req.ExitAgentID != "" {
-		exitAgentShortID, err = id.ParseForwardAgentID(req.ExitAgentID)
-		if err != nil {
+		if err := id.ValidatePrefix(req.ExitAgentID, id.PrefixForwardAgent); err != nil {
 			h.logger.Warnw("invalid exit_agent_id format", "exit_agent_id", req.ExitAgentID, "user_id", userID, "error", err)
 			utils.ErrorResponseWithError(c, errors.NewValidationError("invalid exit_agent_id format, expected fa_xxxxx"))
 			return
 		}
+		exitAgentShortID = req.ExitAgentID
 	}
 
-	// Parse chain agent IDs
+	// Validate chain agent IDs
 	var chainAgentShortIDs []string
 	if len(req.ChainAgentIDs) > 0 {
 		chainAgentShortIDs = make([]string, len(req.ChainAgentIDs))
 		for i, chainAgentID := range req.ChainAgentIDs {
-			shortID, parseErr := id.ParseForwardAgentID(chainAgentID)
-			if parseErr != nil {
-				h.logger.Warnw("invalid chain_agent_id format", "chain_agent_id", chainAgentID, "user_id", userID, "error", parseErr)
+			if err := id.ValidatePrefix(chainAgentID, id.PrefixForwardAgent); err != nil {
+				h.logger.Warnw("invalid chain_agent_id format", "chain_agent_id", chainAgentID, "user_id", userID, "error", err)
 				utils.ErrorResponseWithError(c, errors.NewValidationError("invalid chain_agent_id format, expected fa_xxxxx"))
 				return
 			}
-			chainAgentShortIDs[i] = shortID
+			chainAgentShortIDs[i] = chainAgentID
 		}
 	}
 
-	// Parse chain port config (for direct_chain type)
+	// Validate chain port config (for direct_chain type)
 	var chainPortConfig map[string]uint16
 	if len(req.ChainPortConfig) > 0 {
 		chainPortConfig = make(map[string]uint16, len(req.ChainPortConfig))
 		for agentIDStr, port := range req.ChainPortConfig {
-			// Parse agent ID from chain_port_config
-			shortID, parseErr := id.ParseForwardAgentID(agentIDStr)
-			if parseErr != nil {
-				h.logger.Warnw("invalid agent_id in chain_port_config", "agent_id", agentIDStr, "user_id", userID, "error", parseErr)
+			// Validate agent ID from chain_port_config
+			if err := id.ValidatePrefix(agentIDStr, id.PrefixForwardAgent); err != nil {
+				h.logger.Warnw("invalid agent_id in chain_port_config", "agent_id", agentIDStr, "user_id", userID, "error", err)
 				utils.ErrorResponseWithError(c, errors.NewValidationError("invalid agent_id in chain_port_config, expected fa_xxxxx"))
 				return
 			}
-			chainPortConfig[shortID] = port
+			chainPortConfig[agentIDStr] = port
 		}
 	}
 
 	var targetNodeSID string
 	if req.TargetNodeID != "" {
-		targetNodeSID, err = id.ParseNodeID(req.TargetNodeID)
-		if err != nil {
+		if err := id.ValidatePrefix(req.TargetNodeID, id.PrefixNode); err != nil {
 			h.logger.Warnw("invalid target_node_id format", "target_node_id", req.TargetNodeID, "user_id", userID, "error", err)
 			utils.ErrorResponseWithError(c, errors.NewValidationError("invalid target_node_id format, expected node_xxxxx"))
 			return
 		}
+		targetNodeSID = req.TargetNodeID
 	}
 
 	cmd := usecases.CreateUserForwardRuleCommand{
@@ -305,58 +303,54 @@ func (h *UserForwardRuleHandler) UpdateRule(c *gin.Context) {
 		return
 	}
 
-	// Parse agent_id if provided
+	// Validate agent_id if provided (database stores full SID with prefix)
 	var agentShortID *string
 	if req.AgentID != nil {
-		parsedID, err := id.ParseForwardAgentID(*req.AgentID)
-		if err != nil {
+		if err := id.ValidatePrefix(*req.AgentID, id.PrefixForwardAgent); err != nil {
 			h.logger.Warnw("invalid agent_id format", "agent_id", *req.AgentID, "error", err)
 			utils.ErrorResponseWithError(c, errors.NewValidationError("invalid agent_id format, expected fa_xxxxx"))
 			return
 		}
-		agentShortID = &parsedID
+		agentShortID = req.AgentID
 	}
 
-	// Parse exit_agent_id if provided
+	// Validate exit_agent_id if provided
 	var exitAgentShortID *string
 	if req.ExitAgentID != nil {
-		parsedID, err := id.ParseForwardAgentID(*req.ExitAgentID)
-		if err != nil {
+		if err := id.ValidatePrefix(*req.ExitAgentID, id.PrefixForwardAgent); err != nil {
 			h.logger.Warnw("invalid exit_agent_id format", "exit_agent_id", *req.ExitAgentID, "error", err)
 			utils.ErrorResponseWithError(c, errors.NewValidationError("invalid exit_agent_id format, expected fa_xxxxx"))
 			return
 		}
-		exitAgentShortID = &parsedID
+		exitAgentShortID = req.ExitAgentID
 	}
 
-	// Parse chain_agent_ids if provided
+	// Validate chain_agent_ids if provided
 	var chainAgentShortIDs []string
 	if req.ChainAgentIDs != nil {
 		chainAgentShortIDs = make([]string, len(req.ChainAgentIDs))
 		for i, chainAgentID := range req.ChainAgentIDs {
-			parsedID, parseErr := id.ParseForwardAgentID(chainAgentID)
-			if parseErr != nil {
-				h.logger.Warnw("invalid chain_agent_id format", "chain_agent_id", chainAgentID, "error", parseErr)
+			if err := id.ValidatePrefix(chainAgentID, id.PrefixForwardAgent); err != nil {
+				h.logger.Warnw("invalid chain_agent_id format", "chain_agent_id", chainAgentID, "error", err)
 				utils.ErrorResponseWithError(c, errors.NewValidationError("invalid chain_agent_id format, expected fa_xxxxx"))
 				return
 			}
-			chainAgentShortIDs[i] = parsedID
+			chainAgentShortIDs[i] = chainAgentID
 		}
 	}
 
-	// Parse chain_port_config if provided (for direct_chain type)
+	// Validate chain_port_config if provided (for direct_chain type)
 	var chainPortConfig map[string]uint16
 	if req.ChainPortConfig != nil {
 		chainPortConfig = make(map[string]uint16, len(req.ChainPortConfig))
 		for agentIDStr, port := range req.ChainPortConfig {
-			// Parse agent ID from chain_port_config
-			shortID, parseErr := id.ParseForwardAgentID(agentIDStr)
-			if parseErr != nil {
-				h.logger.Warnw("invalid agent_id in chain_port_config", "agent_id", agentIDStr, "error", parseErr)
+			// Validate agent ID from chain_port_config
+			if err := id.ValidatePrefix(agentIDStr, id.PrefixForwardAgent); err != nil {
+				h.logger.Warnw("invalid agent_id in chain_port_config", "agent_id", agentIDStr, "error", err)
 				utils.ErrorResponseWithError(c, errors.NewValidationError("invalid agent_id in chain_port_config, expected fa_xxxxx"))
 				return
 			}
-			chainPortConfig[shortID] = port
+			chainPortConfig[agentIDStr] = port
 		}
 	}
 
@@ -368,14 +362,13 @@ func (h *UserForwardRuleHandler) UpdateRule(c *gin.Context) {
 			emptyStr := ""
 			targetNodeSID = &emptyStr
 		} else {
-			// Parse Stripe-style ID
-			nodeShortID, err := id.ParseNodeID(*req.TargetNodeID)
-			if err != nil {
+			// Validate Stripe-style ID (database stores full SID with prefix)
+			if err := id.ValidatePrefix(*req.TargetNodeID, id.PrefixNode); err != nil {
 				h.logger.Warnw("invalid target_node_id format", "target_node_id", *req.TargetNodeID, "error", err)
 				utils.ErrorResponseWithError(c, errors.NewValidationError("invalid target_node_id format, expected node_xxxxx"))
 				return
 			}
-			targetNodeSID = &nodeShortID
+			targetNodeSID = req.TargetNodeID
 		}
 	}
 

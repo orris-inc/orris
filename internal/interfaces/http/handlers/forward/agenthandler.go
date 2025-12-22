@@ -1015,9 +1015,8 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 	// Parse requested exit agent ID from path (supports Stripe-style ID like "fa_xK9mP2vL3nQ")
 	exitAgentIDStr := c.Param("agent_id")
 
-	// Parse Stripe-style prefixed ID
-	shortID, err := id.ParseForwardAgentID(exitAgentIDStr)
-	if err != nil {
+	// Validate Stripe-style prefixed ID (database stores full SID with prefix)
+	if err := id.ValidatePrefix(exitAgentIDStr, id.PrefixForwardAgent); err != nil {
 		h.logger.Warnw("invalid agent_id parameter",
 			"agent_id", exitAgentIDStr,
 			"entry_agent_id", entryAgentID,
@@ -1028,12 +1027,11 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 		return
 	}
 
-	// Look up the internal agent ID by short ID
-	exitAgent, err := h.agentRepo.GetBySID(ctx, shortID)
+	// Look up the internal agent ID by SID
+	exitAgent, err := h.agentRepo.GetBySID(ctx, exitAgentIDStr)
 	if err != nil {
 		h.logger.Warnw("exit agent not found",
 			"agent_id", exitAgentIDStr,
-			"short_id", shortID,
 			"entry_agent_id", entryAgentID,
 			"error", err,
 			"ip", c.ClientIP(),
