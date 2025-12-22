@@ -10,7 +10,7 @@ RUN apk add --no-cache ca-certificates tzdata
 COPY orris /app/orris
 
 # Copy migration scripts
-COPY internal/infrastructure/migration/scripts /app/migrations
+COPY internal/infrastructure/migration/scripts /app/internal/infrastructure/migration/scripts
 
 # Expose port
 EXPOSE 8080
