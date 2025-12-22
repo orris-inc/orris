@@ -348,17 +348,19 @@ func (h *ForwardAgentHandler) GetInstallScript(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "Install command generated successfully", result)
 }
 
-// parseAgentShortID extracts the short ID from a prefixed agent ID (e.g., "fa_xK9mP2vL3nQ" -> "xK9mP2vL3nQ").
+// parseAgentShortID validates a prefixed agent ID and returns the SID (e.g., "fa_xK9mP2vL3nQ").
+// Note: Despite the name, this returns the full SID (with prefix) as stored in the database.
 func parseAgentShortID(c *gin.Context) (string, error) {
 	prefixedID := c.Param("id")
 	if prefixedID == "" {
 		return "", errors.NewValidationError("forward agent ID is required")
 	}
 
-	shortID, err := id.ParseForwardAgentID(prefixedID)
-	if err != nil {
+	// Validate the prefix is correct, but return the full prefixed ID
+	// because the database stores SIDs with prefix (e.g., "fa_xxx")
+	if err := id.ValidatePrefix(prefixedID, id.PrefixForwardAgent); err != nil {
 		return "", errors.NewValidationError("invalid forward agent ID format, expected fa_xxxxx")
 	}
 
-	return shortID, nil
+	return prefixedID, nil
 }
