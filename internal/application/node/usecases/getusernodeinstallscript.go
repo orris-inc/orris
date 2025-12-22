@@ -80,10 +80,11 @@ func (uc *GetUserNodeInstallScriptUseCase) Execute(ctx context.Context, query Ge
 		return nil, errors.NewValidationError("node has no token, please regenerate token first")
 	}
 
-	nodeID := n.ID()
+	nodeSID := n.SID()
 
 	// Generate install and uninstall commands
-	nodeArg := fmt.Sprintf("%d:%s", nodeID, token)
+	// Format: curl -fsSL <script_url> | sudo bash -s -- --api-url <api_url> --node <sid>:<token>
+	nodeArg := fmt.Sprintf("%s:%s", nodeSID, token)
 	installCmd := fmt.Sprintf("curl -fsSL %s | sudo bash -s -- --api-url %s --node %s", NodeInstallScriptURL, query.APIURL, nodeArg)
 	uninstallCmd := fmt.Sprintf("curl -fsSL %s | sudo bash -s -- uninstall", NodeInstallScriptURL)
 

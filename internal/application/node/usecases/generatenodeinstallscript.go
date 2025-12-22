@@ -27,7 +27,7 @@ type GenerateNodeInstallScriptResult struct {
 	UninstallCommand string `json:"uninstall_command"`
 	ScriptURL        string `json:"script_url"`
 	APIURL           string `json:"api_url"`
-	NodeID           uint   `json:"node_id"`
+	NodeSID          string `json:"node_sid"`
 	Token            string `json:"token"`
 }
 
@@ -82,11 +82,11 @@ func (uc *GenerateNodeInstallScriptUseCase) Execute(ctx context.Context, query G
 		}
 	}
 
-	nodeID := n.ID()
+	nodeSID := n.SID()
 
 	// Generate install and uninstall commands
-	// Format: curl -fsSL <script_url> | sudo bash -s -- --api-url <api_url> --node <id>:<token>
-	nodeArg := fmt.Sprintf("%d:%s", nodeID, token)
+	// Format: curl -fsSL <script_url> | sudo bash -s -- --api-url <api_url> --node <sid>:<token>
+	nodeArg := fmt.Sprintf("%s:%s", nodeSID, token)
 	installCmd := fmt.Sprintf("curl -fsSL %s | sudo bash -s -- --api-url %s --node %s", NodeInstallScriptURL, query.APIURL, nodeArg)
 	uninstallCmd := fmt.Sprintf("curl -fsSL %s | sudo bash -s -- uninstall", NodeInstallScriptURL)
 
@@ -95,7 +95,7 @@ func (uc *GenerateNodeInstallScriptUseCase) Execute(ctx context.Context, query G
 		UninstallCommand: uninstallCmd,
 		ScriptURL:        NodeInstallScriptURL,
 		APIURL:           query.APIURL,
-		NodeID:           nodeID,
+		NodeSID:          nodeSID,
 		Token:            token,
 	}
 
