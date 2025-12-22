@@ -129,7 +129,7 @@ func (a *oauthClientAdapter) GetUserInfo(ctx context.Context, accessToken string
 func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, log logger.Interface) *Router {
 	engine := gin.New()
 
-	userRepo := repository.NewUserRepositoryDDD(db, log)
+	userRepo := repository.NewUserRepository(db, log)
 	sessionRepo := repository.NewSessionRepository(db)
 	oauthRepo := repository.NewOAuthAccountRepository(db)
 
@@ -340,7 +340,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	getNodeUC := nodeUsecases.NewGetNodeUseCase(nodeRepoImpl, resourceGroupRepo, nodeStatusQuerier, log)
 	updateNodeUC := nodeUsecases.NewUpdateNodeUseCase(log, nodeRepoImpl, resourceGroupRepo)
 	deleteNodeUC := nodeUsecases.NewDeleteNodeUseCase(nodeRepoImpl, log)
-	listNodesUC := nodeUsecases.NewListNodesUseCase(nodeRepoImpl, resourceGroupRepo, nodeStatusQuerier, log)
+	listNodesUC := nodeUsecases.NewListNodesUseCase(nodeRepoImpl, resourceGroupRepo, userRepo, nodeStatusQuerier, log)
 	generateNodeTokenUC := nodeUsecases.NewGenerateNodeTokenUseCase(nodeRepoImpl, log)
 	generateNodeInstallScriptUC := nodeUsecases.NewGenerateNodeInstallScriptUseCase(nodeRepoImpl, log)
 

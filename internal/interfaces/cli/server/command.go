@@ -87,7 +87,7 @@ func run(cmd *cobra.Command, args []string) error {
 		logger.Fatal("migration handling failed", "error", err)
 	}
 
-	userRepo := repository.NewUserRepositoryDDD(database.Get(), logger.NewLogger())
+	userRepo := repository.NewUserRepository(database.Get(), logger.NewLogger())
 	sessionRepo := repository.NewSessionRepository(database.Get())
 	hasher := auth.NewBcryptPasswordHasher(cfg.Auth.Password.BcryptCost)
 
