@@ -566,6 +566,9 @@ func (r *SubscriptionUsageRepositoryImpl) GetTopSubscriptionsByUsage(ctx context
 	// Build base query
 	query := r.db.WithContext(ctx).Model(&models.SubscriptionUsageModel{})
 
+	// Filter out records without subscription_id (NULL subscription_id)
+	query = query.Where("subscription_id IS NOT NULL")
+
 	// Apply optional resource type filter
 	if resourceType != nil && *resourceType != "" {
 		query = query.Where("resource_type = ?", *resourceType)

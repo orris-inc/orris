@@ -96,9 +96,18 @@ func (uc *GetTrafficRankingUseCase) ExecuteUserRanking(
 
 	// Fetch subscriptions to get user IDs
 	for _, subID := range subscriptionIDs {
+		// Skip invalid subscription IDs
+		if subID == 0 {
+			continue
+		}
+
 		sub, err := uc.subscriptionRepo.GetByID(ctx, subID)
 		if err != nil {
 			uc.logger.Warnw("failed to fetch subscription", "subscription_id", subID, "error", err)
+			continue
+		}
+		if sub == nil {
+			uc.logger.Warnw("subscription not found", "subscription_id", subID)
 			continue
 		}
 
@@ -228,9 +237,18 @@ func (uc *GetTrafficRankingUseCase) ExecuteSubscriptionRanking(
 
 	subscriptionsMap := make(map[uint]*subscription.Subscription)
 	for _, subID := range subscriptionIDs {
+		// Skip invalid subscription IDs
+		if subID == 0 {
+			continue
+		}
+
 		sub, err := uc.subscriptionRepo.GetByID(ctx, subID)
 		if err != nil {
 			uc.logger.Warnw("failed to fetch subscription", "subscription_id", subID, "error", err)
+			continue
+		}
+		if sub == nil {
+			uc.logger.Warnw("subscription not found", "subscription_id", subID)
 			continue
 		}
 		subscriptionsMap[subID] = sub

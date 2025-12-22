@@ -6,8 +6,8 @@ import "time"
 
 // TrafficStatsQueryRequest represents common query parameters for traffic statistics
 type TrafficStatsQueryRequest struct {
-	From         time.Time `form:"from" binding:"required" time_format:"2006-01-02T15:04:05Z07:00"`
-	To           time.Time `form:"to" binding:"required" time_format:"2006-01-02T15:04:05Z07:00"`
+	From         time.Time `form:"from" binding:"required" time_format:"2006-01-02"`
+	To           time.Time `form:"to" binding:"required" time_format:"2006-01-02"`
 	ResourceType *string   `form:"resource_type"`
 	Page         int       `form:"page,default=1" binding:"min=1"`
 	PageSize     int       `form:"page_size,default=20" binding:"min=1,max=100"`
@@ -15,16 +15,16 @@ type TrafficStatsQueryRequest struct {
 
 // TrafficRankingRequest represents query parameters for traffic ranking
 type TrafficRankingRequest struct {
-	From         time.Time `form:"from" binding:"required" time_format:"2006-01-02T15:04:05Z07:00"`
-	To           time.Time `form:"to" binding:"required" time_format:"2006-01-02T15:04:05Z07:00"`
+	From         time.Time `form:"from" binding:"required" time_format:"2006-01-02"`
+	To           time.Time `form:"to" binding:"required" time_format:"2006-01-02"`
 	ResourceType *string   `form:"resource_type"`
 	Limit        int       `form:"limit,default=10" binding:"min=1,max=100"`
 }
 
 // TrafficTrendRequest represents query parameters for traffic trend
 type TrafficTrendRequest struct {
-	From         time.Time `form:"from" binding:"required" time_format:"2006-01-02T15:04:05Z07:00"`
-	To           time.Time `form:"to" binding:"required" time_format:"2006-01-02T15:04:05Z07:00"`
+	From         time.Time `form:"from" binding:"required" time_format:"2006-01-02"`
+	To           time.Time `form:"to" binding:"required" time_format:"2006-01-02"`
 	ResourceType *string   `form:"resource_type"`
 	Granularity  string    `form:"granularity" binding:"required,oneof=hour day month"`
 }
