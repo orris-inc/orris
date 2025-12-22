@@ -10,6 +10,9 @@ type Repository interface {
 	// GetByID retrieves a user by internal ID
 	GetByID(ctx context.Context, id uint) (*User, error)
 
+	// GetByIDs retrieves multiple users by internal IDs
+	GetByIDs(ctx context.Context, ids []uint) ([]*User, error)
+
 	// GetBySID retrieves a user by external SID (Stripe-style ID)
 	GetBySID(ctx context.Context, sid string) (*User, error)
 

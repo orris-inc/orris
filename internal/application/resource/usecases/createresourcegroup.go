@@ -70,7 +70,6 @@ func (uc *CreateResourceGroupUseCase) Execute(ctx context.Context, req dto.Creat
 	)
 
 	return &dto.ResourceGroupResponse{
-		ID:          group.ID(),
 		SID:         group.SID(),
 		Name:        group.Name(),
 		PlanSID:     plan.SID(),

@@ -342,9 +342,10 @@ func (r *UpdateNodeRequest) ToCommand(sid string) usecases.UpdateNodeCommand {
 }
 
 type ListNodesRequest struct {
-	Page     int
-	PageSize int
-	Status   *string
+	Page             int
+	PageSize         int
+	Status           *string
+	IncludeUserNodes bool
 }
 
 func parseListNodesRequest(c *gin.Context) (*ListNodesRequest, error) {
@@ -367,14 +368,20 @@ func parseListNodesRequest(c *gin.Context) (*ListNodesRequest, error) {
 		req.Status = &status
 	}
 
+	// Parse include_user_nodes parameter (default: false - only show admin nodes)
+	if includeUserNodes := c.Query("include_user_nodes"); includeUserNodes == "true" || includeUserNodes == "1" {
+		req.IncludeUserNodes = true
+	}
+
 	return req, nil
 }
 
 func (r *ListNodesRequest) ToCommand() usecases.ListNodesQuery {
 	offset := (r.Page - 1) * r.PageSize
 	return usecases.ListNodesQuery{
-		Limit:  r.PageSize,
-		Offset: offset,
-		Status: r.Status,
+		Limit:            r.PageSize,
+		Offset:           offset,
+		Status:           r.Status,
+		IncludeUserNodes: r.IncludeUserNodes,
 	}
 }

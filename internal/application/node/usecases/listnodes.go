@@ -6,18 +6,20 @@ import (
 	"github.com/orris-inc/orris/internal/application/node/dto"
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/domain/resource"
+	"github.com/orris-inc/orris/internal/domain/user"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	sharedquery "github.com/orris-inc/orris/internal/shared/query"
 )
 
 type ListNodesQuery struct {
-	Status    *string
-	GroupID   *uint
-	Search    *string
-	Limit     int
-	Offset    int
-	SortBy    string
-	SortOrder string
+	Status           *string
+	GroupID          *uint
+	Search           *string
+	Limit            int
+	Offset           int
+	SortBy           string
+	SortOrder        string
+	IncludeUserNodes bool // If false (default), only return admin-created nodes
 }
 
 // NodeListItem is deprecated - use dto.NodeDTO instead
@@ -48,6 +50,7 @@ type MultipleNodeSystemStatusQuerier interface {
 type ListNodesUseCase struct {
 	nodeRepo          node.NodeRepository
 	resourceGroupRepo resource.Repository
+	userRepo          user.Repository
 	statusQuerier     MultipleNodeSystemStatusQuerier
 	logger            logger.Interface
 }
@@ -55,12 +58,14 @@ type ListNodesUseCase struct {
 func NewListNodesUseCase(
 	nodeRepo node.NodeRepository,
 	resourceGroupRepo resource.Repository,
+	userRepo user.Repository,
 	statusQuerier MultipleNodeSystemStatusQuerier,
 	logger logger.Interface,
 ) *ListNodesUseCase {
 	return &ListNodesUseCase{
 		nodeRepo:          nodeRepo,
 		resourceGroupRepo: resourceGroupRepo,
+		userRepo:          userRepo,
 		statusQuerier:     statusQuerier,
 		logger:            logger,
 	}
@@ -102,13 +107,15 @@ func (uc *ListNodesUseCase) Execute(ctx context.Context, query ListNodesQuery) (
 	}
 
 	// Build domain filter from query parameters
+	adminOnly := !query.IncludeUserNodes
 	filter := node.NodeFilter{
 		BaseFilter: sharedquery.NewBaseFilter(
 			sharedquery.WithPage(page, query.Limit),
 			sharedquery.WithSort(query.SortBy, query.SortOrder),
 		),
-		Name:   query.Search,
-		Status: query.Status,
+		Name:      query.Search,
+		Status:    query.Status,
+		AdminOnly: &adminOnly,
 	}
 
 	// Query nodes from repository
@@ -126,11 +133,20 @@ func (uc *ListNodesUseCase) Execute(ctx context.Context, query ListNodesQuery) (
 	idToIndexMap := make(map[uint]int, len(nodes))
 	// Collect unique group IDs for batch query
 	groupIDSet := make(map[uint]bool)
+	// Collect unique user IDs for batch query (for user-created nodes)
+	userIDSet := make(map[uint]bool)
+	userIDToNodeIndices := make(map[uint][]int) // Map user ID to node indices
 	for i, n := range nodes {
 		nodeIDs = append(nodeIDs, n.ID())
 		idToIndexMap[n.ID()] = i
 		for _, gid := range n.GroupIDs() {
 			groupIDSet[gid] = true
+		}
+		// Collect user IDs for user-created nodes
+		if n.UserID() != nil {
+			uid := *n.UserID()
+			userIDSet[uid] = true
+			userIDToNodeIndices[uid] = append(userIDToNodeIndices[uid], i)
 		}
 	}
 
@@ -165,6 +181,47 @@ func (uc *ListNodesUseCase) Execute(ctx context.Context, query ListNodesQuery) (
 			}
 			if len(groupSIDs) > 0 {
 				nodeDTOs[i].GroupSIDs = groupSIDs
+			}
+		}
+	}
+
+	// Batch query users to resolve UserID -> Owner info
+	if len(userIDSet) > 0 && uc.userRepo != nil {
+		// Convert set to slice for batch query
+		userIDs := make([]uint, 0, len(userIDSet))
+		for userID := range userIDSet {
+			userIDs = append(userIDs, userID)
+		}
+
+		users, err := uc.userRepo.GetByIDs(ctx, userIDs)
+		if err != nil {
+			uc.logger.Warnw("failed to batch get users, skipping owner info",
+				"user_ids", userIDs,
+				"error", err,
+			)
+		} else {
+			// Build userID -> user map
+			userMap := make(map[uint]*user.User, len(users))
+			for _, u := range users {
+				userMap[u.ID()] = u
+			}
+
+			// Set Owner for each node DTO
+			for userID, nodeIndices := range userIDToNodeIndices {
+				if u, ok := userMap[userID]; ok {
+					ownerDTO := &dto.NodeOwnerDTO{
+						ID: u.SID(),
+					}
+					if u.Email() != nil {
+						ownerDTO.Email = u.Email().String()
+					}
+					if u.Name() != nil {
+						ownerDTO.Name = u.Name().String()
+					}
+					for _, idx := range nodeIndices {
+						nodeDTOs[idx].Owner = ownerDTO
+					}
+				}
 			}
 		}
 	}

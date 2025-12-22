@@ -4,7 +4,6 @@ package admin
 import (
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -126,24 +125,13 @@ func (h *ResourceGroupHandler) List(c *gin.Context) {
 		status = &statusStr
 	}
 
-	var planID *uint
+	var planSID *string
 	if planIDStr := c.Query("plan_id"); planIDStr != "" {
-		// Support both SID (plan_xxx) and internal ID
-		if strings.HasPrefix(planIDStr, "plan_") {
-			// Resolve SID to internal ID
-			plan, err := h.planRepo.GetBySID(c.Request.Context(), planIDStr)
-			if err == nil && plan != nil {
-				pid := plan.ID()
-				planID = &pid
-			}
-		} else if pid, err := strconv.ParseUint(planIDStr, 10, 64); err == nil {
-			pidVal := uint(pid)
-			planID = &pidVal
-		}
+		planSID = &planIDStr
 	}
 
 	query := dto.ListResourceGroupsRequest{
-		PlanID:   planID,
+		PlanSID:  planSID,
 		Status:   status,
 		Page:     page,
 		PageSize: pageSize,

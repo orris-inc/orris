@@ -17,7 +17,6 @@ type UpdateResourceGroupRequest struct {
 
 // ResourceGroupResponse represents a resource group in API responses
 type ResourceGroupResponse struct {
-	ID          uint      `json:"id"`
 	SID         string    `json:"sid"`
 	Name        string    `json:"name"`
 	PlanSID     string    `json:"plan_id"` // Plan's Stripe-style ID (plan_xxx)
@@ -29,7 +28,7 @@ type ResourceGroupResponse struct {
 
 // ListResourceGroupsRequest represents a request to list resource groups
 type ListResourceGroupsRequest struct {
-	PlanID   *uint   `form:"plan_id,omitempty"`
+	PlanSID  *string `form:"plan_id,omitempty"` // Plan's Stripe-style ID (plan_xxx)
 	Status   *string `form:"status,omitempty"`
 	Page     int     `form:"page,default=1" binding:"min=1"`
 	PageSize int     `form:"page_size,default=20" binding:"min=1,max=100"`

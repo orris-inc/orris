@@ -285,14 +285,6 @@ func getUserID(c *gin.Context) (uint, error) {
 	return userID, nil
 }
 
-// getStringPtr returns a pointer to the string if not empty, otherwise nil
-func getStringPtr(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
-}
-
 // CreateUserNodeRequest represents the request body for creating a user node
 type CreateUserNodeRequest struct {
 	Name              string            `json:"name" binding:"required,min=2,max=100" example:"My-Node-01"`

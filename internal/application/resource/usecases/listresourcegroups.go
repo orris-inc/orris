@@ -31,9 +31,21 @@ func NewListResourceGroupsUseCase(repo resource.Repository, planRepo subscriptio
 func (uc *ListResourceGroupsUseCase) Execute(ctx context.Context, req dto.ListResourceGroupsRequest) (*dto.ListResourceGroupsResponse, error) {
 	// Build filter
 	filter := resource.ListFilter{
-		PlanID:   req.PlanID,
 		Page:     req.Page,
 		PageSize: req.PageSize,
+	}
+
+	// Convert PlanSID to PlanID if provided
+	if req.PlanSID != nil && *req.PlanSID != "" {
+		plan, err := uc.planRepo.GetBySID(ctx, *req.PlanSID)
+		if err != nil {
+			uc.logger.Errorw("failed to get plan by SID", "error", err, "plan_sid", *req.PlanSID)
+			return nil, fmt.Errorf("failed to get plan: %w", err)
+		}
+		if plan != nil {
+			planID := plan.ID()
+			filter.PlanID = &planID
+		}
 	}
 
 	if req.Status != nil {
@@ -75,7 +87,6 @@ func (uc *ListResourceGroupsUseCase) Execute(ctx context.Context, req dto.ListRe
 	items := make([]dto.ResourceGroupResponse, 0, len(groups))
 	for _, group := range groups {
 		items = append(items, dto.ResourceGroupResponse{
-			ID:          group.ID(),
 			SID:         group.SID(),
 			Name:        group.Name(),
 			PlanSID:     planSIDMap[group.PlanID()],

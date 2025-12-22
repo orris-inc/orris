@@ -36,6 +36,15 @@ type NodeDTO struct {
 	UpdatedAt         time.Time  `json:"updated_at" example:"2024-01-15T14:20:00Z" description:"Timestamp when the node was last updated"`
 	// System status fields (from Redis)
 	SystemStatus *NodeSystemStatusDTO `json:"system_status,omitempty" description:"Real-time system metrics from monitoring"`
+	// Owner information (for user-created nodes)
+	Owner *NodeOwnerDTO `json:"owner,omitempty" description:"Owner information for user-created nodes"`
+}
+
+// NodeOwnerDTO represents the owner information for a user-created node
+type NodeOwnerDTO struct {
+	ID    string `json:"id" example:"user_xK9mP2vL3nQ" description:"User's Stripe-style ID"`
+	Email string `json:"email" example:"user@example.com" description:"User's email address"`
+	Name  string `json:"name" example:"John Doe" description:"User's display name"`
 }
 
 // NodeSystemStatusDTO represents real-time system status metrics

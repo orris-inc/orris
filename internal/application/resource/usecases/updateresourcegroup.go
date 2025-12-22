@@ -91,7 +91,6 @@ func (uc *UpdateResourceGroupUseCase) executeUpdate(ctx context.Context, group *
 	}
 
 	return &dto.ResourceGroupResponse{
-		ID:          group.ID(),
 		SID:         group.SID(),
 		Name:        group.Name(),
 		PlanSID:     planSID,

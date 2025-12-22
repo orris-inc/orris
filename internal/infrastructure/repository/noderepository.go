@@ -391,7 +391,9 @@ func (r *NodeRepositoryImpl) List(ctx context.Context, filter node.NodeFilter) (
 	query := r.db.WithContext(ctx).Model(&models.NodeModel{})
 
 	// Apply filters
-	if filter.UserID != nil {
+	if filter.AdminOnly != nil && *filter.AdminOnly {
+		query = query.Where("user_id IS NULL")
+	} else if filter.UserID != nil {
 		query = query.Where("user_id = ?", *filter.UserID)
 	}
 	if filter.Name != nil && *filter.Name != "" {

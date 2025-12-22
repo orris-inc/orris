@@ -47,7 +47,6 @@ func (uc *GetResourceGroupUseCase) ExecuteByID(ctx context.Context, id uint) (*d
 	}
 
 	return &dto.ResourceGroupResponse{
-		ID:          group.ID(),
 		SID:         group.SID(),
 		Name:        group.Name(),
 		PlanSID:     planSID,
@@ -79,7 +78,6 @@ func (uc *GetResourceGroupUseCase) ExecuteBySID(ctx context.Context, sid string)
 	}
 
 	return &dto.ResourceGroupResponse{
-		ID:          group.ID(),
 		SID:         group.SID(),
 		Name:        group.Name(),
 		PlanSID:     planSID,

@@ -42,9 +42,10 @@ type NodeRepository interface {
 
 type NodeFilter struct {
 	query.BaseFilter
-	Name     *string
-	Status   *string
-	Tag      *string
-	UserID   *uint   // Filter by owner user ID
-	GroupIDs []uint  // Filter by resource group IDs
+	Name      *string
+	Status    *string
+	Tag       *string
+	UserID    *uint  // Filter by owner user ID
+	GroupIDs  []uint // Filter by resource group IDs
+	AdminOnly *bool  // If true, only return admin-created nodes (user_id IS NULL)
 }
