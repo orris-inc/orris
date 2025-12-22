@@ -31,6 +31,7 @@ var (
 
 // Load loads configuration from file and environment variables
 // If configPath is provided, it will be used instead of default search paths
+// Config file is optional - if not found, defaults and environment variables are used
 func Load(env string, configPath ...string) (*Config, error) {
 	// Load single config file
 	viper.SetConfigName("config")
@@ -54,8 +55,13 @@ func Load(env string, configPath ...string) (*Config, error) {
 	// Set default values
 	setDefaults()
 
+	// Try to read config file, but continue if not found
 	if err := viper.ReadInConfig(); err != nil {
-		return nil, fmt.Errorf("failed to read config file: %w", err)
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+			// Config file was found but another error occurred
+			return nil, fmt.Errorf("failed to read config file: %w", err)
+		}
+		// Config file not found, continue with defaults and env vars
 	}
 
 	// Allow env parameter to override server mode if provided
