@@ -369,3 +369,313 @@ func (r *SubscriptionUsageRepositoryImpl) DeleteOldRecords(ctx context.Context, 
 	r.logger.Infow("old usage records deleted successfully", "before", before, "deleted_count", result.RowsAffected)
 	return nil
 }
+
+// GetPlatformTotalUsage retrieves total usage across the entire platform
+func (r *SubscriptionUsageRepositoryImpl) GetPlatformTotalUsage(ctx context.Context, resourceType *string, from, to time.Time) (*subscription.UsageSummary, error) {
+	var result struct {
+		TotalUpload   uint64
+		TotalDownload uint64
+		TotalUsage    uint64
+	}
+
+	query := r.db.WithContext(ctx).Model(&models.SubscriptionUsageModel{}).
+		Select("COALESCE(SUM(upload), 0) as total_upload, COALESCE(SUM(download), 0) as total_download, COALESCE(SUM(total), 0) as total_usage")
+
+	// Apply optional resource type filter
+	if resourceType != nil && *resourceType != "" {
+		query = query.Where("resource_type = ?", *resourceType)
+	}
+
+	// Apply time range filters
+	if !from.IsZero() {
+		query = query.Where("period >= ?", from)
+	}
+	if !to.IsZero() {
+		query = query.Where("period <= ?", to)
+	}
+
+	if err := query.Scan(&result).Error; err != nil {
+		r.logger.Errorw("failed to get platform total usage", "resource_type", resourceType, "error", err)
+		return nil, fmt.Errorf("failed to get platform total usage: %w", err)
+	}
+
+	summary := &subscription.UsageSummary{
+		Upload:   result.TotalUpload,
+		Download: result.TotalDownload,
+		Total:    result.TotalUsage,
+		From:     from,
+		To:       to,
+	}
+
+	if resourceType != nil {
+		summary.ResourceType = *resourceType
+	}
+
+	r.logger.Infow("platform total usage retrieved successfully", "upload", result.TotalUpload, "download", result.TotalDownload, "total", result.TotalUsage)
+	return summary, nil
+}
+
+// GetUsageGroupedBySubscription retrieves usage data grouped by subscription with pagination
+func (r *SubscriptionUsageRepositoryImpl) GetUsageGroupedBySubscription(ctx context.Context, resourceType *string, from, to time.Time, page, pageSize int) ([]subscription.SubscriptionUsageSummary, int64, error) {
+	// Build base query for aggregation
+	baseQuery := r.db.WithContext(ctx).Model(&models.SubscriptionUsageModel{})
+
+	// Apply optional resource type filter
+	if resourceType != nil && *resourceType != "" {
+		baseQuery = baseQuery.Where("resource_type = ?", *resourceType)
+	}
+
+	// Apply time range filters
+	if !from.IsZero() {
+		baseQuery = baseQuery.Where("period >= ?", from)
+	}
+	if !to.IsZero() {
+		baseQuery = baseQuery.Where("period <= ?", to)
+	}
+
+	// Count total number of distinct subscriptions
+	var totalCount int64
+	countQuery := r.db.WithContext(ctx).Model(&models.SubscriptionUsageModel{}).
+		Distinct("subscription_id")
+
+	if resourceType != nil && *resourceType != "" {
+		countQuery = countQuery.Where("resource_type = ?", *resourceType)
+	}
+	if !from.IsZero() {
+		countQuery = countQuery.Where("period >= ?", from)
+	}
+	if !to.IsZero() {
+		countQuery = countQuery.Where("period <= ?", to)
+	}
+
+	if err := countQuery.Count(&totalCount).Error; err != nil {
+		r.logger.Errorw("failed to count subscriptions", "error", err)
+		return nil, 0, fmt.Errorf("failed to count subscriptions: %w", err)
+	}
+
+	// Execute aggregation query with pagination
+	var results []struct {
+		SubscriptionID uint
+		TotalUpload    uint64
+		TotalDownload  uint64
+		TotalUsage     uint64
+	}
+
+	offset := (page - 1) * pageSize
+	err := baseQuery.
+		Select("subscription_id, COALESCE(SUM(upload), 0) as total_upload, COALESCE(SUM(download), 0) as total_download, COALESCE(SUM(total), 0) as total_usage").
+		Group("subscription_id").
+		Order("total_usage DESC").
+		Limit(pageSize).
+		Offset(offset).
+		Scan(&results).Error
+
+	if err != nil {
+		r.logger.Errorw("failed to get usage grouped by subscription", "resource_type", resourceType, "error", err)
+		return nil, 0, fmt.Errorf("failed to get usage grouped by subscription: %w", err)
+	}
+
+	// Convert to domain type
+	summaries := make([]subscription.SubscriptionUsageSummary, len(results))
+	for i, result := range results {
+		summaries[i] = subscription.SubscriptionUsageSummary{
+			SubscriptionID: result.SubscriptionID,
+			Upload:         result.TotalUpload,
+			Download:       result.TotalDownload,
+			Total:          result.TotalUsage,
+		}
+	}
+
+	r.logger.Infow("usage grouped by subscription retrieved successfully", "count", len(summaries), "total", totalCount)
+	return summaries, totalCount, nil
+}
+
+// GetUsageGroupedByResourceID retrieves usage data grouped by resource ID with pagination
+func (r *SubscriptionUsageRepositoryImpl) GetUsageGroupedByResourceID(ctx context.Context, resourceType string, from, to time.Time, page, pageSize int) ([]subscription.ResourceUsageSummary, int64, error) {
+	// Build base query for aggregation
+	baseQuery := r.db.WithContext(ctx).Model(&models.SubscriptionUsageModel{}).
+		Where("resource_type = ?", resourceType)
+
+	// Apply time range filters
+	if !from.IsZero() {
+		baseQuery = baseQuery.Where("period >= ?", from)
+	}
+	if !to.IsZero() {
+		baseQuery = baseQuery.Where("period <= ?", to)
+	}
+
+	// Count total number of distinct resource IDs
+	var totalCount int64
+	countQuery := r.db.WithContext(ctx).Model(&models.SubscriptionUsageModel{}).
+		Where("resource_type = ?", resourceType).
+		Distinct("resource_id")
+
+	if !from.IsZero() {
+		countQuery = countQuery.Where("period >= ?", from)
+	}
+	if !to.IsZero() {
+		countQuery = countQuery.Where("period <= ?", to)
+	}
+
+	if err := countQuery.Count(&totalCount).Error; err != nil {
+		r.logger.Errorw("failed to count resources", "resource_type", resourceType, "error", err)
+		return nil, 0, fmt.Errorf("failed to count resources: %w", err)
+	}
+
+	// Execute aggregation query with pagination
+	var results []struct {
+		ResourceType  string
+		ResourceID    uint
+		TotalUpload   uint64
+		TotalDownload uint64
+		TotalUsage    uint64
+	}
+
+	offset := (page - 1) * pageSize
+	err := baseQuery.
+		Select("resource_type, resource_id, COALESCE(SUM(upload), 0) as total_upload, COALESCE(SUM(download), 0) as total_download, COALESCE(SUM(total), 0) as total_usage").
+		Group("resource_type, resource_id").
+		Order("total_usage DESC").
+		Limit(pageSize).
+		Offset(offset).
+		Scan(&results).Error
+
+	if err != nil {
+		r.logger.Errorw("failed to get usage grouped by resource ID", "resource_type", resourceType, "error", err)
+		return nil, 0, fmt.Errorf("failed to get usage grouped by resource ID: %w", err)
+	}
+
+	// Convert to domain type
+	summaries := make([]subscription.ResourceUsageSummary, len(results))
+	for i, result := range results {
+		summaries[i] = subscription.ResourceUsageSummary{
+			ResourceType: result.ResourceType,
+			ResourceID:   result.ResourceID,
+			Upload:       result.TotalUpload,
+			Download:     result.TotalDownload,
+			Total:        result.TotalUsage,
+		}
+	}
+
+	r.logger.Infow("usage grouped by resource ID retrieved successfully", "resource_type", resourceType, "count", len(summaries), "total", totalCount)
+	return summaries, totalCount, nil
+}
+
+// GetTopSubscriptionsByUsage retrieves top N subscriptions by total usage
+func (r *SubscriptionUsageRepositoryImpl) GetTopSubscriptionsByUsage(ctx context.Context, resourceType *string, from, to time.Time, limit int) ([]subscription.SubscriptionUsageSummary, error) {
+	// Build base query
+	query := r.db.WithContext(ctx).Model(&models.SubscriptionUsageModel{})
+
+	// Apply optional resource type filter
+	if resourceType != nil && *resourceType != "" {
+		query = query.Where("resource_type = ?", *resourceType)
+	}
+
+	// Apply time range filters
+	if !from.IsZero() {
+		query = query.Where("period >= ?", from)
+	}
+	if !to.IsZero() {
+		query = query.Where("period <= ?", to)
+	}
+
+	// Execute aggregation query
+	var results []struct {
+		SubscriptionID uint
+		TotalUpload    uint64
+		TotalDownload  uint64
+		TotalUsage     uint64
+	}
+
+	err := query.
+		Select("subscription_id, COALESCE(SUM(upload), 0) as total_upload, COALESCE(SUM(download), 0) as total_download, COALESCE(SUM(total), 0) as total_usage").
+		Group("subscription_id").
+		Order("total_usage DESC").
+		Limit(limit).
+		Scan(&results).Error
+
+	if err != nil {
+		r.logger.Errorw("failed to get top subscriptions by usage", "resource_type", resourceType, "limit", limit, "error", err)
+		return nil, fmt.Errorf("failed to get top subscriptions by usage: %w", err)
+	}
+
+	// Convert to domain type
+	summaries := make([]subscription.SubscriptionUsageSummary, len(results))
+	for i, result := range results {
+		summaries[i] = subscription.SubscriptionUsageSummary{
+			SubscriptionID: result.SubscriptionID,
+			Upload:         result.TotalUpload,
+			Download:       result.TotalDownload,
+			Total:          result.TotalUsage,
+		}
+	}
+
+	r.logger.Infow("top subscriptions by usage retrieved successfully", "count", len(summaries), "limit", limit)
+	return summaries, nil
+}
+
+// GetUsageTrend retrieves usage trend data with specified granularity (hour/day/month)
+func (r *SubscriptionUsageRepositoryImpl) GetUsageTrend(ctx context.Context, resourceType *string, from, to time.Time, granularity string) ([]subscription.UsageTrendPoint, error) {
+	// Build base query
+	query := r.db.WithContext(ctx).Model(&models.SubscriptionUsageModel{})
+
+	// Apply optional resource type filter
+	if resourceType != nil && *resourceType != "" {
+		query = query.Where("resource_type = ?", *resourceType)
+	}
+
+	// Apply time range filters
+	if !from.IsZero() {
+		query = query.Where("period >= ?", from)
+	}
+	if !to.IsZero() {
+		query = query.Where("period <= ?", to)
+	}
+
+	// Determine date truncation based on granularity
+	var dateFormat string
+	switch granularity {
+	case "hour":
+		dateFormat = "DATE_FORMAT(period, '%Y-%m-%d %H:00:00')"
+	case "day":
+		dateFormat = "DATE_FORMAT(period, '%Y-%m-%d')"
+	case "month":
+		dateFormat = "DATE_FORMAT(period, '%Y-%m-01')"
+	default:
+		r.logger.Errorw("invalid granularity", "granularity", granularity)
+		return nil, fmt.Errorf("invalid granularity: %s, must be one of: hour, day, month", granularity)
+	}
+
+	// Execute aggregation query
+	var results []struct {
+		Period        time.Time
+		TotalUpload   uint64
+		TotalDownload uint64
+		TotalUsage    uint64
+	}
+
+	err := query.
+		Select(fmt.Sprintf("%s as period, COALESCE(SUM(upload), 0) as total_upload, COALESCE(SUM(download), 0) as total_download, COALESCE(SUM(total), 0) as total_usage", dateFormat)).
+		Group(dateFormat).
+		Order("period ASC").
+		Scan(&results).Error
+
+	if err != nil {
+		r.logger.Errorw("failed to get usage trend", "resource_type", resourceType, "granularity", granularity, "error", err)
+		return nil, fmt.Errorf("failed to get usage trend: %w", err)
+	}
+
+	// Convert to domain type
+	trendPoints := make([]subscription.UsageTrendPoint, len(results))
+	for i, result := range results {
+		trendPoints[i] = subscription.UsageTrendPoint{
+			Period:   result.Period,
+			Upload:   result.TotalUpload,
+			Download: result.TotalDownload,
+			Total:    result.TotalUsage,
+		}
+	}
+
+	r.logger.Infow("usage trend retrieved successfully", "granularity", granularity, "count", len(trendPoints))
+	return trendPoints, nil
+}

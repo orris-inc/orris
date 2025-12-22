@@ -8,6 +8,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
+	adminUsecases "github.com/orris-inc/orris/internal/application/admin/usecases"
 	forwardServices "github.com/orris-inc/orris/internal/application/forward/services"
 	forwardUsecases "github.com/orris-inc/orris/internal/application/forward/usecases"
 	nodeUsecases "github.com/orris-inc/orris/internal/application/node/usecases"
@@ -50,6 +51,7 @@ type Router struct {
 	subscriptionHandler         *handlers.SubscriptionHandler
 	adminSubscriptionHandler    *adminHandlers.SubscriptionHandler
 	adminResourceGroupHandler   *adminHandlers.ResourceGroupHandler
+	adminTrafficStatsHandler    *adminHandlers.TrafficStatsHandler
 	planHandler                 *handlers.PlanHandler
 	subscriptionTokenHandler    *handlers.SubscriptionTokenHandler
 	paymentHandler              *handlers.PaymentHandler
@@ -475,6 +477,37 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		subscriptionPlanRepo, log,
 	)
 
+	// Initialize admin traffic stats use cases
+	getTrafficOverviewUC := adminUsecases.NewGetTrafficOverviewUseCase(
+		subscriptionUsageRepo, subscriptionRepo, userRepo, nodeRepoImpl, forwardRuleRepo, log,
+	)
+	getUserTrafficStatsUC := adminUsecases.NewGetUserTrafficStatsUseCase(
+		subscriptionUsageRepo, subscriptionRepo, userRepo, log,
+	)
+	getSubscriptionTrafficStatsUC := adminUsecases.NewGetSubscriptionTrafficStatsUseCase(
+		subscriptionUsageRepo, subscriptionRepo, userRepo, subscriptionPlanRepo, log,
+	)
+	getAdminNodeTrafficStatsUC := adminUsecases.NewGetAdminNodeTrafficStatsUseCase(
+		subscriptionUsageRepo, nodeRepoImpl, log,
+	)
+	getTrafficRankingUC := adminUsecases.NewGetTrafficRankingUseCase(
+		subscriptionUsageRepo, subscriptionRepo, userRepo, log,
+	)
+	getTrafficTrendUC := adminUsecases.NewGetTrafficTrendUseCase(
+		subscriptionUsageRepo, log,
+	)
+
+	// Initialize admin traffic stats handler
+	adminTrafficStatsHandler := adminHandlers.NewTrafficStatsHandler(
+		getTrafficOverviewUC,
+		getUserTrafficStatsUC,
+		getSubscriptionTrafficStatsUC,
+		getAdminNodeTrafficStatsUC,
+		getTrafficRankingUC,
+		getTrafficTrendUC,
+		log,
+	)
+
 	// Initialize forward rule components (configSyncService will be injected after creation)
 	var createForwardRuleUC *forwardUsecases.CreateForwardRuleUseCase
 	var getForwardRuleUC *forwardUsecases.GetForwardRuleUseCase
@@ -665,6 +698,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		subscriptionHandler:         subscriptionHandler,
 		adminSubscriptionHandler:    adminSubscriptionHandler,
 		adminResourceGroupHandler:   adminResourceGroupHandler,
+		adminTrafficStatsHandler:    adminTrafficStatsHandler,
 		planHandler:                 planHandler,
 		subscriptionTokenHandler:    subscriptionTokenHandler,
 		paymentHandler:              paymentHandler,
@@ -772,6 +806,19 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		adminResourceGroups.POST("/:id/forward-agents", r.adminResourceGroupHandler.AddForwardAgents)
 		adminResourceGroups.DELETE("/:id/forward-agents", r.adminResourceGroupHandler.RemoveForwardAgents)
 		adminResourceGroups.GET("/:id/forward-agents", r.adminResourceGroupHandler.ListForwardAgents)
+	}
+
+	// Admin traffic stats routes
+	adminTrafficStats := r.engine.Group("/admin/traffic-stats")
+	adminTrafficStats.Use(r.authMiddleware.RequireAuth(), authorization.RequireAdmin())
+	{
+		adminTrafficStats.GET("/overview", r.adminTrafficStatsHandler.GetOverview)
+		adminTrafficStats.GET("/users", r.adminTrafficStatsHandler.GetUserStats)
+		adminTrafficStats.GET("/subscriptions", r.adminTrafficStatsHandler.GetSubscriptionStats)
+		adminTrafficStats.GET("/nodes", r.adminTrafficStatsHandler.GetNodeStats)
+		adminTrafficStats.GET("/ranking/users", r.adminTrafficStatsHandler.GetUserRanking)
+		adminTrafficStats.GET("/ranking/subscriptions", r.adminTrafficStatsHandler.GetSubscriptionRanking)
+		adminTrafficStats.GET("/trend", r.adminTrafficStatsHandler.GetTrend)
 	}
 
 	// User subscription routes - only own subscriptions
