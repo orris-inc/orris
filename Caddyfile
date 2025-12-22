@@ -1,0 +1,28 @@
+# Caddyfile for Orris
+# Replace orris.example.com with your domain for automatic HTTPS
+
+:80 {
+    # API routes -> backend service
+    handle /api/* {
+        uri strip_prefix /api
+        reverse_proxy orris:8080
+    }
+
+    # All other routes -> frontend service
+    handle {
+        reverse_proxy frontend:80
+    }
+}
+
+orris.example.com {
+    # API routes -> backend service
+    handle /api/* {
+        uri strip_prefix /api
+        reverse_proxy orris:8080
+    }
+
+    # All other routes -> frontend service
+    handle {
+        reverse_proxy frontend:80
+    }
+}
