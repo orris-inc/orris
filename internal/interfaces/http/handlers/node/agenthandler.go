@@ -4,12 +4,12 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/orris-inc/orris/internal/application/node/dto"
 	"github.com/orris-inc/orris/internal/application/node/usecases"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
@@ -68,8 +68,8 @@ func NewAgentHandler(
 	}
 }
 
-// validateNodeAccess validates that the URL node ID matches the authenticated node ID from token.
-// Returns the validated node ID or an error if validation fails.
+// validateNodeAccess validates that the URL node SID matches the authenticated node SID from token.
+// Returns the validated internal node ID or an error if validation fails.
 func (h *AgentHandler) validateNodeAccess(c *gin.Context) (uint, error) {
 	// Get authenticated node ID from context (set by middleware after token validation)
 	authenticatedNodeID, exists := c.Get("node_id")
@@ -82,21 +82,31 @@ func (h *AgentHandler) validateNodeAccess(c *gin.Context) (uint, error) {
 		return 0, fmt.Errorf("invalid node_id type in context")
 	}
 
-	// Parse requested node ID from URL path parameter
-	nodeIDStr := c.Param("id")
-	requestedNodeID, err := strconv.ParseUint(nodeIDStr, 10, 32)
-	if err != nil {
-		return 0, fmt.Errorf("invalid node_id parameter: %s", nodeIDStr)
+	// Get authenticated node SID from context
+	authenticatedNodeSID, exists := c.Get("node_sid")
+	if !exists {
+		return 0, fmt.Errorf("node_sid not found in context")
 	}
 
-	// Validate that requested node ID matches authenticated node ID
-	if uint(requestedNodeID) != authNodeID {
+	authNodeSID, ok := authenticatedNodeSID.(string)
+	if !ok {
+		return 0, fmt.Errorf("invalid node_sid type in context")
+	}
+
+	// Parse requested node SID from URL path parameter
+	requestedNodeSID := c.Param("nodesid")
+	if err := id.ValidatePrefix(requestedNodeSID, id.PrefixNode); err != nil {
+		return 0, fmt.Errorf("invalid node SID format: %s", requestedNodeSID)
+	}
+
+	// Validate that requested node SID matches authenticated node SID
+	if requestedNodeSID != authNodeSID {
 		h.logger.Warnw("node access denied: token does not match requested node",
-			"requested_node_id", requestedNodeID,
-			"authenticated_node_id", authNodeID,
+			"requested_node_sid", requestedNodeSID,
+			"authenticated_node_sid", authNodeSID,
 			"ip", c.ClientIP(),
 		)
-		return 0, fmt.Errorf("access denied: token does not authorize access to node %d", requestedNodeID)
+		return 0, fmt.Errorf("access denied: token does not authorize access to node %s", requestedNodeSID)
 	}
 
 	return authNodeID, nil

@@ -19,7 +19,7 @@ var ErrUnauthorized = errors.New("unauthorized: invalid or expired node token")
 type Client struct {
 	baseURL    string
 	token      string
-	nodeID     int
+	nodeSID    string
 	httpClient *http.Client
 }
 
@@ -44,13 +44,13 @@ func WithTimeout(d time.Duration) Option {
 //
 // Parameters:
 //   - baseURL: The API base URL (e.g., "https://api.example.com")
-//   - token: The node authentication token (e.g., "node_xxx")
-//   - nodeID: The node ID assigned by the server
-func NewClient(baseURL, token string, nodeID int, opts ...Option) *Client {
+//   - token: The node authentication token
+//   - nodeSID: The node SID assigned by the server (Stripe-style: node_xxx)
+func NewClient(baseURL, token string, nodeSID string, opts ...Option) *Client {
 	c := &Client{
 		baseURL: baseURL,
 		token:   token,
-		nodeID:  nodeID,
+		nodeSID: nodeSID,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -63,7 +63,7 @@ func NewClient(baseURL, token string, nodeID int, opts ...Option) *Client {
 
 // GetConfig retrieves the node configuration.
 func (c *Client) GetConfig(ctx context.Context) (*NodeConfig, error) {
-	url := fmt.Sprintf("%s/agents/%d/config", c.baseURL, c.nodeID)
+	url := fmt.Sprintf("%s/agents/%s/config", c.baseURL, c.nodeSID)
 
 	var config NodeConfig
 	if err := c.doRequest(ctx, http.MethodGet, url, nil, &config); err != nil {
@@ -74,7 +74,7 @@ func (c *Client) GetConfig(ctx context.Context) (*NodeConfig, error) {
 
 // GetSubscriptions retrieves the list of active subscriptions for this node.
 func (c *Client) GetSubscriptions(ctx context.Context) ([]Subscription, error) {
-	url := fmt.Sprintf("%s/agents/%d/subscriptions", c.baseURL, c.nodeID)
+	url := fmt.Sprintf("%s/agents/%s/subscriptions", c.baseURL, c.nodeSID)
 
 	var subscriptions []Subscription
 	if err := c.doRequest(ctx, http.MethodGet, url, nil, &subscriptions); err != nil {
@@ -85,7 +85,7 @@ func (c *Client) GetSubscriptions(ctx context.Context) ([]Subscription, error) {
 
 // ReportTraffic reports subscription traffic data.
 func (c *Client) ReportTraffic(ctx context.Context, reports []TrafficReport) (*TrafficReportResult, error) {
-	url := fmt.Sprintf("%s/agents/%d/traffic", c.baseURL, c.nodeID)
+	url := fmt.Sprintf("%s/agents/%s/traffic", c.baseURL, c.nodeSID)
 
 	var result TrafficReportResult
 	if err := c.doRequest(ctx, http.MethodPost, url, reports, &result); err != nil {
@@ -96,7 +96,7 @@ func (c *Client) ReportTraffic(ctx context.Context, reports []TrafficReport) (*T
 
 // UpdateStatus updates the node system status.
 func (c *Client) UpdateStatus(ctx context.Context, status *NodeStatus) error {
-	url := fmt.Sprintf("%s/agents/%d/status", c.baseURL, c.nodeID)
+	url := fmt.Sprintf("%s/agents/%s/status", c.baseURL, c.nodeSID)
 
 	if err := c.doRequest(ctx, http.MethodPut, url, status, nil); err != nil {
 		return fmt.Errorf("update status: %w", err)
@@ -106,7 +106,7 @@ func (c *Client) UpdateStatus(ctx context.Context, status *NodeStatus) error {
 
 // UpdateOnlineSubscriptions updates the list of online subscriptions.
 func (c *Client) UpdateOnlineSubscriptions(ctx context.Context, subscriptions []OnlineSubscription) (*OnlineSubscriptionsResult, error) {
-	url := fmt.Sprintf("%s/agents/%d/online-subscriptions", c.baseURL, c.nodeID)
+	url := fmt.Sprintf("%s/agents/%s/online-subscriptions", c.baseURL, c.nodeSID)
 
 	body := map[string]any{
 		"subscriptions": subscriptions,

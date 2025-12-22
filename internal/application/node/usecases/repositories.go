@@ -16,6 +16,7 @@ type NodeRepository interface {
 
 type NodeData struct {
 	ID        uint
+	SID       string
 	Name      string
 	TokenHash string
 	Status    string

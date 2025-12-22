@@ -17,8 +17,9 @@ type ValidateNodeTokenCommand struct {
 }
 
 type ValidateNodeTokenResult struct {
-	NodeID uint
-	Name   string
+	NodeID  uint
+	NodeSID string
+	Name    string
 }
 
 type ValidateNodeTokenUseCase struct {
@@ -65,8 +66,9 @@ func (uc *ValidateNodeTokenUseCase) Execute(ctx context.Context, cmd ValidateNod
 	)
 
 	return &ValidateNodeTokenResult{
-		NodeID: node.ID,
-		Name:   node.Name,
+		NodeID:  node.ID,
+		NodeSID: node.SID,
+		Name:    node.Name,
 	}, nil
 }
 

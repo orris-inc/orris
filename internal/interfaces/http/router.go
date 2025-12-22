@@ -443,9 +443,10 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	subscriptionUsageRecorder := adapters.NewSubscriptionUsageRecorderAdapter(subscriptionUsageRepo, log)
 	systemStatusUpdater := adapters.NewNodeSystemStatusUpdaterAdapter(redisClient, log)
 	onlineSubscriptionTracker := adapters.NewOnlineSubscriptionTrackerAdapter(log)
-	reportSubscriptionUsageUC := nodeUsecases.NewReportSubscriptionUsageUseCase(subscriptionUsageRecorder, log)
+	subscriptionIDResolver := adapters.NewSubscriptionIDResolverAdapter(subscriptionRepo, log)
+	reportSubscriptionUsageUC := nodeUsecases.NewReportSubscriptionUsageUseCase(subscriptionUsageRecorder, subscriptionIDResolver, log)
 	reportNodeStatusUC := nodeUsecases.NewReportNodeStatusUseCase(systemStatusUpdater, nodeRepoImpl, log)
-	reportOnlineSubscriptionsUC := nodeUsecases.NewReportOnlineSubscriptionsUseCase(onlineSubscriptionTracker, log)
+	reportOnlineSubscriptionsUC := nodeUsecases.NewReportOnlineSubscriptionsUseCase(onlineSubscriptionTracker, subscriptionIDResolver, log)
 
 	// Initialize RESTful Agent Handler
 	agentHandler := nodeHandlers.NewAgentHandler(
@@ -853,20 +854,20 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 	agentAPI := r.engine.Group("/agents")
 	agentAPI.Use(r.nodeTokenMiddleware.RequireNodeTokenHeader())
 	{
-		// GET /agents/:id/config - Get node configuration
-		agentAPI.GET("/:id/config", r.agentHandler.GetConfig)
+		// GET /agents/:nodesid/config - Get node configuration
+		agentAPI.GET("/:nodesid/config", r.agentHandler.GetConfig)
 
-		// GET /agents/:id/subscriptions - Get active subscriptions for node
-		agentAPI.GET("/:id/subscriptions", r.agentHandler.GetSubscriptions)
+		// GET /agents/:nodesid/subscriptions - Get active subscriptions for node
+		agentAPI.GET("/:nodesid/subscriptions", r.agentHandler.GetSubscriptions)
 
-		// POST /agents/:id/traffic - Report subscription traffic data
-		agentAPI.POST("/:id/traffic", r.agentHandler.ReportTraffic)
+		// POST /agents/:nodesid/traffic - Report subscription traffic data
+		agentAPI.POST("/:nodesid/traffic", r.agentHandler.ReportTraffic)
 
-		// PUT /agents/:id/status - Update node system status
-		agentAPI.PUT("/:id/status", r.agentHandler.UpdateStatus)
+		// PUT /agents/:nodesid/status - Update node system status
+		agentAPI.PUT("/:nodesid/status", r.agentHandler.UpdateStatus)
 
-		// PUT /agents/:id/online-subscriptions - Update online subscriptions list
-		agentAPI.PUT("/:id/online-subscriptions", r.agentHandler.UpdateOnlineSubscriptions)
+		// PUT /agents/:nodesid/online-subscriptions - Update online subscriptions list
+		agentAPI.PUT("/:nodesid/online-subscriptions", r.agentHandler.UpdateOnlineSubscriptions)
 	}
 
 	routes.SetupTicketRoutes(r.engine, &routes.TicketRouteConfig{

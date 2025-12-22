@@ -34,9 +34,9 @@ func NewSubscriptionUsageRecorderAdapter(
 }
 
 // RecordSubscriptionUsage records subscription usage data directly to database
-func (a *SubscriptionUsageRecorderAdapter) RecordSubscriptionUsage(ctx context.Context, nodeID uint, subscriptionID int, upload, download int64) error {
+func (a *SubscriptionUsageRecorderAdapter) RecordSubscriptionUsage(ctx context.Context, nodeID uint, subscriptionID uint, upload, download int64) error {
 	// Validate subscription ID
-	if subscriptionID <= 0 {
+	if subscriptionID == 0 {
 		a.logger.Warnw("invalid subscription ID", "subscription_id", subscriptionID)
 		return nil // Skip invalid subscription IDs
 	}
@@ -50,8 +50,7 @@ func (a *SubscriptionUsageRecorderAdapter) RecordSubscriptionUsage(ctx context.C
 	period := time.Now().Truncate(time.Hour)
 
 	// Create domain entity
-	subIDUint := uint(subscriptionID)
-	usage, err := subscription.NewSubscriptionUsage(subscription.ResourceTypeNode.String(), nodeID, &subIDUint, period)
+	usage, err := subscription.NewSubscriptionUsage(subscription.ResourceTypeNode.String(), nodeID, &subscriptionID, period)
 	if err != nil {
 		a.logger.Errorw("failed to create subscription usage entity",
 			"error", err,
@@ -106,7 +105,7 @@ func (a *SubscriptionUsageRecorderAdapter) BatchRecordSubscriptionUsage(ctx cont
 
 	for _, item := range items {
 		// Skip invalid subscription IDs
-		if item.SubscriptionID <= 0 {
+		if item.SubscriptionID == 0 {
 			a.logger.Warnw("skipping invalid subscription ID in batch",
 				"subscription_id", item.SubscriptionID,
 				"node_id", nodeID,
@@ -120,8 +119,8 @@ func (a *SubscriptionUsageRecorderAdapter) BatchRecordSubscriptionUsage(ctx cont
 		}
 
 		// Create domain entity
-		subIDUint := uint(item.SubscriptionID)
-		usage, err := subscription.NewSubscriptionUsage(subscription.ResourceTypeNode.String(), nodeID, &subIDUint, period)
+		subID := item.SubscriptionID
+		usage, err := subscription.NewSubscriptionUsage(subscription.ResourceTypeNode.String(), nodeID, &subID, period)
 		if err != nil {
 			a.logger.Errorw("failed to create subscription usage entity in batch",
 				"error", err,
@@ -378,6 +377,56 @@ func (a *NodeSystemStatusQuerierAdapter) GetMultipleNodeSystemStatus(ctx context
 		}
 
 		result[nodeID] = status
+	}
+
+	return result, nil
+}
+
+// SubscriptionIDResolverAdapter implements SubscriptionIDResolver interface
+type SubscriptionIDResolverAdapter struct {
+	subscriptionRepo subscription.SubscriptionRepository
+	logger           logger.Interface
+}
+
+// NewSubscriptionIDResolverAdapter creates a new subscription ID resolver adapter
+func NewSubscriptionIDResolverAdapter(
+	subscriptionRepo subscription.SubscriptionRepository,
+	logger logger.Interface,
+) nodeUsecases.SubscriptionIDResolver {
+	return &SubscriptionIDResolverAdapter{
+		subscriptionRepo: subscriptionRepo,
+		logger:           logger,
+	}
+}
+
+// GetIDBySID resolves a single subscription SID to internal ID
+func (a *SubscriptionIDResolverAdapter) GetIDBySID(ctx context.Context, sid string) (uint, error) {
+	sub, err := a.subscriptionRepo.GetBySID(ctx, sid)
+	if err != nil {
+		a.logger.Warnw("failed to resolve subscription SID",
+			"sid", sid,
+			"error", err,
+		)
+		return 0, err
+	}
+	return sub.ID(), nil
+}
+
+// GetIDsBySIDs resolves multiple subscription SIDs to internal IDs in batch
+func (a *SubscriptionIDResolverAdapter) GetIDsBySIDs(ctx context.Context, sids []string) (map[string]uint, error) {
+	result := make(map[string]uint)
+
+	// Query each SID individually (could be optimized with batch query if needed)
+	for _, sid := range sids {
+		sub, err := a.subscriptionRepo.GetBySID(ctx, sid)
+		if err != nil {
+			a.logger.Warnw("failed to resolve subscription SID in batch",
+				"sid", sid,
+				"error", err,
+			)
+			continue // Skip failed lookups, don't fail the entire batch
+		}
+		result[sid] = sub.ID()
 	}
 
 	return result, nil

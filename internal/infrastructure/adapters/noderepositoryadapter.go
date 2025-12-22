@@ -258,6 +258,7 @@ func (r *NodeRepositoryAdapter) GetByTokenHash(ctx context.Context, tokenHash st
 	// Convert domain entity to use case NodeData
 	return usecases.NodeData{
 		ID:        nodeEntity.ID(),
+		SID:       nodeEntity.SID(),
 		Name:      nodeEntity.Name(),
 		TokenHash: nodeEntity.TokenHash(),
 		Status:    string(nodeEntity.Status()),

@@ -4,7 +4,7 @@ package agent
 // NodeConfig represents the node configuration returned by the API.
 // Compatible with sing-box inbound configuration.
 type NodeConfig struct {
-	NodeID            int    `json:"node_id"`
+	NodeSID           string `json:"node_id"`                     // Node SID (Stripe-style: node_xxx)
 	Protocol          string `json:"protocol"`                    // shadowsocks or trojan
 	ServerHost        string `json:"server_host"`                 // Server hostname or IP address
 	ServerPort        int    `json:"server_port"`                 // Server port number
@@ -35,19 +35,19 @@ func (c *NodeConfig) IsShadowsocks() bool {
 
 // Subscription represents an individual subscription authorized for the node.
 type Subscription struct {
-	SubscriptionID int    `json:"subscription_id"`
-	Password       string `json:"password"`
-	Name           string `json:"name"`
-	SpeedLimit     uint64 `json:"speed_limit"`
-	DeviceLimit    int    `json:"device_limit"`
-	ExpireTime     int64  `json:"expire_time"`
+	SubscriptionSID string `json:"subscription_id"` // Subscription SID (Stripe-style: sub_xxx)
+	Password        string `json:"password"`
+	Name            string `json:"name"`
+	SpeedLimit      uint64 `json:"speed_limit"`
+	DeviceLimit     int    `json:"device_limit"`
+	ExpireTime      int64  `json:"expire_time"`
 }
 
 // TrafficReport represents traffic data for a single subscription.
 type TrafficReport struct {
-	SubscriptionID int   `json:"subscription_id"`
-	Upload         int64 `json:"upload"`
-	Download       int64 `json:"download"`
+	SubscriptionSID string `json:"subscription_id"` // Subscription SID (Stripe-style: sub_xxx)
+	Upload          int64  `json:"upload"`
+	Download        int64  `json:"download"`
 }
 
 // NodeStatus represents the system status of a node.
@@ -62,8 +62,8 @@ type NodeStatus struct {
 
 // OnlineSubscription represents an online subscription connection.
 type OnlineSubscription struct {
-	SubscriptionID int    `json:"subscription_id"`
-	IP             string `json:"ip"`
+	SubscriptionSID string `json:"subscription_id"` // Subscription SID (Stripe-style: sub_xxx)
+	IP              string `json:"ip"`
 }
 
 // TrafficReportResult represents the result of a traffic report.

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/orris-inc/orris/internal/application/node/dto"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -21,32 +22,42 @@ type ReportSubscriptionUsageResult struct {
 }
 
 // SubscriptionUsageItem represents a single subscription's usage data for batch recording
+// Uses internal subscription ID for database storage
 type SubscriptionUsageItem struct {
-	SubscriptionID int
+	SubscriptionID uint
 	Upload         int64
 	Download       int64
 }
 
 // SubscriptionUsageRecorder defines the interface for recording subscription usage
 type SubscriptionUsageRecorder interface {
-	RecordSubscriptionUsage(ctx context.Context, nodeID uint, subscriptionID int, upload, download int64) error
+	RecordSubscriptionUsage(ctx context.Context, nodeID uint, subscriptionID uint, upload, download int64) error
 	BatchRecordSubscriptionUsage(ctx context.Context, nodeID uint, items []SubscriptionUsageItem) error
+}
+
+// SubscriptionIDResolver defines the interface for resolving subscription SIDs to internal IDs
+type SubscriptionIDResolver interface {
+	GetIDBySID(ctx context.Context, sid string) (uint, error)
+	GetIDsBySIDs(ctx context.Context, sids []string) (map[string]uint, error)
 }
 
 // ReportSubscriptionUsageUseCase handles reporting subscription usage from node agents
 type ReportSubscriptionUsageUseCase struct {
-	usageRecorder SubscriptionUsageRecorder
-	logger        logger.Interface
+	usageRecorder      SubscriptionUsageRecorder
+	subscriptionLookup SubscriptionIDResolver
+	logger             logger.Interface
 }
 
 // NewReportSubscriptionUsageUseCase creates a new instance of ReportSubscriptionUsageUseCase
 func NewReportSubscriptionUsageUseCase(
 	usageRecorder SubscriptionUsageRecorder,
+	subscriptionLookup SubscriptionIDResolver,
 	logger logger.Interface,
 ) *ReportSubscriptionUsageUseCase {
 	return &ReportSubscriptionUsageUseCase{
-		usageRecorder: usageRecorder,
-		logger:        logger,
+		usageRecorder:      usageRecorder,
+		subscriptionLookup: subscriptionLookup,
+		logger:             logger,
 	}
 }
 
@@ -66,12 +77,16 @@ func (uc *ReportSubscriptionUsageUseCase) Execute(ctx context.Context, cmd Repor
 		}, nil
 	}
 
-	// Collect valid usage items for batch processing
-	validItems := make([]SubscriptionUsageItem, 0, len(cmd.Subscriptions))
+	// Collect valid SIDs for batch lookup
+	validSIDs := make([]string, 0, len(cmd.Subscriptions))
+	usageMap := make(map[string]dto.SubscriptionUsageItem)
+
 	for _, subscription := range cmd.Subscriptions {
-		if subscription.SubscriptionID == 0 {
-			uc.logger.Warnw("skipping subscription usage with invalid subscription_id",
+		// Validate SID format
+		if err := id.ValidatePrefix(subscription.SubscriptionSID, id.PrefixSubscription); err != nil {
+			uc.logger.Warnw("skipping subscription usage with invalid subscription SID",
 				"node_id", cmd.NodeID,
+				"subscription_sid", subscription.SubscriptionSID,
 			)
 			continue
 		}
@@ -81,18 +96,48 @@ func (uc *ReportSubscriptionUsageUseCase) Execute(ctx context.Context, cmd Repor
 			continue
 		}
 
-		validItems = append(validItems, SubscriptionUsageItem{
-			SubscriptionID: subscription.SubscriptionID,
-			Upload:         subscription.Upload,
-			Download:       subscription.Download,
-		})
+		validSIDs = append(validSIDs, subscription.SubscriptionSID)
+		usageMap[subscription.SubscriptionSID] = subscription
 	}
 
 	// If no valid items, return early
-	if len(validItems) == 0 {
+	if len(validSIDs) == 0 {
 		uc.logger.Infow("no valid subscription usage data to report",
 			"node_id", cmd.NodeID,
 			"total_subscriptions", len(cmd.Subscriptions),
+		)
+		return &ReportSubscriptionUsageResult{
+			Success:              true,
+			SubscriptionsUpdated: 0,
+		}, nil
+	}
+
+	// Batch lookup SIDs to internal IDs
+	sidToID, err := uc.subscriptionLookup.GetIDsBySIDs(ctx, validSIDs)
+	if err != nil {
+		uc.logger.Errorw("failed to lookup subscription IDs by SIDs",
+			"error", err,
+			"node_id", cmd.NodeID,
+			"subscription_count", len(validSIDs),
+		)
+		return nil, fmt.Errorf("failed to lookup subscription IDs: %w", err)
+	}
+
+	// Build usage items with internal IDs
+	validItems := make([]SubscriptionUsageItem, 0, len(sidToID))
+	for sid, internalID := range sidToID {
+		usage := usageMap[sid]
+		validItems = append(validItems, SubscriptionUsageItem{
+			SubscriptionID: internalID,
+			Upload:         usage.Upload,
+			Download:       usage.Download,
+		})
+	}
+
+	if len(validItems) == 0 {
+		uc.logger.Warnw("no subscription IDs found for provided SIDs",
+			"node_id", cmd.NodeID,
+			"sids", validSIDs,
 		)
 		return &ReportSubscriptionUsageResult{
 			Success:              true,

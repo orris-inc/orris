@@ -68,6 +68,7 @@ func (m *NodeTokenMiddleware) RequireNodeToken() gin.HandlerFunc {
 		}
 
 		c.Set("node_id", result.NodeID)
+		c.Set("node_sid", result.NodeSID)
 		c.Set("node_name", result.Name)
 		c.Next()
 	}
@@ -100,10 +101,12 @@ func (m *NodeTokenMiddleware) RequireNodeTokenQuery() gin.HandlerFunc {
 
 		// Store node info in context
 		c.Set("node_id", result.NodeID)
+		c.Set("node_sid", result.NodeSID)
 		c.Set("node_name", result.Name)
 
 		m.logger.Infow("agent node authenticated",
 			"node_id", result.NodeID,
+			"node_sid", result.NodeSID,
 			"node_name", result.Name,
 			"ip", c.ClientIP(),
 		)
@@ -139,10 +142,12 @@ func (m *NodeTokenMiddleware) RequireNodeTokenHeader() gin.HandlerFunc {
 
 		// Store node info in context
 		c.Set("node_id", result.NodeID)
+		c.Set("node_sid", result.NodeSID)
 		c.Set("node_name", result.Name)
 
 		m.logger.Infow("node authenticated via X-Node-Token header",
 			"node_id", result.NodeID,
+			"node_sid", result.NodeSID,
 			"node_name", result.Name,
 			"ip", c.ClientIP(),
 		)

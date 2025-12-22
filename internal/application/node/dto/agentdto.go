@@ -22,7 +22,7 @@ type AgentResponse struct {
 // NodeConfigResponse represents node configuration data for node agents
 // Compatible with sing-box inbound configuration
 type NodeConfigResponse struct {
-	NodeID            int    `json:"node_id" binding:"required"`                              // Node unique identifier
+	NodeSID           string `json:"node_id" binding:"required"`                              // Node SID (Stripe-style: node_xxx)
 	Protocol          string `json:"protocol" binding:"required,oneof=shadowsocks trojan"`    // Protocol type
 	ServerHost        string `json:"server_host" binding:"required"`                          // Server hostname or IP address
 	ServerPort        int    `json:"server_port" binding:"required,min=1,max=65535"`          // Server port number
@@ -43,12 +43,12 @@ type NodeConfigResponse struct {
 
 // NodeSubscriptionInfo represents individual subscription information for node access
 type NodeSubscriptionInfo struct {
-	SubscriptionID int    `json:"subscription_id" binding:"required"` // Subscription ID (used for traffic reporting)
-	Password       string `json:"password" binding:"required"`        // HMAC-SHA256 signed password derived from subscription UUID
-	Name           string `json:"name" binding:"required"`            // User identifier for logging (sing-box compatible)
-	SpeedLimit     uint64 `json:"speed_limit"`                        // Speed limit in bps (0 = unlimited)
-	DeviceLimit    int    `json:"device_limit"`                       // Device connection limit (0 = unlimited)
-	ExpireTime     int64  `json:"expire_time"`                        // Unix timestamp of expiration date
+	SubscriptionSID string `json:"subscription_id" binding:"required"` // Subscription SID (Stripe-style: sub_xxx)
+	Password        string `json:"password" binding:"required"`        // HMAC-SHA256 signed password derived from subscription UUID
+	Name            string `json:"name" binding:"required"`            // User identifier for logging (sing-box compatible)
+	SpeedLimit      uint64 `json:"speed_limit"`                        // Speed limit in bps (0 = unlimited)
+	DeviceLimit     int    `json:"device_limit"`                       // Device connection limit (0 = unlimited)
+	ExpireTime      int64  `json:"expire_time"`                        // Unix timestamp of expiration date
 }
 
 // NodeSubscriptionsResponse represents the subscription list response for a node
@@ -58,9 +58,9 @@ type NodeSubscriptionsResponse struct {
 
 // SubscriptionUsageItem represents usage data for a single subscription
 type SubscriptionUsageItem struct {
-	SubscriptionID int   `json:"subscription_id" binding:"required"` // Subscription ID for usage tracking
-	Upload         int64 `json:"upload" binding:"min=0"`             // Upload usage in bytes
-	Download       int64 `json:"download" binding:"min=0"`           // Download usage in bytes
+	SubscriptionSID string `json:"subscription_id" binding:"required"` // Subscription SID (Stripe-style: sub_xxx)
+	Upload          int64  `json:"upload" binding:"min=0"`             // Upload usage in bytes
+	Download        int64  `json:"download" binding:"min=0"`           // Download usage in bytes
 }
 
 // ReportSubscriptionUsageRequest represents subscription usage report request
@@ -80,8 +80,8 @@ type ReportNodeStatusRequest struct {
 
 // OnlineSubscriptionItem represents a single online subscription connection
 type OnlineSubscriptionItem struct {
-	SubscriptionID int    `json:"subscription_id" binding:"required"` // Subscription unique identifier
-	IP             string `json:"ip" binding:"required"`              // Connection IP address
+	SubscriptionSID string `json:"subscription_id" binding:"required"` // Subscription SID (Stripe-style: sub_xxx)
+	IP              string `json:"ip" binding:"required"`              // Connection IP address
 }
 
 // ReportOnlineSubscriptionsRequest represents online subscriptions report request
@@ -97,7 +97,7 @@ func ToNodeConfigResponse(n *node.Node) *NodeConfigResponse {
 	}
 
 	config := &NodeConfigResponse{
-		NodeID:            int(n.ID()),
+		NodeSID:           n.SID(),
 		ServerHost:        n.ServerAddress().Value(),
 		ServerPort:        int(n.AgentPort()),
 		TransportProtocol: "tcp", // Default to TCP
@@ -178,12 +178,12 @@ func ToNodeSubscriptionsResponse(subscriptions []*subscription.Subscription, hma
 		}
 
 		subscriptionInfo := NodeSubscriptionInfo{
-			SubscriptionID: int(sub.ID()), // Using subscription ID for traffic tracking
-			Password:       generatePasswordForEncryptionMethod(sub, hmacSecret, encryptionMethod),
-			Name:           generateSubscriptionName(sub),
-			SpeedLimit:     0, // 0 = unlimited, can be set from subscription plan limits
-			DeviceLimit:    0, // 0 = unlimited, can be set from subscription plan limits
-			ExpireTime:     sub.EndDate().Unix(),
+			SubscriptionSID: sub.SID(), // Using subscription SID for traffic tracking
+			Password:        generatePasswordForEncryptionMethod(sub, hmacSecret, encryptionMethod),
+			Name:            generateSubscriptionName(sub),
+			SpeedLimit:      0, // 0 = unlimited, can be set from subscription plan limits
+			DeviceLimit:     0, // 0 = unlimited, can be set from subscription plan limits
+			ExpireTime:      sub.EndDate().Unix(),
 		}
 
 		subscriptionInfos = append(subscriptionInfos, subscriptionInfo)
