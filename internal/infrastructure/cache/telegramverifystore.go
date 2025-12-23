@@ -27,10 +27,10 @@ func NewTelegramVerifyStore(client *redis.Client) *TelegramVerifyStore {
 }
 
 // Generate generates a new verify code for the user and stores it in Redis
-// Returns a 6-character hex code that expires in 10 minutes
+// Returns an 8-character hex code that expires in 10 minutes
 func (s *TelegramVerifyStore) Generate(ctx context.Context, userID uint) (string, error) {
-	// Generate a random 6-character code
-	bytes := make([]byte, 3)
+	// Generate a random 8-character code (4 bytes = 32 bits of entropy)
+	bytes := make([]byte, 4)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", fmt.Errorf("failed to generate random bytes: %w", err)
 	}

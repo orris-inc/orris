@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/orris-inc/orris/internal/domain/subscription"
@@ -104,21 +105,26 @@ func (uc *ProcessReminderUseCase) processExpiringSubscriptions(ctx context.Conte
 			continue
 		}
 
-		// Build and send message
+		// Build message
 		message := uc.buildExpiringMessage(userSubs, binding.ExpiringDays())
+
+		// Record notification timestamp BEFORE sending to prevent duplicates on partial failure
+		binding.RecordExpiringNotification()
+		if err := uc.bindingRepo.Update(ctx, binding); err != nil {
+			uc.logger.Errorw("failed to update binding before notification", "error", err)
+			errors++
+			continue
+		}
+
+		// Send message
 		if err := uc.botService.SendMessageMarkdown(binding.TelegramUserID(), message); err != nil {
 			uc.logger.Errorw("failed to send expiring notification",
 				"telegram_user_id", binding.TelegramUserID(),
 				"error", err,
 			)
+			// Note: timestamp already updated, message will be retried in next window
 			errors++
 			continue
-		}
-
-		// Record notification sent
-		binding.RecordExpiringNotification()
-		if err := uc.bindingRepo.Update(ctx, binding); err != nil {
-			uc.logger.Errorw("failed to update binding after notification", "error", err)
 		}
 
 		notified++
@@ -218,21 +224,26 @@ func (uc *ProcessReminderUseCase) processTrafficUsage(ctx context.Context) (int,
 			continue
 		}
 
-		// Build and send message
+		// Build message
 		message := uc.buildTrafficMessage(highUsageSubs, binding.TrafficThreshold())
+
+		// Record notification timestamp BEFORE sending to prevent duplicates on partial failure
+		binding.RecordTrafficNotification()
+		if err := uc.bindingRepo.Update(ctx, binding); err != nil {
+			uc.logger.Errorw("failed to update binding before notification", "error", err)
+			errors++
+			continue
+		}
+
+		// Send message
 		if err := uc.botService.SendMessageMarkdown(binding.TelegramUserID(), message); err != nil {
 			uc.logger.Errorw("failed to send traffic notification",
 				"telegram_user_id", binding.TelegramUserID(),
 				"error", err,
 			)
+			// Note: timestamp already updated, message will be retried in next window
 			errors++
 			continue
-		}
-
-		// Record notification sent
-		binding.RecordTrafficNotification()
-		if err := uc.bindingRepo.Update(ctx, binding); err != nil {
-			uc.logger.Errorw("failed to update binding after notification", "error", err)
 		}
 
 		notified++
@@ -244,7 +255,12 @@ func (uc *ProcessReminderUseCase) processTrafficUsage(ctx context.Context) (int,
 func (uc *ProcessReminderUseCase) buildExpiringMessage(subs []*subscription.Subscription, days int) string {
 	msg := fmt.Sprintf("*Subscription Expiring Soon*\n\nThe following subscriptions will expire within %d days:\n\n", days)
 	for _, sub := range subs {
-		daysLeft := int(time.Until(sub.EndDate()).Hours() / 24)
+		// Use ceiling to ensure 23.5 hours shows as 1 day, not 0
+		hoursLeft := time.Until(sub.EndDate()).Hours()
+		daysLeft := int(math.Ceil(hoursLeft / 24))
+		if daysLeft < 0 {
+			daysLeft = 0
+		}
 		msg += fmt.Sprintf("• Subscription `%s`: expires in *%d days* (%s)\n",
 			sub.SID(),
 			daysLeft,

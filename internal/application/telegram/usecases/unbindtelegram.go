@@ -30,6 +30,9 @@ func (uc *UnbindTelegramUseCase) ExecuteByUserID(ctx context.Context, userID uin
 	if err != nil {
 		return err
 	}
+	if binding == nil {
+		return telegram.ErrBindingNotFound
+	}
 
 	if err := uc.bindingRepo.Delete(ctx, binding.ID()); err != nil {
 		return err
@@ -44,6 +47,9 @@ func (uc *UnbindTelegramUseCase) ExecuteByTelegramID(ctx context.Context, telegr
 	binding, err := uc.bindingRepo.GetByTelegramUserID(ctx, telegramUserID)
 	if err != nil {
 		return err
+	}
+	if binding == nil {
+		return telegram.ErrBindingNotFound
 	}
 
 	if err := uc.bindingRepo.Delete(ctx, binding.ID()); err != nil {

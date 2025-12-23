@@ -34,6 +34,10 @@ func (s *BotService) SetWebhook(webhookURL string) error {
 	body := map[string]interface{}{
 		"url": webhookURL,
 	}
+	// Include secret_token if configured for webhook verification
+	if s.config.WebhookSecret != "" {
+		body["secret_token"] = s.config.WebhookSecret
+	}
 
 	return s.makeRequest(url, body)
 }

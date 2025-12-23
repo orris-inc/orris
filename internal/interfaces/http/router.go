@@ -442,7 +442,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		)
 
 		// Initialize Telegram Handler
-		telegramHandler = telegramHandlers.NewHandler(telegramServiceDDD, log)
+		telegramHandler = telegramHandlers.NewHandler(telegramServiceDDD, log, cfg.Telegram.WebhookSecret)
 
 		// Auto-setup Telegram webhook
 		webhookURL := cfg.Telegram.GetWebhookURL(cfg.Server.GetBaseURL())

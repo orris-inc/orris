@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"errors"
 
 	"github.com/orris-inc/orris/internal/application/telegram/dto"
 	"github.com/orris-inc/orris/internal/application/telegram/usecases"
@@ -96,6 +97,17 @@ func (s *ServiceDDD) UpdatePreferences(
 func (s *ServiceDDD) GetBindingStatusByTelegramID(ctx context.Context, telegramUserID int64) (*dto.BindingStatusResponse, error) {
 	binding, err := s.bindingRepo.GetByTelegramUserID(ctx, telegramUserID)
 	if err != nil {
+		// Only treat "not found" as unbound, propagate other errors
+		if errors.Is(err, telegram.ErrBindingNotFound) {
+			return &dto.BindingStatusResponse{IsBound: false}, nil
+		}
+		s.logger.Errorw("failed to get binding by telegram user ID",
+			"telegram_user_id", telegramUserID,
+			"error", err,
+		)
+		return nil, err
+	}
+	if binding == nil {
 		return &dto.BindingStatusResponse{IsBound: false}, nil
 	}
 

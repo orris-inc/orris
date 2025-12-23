@@ -16,15 +16,17 @@ import (
 
 // Handler handles telegram-related HTTP requests
 type Handler struct {
-	service *telegramApp.ServiceDDD
-	logger  logger.Interface
+	service       *telegramApp.ServiceDDD
+	logger        logger.Interface
+	webhookSecret string
 }
 
 // NewHandler creates a new telegram handler
-func NewHandler(service *telegramApp.ServiceDDD, logger logger.Interface) *Handler {
+func NewHandler(service *telegramApp.ServiceDDD, logger logger.Interface, webhookSecret string) *Handler {
 	return &Handler{
-		service: service,
-		logger:  logger,
+		service:       service,
+		logger:        logger,
+		webhookSecret: webhookSecret,
 	}
 }
 
@@ -115,6 +117,19 @@ func (h *Handler) UpdatePreferences(c *gin.Context) {
 // HandleWebhook handles Telegram webhook updates
 // POST /webhooks/telegram
 func (h *Handler) HandleWebhook(c *gin.Context) {
+	// Verify webhook secret if configured
+	if h.webhookSecret != "" {
+		secretHeader := c.GetHeader("X-Telegram-Bot-Api-Secret-Token")
+		if secretHeader != h.webhookSecret {
+			h.logger.Warnw("webhook secret verification failed",
+				"expected_secret_configured", true,
+				"received_secret_empty", secretHeader == "",
+			)
+			utils.ErrorResponse(c, http.StatusUnauthorized, "invalid webhook secret")
+			return
+		}
+	}
+
 	var update dto.WebhookUpdate
 	if err := c.ShouldBindJSON(&update); err != nil {
 		h.logger.Errorw("failed to parse webhook update", "error", err)
