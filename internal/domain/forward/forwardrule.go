@@ -187,7 +187,7 @@ func NewForwardRule(
 			seen[id] = true
 		}
 		// Validate chain_port_config
-		if chainPortConfig == nil || len(chainPortConfig) == 0 {
+		if len(chainPortConfig) == 0 {
 			return nil, fmt.Errorf("chain_port_config is required for direct_chain forward")
 		}
 		// Verify all chain agents have port configuration
@@ -968,7 +968,7 @@ func (r *ForwardRule) UpdateChainPortConfig(chainPortConfig map[uint]uint16) err
 	if !r.ruleType.IsDirectChain() {
 		return fmt.Errorf("chain_port_config can only be updated for direct_chain type rules")
 	}
-	if chainPortConfig == nil || len(chainPortConfig) == 0 {
+	if len(chainPortConfig) == 0 {
 		return fmt.Errorf("chain_port_config cannot be empty for direct_chain forward")
 	}
 	// Verify all chain agents have port configuration
@@ -1011,7 +1011,7 @@ func (r *ForwardRule) UpdateDirectChainConfig(chainAgentIDs []uint, chainPortCon
 	if len(chainAgentIDs) > 10 {
 		return fmt.Errorf("direct_chain forward supports maximum 10 intermediate agents")
 	}
-	if chainPortConfig == nil || len(chainPortConfig) == 0 {
+	if len(chainPortConfig) == 0 {
 		return fmt.Errorf("chain_port_config cannot be empty for direct_chain forward")
 	}
 
@@ -1152,7 +1152,7 @@ func (r *ForwardRule) Validate() error {
 			return fmt.Errorf("chain agent IDs is required for direct_chain forward")
 		}
 		// Validate chain_port_config
-		if r.chainPortConfig == nil || len(r.chainPortConfig) == 0 {
+		if len(r.chainPortConfig) == 0 {
 			return fmt.Errorf("chain_port_config is required for direct_chain forward")
 		}
 		// Verify all chain agents have port configuration

@@ -48,13 +48,6 @@ func withAgentID(id uint) ruleOption {
 	}
 }
 
-// withListenPort sets the listen port.
-func withListenPort(port uint16) ruleOption {
-	return func(p *ruleParams) {
-		p.ListenPort = port
-	}
-}
-
 // withTargetAddress sets the target address.
 func withTargetAddress(addr string) ruleOption {
 	return func(p *ruleParams) {
@@ -97,13 +90,6 @@ func withChainPortConfig(config map[uint]uint16) ruleOption {
 	}
 }
 
-// withName sets the rule name.
-func withName(name string) ruleOption {
-	return func(p *ruleParams) {
-		p.Name = name
-	}
-}
-
 // withBindIP sets the bind IP.
 func withBindIP(ip string) ruleOption {
 	return func(p *ruleParams) {
@@ -115,20 +101,6 @@ func withBindIP(ip string) ruleOption {
 func withIPVersion(version vo.IPVersion) ruleOption {
 	return func(p *ruleParams) {
 		p.IPVersion = version
-	}
-}
-
-// withProtocol sets the protocol.
-func withProtocol(protocol vo.ForwardProtocol) ruleOption {
-	return func(p *ruleParams) {
-		p.Protocol = protocol
-	}
-}
-
-// withRemark sets the remark.
-func withRemark(remark string) ruleOption {
-	return func(p *ruleParams) {
-		p.Remark = remark
 	}
 }
 

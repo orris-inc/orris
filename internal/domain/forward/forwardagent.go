@@ -403,25 +403,22 @@ func validatePublicAddress(address string) error {
 	return fmt.Errorf("invalid public address format: must be a valid IP address or domain name")
 }
 
-// validateTunnelAddress validates if the address is a valid IP (not loopback) or domain name
+// validateTunnelAddress validates if the address is a valid IP or domain name.
+// Loopback addresses (127.0.0.1, localhost) are allowed to support tunnel scenarios like frp.
 func validateTunnelAddress(address string) error {
 	if address == "" {
 		return nil
 	}
 
-	// Try parsing as IP address
+	// Try parsing as IP address (including loopback)
 	if ip := net.ParseIP(address); ip != nil {
-		// Reject loopback addresses (127.0.0.0/8 for IPv4, ::1 for IPv6)
-		if ip.IsLoopback() {
-			return fmt.Errorf("invalid tunnel address: loopback address not allowed")
-		}
 		return nil
 	}
 
 	// Validate as domain name (basic RFC 1123 hostname validation)
-	// Also reject localhost
+	// localhost is allowed for tunnel scenarios
 	if address == "localhost" {
-		return fmt.Errorf("invalid tunnel address: localhost not allowed")
+		return nil
 	}
 	if domainNameRegex.MatchString(address) {
 		return nil
