@@ -192,13 +192,7 @@ func (t *TelegramConfig) IsConfigured() bool {
 	return t.BotToken != ""
 }
 
-// GetWebhookURL returns the webhook URL, auto-derived from server base URL if not set
-func (t *TelegramConfig) GetWebhookURL(serverBaseURL string) string {
-	if t.WebhookURL != "" {
-		return t.WebhookURL
-	}
-	if serverBaseURL == "" {
-		return ""
-	}
-	return fmt.Sprintf("%s/webhooks/telegram", serverBaseURL)
+// GetWebhookURL returns the webhook URL if explicitly configured
+func (t *TelegramConfig) GetWebhookURL() string {
+	return t.WebhookURL
 }

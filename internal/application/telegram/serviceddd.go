@@ -20,6 +20,7 @@ type VerifyCodeStore interface {
 // BotService defines the telegram bot service interface
 type BotService interface {
 	usecases.TelegramMessageSender
+	usecases.BotLinkProvider
 	SendMessage(chatID int64, text string) error
 }
 
@@ -46,7 +47,7 @@ func NewServiceDDD(
 	logger logger.Interface,
 ) *ServiceDDD {
 	return &ServiceDDD{
-		getStatusUC:         usecases.NewGetBindingStatusUseCase(bindingRepo, verifyCodeStore, logger),
+		getStatusUC:         usecases.NewGetBindingStatusUseCase(bindingRepo, verifyCodeStore, botService, logger),
 		bindUC:              usecases.NewBindTelegramUseCase(bindingRepo, verifyCodeStore, logger),
 		unbindUC:            usecases.NewUnbindTelegramUseCase(bindingRepo, logger),
 		updatePreferencesUC: usecases.NewUpdatePreferencesUseCase(bindingRepo, logger),

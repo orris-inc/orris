@@ -19,6 +19,7 @@ type BindingStatusResponse struct {
 	IsBound    bool                     `json:"is_bound"`
 	Binding    *TelegramBindingResponse `json:"binding,omitempty"`
 	VerifyCode string                   `json:"verify_code,omitempty"` // Shown when not bound
+	BotLink    string                   `json:"bot_link,omitempty"`    // Telegram bot link (https://t.me/username)
 }
 
 // UpdatePreferencesRequest represents the request to update notification preferences

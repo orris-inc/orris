@@ -14,28 +14,41 @@ type VerifyCodeGenerator interface {
 	Generate(ctx context.Context, userID uint) (string, error)
 }
 
+// BotLinkProvider provides the Telegram bot link
+type BotLinkProvider interface {
+	GetBotLink() string
+}
+
 // GetBindingStatusUseCase retrieves the telegram binding status for a user
 type GetBindingStatusUseCase struct {
-	bindingRepo   telegram.TelegramBindingRepository
-	verifyCodeGen VerifyCodeGenerator
-	logger        logger.Interface
+	bindingRepo     telegram.TelegramBindingRepository
+	verifyCodeGen   VerifyCodeGenerator
+	botLinkProvider BotLinkProvider
+	logger          logger.Interface
 }
 
 // NewGetBindingStatusUseCase creates a new GetBindingStatusUseCase
 func NewGetBindingStatusUseCase(
 	bindingRepo telegram.TelegramBindingRepository,
 	verifyCodeGen VerifyCodeGenerator,
+	botLinkProvider BotLinkProvider,
 	logger logger.Interface,
 ) *GetBindingStatusUseCase {
 	return &GetBindingStatusUseCase{
-		bindingRepo:   bindingRepo,
-		verifyCodeGen: verifyCodeGen,
-		logger:        logger,
+		bindingRepo:     bindingRepo,
+		verifyCodeGen:   verifyCodeGen,
+		botLinkProvider: botLinkProvider,
+		logger:          logger,
 	}
 }
 
 // Execute retrieves the binding status
 func (uc *GetBindingStatusUseCase) Execute(ctx context.Context, userID uint) (*dto.BindingStatusResponse, error) {
+	botLink := ""
+	if uc.botLinkProvider != nil {
+		botLink = uc.botLinkProvider.GetBotLink()
+	}
+
 	binding, err := uc.bindingRepo.GetByUserID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, telegram.ErrBindingNotFound) {
@@ -48,6 +61,7 @@ func (uc *GetBindingStatusUseCase) Execute(ctx context.Context, userID uint) (*d
 			return &dto.BindingStatusResponse{
 				IsBound:    false,
 				VerifyCode: code,
+				BotLink:    botLink,
 			}, nil
 		}
 		return nil, err
@@ -65,5 +79,6 @@ func (uc *GetBindingStatusUseCase) Execute(ctx context.Context, userID uint) (*d
 			TrafficThreshold: binding.TrafficThreshold(),
 			CreatedAt:        binding.CreatedAt(),
 		},
+		BotLink: botLink,
 	}, nil
 }

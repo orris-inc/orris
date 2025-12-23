@@ -12,20 +12,26 @@ import (
 
 // BotService provides Telegram Bot API operations
 type BotService struct {
-	config     sharedConfig.TelegramConfig
-	httpClient *http.Client
-	baseURL    string
+	config      sharedConfig.TelegramConfig
+	httpClient  *http.Client
+	baseURL     string
+	botUsername string // Cached bot username from getMe
 }
 
 // NewBotService creates a new Telegram bot service
 func NewBotService(config sharedConfig.TelegramConfig) *BotService {
-	return &BotService{
+	s := &BotService{
 		config: config,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
 		baseURL: fmt.Sprintf("https://api.telegram.org/bot%s", config.BotToken),
 	}
+	// Fetch and cache bot username on initialization
+	if config.BotToken != "" {
+		_ = s.fetchBotUsername()
+	}
+	return s
 }
 
 // SetWebhook sets the webhook URL for receiving updates
@@ -75,6 +81,53 @@ func (s *BotService) SendMessageMarkdown(chatID int64, text string) error {
 type apiResponse struct {
 	OK          bool   `json:"ok"`
 	Description string `json:"description,omitempty"`
+}
+
+// getMeResponse represents the response from getMe API
+type getMeResponse struct {
+	OK     bool `json:"ok"`
+	Result struct {
+		ID        int64  `json:"id"`
+		IsBot     bool   `json:"is_bot"`
+		FirstName string `json:"first_name"`
+		Username  string `json:"username"`
+	} `json:"result"`
+	Description string `json:"description,omitempty"`
+}
+
+// fetchBotUsername fetches and caches the bot username from Telegram API
+func (s *BotService) fetchBotUsername() error {
+	url := fmt.Sprintf("%s/getMe", s.baseURL)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var result getMeResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	if !result.OK {
+		return fmt.Errorf("telegram API error: %s", result.Description)
+	}
+
+	s.botUsername = result.Result.Username
+	return nil
+}
+
+// GetBotLink returns the Telegram bot link (https://t.me/username)
+func (s *BotService) GetBotLink() string {
+	if s.botUsername == "" {
+		return ""
+	}
+	return fmt.Sprintf("https://t.me/%s", s.botUsername)
 }
 
 func (s *BotService) makeRequest(url string, body map[string]interface{}) error {
