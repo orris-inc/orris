@@ -310,7 +310,7 @@ func (f *SurgeFormatter) FormatWithPassword(nodes []*Node, password string) (str
 	lines = append(lines, "[Proxy]")
 
 	for _, node := range nodes {
-		nodeName := strings.ReplaceAll(node.Name, " ", "_")
+		nodeName := node.Name
 		var line string
 
 		if node.Protocol == "trojan" {
