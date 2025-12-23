@@ -38,6 +38,9 @@ type ForwardRuleDTO struct {
 	NodeCount                  int      `json:"node_count"`
 	IsAutoMultiplier           bool     `json:"is_auto_multiplier"`
 
+	// Sort order for custom ordering
+	SortOrder int `json:"sort_order"`
+
 	// Target node info (populated when targetNodeID is set)
 	TargetNodeServerAddress string  `json:"target_node_server_address,omitempty"` // node's configured server address
 	TargetNodePublicIPv4    *string `json:"target_node_public_ipv4,omitempty"`    // node's reported public IPv4
@@ -104,6 +107,7 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 		EffectiveTrafficMultiplier: effectiveMultiplier,
 		NodeCount:                  nodeCount,
 		IsAutoMultiplier:           isAuto,
+		SortOrder:                  rule.SortOrder(),
 		internalAgentID:            rule.AgentID(),
 		internalExitAgentID:        rule.ExitAgentID(),
 		internalChainAgents:        rule.ChainAgentIDs(),

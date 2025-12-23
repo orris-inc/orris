@@ -27,6 +27,7 @@ type UpdateForwardRuleCommand struct {
 	IPVersion          *string // auto, ipv4, ipv6
 	Protocol           *string
 	TrafficMultiplier  *float64 // nil means no update (0-1000000)
+	SortOrder          *int     // nil means no update
 	Remark             *string
 }
 
@@ -228,6 +229,12 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 
 	if cmd.TrafficMultiplier != nil {
 		if err := rule.UpdateTrafficMultiplier(cmd.TrafficMultiplier); err != nil {
+			return errors.NewValidationError(err.Error())
+		}
+	}
+
+	if cmd.SortOrder != nil {
+		if err := rule.UpdateSortOrder(*cmd.SortOrder); err != nil {
 			return errors.NewValidationError(err.Error())
 		}
 	}

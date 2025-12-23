@@ -445,6 +445,43 @@ func (m *MockForwardRuleRepository) GetTotalTrafficByUserID(ctx context.Context,
 	return total, nil
 }
 
+// GetBySIDs retrieves multiple forward rules by their SIDs.
+func (m *MockForwardRuleRepository) GetBySIDs(ctx context.Context, sids []string) (map[string]*forward.ForwardRule, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.getError != nil {
+		return nil, m.getError
+	}
+
+	result := make(map[string]*forward.ForwardRule)
+	for _, sid := range sids {
+		if rule, exists := m.rulesByShortID[sid]; exists {
+			result[sid] = rule
+		}
+	}
+
+	return result, nil
+}
+
+// UpdateSortOrders batch updates sort_order for multiple rules.
+func (m *MockForwardRuleRepository) UpdateSortOrders(ctx context.Context, ruleOrders map[uint]int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if m.updateError != nil {
+		return m.updateError
+	}
+
+	for id, sortOrder := range ruleOrders {
+		if rule, exists := m.rules[id]; exists {
+			_ = rule.UpdateSortOrder(sortOrder)
+		}
+	}
+
+	return nil
+}
+
 // Helper methods for testing
 
 // AddRule adds a rule to the mock repository (for test setup).

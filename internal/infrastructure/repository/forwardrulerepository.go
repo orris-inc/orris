@@ -104,6 +104,33 @@ func (r *ForwardRuleRepositoryImpl) GetBySID(ctx context.Context, sid string) (*
 	return entity, nil
 }
 
+// GetBySIDs retrieves multiple forward rules by their SIDs.
+func (r *ForwardRuleRepositoryImpl) GetBySIDs(ctx context.Context, sids []string) (map[string]*forward.ForwardRule, error) {
+	if len(sids) == 0 {
+		return make(map[string]*forward.ForwardRule), nil
+	}
+
+	var ruleModels []*models.ForwardRuleModel
+
+	tx := db.GetTxFromContext(ctx, r.db)
+	if err := tx.Where("sid IN ?", sids).Find(&ruleModels).Error; err != nil {
+		r.logger.Errorw("failed to get forward rules by SIDs", "count", len(sids), "error", err)
+		return nil, fmt.Errorf("failed to get forward rules by SIDs: %w", err)
+	}
+
+	result := make(map[string]*forward.ForwardRule, len(ruleModels))
+	for _, model := range ruleModels {
+		entity, err := r.mapper.ToEntity(model)
+		if err != nil {
+			r.logger.Errorw("failed to map forward rule model to entity", "sid", model.SID, "error", err)
+			return nil, fmt.Errorf("failed to map forward rule: %w", err)
+		}
+		result[model.SID] = entity
+	}
+
+	return result, nil
+}
+
 // GetByListenPort retrieves a forward rule by listen port.
 func (r *ForwardRuleRepositoryImpl) GetByListenPort(ctx context.Context, port uint16) (*forward.ForwardRule, error) {
 	var model models.ForwardRuleModel
@@ -153,6 +180,7 @@ func (r *ForwardRuleRepositoryImpl) Update(ctx context.Context, rule *forward.Fo
 			"exit_agent_id":     model.ExitAgentID,
 			"chain_agent_ids":   model.ChainAgentIDs,
 			"chain_port_config": model.ChainPortConfig,
+			"sort_order":        model.SortOrder,
 			"updated_at":        model.UpdatedAt,
 		})
 
@@ -230,12 +258,14 @@ func (r *ForwardRuleRepositoryImpl) List(ctx context.Context, filter forward.Lis
 	orderBy := filter.OrderBy
 	order := filter.Order
 	if orderBy == "" {
-		orderBy = "created_at"
+		// Default: sort by sort_order ASC, then created_at DESC
+		query = query.Order("sort_order ASC, created_at DESC")
+	} else {
+		if order == "" {
+			order = "desc"
+		}
+		query = query.Order(fmt.Sprintf("%s %s", orderBy, order))
 	}
-	if order == "" {
-		order = "desc"
-	}
-	query = query.Order(fmt.Sprintf("%s %s", orderBy, order))
 
 	// Apply pagination
 	offset := (filter.Page - 1) * filter.PageSize
@@ -444,12 +474,14 @@ func (r *ForwardRuleRepositoryImpl) ListByUserID(ctx context.Context, userID uin
 	orderBy := filter.OrderBy
 	order := filter.Order
 	if orderBy == "" {
-		orderBy = "created_at"
+		// Default: sort by sort_order ASC, then created_at DESC
+		query = query.Order("sort_order ASC, created_at DESC")
+	} else {
+		if order == "" {
+			order = "desc"
+		}
+		query = query.Order(fmt.Sprintf("%s %s", orderBy, order))
 	}
-	if order == "" {
-		order = "desc"
-	}
-	query = query.Order(fmt.Sprintf("%s %s", orderBy, order))
 
 	// Apply pagination
 	offset := (filter.Page - 1) * filter.PageSize
@@ -502,4 +534,30 @@ func (r *ForwardRuleRepositoryImpl) GetTotalTrafficByUserID(ctx context.Context,
 	}
 
 	return result.TotalTraffic, nil
+}
+
+// UpdateSortOrders batch updates sort_order for multiple rules.
+func (r *ForwardRuleRepositoryImpl) UpdateSortOrders(ctx context.Context, ruleOrders map[uint]int) error {
+	if len(ruleOrders) == 0 {
+		return nil
+	}
+
+	tx := db.GetTxFromContext(ctx, r.db)
+	for id, sortOrder := range ruleOrders {
+		result := tx.Model(&models.ForwardRuleModel{}).
+			Where("id = ?", id).
+			Update("sort_order", sortOrder)
+
+		if result.Error != nil {
+			r.logger.Errorw("failed to update sort order", "id", id, "sort_order", sortOrder, "error", result.Error)
+			return fmt.Errorf("failed to update sort order for rule %d: %w", id, result.Error)
+		}
+
+		if result.RowsAffected == 0 {
+			r.logger.Warnw("rule not found when updating sort order", "id", id)
+		}
+	}
+
+	r.logger.Infow("sort orders updated successfully", "count", len(ruleOrders))
+	return nil
 }

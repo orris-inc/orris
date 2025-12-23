@@ -18,16 +18,17 @@ import (
 
 // UserForwardRuleHandler handles HTTP requests for user-level forward rules and agents.
 type UserForwardRuleHandler struct {
-	createRuleUC  *usecases.CreateUserForwardRuleUseCase
-	listRulesUC   *usecases.ListUserForwardRulesUseCase
-	getUsageUC    *usecases.GetUserForwardUsageUseCase
-	updateRuleUC  *usecases.UpdateForwardRuleUseCase
-	deleteRuleUC  *usecases.DeleteForwardRuleUseCase
-	enableRuleUC  *usecases.EnableForwardRuleUseCase
-	disableRuleUC *usecases.DisableForwardRuleUseCase
-	getRuleUC     *usecases.GetForwardRuleUseCase
-	listAgentsUC  *usecases.ListUserForwardAgentsUseCase
-	logger        logger.Interface
+	createRuleUC   *usecases.CreateUserForwardRuleUseCase
+	listRulesUC    *usecases.ListUserForwardRulesUseCase
+	getUsageUC     *usecases.GetUserForwardUsageUseCase
+	updateRuleUC   *usecases.UpdateForwardRuleUseCase
+	deleteRuleUC   *usecases.DeleteForwardRuleUseCase
+	enableRuleUC   *usecases.EnableForwardRuleUseCase
+	disableRuleUC  *usecases.DisableForwardRuleUseCase
+	getRuleUC      *usecases.GetForwardRuleUseCase
+	listAgentsUC   *usecases.ListUserForwardAgentsUseCase
+	reorderRulesUC *usecases.ReorderForwardRulesUseCase
+	logger         logger.Interface
 }
 
 // NewUserForwardRuleHandler creates a new UserForwardRuleHandler.
@@ -41,18 +42,20 @@ func NewUserForwardRuleHandler(
 	disableRuleUC *usecases.DisableForwardRuleUseCase,
 	getRuleUC *usecases.GetForwardRuleUseCase,
 	listAgentsUC *usecases.ListUserForwardAgentsUseCase,
+	reorderRulesUC *usecases.ReorderForwardRulesUseCase,
 ) *UserForwardRuleHandler {
 	return &UserForwardRuleHandler{
-		createRuleUC:  createRuleUC,
-		listRulesUC:   listRulesUC,
-		getUsageUC:    getUsageUC,
-		updateRuleUC:  updateRuleUC,
-		deleteRuleUC:  deleteRuleUC,
-		enableRuleUC:  enableRuleUC,
-		disableRuleUC: disableRuleUC,
-		getRuleUC:     getRuleUC,
-		listAgentsUC:  listAgentsUC,
-		logger:        logger.NewLogger(),
+		createRuleUC:   createRuleUC,
+		listRulesUC:    listRulesUC,
+		getUsageUC:     getUsageUC,
+		updateRuleUC:   updateRuleUC,
+		deleteRuleUC:   deleteRuleUC,
+		enableRuleUC:   enableRuleUC,
+		disableRuleUC:  disableRuleUC,
+		getRuleUC:      getRuleUC,
+		listAgentsUC:   listAgentsUC,
+		reorderRulesUC: reorderRulesUC,
+		logger:         logger.NewLogger(),
 	}
 }
 
@@ -77,6 +80,7 @@ type CreateUserForwardRuleRequest struct {
 	IPVersion         string            `json:"ip_version,omitempty" binding:"omitempty,oneof=auto ipv4 ipv6" example:"auto"`
 	Protocol          string            `json:"protocol" binding:"required,oneof=tcp udp both" example:"tcp"`
 	TrafficMultiplier *float64          `json:"traffic_multiplier,omitempty" binding:"omitempty,gte=0,lte=1000000" example:"1.5"`
+	SortOrder         *int              `json:"sort_order,omitempty" binding:"omitempty,gte=0" example:"100"`
 	Remark            string            `json:"remark,omitempty" example:"Forward to internal MySQL server"`
 }
 
@@ -178,6 +182,7 @@ func (h *UserForwardRuleHandler) CreateRule(c *gin.Context) {
 		IPVersion:          req.IPVersion,
 		Protocol:           req.Protocol,
 		TrafficMultiplier:  req.TrafficMultiplier,
+		SortOrder:          req.SortOrder,
 		Remark:             req.Remark,
 	}
 
@@ -387,6 +392,7 @@ func (h *UserForwardRuleHandler) UpdateRule(c *gin.Context) {
 		IPVersion:          req.IPVersion,
 		Protocol:           req.Protocol,
 		TrafficMultiplier:  req.TrafficMultiplier,
+		SortOrder:          req.SortOrder,
 		Remark:             req.Remark,
 	}
 
@@ -496,4 +502,55 @@ func (h *UserForwardRuleHandler) ListAgents(c *gin.Context) {
 	}
 
 	utils.ListSuccessResponse(c, result.Agents, result.Total, page, pageSize)
+}
+
+// ReorderRules handles PATCH /user/forward-rules/reorder
+func (h *UserForwardRuleHandler) ReorderRules(c *gin.Context) {
+	// Get user_id from context (set by auth middleware)
+	userIDInterface, exists := c.Get("user_id")
+	if !exists {
+		h.logger.Warnw("user_id not found in context")
+		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+		return
+	}
+
+	userID, ok := userIDInterface.(uint)
+	if !ok {
+		h.logger.Warnw("invalid user_id type in context", "user_id", userIDInterface)
+		utils.ErrorResponse(c, http.StatusInternalServerError, "invalid user ID type")
+		return
+	}
+
+	var req ReorderForwardRulesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid request body for reorder rules", "user_id", userID, "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	// Validate rule IDs
+	ruleOrders := make([]usecases.RuleOrder, len(req.RuleOrders))
+	for i, order := range req.RuleOrders {
+		if err := id.ValidatePrefix(order.RuleID, id.PrefixForwardRule); err != nil {
+			h.logger.Warnw("invalid rule_id format", "rule_id", order.RuleID, "user_id", userID, "error", err)
+			utils.ErrorResponseWithError(c, errors.NewValidationError("invalid rule_id format, expected fr_xxxxx"))
+			return
+		}
+		ruleOrders[i] = usecases.RuleOrder{
+			RuleSID:   order.RuleID,
+			SortOrder: order.SortOrder,
+		}
+	}
+
+	cmd := usecases.ReorderForwardRulesCommand{
+		RuleOrders: ruleOrders,
+		UserID:     &userID,
+	}
+
+	if err := h.reorderRulesUC.Execute(c.Request.Context(), cmd); err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.NoContentResponse(c)
 }

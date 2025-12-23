@@ -26,6 +26,7 @@ type ForwardHandler struct {
 	enableRuleUC   *usecases.EnableForwardRuleUseCase
 	disableRuleUC  *usecases.DisableForwardRuleUseCase
 	resetTrafficUC *usecases.ResetForwardRuleTrafficUseCase
+	reorderRulesUC *usecases.ReorderForwardRulesUseCase
 	probeService   *services.ProbeService
 	logger         logger.Interface
 }
@@ -40,6 +41,7 @@ func NewForwardHandler(
 	enableRuleUC *usecases.EnableForwardRuleUseCase,
 	disableRuleUC *usecases.DisableForwardRuleUseCase,
 	resetTrafficUC *usecases.ResetForwardRuleTrafficUseCase,
+	reorderRulesUC *usecases.ReorderForwardRulesUseCase,
 	probeService *services.ProbeService,
 ) *ForwardHandler {
 	return &ForwardHandler{
@@ -51,6 +53,7 @@ func NewForwardHandler(
 		enableRuleUC:   enableRuleUC,
 		disableRuleUC:  disableRuleUC,
 		resetTrafficUC: resetTrafficUC,
+		reorderRulesUC: reorderRulesUC,
 		probeService:   probeService,
 		logger:         logger.NewLogger(),
 	}
@@ -77,6 +80,7 @@ type CreateForwardRuleRequest struct {
 	IPVersion         string            `json:"ip_version,omitempty" binding:"omitempty,oneof=auto ipv4 ipv6" example:"auto"`
 	Protocol          string            `json:"protocol" binding:"required,oneof=tcp udp both" example:"tcp"`
 	TrafficMultiplier *float64          `json:"traffic_multiplier,omitempty" binding:"omitempty,gte=0,lte=1000000" example:"1.5"`
+	SortOrder         *int              `json:"sort_order,omitempty" binding:"omitempty,gte=0" example:"100"`
 	Remark            string            `json:"remark,omitempty" example:"Forward to internal MySQL server"`
 }
 
@@ -95,6 +99,7 @@ type UpdateForwardRuleRequest struct {
 	IPVersion         *string           `json:"ip_version,omitempty" binding:"omitempty,oneof=auto ipv4 ipv6" example:"auto"`
 	Protocol          *string           `json:"protocol,omitempty" binding:"omitempty,oneof=tcp udp both" example:"tcp"`
 	TrafficMultiplier *float64          `json:"traffic_multiplier,omitempty" binding:"omitempty,gte=0,lte=1000000" example:"1.5"`
+	SortOrder         *int              `json:"sort_order,omitempty" example:"100"`
 	Remark            *string           `json:"remark,omitempty" example:"Updated remark"`
 }
 
@@ -179,6 +184,7 @@ func (h *ForwardHandler) CreateRule(c *gin.Context) {
 		IPVersion:          req.IPVersion,
 		Protocol:           req.Protocol,
 		TrafficMultiplier:  req.TrafficMultiplier,
+		SortOrder:          req.SortOrder,
 		Remark:             req.Remark,
 	}
 
@@ -308,6 +314,7 @@ func (h *ForwardHandler) UpdateRule(c *gin.Context) {
 		IPVersion:          req.IPVersion,
 		Protocol:           req.Protocol,
 		TrafficMultiplier:  req.TrafficMultiplier,
+		SortOrder:          req.SortOrder,
 		Remark:             req.Remark,
 	}
 
@@ -486,4 +493,50 @@ func parseRuleShortID(c *gin.Context) (string, error) {
 	}
 
 	return prefixedID, nil
+}
+
+// ReorderForwardRulesRequest represents a request to reorder forward rules.
+type ReorderForwardRulesRequest struct {
+	RuleOrders []ForwardRuleOrder `json:"rule_orders" binding:"required,min=1,dive"`
+}
+
+// ForwardRuleOrder represents a single rule's sort order.
+type ForwardRuleOrder struct {
+	RuleID    string `json:"rule_id" binding:"required" example:"fr_xK9mP2vL3nQ"`
+	SortOrder int    `json:"sort_order" binding:"gte=0" example:"100"`
+}
+
+// ReorderRules handles PATCH /forward-rules/reorder
+func (h *ForwardHandler) ReorderRules(c *gin.Context) {
+	var req ReorderForwardRulesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid request body for reorder rules", "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	// Validate rule IDs
+	ruleOrders := make([]usecases.RuleOrder, len(req.RuleOrders))
+	for i, order := range req.RuleOrders {
+		if err := id.ValidatePrefix(order.RuleID, id.PrefixForwardRule); err != nil {
+			h.logger.Warnw("invalid rule_id format", "rule_id", order.RuleID, "error", err)
+			utils.ErrorResponseWithError(c, errors.NewValidationError("invalid rule_id format, expected fr_xxxxx"))
+			return
+		}
+		ruleOrders[i] = usecases.RuleOrder{
+			RuleSID:   order.RuleID,
+			SortOrder: order.SortOrder,
+		}
+	}
+
+	cmd := usecases.ReorderForwardRulesCommand{
+		RuleOrders: ruleOrders,
+	}
+
+	if err := h.reorderRulesUC.Execute(c.Request.Context(), cmd); err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.NoContentResponse(c)
 }

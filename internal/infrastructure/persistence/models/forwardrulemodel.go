@@ -32,6 +32,7 @@ type ForwardRuleModel struct {
 	UploadBytes       int64          `gorm:"not null;default:0"`
 	DownloadBytes     int64          `gorm:"not null;default:0"`
 	TrafficMultiplier *float64       `gorm:"column:traffic_multiplier;type:decimal(10,4)"`
+	SortOrder         int            `gorm:"not null;default:0"`
 	CreatedAt         time.Time
 	UpdatedAt         time.Time
 	DeletedAt         gorm.DeletedAt `gorm:"index"`

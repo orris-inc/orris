@@ -104,8 +104,8 @@ func (r *ForwardAgentRepositoryImpl) GetSIDsByIDs(ctx context.Context, ids []uin
 	}
 
 	var results []struct {
-		ID  uint
-		SID string
+		ID  uint   `gorm:"column:id"`
+		SID string `gorm:"column:sid"`
 	}
 
 	if err := r.db.WithContext(ctx).

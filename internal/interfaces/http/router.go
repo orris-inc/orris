@@ -38,6 +38,7 @@ import (
 	"github.com/orris-inc/orris/internal/interfaces/http/middleware"
 	"github.com/orris-inc/orris/internal/interfaces/http/routes"
 	"github.com/orris-inc/orris/internal/shared/authorization"
+	shareddb "github.com/orris-inc/orris/internal/shared/db"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/services/markdown"
 )
@@ -621,6 +622,12 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		nodeRepoImpl,
 		log,
 	)
+	txMgr := shareddb.NewTransactionManager(db)
+	reorderForwardRulesUC := forwardUsecases.NewReorderForwardRulesUseCase(
+		forwardRuleRepo,
+		txMgr,
+		log,
+	)
 	getUserForwardUsageUC := forwardUsecases.NewGetUserForwardUsageUseCase(
 		forwardRuleRepo,
 		subscriptionRepo,
@@ -657,6 +664,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		disableForwardRuleUC, // reuse existing
 		getForwardRuleUC,     // reuse existing
 		listUserForwardAgentsUC,
+		reorderForwardRulesUC, // reuse existing
 	)
 
 	// Initialize forward rule owner middleware
@@ -684,6 +692,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		enableForwardRuleUC,
 		disableForwardRuleUC,
 		resetForwardTrafficUC,
+		reorderForwardRulesUC,
 		probeService,
 	)
 

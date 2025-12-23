@@ -29,6 +29,7 @@ type CreateForwardRuleCommand struct {
 	IPVersion          string // auto, ipv4, ipv6 (default: auto)
 	Protocol           string
 	TrafficMultiplier  *float64 // optional traffic multiplier (nil for auto-calculation, 0-1000000)
+	SortOrder          *int     // optional sort order (nil defaults to 0)
 	Remark             string
 }
 
@@ -194,6 +195,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		protocol,
 		cmd.Remark,
 		cmd.TrafficMultiplier,
+		derefIntOrDefault(cmd.SortOrder, 0),
 		id.NewForwardRuleID,
 	)
 	if err != nil {
@@ -343,4 +345,12 @@ func (uc *CreateForwardRuleUseCase) validateCommand(_ context.Context, cmd Creat
 	}
 
 	return nil
+}
+
+// derefIntOrDefault returns the dereferenced value or the default if nil.
+func derefIntOrDefault(ptr *int, defaultVal int) int {
+	if ptr == nil {
+		return defaultVal
+	}
+	return *ptr
 }

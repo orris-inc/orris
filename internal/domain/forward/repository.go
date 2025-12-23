@@ -13,6 +13,10 @@ type Repository interface {
 	// GetBySID retrieves a forward rule by SID.
 	GetBySID(ctx context.Context, sid string) (*ForwardRule, error)
 
+	// GetBySIDs retrieves multiple forward rules by their SIDs.
+	// Returns a map from SID to ForwardRule.
+	GetBySIDs(ctx context.Context, sids []string) (map[string]*ForwardRule, error)
+
 	// GetByListenPort retrieves a forward rule by listen port.
 	GetByListenPort(ctx context.Context, port uint16) (*ForwardRule, error)
 
@@ -58,6 +62,9 @@ type Repository interface {
 
 	// GetTotalTrafficByUserID returns the total traffic (upload + download) for all rules owned by a user.
 	GetTotalTrafficByUserID(ctx context.Context, userID uint) (int64, error)
+
+	// UpdateSortOrders batch updates sort_order for multiple rules.
+	UpdateSortOrders(ctx context.Context, ruleOrders map[uint]int) error
 }
 
 // ListFilter defines the filtering options for listing forward rules.

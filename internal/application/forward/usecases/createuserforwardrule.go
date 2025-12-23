@@ -29,6 +29,7 @@ type CreateUserForwardRuleCommand struct {
 	IPVersion          string // auto, ipv4, ipv6 (default: auto)
 	Protocol           string
 	TrafficMultiplier  *float64 // optional traffic multiplier (nil for auto-calculation, 0-1000000)
+	SortOrder          *int     // optional sort order (nil defaults to 0)
 	Remark             string
 }
 
@@ -211,6 +212,7 @@ func (uc *CreateUserForwardRuleUseCase) Execute(ctx context.Context, cmd CreateU
 		protocol,
 		cmd.Remark,
 		cmd.TrafficMultiplier,
+		derefIntOrDefault(cmd.SortOrder, 0),
 		id.NewForwardRuleID,
 	)
 	if err != nil {

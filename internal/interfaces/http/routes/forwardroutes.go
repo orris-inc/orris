@@ -31,6 +31,7 @@ func SetupForwardRoutes(engine *gin.Engine, cfg *ForwardRouteConfig) {
 		// Collection operations
 		forwardRules.POST("", cfg.ForwardRuleHandler.CreateRule)
 		forwardRules.GET("", cfg.ForwardRuleHandler.ListRules)
+		forwardRules.PATCH("/reorder", cfg.ForwardRuleHandler.ReorderRules)
 
 		// Resource operations
 		forwardRules.GET("/:id", cfg.ForwardRuleHandler.GetRule)
@@ -90,6 +91,7 @@ func SetupForwardRoutes(engine *gin.Engine, cfg *ForwardRouteConfig) {
 			cfg.UserForwardHandler.CreateRule,
 		)
 		userForwardRules.GET("", cfg.UserForwardHandler.ListRules)
+		userForwardRules.PATCH("/reorder", cfg.UserForwardHandler.ReorderRules)
 
 		// Quota usage
 		userForwardRules.GET("/usage", cfg.UserForwardHandler.GetUsage)

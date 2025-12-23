@@ -119,6 +119,7 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 		model.UploadBytes,
 		model.DownloadBytes,
 		model.TrafficMultiplier,
+		model.SortOrder,
 		model.CreatedAt,
 		model.UpdatedAt,
 	)
@@ -199,6 +200,7 @@ func (m *ForwardRuleMapperImpl) ToModel(entity *forward.ForwardRule) (*models.Fo
 		UploadBytes:       entity.GetRawUploadBytes(),
 		DownloadBytes:     entity.GetRawDownloadBytes(),
 		TrafficMultiplier: entity.GetTrafficMultiplier(),
+		SortOrder:         entity.SortOrder(),
 		CreatedAt:         entity.CreatedAt(),
 		UpdatedAt:         entity.UpdatedAt(),
 	}, nil

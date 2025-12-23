@@ -33,6 +33,7 @@ type ForwardRule struct {
 	uploadBytes       int64
 	downloadBytes     int64
 	trafficMultiplier *float64 // traffic multiplier for display. nil means auto-calculate based on node count
+	sortOrder         int
 	createdAt         time.Time
 	updatedAt         time.Time
 }
@@ -60,6 +61,7 @@ func NewForwardRule(
 	protocol vo.ForwardProtocol,
 	remark string,
 	trafficMultiplier *float64,
+	sortOrder int,
 	shortIDGenerator func() (string, error),
 ) (*ForwardRule, error) {
 	if agentID == 0 {
@@ -263,6 +265,7 @@ func NewForwardRule(
 		uploadBytes:       0,
 		downloadBytes:     0,
 		trafficMultiplier: trafficMultiplier,
+		sortOrder:         sortOrder,
 		createdAt:         now,
 		updatedAt:         now,
 	}, nil
@@ -292,6 +295,7 @@ func ReconstructForwardRule(
 	uploadBytes int64,
 	downloadBytes int64,
 	trafficMultiplier *float64,
+	sortOrder int,
 	createdAt, updatedAt time.Time,
 ) (*ForwardRule, error) {
 	if id == 0 {
@@ -353,6 +357,7 @@ func ReconstructForwardRule(
 		uploadBytes:       uploadBytes,
 		downloadBytes:     downloadBytes,
 		trafficMultiplier: trafficMultiplier,
+		sortOrder:         sortOrder,
 		createdAt:         createdAt,
 		updatedAt:         updatedAt,
 	}
@@ -639,6 +644,11 @@ func (r *ForwardRule) GetTrafficMultiplier() *float64 {
 	return r.trafficMultiplier
 }
 
+// SortOrder returns the sort order.
+func (r *ForwardRule) SortOrder() int {
+	return r.sortOrder
+}
+
 // CalculateNodeCount calculates the total number of nodes in the forward chain.
 func (r *ForwardRule) CalculateNodeCount() int {
 	switch r.ruleType {
@@ -856,6 +866,17 @@ func (r *ForwardRule) UpdateTrafficMultiplier(multiplier *float64) error {
 	}
 
 	r.trafficMultiplier = multiplier
+	r.updatedAt = time.Now()
+	return nil
+}
+
+// UpdateSortOrder updates the sort order.
+// Sort order must be non-negative.
+func (r *ForwardRule) UpdateSortOrder(order int) error {
+	if order < 0 {
+		return fmt.Errorf("sort order must be non-negative, got %d", order)
+	}
+	r.sortOrder = order
 	r.updatedAt = time.Now()
 	return nil
 }

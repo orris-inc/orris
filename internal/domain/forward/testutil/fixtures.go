@@ -240,6 +240,7 @@ func NewTestForwardRule(params RuleParams) (*forward.ForwardRule, error) {
 		params.Protocol,
 		params.Remark,
 		params.TrafficMultiplier,
+		0, // sortOrder: default to 0 for test rules
 		generator,
 	)
 }

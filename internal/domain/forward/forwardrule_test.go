@@ -234,6 +234,7 @@ func newTestForwardRule(params ruleParams) (*ForwardRule, error) {
 		params.Protocol,
 		params.Remark,
 		params.TrafficMultiplier,
+		0, // sortOrder: default to 0 for test rules
 		generator,
 	)
 }
@@ -1738,6 +1739,7 @@ func TestForwardRule_Validate_RejectsInvalidRuleType(t *testing.T) {
 		"", vo.IPVersionAuto, vo.ForwardProtocolTCP,
 		vo.ForwardStatusDisabled,
 		"", 0, 0, nil,
+		0, // sortOrder
 		time.Now(), time.Now(),
 	)
 
@@ -2074,6 +2076,7 @@ func TestGetEffectiveMultiplier(t *testing.T) {
 				tt.params.Protocol,
 				tt.params.Remark,
 				tt.multiplier,
+				0, // sortOrder
 				generator,
 			)
 			if err != nil {
@@ -2164,6 +2167,7 @@ func TestTrafficBytesWithMultiplier(t *testing.T) {
 				tt.params.Protocol,
 				tt.params.Remark,
 				tt.multiplier,
+				0, // sortOrder
 				generator,
 			)
 			if err != nil {
@@ -2244,6 +2248,7 @@ func TestTrafficMultiplierValidation(t *testing.T) {
 				params.Protocol,
 				params.Remark,
 				tt.multiplier,
+				0, // sortOrder
 				generator,
 			)
 
@@ -2290,6 +2295,7 @@ func TestGetRawBytes(t *testing.T) {
 		params.Protocol,
 		params.Remark,
 		multiplier,
+		0, // sortOrder
 		generator,
 	)
 	if err != nil {
