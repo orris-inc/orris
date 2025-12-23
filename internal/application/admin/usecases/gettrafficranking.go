@@ -9,6 +9,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/user"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 const (
@@ -67,12 +68,15 @@ func (uc *GetTrafficRankingUseCase) ExecuteUserRanking(
 
 	limit := uc.getLimit(query)
 
+	// Adjust 'to' time to end of day to include all records from that day
+	adjustedTo := utils.AdjustToEndOfDay(query.To)
+
 	// Get top subscriptions by usage
 	topSubscriptions, err := uc.usageRepo.GetTopSubscriptionsByUsage(
 		ctx,
 		query.ResourceType,
 		query.From,
-		query.To,
+		adjustedTo,
 		limit*2, // Fetch more to account for aggregation
 	)
 	if err != nil {
@@ -210,12 +214,15 @@ func (uc *GetTrafficRankingUseCase) ExecuteSubscriptionRanking(
 
 	limit := uc.getLimit(query)
 
+	// Adjust 'to' time to end of day to include all records from that day
+	adjustedTo := utils.AdjustToEndOfDay(query.To)
+
 	// Get top subscriptions by usage
 	topSubscriptions, err := uc.usageRepo.GetTopSubscriptionsByUsage(
 		ctx,
 		query.ResourceType,
 		query.From,
-		query.To,
+		adjustedTo,
 		limit,
 	)
 	if err != nil {

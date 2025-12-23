@@ -444,6 +444,18 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		// Initialize Telegram Handler
 		telegramHandler = telegramHandlers.NewHandler(telegramServiceDDD, log)
 
+		// Auto-setup Telegram webhook
+		webhookURL := cfg.Telegram.GetWebhookURL(cfg.Server.GetBaseURL())
+		if webhookURL != "" {
+			if err := telegramBotService.SetWebhook(webhookURL); err != nil {
+				log.Warnw("Failed to set Telegram webhook, notifications may not work",
+					"error", err,
+					"webhook_url", webhookURL)
+			} else {
+				log.Infow("Telegram webhook configured", "webhook_url", webhookURL)
+			}
+		}
+
 		log.Infow("Telegram notification service initialized")
 	} else {
 		log.Infow("Telegram notification service not configured, skipping")

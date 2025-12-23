@@ -8,6 +8,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 // GetTrafficTrendQuery represents the query parameters for traffic trend
@@ -52,12 +53,15 @@ func (uc *GetTrafficTrendUseCase) Execute(
 		return nil, err
 	}
 
+	// Adjust 'to' time to end of day to include all records from that day
+	adjustedTo := utils.AdjustToEndOfDay(query.To)
+
 	// Get usage trend data
 	trendPoints, err := uc.usageRepo.GetUsageTrend(
 		ctx,
 		query.ResourceType,
 		query.From,
-		query.To,
+		adjustedTo,
 		query.Granularity,
 	)
 	if err != nil {

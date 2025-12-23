@@ -11,6 +11,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/user"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 // GetTrafficOverviewQuery represents the query parameters for traffic overview
@@ -22,12 +23,12 @@ type GetTrafficOverviewQuery struct {
 
 // GetTrafficOverviewUseCase handles retrieving global traffic overview
 type GetTrafficOverviewUseCase struct {
-	usageRepo       subscription.SubscriptionUsageRepository
+	usageRepo        subscription.SubscriptionUsageRepository
 	subscriptionRepo subscription.SubscriptionRepository
-	userRepo        user.Repository
-	nodeRepo        node.NodeRepository
-	forwardRuleRepo forward.Repository
-	logger          logger.Interface
+	userRepo         user.Repository
+	nodeRepo         node.NodeRepository
+	forwardRuleRepo  forward.Repository
+	logger           logger.Interface
 }
 
 // NewGetTrafficOverviewUseCase creates a new GetTrafficOverviewUseCase
@@ -40,12 +41,12 @@ func NewGetTrafficOverviewUseCase(
 	logger logger.Interface,
 ) *GetTrafficOverviewUseCase {
 	return &GetTrafficOverviewUseCase{
-		usageRepo:       usageRepo,
+		usageRepo:        usageRepo,
 		subscriptionRepo: subscriptionRepo,
-		userRepo:        userRepo,
-		nodeRepo:        nodeRepo,
-		forwardRuleRepo: forwardRuleRepo,
-		logger:          logger,
+		userRepo:         userRepo,
+		nodeRepo:         nodeRepo,
+		forwardRuleRepo:  forwardRuleRepo,
+		logger:           logger,
 	}
 }
 
@@ -65,8 +66,11 @@ func (uc *GetTrafficOverviewUseCase) Execute(
 		return nil, err
 	}
 
+	// Adjust 'to' time to end of day to include all records from that day
+	adjustedTo := utils.AdjustToEndOfDay(query.To)
+
 	// Get platform total usage
-	totalUsage, err := uc.usageRepo.GetPlatformTotalUsage(ctx, query.ResourceType, query.From, query.To)
+	totalUsage, err := uc.usageRepo.GetPlatformTotalUsage(ctx, query.ResourceType, query.From, adjustedTo)
 	if err != nil {
 		uc.logger.Errorw("failed to fetch platform total usage", "error", err)
 		return nil, errors.NewInternalError("failed to fetch platform usage")

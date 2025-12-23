@@ -650,8 +650,9 @@ func (r *SubscriptionUsageRepositoryImpl) GetUsageTrend(ctx context.Context, res
 	}
 
 	// Execute aggregation query
+	// Note: DATE_FORMAT returns a string, so we use string type for Period
 	var results []struct {
-		Period        time.Time
+		Period        string
 		TotalUpload   uint64
 		TotalDownload uint64
 		TotalUsage    uint64
@@ -668,11 +669,28 @@ func (r *SubscriptionUsageRepositoryImpl) GetUsageTrend(ctx context.Context, res
 		return nil, fmt.Errorf("failed to get usage trend: %w", err)
 	}
 
+	// Determine time format for parsing based on granularity
+	var timeLayout string
+	switch granularity {
+	case "hour":
+		timeLayout = "2006-01-02 15:00:00"
+	case "day":
+		timeLayout = "2006-01-02"
+	case "month":
+		timeLayout = "2006-01-02"
+	}
+
 	// Convert to domain type
 	trendPoints := make([]subscription.UsageTrendPoint, len(results))
 	for i, result := range results {
+		parsedTime, parseErr := time.Parse(timeLayout, result.Period)
+		if parseErr != nil {
+			r.logger.Warnw("failed to parse period", "period", result.Period, "layout", timeLayout, "error", parseErr)
+			// Use zero time if parsing fails
+			parsedTime = time.Time{}
+		}
 		trendPoints[i] = subscription.UsageTrendPoint{
-			Period:   result.Period,
+			Period:   parsedTime,
 			Upload:   result.TotalUpload,
 			Download: result.TotalDownload,
 			Total:    result.TotalUsage,

@@ -10,6 +10,7 @@ import (
 	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 // GetUserTrafficStatsQuery represents the query parameters for user traffic statistics
@@ -64,12 +65,15 @@ func (uc *GetUserTrafficStatsUseCase) Execute(
 
 	page, pageSize := uc.getPaginationParams(query)
 
+	// Adjust 'to' time to end of day to include all records from that day
+	adjustedTo := utils.AdjustToEndOfDay(query.To)
+
 	// Get usage data grouped by subscription
 	subscriptionUsages, total, err := uc.usageRepo.GetUsageGroupedBySubscription(
 		ctx,
 		query.ResourceType,
 		query.From,
-		query.To,
+		adjustedTo,
 		page,
 		pageSize,
 	)

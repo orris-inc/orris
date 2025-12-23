@@ -50,3 +50,8 @@ oauth:
   github:
     client_id: ""     # ORRIS_OAUTH_GITHUB_CLIENT_ID
     client_secret: "" # ORRIS_OAUTH_GITHUB_CLIENT_SECRET
+
+telegram:
+  bot_token: ""       # ORRIS_TELEGRAM_BOT_TOKEN (from @BotFather)
+  webhook_url: ""     # ORRIS_TELEGRAM_WEBHOOK_URL (optional, auto-derived from server.base_url if empty)
+  webhook_secret: ""  # ORRIS_TELEGRAM_WEBHOOK_SECRET (optional)
