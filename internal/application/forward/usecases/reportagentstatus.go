@@ -105,9 +105,9 @@ func (uc *ReportAgentStatusUseCase) Execute(ctx context.Context, input *dto.Repo
 			"new_port", input.Status.WsListenPort,
 		)
 		if err := uc.portChangeNotifier.NotifyExitPortChange(ctx, input.AgentID); err != nil {
-			uc.logger.Warnw("failed to notify entry agents of port change",
+			uc.logger.Infow("port change notification skipped",
 				"agent_id", input.AgentID,
-				"error", err,
+				"reason", err.Error(),
 			)
 			// Don't return error, status update was successful
 		}

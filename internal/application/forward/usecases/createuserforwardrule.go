@@ -248,7 +248,7 @@ func (uc *CreateUserForwardRuleUseCase) Execute(ctx context.Context, cmd CreateU
 	if rule.IsEnabled() && uc.configSyncSvc != nil {
 		go func() {
 			if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), rule.AgentID(), rule.SID(), "added"); err != nil {
-				uc.logger.Warnw("failed to notify config sync", "rule_id", rule.SID(), "user_id", cmd.UserID, "error", err)
+				uc.logger.Infow("config sync notification skipped", "rule_id", rule.SID(), "user_id", cmd.UserID, "reason", err.Error())
 			}
 		}()
 	}

@@ -125,7 +125,7 @@ func (s *ConfigSyncService) NotifyRuleChange(ctx context.Context, agentID uint, 
 			return err
 		}
 		if rule == nil {
-			s.logger.Warnw("rule not found for sync",
+			s.logger.Debugw("rule not found for sync",
 				"rule_short_id", ruleShortID,
 			)
 			return forward.ErrRuleNotFound
@@ -151,7 +151,7 @@ func (s *ConfigSyncService) NotifyRuleChange(ctx context.Context, agentID uint, 
 		syncData.Removed = []string{ruleShortID}
 
 	default:
-		s.logger.Warnw("unknown change type for rule sync",
+		s.logger.Debugw("unknown change type for rule sync",
 			"change_type", changeType,
 		)
 		return nil
@@ -193,30 +193,20 @@ func (s *ConfigSyncService) NotifyRuleChange(ctx context.Context, agentID uint, 
 	// Update agent version
 	s.agentVersions.Store(agentID, version)
 
-	// Debug log: print sync data details
+	// Aggregate log for sync details (debug level for individual rules)
 	if len(syncData.Added) > 0 {
-		for _, rule := range syncData.Added {
-			s.logger.Infow("config sync rule details (added)",
-				"short_id", rule.ShortID,
-				"rule_type", rule.RuleType,
-				"role", rule.Role,
-				"next_hop_agent_id", rule.NextHopAgentID,
-				"next_hop_address", rule.NextHopAddress,
-				"next_hop_ws_port", rule.NextHopWsPort,
-			)
-		}
+		s.logger.Debugw("config sync rules added",
+			"count", len(syncData.Added),
+			"first_rule_id", syncData.Added[0].ShortID,
+			"first_rule_type", syncData.Added[0].RuleType,
+		)
 	}
 	if len(syncData.Updated) > 0 {
-		for _, rule := range syncData.Updated {
-			s.logger.Infow("config sync rule details (updated)",
-				"short_id", rule.ShortID,
-				"rule_type", rule.RuleType,
-				"role", rule.Role,
-				"next_hop_agent_id", rule.NextHopAgentID,
-				"next_hop_address", rule.NextHopAddress,
-				"next_hop_ws_port", rule.NextHopWsPort,
-			)
-		}
+		s.logger.Debugw("config sync rules updated",
+			"count", len(syncData.Updated),
+			"first_rule_id", syncData.Updated[0].ShortID,
+			"first_rule_type", syncData.Updated[0].RuleType,
+		)
 	}
 
 	s.logger.Infow("config sync notification sent",
@@ -452,7 +442,7 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 					} else if exitStatus != nil && exitStatus.WsListenPort > 0 {
 						syncData.NextHopWsPort = exitStatus.WsListenPort
 					} else {
-						s.logger.Warnw("exit agent has no ws_listen_port configured or is offline",
+						s.logger.Debugw("exit agent has no ws_listen_port configured or is offline",
 							"rule_id", rule.ID(),
 							"exit_agent_id", exitAgentID,
 						)
@@ -545,7 +535,7 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 					} else if nextStatus != nil && nextStatus.WsListenPort > 0 {
 						syncData.NextHopWsPort = nextStatus.WsListenPort
 					} else {
-						s.logger.Warnw("next hop agent has no ws_listen_port configured or is offline",
+						s.logger.Debugw("next hop agent has no ws_listen_port configured or is offline",
 							"rule_id", rule.ID(),
 							"next_hop_agent_id", nextHopAgentID,
 						)
@@ -583,7 +573,7 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 		chainAgentIDs := rule.ChainAgentIDs()
 
 		// Debug logging for chain position and role assignment
-		s.logger.Infow("direct_chain rule sync debug",
+		s.logger.Debugw("direct_chain rule sync",
 			"current_agent_id", agentID,
 			"rule_entry_agent_id", entryAgentID,
 			"chain_agent_ids", chainAgentIDs,
@@ -639,7 +629,7 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 				return nil, fmt.Errorf("failed to get next hop for direct_chain rule: %w", err)
 			}
 
-			s.logger.Infow("direct_chain next hop lookup",
+			s.logger.Debugw("direct_chain next hop lookup",
 				"current_agent_id", agentID,
 				"next_hop_agent_id", nextHopAgentID,
 				"next_hop_port", nextHopPort,
@@ -663,10 +653,9 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 					nextHopToken, _ := s.agentTokenService.Generate(nextAgent.SID())
 					syncData.NextHopConnectionToken = nextHopToken
 
-					s.logger.Infow("direct_chain next hop token generated",
+					s.logger.Debugw("direct_chain next hop token generated",
 						"current_agent_id", agentID,
 						"next_hop_short_id", nextAgent.SID(),
-						"next_hop_token", nextHopToken,
 					)
 				}
 			}
@@ -924,10 +913,10 @@ func (s *ConfigSyncService) NotifyExitPortChange(ctx context.Context, exitAgentI
 		}
 
 		if err := s.hub.SendMessageToAgent(entryAgentID, msg); err != nil {
-			s.logger.Warnw("failed to send port change notification to entry agent",
+			s.logger.Infow("port change notification skipped",
 				"entry_agent_id", entryAgentID,
 				"exit_agent_id", exitAgentID,
-				"error", err,
+				"reason", err.Error(),
 			)
 			lastErr = err
 			continue

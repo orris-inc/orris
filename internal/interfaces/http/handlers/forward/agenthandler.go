@@ -262,14 +262,8 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 					} else if exitStatus != nil && exitStatus.WsListenPort > 0 {
 						ruleDTO.NextHopWsPort = exitStatus.WsListenPort
 
-						h.logger.Debugw("populated next hop info for entry rule",
-							"rule_id", ruleDTO.ID,
-							"next_hop_agent_id", ruleDTO.NextHopAgentID,
-							"next_hop_address", ruleDTO.NextHopAddress,
-							"next_hop_ws_port", ruleDTO.NextHopWsPort,
-						)
 					} else {
-						h.logger.Warnw("exit agent has no ws_listen_port configured or is offline",
+						h.logger.Debugw("exit agent has no ws_listen_port configured or is offline",
 							"rule_id", ruleDTO.ID,
 							"exit_agent_id", exitAgentID,
 						)
@@ -293,13 +287,6 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 
 		ruleDTO.ChainPosition = chainPosition
 		ruleDTO.IsLastInChain = isLast
-
-		h.logger.Debugw("processing chain rule for agent",
-			"rule_id", ruleDTO.ID,
-			"agent_id", agentID,
-			"chain_position", chainPosition,
-			"is_last", isLast,
-		)
 
 		// For non-exit agents in chain, populate next hop information
 		if !isLast {
@@ -331,14 +318,8 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 
 						// Note: connection token is no longer needed as agents use HMAC-based agent tokens
 
-						h.logger.Debugw("populated next hop info for chain rule",
-							"rule_id", ruleDTO.ID,
-							"next_hop_agent_id", ruleDTO.NextHopAgentID,
-							"next_hop_address", ruleDTO.NextHopAddress,
-							"next_hop_ws_port", ruleDTO.NextHopWsPort,
-						)
 					} else {
-						h.logger.Warnw("next hop agent has no ws_listen_port configured or is offline",
+						h.logger.Debugw("next hop agent has no ws_listen_port configured or is offline",
 							"rule_id", ruleDTO.ID,
 							"next_hop_agent_id", nextHopAgentID,
 						)
@@ -350,20 +331,12 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 			ruleDTO.TargetAddress = ""
 			ruleDTO.TargetPort = 0
 
-			h.logger.Debugw("cleared target info for non-exit chain agent",
-				"rule_id", ruleDTO.ID,
-				"agent_id", agentID,
-			)
 		} else {
 			// For exit agents, clear next hop info (minimum info principle)
 			ruleDTO.NextHopAgentID = ""
 			ruleDTO.NextHopAddress = ""
 			ruleDTO.NextHopWsPort = 0
 
-			h.logger.Debugw("cleared next hop info for exit chain agent",
-				"rule_id", ruleDTO.ID,
-				"agent_id", agentID,
-			)
 		}
 	}
 
@@ -393,13 +366,6 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 
 		ruleDTO.ChainPosition = chainPosition
 		ruleDTO.IsLastInChain = isLast
-
-		h.logger.Debugw("processing direct_chain rule for agent",
-			"rule_id", ruleDTO.ID,
-			"agent_id", agentID,
-			"chain_position", chainPosition,
-			"is_last", isLast,
-		)
 
 		// Set ListenPort based on role
 		// Entry agent uses rule.ListenPort(), other agents use chainPortConfig
@@ -443,13 +409,6 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 					nextHopToken, _ := h.agentTokenService.Generate(nextAgent.SID())
 					ruleDTO.NextHopConnectionToken = nextHopToken
 
-					h.logger.Debugw("populated next hop info for direct_chain rule",
-						"rule_id", ruleDTO.ID,
-						"next_hop_agent_id", ruleDTO.NextHopAgentID,
-						"next_hop_address", ruleDTO.NextHopAddress,
-						"next_hop_port", ruleDTO.NextHopPort,
-						"next_hop_connection_token", nextHopToken,
-					)
 				}
 			}
 
@@ -457,20 +416,12 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 			ruleDTO.TargetAddress = ""
 			ruleDTO.TargetPort = 0
 
-			h.logger.Debugw("cleared target info for non-exit direct_chain agent",
-				"rule_id", ruleDTO.ID,
-				"agent_id", agentID,
-			)
 		} else {
 			// For exit agents, clear next hop info (minimum info principle)
 			ruleDTO.NextHopAgentID = ""
 			ruleDTO.NextHopAddress = ""
 			ruleDTO.NextHopPort = 0
 
-			h.logger.Debugw("cleared next hop info for exit direct_chain agent",
-				"rule_id", ruleDTO.ID,
-				"agent_id", agentID,
-			)
 		}
 	}
 
@@ -492,10 +443,6 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 				ruleDTO.Role = "exit"
 				ruleDTO.ExitAgentID = ""
 
-				h.logger.Debugw("set role=exit for exit agent",
-					"rule_id", ruleDTO.ID,
-					"agent_id", agentID,
-				)
 			}
 
 		case "chain":
@@ -1120,7 +1067,7 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 	}
 
 	if exitStatus == nil || exitStatus.WsListenPort == 0 {
-		h.logger.Warnw("exit agent has no ws_listen_port configured or is offline",
+		h.logger.Debugw("exit agent has no ws_listen_port configured or is offline",
 			"exit_agent_id", exitAgentID,
 			"ip", c.ClientIP(),
 		)
@@ -1168,36 +1115,24 @@ func (h *AgentHandler) resolveNodeAddress(targetNode *node.Node, ipVersion strin
 	case "ipv6":
 		// Prefer IPv6: ipv6 > server_address > ipv4
 		if ipv6 != "" {
-			h.logger.Debugw("using IPv6 address per ip_version setting",
-				"ipv6", ipv6,
-			)
 			return ipv6
 		}
 		if isValidServerAddr {
 			return serverAddr
 		}
 		if ipv4 != "" {
-			h.logger.Debugw("falling back to IPv4 (IPv6 not available)",
-				"ipv4", ipv4,
-			)
 			return ipv4
 		}
 
 	case "ipv4":
 		// Prefer IPv4: ipv4 > server_address > ipv6
 		if ipv4 != "" {
-			h.logger.Debugw("using IPv4 address per ip_version setting",
-				"ipv4", ipv4,
-			)
 			return ipv4
 		}
 		if isValidServerAddr {
 			return serverAddr
 		}
 		if ipv6 != "" {
-			h.logger.Debugw("falling back to IPv6 (IPv4 not available)",
-				"ipv6", ipv6,
-			)
 			return ipv6
 		}
 
@@ -1207,15 +1142,9 @@ func (h *AgentHandler) resolveNodeAddress(targetNode *node.Node, ipVersion strin
 			return serverAddr
 		}
 		if ipv4 != "" {
-			h.logger.Debugw("using public IPv4 as fallback",
-				"ipv4", ipv4,
-			)
 			return ipv4
 		}
 		if ipv6 != "" {
-			h.logger.Debugw("using public IPv6 as fallback",
-				"ipv6", ipv6,
-			)
 			return ipv6
 		}
 	}
