@@ -176,3 +176,18 @@ type AdminConfig struct {
 func (a *AdminConfig) IsConfigured() bool {
 	return a.Email != "" && a.Password != ""
 }
+
+// TelegramConfig holds Telegram bot configuration
+type TelegramConfig struct {
+	// BotToken is the Telegram bot token from @BotFather
+	BotToken string `mapstructure:"bot_token"`
+	// WebhookURL is the public URL for receiving Telegram updates
+	WebhookURL string `mapstructure:"webhook_url"`
+	// WebhookSecret is used to verify webhook requests (optional)
+	WebhookSecret string `mapstructure:"webhook_secret"`
+}
+
+// IsConfigured returns true if Telegram config has required fields
+func (t *TelegramConfig) IsConfigured() bool {
+	return t.BotToken != ""
+}

@@ -21,6 +21,7 @@ type Config struct {
 	Subscription sharedConfig.SubscriptionConfig `mapstructure:"subscription"`
 	Forward      sharedConfig.ForwardConfig      `mapstructure:"forward"`
 	Admin        sharedConfig.AdminConfig        `mapstructure:"admin"`
+	Telegram     sharedConfig.TelegramConfig     `mapstructure:"telegram"`
 }
 
 var (
@@ -161,4 +162,9 @@ func setDefaults() {
 	viper.SetDefault("admin.email", "")
 	viper.SetDefault("admin.password", "")
 	viper.SetDefault("admin.name", "Admin")
+
+	// Telegram defaults
+	viper.SetDefault("telegram.bot_token", "")
+	viper.SetDefault("telegram.webhook_url", "")
+	viper.SetDefault("telegram.webhook_secret", "")
 }

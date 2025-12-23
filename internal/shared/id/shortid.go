@@ -27,6 +27,7 @@ const (
 	PrefixSubscriptionUsage = "usage"
 	PrefixPlanPricing       = "price"
 	PrefixResourceGroup     = "rg"
+	PrefixTelegramBinding   = "tg_bind"
 )
 
 // Generate creates a random short ID with the specified length using Base62 encoding.
@@ -234,4 +235,14 @@ func NewResourceGroupID() (string, error) {
 // ParseResourceGroupID extracts the short ID from a Resource Group prefixed ID.
 func ParseResourceGroupID(prefixedID string) (string, error) {
 	return ExtractShortID(prefixedID, PrefixResourceGroup)
+}
+
+// NewTelegramBindingID generates a new Telegram Binding SID (tg_bind_xxx).
+func NewTelegramBindingID() (string, error) {
+	return NewSID(PrefixTelegramBinding)
+}
+
+// ParseTelegramBindingID extracts the short ID from a Telegram Binding prefixed ID.
+func ParseTelegramBindingID(prefixedID string) (string, error) {
+	return ExtractShortID(prefixedID, PrefixTelegramBinding)
 }

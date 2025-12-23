@@ -17,6 +17,7 @@ import (
 	paymentUsecases "github.com/orris-inc/orris/internal/application/payment/usecases"
 	resourceUsecases "github.com/orris-inc/orris/internal/application/resource/usecases"
 	subscriptionUsecases "github.com/orris-inc/orris/internal/application/subscription/usecases"
+	telegramApp "github.com/orris-inc/orris/internal/application/telegram"
 	"github.com/orris-inc/orris/internal/application/user"
 	"github.com/orris-inc/orris/internal/application/user/helpers"
 	"github.com/orris-inc/orris/internal/application/user/usecases"
@@ -27,6 +28,7 @@ import (
 	"github.com/orris-inc/orris/internal/infrastructure/email"
 	"github.com/orris-inc/orris/internal/infrastructure/repository"
 	"github.com/orris-inc/orris/internal/infrastructure/services"
+	telegramInfra "github.com/orris-inc/orris/internal/infrastructure/telegram"
 	"github.com/orris-inc/orris/internal/infrastructure/template"
 	"github.com/orris-inc/orris/internal/infrastructure/token"
 	"github.com/orris-inc/orris/internal/interfaces/http/handlers"
@@ -34,6 +36,7 @@ import (
 	agentHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/agent"
 	forwardHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward"
 	nodeHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/node"
+	telegramHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/telegram"
 	ticketHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/ticket"
 	"github.com/orris-inc/orris/internal/interfaces/http/middleware"
 	"github.com/orris-inc/orris/internal/interfaces/http/routes"
@@ -62,6 +65,8 @@ type Router struct {
 	agentHandler                *nodeHandlers.AgentHandler
 	ticketHandler               *ticketHandlers.TicketHandler
 	notificationHandler         *handlers.NotificationHandler
+	telegramHandler             *telegramHandlers.Handler
+	telegramService             *telegramApp.ServiceDDD
 	forwardRuleHandler          *forwardHandlers.ForwardHandler
 	forwardAgentHandler         *forwardHandlers.ForwardAgentHandler
 	forwardAgentAPIHandler      *forwardHandlers.AgentHandler
@@ -412,6 +417,38 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	notificationHandler := handlers.NewNotificationHandler(notificationServiceDDD, log)
 
+	// Initialize Telegram notification components (only if configured)
+	var telegramHandler *telegramHandlers.Handler
+	var telegramServiceDDD *telegramApp.ServiceDDD
+	if cfg.Telegram.IsConfigured() {
+		// Initialize Telegram Bot Service
+		telegramBotService := telegramInfra.NewBotService(cfg.Telegram)
+
+		// Initialize Telegram Verify Store (using existing redisClient)
+		telegramVerifyStore := cache.NewTelegramVerifyStore(redisClient)
+
+		// Initialize Telegram Binding Repository
+		telegramBindingRepo := repository.NewTelegramBindingRepository(db, log)
+
+		// Initialize Telegram ServiceDDD
+		telegramServiceDDD = telegramApp.NewServiceDDD(
+			telegramBindingRepo,
+			subscriptionRepo,
+			subscriptionUsageRepo,
+			subscriptionPlanRepo,
+			telegramVerifyStore,
+			telegramBotService,
+			log,
+		)
+
+		// Initialize Telegram Handler
+		telegramHandler = telegramHandlers.NewHandler(telegramServiceDDD, log)
+
+		log.Infow("Telegram notification service initialized")
+	} else {
+		log.Infow("Telegram notification service not configured, skipping")
+	}
+
 	// Create profile handler
 	profileHandler := handlers.NewProfileHandler(userService)
 
@@ -717,6 +754,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		agentHandler:                agentHandler,
 		ticketHandler:               ticketHandler,
 		notificationHandler:         notificationHandler,
+		telegramHandler:             telegramHandler,
+		telegramService:             telegramServiceDDD,
 		forwardRuleHandler:          forwardRuleHandler,
 		forwardAgentHandler:         forwardAgentHandler,
 		forwardAgentAPIHandler:      forwardAgentAPIHandler,
@@ -937,6 +976,14 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		AuthMiddleware:      r.authMiddleware,
 	})
 
+	// Setup Telegram routes (only if handler is initialized)
+	if r.telegramHandler != nil {
+		routes.SetupTelegramRoutes(r.engine, &routes.TelegramRouteConfig{
+			Handler:        r.telegramHandler,
+			AuthMiddleware: r.authMiddleware,
+		})
+	}
+
 	routes.SetupForwardRoutes(r.engine, &routes.ForwardRouteConfig{
 		ForwardRuleHandler:          r.forwardRuleHandler,
 		ForwardAgentHandler:         r.forwardAgentHandler,
@@ -967,4 +1014,9 @@ func (r *Router) Run(addr string) error {
 // Shutdown gracefully shuts down the router
 func (r *Router) Shutdown() {
 	// Reserved for future cleanup tasks
+}
+
+// GetTelegramService returns the telegram service for scheduler use
+func (r *Router) GetTelegramService() *telegramApp.ServiceDDD {
+	return r.telegramService
 }
