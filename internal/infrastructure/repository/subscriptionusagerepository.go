@@ -135,6 +135,41 @@ func (r *SubscriptionUsageRepositoryImpl) GetTotalUsage(ctx context.Context, res
 	return summary, nil
 }
 
+// GetTotalUsageBySubscriptionID retrieves the total usage for a subscription within a time range
+func (r *SubscriptionUsageRepositoryImpl) GetTotalUsageBySubscriptionID(ctx context.Context, subscriptionID uint, from, to time.Time) (*subscription.UsageSummary, error) {
+	var result struct {
+		TotalUpload   uint64
+		TotalDownload uint64
+		TotalUsage    uint64
+	}
+
+	query := r.db.WithContext(ctx).Model(&models.SubscriptionUsageModel{}).
+		Select("COALESCE(SUM(upload), 0) as total_upload, COALESCE(SUM(download), 0) as total_download, COALESCE(SUM(total), 0) as total_usage").
+		Where("subscription_id = ?", subscriptionID)
+
+	if !from.IsZero() {
+		query = query.Where("period >= ?", from)
+	}
+	if !to.IsZero() {
+		query = query.Where("period <= ?", to)
+	}
+
+	if err := query.Scan(&result).Error; err != nil {
+		r.logger.Errorw("failed to get total usage by subscription ID", "subscription_id", subscriptionID, "error", err)
+		return nil, fmt.Errorf("failed to get total usage by subscription ID: %w", err)
+	}
+
+	summary := &subscription.UsageSummary{
+		Upload:   result.TotalUpload,
+		Download: result.TotalDownload,
+		Total:    result.TotalUsage,
+		From:     from,
+		To:       to,
+	}
+
+	return summary, nil
+}
+
 // AggregateDaily aggregates hourly usage into daily statistics
 func (r *SubscriptionUsageRepositoryImpl) AggregateDaily(ctx context.Context, date time.Time) error {
 	// Start a transaction for atomicity

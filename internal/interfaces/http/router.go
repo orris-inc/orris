@@ -52,6 +52,7 @@ type Router struct {
 	userHandler                 *handlers.UserHandler
 	authHandler                 *handlers.AuthHandler
 	profileHandler              *handlers.ProfileHandler
+	dashboardHandler            *handlers.DashboardHandler
 	subscriptionHandler         *handlers.SubscriptionHandler
 	adminSubscriptionHandler    *adminHandlers.SubscriptionHandler
 	adminResourceGroupHandler   *adminHandlers.ResourceGroupHandler
@@ -466,6 +467,15 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Create profile handler
 	profileHandler := handlers.NewProfileHandler(userService)
 
+	// Create dashboard handler
+	getDashboardUC := usecases.NewGetDashboardUseCase(
+		subscriptionRepo,
+		subscriptionUsageRepo,
+		subscriptionPlanRepo,
+		log,
+	)
+	dashboardHandler := handlers.NewDashboardHandler(getDashboardUC, log)
+
 	// TODO: Implement real payment gateway (Alipay/WeChat/Stripe)
 	// Currently mock gateway is removed as per CLAUDE.md rule: "no mock data allowed"
 	var gateway paymentGateway.PaymentGateway = nil // Temporary placeholder until real implementation
@@ -754,6 +764,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		userHandler:                 userHandler,
 		authHandler:                 authHandler,
 		profileHandler:              profileHandler,
+		dashboardHandler:            dashboardHandler,
 		subscriptionHandler:         subscriptionHandler,
 		adminSubscriptionHandler:    adminSubscriptionHandler,
 		adminResourceGroupHandler:   adminResourceGroupHandler,
@@ -826,6 +837,7 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		// Specific named endpoints (must come BEFORE /:id to avoid conflicts)
 		users.PATCH("/me", r.profileHandler.UpdateProfile)
 		users.PUT("/me/password", r.profileHandler.ChangePassword)
+		users.GET("/me/dashboard", r.dashboardHandler.GetDashboard)
 		users.GET("/email/:email", authorization.RequireAdmin(), r.userHandler.GetUserByEmail)
 
 		// Generic parameterized routes (must come LAST)
