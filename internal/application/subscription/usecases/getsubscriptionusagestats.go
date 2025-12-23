@@ -4,6 +4,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
@@ -23,7 +25,7 @@ type GetSubscriptionUsageStatsQuery struct {
 // SubscriptionUsageStatsRecord represents a single usage stats record
 type SubscriptionUsageStatsRecord struct {
 	ResourceType string    `json:"resource_type"`
-	ResourceID   uint      `json:"resource_id"`
+	ResourceSID  string    `json:"resource_id"` // Stripe-style SID (node_xxx or fwd_xxx)
 	Upload       uint64    `json:"upload"`
 	Download     uint64    `json:"download"`
 	Total        uint64    `json:"total"`
@@ -48,18 +50,24 @@ type GetSubscriptionUsageStatsResponse struct {
 
 // GetSubscriptionUsageStatsUseCase handles retrieving usage statistics for a subscription
 type GetSubscriptionUsageStatsUseCase struct {
-	usageRepo subscription.SubscriptionUsageRepository
-	logger    logger.Interface
+	usageRepo       subscription.SubscriptionUsageRepository
+	nodeRepo        node.NodeRepository
+	forwardRuleRepo forward.Repository
+	logger          logger.Interface
 }
 
 // NewGetSubscriptionUsageStatsUseCase creates a new GetSubscriptionUsageStatsUseCase
 func NewGetSubscriptionUsageStatsUseCase(
 	usageRepo subscription.SubscriptionUsageRepository,
+	nodeRepo node.NodeRepository,
+	forwardRuleRepo forward.Repository,
 	logger logger.Interface,
 ) *GetSubscriptionUsageStatsUseCase {
 	return &GetSubscriptionUsageStatsUseCase{
-		usageRepo: usageRepo,
-		logger:    logger,
+		usageRepo:       usageRepo,
+		nodeRepo:        nodeRepo,
+		forwardRuleRepo: forwardRuleRepo,
+		logger:          logger,
 	}
 }
 
@@ -88,14 +96,63 @@ func (uc *GetSubscriptionUsageStatsUseCase) Execute(
 		return nil, errors.NewInternalError("failed to fetch usage statistics")
 	}
 
+	// Collect resource IDs by type for batch lookup
+	nodeIDs := make([]uint, 0)
+	forwardRuleIDs := make([]uint, 0)
+	for _, record := range usageRecords {
+		switch subscription.ResourceType(record.ResourceType()) {
+		case subscription.ResourceTypeNode:
+			nodeIDs = append(nodeIDs, record.ResourceID())
+		case subscription.ResourceTypeForwardRule:
+			forwardRuleIDs = append(forwardRuleIDs, record.ResourceID())
+		}
+	}
+
+	// Batch fetch nodes to get SIDs
+	nodeSIDMap := make(map[uint]string)
+	if len(nodeIDs) > 0 {
+		nodes, err := uc.nodeRepo.GetByIDs(ctx, nodeIDs)
+		if err != nil {
+			uc.logger.Warnw("failed to fetch nodes for SID lookup", "error", err)
+		} else {
+			for _, n := range nodes {
+				nodeSIDMap[n.ID()] = n.SID()
+			}
+		}
+	}
+
+	// Batch fetch forward rules to get SIDs
+	forwardRuleSIDMap := make(map[uint]string)
+	if len(forwardRuleIDs) > 0 {
+		for _, id := range forwardRuleIDs {
+			rule, err := uc.forwardRuleRepo.GetByID(ctx, id)
+			if err != nil {
+				uc.logger.Warnw("failed to fetch forward rule for SID lookup", "rule_id", id, "error", err)
+				continue
+			}
+			if rule != nil {
+				forwardRuleSIDMap[id] = rule.SID()
+			}
+		}
+	}
+
 	// Convert records and calculate summary
 	records := make([]*SubscriptionUsageStatsRecord, 0, len(usageRecords))
 	summary := &SubscriptionUsageSummary{}
 
 	for _, record := range usageRecords {
+		// Get resource SID based on type
+		var resourceSID string
+		switch subscription.ResourceType(record.ResourceType()) {
+		case subscription.ResourceTypeNode:
+			resourceSID = nodeSIDMap[record.ResourceID()]
+		case subscription.ResourceTypeForwardRule:
+			resourceSID = forwardRuleSIDMap[record.ResourceID()]
+		}
+
 		records = append(records, &SubscriptionUsageStatsRecord{
 			ResourceType: record.ResourceType(),
-			ResourceID:   record.ResourceID(),
+			ResourceSID:  resourceSID,
 			Upload:       record.Upload(),
 			Download:     record.Download(),
 			Total:        record.Total(),

@@ -22,6 +22,8 @@ type BotService interface {
 	usecases.TelegramMessageSender
 	usecases.BotLinkProvider
 	SendMessage(chatID int64, text string) error
+	SendMessageWithKeyboard(chatID int64, text string, keyboard any) error
+	GetDefaultReplyKeyboard() any
 }
 
 // ServiceDDD aggregates all telegram-related use cases
@@ -130,6 +132,12 @@ func (s *ServiceDDD) GetBindingStatusByTelegramID(ctx context.Context, telegramU
 // SendBotMessage sends a message via the telegram bot
 func (s *ServiceDDD) SendBotMessage(chatID int64, text string) error {
 	return s.botService.SendMessage(chatID, text)
+}
+
+// SendBotMessageWithKeyboard sends a message with a reply keyboard via the telegram bot
+func (s *ServiceDDD) SendBotMessageWithKeyboard(chatID int64, text string) error {
+	keyboard := s.botService.GetDefaultReplyKeyboard()
+	return s.botService.SendMessageWithKeyboard(chatID, text, keyboard)
 }
 
 // GetProcessReminderUseCase returns the reminder processor for scheduler use

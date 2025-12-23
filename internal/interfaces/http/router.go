@@ -226,6 +226,10 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	planPricingRepo := repository.NewPlanPricingRepository(db, log)
 	paymentRepo := repository.NewPaymentRepository(db)
 
+	// Initialize node and forward repositories early (needed by subscription usage stats)
+	nodeRepoImpl := repository.NewNodeRepository(db, log)
+	forwardRuleRepo := repository.NewForwardRuleRepository(db, log)
+
 	tokenGenerator := token.NewTokenGenerator()
 
 	createSubscriptionUC := subscriptionUsecases.NewCreateSubscriptionUseCase(
@@ -251,7 +255,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		subscriptionRepo, subscriptionPlanRepo, log,
 	)
 	getSubscriptionUsageStatsUC := subscriptionUsecases.NewGetSubscriptionUsageStatsUseCase(
-		subscriptionUsageRepo, log,
+		subscriptionUsageRepo, nodeRepoImpl, forwardRuleRepo, log,
 	)
 	resetSubscriptionLinkUC := subscriptionUsecases.NewResetSubscriptionLinkUseCase(
 		subscriptionRepo, subscriptionPlanRepo, userRepo, log, subscriptionBaseURL,
@@ -324,7 +328,6 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		generateTokenUC, listTokensUC, revokeTokenUC, refreshSubscriptionTokenUC,
 	)
 
-	nodeRepoImpl := repository.NewNodeRepository(db, log)
 	nodeRepo := adapters.NewNodeRepositoryAdapter(nodeRepoImpl, db, log)
 	tokenValidator := adapters.NewSubscriptionTokenValidatorAdapter(db, log)
 
@@ -510,9 +513,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		log,
 	)
 
-	// Initialize forward repositories (agent repo needed by rule use cases)
+	// Initialize forward agent repository (rule repo initialized earlier)
 	forwardAgentRepo := repository.NewForwardAgentRepository(db, log)
-	forwardRuleRepo := repository.NewForwardRuleRepository(db, log)
 
 	// Initialize resource group membership use cases (need node and agent repos)
 	manageNodesUC := resourceUsecases.NewManageResourceGroupNodesUseCase(resourceGroupRepo, nodeRepoImpl, subscriptionPlanRepo, log)

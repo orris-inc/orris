@@ -182,7 +182,8 @@ func (h *Handler) handleBindCommand(c *gin.Context, telegramUserID int64, userna
 		return
 	}
 
-	_ = h.service.SendBotMessage(telegramUserID, "✅ Binding successful! You will now receive notifications.\n\nUse /status to check your settings.")
+	// Send success message with reply keyboard for easy access to commands
+	_ = h.service.SendBotMessageWithKeyboard(telegramUserID, "✅ *Binding successful!* You will now receive notifications.\n\nUse the buttons below or type /status to check your settings.")
 	utils.SuccessResponse(c, http.StatusOK, "success", resp)
 }
 
@@ -226,7 +227,8 @@ func (h *Handler) handleHelpCommand(c *gin.Context, telegramUserID int64) {
 		"/status - View your notification settings\n" +
 		"/help - Show this help message\n\n" +
 		"To get started, visit your account settings on the website to get a verification code."
-	_ = h.service.SendBotMessage(telegramUserID, helpMsg)
+	// Send help message with reply keyboard for easy access to commands
+	_ = h.service.SendBotMessageWithKeyboard(telegramUserID, helpMsg)
 	utils.SuccessResponse(c, http.StatusOK, "success", nil)
 }
 

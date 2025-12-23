@@ -37,7 +37,7 @@ func NewBotService(config sharedConfig.TelegramConfig) *BotService {
 // SetWebhook sets the webhook URL for receiving updates
 func (s *BotService) SetWebhook(webhookURL string) error {
 	url := fmt.Sprintf("%s/setWebhook", s.baseURL)
-	body := map[string]interface{}{
+	body := map[string]any{
 		"url": webhookURL,
 	}
 	// Include secret_token if configured for webhook verification
@@ -57,7 +57,7 @@ func (s *BotService) DeleteWebhook() error {
 // SendMessage sends a plain text message to a chat
 func (s *BotService) SendMessage(chatID int64, text string) error {
 	url := fmt.Sprintf("%s/sendMessage", s.baseURL)
-	body := map[string]interface{}{
+	body := map[string]any{
 		"chat_id": chatID,
 		"text":    text,
 	}
@@ -68,13 +68,49 @@ func (s *BotService) SendMessage(chatID int64, text string) error {
 // SendMessageMarkdown sends a markdown formatted message to a chat
 func (s *BotService) SendMessageMarkdown(chatID int64, text string) error {
 	url := fmt.Sprintf("%s/sendMessage", s.baseURL)
-	body := map[string]interface{}{
+	body := map[string]any{
 		"chat_id":    chatID,
 		"text":       text,
 		"parse_mode": "Markdown",
 	}
 
 	return s.makeRequest(url, body)
+}
+
+// SendMessageWithKeyboard sends a message with a reply keyboard
+func (s *BotService) SendMessageWithKeyboard(chatID int64, text string, keyboard any) error {
+	url := fmt.Sprintf("%s/sendMessage", s.baseURL)
+	body := map[string]any{
+		"chat_id":      chatID,
+		"text":         text,
+		"parse_mode":   "Markdown",
+		"reply_markup": keyboard,
+	}
+
+	return s.makeRequest(url, body)
+}
+
+// GetDefaultReplyKeyboard returns the default reply keyboard with common commands
+func (s *BotService) GetDefaultReplyKeyboard() any {
+	return &ReplyKeyboardMarkup{
+		Keyboard: [][]KeyboardButton{
+			{{Text: "/status"}, {Text: "/help"}},
+			{{Text: "/unbind"}},
+		},
+		ResizeKeyboard: true,
+	}
+}
+
+// KeyboardButton represents a button in a reply keyboard
+type KeyboardButton struct {
+	Text string `json:"text"`
+}
+
+// ReplyKeyboardMarkup represents a custom reply keyboard
+type ReplyKeyboardMarkup struct {
+	Keyboard        [][]KeyboardButton `json:"keyboard"`
+	ResizeKeyboard  bool               `json:"resize_keyboard,omitempty"`
+	OneTimeKeyboard bool               `json:"one_time_keyboard,omitempty"`
 }
 
 // apiResponse represents a Telegram API response
@@ -130,7 +166,7 @@ func (s *BotService) GetBotLink() string {
 	return fmt.Sprintf("https://t.me/%s", s.botUsername)
 }
 
-func (s *BotService) makeRequest(url string, body map[string]interface{}) error {
+func (s *BotService) makeRequest(url string, body map[string]any) error {
 	var req *http.Request
 	var err error
 
