@@ -79,15 +79,17 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 		return nil, errors.NewConflictError("node with this name already exists", cmd.Name)
 	}
 
-	// Check for duplicate server address and agent port
-	exists, err = uc.nodeRepo.ExistsByAddress(ctx, cmd.ServerAddress, int(cmd.AgentPort))
-	if err != nil {
-		uc.logger.Errorw("failed to check existing node by address", "address", cmd.ServerAddress, "port", cmd.AgentPort, "error", err)
-		return nil, fmt.Errorf("failed to check existing node: %w", err)
-	}
-	if exists {
-		uc.logger.Warnw("node with address and port already exists", "address", cmd.ServerAddress, "port", cmd.AgentPort)
-		return nil, errors.NewConflictError("node with this server address and port already exists", fmt.Sprintf("%s:%d", cmd.ServerAddress, cmd.AgentPort))
+	// Check for duplicate server address and agent port (only when address is specified)
+	if cmd.ServerAddress != "" {
+		exists, err = uc.nodeRepo.ExistsByAddress(ctx, cmd.ServerAddress, int(cmd.AgentPort))
+		if err != nil {
+			uc.logger.Errorw("failed to check existing node by address", "address", cmd.ServerAddress, "port", cmd.AgentPort, "error", err)
+			return nil, fmt.Errorf("failed to check existing node: %w", err)
+		}
+		if exists {
+			uc.logger.Warnw("node with address and port already exists", "address", cmd.ServerAddress, "port", cmd.AgentPort)
+			return nil, errors.NewConflictError("node with this server address and port already exists", fmt.Sprintf("%s:%d", cmd.ServerAddress, cmd.AgentPort))
+		}
 	}
 
 	// Create value objects
@@ -214,9 +216,7 @@ func (uc *CreateNodeUseCase) validateCommand(cmd CreateNodeCommand) error {
 		return errors.NewValidationError("node name is required")
 	}
 
-	if cmd.ServerAddress == "" {
-		return errors.NewValidationError("server address is required")
-	}
+	// ServerAddress is optional - will use public IP as fallback
 
 	if cmd.AgentPort == 0 {
 		return errors.NewValidationError("agent port is required")
