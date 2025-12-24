@@ -3,11 +3,13 @@ package usecases
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 // GetUserForwardUsageQuery represents the input for getting user forward usage.
@@ -29,6 +31,7 @@ type GetUserForwardUsageUseCase struct {
 	repo             forward.Repository
 	subscriptionRepo subscription.SubscriptionRepository
 	planRepo         subscription.PlanRepository
+	usageRepo        subscription.SubscriptionUsageRepository
 	logger           logger.Interface
 }
 
@@ -37,12 +40,14 @@ func NewGetUserForwardUsageUseCase(
 	repo forward.Repository,
 	subscriptionRepo subscription.SubscriptionRepository,
 	planRepo subscription.PlanRepository,
+	usageRepo subscription.SubscriptionUsageRepository,
 	logger logger.Interface,
 ) *GetUserForwardUsageUseCase {
 	return &GetUserForwardUsageUseCase{
 		repo:             repo,
 		subscriptionRepo: subscriptionRepo,
 		planRepo:         planRepo,
+		usageRepo:        usageRepo,
 		logger:           logger,
 	}
 }
@@ -72,6 +77,11 @@ func (uc *GetUserForwardUsageUseCase) Execute(ctx context.Context, query GetUser
 	hasUnlimitedTraffic := false
 	allowedTypesSet := make(map[string]bool)
 
+	// Collect forward subscription IDs and their period ranges for traffic query
+	var forwardSubscriptionIDs []uint
+	var earliestFrom, latestTo time.Time
+	firstSub := true
+
 	// Find the highest limits among all active subscriptions
 	for _, sub := range subscriptions {
 		plan, err := uc.planRepo.GetByID(ctx, sub.PlanID())
@@ -88,6 +98,18 @@ func (uc *GetUserForwardUsageUseCase) Execute(ctx context.Context, query GetUser
 		if !plan.PlanType().IsForward() {
 			continue
 		}
+
+		// Collect forward subscription ID and period range
+		forwardSubscriptionIDs = append(forwardSubscriptionIDs, sub.ID())
+		periodStart := sub.CurrentPeriodStart()
+		periodEnd := sub.CurrentPeriodEnd()
+		if firstSub || periodStart.Before(earliestFrom) {
+			earliestFrom = periodStart
+		}
+		if firstSub || periodEnd.After(latestTo) {
+			latestTo = periodEnd
+		}
+		firstSub = false
 
 		planFeatures := plan.Features()
 		if planFeatures == nil {
@@ -152,22 +174,31 @@ func (uc *GetUserForwardUsageUseCase) Execute(ctx context.Context, query GetUser
 		maxTrafficLimit = 0
 	}
 
-	// Get current usage by fetching all rules and calculating traffic with multiplier applied
-	// Use a large page size to get all rules in one query
-	rules, ruleCount, err := uc.repo.ListByUserID(ctx, query.UserID, forward.ListFilter{
+	// Get rule count only (no need to fetch all rules)
+	_, ruleCount, err := uc.repo.ListByUserID(ctx, query.UserID, forward.ListFilter{
 		Page:     1,
-		PageSize: 10000, // Large enough to get all rules for a single user
+		PageSize: 1, // Only need count, not actual rules
 	})
 	if err != nil {
-		uc.logger.Errorw("failed to list user forward rules", "user_id", query.UserID, "error", err)
-		return nil, fmt.Errorf("failed to get user rules: %w", err)
+		uc.logger.Errorw("failed to count user forward rules", "user_id", query.UserID, "error", err)
+		return nil, fmt.Errorf("failed to get user rules count: %w", err)
 	}
 
-	// Calculate total traffic with multiplier applied for each rule
-	var trafficUsed int64
-	for _, rule := range rules {
-		// TotalBytes() returns traffic with multiplier already applied
-		trafficUsed += rule.TotalBytes()
+	// Query traffic usage from subscription_usages table
+	var trafficUsed uint64
+	if len(forwardSubscriptionIDs) > 0 {
+		// Adjust latestTo to end of day
+		latestTo = utils.AdjustToEndOfDay(latestTo)
+
+		resourceType := string(subscription.ResourceTypeForwardRule)
+		usageSummary, err := uc.usageRepo.GetTotalUsageBySubscriptionIDs(
+			ctx, resourceType, forwardSubscriptionIDs, earliestFrom, latestTo,
+		)
+		if err != nil {
+			uc.logger.Warnw("failed to get forward traffic usage", "error", err)
+		} else if usageSummary != nil {
+			trafficUsed = usageSummary.Total
+		}
 	}
 
 	// Convert allowed types set to slice
@@ -179,7 +210,7 @@ func (uc *GetUserForwardUsageUseCase) Execute(ctx context.Context, query GetUser
 	result := &GetUserForwardUsageResult{
 		RuleCount:    int(ruleCount),
 		RuleLimit:    maxRuleLimit,
-		TrafficUsed:  uint64(trafficUsed),
+		TrafficUsed:  trafficUsed,
 		TrafficLimit: maxTrafficLimit,
 		AllowedTypes: allowedTypes,
 	}

@@ -692,6 +692,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		forwardRuleRepo,
 		subscriptionRepo,
 		subscriptionPlanRepo,
+		subscriptionUsageRepo,
 		log,
 	)
 
