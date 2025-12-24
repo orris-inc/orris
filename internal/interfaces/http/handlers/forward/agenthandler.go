@@ -251,7 +251,7 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 					// Use effective tunnel address (prefers tunnel_address over public_address)
 					ruleDTO.NextHopAddress = exitAgent.GetEffectiveTunnelAddress()
 
-					// Get ws_listen_port from cached agent status
+					// Get tunnel ports from cached agent status
 					exitStatus, err := h.statusQuerier.GetStatus(ctx, exitAgentID)
 					if err != nil {
 						h.logger.Warnw("failed to get exit agent status for entry rule",
@@ -259,14 +259,19 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 							"exit_agent_id", exitAgentID,
 							"error", err,
 						)
-					} else if exitStatus != nil && exitStatus.WsListenPort > 0 {
-						ruleDTO.NextHopWsPort = exitStatus.WsListenPort
-
-					} else {
-						h.logger.Debugw("exit agent has no ws_listen_port configured or is offline",
-							"rule_id", ruleDTO.ID,
-							"exit_agent_id", exitAgentID,
-						)
+					} else if exitStatus != nil {
+						if exitStatus.WsListenPort > 0 {
+							ruleDTO.NextHopWsPort = exitStatus.WsListenPort
+						}
+						if exitStatus.TlsListenPort > 0 {
+							ruleDTO.NextHopTlsPort = exitStatus.TlsListenPort
+						}
+						if exitStatus.WsListenPort == 0 && exitStatus.TlsListenPort == 0 {
+							h.logger.Debugw("exit agent has no tunnel port configured or is offline",
+								"rule_id", ruleDTO.ID,
+								"exit_agent_id", exitAgentID,
+							)
+						}
 					}
 				}
 			}
@@ -305,7 +310,7 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 					// Use effective tunnel address (prefers tunnel_address over public_address)
 					ruleDTO.NextHopAddress = nextAgent.GetEffectiveTunnelAddress()
 
-					// Get ws_listen_port from cached agent status (same as GetExitEndpoint)
+					// Get tunnel ports from cached agent status
 					nextStatus, err := h.statusQuerier.GetStatus(ctx, nextHopAgentID)
 					if err != nil {
 						h.logger.Warnw("failed to get next hop agent status",
@@ -313,16 +318,19 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 							"next_hop_agent_id", nextHopAgentID,
 							"error", err,
 						)
-					} else if nextStatus != nil && nextStatus.WsListenPort > 0 {
-						ruleDTO.NextHopWsPort = nextStatus.WsListenPort
-
-						// Note: connection token is no longer needed as agents use HMAC-based agent tokens
-
-					} else {
-						h.logger.Debugw("next hop agent has no ws_listen_port configured or is offline",
-							"rule_id", ruleDTO.ID,
-							"next_hop_agent_id", nextHopAgentID,
-						)
+					} else if nextStatus != nil {
+						if nextStatus.WsListenPort > 0 {
+							ruleDTO.NextHopWsPort = nextStatus.WsListenPort
+						}
+						if nextStatus.TlsListenPort > 0 {
+							ruleDTO.NextHopTlsPort = nextStatus.TlsListenPort
+						}
+						if nextStatus.WsListenPort == 0 && nextStatus.TlsListenPort == 0 {
+							h.logger.Debugw("next hop agent has no tunnel port configured or is offline",
+								"rule_id", ruleDTO.ID,
+								"next_hop_agent_id", nextHopAgentID,
+							)
+						}
 					}
 				}
 			}
@@ -336,7 +344,7 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 			ruleDTO.NextHopAgentID = ""
 			ruleDTO.NextHopAddress = ""
 			ruleDTO.NextHopWsPort = 0
-
+			ruleDTO.NextHopTlsPort = 0
 		}
 	}
 
@@ -610,8 +618,13 @@ func (h *AgentHandler) RefreshRule(c *gin.Context) {
 					ruleDTO.NextHopAddress = exitAgent.GetEffectiveTunnelAddress()
 
 					exitStatus, err := h.statusQuerier.GetStatus(ctx, exitAgentID)
-					if err == nil && exitStatus != nil && exitStatus.WsListenPort > 0 {
-						ruleDTO.NextHopWsPort = exitStatus.WsListenPort
+					if err == nil && exitStatus != nil {
+						if exitStatus.WsListenPort > 0 {
+							ruleDTO.NextHopWsPort = exitStatus.WsListenPort
+						}
+						if exitStatus.TlsListenPort > 0 {
+							ruleDTO.NextHopTlsPort = exitStatus.TlsListenPort
+						}
 					}
 				}
 			}
@@ -657,8 +670,13 @@ func (h *AgentHandler) RefreshRule(c *gin.Context) {
 					ruleDTO.NextHopAddress = nextAgent.GetEffectiveTunnelAddress()
 
 					nextStatus, err := h.statusQuerier.GetStatus(ctx, nextHopAgentID)
-					if err == nil && nextStatus != nil && nextStatus.WsListenPort > 0 {
-						ruleDTO.NextHopWsPort = nextStatus.WsListenPort
+					if err == nil && nextStatus != nil {
+						if nextStatus.WsListenPort > 0 {
+							ruleDTO.NextHopWsPort = nextStatus.WsListenPort
+						}
+						if nextStatus.TlsListenPort > 0 {
+							ruleDTO.NextHopTlsPort = nextStatus.TlsListenPort
+						}
 					}
 				}
 			}
@@ -736,6 +754,7 @@ func (h *AgentHandler) RefreshRule(c *gin.Context) {
 		"agent_id", agentID,
 		"rule_type", rule.RuleType().String(),
 		"next_hop_ws_port", ruleDTO.NextHopWsPort,
+		"next_hop_tls_port", ruleDTO.NextHopTlsPort,
 		"ip", c.ClientIP(),
 	)
 
@@ -1071,12 +1090,12 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 		return
 	}
 
-	if exitStatus == nil || exitStatus.WsListenPort == 0 {
-		h.logger.Debugw("exit agent has no ws_listen_port configured or is offline",
+	if exitStatus == nil || (exitStatus.WsListenPort == 0 && exitStatus.TlsListenPort == 0) {
+		h.logger.Debugw("exit agent has no tunnel port configured or is offline",
 			"exit_agent_id", exitAgentID,
 			"ip", c.ClientIP(),
 		)
-		utils.ErrorResponse(c, http.StatusNotFound, "exit agent is offline or has no ws_listen_port configured")
+		utils.ErrorResponse(c, http.StatusNotFound, "exit agent is offline or has no tunnel port configured")
 		return
 	}
 
@@ -1088,14 +1107,16 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 		"entry_agent_id", entryAgentID,
 		"address", address,
 		"ws_port", exitStatus.WsListenPort,
+		"tls_port", exitStatus.TlsListenPort,
 		"ip", c.ClientIP(),
 	)
 
 	// Return the connection information
 	// Note: connection_token is no longer needed as agents use HMAC-based agent tokens for verification
 	utils.SuccessResponse(c, http.StatusOK, "exit endpoint information retrieved successfully", map[string]any{
-		"address": address,
-		"ws_port": exitStatus.WsListenPort,
+		"address":  address,
+		"ws_port":  exitStatus.WsListenPort,
+		"tls_port": exitStatus.TlsListenPort,
 	})
 }
 
