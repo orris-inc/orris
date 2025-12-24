@@ -811,25 +811,26 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 		return
 	}
 
-	// ruleInfo holds rule ID and user ID for traffic recording
+	// ruleInfo holds rule ID, user ID, and effective multiplier for traffic recording
 	type ruleInfo struct {
-		id     uint
-		userID *uint
+		id                  uint
+		userID              *uint
+		effectiveMultiplier float64
 	}
 
 	// Merge all rules into validRuleIDs map (use rule.ID() to deduplicate)
 	validRuleIDs := make(map[string]ruleInfo) // Stripe-style ID -> ruleInfo
 	for _, rule := range agentRules {
 		stripeID := rule.SID()
-		validRuleIDs[stripeID] = ruleInfo{id: rule.ID(), userID: rule.UserID()}
+		validRuleIDs[stripeID] = ruleInfo{id: rule.ID(), userID: rule.UserID(), effectiveMultiplier: rule.GetEffectiveMultiplier()}
 	}
 	for _, rule := range exitRules {
 		stripeID := rule.SID()
-		validRuleIDs[stripeID] = ruleInfo{id: rule.ID(), userID: rule.UserID()}
+		validRuleIDs[stripeID] = ruleInfo{id: rule.ID(), userID: rule.UserID(), effectiveMultiplier: rule.GetEffectiveMultiplier()}
 	}
 	for _, rule := range chainRules {
 		stripeID := rule.SID()
-		validRuleIDs[stripeID] = ruleInfo{id: rule.ID(), userID: rule.UserID()}
+		validRuleIDs[stripeID] = ruleInfo{id: rule.ID(), userID: rule.UserID(), effectiveMultiplier: rule.GetEffectiveMultiplier()}
 	}
 
 	h.logger.Debugw("validated rule sources for traffic report",
@@ -910,8 +911,12 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 		}
 
 		// Also record traffic to subscription_usages table (for unified traffic tracking)
+		// Apply traffic multiplier before recording to subscription_usages
 		if h.trafficRecorder != nil && info.userID != nil {
-			if err := h.trafficRecorder.RecordForwardTraffic(ctx, info.id, *info.userID, item.UploadBytes, item.DownloadBytes); err != nil {
+			// Apply multiplier to get the effective traffic for billing/usage tracking
+			effectiveUpload := int64(float64(item.UploadBytes) * info.effectiveMultiplier)
+			effectiveDownload := int64(float64(item.DownloadBytes) * info.effectiveMultiplier)
+			if err := h.trafficRecorder.RecordForwardTraffic(ctx, info.id, *info.userID, effectiveUpload, effectiveDownload); err != nil {
 				// Log warning but don't fail the request - forward_rules update already succeeded
 				h.logger.Warnw("failed to record forward traffic to subscription_usages",
 					"rule_id", item.RuleID,

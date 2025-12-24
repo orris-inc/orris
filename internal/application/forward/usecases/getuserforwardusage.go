@@ -152,17 +152,22 @@ func (uc *GetUserForwardUsageUseCase) Execute(ctx context.Context, query GetUser
 		maxTrafficLimit = 0
 	}
 
-	// Get current usage
-	ruleCount, err := uc.repo.CountByUserID(ctx, query.UserID)
+	// Get current usage by fetching all rules and calculating traffic with multiplier applied
+	// Use a large page size to get all rules in one query
+	rules, ruleCount, err := uc.repo.ListByUserID(ctx, query.UserID, forward.ListFilter{
+		Page:     1,
+		PageSize: 10000, // Large enough to get all rules for a single user
+	})
 	if err != nil {
-		uc.logger.Errorw("failed to count user forward rules", "user_id", query.UserID, "error", err)
-		return nil, fmt.Errorf("failed to get rule count: %w", err)
+		uc.logger.Errorw("failed to list user forward rules", "user_id", query.UserID, "error", err)
+		return nil, fmt.Errorf("failed to get user rules: %w", err)
 	}
 
-	trafficUsed, err := uc.repo.GetTotalTrafficByUserID(ctx, query.UserID)
-	if err != nil {
-		uc.logger.Errorw("failed to get user total traffic", "user_id", query.UserID, "error", err)
-		return nil, fmt.Errorf("failed to get traffic usage: %w", err)
+	// Calculate total traffic with multiplier applied for each rule
+	var trafficUsed int64
+	for _, rule := range rules {
+		// TotalBytes() returns traffic with multiplier already applied
+		trafficUsed += rule.TotalBytes()
 	}
 
 	// Convert allowed types set to slice
