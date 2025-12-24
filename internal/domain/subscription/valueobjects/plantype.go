@@ -10,11 +10,13 @@ const (
 	PlanTypeNode PlanType = "node"
 	// PlanTypeForward represents a forward-based subscription plan
 	PlanTypeForward PlanType = "forward"
+	// PlanTypeHybrid represents a hybrid subscription plan (both official nodes and user's own forward rules)
+	PlanTypeHybrid PlanType = "hybrid"
 )
 
 // IsValid checks if the plan type is valid
 func (pt PlanType) IsValid() bool {
-	return pt == PlanTypeNode || pt == PlanTypeForward
+	return pt == PlanTypeNode || pt == PlanTypeForward || pt == PlanTypeHybrid
 }
 
 // String returns the string representation of the plan type
@@ -26,7 +28,7 @@ func (pt PlanType) String() string {
 func NewPlanType(s string) (PlanType, error) {
 	pt := PlanType(s)
 	if !pt.IsValid() {
-		return "", fmt.Errorf("invalid plan type: %s, must be 'node' or 'forward'", s)
+		return "", fmt.Errorf("invalid plan type: %s, must be 'node', 'forward', or 'hybrid'", s)
 	}
 	return pt, nil
 }
@@ -39,4 +41,9 @@ func (pt PlanType) IsNode() bool {
 // IsForward checks if the plan type is forward
 func (pt PlanType) IsForward() bool {
 	return pt == PlanTypeForward
+}
+
+// IsHybrid checks if the plan type is hybrid
+func (pt PlanType) IsHybrid() bool {
+	return pt == PlanTypeHybrid
 }
