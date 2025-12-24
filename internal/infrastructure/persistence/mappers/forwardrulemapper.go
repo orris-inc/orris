@@ -96,6 +96,7 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 	}
 
 	ipVersion := vo.IPVersion(model.IPVersion)
+	tunnelType := vo.TunnelType(model.TunnelType)
 
 	entity, err := forward.ReconstructForwardRule(
 		model.ID,
@@ -106,6 +107,7 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 		exitAgentID,
 		chainAgentIDs,
 		chainPortConfig,
+		tunnelType,
 		model.Name,
 		model.ListenPort,
 		model.TargetAddress,
@@ -187,6 +189,7 @@ func (m *ForwardRuleMapperImpl) ToModel(entity *forward.ForwardRule) (*models.Fo
 		ExitAgentID:       exitAgentID,
 		ChainAgentIDs:     chainAgentIDsJSON,
 		ChainPortConfig:   chainPortConfigJSON,
+		TunnelType:        entity.TunnelType().String(),
 		Name:              entity.Name(),
 		ListenPort:        entity.ListenPort(),
 		TargetAddress:     entity.TargetAddress(),

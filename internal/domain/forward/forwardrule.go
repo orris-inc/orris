@@ -20,6 +20,7 @@ type ForwardRule struct {
 	exitAgentID       uint            // exit agent ID (required for entry type)
 	chainAgentIDs     []uint          // ordered array of intermediate agent IDs for chain forwarding
 	chainPortConfig   map[uint]uint16 // map of agent_id -> listen_port for direct_chain type
+	tunnelType        vo.TunnelType   // tunnel type: ws or tls (default: ws)
 	name              string
 	listenPort        uint16
 	targetAddress     string // final target address (required for direct and exit types if targetNodeID is not set)
@@ -51,6 +52,7 @@ func NewForwardRule(
 	exitAgentID uint,
 	chainAgentIDs []uint,
 	chainPortConfig map[uint]uint16,
+	tunnelType vo.TunnelType,
 	name string,
 	listenPort uint16,
 	targetAddress string,
@@ -237,6 +239,11 @@ func NewForwardRule(
 		return nil, fmt.Errorf("invalid IP version: %s", ipVersion)
 	}
 
+	// Validate tunnel type (empty defaults to WS)
+	if !tunnelType.IsValid() {
+		return nil, fmt.Errorf("invalid tunnel type: %s", tunnelType)
+	}
+
 	// Generate SID for external API use
 	sid, err := shortIDGenerator()
 	if err != nil {
@@ -252,6 +259,7 @@ func NewForwardRule(
 		exitAgentID:       exitAgentID,
 		chainAgentIDs:     chainAgentIDs,
 		chainPortConfig:   chainPortConfig,
+		tunnelType:        tunnelType,
 		name:              name,
 		listenPort:        listenPort,
 		targetAddress:     targetAddress,
@@ -282,6 +290,7 @@ func ReconstructForwardRule(
 	exitAgentID uint,
 	chainAgentIDs []uint,
 	chainPortConfig map[uint]uint16,
+	tunnelType vo.TunnelType,
 	name string,
 	listenPort uint16,
 	targetAddress string,
@@ -344,6 +353,7 @@ func ReconstructForwardRule(
 		exitAgentID:       exitAgentID,
 		chainAgentIDs:     chainAgentIDs,
 		chainPortConfig:   chainPortConfig,
+		tunnelType:        tunnelType,
 		name:              name,
 		listenPort:        listenPort,
 		targetAddress:     targetAddress,
@@ -442,6 +452,11 @@ func (r *ForwardRule) ChainAgentIDs() []uint {
 // ChainPortConfig returns the chain port configuration (for direct_chain type rules).
 func (r *ForwardRule) ChainPortConfig() map[uint]uint16 {
 	return r.chainPortConfig
+}
+
+// TunnelType returns the tunnel type (ws or tls).
+func (r *ForwardRule) TunnelType() vo.TunnelType {
+	return r.tunnelType
 }
 
 // GetAgentListenPort returns the listen port for a specific agent in the chain.
@@ -909,6 +924,19 @@ func (r *ForwardRule) UpdateExitAgentID(exitAgentID uint) error {
 		return nil
 	}
 	r.exitAgentID = exitAgentID
+	r.updatedAt = time.Now()
+	return nil
+}
+
+// UpdateTunnelType updates the tunnel type.
+func (r *ForwardRule) UpdateTunnelType(tunnelType vo.TunnelType) error {
+	if !tunnelType.IsValid() {
+		return fmt.Errorf("invalid tunnel type: %s", tunnelType)
+	}
+	if r.tunnelType == tunnelType {
+		return nil
+	}
+	r.tunnelType = tunnelType
 	r.updatedAt = time.Now()
 	return nil
 }

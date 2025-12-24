@@ -19,6 +19,7 @@ type UpdateForwardRuleCommand struct {
 	ExitAgentShortID   *string           // exit agent ID (for entry type rules only)
 	ChainAgentShortIDs []string          // chain agent IDs (for chain type rules only), nil means no update
 	ChainPortConfig    map[string]uint16 // chain port config (for direct_chain type rules only), nil means no update
+	TunnelType         *string           // tunnel type: ws or tls (nil means no update)
 	ListenPort         *uint16
 	TargetAddress      *string
 	TargetPort         *uint16
@@ -223,6 +224,13 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 	if cmd.Protocol != nil {
 		protocol := vo.ForwardProtocol(*cmd.Protocol)
 		if err := rule.UpdateProtocol(protocol); err != nil {
+			return errors.NewValidationError(err.Error())
+		}
+	}
+
+	if cmd.TunnelType != nil {
+		tunnelType := vo.TunnelType(*cmd.TunnelType)
+		if err := rule.UpdateTunnelType(tunnelType); err != nil {
 			return errors.NewValidationError(err.Error())
 		}
 	}

@@ -1185,8 +1185,9 @@ type ReportStatusRequest struct {
 	UDPConnections    int               `json:"udp_connections"`
 	ActiveRules       int               `json:"active_rules"`
 	ActiveConnections int               `json:"active_connections"`
-	TunnelStatus      map[string]string `json:"tunnel_status,omitempty"`  // Key is Stripe-style rule ID (e.g., "fr_xK9mP2vL3nQ")
-	WsListenPort      uint16            `json:"ws_listen_port,omitempty"` // WebSocket listen port for exit agent tunnel connections
+	TunnelStatus      map[string]string `json:"tunnel_status,omitempty"`   // Key is Stripe-style rule ID (e.g., "fr_xK9mP2vL3nQ")
+	WsListenPort      uint16            `json:"ws_listen_port,omitempty"`  // WebSocket listen port for exit agent tunnel connections
+	TlsListenPort     uint16            `json:"tls_listen_port,omitempty"` // TLS listen port for exit agent tunnel connections
 }
 
 // ReportStatus handles POST /forward-agent-api/status
@@ -1239,6 +1240,7 @@ func (h *AgentHandler) ReportStatus(c *gin.Context) {
 		ActiveConnections: req.ActiveConnections,
 		TunnelStatus:      req.TunnelStatus,
 		WsListenPort:      req.WsListenPort,
+		TlsListenPort:     req.TlsListenPort,
 	}
 
 	// Execute use case

@@ -20,6 +20,7 @@ type CreateUserForwardRuleCommand struct {
 	ExitAgentShortID   string            // required for entry type (Stripe-style short ID without prefix)
 	ChainAgentShortIDs []string          // required for chain type (ordered list of Stripe-style short IDs without prefix)
 	ChainPortConfig    map[string]uint16 // required for direct_chain type (agent short_id -> listen port)
+	TunnelType         string            // tunnel type: ws or tls (default: ws)
 	Name               string
 	ListenPort         uint16 // required for all types (direct, entry, chain, direct_chain)
 	TargetAddress      string // required for all types (mutually exclusive with TargetNodeSID)
@@ -194,6 +195,7 @@ func (uc *CreateUserForwardRuleUseCase) Execute(ctx context.Context, cmd CreateU
 	protocol := vo.ForwardProtocol(cmd.Protocol)
 	ruleType := vo.ForwardRuleType(cmd.RuleType)
 	ipVersion := vo.IPVersion(cmd.IPVersion)
+	tunnelType := vo.TunnelType(cmd.TunnelType)
 	userIDPtr := &cmd.UserID
 	rule, err := forward.NewForwardRule(
 		agentID,
@@ -202,6 +204,7 @@ func (uc *CreateUserForwardRuleUseCase) Execute(ctx context.Context, cmd CreateU
 		exitAgentID,
 		chainAgentIDs,
 		chainPortConfig,
+		tunnelType,
 		cmd.Name,
 		cmd.ListenPort,
 		cmd.TargetAddress,

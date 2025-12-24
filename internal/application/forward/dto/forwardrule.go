@@ -50,12 +50,16 @@ type ForwardRuleDTO struct {
 	// Values: "entry" (needs to establish tunnel), "exit" (accepts tunnel connections), "relay" (chain middle node)
 	Role string `json:"role,omitempty"`
 
+	// Tunnel configuration
+	TunnelType string `json:"tunnel_type,omitempty"` // tunnel type: "ws" or "tls" (default: "ws")
+
 	// Chain-specific fields (populated for chain rules based on requesting agent's role)
 	ChainPosition          int    `json:"chain_position,omitempty"`            // agent's position in chain (0-indexed)
 	IsLastInChain          bool   `json:"is_last_in_chain,omitempty"`          // true if agent is last in chain
 	NextHopAgentID         string `json:"next_hop_agent_id,omitempty"`         // next agent in chain (Stripe-style ID)
 	NextHopAddress         string `json:"next_hop_address,omitempty"`          // next agent's public address
 	NextHopWsPort          uint16 `json:"next_hop_ws_port,omitempty"`          // next agent's WS port (from status cache)
+	NextHopTlsPort         uint16 `json:"next_hop_tls_port,omitempty"`         // next agent's TLS port (from status cache)
 	NextHopPort            uint16 `json:"next_hop_port,omitempty"`             // next agent's listen port (for direct_chain type)
 	NextHopConnectionToken string `json:"next_hop_connection_token,omitempty"` // short-term JWT for next hop authentication
 
@@ -108,6 +112,7 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 		NodeCount:                  nodeCount,
 		IsAutoMultiplier:           isAuto,
 		SortOrder:                  rule.SortOrder(),
+		TunnelType:                 rule.TunnelType().String(),
 		internalAgentID:            rule.AgentID(),
 		internalExitAgentID:        rule.ExitAgentID(),
 		internalChainAgents:        rule.ChainAgentIDs(),

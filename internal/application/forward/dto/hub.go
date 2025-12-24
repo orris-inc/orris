@@ -85,8 +85,10 @@ type RuleSyncData struct {
 	NextHopAgentID         string   `json:"next_hop_agent_id,omitempty"`
 	NextHopAddress         string   `json:"next_hop_address,omitempty"`
 	NextHopWsPort          uint16   `json:"next_hop_ws_port,omitempty"`
+	NextHopTlsPort         uint16   `json:"next_hop_tls_port,omitempty"`         // Next hop TLS listen port for tunnel connections
 	NextHopPort            uint16   `json:"next_hop_port,omitempty"`             // Next hop listen port (for direct_chain type)
 	NextHopConnectionToken string   `json:"next_hop_connection_token,omitempty"` // Short-term token for next hop authentication
+	TunnelType             string   `json:"tunnel_type,omitempty"`               // Tunnel type: "ws" or "tls"
 	ChainAgentIDs          []string `json:"chain_agent_ids,omitempty"`
 	ChainPosition          int      `json:"chain_position,omitempty"`
 	IsLastInChain          bool     `json:"is_last_in_chain,omitempty"`

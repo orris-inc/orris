@@ -26,6 +26,7 @@ type ruleParams struct {
 	ExitAgentID       uint
 	ChainAgentIDs     []uint
 	ChainPortConfig   map[uint]uint16
+	TunnelType        vo.TunnelType
 	Name              string
 	ListenPort        uint16
 	TargetAddress     string
@@ -196,6 +197,7 @@ func newTestForwardRule(params ruleParams) (*ForwardRule, error) {
 		params.ExitAgentID,
 		params.ChainAgentIDs,
 		params.ChainPortConfig,
+		params.TunnelType,
 		params.Name,
 		params.ListenPort,
 		params.TargetAddress,
@@ -1706,6 +1708,7 @@ func TestForwardRule_Validate_RejectsInvalidRuleType(t *testing.T) {
 		1, shortID, 1, nil, // id, shortID, agentID, userID
 		vo.ForwardRuleType("invalid"),
 		0, nil, nil,
+		vo.TunnelTypeWS, // tunnelType
 		"test", 8080,
 		"10.0.0.1", 9000, nil,
 		"", vo.IPVersionAuto, vo.ForwardProtocolTCP,
@@ -2038,6 +2041,7 @@ func TestGetEffectiveMultiplier(t *testing.T) {
 				tt.params.ExitAgentID,
 				tt.params.ChainAgentIDs,
 				tt.params.ChainPortConfig,
+				tt.params.TunnelType,
 				tt.params.Name,
 				tt.params.ListenPort,
 				tt.params.TargetAddress,
@@ -2129,6 +2133,7 @@ func TestTrafficBytesWithMultiplier(t *testing.T) {
 				tt.params.ExitAgentID,
 				tt.params.ChainAgentIDs,
 				tt.params.ChainPortConfig,
+				tt.params.TunnelType,
 				tt.params.Name,
 				tt.params.ListenPort,
 				tt.params.TargetAddress,
@@ -2210,6 +2215,7 @@ func TestTrafficMultiplierValidation(t *testing.T) {
 				params.ExitAgentID,
 				params.ChainAgentIDs,
 				params.ChainPortConfig,
+				params.TunnelType,
 				params.Name,
 				params.ListenPort,
 				params.TargetAddress,
@@ -2257,6 +2263,7 @@ func TestGetRawBytes(t *testing.T) {
 		params.ExitAgentID,
 		params.ChainAgentIDs,
 		params.ChainPortConfig,
+		params.TunnelType,
 		params.Name,
 		params.ListenPort,
 		params.TargetAddress,

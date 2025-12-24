@@ -259,11 +259,27 @@ func (s *ProbeService) probeEntryRule(ctx context.Context, rule *forward.Forward
 		return response, nil
 	}
 
-	// Get WS port from exit agent status cache
+	// Get tunnel port from exit agent status cache based on rule's tunnel type
 	exitStatus, err := s.statusQuerier.GetStatus(ctx, exitAgentID)
-	if err != nil || exitStatus == nil || exitStatus.WsListenPort == 0 {
-		response.Error = "exit agent status not found or ws_listen_port not configured"
+	if err != nil || exitStatus == nil {
+		response.Error = "exit agent status not found"
 		return response, nil
+	}
+
+	// Select port based on tunnel type
+	var tunnelPort uint16
+	if rule.TunnelType().IsTLS() {
+		tunnelPort = exitStatus.TlsListenPort
+		if tunnelPort == 0 {
+			response.Error = "exit agent has no tls_listen_port configured"
+			return response, nil
+		}
+	} else {
+		tunnelPort = exitStatus.WsListenPort
+		if tunnelPort == 0 {
+			response.Error = "exit agent has no ws_listen_port configured"
+			return response, nil
+		}
 	}
 
 	// Step 1: Probe tunnel (entry → exit)
@@ -276,7 +292,7 @@ func (s *ProbeService) probeEntryRule(ctx context.Context, rule *forward.Forward
 
 	ruleStripeID := rule.SID()
 	tunnelLatency, err := s.sendProbeTask(ctx, entryAgentID, ruleStripeID, dto.ProbeTaskTypeTunnel,
-		tunnelAddr, exitStatus.WsListenPort, "tcp")
+		tunnelAddr, tunnelPort, "tcp")
 	if err != nil {
 		response.Error = "tunnel probe failed: " + err.Error()
 		return response, nil
@@ -462,19 +478,51 @@ func (s *ProbeService) probeChainRule(ctx context.Context, rule *forward.Forward
 				continue
 			}
 
-			// Get next agent's WS port from status cache
+			// Get next agent's tunnel port from status cache based on rule's tunnel type
 			nextStatus, err := s.statusQuerier.GetStatus(ctx, nextAgentID)
-			if err != nil || nextStatus == nil || nextStatus.WsListenPort == 0 {
+			if err != nil || nextStatus == nil {
 				hopLatency := &dto.ChainHopLatency{
 					From:    fromAgentStripeID,
 					To:      nextAgent.SID(),
 					Success: false,
 					Online:  isOnline,
-					Error:   "next agent status not found or ws_listen_port not configured",
+					Error:   "next agent status not found",
 				}
 				chainLatencies = append(chainLatencies, hopLatency)
 				allSuccess = false
 				continue
+			}
+
+			// Select port based on tunnel type
+			var nextTunnelPort uint16
+			if rule.TunnelType().IsTLS() {
+				nextTunnelPort = nextStatus.TlsListenPort
+				if nextTunnelPort == 0 {
+					hopLatency := &dto.ChainHopLatency{
+						From:    fromAgentStripeID,
+						To:      nextAgent.SID(),
+						Success: false,
+						Online:  isOnline,
+						Error:   "next agent has no tls_listen_port configured",
+					}
+					chainLatencies = append(chainLatencies, hopLatency)
+					allSuccess = false
+					continue
+				}
+			} else {
+				nextTunnelPort = nextStatus.WsListenPort
+				if nextTunnelPort == 0 {
+					hopLatency := &dto.ChainHopLatency{
+						From:    fromAgentStripeID,
+						To:      nextAgent.SID(),
+						Success: false,
+						Online:  isOnline,
+						Error:   "next agent has no ws_listen_port configured",
+					}
+					chainLatencies = append(chainLatencies, hopLatency)
+					allSuccess = false
+					continue
+				}
 			}
 
 			hopLatency := &dto.ChainHopLatency{
@@ -502,7 +550,7 @@ func (s *ProbeService) probeChainRule(ctx context.Context, rule *forward.Forward
 			}
 
 			latency, err := s.sendProbeTask(ctx, currentAgentID, ruleStripeID, dto.ProbeTaskTypeTunnel,
-				tunnelAddr, nextStatus.WsListenPort, "tcp")
+				tunnelAddr, nextTunnelPort, "tcp")
 			if err != nil {
 				hopLatency.Success = false
 				hopLatency.Error = err.Error()

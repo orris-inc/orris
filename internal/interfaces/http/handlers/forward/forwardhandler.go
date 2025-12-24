@@ -71,6 +71,7 @@ type CreateForwardRuleRequest struct {
 	ExitAgentID       string            `json:"exit_agent_id,omitempty" example:"fa_yL8nQ3wM4oR"`
 	ChainAgentIDs     []string          `json:"chain_agent_ids,omitempty" example:"[\"fa_aaa\",\"fa_bbb\"]"`
 	ChainPortConfig   map[string]uint16 `json:"chain_port_config,omitempty" example:"{\"fa_xK9mP2vL3nQ\":8080,\"fa_yL8nQ3wM4oR\":9090}"`
+	TunnelType        string            `json:"tunnel_type,omitempty" binding:"omitempty,oneof=ws tls" example:"ws"`
 	Name              string            `json:"name" binding:"required" example:"MySQL-Forward"`
 	ListenPort        uint16            `json:"listen_port,omitempty" example:"13306"`
 	TargetAddress     string            `json:"target_address,omitempty" example:"192.168.1.100"`
@@ -91,6 +92,7 @@ type UpdateForwardRuleRequest struct {
 	ExitAgentID       *string           `json:"exit_agent_id,omitempty" example:"fa_yL8nQ3wM4oR"`
 	ChainAgentIDs     []string          `json:"chain_agent_ids,omitempty" example:"[\"fa_aaa\",\"fa_bbb\"]"`
 	ChainPortConfig   map[string]uint16 `json:"chain_port_config,omitempty" example:"{\"fa_xK9mP2vL3nQ\":8080,\"fa_yL8nQ3wM4oR\":9090}"`
+	TunnelType        *string           `json:"tunnel_type,omitempty" binding:"omitempty,oneof=ws tls" example:"ws"`
 	ListenPort        *uint16           `json:"listen_port,omitempty" example:"13307"`
 	TargetAddress     *string           `json:"target_address,omitempty" example:"192.168.1.101"`
 	TargetPort        *uint16           `json:"target_port,omitempty" example:"3307"`
@@ -175,6 +177,7 @@ func (h *ForwardHandler) CreateRule(c *gin.Context) {
 		ExitAgentShortID:   exitAgentShortID,
 		ChainAgentShortIDs: chainAgentShortIDs,
 		ChainPortConfig:    chainPortConfig,
+		TunnelType:         req.TunnelType,
 		Name:               req.Name,
 		ListenPort:         req.ListenPort,
 		TargetAddress:      req.TargetAddress,
@@ -306,6 +309,7 @@ func (h *ForwardHandler) UpdateRule(c *gin.Context) {
 		ExitAgentShortID:   exitAgentShortID,
 		ChainAgentShortIDs: chainAgentShortIDs,
 		ChainPortConfig:    chainPortConfig,
+		TunnelType:         req.TunnelType,
 		ListenPort:         req.ListenPort,
 		TargetAddress:      req.TargetAddress,
 		TargetPort:         req.TargetPort,

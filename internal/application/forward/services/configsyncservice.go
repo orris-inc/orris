@@ -381,6 +381,7 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 		ListenPort: rule.ListenPort(),
 		Protocol:   rule.Protocol().String(),
 		BindIP:     rule.BindIP(),
+		TunnelType: rule.TunnelType().String(),
 	}
 
 	// Resolve target address and port
@@ -431,7 +432,7 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 					syncData.NextHopAgentID = exitAgent.SID()
 					syncData.NextHopAddress = exitAgent.GetEffectiveTunnelAddress()
 
-					// Get ws_listen_port from cached agent status
+					// Get tunnel ports from cached agent status
 					exitStatus, err := s.statusQuerier.GetStatus(ctx, exitAgentID)
 					if err != nil {
 						s.logger.Warnw("failed to get exit agent status",
@@ -439,13 +440,19 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 							"exit_agent_id", exitAgentID,
 							"error", err,
 						)
-					} else if exitStatus != nil && exitStatus.WsListenPort > 0 {
-						syncData.NextHopWsPort = exitStatus.WsListenPort
-					} else {
-						s.logger.Debugw("exit agent has no ws_listen_port configured or is offline",
-							"rule_id", rule.ID(),
-							"exit_agent_id", exitAgentID,
-						)
+					} else if exitStatus != nil {
+						if exitStatus.WsListenPort > 0 {
+							syncData.NextHopWsPort = exitStatus.WsListenPort
+						}
+						if exitStatus.TlsListenPort > 0 {
+							syncData.NextHopTlsPort = exitStatus.TlsListenPort
+						}
+						if exitStatus.WsListenPort == 0 && exitStatus.TlsListenPort == 0 {
+							s.logger.Debugw("exit agent has no tunnel port configured or is offline",
+								"rule_id", rule.ID(),
+								"exit_agent_id", exitAgentID,
+							)
+						}
 					}
 				}
 			}
@@ -524,7 +531,7 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 					syncData.NextHopAgentID = nextAgent.SID()
 					syncData.NextHopAddress = nextAgent.GetEffectiveTunnelAddress()
 
-					// Get ws_listen_port from cached agent status
+					// Get tunnel ports from cached agent status
 					nextStatus, err := s.statusQuerier.GetStatus(ctx, nextHopAgentID)
 					if err != nil {
 						s.logger.Warnw("failed to get next hop agent status",
@@ -532,13 +539,19 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 							"next_hop_agent_id", nextHopAgentID,
 							"error", err,
 						)
-					} else if nextStatus != nil && nextStatus.WsListenPort > 0 {
-						syncData.NextHopWsPort = nextStatus.WsListenPort
-					} else {
-						s.logger.Debugw("next hop agent has no ws_listen_port configured or is offline",
-							"rule_id", rule.ID(),
-							"next_hop_agent_id", nextHopAgentID,
-						)
+					} else if nextStatus != nil {
+						if nextStatus.WsListenPort > 0 {
+							syncData.NextHopWsPort = nextStatus.WsListenPort
+						}
+						if nextStatus.TlsListenPort > 0 {
+							syncData.NextHopTlsPort = nextStatus.TlsListenPort
+						}
+						if nextStatus.WsListenPort == 0 && nextStatus.TlsListenPort == 0 {
+							s.logger.Debugw("next hop agent has no tunnel port configured or is offline",
+								"rule_id", rule.ID(),
+								"next_hop_agent_id", nextHopAgentID,
+							)
+						}
 					}
 				}
 			}

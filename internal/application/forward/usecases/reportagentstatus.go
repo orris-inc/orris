@@ -77,9 +77,10 @@ func (uc *ReportAgentStatusUseCase) Execute(ctx context.Context, input *dto.Repo
 		return fmt.Errorf("agent not found: %d", input.AgentID)
 	}
 
-	// Check if ws_listen_port has changed (for exit agent port change notification)
-	var oldWsPort uint16
-	if uc.statusQuerier != nil && input.Status.WsListenPort > 0 {
+	// Check if tunnel ports have changed (for exit agent port change notification)
+	var oldWsPort, oldTlsPort uint16
+	hasTunnelPorts := input.Status.WsListenPort > 0 || input.Status.TlsListenPort > 0
+	if uc.statusQuerier != nil && hasTunnelPorts {
 		oldStatus, err := uc.statusQuerier.GetStatus(ctx, input.AgentID)
 		if err != nil {
 			uc.logger.Warnw("failed to get old status for port change detection",
@@ -88,6 +89,7 @@ func (uc *ReportAgentStatusUseCase) Execute(ctx context.Context, input *dto.Repo
 			)
 		} else if oldStatus != nil {
 			oldWsPort = oldStatus.WsListenPort
+			oldTlsPort = oldStatus.TlsListenPort
 		}
 	}
 
@@ -97,12 +99,16 @@ func (uc *ReportAgentStatusUseCase) Execute(ctx context.Context, input *dto.Repo
 		return fmt.Errorf("update status: %w", err)
 	}
 
-	// Notify entry agents if ws_listen_port has changed
-	if uc.portChangeNotifier != nil && input.Status.WsListenPort > 0 && oldWsPort > 0 && oldWsPort != input.Status.WsListenPort {
-		uc.logger.Infow("exit agent ws_listen_port changed, notifying entry agents",
+	// Notify entry agents if tunnel ports have changed
+	wsPortChanged := input.Status.WsListenPort > 0 && oldWsPort > 0 && oldWsPort != input.Status.WsListenPort
+	tlsPortChanged := input.Status.TlsListenPort > 0 && oldTlsPort > 0 && oldTlsPort != input.Status.TlsListenPort
+	if uc.portChangeNotifier != nil && (wsPortChanged || tlsPortChanged) {
+		uc.logger.Infow("exit agent tunnel port changed, notifying entry agents",
 			"agent_id", input.AgentID,
-			"old_port", oldWsPort,
-			"new_port", input.Status.WsListenPort,
+			"old_ws_port", oldWsPort,
+			"new_ws_port", input.Status.WsListenPort,
+			"old_tls_port", oldTlsPort,
+			"new_tls_port", input.Status.TlsListenPort,
 		)
 		if err := uc.portChangeNotifier.NotifyExitPortChange(ctx, input.AgentID); err != nil {
 			uc.logger.Infow("port change notification skipped",

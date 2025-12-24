@@ -22,8 +22,9 @@ type AgentStatusDTO struct {
 	ActiveConnections int               `json:"active_connections"`
 	TunnelStatus      map[string]string `json:"tunnel_status,omitempty"` // Key is Stripe-style rule ID (e.g., "fr_xK9mP2vL3nQ")
 
-	// WebSocket tunnel configuration (for exit agent)
-	WsListenPort uint16 `json:"ws_listen_port,omitempty"` // WebSocket listen port for tunnel connections
+	// Tunnel configuration (for exit agent)
+	WsListenPort  uint16 `json:"ws_listen_port,omitempty"`  // WebSocket listen port for tunnel connections
+	TlsListenPort uint16 `json:"tls_listen_port,omitempty"` // TLS listen port for tunnel connections
 }
 
 // ReportAgentStatusInput represents the input for ReportAgentStatus use case.

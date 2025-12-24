@@ -66,6 +66,7 @@ func (a *ForwardAgentStatusAdapter) UpdateStatus(ctx context.Context, agentID ui
 		"active_rules":       status.ActiveRules,
 		"active_connections": status.ActiveConnections,
 		"ws_listen_port":     status.WsListenPort,
+		"tls_listen_port":    status.TlsListenPort,
 		"updated_at":         time.Now().Unix(),
 	})
 
@@ -180,6 +181,7 @@ func (a *ForwardAgentStatusAdapter) parseStatus(values map[string]string) *dto.A
 
 	// Parse uint16 values
 	fmt.Sscanf(values["ws_listen_port"], "%d", &status.WsListenPort)
+	fmt.Sscanf(values["tls_listen_port"], "%d", &status.TlsListenPort)
 
 	// Parse tunnel status JSON
 	if tunnelJSON, ok := values["tunnel_status"]; ok && tunnelJSON != "" {
