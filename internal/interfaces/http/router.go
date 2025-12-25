@@ -600,7 +600,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Initialize agent last seen updater for status reporting
 	agentLastSeenUpdater := adapters.NewAgentLastSeenUpdaterAdapter(forwardAgentRepo)
 	getAgentStatusUC := forwardUsecases.NewGetAgentStatusUseCase(forwardAgentRepo, forwardAgentStatusAdapter, log)
-	getRuleSyncStatusUC := forwardUsecases.NewGetRuleSyncStatusUseCase(forwardAgentRepo, ruleSyncStatusAdapter, log)
+	getRuleOverallStatusUC := forwardUsecases.NewGetRuleOverallStatusUseCase(forwardRuleRepo, forwardAgentRepo, ruleSyncStatusAdapter, log)
 	getForwardAgentTokenUC := forwardUsecases.NewGetForwardAgentTokenUseCase(forwardAgentRepo, log)
 	generateInstallScriptUC := forwardUsecases.NewGenerateInstallScriptUseCase(forwardAgentRepo, log)
 
@@ -674,7 +674,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		regenerateForwardAgentTokenUC,
 		getForwardAgentTokenUC,
 		getAgentStatusUC,
-		getRuleSyncStatusUC,
+		getRuleOverallStatusUC,
 		generateInstallScriptUC,
 		serverBaseURL,
 	)

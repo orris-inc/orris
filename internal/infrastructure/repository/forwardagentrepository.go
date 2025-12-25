@@ -125,6 +125,31 @@ func (r *ForwardAgentRepositoryImpl) GetSIDsByIDs(ctx context.Context, ids []uin
 	return sidMap, nil
 }
 
+// GetByIDs retrieves multiple forward agents by their internal IDs.
+func (r *ForwardAgentRepositoryImpl) GetByIDs(ctx context.Context, ids []uint) (map[uint]*forward.ForwardAgent, error) {
+	if len(ids) == 0 {
+		return make(map[uint]*forward.ForwardAgent), nil
+	}
+
+	var agentModels []*models.ForwardAgentModel
+	if err := r.db.WithContext(ctx).Where("id IN ?", ids).Find(&agentModels).Error; err != nil {
+		r.logger.Errorw("failed to get forward agents by IDs", "ids", ids, "error", err)
+		return nil, fmt.Errorf("failed to get forward agents: %w", err)
+	}
+
+	result := make(map[uint]*forward.ForwardAgent, len(agentModels))
+	for _, model := range agentModels {
+		entity, err := r.mapper.ToEntity(model)
+		if err != nil {
+			r.logger.Warnw("failed to map forward agent model to entity", "id", model.ID, "error", err)
+			continue
+		}
+		result[model.ID] = entity
+	}
+
+	return result, nil
+}
+
 // GetByTokenHash retrieves a forward agent by token hash.
 func (r *ForwardAgentRepositoryImpl) GetByTokenHash(ctx context.Context, tokenHash string) (*forward.ForwardAgent, error) {
 	var model models.ForwardAgentModel

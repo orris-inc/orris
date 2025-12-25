@@ -48,6 +48,9 @@ func SetupForwardRoutes(engine *gin.Engine, cfg *ForwardRouteConfig) {
 
 		// Probe operations
 		forwardRules.POST("/:id/probe", cfg.ForwardRuleHandler.ProbeRule)
+
+		// Rule status (aggregated from all agents)
+		forwardRules.GET("/:id/status", cfg.ForwardAgentHandler.GetRuleOverallStatus)
 	}
 
 	// Forward agents management (admin only)
@@ -71,9 +74,6 @@ func SetupForwardRoutes(engine *gin.Engine, cfg *ForwardRouteConfig) {
 
 		// Runtime status (from agent reports)
 		forwardAgents.GET("/:id/status", cfg.ForwardAgentHandler.GetAgentStatus)
-
-		// Rule sync status (from agent reports)
-		forwardAgents.GET("/:id/rule-status", cfg.ForwardAgentHandler.GetRuleSyncStatus)
 
 		// Token operations
 		forwardAgents.GET("/:id/token", cfg.ForwardAgentHandler.GetToken)

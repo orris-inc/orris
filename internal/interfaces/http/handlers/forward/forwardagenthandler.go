@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/application/forward/usecases"
 	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
@@ -27,7 +28,7 @@ type ForwardAgentHandler struct {
 	regenerateTokenUC       *usecases.RegenerateForwardAgentTokenUseCase
 	getAgentTokenUC         *usecases.GetForwardAgentTokenUseCase
 	getAgentStatusUC        *usecases.GetAgentStatusUseCase
-	getRuleSyncStatusUC     *usecases.GetRuleSyncStatusUseCase
+	getRuleOverallStatusUC  *usecases.GetRuleOverallStatusUseCase
 	generateInstallScriptUC *usecases.GenerateInstallScriptUseCase
 	serverURL               string
 	logger                  logger.Interface
@@ -45,7 +46,7 @@ func NewForwardAgentHandler(
 	regenerateTokenUC *usecases.RegenerateForwardAgentTokenUseCase,
 	getAgentTokenUC *usecases.GetForwardAgentTokenUseCase,
 	getAgentStatusUC *usecases.GetAgentStatusUseCase,
-	getRuleSyncStatusUC *usecases.GetRuleSyncStatusUseCase,
+	getRuleOverallStatusUC *usecases.GetRuleOverallStatusUseCase,
 	generateInstallScriptUC *usecases.GenerateInstallScriptUseCase,
 	serverURL string,
 ) *ForwardAgentHandler {
@@ -60,7 +61,7 @@ func NewForwardAgentHandler(
 		regenerateTokenUC:       regenerateTokenUC,
 		getAgentTokenUC:         getAgentTokenUC,
 		getAgentStatusUC:        getAgentStatusUC,
-		getRuleSyncStatusUC:     getRuleSyncStatusUC,
+		getRuleOverallStatusUC:  getRuleOverallStatusUC,
 		generateInstallScriptUC: generateInstallScriptUC,
 		serverURL:               serverURL,
 		logger:                  logger.NewLogger(),
@@ -351,29 +352,29 @@ func (h *ForwardAgentHandler) GetInstallScript(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "Install command generated successfully", result)
 }
 
-// GetRuleSyncStatus handles GET /api/forward-agents/:agent_id/rule-status
-func (h *ForwardAgentHandler) GetRuleSyncStatus(c *gin.Context) {
-	// Get agent ID from path parameter
-	agentID, err := parseAgentShortID(c)
+// GetRuleOverallStatus handles GET /forward-rules/:id/status
+func (h *ForwardAgentHandler) GetRuleOverallStatus(c *gin.Context) {
+	// Parse rule ID from path parameter
+	ruleSID, err := parseRuleShortID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	h.logger.Debugw("getting rule sync status",
-		"agent_id", agentID,
+	h.logger.Debugw("getting rule overall status",
+		"rule_id", ruleSID,
 		"ip", c.ClientIP(),
 	)
 
 	// Execute use case
-	query := usecases.GetRuleSyncStatusQuery{
-		ShortID: agentID,
+	input := &dto.GetRuleOverallStatusInput{
+		RuleSID: ruleSID,
 	}
 
-	result, err := h.getRuleSyncStatusUC.Execute(c.Request.Context(), query)
+	result, err := h.getRuleOverallStatusUC.Execute(c.Request.Context(), input)
 	if err != nil {
-		h.logger.Errorw("failed to get rule sync status",
-			"agent_id", agentID,
+		h.logger.Errorw("failed to get rule overall status",
+			"rule_id", ruleSID,
 			"error", err,
 			"ip", c.ClientIP(),
 		)
@@ -381,9 +382,10 @@ func (h *ForwardAgentHandler) GetRuleSyncStatus(c *gin.Context) {
 		return
 	}
 
-	h.logger.Infow("rule sync status retrieved successfully",
-		"agent_id", agentID,
-		"rules_count", len(result.Rules),
+	h.logger.Infow("rule overall status retrieved successfully",
+		"rule_id", ruleSID,
+		"total_agents", result.TotalAgents,
+		"healthy_agents", result.HealthyAgents,
 		"ip", c.ClientIP(),
 	)
 

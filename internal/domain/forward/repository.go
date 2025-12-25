@@ -98,6 +98,10 @@ type AgentRepository interface {
 	// Returns a map from internal ID to SID.
 	GetSIDsByIDs(ctx context.Context, ids []uint) (map[uint]string, error)
 
+	// GetByIDs retrieves multiple forward agents by their internal IDs.
+	// Returns a map from internal ID to ForwardAgent.
+	GetByIDs(ctx context.Context, ids []uint) (map[uint]*ForwardAgent, error)
+
 	// Update updates an existing forward agent.
 	Update(ctx context.Context, agent *ForwardAgent) error
 
