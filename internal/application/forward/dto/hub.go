@@ -18,6 +18,9 @@ const (
 	// Config sync message types (Forward domain specific, routed through AgentHub).
 	MsgTypeConfigSync = "config_sync" // Server -> Agent
 	MsgTypeConfigAck  = "config_ack"  // Agent -> Server
+
+	// Rule sync status message types (Forward domain specific, routed through AgentHub).
+	MsgTypeRuleSyncStatus = "rule_sync_status" // Agent -> Server
 )
 
 // HubMessage is the unified WebSocket message envelope.

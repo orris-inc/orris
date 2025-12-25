@@ -71,10 +71,5 @@ func (uc *GetRuleSyncStatusUseCase) Execute(ctx context.Context, query GetRuleSy
 		UpdatedAt: result.UpdatedAt,
 	}
 
-	uc.logger.Infow("rule sync status retrieved successfully",
-		"short_id", agent.SID(),
-		"rules_count", len(result.Rules),
-	)
-
 	return response, nil
 }

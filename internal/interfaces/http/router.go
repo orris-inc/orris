@@ -653,6 +653,9 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	configSyncService := forwardServices.NewConfigSyncService(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, forwardAgentStatusAdapter, cfg.Forward.TokenSigningSecret, agentHub, log)
 	agentHub.RegisterMessageHandler(configSyncService)
 
+	// Register rule sync status handler for WebSocket-based status reporting
+	agentHub.RegisterMessageHandler(reportRuleSyncStatusUC)
+
 	// Set port change notifier for exit agent port change detection
 	reportAgentStatusUC.SetPortChangeNotifier(configSyncService)
 
