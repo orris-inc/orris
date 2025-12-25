@@ -71,6 +71,7 @@ type CreateForwardRuleRequest struct {
 	ExitAgentID       string            `json:"exit_agent_id,omitempty" example:"fa_yL8nQ3wM4oR"`
 	ChainAgentIDs     []string          `json:"chain_agent_ids,omitempty" example:"[\"fa_aaa\",\"fa_bbb\"]"`
 	ChainPortConfig   map[string]uint16 `json:"chain_port_config,omitempty" example:"{\"fa_xK9mP2vL3nQ\":8080,\"fa_yL8nQ3wM4oR\":9090}"`
+	TunnelHops        *int              `json:"tunnel_hops,omitempty" binding:"omitempty,gte=0,lte=10" example:"2"`
 	TunnelType        string            `json:"tunnel_type,omitempty" binding:"omitempty,oneof=ws tls" example:"ws"`
 	Name              string            `json:"name" binding:"required" example:"MySQL-Forward"`
 	ListenPort        uint16            `json:"listen_port,omitempty" example:"13306"`
@@ -177,6 +178,7 @@ func (h *ForwardHandler) CreateRule(c *gin.Context) {
 		ExitAgentShortID:   exitAgentShortID,
 		ChainAgentShortIDs: chainAgentShortIDs,
 		ChainPortConfig:    chainPortConfig,
+		TunnelHops:         req.TunnelHops,
 		TunnelType:         req.TunnelType,
 		Name:               req.Name,
 		ListenPort:         req.ListenPort,

@@ -52,6 +52,12 @@ type ForwardRuleDTO struct {
 
 	// Tunnel configuration
 	TunnelType string `json:"tunnel_type,omitempty"` // tunnel type: "ws" or "tls" (default: "ws")
+	TunnelHops *int   `json:"tunnel_hops,omitempty"` // number of hops using tunnel (nil=full tunnel, N=first N hops use tunnel)
+
+	// Hop mode for hybrid chain (populated based on agent's position)
+	HopMode      string `json:"hop_mode,omitempty"`      // "tunnel", "direct", or "boundary"
+	InboundMode  string `json:"inbound_mode,omitempty"`  // for boundary nodes: "tunnel" or "direct"
+	OutboundMode string `json:"outbound_mode,omitempty"` // for boundary nodes: "tunnel" or "direct"
 
 	// Chain-specific fields (populated for chain rules based on requesting agent's role)
 	ChainPosition          int    `json:"chain_position,omitempty"`            // agent's position in chain (0-indexed)
@@ -113,6 +119,7 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 		IsAutoMultiplier:           isAuto,
 		SortOrder:                  rule.SortOrder(),
 		TunnelType:                 rule.TunnelType().String(),
+		TunnelHops:                 rule.TunnelHops(),
 		internalAgentID:            rule.AgentID(),
 		internalExitAgentID:        rule.ExitAgentID(),
 		internalChainAgents:        rule.ChainAgentIDs(),

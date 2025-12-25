@@ -23,6 +23,7 @@ func TestMockForwardRuleRepository(t *testing.T) {
 		0,   // exitAgentID
 		nil, // chainAgentIDs
 		nil, // chainPortConfig
+		nil, // tunnelHops
 		vo.TunnelTypeWS, // tunnelType
 		"test-rule",
 		8080,
@@ -117,6 +118,7 @@ func TestMockForwardRuleRepository_ErrorInjection(t *testing.T) {
 		0,
 		nil,
 		nil,
+		nil,              // tunnelHops
 		vo.TunnelTypeWS, // tunnelType
 		"test-rule",
 		8080,

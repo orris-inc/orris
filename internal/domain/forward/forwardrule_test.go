@@ -197,6 +197,7 @@ func newTestForwardRule(params ruleParams) (*ForwardRule, error) {
 		params.ExitAgentID,
 		params.ChainAgentIDs,
 		params.ChainPortConfig,
+		nil, // tunnelHops
 		params.TunnelType,
 		params.Name,
 		params.ListenPort,
@@ -1708,7 +1709,8 @@ func TestForwardRule_Validate_RejectsInvalidRuleType(t *testing.T) {
 		1, shortID, 1, nil, // id, shortID, agentID, userID
 		vo.ForwardRuleType("invalid"),
 		0, nil, nil,
-		vo.TunnelTypeWS, // tunnelType
+		nil,               // tunnelHops
+		vo.TunnelTypeWS,   // tunnelType
 		"test", 8080,
 		"10.0.0.1", 9000, nil,
 		"", vo.IPVersionAuto, vo.ForwardProtocolTCP,
@@ -2041,6 +2043,7 @@ func TestGetEffectiveMultiplier(t *testing.T) {
 				tt.params.ExitAgentID,
 				tt.params.ChainAgentIDs,
 				tt.params.ChainPortConfig,
+				nil, // tunnelHops
 				tt.params.TunnelType,
 				tt.params.Name,
 				tt.params.ListenPort,
@@ -2133,6 +2136,7 @@ func TestTrafficBytesWithMultiplier(t *testing.T) {
 				tt.params.ExitAgentID,
 				tt.params.ChainAgentIDs,
 				tt.params.ChainPortConfig,
+				nil, // tunnelHops
 				tt.params.TunnelType,
 				tt.params.Name,
 				tt.params.ListenPort,
@@ -2215,6 +2219,7 @@ func TestTrafficMultiplierValidation(t *testing.T) {
 				params.ExitAgentID,
 				params.ChainAgentIDs,
 				params.ChainPortConfig,
+				nil, // tunnelHops
 				params.TunnelType,
 				params.Name,
 				params.ListenPort,
@@ -2263,6 +2268,7 @@ func TestGetRawBytes(t *testing.T) {
 		params.ExitAgentID,
 		params.ChainAgentIDs,
 		params.ChainPortConfig,
+		nil, // tunnelHops
 		params.TunnelType,
 		params.Name,
 		params.ListenPort,

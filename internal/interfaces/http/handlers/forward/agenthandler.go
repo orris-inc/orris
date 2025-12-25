@@ -537,11 +537,21 @@ func (h *AgentHandler) RefreshRule(c *gin.Context) {
 	// Look up the rule by short ID
 	rule, err := h.repo.GetBySID(ctx, shortID)
 	if err != nil {
-		h.logger.Warnw("rule not found",
+		h.logger.Warnw("failed to get rule",
 			"rule_id", ruleIDStr,
 			"short_id", shortID,
 			"agent_id", agentID,
 			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusNotFound, "rule not found")
+		return
+	}
+	if rule == nil {
+		h.logger.Warnw("rule not found",
+			"rule_id", ruleIDStr,
+			"short_id", shortID,
+			"agent_id", agentID,
 			"ip", c.ClientIP(),
 		)
 		utils.ErrorResponse(c, http.StatusNotFound, "rule not found")
@@ -1001,10 +1011,19 @@ func (h *AgentHandler) GetExitEndpoint(c *gin.Context) {
 	// Look up the internal agent ID by SID
 	exitAgent, err := h.agentRepo.GetBySID(ctx, exitAgentIDStr)
 	if err != nil {
-		h.logger.Warnw("exit agent not found",
+		h.logger.Warnw("failed to get exit agent",
 			"agent_id", exitAgentIDStr,
 			"entry_agent_id", entryAgentID,
 			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusNotFound, "exit agent not found")
+		return
+	}
+	if exitAgent == nil {
+		h.logger.Warnw("exit agent not found",
+			"agent_id", exitAgentIDStr,
+			"entry_agent_id", entryAgentID,
 			"ip", c.ClientIP(),
 		)
 		utils.ErrorResponse(c, http.StatusNotFound, "exit agent not found")
@@ -1334,11 +1353,21 @@ func (h *AgentHandler) VerifyTunnelHandshake(c *gin.Context) {
 	// Look up the rule by short ID
 	rule, err := h.repo.GetBySID(ctx, ruleShortID)
 	if err != nil {
-		h.logger.Warnw("rule not found for handshake verification",
+		h.logger.Warnw("failed to get rule for handshake verification",
 			"rule_id", req.RuleID,
 			"short_id", ruleShortID,
 			"exit_agent_id", exitAgentID,
 			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusNotFound, "rule not found")
+		return
+	}
+	if rule == nil {
+		h.logger.Warnw("rule not found for handshake verification",
+			"rule_id", req.RuleID,
+			"short_id", ruleShortID,
+			"exit_agent_id", exitAgentID,
 			"ip", c.ClientIP(),
 		)
 		utils.ErrorResponse(c, http.StatusNotFound, "rule not found")

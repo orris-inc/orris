@@ -19,7 +19,8 @@ type CreateUserForwardRuleCommand struct {
 	RuleType           string            // direct, entry, chain, direct_chain
 	ExitAgentShortID   string            // required for entry type (Stripe-style short ID without prefix)
 	ChainAgentShortIDs []string          // required for chain type (ordered list of Stripe-style short IDs without prefix)
-	ChainPortConfig    map[string]uint16 // required for direct_chain type (agent short_id -> listen port)
+	ChainPortConfig    map[string]uint16 // required for direct_chain type or hybrid chain direct hops (agent short_id -> listen port)
+	TunnelHops         *int              // number of hops using tunnel (nil=full tunnel, N=first N hops use tunnel) - for chain type only
 	TunnelType         string            // tunnel type: ws or tls (default: ws)
 	Name               string
 	ListenPort         uint16 // required for all types (direct, entry, chain, direct_chain)
@@ -204,6 +205,7 @@ func (uc *CreateUserForwardRuleUseCase) Execute(ctx context.Context, cmd CreateU
 		exitAgentID,
 		chainAgentIDs,
 		chainPortConfig,
+		cmd.TunnelHops,
 		tunnelType,
 		cmd.Name,
 		cmd.ListenPort,

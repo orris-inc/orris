@@ -18,7 +18,8 @@ type ForwardRuleModel struct {
 	RuleType          string         `gorm:"not null;default:direct;size:20"`                                     // direct, chain, direct_chain, websocket
 	ExitAgentID       *uint          `gorm:"index:idx_forward_exit_agent_id"`                                     // exit agent ID for chain/websocket forward (nullable)
 	ChainAgentIDs     datatypes.JSON `gorm:"type:json;default:null"`                                              // ordered array of intermediate agent IDs for chain forwarding
-	ChainPortConfig   datatypes.JSON `gorm:"type:json;default:null"`                                              // map of agent_id -> listen_port for direct_chain type
+	ChainPortConfig   datatypes.JSON `gorm:"type:json;default:null"`                                              // map of agent_id -> listen_port for direct_chain type or hybrid chain direct hops
+	TunnelHops        *int           `gorm:"column:tunnel_hops"`                                                  // number of hops using tunnel (nil=full tunnel, N=first N hops use tunnel)
 	TunnelType        string         `gorm:"not null;default:ws;size:10"`                                         // tunnel type: ws or tls
 	Name              string         `gorm:"not null;size:100;index:idx_forward_name"`
 	ListenPort        uint16         `gorm:"not null;uniqueIndex:idx_listen_port_agent"`

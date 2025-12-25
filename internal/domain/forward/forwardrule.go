@@ -19,7 +19,8 @@ type ForwardRule struct {
 	ruleType          vo.ForwardRuleType
 	exitAgentID       uint            // exit agent ID (required for entry type)
 	chainAgentIDs     []uint          // ordered array of intermediate agent IDs for chain forwarding
-	chainPortConfig   map[uint]uint16 // map of agent_id -> listen_port for direct_chain type
+	chainPortConfig   map[uint]uint16 // map of agent_id -> listen_port for direct_chain type or hybrid chain direct hops
+	tunnelHops        *int            // number of hops using tunnel (nil=full tunnel, N=first N hops use tunnel)
 	tunnelType        vo.TunnelType   // tunnel type: ws or tls (default: ws)
 	name              string
 	listenPort        uint16
@@ -44,6 +45,9 @@ type ForwardRule struct {
 // - direct: requires agentID, listenPort, (targetAddress+targetPort OR targetNodeID)
 // - entry: requires agentID, listenPort, exitAgentID, (targetAddress+targetPort OR targetNodeID)
 // - chain: requires agentID, listenPort, chainAgentIDs (at least 1), (targetAddress+targetPort OR targetNodeID)
+//   - optionally tunnelHops to create hybrid chain (first N hops tunnel, rest direct)
+//   - if tunnelHops > 0, chainPortConfig required for direct hops
+//
 // - direct_chain: requires agentID, listenPort, chainAgentIDs (at least 1), chainPortConfig, (targetAddress+targetPort OR targetNodeID)
 func NewForwardRule(
 	agentID uint,
@@ -52,6 +56,7 @@ func NewForwardRule(
 	exitAgentID uint,
 	chainAgentIDs []uint,
 	chainPortConfig map[uint]uint16,
+	tunnelHops *int,
 	tunnelType vo.TunnelType,
 	name string,
 	listenPort uint16,
@@ -151,6 +156,32 @@ func NewForwardRule(
 				return nil, fmt.Errorf("chain contains duplicate agent ID: %d", id)
 			}
 			seen[id] = true
+		}
+		// Validate tunnelHops for hybrid chain
+		if tunnelHops != nil {
+			if *tunnelHops < 0 {
+				return nil, fmt.Errorf("tunnel_hops cannot be negative")
+			}
+			// If tunnelHops > 0, validate chainPortConfig for direct hops
+			// Total hops = len(chainAgentIDs) (entry -> chain[0] -> chain[1] -> ... -> chain[n-1] -> target)
+			totalHops := len(chainAgentIDs)
+			if *tunnelHops > 0 && *tunnelHops < totalHops {
+				// This is a hybrid chain, need port config for direct hops
+				// Direct hops start from position tunnelHops
+				// Full chain: [agentID, chainAgentIDs[0], chainAgentIDs[1], ...]
+				// Position tunnelHops is the boundary node (receives tunnel, sends direct)
+				// Positions > tunnelHops are pure direct nodes
+				for i := *tunnelHops; i < len(chainAgentIDs); i++ {
+					chainAgentID := chainAgentIDs[i]
+					port, exists := chainPortConfig[chainAgentID]
+					if !exists {
+						return nil, fmt.Errorf("chain_port_config missing port for agent ID %d (required for direct hop at position %d)", chainAgentID, i+1)
+					}
+					if port == 0 {
+						return nil, fmt.Errorf("chain_port_config has invalid port for agent ID %d", chainAgentID)
+					}
+				}
+			}
 		}
 		// Chain rules require target information (at the end of chain)
 		hasTarget := targetAddress != "" && targetPort != 0
@@ -259,6 +290,7 @@ func NewForwardRule(
 		exitAgentID:       exitAgentID,
 		chainAgentIDs:     chainAgentIDs,
 		chainPortConfig:   chainPortConfig,
+		tunnelHops:        tunnelHops,
 		tunnelType:        tunnelType,
 		name:              name,
 		listenPort:        listenPort,
@@ -290,6 +322,7 @@ func ReconstructForwardRule(
 	exitAgentID uint,
 	chainAgentIDs []uint,
 	chainPortConfig map[uint]uint16,
+	tunnelHops *int,
 	tunnelType vo.TunnelType,
 	name string,
 	listenPort uint16,
@@ -353,6 +386,7 @@ func ReconstructForwardRule(
 		exitAgentID:       exitAgentID,
 		chainAgentIDs:     chainAgentIDs,
 		chainPortConfig:   chainPortConfig,
+		tunnelHops:        tunnelHops,
 		tunnelType:        tunnelType,
 		name:              name,
 		listenPort:        listenPort,
@@ -457,6 +491,77 @@ func (r *ForwardRule) ChainPortConfig() map[uint]uint16 {
 // TunnelType returns the tunnel type (ws or tls).
 func (r *ForwardRule) TunnelType() vo.TunnelType {
 	return r.tunnelType
+}
+
+// TunnelHops returns the number of hops using tunnel.
+// Returns nil for full tunnel mode (all hops use tunnel).
+// Returns N for hybrid mode (first N hops use tunnel, rest use direct).
+func (r *ForwardRule) TunnelHops() *int {
+	return r.tunnelHops
+}
+
+// IsHybridChain returns true if this is a hybrid chain rule
+// (chain rule with tunnelHops > 0 and tunnelHops < total hops).
+func (r *ForwardRule) IsHybridChain() bool {
+	if !r.ruleType.IsChain() {
+		return false
+	}
+	if r.tunnelHops == nil || *r.tunnelHops == 0 {
+		return false
+	}
+	totalHops := len(r.chainAgentIDs)
+	return *r.tunnelHops > 0 && *r.tunnelHops < totalHops
+}
+
+// NeedsTunnelAtPosition returns true if the hop at the given position needs tunnel.
+// Position 0 is entry agent, position N is chainAgentIDs[N-1].
+// For chain rules: all positions need tunnel unless tunnelHops is set.
+// For hybrid chain: positions < tunnelHops need tunnel for outbound.
+// For direct_chain: no positions need tunnel.
+func (r *ForwardRule) NeedsTunnelAtPosition(position int) bool {
+	if r.ruleType.IsDirectChain() {
+		return false
+	}
+	if !r.ruleType.IsChain() {
+		return false
+	}
+	// Full tunnel mode (nil, 0, or >= total hops means all hops use tunnel)
+	if r.tunnelHops == nil || *r.tunnelHops == 0 || *r.tunnelHops >= len(r.chainAgentIDs) {
+		return true
+	}
+	// Hybrid mode: positions < tunnelHops use tunnel for outbound connection
+	return position < *r.tunnelHops
+}
+
+// GetHopMode returns the hop mode for an agent at the given position.
+// Returns: "tunnel" (pure tunnel), "direct" (pure direct), or "boundary" (tunnel inbound, direct outbound).
+func (r *ForwardRule) GetHopMode(position int) string {
+	if r.ruleType.IsDirectChain() {
+		return "direct"
+	}
+	if !r.ruleType.IsChain() {
+		return "direct"
+	}
+
+	totalPositions := len(r.chainAgentIDs) + 1 // +1 for entry agent
+	isLast := position >= totalPositions-1
+
+	// Full tunnel mode (nil, 0, or >= total hops means all hops use tunnel)
+	if r.tunnelHops == nil || *r.tunnelHops == 0 || *r.tunnelHops >= len(r.chainAgentIDs) {
+		return "tunnel"
+	}
+
+	// Hybrid mode
+	inboundNeedsTunnel := position > 0 && position <= *r.tunnelHops
+	outboundNeedsTunnel := !isLast && position < *r.tunnelHops
+
+	if inboundNeedsTunnel && !outboundNeedsTunnel {
+		return "boundary"
+	}
+	if outboundNeedsTunnel {
+		return "tunnel"
+	}
+	return "direct"
 }
 
 // GetAgentListenPort returns the listen port for a specific agent in the chain.
@@ -941,6 +1046,47 @@ func (r *ForwardRule) UpdateTunnelType(tunnelType vo.TunnelType) error {
 	return nil
 }
 
+// UpdateTunnelHops updates the number of hops using tunnel for hybrid chain.
+// Set to nil or 0 for full tunnel mode (all hops use tunnel).
+// Set to N for hybrid mode (first N hops use tunnel, rest use direct).
+// Only valid for chain rules.
+func (r *ForwardRule) UpdateTunnelHops(tunnelHops *int) error {
+	if !r.ruleType.IsChain() {
+		return fmt.Errorf("tunnel_hops can only be set for chain type rules")
+	}
+
+	// Validate tunnelHops
+	if tunnelHops != nil {
+		if *tunnelHops < 0 {
+			return fmt.Errorf("tunnel_hops cannot be negative")
+		}
+		// Validate chainPortConfig for direct hops
+		totalHops := len(r.chainAgentIDs)
+		if *tunnelHops > 0 && *tunnelHops < totalHops {
+			// This is a hybrid chain, verify port config for direct hops
+			for i := *tunnelHops; i < len(r.chainAgentIDs); i++ {
+				chainAgentID := r.chainAgentIDs[i]
+				port, exists := r.chainPortConfig[chainAgentID]
+				if !exists || port == 0 {
+					return fmt.Errorf("chain_port_config missing valid port for agent ID %d (required for direct hop at position %d)", chainAgentID, i+1)
+				}
+			}
+		}
+	}
+
+	// Check if already set to the same value
+	if r.tunnelHops == nil && tunnelHops == nil {
+		return nil
+	}
+	if r.tunnelHops != nil && tunnelHops != nil && *r.tunnelHops == *tunnelHops {
+		return nil
+	}
+
+	r.tunnelHops = tunnelHops
+	r.updatedAt = time.Now()
+	return nil
+}
+
 // UpdateAgentID updates the entry agent ID.
 func (r *ForwardRule) UpdateAgentID(agentID uint) error {
 	if agentID == 0 {
@@ -1162,6 +1308,23 @@ func (r *ForwardRule) Validate() error {
 		}
 		if len(r.chainAgentIDs) == 0 {
 			return fmt.Errorf("chain agent IDs is required for chain forward")
+		}
+		// Validate tunnelHops for hybrid chain
+		if r.tunnelHops != nil {
+			if *r.tunnelHops < 0 {
+				return fmt.Errorf("tunnel_hops cannot be negative")
+			}
+			totalHops := len(r.chainAgentIDs)
+			if *r.tunnelHops > 0 && *r.tunnelHops < totalHops {
+				// This is a hybrid chain, verify port config for direct hops
+				for i := *r.tunnelHops; i < len(r.chainAgentIDs); i++ {
+					chainAgentID := r.chainAgentIDs[i]
+					port, exists := r.chainPortConfig[chainAgentID]
+					if !exists || port == 0 {
+						return fmt.Errorf("chain_port_config missing valid port for agent ID %d (required for direct hop)", chainAgentID)
+					}
+				}
+			}
 		}
 		// Chain rules require target information (at the end of chain)
 		hasTarget := r.targetAddress != "" && r.targetPort != 0

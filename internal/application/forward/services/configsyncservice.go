@@ -485,6 +485,17 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 
 		syncData.ChainPosition = chainPosition
 		syncData.IsLastInChain = isLast
+		syncData.TunnelHops = rule.TunnelHops()
+
+		// Determine hop mode for hybrid chain support
+		hopMode := rule.GetHopMode(chainPosition)
+		syncData.HopMode = hopMode
+
+		// For boundary nodes, set inbound/outbound modes
+		if hopMode == "boundary" {
+			syncData.InboundMode = "tunnel"
+			syncData.OutboundMode = "direct"
+		}
 
 		// Populate ChainAgentIDs (Stripe-style IDs)
 		// Full chain: [entry_agent] + chain_agents (matches GetChainPosition calculation)
@@ -531,26 +542,41 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 					syncData.NextHopAgentID = nextAgent.SID()
 					syncData.NextHopAddress = nextAgent.GetEffectiveTunnelAddress()
 
-					// Get tunnel ports from cached agent status
-					nextStatus, err := s.statusQuerier.GetStatus(ctx, nextHopAgentID)
-					if err != nil {
-						s.logger.Warnw("failed to get next hop agent status",
-							"rule_id", rule.ID(),
-							"next_hop_agent_id", nextHopAgentID,
-							"error", err,
-						)
-					} else if nextStatus != nil {
-						if nextStatus.WsListenPort > 0 {
-							syncData.NextHopWsPort = nextStatus.WsListenPort
+					// Check if outbound uses tunnel or direct based on hop mode
+					outboundNeedsTunnel := hopMode == "tunnel" || (hopMode == "boundary" && syncData.OutboundMode == "tunnel")
+					if !outboundNeedsTunnel && (hopMode == "direct" || hopMode == "boundary") {
+						// Direct connection mode: use chainPortConfig for next hop port
+						nextHopPort := rule.GetAgentListenPort(nextHopAgentID)
+						if nextHopPort > 0 {
+							syncData.NextHopPort = nextHopPort
 						}
-						if nextStatus.TlsListenPort > 0 {
-							syncData.NextHopTlsPort = nextStatus.TlsListenPort
+						// Generate connection token for direct hop authentication
+						if s.agentTokenService != nil {
+							nextHopToken, _ := s.agentTokenService.Generate(nextAgent.SID())
+							syncData.NextHopConnectionToken = nextHopToken
 						}
-						if nextStatus.WsListenPort == 0 && nextStatus.TlsListenPort == 0 {
-							s.logger.Debugw("next hop agent has no tunnel port configured or is offline",
+					} else {
+						// Tunnel mode: get tunnel ports from cached agent status
+						nextStatus, err := s.statusQuerier.GetStatus(ctx, nextHopAgentID)
+						if err != nil {
+							s.logger.Warnw("failed to get next hop agent status",
 								"rule_id", rule.ID(),
 								"next_hop_agent_id", nextHopAgentID,
+								"error", err,
 							)
+						} else if nextStatus != nil {
+							if nextStatus.WsListenPort > 0 {
+								syncData.NextHopWsPort = nextStatus.WsListenPort
+							}
+							if nextStatus.TlsListenPort > 0 {
+								syncData.NextHopTlsPort = nextStatus.TlsListenPort
+							}
+							if nextStatus.WsListenPort == 0 && nextStatus.TlsListenPort == 0 {
+								s.logger.Debugw("next hop agent has no tunnel port configured or is offline",
+									"rule_id", rule.ID(),
+									"next_hop_agent_id", nextHopAgentID,
+								)
+							}
 						}
 					}
 				}
@@ -559,6 +585,16 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 			// For exit agents, include target info
 			syncData.TargetAddress = targetAddress
 			syncData.TargetPort = targetPort
+		}
+
+		// For hybrid chain direct hops (boundary and pure direct), set listen port from chainPortConfig
+		if hopMode == "boundary" || hopMode == "direct" {
+			if chainPosition > 0 { // Not entry agent
+				listenPort := rule.GetAgentListenPort(agentID)
+				if listenPort > 0 {
+					syncData.ListenPort = listenPort
+				}
+			}
 		}
 
 	case "direct_chain":
