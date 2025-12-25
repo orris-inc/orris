@@ -68,9 +68,6 @@ func (uc *ReportSubscriptionUsageUseCase) Execute(ctx context.Context, cmd Repor
 	}
 
 	if len(cmd.Subscriptions) == 0 {
-		uc.logger.Infow("no subscription usage data to report",
-			"node_id", cmd.NodeID,
-		)
 		return &ReportSubscriptionUsageResult{
 			Success:              true,
 			SubscriptionsUpdated: 0,
@@ -102,10 +99,6 @@ func (uc *ReportSubscriptionUsageUseCase) Execute(ctx context.Context, cmd Repor
 
 	// If no valid items, return early
 	if len(validSIDs) == 0 {
-		uc.logger.Infow("no valid subscription usage data to report",
-			"node_id", cmd.NodeID,
-			"total_subscriptions", len(cmd.Subscriptions),
-		)
 		return &ReportSubscriptionUsageResult{
 			Success:              true,
 			SubscriptionsUpdated: 0,
@@ -155,9 +148,8 @@ func (uc *ReportSubscriptionUsageUseCase) Execute(ctx context.Context, cmd Repor
 		return nil, fmt.Errorf("failed to batch record subscription usage: %w", err)
 	}
 
-	uc.logger.Infow("subscription usage reported successfully",
+	uc.logger.Debugw("subscription usage reported",
 		"node_id", cmd.NodeID,
-		"total_subscriptions", len(cmd.Subscriptions),
 		"subscriptions_recorded", len(validItems),
 	)
 

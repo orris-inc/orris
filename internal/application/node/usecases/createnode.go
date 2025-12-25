@@ -60,22 +60,17 @@ func NewCreateNodeUseCase(
 }
 
 func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand) (*CreateNodeResult, error) {
-	uc.logger.Infow("executing create node use case", "name", cmd.Name)
-
 	// Validate command
 	if err := uc.validateCommand(cmd); err != nil {
-		uc.logger.Errorw("invalid create node command", "error", err)
 		return nil, err
 	}
 
 	// Check for duplicate node name
 	exists, err := uc.nodeRepo.ExistsByName(ctx, cmd.Name)
 	if err != nil {
-		uc.logger.Errorw("failed to check existing node by name", "name", cmd.Name, "error", err)
 		return nil, fmt.Errorf("failed to check existing node: %w", err)
 	}
 	if exists {
-		uc.logger.Warnw("node with name already exists", "name", cmd.Name)
 		return nil, errors.NewConflictError("node with this name already exists", cmd.Name)
 	}
 
@@ -83,11 +78,9 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 	if cmd.ServerAddress != "" {
 		exists, err = uc.nodeRepo.ExistsByAddress(ctx, cmd.ServerAddress, int(cmd.AgentPort))
 		if err != nil {
-			uc.logger.Errorw("failed to check existing node by address", "address", cmd.ServerAddress, "port", cmd.AgentPort, "error", err)
 			return nil, fmt.Errorf("failed to check existing node: %w", err)
 		}
 		if exists {
-			uc.logger.Warnw("node with address and port already exists", "address", cmd.ServerAddress, "port", cmd.AgentPort)
 			return nil, errors.NewConflictError("node with this server address and port already exists", fmt.Sprintf("%s:%d", cmd.ServerAddress, cmd.AgentPort))
 		}
 	}
@@ -95,20 +88,17 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 	// Create value objects
 	serverAddress, err := vo.NewServerAddress(cmd.ServerAddress)
 	if err != nil {
-		uc.logger.Errorw("invalid server address", "error", err)
 		return nil, fmt.Errorf("invalid server address: %w", err)
 	}
 
 	// Validate and create protocol
 	protocol := vo.Protocol(cmd.Protocol)
 	if !protocol.IsValid() {
-		uc.logger.Errorw("invalid protocol", "protocol", cmd.Protocol)
 		return nil, errors.NewValidationError(fmt.Sprintf("unsupported protocol: %s", cmd.Protocol))
 	}
 
 	// Validate protocol and method compatibility
 	if err := uc.validateProtocolMethodCompatibility(protocol, cmd.Method); err != nil {
-		uc.logger.Errorw("protocol and method mismatch", "protocol", cmd.Protocol, "method", cmd.Method, "error", err)
 		return nil, err
 	}
 
@@ -120,7 +110,6 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 	if protocol.IsShadowsocks() {
 		encryptionConfig, err = vo.NewEncryptionConfig(cmd.Method)
 		if err != nil {
-			uc.logger.Errorw("invalid encryption config", "error", err)
 			return nil, fmt.Errorf("invalid encryption config: %w", err)
 		}
 
@@ -128,7 +117,6 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 		if cmd.Plugin != nil && *cmd.Plugin != "" {
 			pluginConfig, err = vo.NewPluginConfig(*cmd.Plugin, cmd.PluginOpts)
 			if err != nil {
-				uc.logger.Errorw("invalid plugin config", "error", err)
 				return nil, fmt.Errorf("invalid plugin config: %w", err)
 			}
 		}
@@ -151,7 +139,6 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 			cmd.SNI,
 		)
 		if err != nil {
-			uc.logger.Errorw("invalid trojan config", "error", err)
 			return nil, fmt.Errorf("invalid trojan config: %w", err)
 		}
 		trojanConfig = &tc
@@ -175,7 +162,6 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 		id.NewNodeID,
 	)
 	if err != nil {
-		uc.logger.Errorw("failed to create node entity", "error", err)
 		return nil, fmt.Errorf("failed to create node: %w", err)
 	}
 
@@ -184,7 +170,7 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 
 	// Persist the node
 	if err := uc.nodeRepo.Create(ctx, nodeEntity); err != nil {
-		uc.logger.Errorw("failed to persist node", "error", err)
+		uc.logger.Errorw("failed to persist node", "error", err, "name", cmd.Name)
 		return nil, fmt.Errorf("failed to save node: %w", err)
 	}
 

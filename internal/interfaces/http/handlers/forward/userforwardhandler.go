@@ -89,14 +89,14 @@ func (h *UserForwardRuleHandler) CreateRule(c *gin.Context) {
 	// Get user_id from context (set by auth middleware)
 	userIDInterface, exists := c.Get("user_id")
 	if !exists {
-		h.logger.Warnw("user_id not found in context")
+		h.logger.Warnw("user_id not found in context", "ip", c.ClientIP())
 		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
 		return
 	}
 
 	userID, ok := userIDInterface.(uint)
 	if !ok {
-		h.logger.Warnw("invalid user_id type in context", "user_id", userIDInterface)
+		h.logger.Warnw("invalid user_id type in context", "user_id", userIDInterface, "ip", c.ClientIP())
 		utils.ErrorResponse(c, http.StatusInternalServerError, "invalid user ID type")
 		return
 	}
@@ -200,14 +200,14 @@ func (h *UserForwardRuleHandler) ListRules(c *gin.Context) {
 	// Get user_id from context (set by auth middleware)
 	userIDInterface, exists := c.Get("user_id")
 	if !exists {
-		h.logger.Warnw("user_id not found in context")
+		h.logger.Warnw("user_id not found in context", "ip", c.ClientIP())
 		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
 		return
 	}
 
 	userID, ok := userIDInterface.(uint)
 	if !ok {
-		h.logger.Warnw("invalid user_id type in context", "user_id", userIDInterface)
+		h.logger.Warnw("invalid user_id type in context", "user_id", userIDInterface, "ip", c.ClientIP())
 		utils.ErrorResponse(c, http.StatusInternalServerError, "invalid user ID type")
 		return
 	}
@@ -248,14 +248,14 @@ func (h *UserForwardRuleHandler) GetUsage(c *gin.Context) {
 	// Get user_id from context (set by auth middleware)
 	userIDInterface, exists := c.Get("user_id")
 	if !exists {
-		h.logger.Warnw("user_id not found in context")
+		h.logger.Warnw("user_id not found in context", "ip", c.ClientIP())
 		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
 		return
 	}
 
 	userID, ok := userIDInterface.(uint)
 	if !ok {
-		h.logger.Warnw("invalid user_id type in context", "user_id", userIDInterface)
+		h.logger.Warnw("invalid user_id type in context", "user_id", userIDInterface, "ip", c.ClientIP())
 		utils.ErrorResponse(c, http.StatusInternalServerError, "invalid user ID type")
 		return
 	}
@@ -464,14 +464,14 @@ func (h *UserForwardRuleHandler) ListAgents(c *gin.Context) {
 	// Get user_id from context (set by auth middleware)
 	userIDInterface, exists := c.Get("user_id")
 	if !exists {
-		h.logger.Warnw("user_id not found in context")
+		h.logger.Warnw("user_id not found in context", "ip", c.ClientIP())
 		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
 		return
 	}
 
 	userID, ok := userIDInterface.(uint)
 	if !ok {
-		h.logger.Warnw("invalid user_id type in context", "user_id", userIDInterface)
+		h.logger.Warnw("invalid user_id type in context", "user_id", userIDInterface, "ip", c.ClientIP())
 		utils.ErrorResponse(c, http.StatusInternalServerError, "invalid user ID type")
 		return
 	}
@@ -509,14 +509,14 @@ func (h *UserForwardRuleHandler) ReorderRules(c *gin.Context) {
 	// Get user_id from context (set by auth middleware)
 	userIDInterface, exists := c.Get("user_id")
 	if !exists {
-		h.logger.Warnw("user_id not found in context")
+		h.logger.Warnw("user_id not found in context", "ip", c.ClientIP())
 		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
 		return
 	}
 
 	userID, ok := userIDInterface.(uint)
 	if !ok {
-		h.logger.Warnw("invalid user_id type in context", "user_id", userIDInterface)
+		h.logger.Warnw("invalid user_id type in context", "user_id", userIDInterface, "ip", c.ClientIP())
 		utils.ErrorResponse(c, http.StatusInternalServerError, "invalid user ID type")
 		return
 	}

@@ -14,6 +14,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/forward"
 	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/infrastructure/auth"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -26,10 +27,11 @@ const (
 // ProbeService handles probe operations for forward rules.
 // It implements agent.MessageHandler interface.
 type ProbeService struct {
-	repo          forward.Repository
-	agentRepo     forward.AgentRepository
-	nodeRepo      node.NodeRepository
-	statusQuerier ProbeStatusQuerier
+	repo              forward.Repository
+	agentRepo         forward.AgentRepository
+	nodeRepo          node.NodeRepository
+	statusQuerier     ProbeStatusQuerier
+	agentTokenService *auth.AgentTokenService
 
 	// Hub interface for sending messages
 	hub ProbeHub
@@ -59,16 +61,18 @@ func NewProbeService(
 	nodeRepo node.NodeRepository,
 	statusQuerier ProbeStatusQuerier,
 	hub ProbeHub,
+	tokenSigningSecret string,
 	log logger.Interface,
 ) *ProbeService {
 	return &ProbeService{
-		repo:          repo,
-		agentRepo:     agentRepo,
-		nodeRepo:      nodeRepo,
-		statusQuerier: statusQuerier,
-		hub:           hub,
-		pendingProbes: make(map[string]chan *dto.ProbeTaskResult),
-		logger:        log,
+		repo:              repo,
+		agentRepo:         agentRepo,
+		nodeRepo:          nodeRepo,
+		statusQuerier:     statusQuerier,
+		agentTokenService: auth.NewAgentTokenService(tokenSigningSecret),
+		hub:               hub,
+		pendingProbes:     make(map[string]chan *dto.ProbeTaskResult),
+		logger:            log,
 	}
 }
 
@@ -232,6 +236,7 @@ func (s *ProbeService) probeDirectRule(ctx context.Context, rule *forward.Forwar
 }
 
 // probeEntryRule probes an entry rule (entry → exit → target).
+// Uses tunnel_ping to measure actual tunnel RTT instead of simple TCP connection test.
 func (s *ProbeService) probeEntryRule(ctx context.Context, rule *forward.ForwardRule, ipVersion vo.IPVersion, response *dto.RuleProbeResponse) (*dto.RuleProbeResponse, error) {
 	entryAgentID := rule.AgentID()
 	exitAgentID := rule.ExitAgentID()
@@ -252,6 +257,13 @@ func (s *ProbeService) probeEntryRule(ctx context.Context, rule *forward.Forward
 		return response, nil
 	}
 
+	// Get entry agent info (for generating tunnel token)
+	entryAgent, err := s.agentRepo.GetByID(ctx, entryAgentID)
+	if err != nil || entryAgent == nil {
+		response.Error = "entry agent not found"
+		return response, nil
+	}
+
 	// Get exit agent info
 	exitAgent, err := s.agentRepo.GetByID(ctx, exitAgentID)
 	if err != nil || exitAgent == nil {
@@ -268,6 +280,7 @@ func (s *ProbeService) probeEntryRule(ctx context.Context, rule *forward.Forward
 
 	// Select port based on tunnel type
 	var tunnelPort uint16
+	tunnelType := rule.TunnelType().String()
 	if rule.TunnelType().IsTLS() {
 		tunnelPort = exitStatus.TlsListenPort
 		if tunnelPort == 0 {
@@ -282,7 +295,6 @@ func (s *ProbeService) probeEntryRule(ctx context.Context, rule *forward.Forward
 		}
 	}
 
-	// Step 1: Probe tunnel (entry → exit)
 	// Use GetEffectiveTunnelAddress for tunnel connections (prefers tunnel_address over public_address)
 	tunnelAddr := exitAgent.GetEffectiveTunnelAddress()
 	if tunnelAddr == "" {
@@ -290,19 +302,28 @@ func (s *ProbeService) probeEntryRule(ctx context.Context, rule *forward.Forward
 		return response, nil
 	}
 
+	// Generate tunnel token for entry agent
+	tunnelToken, _ := s.agentTokenService.Generate(entryAgent.SID())
+
 	ruleStripeID := rule.SID()
-	tunnelLatency, err := s.sendProbeTask(ctx, entryAgentID, ruleStripeID, dto.ProbeTaskTypeTunnel,
-		tunnelAddr, tunnelPort, "tcp")
+
+	// Step 1: Probe tunnel using tunnel_ping (measures actual tunnel RTT)
+	tunnelPingResult, err := s.sendTunnelPingTask(ctx, entryAgentID, ruleStripeID,
+		tunnelAddr, tunnelPort, tunnelType, tunnelToken, 3)
 	if err != nil {
-		response.Error = "tunnel probe failed: " + err.Error()
+		response.Error = "tunnel ping failed: " + err.Error()
 		return response, nil
 	}
-	response.TunnelLatencyMs = &tunnelLatency
+
+	// Set tunnel latency results
+	response.TunnelLatencyMs = &tunnelPingResult.AvgLatencyMs
+	response.TunnelMinLatencyMs = &tunnelPingResult.MinLatencyMs
+	response.TunnelMaxLatencyMs = &tunnelPingResult.MaxLatencyMs
+	response.TunnelPacketLoss = &tunnelPingResult.PacketLoss
 
 	// Step 2: Probe target from exit agent (exit → target)
 	if !s.hub.IsAgentOnline(exitAgentID) {
 		response.Error = "exit agent not connected, cannot probe target"
-		response.TunnelLatencyMs = &tunnelLatency
 		return response, nil
 	}
 
@@ -315,19 +336,16 @@ func (s *ProbeService) probeEntryRule(ctx context.Context, rule *forward.Forward
 		targetNode, err := s.nodeRepo.GetByID(ctx, *rule.TargetNodeID())
 		if err != nil {
 			response.Error = "failed to get target node: " + err.Error()
-			response.TunnelLatencyMs = &tunnelLatency
 			return response, nil
 		}
 		if targetNode == nil {
 			response.Error = "target node not found"
-			response.TunnelLatencyMs = &tunnelLatency
 			return response, nil
 		}
 		// Resolve target address based on IP version preference
 		targetAddress = s.resolveNodeAddress(targetNode, ipVersion)
 		if targetAddress == "" {
 			response.Error = "target node has no available address for ip_version: " + ipVersion.String()
-			response.TunnelLatencyMs = &tunnelLatency
 			return response, nil
 		}
 		// Use node's agent port if rule's target port is not set
@@ -341,13 +359,12 @@ func (s *ProbeService) probeEntryRule(ctx context.Context, rule *forward.Forward
 		targetAddress, targetPort, "tcp")
 	if err != nil {
 		response.Error = "target probe failed: " + err.Error()
-		response.TunnelLatencyMs = &tunnelLatency
 		return response, nil
 	}
 
 	response.Success = true
 	response.TargetLatencyMs = &targetLatency
-	totalLatency := tunnelLatency + targetLatency
+	totalLatency := tunnelPingResult.AvgLatencyMs + targetLatency
 	response.TotalLatencyMs = &totalLatency
 	return response, nil
 }
@@ -830,6 +847,103 @@ func (s *ProbeService) sendProbeTask(
 		return 0, &probeError{message: "probe timeout"}
 	case <-ctx.Done():
 		return 0, ctx.Err()
+	}
+}
+
+// TunnelPingResult contains detailed tunnel ping results.
+type TunnelPingResult struct {
+	AvgLatencyMs int64
+	MinLatencyMs int64
+	MaxLatencyMs int64
+	PacketLoss   float64
+	PingsSent    int
+	PingsRecv    int
+}
+
+// sendTunnelPingTask sends a tunnel_ping probe task to an agent and waits for the result.
+func (s *ProbeService) sendTunnelPingTask(
+	ctx context.Context,
+	agentID uint,
+	ruleID string,
+	target string,
+	port uint16,
+	tunnelType string,
+	tunnelToken string,
+	pingCount int,
+) (*TunnelPingResult, error) {
+	taskID := uuid.New().String()
+
+	// Create result channel
+	resultChan := make(chan *dto.ProbeTaskResult, 1)
+	s.pendingProbesMu.Lock()
+	s.pendingProbes[taskID] = resultChan
+	s.pendingProbesMu.Unlock()
+
+	defer func() {
+		s.pendingProbesMu.Lock()
+		delete(s.pendingProbes, taskID)
+		s.pendingProbesMu.Unlock()
+	}()
+
+	// Get agent
+	agent, err := s.agentRepo.GetByID(ctx, agentID)
+	if err != nil {
+		return nil, err
+	}
+	if agent == nil {
+		return nil, forward.ErrAgentNotFound
+	}
+
+	// Set defaults
+	if pingCount <= 0 {
+		pingCount = 3
+	}
+
+	// Send tunnel ping task
+	task := &dto.ProbeTask{
+		ID:                taskID,
+		Type:              dto.ProbeTaskTypeTunnelPing,
+		RuleID:            ruleID,
+		Target:            target,
+		Port:              port,
+		Timeout:           int(probeTimeout.Milliseconds()),
+		TunnelType:        tunnelType,
+		TunnelToken:       tunnelToken,
+		PingCount:         pingCount,
+		PingIntervalMs:    200,
+		TunnelConnTimeout: int(probeTimeout.Milliseconds()),
+	}
+
+	msg := &dto.HubMessage{
+		Type:      dto.MsgTypeProbeTask,
+		AgentID:   agent.SID(),
+		Timestamp: time.Now().Unix(),
+		Data:      task,
+	}
+
+	if err := s.hub.SendMessageToAgent(agentID, msg); err != nil {
+		return nil, err
+	}
+
+	// Wait for result with extended timeout for tunnel ping
+	tunnelPingTimeout := probeTimeout + time.Duration(pingCount)*time.Second
+	select {
+	case result := <-resultChan:
+		if !result.Success {
+			return nil, &probeError{message: result.Error}
+		}
+		return &TunnelPingResult{
+			AvgLatencyMs: result.AvgLatencyMs,
+			MinLatencyMs: result.MinLatencyMs,
+			MaxLatencyMs: result.MaxLatencyMs,
+			PacketLoss:   result.PacketLoss,
+			PingsSent:    result.PingsSent,
+			PingsRecv:    result.PingsRecv,
+		}, nil
+	case <-time.After(tunnelPingTimeout):
+		return nil, &probeError{message: "tunnel ping timeout"}
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 

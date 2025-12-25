@@ -62,23 +62,18 @@ func NewGetNodeUseCase(
 
 // Execute retrieves a node by SID
 func (uc *GetNodeUseCase) Execute(ctx context.Context, query GetNodeQuery) (*GetNodeResult, error) {
-	uc.logger.Infow("executing get node use case", "sid", query.SID)
-
 	// Validate query
 	if err := uc.validateQuery(query); err != nil {
-		uc.logger.Errorw("invalid get node query", "error", err)
 		return nil, err
 	}
 
 	// Retrieve the node
 	nodeEntity, err := uc.nodeRepo.GetBySID(ctx, query.SID)
 	if err != nil {
-		uc.logger.Errorw("failed to get node by SID", "sid", query.SID, "error", err)
 		return nil, fmt.Errorf("failed to get node: %w", err)
 	}
 
 	if nodeEntity == nil {
-		uc.logger.Warnw("node not found", "sid", query.SID)
 		return nil, errors.NewNotFoundError("node not found")
 	}
 
@@ -124,7 +119,7 @@ func (uc *GetNodeUseCase) Execute(ctx context.Context, query GetNodeQuery) (*Get
 		}
 	}
 
-	uc.logger.Infow("node retrieved successfully", "node_id", nodeEntity.ID(), "sid", nodeEntity.SID(), "name", nodeEntity.Name())
+	uc.logger.Debugw("node retrieved", "sid", nodeEntity.SID())
 
 	return &GetNodeResult{
 		Node: nodeDTO,

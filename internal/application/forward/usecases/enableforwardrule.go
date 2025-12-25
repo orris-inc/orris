@@ -66,7 +66,7 @@ func (uc *EnableForwardRuleUseCase) Execute(ctx context.Context, cmd EnableForwa
 		// Notify entry agent
 		go func() {
 			if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), rule.AgentID(), cmd.ShortID, "added"); err != nil {
-				uc.logger.Infow("config sync notification skipped for entry agent", "rule_id", cmd.ShortID, "agent_id", rule.AgentID(), "reason", err.Error())
+				uc.logger.Debugw("config sync notification skipped for entry agent", "rule_id", cmd.ShortID, "agent_id", rule.AgentID(), "reason", err.Error())
 			}
 		}()
 
@@ -77,7 +77,7 @@ func (uc *EnableForwardRuleUseCase) Execute(ctx context.Context, cmd EnableForwa
 			if rule.ExitAgentID() != 0 {
 				go func() {
 					if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), rule.ExitAgentID(), cmd.ShortID, "added"); err != nil {
-						uc.logger.Infow("config sync notification skipped for exit agent", "rule_id", cmd.ShortID, "agent_id", rule.ExitAgentID(), "reason", err.Error())
+						uc.logger.Debugw("config sync notification skipped for exit agent", "rule_id", cmd.ShortID, "agent_id", rule.ExitAgentID(), "reason", err.Error())
 					}
 				}()
 			}
@@ -86,7 +86,7 @@ func (uc *EnableForwardRuleUseCase) Execute(ctx context.Context, cmd EnableForwa
 			for _, agentID := range rule.ChainAgentIDs() {
 				go func(aid uint) {
 					if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), aid, cmd.ShortID, "added"); err != nil {
-						uc.logger.Infow("config sync notification skipped for chain agent", "rule_id", cmd.ShortID, "agent_id", aid, "reason", err.Error())
+						uc.logger.Debugw("config sync notification skipped for chain agent", "rule_id", cmd.ShortID, "agent_id", aid, "reason", err.Error())
 					}
 				}(agentID)
 			}

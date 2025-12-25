@@ -67,7 +67,7 @@ func (uc *DeleteForwardRuleUseCase) Execute(ctx context.Context, cmd DeleteForwa
 	if wasEnabled && uc.configSyncSvc != nil {
 		go func() {
 			if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), agentID, ruleShortID, "removed"); err != nil {
-				uc.logger.Infow("config sync notification skipped", "rule_id", ruleShortID, "reason", err.Error())
+				uc.logger.Debugw("config sync notification skipped", "rule_id", ruleShortID, "reason", err.Error())
 			}
 		}()
 	}

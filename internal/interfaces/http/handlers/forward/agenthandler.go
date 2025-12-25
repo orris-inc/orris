@@ -20,15 +20,16 @@ import (
 
 // AgentHandler handles RESTful agent API requests for forward client
 type AgentHandler struct {
-	repo               forward.Repository
-	agentRepo          forward.AgentRepository
-	nodeRepo           node.NodeRepository
-	reportStatusUC     *usecases.ReportAgentStatusUseCase
-	statusQuerier      usecases.AgentStatusQuerier
-	tokenSigningSecret string
-	agentTokenService  *auth.AgentTokenService
-	trafficRecorder    adapters.ForwardTrafficRecorder
-	logger             logger.Interface
+	repo                   forward.Repository
+	agentRepo              forward.AgentRepository
+	nodeRepo               node.NodeRepository
+	reportStatusUC         *usecases.ReportAgentStatusUseCase
+	reportRuleSyncStatusUC *usecases.ReportRuleSyncStatusUseCase
+	statusQuerier          usecases.AgentStatusQuerier
+	tokenSigningSecret     string
+	agentTokenService      *auth.AgentTokenService
+	trafficRecorder        adapters.ForwardTrafficRecorder
+	logger                 logger.Interface
 }
 
 // NewAgentHandler creates a new AgentHandler instance
@@ -37,21 +38,23 @@ func NewAgentHandler(
 	agentRepo forward.AgentRepository,
 	nodeRepo node.NodeRepository,
 	reportStatusUC *usecases.ReportAgentStatusUseCase,
+	reportRuleSyncStatusUC *usecases.ReportRuleSyncStatusUseCase,
 	statusQuerier usecases.AgentStatusQuerier,
 	tokenSigningSecret string,
 	trafficRecorder adapters.ForwardTrafficRecorder,
 	logger logger.Interface,
 ) *AgentHandler {
 	return &AgentHandler{
-		repo:               repo,
-		agentRepo:          agentRepo,
-		nodeRepo:           nodeRepo,
-		reportStatusUC:     reportStatusUC,
-		statusQuerier:      statusQuerier,
-		tokenSigningSecret: tokenSigningSecret,
-		agentTokenService:  auth.NewAgentTokenService(tokenSigningSecret),
-		trafficRecorder:    trafficRecorder,
-		logger:             logger,
+		repo:                   repo,
+		agentRepo:              agentRepo,
+		nodeRepo:               nodeRepo,
+		reportStatusUC:         reportStatusUC,
+		reportRuleSyncStatusUC: reportRuleSyncStatusUC,
+		statusQuerier:          statusQuerier,
+		tokenSigningSecret:     tokenSigningSecret,
+		agentTokenService:      auth.NewAgentTokenService(tokenSigningSecret),
+		trafficRecorder:        trafficRecorder,
+		logger:                 logger,
 	}
 }
 
@@ -65,6 +68,11 @@ type ForwardRuleTrafficItem struct {
 // ReportTrafficRequest represents traffic report request from forward client
 type ReportTrafficRequest struct {
 	Rules []ForwardRuleTrafficItem `json:"rules" binding:"required,dive"`
+}
+
+// ReportRuleSyncStatusRequest represents rule sync status report request from forward client
+type ReportRuleSyncStatusRequest struct {
+	Rules []dto.RuleSyncStatusItem `json:"rules" binding:"required,dive"`
 }
 
 // getAuthenticatedAgentID extracts the authenticated forward agent ID from context.
@@ -95,7 +103,7 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 		return
 	}
 
-	h.logger.Infow("forward client requesting enabled rules",
+	h.logger.Debugw("forward client requesting enabled rules",
 		"agent_id", agentID,
 		"ip", c.ClientIP(),
 	)
@@ -154,7 +162,7 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 		allRules = append(allRules, rule)
 	}
 
-	h.logger.Infow("enabled forward rules retrieved successfully",
+	h.logger.Debugw("enabled forward rules retrieved successfully",
 		"rule_count", len(allRules),
 		"entry_rules", len(rules),
 		"exit_rules", len(exitRules),
@@ -520,10 +528,9 @@ func (h *AgentHandler) RefreshRule(c *gin.Context) {
 		return
 	}
 
-	// Parse rule ID from path (Stripe-style ID like "fr_xK9mP2vL3nQ")
+	// Validate rule ID from path (Stripe-style ID like "fr_xK9mP2vL3nQ")
 	ruleIDStr := c.Param("rule_id")
-	shortID, err := id.ParseForwardRuleID(ruleIDStr)
-	if err != nil {
+	if err := id.ValidatePrefix(ruleIDStr, id.PrefixForwardRule); err != nil {
 		h.logger.Warnw("invalid rule_id parameter",
 			"rule_id", ruleIDStr,
 			"agent_id", agentID,
@@ -534,12 +541,11 @@ func (h *AgentHandler) RefreshRule(c *gin.Context) {
 		return
 	}
 
-	// Look up the rule by short ID
-	rule, err := h.repo.GetBySID(ctx, shortID)
+	// Look up the rule by SID (database stores full prefixed ID like "fr_xxx")
+	rule, err := h.repo.GetBySID(ctx, ruleIDStr)
 	if err != nil {
 		h.logger.Warnw("failed to get rule",
 			"rule_id", ruleIDStr,
-			"short_id", shortID,
 			"agent_id", agentID,
 			"error", err,
 			"ip", c.ClientIP(),
@@ -550,7 +556,6 @@ func (h *AgentHandler) RefreshRule(c *gin.Context) {
 	if rule == nil {
 		h.logger.Warnw("rule not found",
 			"rule_id", ruleIDStr,
-			"short_id", shortID,
 			"agent_id", agentID,
 			"ip", c.ClientIP(),
 		)
@@ -797,7 +802,7 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 		return
 	}
 
-	h.logger.Infow("forward client traffic report received",
+	h.logger.Debugw("forward client traffic report received",
 		"rule_count", len(req.Rules),
 		"agent_id", agentID,
 		"ip", c.ClientIP(),
@@ -959,7 +964,7 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 		successCount++
 	}
 
-	h.logger.Infow("forward traffic report processed",
+	h.logger.Debugw("forward traffic report processed",
 		"success_count", successCount,
 		"error_count", errorCount,
 		"denied_count", deniedCount,
@@ -1302,6 +1307,67 @@ func (h *AgentHandler) ReportStatus(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "status reported successfully", nil)
 }
 
+// ReportRuleSyncStatus handles POST /forward-agent-api/rule-sync-status
+func (h *AgentHandler) ReportRuleSyncStatus(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	// Get authenticated agent ID from context
+	agentID, err := h.getAuthenticatedAgentID(c)
+	if err != nil {
+		h.logger.Warnw("failed to get authenticated agent ID",
+			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	// Parse request body
+	var req ReportRuleSyncStatusRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid rule sync status report request body",
+			"error", err,
+			"agent_id", agentID,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	h.logger.Debugw("forward agent rule sync status report received",
+		"agent_id", agentID,
+		"rules_count", len(req.Rules),
+		"ip", c.ClientIP(),
+	)
+
+	// Execute use case
+	input := &dto.ReportRuleSyncStatusInput{
+		AgentID: agentID,
+		Rules:   req.Rules,
+	}
+
+	if err := h.reportRuleSyncStatusUC.Execute(ctx, input); err != nil {
+		h.logger.Errorw("failed to report rule sync status",
+			"error", err,
+			"agent_id", agentID,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to report rule sync status")
+		return
+	}
+
+	h.logger.Infow("rule sync status reported successfully",
+		"agent_id", agentID,
+		"rules_count", len(req.Rules),
+		"ip", c.ClientIP(),
+	)
+
+	// All rules were successfully stored since use case succeeded
+	utils.SuccessResponse(c, http.StatusOK, "rule sync status reported successfully", map[string]any{
+		"rules_updated": len(req.Rules),
+	})
+}
+
 // VerifyTunnelHandshake handles POST /forward-agent-api/verify-tunnel-handshake
 // This endpoint allows exit agents to verify tunnel handshake requests from entry agents
 // by validating the entry agent's token and checking rule access permissions.
@@ -1337,9 +1403,8 @@ func (h *AgentHandler) VerifyTunnelHandshake(c *gin.Context) {
 		"ip", c.ClientIP(),
 	)
 
-	// Parse rule ID (Stripe-style ID like "fr_xK9mP2vL3nQ")
-	ruleShortID, err := id.ParseForwardRuleID(req.RuleID)
-	if err != nil {
+	// Validate rule ID format (Stripe-style ID like "fr_xK9mP2vL3nQ")
+	if err := id.ValidatePrefix(req.RuleID, id.PrefixForwardRule); err != nil {
 		h.logger.Warnw("invalid rule_id in handshake verification",
 			"rule_id", req.RuleID,
 			"exit_agent_id", exitAgentID,
@@ -1350,12 +1415,11 @@ func (h *AgentHandler) VerifyTunnelHandshake(c *gin.Context) {
 		return
 	}
 
-	// Look up the rule by short ID
-	rule, err := h.repo.GetBySID(ctx, ruleShortID)
+	// Look up the rule by SID (database stores full prefixed ID like "fr_xxx")
+	rule, err := h.repo.GetBySID(ctx, req.RuleID)
 	if err != nil {
 		h.logger.Warnw("failed to get rule for handshake verification",
 			"rule_id", req.RuleID,
-			"short_id", ruleShortID,
 			"exit_agent_id", exitAgentID,
 			"error", err,
 			"ip", c.ClientIP(),
@@ -1366,7 +1430,6 @@ func (h *AgentHandler) VerifyTunnelHandshake(c *gin.Context) {
 	if rule == nil {
 		h.logger.Warnw("rule not found for handshake verification",
 			"rule_id", req.RuleID,
-			"short_id", ruleShortID,
 			"exit_agent_id", exitAgentID,
 			"ip", c.ClientIP(),
 		)

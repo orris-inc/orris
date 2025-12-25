@@ -50,24 +50,23 @@ func (m *NodeOwnerMiddleware) RequireOwnership() gin.HandlerFunc {
 		}
 
 		// Get node ID from URL parameter
-		nodeIDParam := c.Param("id")
-		if nodeIDParam == "" {
+		nodeID := c.Param("id")
+		if nodeID == "" {
 			utils.ErrorResponseWithError(c, errors.NewValidationError("node ID is required"))
 			c.Abort()
 			return
 		}
 
-		// Parse node SID
-		nodeSID, err := id.ParseNodeID(nodeIDParam)
-		if err != nil {
-			m.logger.Warnw("invalid node ID format", "node_id", nodeIDParam, "error", err)
+		// Validate node SID format (e.g., "node_xxx")
+		if err := id.ValidatePrefix(nodeID, id.PrefixNode); err != nil {
+			m.logger.Warnw("invalid node ID format", "node_id", nodeID, "error", err)
 			utils.ErrorResponseWithError(c, errors.NewValidationError("invalid node ID format"))
 			c.Abort()
 			return
 		}
 
-		// Get node from repository
-		nodeEntity, err := m.nodeRepo.GetBySID(c.Request.Context(), nodeSID)
+		// Get node from repository (database stores full prefixed ID like "node_xxx")
+		nodeEntity, err := m.nodeRepo.GetBySID(c.Request.Context(), nodeID)
 		if err != nil {
 			utils.ErrorResponseWithError(c, err)
 			c.Abort()
@@ -78,7 +77,7 @@ func (m *NodeOwnerMiddleware) RequireOwnership() gin.HandlerFunc {
 		if !nodeEntity.IsOwnedBy(userID) {
 			m.logger.Warnw("user attempted to access node they don't own",
 				"user_id", userID,
-				"node_sid", nodeSID,
+				"node_id", nodeID,
 				"node_owner", nodeEntity.UserID(),
 			)
 			utils.ErrorResponseWithError(c, errors.NewForbiddenError("access denied to this node"))
@@ -88,7 +87,7 @@ func (m *NodeOwnerMiddleware) RequireOwnership() gin.HandlerFunc {
 
 		// Store node in context for handler use
 		c.Set("node", nodeEntity)
-		c.Set("node_sid", nodeSID)
+		c.Set("node_id", nodeID)
 
 		c.Next()
 	}

@@ -82,7 +82,7 @@ func (m *ForwardAgentTokenMiddleware) RequireForwardAgentToken() gin.HandlerFunc
 		c.Set("forward_agent_id", result.AgentID)
 		c.Set("forward_agent_name", result.AgentName)
 
-		m.logger.Infow("forward agent authenticated",
+		m.logger.Debugw("forward agent authenticated",
 			"agent_id", result.AgentStripeID,
 			"agent_name", result.AgentName,
 			"ip", c.ClientIP(),

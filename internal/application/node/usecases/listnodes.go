@@ -72,12 +72,6 @@ func NewListNodesUseCase(
 }
 
 func (uc *ListNodesUseCase) Execute(ctx context.Context, query ListNodesQuery) (*ListNodesResult, error) {
-	uc.logger.Infow("executing list nodes use case",
-		"limit", query.Limit,
-		"offset", query.Offset,
-		"status", query.Status,
-	)
-
 	// Validate and normalize pagination parameters
 	if query.Limit <= 0 {
 		query.Limit = 20
@@ -251,7 +245,7 @@ func (uc *ListNodesUseCase) Execute(ctx context.Context, query ListNodesQuery) (
 		}
 	}
 
-	uc.logger.Infow("nodes listed successfully",
+	uc.logger.Debugw("nodes listed",
 		"count", len(nodeDTOs),
 		"total", totalCount,
 	)

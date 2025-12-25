@@ -586,6 +586,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	createForwardAgentUC := forwardUsecases.NewCreateForwardAgentUseCase(forwardAgentRepo, agentTokenSvc, log)
 	// Initialize forward agent status adapter early for getForwardAgentUC
 	forwardAgentStatusAdapter := adapters.NewForwardAgentStatusAdapter(redisClient, log)
+	ruleSyncStatusAdapter := adapters.NewRuleSyncStatusAdapter(redisClient, log)
 	getForwardAgentUC := forwardUsecases.NewGetForwardAgentUseCase(forwardAgentRepo, forwardAgentStatusAdapter, log)
 	updateForwardAgentUC := forwardUsecases.NewUpdateForwardAgentUseCase(forwardAgentRepo, resourceGroupRepo, log)
 	deleteForwardAgentUC := forwardUsecases.NewDeleteForwardAgentUseCase(forwardAgentRepo, log)
@@ -598,6 +599,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Initialize agent last seen updater for status reporting
 	agentLastSeenUpdater := adapters.NewAgentLastSeenUpdaterAdapter(forwardAgentRepo)
 	getAgentStatusUC := forwardUsecases.NewGetAgentStatusUseCase(forwardAgentRepo, forwardAgentStatusAdapter, log)
+	getRuleSyncStatusUC := forwardUsecases.NewGetRuleSyncStatusUseCase(forwardAgentRepo, ruleSyncStatusAdapter, log)
 	getForwardAgentTokenUC := forwardUsecases.NewGetForwardAgentTokenUseCase(forwardAgentRepo, log)
 	generateInstallScriptUC := forwardUsecases.NewGenerateInstallScriptUseCase(forwardAgentRepo, log)
 
@@ -615,6 +617,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		regenerateForwardAgentTokenUC,
 		getForwardAgentTokenUC,
 		getAgentStatusUC,
+		getRuleSyncStatusUC,
 		generateInstallScriptUC,
 		serverBaseURL,
 	)
@@ -623,6 +626,12 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		forwardAgentStatusAdapter,
 		forwardAgentStatusAdapter, // statusQuerier (same adapter implements both interfaces)
 		agentLastSeenUpdater,
+		log,
+	)
+	reportRuleSyncStatusUC := forwardUsecases.NewReportRuleSyncStatusUseCase(
+		forwardAgentRepo,
+		ruleSyncStatusAdapter,
+		forwardRuleRepo,
 		log,
 	)
 
@@ -635,7 +644,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	)
 
 	// Initialize forward agent API handler for client to fetch rules and report traffic
-	forwardAgentAPIHandler := forwardHandlers.NewAgentHandler(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, reportAgentStatusUC, forwardAgentStatusAdapter, cfg.Forward.TokenSigningSecret, forwardTrafficRecorder, log)
+	forwardAgentAPIHandler := forwardHandlers.NewAgentHandler(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, reportAgentStatusUC, reportRuleSyncStatusUC, forwardAgentStatusAdapter, cfg.Forward.TokenSigningSecret, forwardTrafficRecorder, log)
 
 	// Initialize forward agent token middleware
 	forwardAgentTokenMiddleware := middleware.NewForwardAgentTokenMiddleware(validateForwardAgentTokenUC, log)
@@ -648,7 +657,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	agentHub.RegisterStatusHandler(forwardStatusHandler)
 
 	// Initialize and register probe service for forward domain
-	probeService := forwardServices.NewProbeService(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, forwardAgentStatusAdapter, agentHub, log)
+	probeService := forwardServices.NewProbeService(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, forwardAgentStatusAdapter, agentHub, cfg.Forward.TokenSigningSecret, log)
 	agentHub.RegisterMessageHandler(probeService)
 
 	// Initialize and register config sync service for forward domain

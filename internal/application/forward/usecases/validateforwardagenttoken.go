@@ -80,7 +80,7 @@ func (uc *ValidateForwardAgentTokenUseCase) Execute(
 		return nil, fmt.Errorf("agent is not enabled")
 	}
 
-	uc.logger.Infow("forward agent token validated successfully",
+	uc.logger.Debugw("forward agent token validated successfully",
 		"agent_id", agentStripeID,
 		"agent_name", agent.Name(),
 		"ip", cmd.IPAddress,

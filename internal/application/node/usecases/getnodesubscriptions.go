@@ -79,10 +79,9 @@ func (uc *GetNodeSubscriptionsUseCase) Execute(ctx context.Context, cmd GetNodeS
 	// Convert subscriptions to agent subscriptions response
 	subscriptionInfos := dto.ToNodeSubscriptionsResponse(subscriptions, hmacSecret, encryptionMethod)
 
-	uc.logger.Infow("node subscriptions retrieved successfully",
+	uc.logger.Debugw("node subscriptions retrieved",
 		"node_id", cmd.NodeID,
 		"subscription_count", len(subscriptionInfos.Subscriptions),
-		"encryption_method", encryptionMethod,
 	)
 
 	return &GetNodeSubscriptionsResult{

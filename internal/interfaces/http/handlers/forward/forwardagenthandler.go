@@ -27,6 +27,7 @@ type ForwardAgentHandler struct {
 	regenerateTokenUC       *usecases.RegenerateForwardAgentTokenUseCase
 	getAgentTokenUC         *usecases.GetForwardAgentTokenUseCase
 	getAgentStatusUC        *usecases.GetAgentStatusUseCase
+	getRuleSyncStatusUC     *usecases.GetRuleSyncStatusUseCase
 	generateInstallScriptUC *usecases.GenerateInstallScriptUseCase
 	serverURL               string
 	logger                  logger.Interface
@@ -44,6 +45,7 @@ func NewForwardAgentHandler(
 	regenerateTokenUC *usecases.RegenerateForwardAgentTokenUseCase,
 	getAgentTokenUC *usecases.GetForwardAgentTokenUseCase,
 	getAgentStatusUC *usecases.GetAgentStatusUseCase,
+	getRuleSyncStatusUC *usecases.GetRuleSyncStatusUseCase,
 	generateInstallScriptUC *usecases.GenerateInstallScriptUseCase,
 	serverURL string,
 ) *ForwardAgentHandler {
@@ -58,6 +60,7 @@ func NewForwardAgentHandler(
 		regenerateTokenUC:       regenerateTokenUC,
 		getAgentTokenUC:         getAgentTokenUC,
 		getAgentStatusUC:        getAgentStatusUC,
+		getRuleSyncStatusUC:     getRuleSyncStatusUC,
 		generateInstallScriptUC: generateInstallScriptUC,
 		serverURL:               serverURL,
 		logger:                  logger.NewLogger(),
@@ -91,7 +94,7 @@ type UpdateAgentStatusRequest struct {
 func (h *ForwardAgentHandler) CreateAgent(c *gin.Context) {
 	var req CreateForwardAgentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Warnw("invalid request body for create forward agent", "error", err)
+		h.logger.Warnw("invalid request body for create forward agent", "error", err, "ip", c.ClientIP())
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
@@ -170,7 +173,7 @@ func (h *ForwardAgentHandler) UpdateAgent(c *gin.Context) {
 
 	var req UpdateForwardAgentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Warnw("invalid request body for update forward agent", "short_id", shortID, "error", err)
+		h.logger.Warnw("invalid request body for update forward agent", "short_id", shortID, "error", err, "ip", c.ClientIP())
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
@@ -247,7 +250,7 @@ func (h *ForwardAgentHandler) DisableAgent(c *gin.Context) {
 func (h *ForwardAgentHandler) UpdateStatus(c *gin.Context) {
 	var req UpdateAgentStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Warnw("invalid request body for update agent status", "error", err)
+		h.logger.Warnw("invalid request body for update agent status", "error", err, "ip", c.ClientIP())
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
@@ -346,6 +349,45 @@ func (h *ForwardAgentHandler) GetInstallScript(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "Install command generated successfully", result)
+}
+
+// GetRuleSyncStatus handles GET /api/forward-agents/:agent_id/rule-status
+func (h *ForwardAgentHandler) GetRuleSyncStatus(c *gin.Context) {
+	// Get agent ID from path parameter
+	agentID, err := parseAgentShortID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	h.logger.Debugw("getting rule sync status",
+		"agent_id", agentID,
+		"ip", c.ClientIP(),
+	)
+
+	// Execute use case
+	query := usecases.GetRuleSyncStatusQuery{
+		ShortID: agentID,
+	}
+
+	result, err := h.getRuleSyncStatusUC.Execute(c.Request.Context(), query)
+	if err != nil {
+		h.logger.Errorw("failed to get rule sync status",
+			"agent_id", agentID,
+			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	h.logger.Infow("rule sync status retrieved successfully",
+		"agent_id", agentID,
+		"rules_count", len(result.Rules),
+		"ip", c.ClientIP(),
+	)
+
+	utils.SuccessResponse(c, http.StatusOK, "", result)
 }
 
 // parseAgentShortID validates a prefixed agent ID and returns the SID (e.g., "fa_xK9mP2vL3nQ").

@@ -110,14 +110,14 @@ type UpdateForwardRuleRequest struct {
 func (h *ForwardHandler) CreateRule(c *gin.Context) {
 	var req CreateForwardRuleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Warnw("invalid request body for create forward rule", "error", err)
+		h.logger.Warnw("invalid request body for create forward rule", "error", err, "ip", c.ClientIP())
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
 	// Validate Stripe-style IDs (database stores full SID with prefix)
 	if err := id.ValidatePrefix(req.AgentID, id.PrefixForwardAgent); err != nil {
-		h.logger.Warnw("invalid agent_id format", "agent_id", req.AgentID, "error", err)
+		h.logger.Warnw("invalid agent_id format", "agent_id", req.AgentID, "error", err, "ip", c.ClientIP())
 		utils.ErrorResponseWithError(c, errors.NewValidationError("invalid agent_id format, expected fa_xxxxx"))
 		return
 	}
@@ -126,7 +126,7 @@ func (h *ForwardHandler) CreateRule(c *gin.Context) {
 	var exitAgentShortID string
 	if req.ExitAgentID != "" {
 		if err := id.ValidatePrefix(req.ExitAgentID, id.PrefixForwardAgent); err != nil {
-			h.logger.Warnw("invalid exit_agent_id format", "exit_agent_id", req.ExitAgentID, "error", err)
+			h.logger.Warnw("invalid exit_agent_id format", "exit_agent_id", req.ExitAgentID, "error", err, "ip", c.ClientIP())
 			utils.ErrorResponseWithError(c, errors.NewValidationError("invalid exit_agent_id format, expected fa_xxxxx"))
 			return
 		}
@@ -139,7 +139,7 @@ func (h *ForwardHandler) CreateRule(c *gin.Context) {
 		chainAgentShortIDs = make([]string, len(req.ChainAgentIDs))
 		for i, chainAgentID := range req.ChainAgentIDs {
 			if err := id.ValidatePrefix(chainAgentID, id.PrefixForwardAgent); err != nil {
-				h.logger.Warnw("invalid chain_agent_id format", "chain_agent_id", chainAgentID, "error", err)
+				h.logger.Warnw("invalid chain_agent_id format", "chain_agent_id", chainAgentID, "error", err, "ip", c.ClientIP())
 				utils.ErrorResponseWithError(c, errors.NewValidationError("invalid chain_agent_id format, expected fa_xxxxx"))
 				return
 			}
@@ -154,7 +154,7 @@ func (h *ForwardHandler) CreateRule(c *gin.Context) {
 		for agentIDStr, port := range req.ChainPortConfig {
 			// Validate agent ID from chain_port_config
 			if err := id.ValidatePrefix(agentIDStr, id.PrefixForwardAgent); err != nil {
-				h.logger.Warnw("invalid agent_id in chain_port_config", "agent_id", agentIDStr, "error", err)
+				h.logger.Warnw("invalid agent_id in chain_port_config", "agent_id", agentIDStr, "error", err, "ip", c.ClientIP())
 				utils.ErrorResponseWithError(c, errors.NewValidationError("invalid agent_id in chain_port_config, expected fa_xxxxx"))
 				return
 			}
@@ -165,7 +165,7 @@ func (h *ForwardHandler) CreateRule(c *gin.Context) {
 	var targetNodeSID string
 	if req.TargetNodeID != "" {
 		if err := id.ValidatePrefix(req.TargetNodeID, id.PrefixNode); err != nil {
-			h.logger.Warnw("invalid target_node_id format", "target_node_id", req.TargetNodeID, "error", err)
+			h.logger.Warnw("invalid target_node_id format", "target_node_id", req.TargetNodeID, "error", err, "ip", c.ClientIP())
 			utils.ErrorResponseWithError(c, errors.NewValidationError("invalid target_node_id format, expected node_xxxxx"))
 			return
 		}
@@ -230,7 +230,7 @@ func (h *ForwardHandler) UpdateRule(c *gin.Context) {
 
 	var req UpdateForwardRuleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Warnw("invalid request body for update forward rule", "short_id", shortID, "error", err)
+		h.logger.Warnw("invalid request body for update forward rule", "short_id", shortID, "error", err, "ip", c.ClientIP())
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
@@ -239,7 +239,7 @@ func (h *ForwardHandler) UpdateRule(c *gin.Context) {
 	var agentShortID *string
 	if req.AgentID != nil {
 		if err := id.ValidatePrefix(*req.AgentID, id.PrefixForwardAgent); err != nil {
-			h.logger.Warnw("invalid agent_id format", "agent_id", *req.AgentID, "error", err)
+			h.logger.Warnw("invalid agent_id format", "agent_id", *req.AgentID, "error", err, "ip", c.ClientIP())
 			utils.ErrorResponseWithError(c, errors.NewValidationError("invalid agent_id format, expected fa_xxxxx"))
 			return
 		}
@@ -250,7 +250,7 @@ func (h *ForwardHandler) UpdateRule(c *gin.Context) {
 	var exitAgentShortID *string
 	if req.ExitAgentID != nil {
 		if err := id.ValidatePrefix(*req.ExitAgentID, id.PrefixForwardAgent); err != nil {
-			h.logger.Warnw("invalid exit_agent_id format", "exit_agent_id", *req.ExitAgentID, "error", err)
+			h.logger.Warnw("invalid exit_agent_id format", "exit_agent_id", *req.ExitAgentID, "error", err, "ip", c.ClientIP())
 			utils.ErrorResponseWithError(c, errors.NewValidationError("invalid exit_agent_id format, expected fa_xxxxx"))
 			return
 		}
@@ -263,7 +263,7 @@ func (h *ForwardHandler) UpdateRule(c *gin.Context) {
 		chainAgentShortIDs = make([]string, len(req.ChainAgentIDs))
 		for i, chainAgentID := range req.ChainAgentIDs {
 			if err := id.ValidatePrefix(chainAgentID, id.PrefixForwardAgent); err != nil {
-				h.logger.Warnw("invalid chain_agent_id format", "chain_agent_id", chainAgentID, "error", err)
+				h.logger.Warnw("invalid chain_agent_id format", "chain_agent_id", chainAgentID, "error", err, "ip", c.ClientIP())
 				utils.ErrorResponseWithError(c, errors.NewValidationError("invalid chain_agent_id format, expected fa_xxxxx"))
 				return
 			}
@@ -278,7 +278,7 @@ func (h *ForwardHandler) UpdateRule(c *gin.Context) {
 		for agentIDStr, port := range req.ChainPortConfig {
 			// Validate agent ID from chain_port_config
 			if err := id.ValidatePrefix(agentIDStr, id.PrefixForwardAgent); err != nil {
-				h.logger.Warnw("invalid agent_id in chain_port_config", "agent_id", agentIDStr, "error", err)
+				h.logger.Warnw("invalid agent_id in chain_port_config", "agent_id", agentIDStr, "error", err, "ip", c.ClientIP())
 				utils.ErrorResponseWithError(c, errors.NewValidationError("invalid agent_id in chain_port_config, expected fa_xxxxx"))
 				return
 			}
@@ -296,7 +296,7 @@ func (h *ForwardHandler) UpdateRule(c *gin.Context) {
 		} else {
 			// Validate Stripe-style ID (database stores full SID with prefix)
 			if err := id.ValidatePrefix(*req.TargetNodeID, id.PrefixNode); err != nil {
-				h.logger.Warnw("invalid target_node_id format", "target_node_id", *req.TargetNodeID, "error", err)
+				h.logger.Warnw("invalid target_node_id format", "target_node_id", *req.TargetNodeID, "error", err, "ip", c.ClientIP())
 				utils.ErrorResponseWithError(c, errors.NewValidationError("invalid target_node_id format, expected node_xxxxx"))
 				return
 			}
@@ -423,7 +423,7 @@ type UpdateStatusRequest struct {
 func (h *ForwardHandler) UpdateStatus(c *gin.Context) {
 	var req UpdateStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Warnw("invalid request body for update status", "error", err)
+		h.logger.Warnw("invalid request body for update status", "error", err, "ip", c.ClientIP())
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
@@ -516,7 +516,7 @@ type ForwardRuleOrder struct {
 func (h *ForwardHandler) ReorderRules(c *gin.Context) {
 	var req ReorderForwardRulesRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Warnw("invalid request body for reorder rules", "error", err)
+		h.logger.Warnw("invalid request body for reorder rules", "error", err, "ip", c.ClientIP())
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
@@ -525,7 +525,7 @@ func (h *ForwardHandler) ReorderRules(c *gin.Context) {
 	ruleOrders := make([]usecases.RuleOrder, len(req.RuleOrders))
 	for i, order := range req.RuleOrders {
 		if err := id.ValidatePrefix(order.RuleID, id.PrefixForwardRule); err != nil {
-			h.logger.Warnw("invalid rule_id format", "rule_id", order.RuleID, "error", err)
+			h.logger.Warnw("invalid rule_id format", "rule_id", order.RuleID, "error", err, "ip", c.ClientIP())
 			utils.ErrorResponseWithError(c, errors.NewValidationError("invalid rule_id format, expected fr_xxxxx"))
 			return
 		}

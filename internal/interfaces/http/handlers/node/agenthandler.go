@@ -129,12 +129,6 @@ func (h *AgentHandler) GetConfig(c *gin.Context) {
 	// Get optional node_type query parameter
 	nodeType := c.Query("node_type")
 
-	h.logger.Infow("node configuration request received",
-		"node_id", nodeID,
-		"node_type", nodeType,
-		"ip", c.ClientIP(),
-	)
-
 	// Execute use case
 	cmd := usecases.GetNodeConfigCommand{
 		NodeID:   nodeID,
@@ -143,11 +137,6 @@ func (h *AgentHandler) GetConfig(c *gin.Context) {
 
 	result, err := h.getNodeConfigUC.Execute(ctx, cmd)
 	if err != nil {
-		h.logger.Errorw("failed to get node config",
-			"error", err,
-			"node_id", nodeID,
-		)
-
 		// Determine appropriate status code based on error
 		statusCode := http.StatusInternalServerError
 		message := "failed to retrieve node configuration"
@@ -163,11 +152,6 @@ func (h *AgentHandler) GetConfig(c *gin.Context) {
 		utils.ErrorResponse(c, statusCode, message)
 		return
 	}
-
-	h.logger.Infow("node configuration retrieved",
-		"node_id", nodeID,
-		"ip", c.ClientIP(),
-	)
 
 	// Return success response
 	utils.SuccessResponse(c, http.StatusOK, "node configuration retrieved successfully", result.Config)
@@ -187,11 +171,6 @@ func (h *AgentHandler) GetSubscriptions(c *gin.Context) {
 		return
 	}
 
-	h.logger.Infow("node subscriptions request received",
-		"node_id", nodeID,
-		"ip", c.ClientIP(),
-	)
-
 	// Execute use case
 	cmd := usecases.GetNodeSubscriptionsCommand{
 		NodeID: nodeID,
@@ -199,19 +178,9 @@ func (h *AgentHandler) GetSubscriptions(c *gin.Context) {
 
 	result, err := h.getNodeSubscriptionsUC.Execute(ctx, cmd)
 	if err != nil {
-		h.logger.Errorw("failed to get node subscriptions",
-			"error", err,
-			"node_id", nodeID,
-		)
 		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to retrieve subscription list")
 		return
 	}
-
-	h.logger.Infow("node subscriptions retrieved",
-		"node_id", nodeID,
-		"subscription_count", len(result.Subscriptions.Subscriptions),
-		"ip", c.ClientIP(),
-	)
 
 	// Return success response
 	utils.SuccessResponse(c, http.StatusOK, "subscription list retrieved successfully", result.Subscriptions.Subscriptions)
@@ -237,17 +206,10 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 		h.logger.Warnw("invalid usage report request body",
 			"error", err,
 			"node_id", nodeID,
-			"ip", c.ClientIP(),
 		)
 		utils.ErrorResponse(c, http.StatusBadRequest, "invalid request body")
 		return
 	}
-
-	h.logger.Infow("usage report received",
-		"node_id", nodeID,
-		"subscription_count", len(subscriptions),
-		"ip", c.ClientIP(),
-	)
 
 	// Execute use case
 	cmd := usecases.ReportSubscriptionUsageCommand{
@@ -257,19 +219,9 @@ func (h *AgentHandler) ReportTraffic(c *gin.Context) {
 
 	result, err := h.reportSubscriptionUsageUC.Execute(ctx, cmd)
 	if err != nil {
-		h.logger.Errorw("failed to report subscription usage",
-			"error", err,
-			"node_id", nodeID,
-		)
 		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to process usage report")
 		return
 	}
-
-	h.logger.Infow("usage reported successfully",
-		"node_id", nodeID,
-		"subscriptions_updated", result.SubscriptionsUpdated,
-		"ip", c.ClientIP(),
-	)
 
 	// Return success response
 	utils.SuccessResponse(c, http.StatusOK, "usage reported successfully", map[string]any{
@@ -297,18 +249,10 @@ func (h *AgentHandler) UpdateStatus(c *gin.Context) {
 		h.logger.Warnw("invalid status report request body",
 			"error", err,
 			"node_id", nodeID,
-			"ip", c.ClientIP(),
 		)
 		utils.ErrorResponse(c, http.StatusBadRequest, "invalid request body")
 		return
 	}
-
-	h.logger.Infow("node status update received",
-		"node_id", nodeID,
-		"cpu", status.CPU,
-		"memory", status.Mem,
-		"ip", c.ClientIP(),
-	)
 
 	// Execute use case
 	cmd := usecases.ReportNodeStatusCommand{
@@ -318,18 +262,9 @@ func (h *AgentHandler) UpdateStatus(c *gin.Context) {
 
 	_, err = h.reportNodeStatusUC.Execute(ctx, cmd)
 	if err != nil {
-		h.logger.Errorw("failed to report node status",
-			"error", err,
-			"node_id", nodeID,
-		)
 		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to process status report")
 		return
 	}
-
-	h.logger.Infow("node status updated successfully",
-		"node_id", nodeID,
-		"ip", c.ClientIP(),
-	)
 
 	// Return success response
 	utils.SuccessResponse(c, http.StatusOK, "status updated successfully", map[string]any{
@@ -357,17 +292,10 @@ func (h *AgentHandler) UpdateOnlineSubscriptions(c *gin.Context) {
 		h.logger.Warnw("invalid online subscriptions report request body",
 			"error", err,
 			"node_id", nodeID,
-			"ip", c.ClientIP(),
 		)
 		utils.ErrorResponse(c, http.StatusBadRequest, "invalid request body")
 		return
 	}
-
-	h.logger.Infow("online subscriptions update received",
-		"node_id", nodeID,
-		"subscription_count", len(req.Subscriptions),
-		"ip", c.ClientIP(),
-	)
 
 	// Execute use case
 	cmd := usecases.ReportOnlineSubscriptionsCommand{
@@ -377,19 +305,9 @@ func (h *AgentHandler) UpdateOnlineSubscriptions(c *gin.Context) {
 
 	result, err := h.reportOnlineSubscriptionsUC.Execute(ctx, cmd)
 	if err != nil {
-		h.logger.Errorw("failed to report online subscriptions",
-			"error", err,
-			"node_id", nodeID,
-		)
 		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to process online subscriptions report")
 		return
 	}
-
-	h.logger.Infow("online subscriptions updated successfully",
-		"node_id", nodeID,
-		"online_count", result.OnlineCount,
-		"ip", c.ClientIP(),
-	)
 
 	// Return success response
 	utils.SuccessResponse(c, http.StatusOK, "online subscriptions updated successfully", map[string]any{

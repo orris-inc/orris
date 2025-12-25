@@ -50,26 +50,24 @@ func (s *ServiceDDD) CreateUser(ctx context.Context, request dto.CreateUserReque
 
 // UpdateUser updates an existing user by external UUID (Stripe-style ID)
 func (s *ServiceDDD) UpdateUser(ctx context.Context, uuid string, request dto.UpdateUserRequest) (*dto.UserResponse, error) {
-	// Extract short ID from prefixed UUID (usr_xxx -> xxx)
-	shortID, err := id.ParseUserID(uuid)
-	if err != nil {
+	// Validate Stripe-style ID format (usr_xxx), database stores full prefixed ID
+	if err := id.ValidatePrefix(uuid, id.PrefixUser); err != nil {
 		return nil, errors.NewValidationError("invalid user ID format")
 	}
 
 	if err := s.updateUserUC.ValidateRequest(request); err != nil {
 		return nil, err
 	}
-	return s.updateUserUC.Execute(ctx, shortID, request)
+	return s.updateUserUC.Execute(ctx, uuid, request)
 }
 
 // GetUserByUUID retrieves a user by external UUID (Stripe-style ID)
 func (s *ServiceDDD) GetUserByUUID(ctx context.Context, uuid string) (*dto.UserResponse, error) {
-	// Extract short ID from prefixed UUID (usr_xxx -> xxx)
-	shortID, err := id.ParseUserID(uuid)
-	if err != nil {
+	// Validate Stripe-style ID format (usr_xxx), database stores full prefixed ID
+	if err := id.ValidatePrefix(uuid, id.PrefixUser); err != nil {
 		return nil, errors.NewValidationError("invalid user ID format")
 	}
-	return s.getUserUC.ExecuteBySID(ctx, shortID)
+	return s.getUserUC.ExecuteBySID(ctx, uuid)
 }
 
 // GetUserByID retrieves a user by internal ID (for internal use)

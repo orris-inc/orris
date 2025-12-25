@@ -7,8 +7,10 @@ type ProbeTaskType string
 const (
 	// ProbeTaskTypeTarget probes target reachability from agent.
 	ProbeTaskTypeTarget ProbeTaskType = "target"
-	// ProbeTaskTypeTunnel probes tunnel connectivity (entry to exit).
+	// ProbeTaskTypeTunnel probes tunnel connectivity (entry to exit) via TCP connection test.
 	ProbeTaskTypeTunnel ProbeTaskType = "tunnel"
+	// ProbeTaskTypeTunnelPing measures tunnel latency by sending ping/pong through the tunnel.
+	ProbeTaskTypeTunnelPing ProbeTaskType = "tunnel_ping"
 )
 
 // ProbeTask represents a probe task to be executed by the agent.
@@ -20,6 +22,13 @@ type ProbeTask struct {
 	Port     uint16        `json:"port"`
 	Protocol string        `json:"protocol"`
 	Timeout  int           `json:"timeout"` // milliseconds
+
+	// TunnelPing specific fields
+	TunnelType        string `json:"tunnel_type,omitempty"`         // "ws" or "tls"
+	TunnelToken       string `json:"tunnel_token,omitempty"`        // connection token for tunnel handshake
+	PingCount         int    `json:"ping_count,omitempty"`          // number of pings (default: 3)
+	PingIntervalMs    int    `json:"ping_interval_ms,omitempty"`    // interval between pings in ms (default: 200)
+	TunnelConnTimeout int    `json:"tunnel_conn_timeout,omitempty"` // tunnel connection timeout in ms
 }
 
 // ProbeTaskResult represents the result of a single probe task.
@@ -30,6 +39,14 @@ type ProbeTaskResult struct {
 	Success   bool          `json:"success"`
 	LatencyMs int64         `json:"latency_ms"`
 	Error     string        `json:"error,omitempty"`
+
+	// TunnelPing specific results
+	MinLatencyMs int64   `json:"min_latency_ms,omitempty"` // minimum RTT
+	MaxLatencyMs int64   `json:"max_latency_ms,omitempty"` // maximum RTT
+	AvgLatencyMs int64   `json:"avg_latency_ms,omitempty"` // average RTT
+	PacketLoss   float64 `json:"packet_loss,omitempty"`    // packet loss percentage (0-100)
+	PingsSent    int     `json:"pings_sent,omitempty"`     // number of pings sent
+	PingsRecv    int     `json:"pings_recv,omitempty"`     // number of pongs received
 }
 
 // ChainHopLatency represents the latency of a single hop in the chain.
@@ -50,9 +67,14 @@ type RuleProbeResponse struct {
 	RuleID          string             `json:"rule_id"`   // Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ")
 	RuleType        string             `json:"rule_type"` // direct, entry, chain, direct_chain
 	Success         bool               `json:"success"`
-	TunnelLatencyMs *int64             `json:"tunnel_latency_ms,omitempty"` // entry only: entry→exit
+	TunnelLatencyMs *int64             `json:"tunnel_latency_ms,omitempty"` // entry only: entry→exit (avg)
 	TargetLatencyMs *int64             `json:"target_latency_ms,omitempty"` // agent→target
 	ChainLatencies  []*ChainHopLatency `json:"chain_latencies,omitempty"`   // chain/direct_chain: per-hop latencies
 	TotalLatencyMs  *int64             `json:"total_latency_ms,omitempty"`  // total round-trip
 	Error           string             `json:"error,omitempty"`
+
+	// TunnelPing detailed results (when tunnel_ping probe is used)
+	TunnelMinLatencyMs *int64   `json:"tunnel_min_latency_ms,omitempty"` // minimum tunnel RTT
+	TunnelMaxLatencyMs *int64   `json:"tunnel_max_latency_ms,omitempty"` // maximum tunnel RTT
+	TunnelPacketLoss   *float64 `json:"tunnel_packet_loss,omitempty"`    // tunnel packet loss percentage
 }

@@ -193,7 +193,7 @@ func (r *SubscriptionRepositoryImpl) GetActiveSubscriptionsByNodeID(ctx context.
 		return nil, fmt.Errorf("failed to map subscriptions: %w", err)
 	}
 
-	r.logger.Infow("retrieved active subscriptions for node",
+	r.logger.Debugw("retrieved active subscriptions for node",
 		"node_id", nodeID,
 		"group_ids", groupIDs,
 		"plan_ids", planIDs,

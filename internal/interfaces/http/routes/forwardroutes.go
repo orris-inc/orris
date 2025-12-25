@@ -72,6 +72,9 @@ func SetupForwardRoutes(engine *gin.Engine, cfg *ForwardRouteConfig) {
 		// Runtime status (from agent reports)
 		forwardAgents.GET("/:id/status", cfg.ForwardAgentHandler.GetAgentStatus)
 
+		// Rule sync status (from agent reports)
+		forwardAgents.GET("/:id/rule-status", cfg.ForwardAgentHandler.GetRuleSyncStatus)
+
 		// Token operations
 		forwardAgents.GET("/:id/token", cfg.ForwardAgentHandler.GetToken)
 		forwardAgents.POST("/:id/regenerate-token", cfg.ForwardAgentHandler.RegenerateToken)
@@ -123,6 +126,7 @@ func SetupForwardRoutes(engine *gin.Engine, cfg *ForwardRouteConfig) {
 		forwardAgentAPI.GET("/rules/:rule_id", cfg.ForwardAgentAPIHandler.RefreshRule)
 		forwardAgentAPI.POST("/traffic", cfg.ForwardAgentAPIHandler.ReportTraffic)
 		forwardAgentAPI.POST("/status", cfg.ForwardAgentAPIHandler.ReportStatus)
+		forwardAgentAPI.POST("/rule-sync-status", cfg.ForwardAgentAPIHandler.ReportRuleSyncStatus)
 		forwardAgentAPI.GET("/exit-endpoint/:agent_id", cfg.ForwardAgentAPIHandler.GetExitEndpoint)
 		forwardAgentAPI.POST("/verify-tunnel-handshake", cfg.ForwardAgentAPIHandler.VerifyTunnelHandshake)
 	}

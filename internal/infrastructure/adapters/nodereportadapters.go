@@ -254,7 +254,7 @@ func (a *NodeSystemStatusUpdaterAdapter) UpdateSystemStatus(ctx context.Context,
 		return fmt.Errorf("failed to store node status: %w", err)
 	}
 
-	a.logger.Infow("node system status updated in redis",
+	a.logger.Debugw("node system status updated in redis",
 		"node_id", nodeID,
 		"cpu", cpu,
 		"memory", memory,

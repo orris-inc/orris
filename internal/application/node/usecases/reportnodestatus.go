@@ -85,14 +85,10 @@ func (uc *ReportNodeStatusUseCase) Execute(ctx context.Context, cmd ReportNodeSt
 	// Update last_seen_at and public IPs in database (throttled to reduce DB writes)
 	uc.updateLastSeenAtThrottled(ctx, cmd.NodeID, cmd.Status.PublicIPv4, cmd.Status.PublicIPv6)
 
-	uc.logger.Infow("node status reported successfully",
+	uc.logger.Debugw("node status reported",
 		"node_id", cmd.NodeID,
 		"cpu", cmd.Status.CPU,
 		"memory", cmd.Status.Mem,
-		"disk", cmd.Status.Disk,
-		"uptime", cmd.Status.Uptime,
-		"public_ipv4", cmd.Status.PublicIPv4,
-		"public_ipv6", cmd.Status.PublicIPv6,
 	)
 
 	return &ReportNodeStatusResult{

@@ -49,20 +49,33 @@ func (s *AgentTokenService) Verify(token string) (shortID string, err error) {
 	}
 
 	// Parse token: fwd_<short_id>_<signature>
-	// Use SplitN to limit splits since signature may contain '_' (base64url encoding)
-	parts := strings.SplitN(token, "_", 3)
-	if len(parts) != 3 {
-		return "", errors.New("invalid token format")
-	}
+	// short_id may contain underscores (e.g., "fa_xxx"), so we use fixed positions:
+	// - prefix is "fwd" (3 chars)
+	// - signature is base64url encoded (22 chars, fixed length)
+	// - format: fwd_<short_id>_<signature>
 
-	prefix := parts[0]
-	shortID = parts[1]
-	providedSig := parts[2]
-
-	if prefix != AgentTokenPrefix {
+	prefixWithUnderscore := AgentTokenPrefix + "_"
+	if !strings.HasPrefix(token, prefixWithUnderscore) {
 		return "", errors.New("invalid token prefix")
 	}
 
+	// Token must be at least: "fwd_" (4) + "x" (1 min short_id) + "_" (1) + signature (22) = 28 chars
+	minLength := len(prefixWithUnderscore) + 1 + 1 + tokenSignatureLength
+	if len(token) < minLength {
+		return "", errors.New("invalid token format")
+	}
+
+	// Extract signature (last 22 chars)
+	providedSig := token[len(token)-tokenSignatureLength:]
+
+	// Extract short_id (between "fwd_" and "_<signature>")
+	// The underscore before signature is at position len(token) - tokenSignatureLength - 1
+	separatorPos := len(token) - tokenSignatureLength - 1
+	if token[separatorPos] != '_' {
+		return "", errors.New("invalid token format")
+	}
+
+	shortID = token[len(prefixWithUnderscore):separatorPos]
 	if shortID == "" {
 		return "", errors.New("invalid short ID in token")
 	}

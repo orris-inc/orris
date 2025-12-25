@@ -59,10 +59,8 @@ func (uc *ValidateNodeTokenUseCase) Execute(ctx context.Context, cmd ValidateNod
 		return nil, fmt.Errorf("node is not active")
 	}
 
-	uc.logger.Infow("node token validated successfully",
+	uc.logger.Debugw("node token validated",
 		"node_id", node.ID,
-		"node_name", node.Name,
-		"ip_address", cmd.IPAddress,
 	)
 
 	return &ValidateNodeTokenResult{

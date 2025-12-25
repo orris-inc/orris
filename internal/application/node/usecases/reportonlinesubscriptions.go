@@ -132,7 +132,7 @@ func (uc *ReportOnlineSubscriptionsUseCase) Execute(ctx context.Context, cmd Rep
 		return nil, fmt.Errorf("failed to update online subscriptions")
 	}
 
-	uc.logger.Infow("online subscriptions reported successfully",
+	uc.logger.Debugw("online subscriptions reported",
 		"node_id", cmd.NodeID,
 		"online_count", len(subscriptions),
 	)

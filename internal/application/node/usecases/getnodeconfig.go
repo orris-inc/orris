@@ -81,7 +81,7 @@ func (uc *GetNodeConfigUseCase) Execute(ctx context.Context, cmd GetNodeConfigCo
 		config.Protocol = cmd.NodeType
 	}
 
-	uc.logger.Infow("node configuration retrieved successfully",
+	uc.logger.Debugw("node configuration retrieved",
 		"node_id", cmd.NodeID,
 		"protocol", config.Protocol,
 	)

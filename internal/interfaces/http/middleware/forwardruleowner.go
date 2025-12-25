@@ -44,25 +44,25 @@ func (m *ForwardRuleOwnerMiddleware) RequireOwnership() gin.HandlerFunc {
 		userRole := c.GetString(constants.ContextKeyUserRole)
 		isAdmin := userRole == constants.RoleAdmin
 
-		prefixedID := c.Param("id")
-		if prefixedID == "" {
+		ruleID := c.Param("id")
+		if ruleID == "" {
 			utils.ErrorResponse(c, http.StatusBadRequest, "forward rule ID is required")
 			c.Abort()
 			return
 		}
 
-		// Parse Stripe-style ID (e.g., "fr_xK9mP2vL3nQ" -> "xK9mP2vL3nQ")
-		shortID, err := id.ParseForwardRuleID(prefixedID)
-		if err != nil {
+		// Validate Stripe-style ID format (e.g., "fr_xK9mP2vL3nQ")
+		if err := id.ValidatePrefix(ruleID, id.PrefixForwardRule); err != nil {
 			utils.ErrorResponse(c, http.StatusBadRequest, "invalid forward rule ID format, expected fr_xxxxx")
 			c.Abort()
 			return
 		}
 
-		rule, err := m.forwardRuleRepo.GetBySID(c.Request.Context(), shortID)
+		// Look up the rule by SID (database stores full prefixed ID like "fr_xxx")
+		rule, err := m.forwardRuleRepo.GetBySID(c.Request.Context(), ruleID)
 		if err != nil {
 			m.logger.Warnw("failed to get forward rule for ownership check",
-				"forward_rule_short_id", shortID,
+				"forward_rule_id", ruleID,
 				"error", err,
 			)
 			utils.ErrorResponse(c, http.StatusNotFound, "forward rule not found")
@@ -86,7 +86,7 @@ func (m *ForwardRuleOwnerMiddleware) RequireOwnership() gin.HandlerFunc {
 		// Admin can access all rules
 		if isAdmin {
 			c.Set("forward_rule", rule)
-			c.Set("forward_rule_short_id", shortID)
+			c.Set("forward_rule_id", ruleID)
 			c.Next()
 			return
 		}
@@ -96,7 +96,7 @@ func (m *ForwardRuleOwnerMiddleware) RequireOwnership() gin.HandlerFunc {
 			// user_id is NULL, only admin can access
 			m.logger.Warnw("non-admin user attempted to access admin-owned forward rule",
 				"current_user_id", currentUserID,
-				"forward_rule_short_id", shortID,
+				"forward_rule_id", ruleID,
 			)
 			utils.ErrorResponse(c, http.StatusForbidden, "access denied")
 			c.Abort()
@@ -108,7 +108,7 @@ func (m *ForwardRuleOwnerMiddleware) RequireOwnership() gin.HandlerFunc {
 			m.logger.Warnw("user attempted to access another user's forward rule",
 				"current_user_id", currentUserID,
 				"forward_rule_owner_id", rule.UserID(),
-				"forward_rule_short_id", shortID,
+				"forward_rule_id", ruleID,
 			)
 			utils.ErrorResponse(c, http.StatusForbidden, "access denied")
 			c.Abort()
@@ -117,7 +117,7 @@ func (m *ForwardRuleOwnerMiddleware) RequireOwnership() gin.HandlerFunc {
 
 		// Store forward rule in context for handler reuse
 		c.Set("forward_rule", rule)
-		c.Set("forward_rule_short_id", shortID)
+		c.Set("forward_rule_id", ruleID)
 
 		c.Next()
 	}
