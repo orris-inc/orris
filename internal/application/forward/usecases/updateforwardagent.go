@@ -22,21 +22,24 @@ type UpdateForwardAgentCommand struct {
 
 // UpdateForwardAgentUseCase handles forward agent updates.
 type UpdateForwardAgentUseCase struct {
-	repo              forward.AgentRepository
-	resourceGroupRepo resource.Repository
-	logger            logger.Interface
+	repo                  forward.AgentRepository
+	resourceGroupRepo     resource.Repository
+	addressChangeNotifier AgentAddressChangeNotifier
+	logger                logger.Interface
 }
 
 // NewUpdateForwardAgentUseCase creates a new UpdateForwardAgentUseCase.
 func NewUpdateForwardAgentUseCase(
 	repo forward.AgentRepository,
 	resourceGroupRepo resource.Repository,
+	addressChangeNotifier AgentAddressChangeNotifier,
 	logger logger.Interface,
 ) *UpdateForwardAgentUseCase {
 	return &UpdateForwardAgentUseCase{
-		repo:              repo,
-		resourceGroupRepo: resourceGroupRepo,
-		logger:            logger,
+		repo:                  repo,
+		resourceGroupRepo:     resourceGroupRepo,
+		addressChangeNotifier: addressChangeNotifier,
+		logger:                logger,
 	}
 }
 
@@ -56,6 +59,10 @@ func (uc *UpdateForwardAgentUseCase) Execute(ctx context.Context, cmd UpdateForw
 	if agent == nil {
 		return errors.NewNotFoundError("forward agent", cmd.ShortID)
 	}
+
+	// Track original address values to detect changes
+	originalPublicAddress := agent.PublicAddress()
+	originalTunnelAddress := agent.TunnelAddress()
 
 	// Update fields
 	if cmd.Name != nil {
@@ -109,5 +116,32 @@ func (uc *UpdateForwardAgentUseCase) Execute(ctx context.Context, cmd UpdateForw
 	}
 
 	uc.logger.Infow("forward agent updated successfully", "id", agent.ID(), "short_id", agent.SID())
+
+	// Check if address changed and notify related agents
+	addressChanged := (cmd.PublicAddress != nil && *cmd.PublicAddress != originalPublicAddress) ||
+		(cmd.TunnelAddress != nil && *cmd.TunnelAddress != originalTunnelAddress)
+
+	if addressChanged && uc.addressChangeNotifier != nil {
+		agentID := agent.ID()
+		uc.logger.Infow("agent address changed, notifying related agents",
+			"agent_id", agentID,
+			"short_id", agent.SID(),
+			"old_public_address", originalPublicAddress,
+			"new_public_address", agent.PublicAddress(),
+			"old_tunnel_address", originalTunnelAddress,
+			"new_tunnel_address", agent.TunnelAddress(),
+		)
+
+		// Notify asynchronously to avoid blocking the API response
+		go func() {
+			if err := uc.addressChangeNotifier.NotifyAgentAddressChange(context.Background(), agentID); err != nil {
+				uc.logger.Warnw("failed to notify agent address change",
+					"agent_id", agentID,
+					"error", err,
+				)
+			}
+		}()
+	}
+
 	return nil
 }

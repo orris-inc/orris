@@ -843,14 +843,7 @@ func (s *ConfigSyncService) NotifyExitPortChange(ctx context.Context, exitAgentI
 		return err
 	}
 
-	if len(entryRules) == 0 {
-		s.logger.Debugw("no entry rules found for exit agent",
-			"exit_agent_id", exitAgentID,
-		)
-		return nil
-	}
-
-	// Collect unique entry agent IDs
+	// Collect unique entry agent IDs from entry rules
 	entryAgentIDs := make(map[uint]bool)
 	for _, rule := range entryRules {
 		if rule.RuleType().String() == "entry" {
@@ -881,6 +874,13 @@ func (s *ConfigSyncService) NotifyExitPortChange(ctx context.Context, exitAgentI
 				}
 			}
 		}
+	}
+
+	if len(entryAgentIDs) == 0 {
+		s.logger.Debugw("no agents to notify for exit agent address/port change",
+			"exit_agent_id", exitAgentID,
+		)
+		return nil
 	}
 
 	s.logger.Infow("found entry agents to notify",
@@ -985,35 +985,68 @@ func (s *ConfigSyncService) NotifyExitPortChange(ctx context.Context, exitAgentI
 	return lastErr
 }
 
-// getEntryRulesForExitAgent retrieves enabled rules for an entry agent that point to a specific exit agent.
-func (s *ConfigSyncService) getEntryRulesForExitAgent(ctx context.Context, entryAgentID, exitAgentID uint) ([]*forward.ForwardRule, error) {
-	// Get all enabled rules for this entry agent
-	rules, err := s.repo.ListEnabledByAgentID(ctx, entryAgentID)
+// NotifyAgentAddressChange notifies all entry agents that have rules using this agent.
+// This is called when an agent's public_address or tunnel_address changes.
+// The logic is similar to NotifyExitPortChange as both require re-syncing rules
+// to update the tunnel/next-hop address information.
+func (s *ConfigSyncService) NotifyAgentAddressChange(ctx context.Context, agentID uint) error {
+	s.logger.Infow("notifying entry agents of agent address change",
+		"agent_id", agentID,
+	)
+
+	// Reuse the same logic as NotifyExitPortChange since address changes
+	// also require updating next-hop information in entry/relay agents
+	return s.NotifyExitPortChange(ctx, agentID)
+}
+
+// getEntryRulesForExitAgent retrieves enabled rules for an agent that has exitAgentID as its next hop.
+// The agentID parameter is the agent that needs to be notified (not necessarily the entry agent).
+func (s *ConfigSyncService) getEntryRulesForExitAgent(ctx context.Context, agentID, exitAgentID uint) ([]*forward.ForwardRule, error) {
+	// Get all enabled rules where this agent is the entry agent
+	rules, err := s.repo.ListEnabledByAgentID(ctx, agentID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Filter rules that point to the exit agent
-	result := make([]*forward.ForwardRule, 0)
+	// Also get chain rules where this agent participates (for chain middle nodes)
+	chainRules, err := s.repo.ListEnabledByChainAgentID(ctx, agentID)
+	if err != nil {
+		s.logger.Warnw("failed to list chain rules for agent",
+			"agent_id", agentID,
+			"error", err,
+		)
+		// Continue with entry rules
+	} else {
+		rules = append(rules, chainRules...)
+	}
+
+	// Deduplicate rules by ID
+	ruleMap := make(map[uint]*forward.ForwardRule)
 	for _, rule := range rules {
+		ruleMap[rule.ID()] = rule
+	}
+
+	// Filter rules that have exitAgentID as next hop for this agent
+	result := make([]*forward.ForwardRule, 0)
+	for _, rule := range ruleMap {
 		switch rule.RuleType().String() {
 		case "entry":
 			if rule.ExitAgentID() == exitAgentID {
 				result = append(result, rule)
 			}
 		case "chain":
-			// Check if this entry agent has exitAgentID as its next hop
-			nextHop := rule.GetNextHopAgentID(entryAgentID)
+			// Check if this agent has exitAgentID as its next hop
+			nextHop := rule.GetNextHopAgentID(agentID)
 			if nextHop == exitAgentID {
 				result = append(result, rule)
 			}
 		case "direct_chain":
 			// Check if this agent has exitAgentID as its next hop in direct_chain
-			nextHop, _, err := rule.GetNextHopForDirectChainSafe(entryAgentID)
+			nextHop, _, err := rule.GetNextHopForDirectChainSafe(agentID)
 			if err != nil {
 				s.logger.Warnw("failed to get next hop for direct_chain in exit endpoint change notification",
 					"rule_id", rule.ID(),
-					"entry_agent_id", entryAgentID,
+					"agent_id", agentID,
 					"error", err,
 				)
 				continue

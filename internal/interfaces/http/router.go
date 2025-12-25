@@ -588,7 +588,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	forwardAgentStatusAdapter := adapters.NewForwardAgentStatusAdapter(redisClient, log)
 	ruleSyncStatusAdapter := adapters.NewRuleSyncStatusAdapter(redisClient, log)
 	getForwardAgentUC := forwardUsecases.NewGetForwardAgentUseCase(forwardAgentRepo, forwardAgentStatusAdapter, log)
-	updateForwardAgentUC := forwardUsecases.NewUpdateForwardAgentUseCase(forwardAgentRepo, resourceGroupRepo, log)
+	// updateForwardAgentUC will be initialized later after configSyncService is available
+	var updateForwardAgentUC *forwardUsecases.UpdateForwardAgentUseCase
 	deleteForwardAgentUC := forwardUsecases.NewDeleteForwardAgentUseCase(forwardAgentRepo, log)
 	listForwardAgentsUC := forwardUsecases.NewListForwardAgentsUseCase(forwardAgentRepo, forwardAgentStatusAdapter, log)
 	enableForwardAgentUC := forwardUsecases.NewEnableForwardAgentUseCase(forwardAgentRepo, log)
@@ -606,21 +607,9 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Server base URL for forward agent install script
 	serverBaseURL := cfg.Server.GetBaseURL()
 
-	forwardAgentHandler := forwardHandlers.NewForwardAgentHandler(
-		createForwardAgentUC,
-		getForwardAgentUC,
-		listForwardAgentsUC,
-		updateForwardAgentUC,
-		deleteForwardAgentUC,
-		enableForwardAgentUC,
-		disableForwardAgentUC,
-		regenerateForwardAgentTokenUC,
-		getForwardAgentTokenUC,
-		getAgentStatusUC,
-		getRuleSyncStatusUC,
-		generateInstallScriptUC,
-		serverBaseURL,
-	)
+	// forwardAgentHandler will be initialized later after updateForwardAgentUC is available
+	var forwardAgentHandler *forwardHandlers.ForwardAgentHandler
+
 	reportAgentStatusUC := forwardUsecases.NewReportAgentStatusUseCase(
 		forwardAgentRepo,
 		forwardAgentStatusAdapter,
@@ -666,6 +655,26 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	// Set port change notifier for exit agent port change detection
 	reportAgentStatusUC.SetPortChangeNotifier(configSyncService)
+
+	// Now initialize updateForwardAgentUC with configSyncService for address change notification
+	updateForwardAgentUC = forwardUsecases.NewUpdateForwardAgentUseCase(forwardAgentRepo, resourceGroupRepo, configSyncService, log)
+
+	// Now initialize forwardAgentHandler after updateForwardAgentUC is available
+	forwardAgentHandler = forwardHandlers.NewForwardAgentHandler(
+		createForwardAgentUC,
+		getForwardAgentUC,
+		listForwardAgentsUC,
+		updateForwardAgentUC,
+		deleteForwardAgentUC,
+		enableForwardAgentUC,
+		disableForwardAgentUC,
+		regenerateForwardAgentTokenUC,
+		getForwardAgentTokenUC,
+		getAgentStatusUC,
+		getRuleSyncStatusUC,
+		generateInstallScriptUC,
+		serverBaseURL,
+	)
 
 	// Now initialize forward rule use cases with configSyncService
 	createForwardRuleUC = forwardUsecases.NewCreateForwardRuleUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, configSyncService, log)
