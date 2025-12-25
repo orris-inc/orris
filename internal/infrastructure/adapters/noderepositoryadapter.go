@@ -43,7 +43,7 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, link
 		Where("link_token = ? AND status = ?", linkToken, valueobjects.StatusActive).
 		First(&subscriptionModel).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			r.logger.Warnw("active subscription not found", "link_token_prefix", linkToken[:8]+"...")
+			r.logger.Warnw("active subscription not found", "link_token_prefix", truncateTokenForLog(linkToken))
 			return []*usecases.Node{}, nil
 		}
 		r.logger.Errorw("failed to query subscription", "error", err)
@@ -990,4 +990,14 @@ func uintSliceToJSONArray(ids []uint) string {
 		parts[i] = fmt.Sprintf("%d", id)
 	}
 	return "[" + strings.Join(parts, ",") + "]"
+}
+
+// truncateTokenForLog safely truncates a token for logging purposes
+// Returns first 8 characters followed by "..." or the full token if shorter
+func truncateTokenForLog(token string) string {
+	const maxLen = 8
+	if len(token) <= maxLen {
+		return token
+	}
+	return token[:maxLen] + "..."
 }

@@ -193,10 +193,12 @@ func (f *V2RayFormatter) Format(nodes []*Node) (string, error) {
 
 func (f *V2RayFormatter) FormatWithPassword(nodes []*Node, password string) (string, error) {
 	v2rayNodes := make([]v2rayNode, 0, len(nodes))
+	skippedTrojanCount := 0
 
 	for _, node := range nodes {
 		// V2Ray format only supports Shadowsocks, skip Trojan nodes
 		if node.Protocol == "trojan" {
+			skippedTrojanCount++
 			continue
 		}
 
@@ -214,6 +216,11 @@ func (f *V2RayFormatter) FormatWithPassword(nodes []*Node, password string) (str
 		}
 
 		v2rayNodes = append(v2rayNodes, v2rayNode)
+	}
+
+	// Return error if all nodes were Trojan (V2Ray format doesn't support Trojan)
+	if len(v2rayNodes) == 0 && skippedTrojanCount > 0 {
+		return "", fmt.Errorf("v2ray format does not support Trojan protocol, please use base64 or clash format instead")
 	}
 
 	jsonBytes, err := json.MarshalIndent(v2rayNodes, "", "  ")
@@ -259,10 +266,12 @@ func (f *SIP008Formatter) FormatWithPassword(nodes []*Node, password string) (st
 		Version: 1,
 		Servers: make([]sip008Server, 0, len(nodes)),
 	}
+	skippedTrojanCount := 0
 
 	for _, node := range nodes {
 		// SIP008 format only supports Shadowsocks, skip Trojan nodes
 		if node.Protocol == "trojan" {
+			skippedTrojanCount++
 			continue
 		}
 
@@ -281,6 +290,11 @@ func (f *SIP008Formatter) FormatWithPassword(nodes []*Node, password string) (st
 		}
 
 		config.Servers = append(config.Servers, server)
+	}
+
+	// Return error if all nodes were Trojan (SIP008 format doesn't support Trojan)
+	if len(config.Servers) == 0 && skippedTrojanCount > 0 {
+		return "", fmt.Errorf("sip008 format does not support Trojan protocol, please use base64 or clash format instead")
 	}
 
 	jsonBytes, err := json.MarshalIndent(config, "", "  ")
