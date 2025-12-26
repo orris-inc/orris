@@ -69,15 +69,16 @@ type Repository interface {
 
 // ListFilter defines the filtering options for listing forward rules.
 type ListFilter struct {
-	Page     int
-	PageSize int
-	AgentID  uint
-	UserID   *uint
-	Name     string
-	Protocol string
-	Status   string
-	OrderBy  string
-	Order    string
+	Page             int
+	PageSize         int
+	AgentID          uint
+	UserID           *uint
+	IncludeUserRules bool // When false (default), excludes rules with user_id set; when true, includes all rules
+	Name             string
+	Protocol         string
+	Status           string
+	OrderBy          string
+	Order            string
 }
 
 // AgentRepository defines the interface for forward agent persistence.

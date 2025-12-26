@@ -363,14 +363,18 @@ func (h *ForwardHandler) ListRules(c *gin.Context) {
 		pageSize = constants.DefaultPageSize
 	}
 
+	// Parse include_user_rules parameter (default: false)
+	includeUserRules := c.Query("include_user_rules") == "true"
+
 	query := usecases.ListForwardRulesQuery{
-		Page:     page,
-		PageSize: pageSize,
-		Name:     c.Query("name"),
-		Protocol: c.Query("protocol"),
-		Status:   c.Query("status"),
-		OrderBy:  c.Query("order_by"),
-		Order:    c.Query("order"),
+		Page:             page,
+		PageSize:         pageSize,
+		Name:             c.Query("name"),
+		Protocol:         c.Query("protocol"),
+		Status:           c.Query("status"),
+		OrderBy:          c.Query("order_by"),
+		Order:            c.Query("order"),
+		IncludeUserRules: includeUserRules,
 	}
 
 	result, err := h.listRulesUC.Execute(c.Request.Context(), query)

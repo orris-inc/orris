@@ -278,11 +278,15 @@ func (r *NodeRepositoryAdapter) getForwardedNodes(ctx context.Context, nodeIDs [
 	}
 
 	// Query forward rules that target these nodes (all types with target node, enabled status)
+	// Important: Only include system/admin-created rules (user_id IS NULL or 0)
+	// User-created rules (with user_id) should only appear in their own subscription,
+	// not in other users' subscriptions
 	var forwardRules []models.ForwardRuleModel
 	if err := r.db.WithContext(ctx).
 		Where("target_node_id IN ?", nodeIDs).
 		Where("status = ?", "enabled").
 		Where("rule_type IN ?", []string{"direct", "entry", "chain", "direct_chain"}).
+		Where("user_id IS NULL OR user_id = 0").
 		Find(&forwardRules).Error; err != nil {
 		r.logger.Warnw("failed to query forward rules for nodes", "error", err)
 		return nil

@@ -13,13 +13,14 @@ import (
 
 // ListForwardRulesQuery represents the input for listing forward rules.
 type ListForwardRulesQuery struct {
-	Page     int
-	PageSize int
-	Name     string
-	Protocol string
-	Status   string
-	OrderBy  string
-	Order    string
+	Page             int
+	PageSize         int
+	Name             string
+	Protocol         string
+	Status           string
+	OrderBy          string
+	Order            string
+	IncludeUserRules bool // When true, includes rules created by users; when false, excludes them
 }
 
 // ListForwardRulesResult represents the output of listing forward rules.
@@ -72,13 +73,14 @@ func (uc *ListForwardRulesUseCase) Execute(ctx context.Context, query ListForwar
 	}
 
 	filter := forward.ListFilter{
-		Page:     query.Page,
-		PageSize: query.PageSize,
-		Name:     query.Name,
-		Protocol: query.Protocol,
-		Status:   query.Status,
-		OrderBy:  query.OrderBy,
-		Order:    query.Order,
+		Page:             query.Page,
+		PageSize:         query.PageSize,
+		Name:             query.Name,
+		Protocol:         query.Protocol,
+		Status:           query.Status,
+		OrderBy:          query.OrderBy,
+		Order:            query.Order,
+		IncludeUserRules: query.IncludeUserRules,
 	}
 
 	rules, total, err := uc.repo.List(ctx, filter)

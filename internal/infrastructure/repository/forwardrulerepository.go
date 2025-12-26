@@ -261,6 +261,9 @@ func (r *ForwardRuleRepositoryImpl) List(ctx context.Context, filter forward.Lis
 	}
 	if filter.UserID != nil {
 		query = query.Where("user_id = ?", *filter.UserID)
+	} else if !filter.IncludeUserRules {
+		// When IncludeUserRules is false (default), exclude rules created by users
+		query = query.Where("user_id IS NULL OR user_id = 0")
 	}
 	if filter.Name != "" {
 		query = query.Where("name LIKE ?", "%"+filter.Name+"%")
