@@ -63,7 +63,7 @@ type CreatePlanRequest struct {
 	Name         string                      `json:"name" binding:"required"`
 	Slug         string                      `json:"slug" binding:"required"`
 	Description  string                      `json:"description"`
-	PlanType     string                      `json:"plan_type" binding:"required,oneof=node forward"`
+	PlanType     string                      `json:"plan_type" binding:"required,oneof=node forward hybrid"`
 	Limits       map[string]interface{}      `json:"limits"`
 	APIRateLimit uint                        `json:"api_rate_limit"`
 	MaxUsers     uint                        `json:"max_users"`

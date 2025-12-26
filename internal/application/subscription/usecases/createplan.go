@@ -79,7 +79,11 @@ func (uc *CreatePlanUseCase) Execute(
 	}
 
 	if cmd.Limits != nil {
-		features := vo.NewPlanFeatures(cmd.Limits)
+		features, err := vo.NewPlanFeaturesWithValidation(cmd.Limits)
+		if err != nil {
+			uc.logger.Errorw("invalid plan limits", "error", err)
+			return nil, fmt.Errorf("invalid plan limits: %w", err)
+		}
 		if err := plan.UpdateFeatures(features); err != nil {
 			uc.logger.Errorw("failed to set plan features", "error", err)
 			return nil, fmt.Errorf("failed to set plan features: %w", err)

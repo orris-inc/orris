@@ -200,6 +200,84 @@ const (
 	LimitKeyRuleTypes = "rule_types"
 )
 
+// validLimitKeys contains all valid limit keys
+var validLimitKeys = map[string]bool{
+	LimitKeyTraffic:         true,
+	LimitKeyDeviceCount:     true,
+	LimitKeySpeedLimit:      true,
+	LimitKeyConnectionLimit: true,
+	LimitKeyRuleCount:       true,
+	LimitKeyRuleTypes:       true,
+}
+
+// legacyKeyMapping maps deprecated keys to their standard equivalents
+var legacyKeyMapping = map[string]string{
+	"forward_rule_limit":    LimitKeyRuleCount,
+	"forward_traffic_limit": LimitKeyTraffic,
+	"node_rule_limit":       LimitKeyRuleCount,
+	"node_traffic_limit":    LimitKeyTraffic,
+}
+
+// IsValidLimitKey checks if the given key is a valid limit key
+func IsValidLimitKey(key string) bool {
+	return validLimitKeys[key]
+}
+
+// NormalizeLimitKey converts a legacy key to its standard equivalent
+// Returns the normalized key and true if conversion happened, or original key and false
+func NormalizeLimitKey(key string) (string, bool) {
+	if standardKey, exists := legacyKeyMapping[key]; exists {
+		return standardKey, true
+	}
+	return key, false
+}
+
+// ValidateLimitKeys validates all keys in the limits map
+// Returns an error if any key is invalid (not in valid keys and not a legacy key)
+func ValidateLimitKeys(limits map[string]interface{}) error {
+	for key := range limits {
+		if !validLimitKeys[key] && legacyKeyMapping[key] == "" {
+			return fmt.Errorf("invalid limit key: %s", key)
+		}
+	}
+	return nil
+}
+
+// NormalizeLimits converts all legacy keys to standard keys in the limits map
+// Returns a new map with normalized keys
+func NormalizeLimits(limits map[string]interface{}) map[string]interface{} {
+	if limits == nil {
+		return nil
+	}
+
+	normalized := make(map[string]interface{}, len(limits))
+	for key, value := range limits {
+		if standardKey, converted := NormalizeLimitKey(key); converted {
+			normalized[standardKey] = value
+		} else {
+			normalized[key] = value
+		}
+	}
+	return normalized
+}
+
+// NewPlanFeaturesWithValidation creates a new PlanFeatures with key validation and normalization
+// Returns an error if any limit key is invalid
+func NewPlanFeaturesWithValidation(limits map[string]interface{}) (*PlanFeatures, error) {
+	if limits == nil {
+		return NewPlanFeatures(nil), nil
+	}
+
+	// Validate keys
+	if err := ValidateLimitKeys(limits); err != nil {
+		return nil, err
+	}
+
+	// Normalize keys
+	normalized := NormalizeLimits(limits)
+
+	return NewPlanFeatures(normalized), nil
+}
 
 // GetTrafficLimit returns the monthly traffic limit in bytes
 // Returns 0 if unlimited or not set

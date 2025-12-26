@@ -58,18 +58,11 @@ func (uc *UpdatePlanUseCase) Execute(
 	}
 
 	if cmd.Limits != nil {
-		var limitsMap map[string]interface{}
-
-		if cmd.Limits != nil {
-			limitsMap = *cmd.Limits
-		} else {
-			// Keep existing limits if not provided
-			if plan.Features() != nil {
-				limitsMap = plan.Features().Limits
-			}
+		features, err := vo.NewPlanFeaturesWithValidation(*cmd.Limits)
+		if err != nil {
+			uc.logger.Errorw("invalid plan limits", "error", err)
+			return nil, fmt.Errorf("invalid plan limits: %w", err)
 		}
-
-		features := vo.NewPlanFeatures(limitsMap)
 		if err := plan.UpdateFeatures(features); err != nil {
 			uc.logger.Errorw("failed to update features", "error", err)
 			return nil, fmt.Errorf("failed to update features: %w", err)
