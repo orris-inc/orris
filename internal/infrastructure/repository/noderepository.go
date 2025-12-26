@@ -12,6 +12,7 @@ import (
 	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/db"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -315,7 +316,7 @@ func (r *NodeRepositoryImpl) Update(ctx context.Context, nodeEntity *node.Node) 
 		if result.RowsAffected == 0 {
 			// Check if the record exists to distinguish between not found and version conflict
 			var count int64
-			if err := tx.Model(&models.NodeModel{}).Where("id = ?", model.ID).Count(&count).Error; err == nil && count > 0 {
+			if err := tx.Model(&models.NodeModel{}).Scopes(db.NotDeleted()).Where("id = ?", model.ID).Count(&count).Error; err == nil && count > 0 {
 				return errors.NewConflictError("node was modified by another request, please retry")
 			}
 			return errors.NewNotFoundError("node not found", fmt.Sprintf("id=%d", model.ID))
@@ -482,10 +483,13 @@ func (r *NodeRepositoryImpl) List(ctx context.Context, filter node.NodeFilter) (
 	return entities, total, nil
 }
 
-// ExistsByName checks if a node with the given name exists
+// ExistsByName checks if a node with the given name exists (excluding soft-deleted records)
 func (r *NodeRepositoryImpl) ExistsByName(ctx context.Context, name string) (bool, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Model(&models.NodeModel{}).Where("name = ?", name).Count(&count).Error
+	err := r.db.WithContext(ctx).Model(&models.NodeModel{}).
+		Scopes(db.NotDeleted()).
+		Where("name = ?", name).
+		Count(&count).Error
 	if err != nil {
 		r.logger.Errorw("failed to check node existence by name", "name", name, "error", err)
 		return false, fmt.Errorf("failed to check node existence: %w", err)
@@ -493,10 +497,11 @@ func (r *NodeRepositoryImpl) ExistsByName(ctx context.Context, name string) (boo
 	return count > 0, nil
 }
 
-// ExistsByNameExcluding checks if a node with the given name exists, excluding a specific node ID
+// ExistsByNameExcluding checks if a node with the given name exists, excluding a specific node ID (excluding soft-deleted records)
 func (r *NodeRepositoryImpl) ExistsByNameExcluding(ctx context.Context, name string, excludeID uint) (bool, error) {
 	var count int64
 	err := r.db.WithContext(ctx).Model(&models.NodeModel{}).
+		Scopes(db.NotDeleted()).
 		Where("name = ? AND id != ?", name, excludeID).
 		Count(&count).Error
 	if err != nil {
@@ -506,10 +511,11 @@ func (r *NodeRepositoryImpl) ExistsByNameExcluding(ctx context.Context, name str
 	return count > 0, nil
 }
 
-// ExistsByAddress checks if a node with the given address and port exists
+// ExistsByAddress checks if a node with the given address and port exists (excluding soft-deleted records)
 func (r *NodeRepositoryImpl) ExistsByAddress(ctx context.Context, address string, port int) (bool, error) {
 	var count int64
 	err := r.db.WithContext(ctx).Model(&models.NodeModel{}).
+		Scopes(db.NotDeleted()).
 		Where("server_address = ? AND agent_port = ?", address, port).
 		Count(&count).Error
 	if err != nil {
@@ -519,10 +525,11 @@ func (r *NodeRepositoryImpl) ExistsByAddress(ctx context.Context, address string
 	return count > 0, nil
 }
 
-// ExistsByAddressExcluding checks if a node with the given address and port exists, excluding a specific node ID
+// ExistsByAddressExcluding checks if a node with the given address and port exists, excluding a specific node ID (excluding soft-deleted records)
 func (r *NodeRepositoryImpl) ExistsByAddressExcluding(ctx context.Context, address string, port int, excludeID uint) (bool, error) {
 	var count int64
 	err := r.db.WithContext(ctx).Model(&models.NodeModel{}).
+		Scopes(db.NotDeleted()).
 		Where("server_address = ? AND agent_port = ? AND id != ?", address, port, excludeID).
 		Count(&count).Error
 	if err != nil {
@@ -707,10 +714,13 @@ func (r *NodeRepositoryImpl) ListByUserID(ctx context.Context, userID uint, filt
 	return entities, total, nil
 }
 
-// CountByUserID counts nodes owned by a specific user
+// CountByUserID counts nodes owned by a specific user (excluding soft-deleted records)
 func (r *NodeRepositoryImpl) CountByUserID(ctx context.Context, userID uint) (int64, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Model(&models.NodeModel{}).Where("user_id = ?", userID).Count(&count).Error
+	err := r.db.WithContext(ctx).Model(&models.NodeModel{}).
+		Scopes(db.NotDeleted()).
+		Where("user_id = ?", userID).
+		Count(&count).Error
 	if err != nil {
 		r.logger.Errorw("failed to count user nodes", "user_id", userID, "error", err)
 		return 0, fmt.Errorf("failed to count user nodes: %w", err)
@@ -718,10 +728,11 @@ func (r *NodeRepositoryImpl) CountByUserID(ctx context.Context, userID uint) (in
 	return count, nil
 }
 
-// ExistsByNameForUser checks if a node with the given name exists for a specific user
+// ExistsByNameForUser checks if a node with the given name exists for a specific user (excluding soft-deleted records)
 func (r *NodeRepositoryImpl) ExistsByNameForUser(ctx context.Context, name string, userID uint) (bool, error) {
 	var count int64
 	err := r.db.WithContext(ctx).Model(&models.NodeModel{}).
+		Scopes(db.NotDeleted()).
 		Where("name = ? AND user_id = ?", name, userID).
 		Count(&count).Error
 	if err != nil {
@@ -731,10 +742,11 @@ func (r *NodeRepositoryImpl) ExistsByNameForUser(ctx context.Context, name strin
 	return count > 0, nil
 }
 
-// ExistsByNameForUserExcluding checks if a node with the given name exists for a user, excluding a specific node
+// ExistsByNameForUserExcluding checks if a node with the given name exists for a user, excluding a specific node (excluding soft-deleted records)
 func (r *NodeRepositoryImpl) ExistsByNameForUserExcluding(ctx context.Context, name string, userID uint, excludeID uint) (bool, error) {
 	var count int64
 	err := r.db.WithContext(ctx).Model(&models.NodeModel{}).
+		Scopes(db.NotDeleted()).
 		Where("name = ? AND user_id = ? AND id != ?", name, userID, excludeID).
 		Count(&count).Error
 	if err != nil {
@@ -744,10 +756,11 @@ func (r *NodeRepositoryImpl) ExistsByNameForUserExcluding(ctx context.Context, n
 	return count > 0, nil
 }
 
-// ExistsByAddressForUser checks if a node with the given address and port exists for a specific user
+// ExistsByAddressForUser checks if a node with the given address and port exists for a specific user (excluding soft-deleted records)
 func (r *NodeRepositoryImpl) ExistsByAddressForUser(ctx context.Context, address string, port int, userID uint) (bool, error) {
 	var count int64
 	err := r.db.WithContext(ctx).Model(&models.NodeModel{}).
+		Scopes(db.NotDeleted()).
 		Where("server_address = ? AND agent_port = ? AND user_id = ?", address, port, userID).
 		Count(&count).Error
 	if err != nil {
@@ -757,10 +770,11 @@ func (r *NodeRepositoryImpl) ExistsByAddressForUser(ctx context.Context, address
 	return count > 0, nil
 }
 
-// ExistsByAddressForUserExcluding checks if a node with the given address and port exists for a user, excluding a specific node
+// ExistsByAddressForUserExcluding checks if a node with the given address and port exists for a user, excluding a specific node (excluding soft-deleted records)
 func (r *NodeRepositoryImpl) ExistsByAddressForUserExcluding(ctx context.Context, address string, port int, userID uint, excludeID uint) (bool, error) {
 	var count int64
 	err := r.db.WithContext(ctx).Model(&models.NodeModel{}).
+		Scopes(db.NotDeleted()).
 		Where("server_address = ? AND agent_port = ? AND user_id = ? AND id != ?", address, port, userID, excludeID).
 		Count(&count).Error
 	if err != nil {

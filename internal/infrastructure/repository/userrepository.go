@@ -11,6 +11,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/user"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/db"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -294,20 +295,26 @@ func (r *UserRepository) List(ctx context.Context, filter user.ListFilter) ([]*u
 	return entities, total, nil
 }
 
-// Exists checks if a user exists by ID
+// Exists checks if a user exists by ID (excluding soft-deleted records)
 func (r *UserRepository) Exists(ctx context.Context, id uint) (bool, error) {
 	var count int64
-	if err := r.db.WithContext(ctx).Model(&models.UserModel{}).Where("id = ?", id).Count(&count).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&models.UserModel{}).
+		Scopes(db.NotDeleted()).
+		Where("id = ?", id).
+		Count(&count).Error; err != nil {
 		r.logger.Errorw("failed to check user existence", "id", id, "error", err)
 		return false, fmt.Errorf("failed to check existence: %w", err)
 	}
 	return count > 0, nil
 }
 
-// ExistsByEmail checks if a user exists by email
+// ExistsByEmail checks if a user exists by email (excluding soft-deleted records)
 func (r *UserRepository) ExistsByEmail(ctx context.Context, email string) (bool, error) {
 	var count int64
-	if err := r.db.WithContext(ctx).Model(&models.UserModel{}).Where("email = ?", email).Count(&count).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&models.UserModel{}).
+		Scopes(db.NotDeleted()).
+		Where("email = ?", email).
+		Count(&count).Error; err != nil {
 		r.logger.Errorw("failed to check user existence by email", "email", email, "error", err)
 		return false, fmt.Errorf("failed to check existence: %w", err)
 	}

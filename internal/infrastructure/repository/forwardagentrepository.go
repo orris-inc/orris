@@ -10,6 +10,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/db"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -302,10 +303,13 @@ func (r *ForwardAgentRepositoryImpl) ListEnabled(ctx context.Context) ([]*forwar
 	return entities, nil
 }
 
-// ExistsByName checks if an agent with the given name exists.
+// ExistsByName checks if an agent with the given name exists (excluding soft-deleted records).
 func (r *ForwardAgentRepositoryImpl) ExistsByName(ctx context.Context, name string) (bool, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Model(&models.ForwardAgentModel{}).Where("name = ?", name).Count(&count).Error
+	err := r.db.WithContext(ctx).Model(&models.ForwardAgentModel{}).
+		Scopes(db.NotDeleted()).
+		Where("name = ?", name).
+		Count(&count).Error
 	if err != nil {
 		r.logger.Errorw("failed to check forward agent existence by name", "name", name, "error", err)
 		return false, fmt.Errorf("failed to check forward agent existence: %w", err)

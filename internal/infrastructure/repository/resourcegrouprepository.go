@@ -10,6 +10,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/resource"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/db"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -241,10 +242,13 @@ func (r *ResourceGroupRepositoryImpl) List(ctx context.Context, filter resource.
 	return entities, total, nil
 }
 
-// ExistsByName checks if a resource group with the given name exists.
+// ExistsByName checks if a resource group with the given name exists (excluding soft-deleted records).
 func (r *ResourceGroupRepositoryImpl) ExistsByName(ctx context.Context, name string) (bool, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Model(&models.ResourceGroupModel{}).Where("name = ?", name).Count(&count).Error
+	err := r.db.WithContext(ctx).Model(&models.ResourceGroupModel{}).
+		Scopes(db.NotDeleted()).
+		Where("name = ?", name).
+		Count(&count).Error
 	if err != nil {
 		r.logger.Errorw("failed to check resource group existence by name", "name", name, "error", err)
 		return false, fmt.Errorf("failed to check resource group existence: %w", err)

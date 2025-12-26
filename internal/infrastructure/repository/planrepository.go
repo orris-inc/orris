@@ -11,6 +11,7 @@ import (
 	vo "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 	"github.com/orris-inc/orris/internal/shared/constants"
+	"github.com/orris-inc/orris/internal/shared/db"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -232,9 +233,11 @@ func (r *PlanRepositoryImpl) List(ctx context.Context, filter subscription.PlanF
 	return plans, total, nil
 }
 
+// ExistsBySlug checks if a plan with the given slug exists (excluding soft-deleted records).
 func (r *PlanRepositoryImpl) ExistsBySlug(ctx context.Context, slug string) (bool, error) {
 	var count int64
 	err := r.db.WithContext(ctx).Model(&models.PlanModel{}).
+		Scopes(db.NotDeleted()).
 		Where("slug = ?", slug).
 		Count(&count).Error
 

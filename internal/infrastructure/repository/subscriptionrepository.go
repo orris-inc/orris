@@ -12,6 +12,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/db"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -166,6 +167,7 @@ func (r *SubscriptionRepositoryImpl) GetActiveSubscriptionsByNodeID(ctx context.
 	if err := r.db.WithContext(ctx).
 		Table("resource_groups").
 		Select("plan_id").
+		Scopes(db.NotDeleted()).
 		Where("id IN ? AND status = ?", groupIDs, "active").
 		Pluck("plan_id", &planIDs).Error; err != nil {
 		r.logger.Errorw("failed to query resource groups", "group_ids", groupIDs, "error", err)
@@ -302,7 +304,7 @@ func (r *SubscriptionRepositoryImpl) List(ctx context.Context, filter subscripti
 	var models []*models.SubscriptionModel
 	var total int64
 
-	query := r.db.WithContext(ctx).Table("subscriptions")
+	query := r.db.WithContext(ctx).Table("subscriptions").Scopes(db.NotDeleted())
 
 	if filter.UserID != nil {
 		query = query.Where("user_id = ?", *filter.UserID)
@@ -349,18 +351,26 @@ func (r *SubscriptionRepositoryImpl) List(ctx context.Context, filter subscripti
 	return entities, total, nil
 }
 
+// CountByPlanID counts subscriptions by plan ID (excluding soft-deleted records).
 func (r *SubscriptionRepositoryImpl) CountByPlanID(ctx context.Context, planID uint) (int64, error) {
 	var count int64
-	if err := r.db.WithContext(ctx).Model(&models.SubscriptionModel{}).Where("plan_id = ?", planID).Count(&count).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&models.SubscriptionModel{}).
+		Scopes(db.NotDeleted()).
+		Where("plan_id = ?", planID).
+		Count(&count).Error; err != nil {
 		r.logger.Errorw("failed to count subscriptions by plan ID", "plan_id", planID, "error", err)
 		return 0, fmt.Errorf("failed to count subscriptions: %w", err)
 	}
 	return count, nil
 }
 
+// CountByStatus counts subscriptions by status (excluding soft-deleted records).
 func (r *SubscriptionRepositoryImpl) CountByStatus(ctx context.Context, status string) (int64, error) {
 	var count int64
-	if err := r.db.WithContext(ctx).Model(&models.SubscriptionModel{}).Where("status = ?", status).Count(&count).Error; err != nil {
+	if err := r.db.WithContext(ctx).Model(&models.SubscriptionModel{}).
+		Scopes(db.NotDeleted()).
+		Where("status = ?", status).
+		Count(&count).Error; err != nil {
 		r.logger.Errorw("failed to count subscriptions by status", "status", status, "error", err)
 		return 0, fmt.Errorf("failed to count subscriptions: %w", err)
 	}

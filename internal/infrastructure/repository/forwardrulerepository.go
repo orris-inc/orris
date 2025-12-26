@@ -350,11 +350,14 @@ func (r *ForwardRuleRepositoryImpl) ListEnabledByAgentID(ctx context.Context, ag
 	return entities, nil
 }
 
-// ExistsByListenPort checks if a rule with the given listen port exists.
+// ExistsByListenPort checks if a rule with the given listen port exists (excluding soft-deleted records).
 func (r *ForwardRuleRepositoryImpl) ExistsByListenPort(ctx context.Context, port uint16) (bool, error) {
 	var count int64
 	tx := db.GetTxFromContext(ctx, r.db)
-	err := tx.Model(&models.ForwardRuleModel{}).Where("listen_port = ?", port).Count(&count).Error
+	err := tx.Model(&models.ForwardRuleModel{}).
+		Scopes(db.NotDeleted()).
+		Where("listen_port = ?", port).
+		Count(&count).Error
 	if err != nil {
 		r.logger.Errorw("failed to check forward rule existence by listen port", "port", port, "error", err)
 		return false, fmt.Errorf("failed to check forward rule existence: %w", err)
@@ -509,11 +512,14 @@ func (r *ForwardRuleRepositoryImpl) ListByUserID(ctx context.Context, userID uin
 	return entities, total, nil
 }
 
-// CountByUserID returns the total count of forward rules for a specific user.
+// CountByUserID returns the total count of forward rules for a specific user (excluding soft-deleted records).
 func (r *ForwardRuleRepositoryImpl) CountByUserID(ctx context.Context, userID uint) (int64, error) {
 	var count int64
 	tx := db.GetTxFromContext(ctx, r.db)
-	err := tx.Model(&models.ForwardRuleModel{}).Where("user_id = ?", userID).Count(&count).Error
+	err := tx.Model(&models.ForwardRuleModel{}).
+		Scopes(db.NotDeleted()).
+		Where("user_id = ?", userID).
+		Count(&count).Error
 	if err != nil {
 		r.logger.Errorw("failed to count forward rules by user ID", "user_id", userID, "error", err)
 		return 0, fmt.Errorf("failed to count forward rules by user ID: %w", err)
@@ -521,7 +527,7 @@ func (r *ForwardRuleRepositoryImpl) CountByUserID(ctx context.Context, userID ui
 	return count, nil
 }
 
-// GetTotalTrafficByUserID returns the total traffic (upload + download) for all rules owned by a user.
+// GetTotalTrafficByUserID returns the total traffic (upload + download) for all rules owned by a user (excluding soft-deleted records).
 func (r *ForwardRuleRepositoryImpl) GetTotalTrafficByUserID(ctx context.Context, userID uint) (int64, error) {
 	var result struct {
 		TotalTraffic int64
@@ -529,6 +535,7 @@ func (r *ForwardRuleRepositoryImpl) GetTotalTrafficByUserID(ctx context.Context,
 
 	tx := db.GetTxFromContext(ctx, r.db)
 	err := tx.Model(&models.ForwardRuleModel{}).
+		Scopes(db.NotDeleted()).
 		Select("COALESCE(SUM(upload_bytes + download_bytes), 0) as total_traffic").
 		Where("user_id = ?", userID).
 		Scan(&result).Error
