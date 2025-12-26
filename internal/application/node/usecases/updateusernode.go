@@ -67,8 +67,8 @@ func (uc *UpdateUserNodeUseCase) Execute(ctx context.Context, cmd UpdateUserNode
 		}
 	}
 
-	// Update server address if provided
-	if cmd.ServerAddress != nil && *cmd.ServerAddress != "" {
+	// Update server address if provided (supports setting to empty)
+	if cmd.ServerAddress != nil {
 		serverAddress, err := vo.NewServerAddress(*cmd.ServerAddress)
 		if err != nil {
 			return nil, fmt.Errorf("invalid server address: %w", err)
@@ -80,17 +80,19 @@ func (uc *UpdateUserNodeUseCase) Execute(ctx context.Context, cmd UpdateUserNode
 
 	// Update agent port if provided
 	if cmd.AgentPort != nil {
-		// Check address:port uniqueness
+		// Check address:port uniqueness (skip if address is empty)
 		addr := nodeEntity.ServerAddress().Value()
 		if cmd.ServerAddress != nil {
 			addr = *cmd.ServerAddress
 		}
-		exists, err := uc.nodeRepo.ExistsByAddressForUserExcluding(ctx, addr, int(*cmd.AgentPort), cmd.UserID, nodeEntity.ID())
-		if err != nil {
-			return nil, fmt.Errorf("failed to check address uniqueness: %w", err)
-		}
-		if exists {
-			return nil, errors.NewConflictError("node with this address and port already exists")
+		if addr != "" {
+			exists, err := uc.nodeRepo.ExistsByAddressForUserExcluding(ctx, addr, int(*cmd.AgentPort), cmd.UserID, nodeEntity.ID())
+			if err != nil {
+				return nil, fmt.Errorf("failed to check address uniqueness: %w", err)
+			}
+			if exists {
+				return nil, errors.NewConflictError("node with this address and port already exists")
+			}
 		}
 		if err := nodeEntity.UpdateAgentPort(*cmd.AgentPort); err != nil {
 			return nil, err

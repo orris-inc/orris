@@ -79,15 +79,17 @@ func (uc *CreateUserNodeUseCase) Execute(ctx context.Context, cmd CreateUserNode
 		return nil, errors.NewConflictError("node with this name already exists", cmd.Name)
 	}
 
-	// Check for duplicate server address and port within user scope
-	exists, err = uc.nodeRepo.ExistsByAddressForUser(ctx, cmd.ServerAddress, int(cmd.AgentPort), cmd.UserID)
-	if err != nil {
-		uc.logger.Errorw("failed to check existing node by address", "address", cmd.ServerAddress, "port", cmd.AgentPort, "user_id", cmd.UserID, "error", err)
-		return nil, fmt.Errorf("failed to check existing node: %w", err)
-	}
-	if exists {
-		uc.logger.Warnw("node with address and port already exists for user", "address", cmd.ServerAddress, "port", cmd.AgentPort, "user_id", cmd.UserID)
-		return nil, errors.NewConflictError("node with this server address and port already exists", fmt.Sprintf("%s:%d", cmd.ServerAddress, cmd.AgentPort))
+	// Check for duplicate server address and port within user scope (skip if address is empty)
+	if cmd.ServerAddress != "" {
+		exists, err = uc.nodeRepo.ExistsByAddressForUser(ctx, cmd.ServerAddress, int(cmd.AgentPort), cmd.UserID)
+		if err != nil {
+			uc.logger.Errorw("failed to check existing node by address", "address", cmd.ServerAddress, "port", cmd.AgentPort, "user_id", cmd.UserID, "error", err)
+			return nil, fmt.Errorf("failed to check existing node: %w", err)
+		}
+		if exists {
+			uc.logger.Warnw("node with address and port already exists for user", "address", cmd.ServerAddress, "port", cmd.AgentPort, "user_id", cmd.UserID)
+			return nil, errors.NewConflictError("node with this server address and port already exists", fmt.Sprintf("%s:%d", cmd.ServerAddress, cmd.AgentPort))
+		}
 	}
 
 	// Create value objects
@@ -218,10 +220,6 @@ func (uc *CreateUserNodeUseCase) validateCommand(cmd CreateUserNodeCommand) erro
 
 	if cmd.Name == "" {
 		return errors.NewValidationError("node name is required")
-	}
-
-	if cmd.ServerAddress == "" {
-		return errors.NewValidationError("server address is required")
 	}
 
 	if cmd.AgentPort == 0 {

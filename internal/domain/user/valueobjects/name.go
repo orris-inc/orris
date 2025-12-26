@@ -4,13 +4,15 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 )
 
 // nameRegex ensures the name contains only valid characters
-var nameRegex = regexp.MustCompile(`^[a-zA-Z\s\-'\.]+$`)
+// Supports: letters (including unicode/CJK), digits, spaces, hyphens, apostrophes, and periods
+var nameRegex = regexp.MustCompile(`^[\p{L}\p{N}\s\-'\.]+$`)
 
 // Name represents a person's name value object
 type Name struct {
@@ -26,11 +28,12 @@ func NewName(value string) (*Name, error) {
 		return nil, fmt.Errorf("name cannot be empty")
 	}
 
-	if len(normalized) < 2 {
+	runeCount := utf8.RuneCountInString(normalized)
+	if runeCount < 2 {
 		return nil, fmt.Errorf("name must be at least 2 characters long")
 	}
 
-	if len(normalized) > 100 {
+	if runeCount > 100 {
 		return nil, fmt.Errorf("name cannot exceed 100 characters")
 	}
 
@@ -92,8 +95,8 @@ func (n *Name) Initials() string {
 	parts := strings.Fields(n.value)
 	var initials []string
 	for _, part := range parts {
-		if len(part) > 0 {
-			initials = append(initials, string(part[0]))
+		if r, _ := utf8.DecodeRuneInString(part); r != utf8.RuneError {
+			initials = append(initials, string(r))
 		}
 	}
 	return strings.ToUpper(strings.Join(initials, ""))

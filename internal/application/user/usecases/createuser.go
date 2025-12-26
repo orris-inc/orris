@@ -50,13 +50,13 @@ func (uc *CreateUserUseCase) Execute(ctx context.Context, request dto.CreateUser
 	email, err := vo.NewEmail(request.Email)
 	if err != nil {
 		uc.logger.Errorw("invalid email", "error", err)
-		return nil, fmt.Errorf("invalid email: %w", err)
+		return nil, errors.NewValidationError("invalid email", err.Error())
 	}
 
 	name, err := vo.NewName(request.Name)
 	if err != nil {
 		uc.logger.Errorw("invalid name", "error", err)
-		return nil, fmt.Errorf("invalid name: %w", err)
+		return nil, errors.NewValidationError("invalid name", err.Error())
 	}
 
 	// Create user using constructor with SID generator
