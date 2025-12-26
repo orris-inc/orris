@@ -120,12 +120,12 @@ func (uc *GetTrafficTrendUseCase) validateQuery(query GetTrafficTrendQuery) erro
 func (uc *GetTrafficTrendUseCase) formatPeriod(t time.Time, granularity string) string {
 	switch granularity {
 	case "hour":
-		return t.Format("2006-01-02T15:00:00Z07:00")
+		return t.Format("2006-01-02 15:00")
 	case "day":
 		return t.Format("2006-01-02")
 	case "month":
 		return t.Format("2006-01")
 	default:
-		return t.Format(time.RFC3339)
+		return t.Format("2006-01-02 15:04:05")
 	}
 }

@@ -10,6 +10,7 @@ import (
 	nodeUsecases "github.com/orris-inc/orris/internal/application/node/usecases"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 // SubscriptionUsageRecorderAdapter adapts to record subscription-based usage
@@ -46,8 +47,8 @@ func (a *SubscriptionUsageRecorderAdapter) RecordSubscriptionUsage(ctx context.C
 		return nil
 	}
 
-	// Create period for current hour aggregation
-	period := time.Now().Truncate(time.Hour)
+	// Create period for current hour aggregation in business timezone
+	period := utils.TruncateToHour()
 
 	// Create domain entity
 	usage, err := subscription.NewSubscriptionUsage(subscription.ResourceTypeNode.String(), nodeID, &subscriptionID, period)
@@ -96,8 +97,8 @@ func (a *SubscriptionUsageRecorderAdapter) BatchRecordSubscriptionUsage(ctx cont
 		return nil
 	}
 
-	// Use current hour as period for consistent aggregation
-	period := time.Now().Truncate(time.Hour)
+	// Use current hour as period for consistent aggregation in business timezone
+	period := utils.TruncateToHour()
 
 	// Process each item
 	validCount := 0

@@ -6,6 +6,7 @@ server:
   host: "0.0.0.0"
   port: 8080
   mode: "debug" # debug | release | test
+  timezone: "Asia/Shanghai" # Business timezone for traffic statistics
   allowed_origins:
     - "http://localhost:3000"
   frontend_callback_url: "http://localhost:3000/oauth/callback"

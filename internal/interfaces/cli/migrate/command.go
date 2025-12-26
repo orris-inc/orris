@@ -10,6 +10,7 @@ import (
 	"github.com/orris-inc/orris/internal/infrastructure/database"
 	"github.com/orris-inc/orris/internal/infrastructure/migration"
 	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 var (
@@ -117,6 +118,11 @@ func initEnv() (string, error) {
 
 	if err := logger.Init(&cfg.Logger); err != nil {
 		return "", fmt.Errorf("failed to initialize logger: %w", err)
+	}
+
+	// Initialize business timezone before database connection
+	if err := utils.InitTimezone(cfg.Server.Timezone); err != nil {
+		return "", fmt.Errorf("failed to initialize timezone: %w", err)
 	}
 
 	if err := database.Init(&cfg.Database); err != nil {

@@ -11,6 +11,7 @@ import (
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 // SubscriptionUsageRepositoryImpl implements the subscription.SubscriptionUsageRepository interface
@@ -174,8 +175,8 @@ func (r *SubscriptionUsageRepositoryImpl) GetTotalUsageBySubscriptionID(ctx cont
 func (r *SubscriptionUsageRepositoryImpl) AggregateDaily(ctx context.Context, date time.Time) error {
 	// Start a transaction for atomicity
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Calculate start and end of the day
-		startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
+		// Calculate start and end of the day in business timezone
+		startOfDay := utils.StartOfDay(date)
 		endOfDay := startOfDay.Add(24 * time.Hour)
 
 		// Aggregate usage by resource_type and resource_id for the day
@@ -234,8 +235,8 @@ func (r *SubscriptionUsageRepositoryImpl) AggregateDaily(ctx context.Context, da
 func (r *SubscriptionUsageRepositoryImpl) AggregateMonthly(ctx context.Context, year int, month int) error {
 	// Start a transaction for atomicity
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Calculate start and end of the month
-		startOfMonth := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
+		// Calculate start and end of the month in business timezone
+		startOfMonth := utils.StartOfMonth(year, time.Month(month))
 		endOfMonth := startOfMonth.AddDate(0, 1, 0)
 
 		// Aggregate usage by resource_type and resource_id for the month
@@ -320,7 +321,8 @@ func (r *SubscriptionUsageRepositoryImpl) GetDailyStats(ctx context.Context, res
 
 // GetMonthlyStats retrieves monthly usage statistics for a resource
 func (r *SubscriptionUsageRepositoryImpl) GetMonthlyStats(ctx context.Context, resourceType string, resourceID uint, year int) ([]*subscription.SubscriptionUsage, error) {
-	startOfYear := time.Date(year, 1, 1, 0, 0, 0, 0, time.UTC)
+	// Use business timezone for year boundaries
+	startOfYear := utils.StartOfYear(year)
 	endOfYear := startOfYear.AddDate(1, 0, 0)
 
 	var usageModels []*models.SubscriptionUsageModel

@@ -6,6 +6,7 @@ type ServerConfig struct {
 	Host                string   `mapstructure:"host"`
 	Port                int      `mapstructure:"port"`
 	Mode                string   `mapstructure:"mode"`
+	Timezone            string   `mapstructure:"timezone"` // Business timezone, e.g., "Asia/Shanghai"
 	BaseURL             string   `mapstructure:"base_url"`
 	AllowedOrigins      []string `mapstructure:"allowed_origins"`
 	FrontendCallbackURL string   `mapstructure:"frontend_callback_url"`

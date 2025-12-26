@@ -95,6 +95,7 @@ func setDefaults() {
 	viper.SetDefault("server.host", "0.0.0.0")
 	viper.SetDefault("server.port", 8080)
 	viper.SetDefault("server.mode", "debug")
+	viper.SetDefault("server.timezone", "Asia/Shanghai")
 	viper.SetDefault("server.base_url", "")
 	viper.SetDefault("server.allowed_origins", []string{})
 	viper.SetDefault("server.frontend_callback_url", "")
