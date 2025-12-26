@@ -587,13 +587,21 @@ func (s *ConfigSyncService) convertRuleToSyncData(ctx context.Context, rule *for
 			syncData.TargetPort = targetPort
 		}
 
-		// For hybrid chain direct hops (boundary and pure direct), set listen port from chainPortConfig
-		if hopMode == "boundary" || hopMode == "direct" {
-			if chainPosition > 0 { // Not entry agent
+		// Set listen port based on hop mode
+		// - entry (pos 0): uses rule.ListenPort() (already set in initialization)
+		// - boundary: receives via tunnel, so clear ListenPort (use WS/TLS port instead)
+		// - direct: receives via direct connection, use chainPortConfig port
+		if chainPosition > 0 { // Not entry agent
+			if hopMode == "direct" {
 				listenPort := rule.GetAgentListenPort(agentID)
 				if listenPort > 0 {
 					syncData.ListenPort = listenPort
+				} else {
+					syncData.ListenPort = 0
 				}
+			} else {
+				// boundary and tunnel nodes don't need ListenPort (they use WS/TLS tunnel)
+				syncData.ListenPort = 0
 			}
 		}
 

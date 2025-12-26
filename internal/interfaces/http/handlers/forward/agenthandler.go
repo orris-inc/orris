@@ -300,6 +300,30 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 
 		ruleDTO.ChainPosition = chainPosition
 		ruleDTO.IsLastInChain = isLast
+		ruleDTO.TunnelHops = rule.TunnelHops()
+
+		// Determine hop mode for hybrid chain support
+		hopMode := rule.GetHopMode(chainPosition)
+		ruleDTO.HopMode = hopMode
+
+		// For boundary nodes, set inbound/outbound modes
+		if hopMode == "boundary" {
+			ruleDTO.InboundMode = "tunnel"
+			ruleDTO.OutboundMode = "direct"
+		}
+
+		// Set listen port based on hop mode
+		// - entry (pos 0): uses rule.ListenPort() (already set in DTO initialization)
+		// - boundary: receives via tunnel, so clear ListenPort (use WS/TLS port instead)
+		// - direct: receives via direct connection, use chainPortConfig port
+		if chainPosition > 0 { // Not entry agent
+			if hopMode == "direct" {
+				ruleDTO.ListenPort = rule.GetAgentListenPort(agentID)
+			} else {
+				// boundary and tunnel nodes don't need ListenPort (they use WS/TLS tunnel)
+				ruleDTO.ListenPort = 0
+			}
+		}
 
 		// For non-exit agents in chain, populate next hop information
 		if !isLast {
@@ -318,26 +342,39 @@ func (h *AgentHandler) GetEnabledRules(c *gin.Context) {
 					// Use effective tunnel address (prefers tunnel_address over public_address)
 					ruleDTO.NextHopAddress = nextAgent.GetEffectiveTunnelAddress()
 
-					// Get tunnel ports from cached agent status
-					nextStatus, err := h.statusQuerier.GetStatus(ctx, nextHopAgentID)
-					if err != nil {
-						h.logger.Warnw("failed to get next hop agent status",
-							"rule_id", ruleDTO.ID,
-							"next_hop_agent_id", nextHopAgentID,
-							"error", err,
-						)
-					} else if nextStatus != nil {
-						if nextStatus.WsListenPort > 0 {
-							ruleDTO.NextHopWsPort = nextStatus.WsListenPort
+					// Check if outbound uses tunnel or direct based on hop mode
+					outboundNeedsTunnel := hopMode == "tunnel" || (hopMode == "boundary" && ruleDTO.OutboundMode == "tunnel")
+					if !outboundNeedsTunnel && (hopMode == "direct" || hopMode == "boundary") {
+						// Direct connection mode: use chainPortConfig for next hop port
+						nextHopPort := rule.GetAgentListenPort(nextHopAgentID)
+						if nextHopPort > 0 {
+							ruleDTO.NextHopPort = nextHopPort
 						}
-						if nextStatus.TlsListenPort > 0 {
-							ruleDTO.NextHopTlsPort = nextStatus.TlsListenPort
-						}
-						if nextStatus.WsListenPort == 0 && nextStatus.TlsListenPort == 0 {
-							h.logger.Debugw("next hop agent has no tunnel port configured or is offline",
+						// Generate connection token for direct hop authentication
+						nextHopToken, _ := h.agentTokenService.Generate(nextAgent.SID())
+						ruleDTO.NextHopConnectionToken = nextHopToken
+					} else {
+						// Tunnel mode: get tunnel ports from cached agent status
+						nextStatus, err := h.statusQuerier.GetStatus(ctx, nextHopAgentID)
+						if err != nil {
+							h.logger.Warnw("failed to get next hop agent status",
 								"rule_id", ruleDTO.ID,
 								"next_hop_agent_id", nextHopAgentID,
+								"error", err,
 							)
+						} else if nextStatus != nil {
+							if nextStatus.WsListenPort > 0 {
+								ruleDTO.NextHopWsPort = nextStatus.WsListenPort
+							}
+							if nextStatus.TlsListenPort > 0 {
+								ruleDTO.NextHopTlsPort = nextStatus.TlsListenPort
+							}
+							if nextStatus.WsListenPort == 0 && nextStatus.TlsListenPort == 0 {
+								h.logger.Debugw("next hop agent has no tunnel port configured or is offline",
+									"rule_id", ruleDTO.ID,
+									"next_hop_agent_id", nextHopAgentID,
+								)
+							}
 						}
 					}
 				}
@@ -651,6 +688,27 @@ func (h *AgentHandler) RefreshRule(c *gin.Context) {
 
 		ruleDTO.ChainPosition = chainPosition
 		ruleDTO.IsLastInChain = isLast
+		ruleDTO.TunnelHops = rule.TunnelHops()
+
+		// Determine hop mode for hybrid chain support
+		hopMode := rule.GetHopMode(chainPosition)
+		ruleDTO.HopMode = hopMode
+
+		// For boundary nodes, set inbound/outbound modes
+		if hopMode == "boundary" {
+			ruleDTO.InboundMode = "tunnel"
+			ruleDTO.OutboundMode = "direct"
+		}
+
+		// Set listen port based on hop mode
+		if chainPosition > 0 { // Not entry agent
+			if hopMode == "direct" {
+				ruleDTO.ListenPort = rule.GetAgentListenPort(agentID)
+			} else {
+				// boundary and tunnel nodes don't need ListenPort (they use WS/TLS tunnel)
+				ruleDTO.ListenPort = 0
+			}
+		}
 
 		// Populate ChainAgentIDs (full chain: entry + chain_agents)
 		fullChainIDs := append([]uint{rule.AgentID()}, rule.ChainAgentIDs()...)
@@ -684,13 +742,27 @@ func (h *AgentHandler) RefreshRule(c *gin.Context) {
 					ruleDTO.NextHopAgentID = nextAgent.SID()
 					ruleDTO.NextHopAddress = nextAgent.GetEffectiveTunnelAddress()
 
-					nextStatus, err := h.statusQuerier.GetStatus(ctx, nextHopAgentID)
-					if err == nil && nextStatus != nil {
-						if nextStatus.WsListenPort > 0 {
-							ruleDTO.NextHopWsPort = nextStatus.WsListenPort
+					// Check if outbound uses tunnel or direct based on hop mode
+					outboundNeedsTunnel := hopMode == "tunnel" || (hopMode == "boundary" && ruleDTO.OutboundMode == "tunnel")
+					if !outboundNeedsTunnel && (hopMode == "direct" || hopMode == "boundary") {
+						// Direct connection mode: use chainPortConfig for next hop port
+						nextHopPort := rule.GetAgentListenPort(nextHopAgentID)
+						if nextHopPort > 0 {
+							ruleDTO.NextHopPort = nextHopPort
 						}
-						if nextStatus.TlsListenPort > 0 {
-							ruleDTO.NextHopTlsPort = nextStatus.TlsListenPort
+						// Generate connection token for direct hop authentication
+						nextHopToken, _ := h.agentTokenService.Generate(nextAgent.SID())
+						ruleDTO.NextHopConnectionToken = nextHopToken
+					} else {
+						// Tunnel mode: get tunnel ports from cached agent status
+						nextStatus, err := h.statusQuerier.GetStatus(ctx, nextHopAgentID)
+						if err == nil && nextStatus != nil {
+							if nextStatus.WsListenPort > 0 {
+								ruleDTO.NextHopWsPort = nextStatus.WsListenPort
+							}
+							if nextStatus.TlsListenPort > 0 {
+								ruleDTO.NextHopTlsPort = nextStatus.TlsListenPort
+							}
 						}
 					}
 				}

@@ -495,53 +495,6 @@ func (s *ProbeService) probeChainRule(ctx context.Context, rule *forward.Forward
 				continue
 			}
 
-			// Get next agent's tunnel port from status cache based on rule's tunnel type
-			nextStatus, err := s.statusQuerier.GetStatus(ctx, nextAgentID)
-			if err != nil || nextStatus == nil {
-				hopLatency := &dto.ChainHopLatency{
-					From:    fromAgentStripeID,
-					To:      nextAgent.SID(),
-					Success: false,
-					Online:  isOnline,
-					Error:   "next agent status not found",
-				}
-				chainLatencies = append(chainLatencies, hopLatency)
-				allSuccess = false
-				continue
-			}
-
-			// Select port based on tunnel type
-			var nextTunnelPort uint16
-			if rule.TunnelType().IsTLS() {
-				nextTunnelPort = nextStatus.TlsListenPort
-				if nextTunnelPort == 0 {
-					hopLatency := &dto.ChainHopLatency{
-						From:    fromAgentStripeID,
-						To:      nextAgent.SID(),
-						Success: false,
-						Online:  isOnline,
-						Error:   "next agent has no tls_listen_port configured",
-					}
-					chainLatencies = append(chainLatencies, hopLatency)
-					allSuccess = false
-					continue
-				}
-			} else {
-				nextTunnelPort = nextStatus.WsListenPort
-				if nextTunnelPort == 0 {
-					hopLatency := &dto.ChainHopLatency{
-						From:    fromAgentStripeID,
-						To:      nextAgent.SID(),
-						Success: false,
-						Online:  isOnline,
-						Error:   "next agent has no ws_listen_port configured",
-					}
-					chainLatencies = append(chainLatencies, hopLatency)
-					allSuccess = false
-					continue
-				}
-			}
-
 			hopLatency := &dto.ChainHopLatency{
 				From:   fromAgentStripeID,
 				To:     nextAgent.SID(),
@@ -556,18 +509,78 @@ func (s *ProbeService) probeChainRule(ctx context.Context, rule *forward.Forward
 				continue
 			}
 
-			// Use GetEffectiveTunnelAddress for tunnel connections
-			tunnelAddr := nextAgent.GetEffectiveTunnelAddress()
-			if tunnelAddr == "" {
-				hopLatency.Success = false
-				hopLatency.Error = "next agent has no tunnel address"
-				chainLatencies = append(chainLatencies, hopLatency)
-				allSuccess = false
-				continue
+			// Determine if this hop uses tunnel or direct connection based on hop mode
+			hopMode := rule.GetHopMode(i)
+			outboundNeedsTunnel := hopMode == "tunnel" || (hopMode == "boundary" && false) // boundary outbound is always direct
+
+			var probeAddr string
+			var probePort uint16
+			var probeType dto.ProbeTaskType
+
+			if !outboundNeedsTunnel && (hopMode == "direct" || hopMode == "boundary") {
+				// Direct connection mode: use chainPortConfig for next hop port
+				probePort = rule.GetAgentListenPort(nextAgentID)
+				if probePort == 0 {
+					hopLatency.Success = false
+					hopLatency.Error = "next agent has no direct port configured in chain_port_config"
+					chainLatencies = append(chainLatencies, hopLatency)
+					allSuccess = false
+					continue
+				}
+				probeAddr = nextAgent.GetEffectiveTunnelAddress()
+				if probeAddr == "" {
+					hopLatency.Success = false
+					hopLatency.Error = "next agent has no address"
+					chainLatencies = append(chainLatencies, hopLatency)
+					allSuccess = false
+					continue
+				}
+				probeType = dto.ProbeTaskTypeTarget
+			} else {
+				// Tunnel mode: get tunnel ports from status cache
+				nextStatus, err := s.statusQuerier.GetStatus(ctx, nextAgentID)
+				if err != nil || nextStatus == nil {
+					hopLatency.Success = false
+					hopLatency.Error = "next agent status not found"
+					chainLatencies = append(chainLatencies, hopLatency)
+					allSuccess = false
+					continue
+				}
+
+				// Select port based on tunnel type
+				if rule.TunnelType().IsTLS() {
+					probePort = nextStatus.TlsListenPort
+					if probePort == 0 {
+						hopLatency.Success = false
+						hopLatency.Error = "next agent has no tls_listen_port configured"
+						chainLatencies = append(chainLatencies, hopLatency)
+						allSuccess = false
+						continue
+					}
+				} else {
+					probePort = nextStatus.WsListenPort
+					if probePort == 0 {
+						hopLatency.Success = false
+						hopLatency.Error = "next agent has no ws_listen_port configured"
+						chainLatencies = append(chainLatencies, hopLatency)
+						allSuccess = false
+						continue
+					}
+				}
+
+				probeAddr = nextAgent.GetEffectiveTunnelAddress()
+				if probeAddr == "" {
+					hopLatency.Success = false
+					hopLatency.Error = "next agent has no tunnel address"
+					chainLatencies = append(chainLatencies, hopLatency)
+					allSuccess = false
+					continue
+				}
+				probeType = dto.ProbeTaskTypeTunnel
 			}
 
-			latency, err := s.sendProbeTask(ctx, currentAgentID, ruleStripeID, dto.ProbeTaskTypeTunnel,
-				tunnelAddr, nextTunnelPort, "tcp")
+			latency, err := s.sendProbeTask(ctx, currentAgentID, ruleStripeID, probeType,
+				probeAddr, probePort, "tcp")
 			if err != nil {
 				hopLatency.Success = false
 				hopLatency.Error = err.Error()

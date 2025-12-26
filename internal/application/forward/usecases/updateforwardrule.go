@@ -19,6 +19,7 @@ type UpdateForwardRuleCommand struct {
 	ExitAgentShortID   *string           // exit agent ID (for entry type rules only)
 	ChainAgentShortIDs []string          // chain agent IDs (for chain type rules only), nil means no update
 	ChainPortConfig    map[string]uint16 // chain port config (for direct_chain type rules only), nil means no update
+	TunnelHops         *int              // number of tunnel hops for hybrid chain (nil means no update)
 	TunnelType         *string           // tunnel type: ws or tls (nil means no update)
 	ListenPort         *uint16
 	TargetAddress      *string
@@ -135,7 +136,7 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 		}
 	}
 
-	// Update chain port config (for direct_chain type rules)
+	// Update chain port config (for direct_chain and hybrid chain type rules)
 	if cmd.ChainPortConfig != nil {
 		chainPortConfig := make(map[uint]uint16, len(cmd.ChainPortConfig))
 		for shortID, port := range cmd.ChainPortConfig {
@@ -150,6 +151,13 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 			chainPortConfig[chainAgent.ID()] = port
 		}
 		if err := rule.UpdateChainPortConfig(chainPortConfig); err != nil {
+			return errors.NewValidationError(err.Error())
+		}
+	}
+
+	// Update tunnel hops for hybrid chain (must be after ChainPortConfig update)
+	if cmd.TunnelHops != nil {
+		if err := rule.UpdateTunnelHops(cmd.TunnelHops); err != nil {
 			return errors.NewValidationError(err.Error())
 		}
 	}

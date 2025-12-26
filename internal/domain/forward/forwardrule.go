@@ -1136,38 +1136,95 @@ func (r *ForwardRule) UpdateChainAgentIDs(chainAgentIDs []uint) error {
 	return nil
 }
 
-// UpdateChainPortConfig updates the chain port configuration for direct_chain type rules.
-// DEPRECATED: Use UpdateDirectChainConfig instead for atomic updates.
+// UpdateChainPortConfig updates the chain port configuration.
+// Supported for:
+// - direct_chain: all chain agents require port configuration
+// - chain (hybrid mode): agents from tunnelHops position onward require port configuration
+// DEPRECATED: Use UpdateDirectChainConfig instead for atomic updates of direct_chain rules.
 func (r *ForwardRule) UpdateChainPortConfig(chainPortConfig map[uint]uint16) error {
-	if !r.ruleType.IsDirectChain() {
-		return fmt.Errorf("chain_port_config can only be updated for direct_chain type rules")
+	if !r.ruleType.IsDirectChain() && !r.ruleType.IsChain() {
+		return fmt.Errorf("chain_port_config can only be updated for chain or direct_chain type rules")
 	}
-	if len(chainPortConfig) == 0 {
-		return fmt.Errorf("chain_port_config cannot be empty for direct_chain forward")
-	}
-	// Verify all chain agents have port configuration
-	for _, id := range r.chainAgentIDs {
-		port, exists := chainPortConfig[id]
-		if !exists {
-			return fmt.Errorf("chain_port_config missing port for agent ID %d", id)
+
+	// Handle different rule types
+	if r.ruleType.IsDirectChain() {
+		// For direct_chain: all chain agents need port configuration
+		if len(chainPortConfig) == 0 {
+			return fmt.Errorf("chain_port_config cannot be empty for direct_chain forward")
 		}
-		if port == 0 {
-			return fmt.Errorf("chain_port_config has invalid port for agent ID %d", id)
-		}
-	}
-	// Check for extra entries in chain_port_config
-	for id := range chainPortConfig {
-		found := false
-		for _, chainID := range r.chainAgentIDs {
-			if id == chainID {
-				found = true
-				break
+		// Verify all chain agents have port configuration
+		for _, id := range r.chainAgentIDs {
+			port, exists := chainPortConfig[id]
+			if !exists {
+				return fmt.Errorf("chain_port_config missing port for agent ID %d", id)
+			}
+			if port == 0 {
+				return fmt.Errorf("chain_port_config has invalid port for agent ID %d", id)
 			}
 		}
-		if !found {
-			return fmt.Errorf("chain_port_config contains agent ID %d not in chain_agent_ids", id)
+		// Check for extra entries in chain_port_config
+		for id := range chainPortConfig {
+			found := false
+			for _, chainID := range r.chainAgentIDs {
+				if id == chainID {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return fmt.Errorf("chain_port_config contains agent ID %d not in chain_agent_ids", id)
+			}
+		}
+	} else if r.ruleType.IsChain() {
+		// For chain (hybrid mode): only agents from tunnelHops position need port configuration
+		// If tunnelHops is nil or 0, it's full tunnel mode and no port config is needed
+		// If tunnelHops >= len(chainAgentIDs), it's also full tunnel mode
+		if r.tunnelHops == nil || *r.tunnelHops == 0 || *r.tunnelHops >= len(r.chainAgentIDs) {
+			// Full tunnel mode - chainPortConfig is optional but should be empty or not updated
+			if len(chainPortConfig) > 0 {
+				// Allow clearing or setting for future hybrid mode transition
+				// Just validate the IDs are in chain
+				for id := range chainPortConfig {
+					found := false
+					for _, chainID := range r.chainAgentIDs {
+						if id == chainID {
+							found = true
+							break
+						}
+					}
+					if !found {
+						return fmt.Errorf("chain_port_config contains agent ID %d not in chain_agent_ids", id)
+					}
+				}
+			}
+		} else {
+			// Hybrid chain mode - verify port config for direct hops
+			for i := *r.tunnelHops; i < len(r.chainAgentIDs); i++ {
+				chainAgentID := r.chainAgentIDs[i]
+				port, exists := chainPortConfig[chainAgentID]
+				if !exists {
+					return fmt.Errorf("chain_port_config missing port for agent ID %d (required for direct hop at position %d)", chainAgentID, i+1)
+				}
+				if port == 0 {
+					return fmt.Errorf("chain_port_config has invalid port for agent ID %d", chainAgentID)
+				}
+			}
+			// Check for extra entries not in chain
+			for id := range chainPortConfig {
+				found := false
+				for _, chainID := range r.chainAgentIDs {
+					if id == chainID {
+						found = true
+						break
+					}
+				}
+				if !found {
+					return fmt.Errorf("chain_port_config contains agent ID %d not in chain_agent_ids", id)
+				}
+			}
 		}
 	}
+
 	r.chainPortConfig = chainPortConfig
 	r.updatedAt = time.Now()
 	return nil
