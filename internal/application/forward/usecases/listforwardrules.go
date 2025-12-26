@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
@@ -31,10 +32,11 @@ type ListForwardRulesResult struct {
 
 // ListForwardRulesUseCase handles listing forward rules.
 type ListForwardRulesUseCase struct {
-	repo      forward.Repository
-	agentRepo forward.AgentRepository
-	nodeRepo  node.NodeRepository
-	logger    logger.Interface
+	repo          forward.Repository
+	agentRepo     forward.AgentRepository
+	nodeRepo      node.NodeRepository
+	statusQuerier RuleSyncStatusBatchQuerier
+	logger        logger.Interface
 }
 
 // NewListForwardRulesUseCase creates a new ListForwardRulesUseCase.
@@ -42,13 +44,15 @@ func NewListForwardRulesUseCase(
 	repo forward.Repository,
 	agentRepo forward.AgentRepository,
 	nodeRepo node.NodeRepository,
+	statusQuerier RuleSyncStatusBatchQuerier,
 	logger logger.Interface,
 ) *ListForwardRulesUseCase {
 	return &ListForwardRulesUseCase{
-		repo:      repo,
-		agentRepo: agentRepo,
-		nodeRepo:  nodeRepo,
-		logger:    logger,
+		repo:          repo,
+		agentRepo:     agentRepo,
+		nodeRepo:      nodeRepo,
+		statusQuerier: statusQuerier,
+		logger:        logger,
 	}
 }
 
@@ -139,10 +143,100 @@ func (uc *ListForwardRulesUseCase) Execute(ctx context.Context, query ListForwar
 		}
 	}
 
+	// Populate runtime sync status for each rule
+	if uc.statusQuerier != nil && len(dtos) > 0 {
+		uc.populateSyncStatus(ctx, dtos, agentIDs)
+	}
+
 	return &ListForwardRulesResult{
 		Rules: dtos,
 		Total: total,
 		Page:  query.Page,
 		Pages: pages,
 	}, nil
+}
+
+// populateSyncStatus populates runtime sync status for all rules.
+func (uc *ListForwardRulesUseCase) populateSyncStatus(ctx context.Context, dtos []*dto.ForwardRuleDTO, agentIDs []uint) {
+	// Batch query status for all agents involved in the rules
+	if len(agentIDs) == 0 {
+		return
+	}
+
+	statusMap, err := uc.statusQuerier.GetMultipleRuleStatus(ctx, agentIDs)
+	if err != nil {
+		uc.logger.Warnw("failed to fetch rule sync statuses", "error", err, "agent_count", len(agentIDs))
+		return
+	}
+
+	// Build rule -> agent IDs mapping
+	ruleAgentMap := dto.CollectAllAgentIDsForRules(dtos)
+
+	// Aggregate status for each rule
+	for _, ruleDTO := range dtos {
+		ruleAgentIDs := ruleAgentMap[ruleDTO.ID]
+		if len(ruleAgentIDs) == 0 {
+			continue
+		}
+
+		statusInfo := uc.aggregateRuleStatus(ruleDTO.ID, ruleAgentIDs, statusMap)
+		ruleDTO.PopulateSyncStatus(statusInfo)
+	}
+}
+
+// aggregateRuleStatus aggregates sync status from all agents for a single rule.
+func (uc *ListForwardRulesUseCase) aggregateRuleStatus(
+	ruleSID string,
+	agentIDs []uint,
+	statusMap map[uint]*dto.RuleSyncStatusQueryResult,
+) *dto.RuleSyncStatusInfo {
+	if len(agentIDs) == 0 {
+		return nil
+	}
+
+	var syncStatuses, runStatuses []string
+	var latestUpdate int64
+	healthyCount := 0
+
+	for _, agentID := range agentIDs {
+		syncStatus := "pending"
+		runStatus := "unknown"
+		hasError := false
+
+		// Find this rule's status from agent's reported statuses
+		if queryResult, ok := statusMap[agentID]; ok {
+			if queryResult.UpdatedAt > latestUpdate {
+				latestUpdate = queryResult.UpdatedAt
+			}
+			for _, ruleStatus := range queryResult.Rules {
+				if ruleStatus.RuleID == ruleSID {
+					syncStatus = ruleStatus.SyncStatus
+					runStatus = ruleStatus.RunStatus
+					hasError = ruleStatus.ErrorMessage != ""
+					break
+				}
+			}
+		}
+
+		syncStatuses = append(syncStatuses, syncStatus)
+		runStatuses = append(runStatuses, runStatus)
+
+		// Count healthy agents
+		if syncStatus == "synced" && runStatus == "running" && !hasError {
+			healthyCount++
+		}
+	}
+
+	// Use current time if no updates found
+	if latestUpdate == 0 {
+		latestUpdate = time.Now().Unix()
+	}
+
+	return &dto.RuleSyncStatusInfo{
+		SyncStatus:    dto.AggregateSyncStatus(syncStatuses),
+		RunStatus:     dto.AggregateRunStatus(runStatuses),
+		TotalAgents:   len(agentIDs),
+		HealthyAgents: healthyCount,
+		UpdatedAt:     latestUpdate,
+	}
 }

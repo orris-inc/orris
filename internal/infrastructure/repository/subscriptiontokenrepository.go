@@ -10,6 +10,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	vo "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/db"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -153,8 +154,8 @@ func (r *SubscriptionTokenRepositoryImpl) GetActiveBySubscriptionID(ctx context.
 
 func (r *SubscriptionTokenRepositoryImpl) RevokeAllBySubscriptionID(ctx context.Context, subscriptionID uint) error {
 	now := time.Now()
-	result := r.db.WithContext(ctx).
-		Model(&models.SubscriptionTokenModel{}).
+	tx := db.GetTxFromContext(ctx, r.db)
+	result := tx.Model(&models.SubscriptionTokenModel{}).
 		Where("subscription_id = ?", subscriptionID).
 		Updates(map[string]interface{}{
 			"is_active":  false,
@@ -221,6 +222,7 @@ func (r *SubscriptionTokenRepositoryImpl) toModel(token *subscription.Subscripti
 
 	return &models.SubscriptionTokenModel{
 		ID:             token.ID(),
+		SID:            token.SID(),
 		SubscriptionID: token.SubscriptionID(),
 		Name:           token.Name(),
 		TokenHash:      token.TokenHash(),

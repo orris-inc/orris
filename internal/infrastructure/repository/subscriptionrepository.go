@@ -243,7 +243,8 @@ func (r *SubscriptionRepositoryImpl) Update(ctx context.Context, subscriptionEnt
 }
 
 func (r *SubscriptionRepositoryImpl) Delete(ctx context.Context, id uint) error {
-	if err := r.db.WithContext(ctx).Delete(&models.SubscriptionModel{}, id).Error; err != nil {
+	tx := db.GetTxFromContext(ctx, r.db)
+	if err := tx.Delete(&models.SubscriptionModel{}, id).Error; err != nil {
 		r.logger.Errorw("failed to delete subscription", "id", id, "error", err)
 		return fmt.Errorf("failed to delete subscription: %w", err)
 	}

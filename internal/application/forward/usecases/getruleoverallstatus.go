@@ -210,68 +210,12 @@ func (uc *GetRuleOverallStatusUseCase) aggregateStatus(agentStatuses []dto.Agent
 	}
 
 	// Aggregate sync status: failed > pending > synced
-	overallSyncStatus := uc.aggregateSyncStatus(syncStatuses)
+	overallSyncStatus := dto.AggregateSyncStatus(syncStatuses)
 
 	// Aggregate run status: error > stopped > starting > running
-	overallRunStatus := uc.aggregateRunStatus(runStatuses)
+	overallRunStatus := dto.AggregateRunStatus(runStatuses)
 
 	return overallSyncStatus, overallRunStatus, healthyCount
-}
-
-// aggregateSyncStatus aggregates sync statuses with priority: failed > pending > synced
-func (uc *GetRuleOverallStatusUseCase) aggregateSyncStatus(statuses []string) string {
-	hasFailed := false
-	hasPending := false
-
-	for _, status := range statuses {
-		if status == "failed" {
-			hasFailed = true
-		} else if status == "pending" {
-			hasPending = true
-		}
-	}
-
-	if hasFailed {
-		return "failed"
-	}
-	if hasPending {
-		return "pending"
-	}
-	return "synced"
-}
-
-// aggregateRunStatus aggregates run statuses with priority: error > stopped > starting > running
-func (uc *GetRuleOverallStatusUseCase) aggregateRunStatus(statuses []string) string {
-	hasError := false
-	hasStopped := false
-	hasStarting := false
-	hasUnknown := false
-
-	for _, status := range statuses {
-		if status == "error" {
-			hasError = true
-		} else if status == "stopped" {
-			hasStopped = true
-		} else if status == "starting" {
-			hasStarting = true
-		} else if status == "unknown" {
-			hasUnknown = true
-		}
-	}
-
-	if hasError {
-		return "error"
-	}
-	if hasStopped {
-		return "stopped"
-	}
-	if hasStarting {
-		return "starting"
-	}
-	if hasUnknown {
-		return "unknown"
-	}
-	return "running"
 }
 
 // findLatestUpdate finds the latest update timestamp from all agent statuses.

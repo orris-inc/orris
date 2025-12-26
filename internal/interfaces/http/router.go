@@ -249,6 +249,9 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	cancelSubscriptionUC := subscriptionUsecases.NewCancelSubscriptionUseCase(
 		subscriptionRepo, subscriptionTokenRepo, log,
 	)
+	deleteSubscriptionUC := subscriptionUsecases.NewDeleteSubscriptionUseCase(
+		subscriptionRepo, subscriptionTokenRepo, shareddb.NewTransactionManager(db), log,
+	)
 	renewSubscriptionUC := subscriptionUsecases.NewRenewSubscriptionUseCase(
 		subscriptionRepo, subscriptionPlanRepo, planPricingRepo, log,
 	)
@@ -283,6 +286,9 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	deactivatePlanUC := subscriptionUsecases.NewDeactivatePlanUseCase(
 		subscriptionPlanRepo, log,
 	)
+	deletePlanUC := subscriptionUsecases.NewDeletePlanUseCase(
+		subscriptionPlanRepo, subscriptionRepo, planPricingRepo, shareddb.NewTransactionManager(db), log,
+	)
 	getPlanPricingsUC := subscriptionUsecases.NewGetPlanPricingsUseCase(
 		subscriptionPlanRepo, planPricingRepo, log,
 	)
@@ -302,7 +308,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	subscriptionHandler := handlers.NewSubscriptionHandler(
 		createSubscriptionUC, getSubscriptionUC, listUserSubscriptionsUC,
-		cancelSubscriptionUC, changePlanUC, getSubscriptionUsageStatsUC,
+		cancelSubscriptionUC, deleteSubscriptionUC, changePlanUC, getSubscriptionUsageStatsUC,
 		resetSubscriptionLinkUC, log,
 	)
 	adminSubscriptionHandler := adminHandlers.NewSubscriptionHandler(
@@ -323,7 +329,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	planHandler := handlers.NewPlanHandler(
 		createPlanUC, updatePlanUC, getPlanUC, listPlansUC,
-		getPublicPlansUC, activatePlanUC, deactivatePlanUC, getPlanPricingsUC,
+		getPublicPlansUC, activatePlanUC, deactivatePlanUC, deletePlanUC, getPlanPricingsUC,
 	)
 	subscriptionTokenHandler := handlers.NewSubscriptionTokenHandler(
 		generateTokenUC, listTokensUC, revokeTokenUC, refreshSubscriptionTokenUC,
@@ -684,7 +690,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	getForwardRuleUC = forwardUsecases.NewGetForwardRuleUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, log)
 	updateForwardRuleUC = forwardUsecases.NewUpdateForwardRuleUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, configSyncService, log)
 	deleteForwardRuleUC = forwardUsecases.NewDeleteForwardRuleUseCase(forwardRuleRepo, configSyncService, log)
-	listForwardRulesUC = forwardUsecases.NewListForwardRulesUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, log)
+	listForwardRulesUC = forwardUsecases.NewListForwardRulesUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, ruleSyncStatusAdapter, log)
 	enableForwardRuleUC = forwardUsecases.NewEnableForwardRuleUseCase(forwardRuleRepo, configSyncService, log)
 	disableForwardRuleUC = forwardUsecases.NewDisableForwardRuleUseCase(forwardRuleRepo, configSyncService, log)
 	resetForwardTrafficUC = forwardUsecases.NewResetForwardRuleTrafficUseCase(forwardRuleRepo, log)
@@ -701,6 +707,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		forwardRuleRepo,
 		forwardAgentRepo,
 		nodeRepoImpl,
+		ruleSyncStatusAdapter,
 		log,
 	)
 	txMgr := shareddb.NewTransactionManager(db)
@@ -932,6 +939,7 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 			subscriptionWithOwnership.PATCH("/status", r.subscriptionHandler.UpdateStatus)
 			subscriptionWithOwnership.PATCH("/plan", r.subscriptionHandler.ChangePlan)
 			subscriptionWithOwnership.PUT("/link", r.subscriptionHandler.ResetLink)
+			subscriptionWithOwnership.DELETE("", r.subscriptionHandler.DeleteSubscription)
 
 			// Token sub-resource endpoints (using /action path due to Gin framework limitation with colon format)
 			subscriptionWithOwnership.POST("/tokens/:token_id/refresh", r.subscriptionTokenHandler.RefreshToken)
@@ -979,6 +987,7 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 			// Generic parameterized routes (must come LAST)
 			plansProtected.GET("/:id", r.planHandler.GetPlan)
 			plansProtected.PUT("/:id", r.planHandler.UpdatePlan)
+			plansProtected.DELETE("/:id", r.planHandler.DeletePlan)
 		}
 	}
 

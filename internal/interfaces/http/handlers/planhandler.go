@@ -29,6 +29,7 @@ type PlanHandler struct {
 	getPublicPlansUC  *usecases.GetPublicPlansUseCase
 	activatePlanUC    *usecases.ActivatePlanUseCase
 	deactivatePlanUC  *usecases.DeactivatePlanUseCase
+	deletePlanUC      *usecases.DeletePlanUseCase
 	getPlanPricingsUC *usecases.GetPlanPricingsUseCase
 	logger            logger.Interface
 }
@@ -41,6 +42,7 @@ func NewPlanHandler(
 	getPublicPlansUC *usecases.GetPublicPlansUseCase,
 	activatePlanUC *usecases.ActivatePlanUseCase,
 	deactivatePlanUC *usecases.DeactivatePlanUseCase,
+	deletePlanUC *usecases.DeletePlanUseCase,
 	getPlanPricingsUC *usecases.GetPlanPricingsUseCase,
 ) *PlanHandler {
 	return &PlanHandler{
@@ -51,6 +53,7 @@ func NewPlanHandler(
 		getPublicPlansUC:  getPublicPlansUC,
 		activatePlanUC:    activatePlanUC,
 		deactivatePlanUC:  deactivatePlanUC,
+		deletePlanUC:      deletePlanUC,
 		getPlanPricingsUC: getPlanPricingsUC,
 		logger:            logger.NewLogger(),
 	}
@@ -249,6 +252,21 @@ func (h *PlanHandler) GetPlanPricings(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "", result)
+}
+
+func (h *PlanHandler) DeletePlan(c *gin.Context) {
+	planSID, err := parsePlanSID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	if err := h.deletePlanUC.Execute(c.Request.Context(), planSID); err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Plan deleted successfully", nil)
 }
 
 func parsePlanSID(c *gin.Context) (string, error) {

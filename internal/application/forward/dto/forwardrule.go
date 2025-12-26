@@ -59,6 +59,13 @@ type ForwardRuleDTO struct {
 	InboundMode  string `json:"inbound_mode,omitempty"`  // for boundary nodes: "tunnel" or "direct"
 	OutboundMode string `json:"outbound_mode,omitempty"` // for boundary nodes: "tunnel" or "direct"
 
+	// Runtime sync status (populated from agent status cache)
+	SyncStatus      string `json:"sync_status,omitempty"`       // aggregated: synced, pending, failed
+	RunStatus       string `json:"run_status,omitempty"`        // aggregated: running, stopped, error, starting, unknown
+	TotalAgents     int    `json:"total_agents,omitempty"`      // total agents in forwarding chain
+	HealthyAgents   int    `json:"healthy_agents,omitempty"`    // number of healthy agents
+	StatusUpdatedAt int64  `json:"status_updated_at,omitempty"` // last status update timestamp (Unix seconds)
+
 	// Chain-specific fields (populated for chain rules based on requesting agent's role)
 	ChainPosition          int    `json:"chain_position,omitempty"`            // agent's position in chain (0-indexed)
 	IsLastInChain          bool   `json:"is_last_in_chain,omitempty"`          // true if agent is last in chain
@@ -270,4 +277,47 @@ func CollectAgentIDs(dtos []*ForwardRuleDTO) []uint {
 		ids = append(ids, id)
 	}
 	return ids
+}
+
+// RuleSyncStatusInfo contains aggregated sync status for a rule.
+type RuleSyncStatusInfo struct {
+	SyncStatus    string // aggregated: synced, pending, failed
+	RunStatus     string // aggregated: running, stopped, error, starting, unknown
+	TotalAgents   int    // total agents in chain
+	HealthyAgents int    // number of healthy agents
+	UpdatedAt     int64  // last update timestamp (Unix seconds)
+}
+
+// PopulateSyncStatus fills in the runtime sync status fields.
+func (d *ForwardRuleDTO) PopulateSyncStatus(info *RuleSyncStatusInfo) {
+	if info == nil {
+		return
+	}
+	d.SyncStatus = info.SyncStatus
+	d.RunStatus = info.RunStatus
+	d.TotalAgents = info.TotalAgents
+	d.HealthyAgents = info.HealthyAgents
+	d.StatusUpdatedAt = info.UpdatedAt
+}
+
+// CollectAllAgentIDsForRules collects all agent IDs involved in forwarding for each rule.
+// Returns a map from rule SID to list of agent IDs (including entry, exit, and chain agents).
+func CollectAllAgentIDsForRules(dtos []*ForwardRuleDTO) map[string][]uint {
+	result := make(map[string][]uint, len(dtos))
+	for _, dto := range dtos {
+		var agentIDs []uint
+		if dto.internalAgentID != 0 {
+			agentIDs = append(agentIDs, dto.internalAgentID)
+		}
+		switch dto.RuleType {
+		case "entry":
+			if dto.internalExitAgentID != 0 {
+				agentIDs = append(agentIDs, dto.internalExitAgentID)
+			}
+		case "chain", "direct_chain":
+			agentIDs = append(agentIDs, dto.internalChainAgents...)
+		}
+		result[dto.ID] = agentIDs
+	}
+	return result
 }

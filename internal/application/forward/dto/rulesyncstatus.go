@@ -52,3 +52,61 @@ type RuleOverallStatusResponse struct {
 type GetRuleOverallStatusInput struct {
 	RuleSID string // Stripe-style rule ID (e.g., "fr_xK9mP2vL3nQ")
 }
+
+// AggregateSyncStatus aggregates sync statuses with priority: failed > pending > synced.
+func AggregateSyncStatus(statuses []string) string {
+	hasFailed := false
+	hasPending := false
+
+	for _, status := range statuses {
+		switch status {
+		case "failed":
+			hasFailed = true
+		case "pending":
+			hasPending = true
+		}
+	}
+
+	if hasFailed {
+		return "failed"
+	}
+	if hasPending {
+		return "pending"
+	}
+	return "synced"
+}
+
+// AggregateRunStatus aggregates run statuses with priority: error > stopped > starting > unknown > running.
+func AggregateRunStatus(statuses []string) string {
+	hasError := false
+	hasStopped := false
+	hasStarting := false
+	hasUnknown := false
+
+	for _, status := range statuses {
+		switch status {
+		case "error":
+			hasError = true
+		case "stopped":
+			hasStopped = true
+		case "starting":
+			hasStarting = true
+		case "unknown":
+			hasUnknown = true
+		}
+	}
+
+	if hasError {
+		return "error"
+	}
+	if hasStopped {
+		return "stopped"
+	}
+	if hasStarting {
+		return "starting"
+	}
+	if hasUnknown {
+		return "unknown"
+	}
+	return "running"
+}

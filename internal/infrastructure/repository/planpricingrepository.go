@@ -10,6 +10,7 @@ import (
 	vo "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/db"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -254,8 +255,8 @@ func (r *PlanPricingRepositoryImpl) Delete(ctx context.Context, id uint) error {
 
 // DeleteByPlanID deletes all pricing records for a specific plan
 func (r *PlanPricingRepositoryImpl) DeleteByPlanID(ctx context.Context, planID uint) error {
-	result := r.db.WithContext(ctx).
-		Where("plan_id = ?", planID).
+	tx := db.GetTxFromContext(ctx, r.db)
+	result := tx.Where("plan_id = ?", planID).
 		Delete(&models.PlanPricingModel{})
 
 	if result.Error != nil {

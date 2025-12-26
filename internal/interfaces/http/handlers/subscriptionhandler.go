@@ -27,6 +27,7 @@ type SubscriptionHandler struct {
 	getUseCase           *usecases.GetSubscriptionUseCase
 	listUserUseCase      *usecases.ListUserSubscriptionsUseCase
 	cancelUseCase        *usecases.CancelSubscriptionUseCase
+	deleteUseCase        *usecases.DeleteSubscriptionUseCase
 	changePlanUseCase    *usecases.ChangePlanUseCase
 	getUsageStatsUseCase *usecases.GetSubscriptionUsageStatsUseCase
 	resetLinkUseCase     *usecases.ResetSubscriptionLinkUseCase
@@ -39,6 +40,7 @@ func NewSubscriptionHandler(
 	getUC *usecases.GetSubscriptionUseCase,
 	listUserUC *usecases.ListUserSubscriptionsUseCase,
 	cancelUC *usecases.CancelSubscriptionUseCase,
+	deleteUC *usecases.DeleteSubscriptionUseCase,
 	changePlanUC *usecases.ChangePlanUseCase,
 	getUsageStatsUC *usecases.GetSubscriptionUsageStatsUseCase,
 	resetLinkUC *usecases.ResetSubscriptionLinkUseCase,
@@ -49,6 +51,7 @@ func NewSubscriptionHandler(
 		getUseCase:           getUC,
 		listUserUseCase:      listUserUC,
 		cancelUseCase:        cancelUC,
+		deleteUseCase:        deleteUC,
 		changePlanUseCase:    changePlanUC,
 		getUsageStatsUseCase: getUsageStatsUC,
 		resetLinkUseCase:     resetLinkUC,
@@ -420,4 +423,28 @@ func (h *SubscriptionHandler) ResetLink(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "Subscription link reset successfully", result)
+}
+
+// DeleteSubscription handles DELETE /subscriptions/:id
+func (h *SubscriptionHandler) DeleteSubscription(c *gin.Context) {
+	// Ownership already verified by middleware
+	subscriptionID, exists := c.Get("subscription_id")
+	if !exists {
+		sidStr := c.Param("id")
+		if err := id.ValidatePrefix(sidStr, id.PrefixSubscription); err != nil {
+			utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID format, expected sub_xxxxx")
+			return
+		}
+		h.logger.Warnw("subscription ownership middleware not applied, falling back to SID resolution", "sid", sidStr)
+		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error: ownership middleware required")
+		return
+	}
+
+	if err := h.deleteUseCase.Execute(c.Request.Context(), subscriptionID.(uint)); err != nil {
+		h.logger.Errorw("failed to delete subscription", "error", err, "subscription_id", subscriptionID)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Subscription deleted successfully", nil)
 }
