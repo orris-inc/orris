@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -12,6 +13,21 @@ import (
 	vo "github.com/orris-inc/orris/internal/domain/ticket/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 )
+
+// allowedTicketOrderByFields defines the whitelist of allowed ORDER BY fields
+// to prevent SQL injection attacks.
+var allowedTicketOrderByFields = map[string]bool{
+	"id":          true,
+	"number":      true,
+	"title":       true,
+	"status":      true,
+	"priority":    true,
+	"category":    true,
+	"creator_id":  true,
+	"assignee_id": true,
+	"created_at":  true,
+	"updated_at":  true,
+}
 
 type TicketRepository struct {
 	db *gorm.DB
@@ -121,14 +137,14 @@ func (r *TicketRepository) List(
 		return nil, 0, fmt.Errorf("failed to count tickets: %w", err)
 	}
 
-	if filter.SortBy != "" {
-		order := filter.SortBy
-		if filter.SortOrder == "desc" {
-			order += " DESC"
-		} else {
-			order += " ASC"
+	// Apply sorting with whitelist validation to prevent SQL injection
+	sortBy := strings.ToLower(filter.SortBy)
+	if sortBy != "" && allowedTicketOrderByFields[sortBy] {
+		order := strings.ToUpper(filter.SortOrder)
+		if order != "ASC" && order != "DESC" {
+			order = "DESC"
 		}
-		query = query.Order(order)
+		query = query.Order(sortBy + " " + order)
 	} else {
 		query = query.Order("created_at DESC")
 	}

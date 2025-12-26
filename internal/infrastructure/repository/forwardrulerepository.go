@@ -15,6 +15,26 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
+// allowedRuleOrderByFields defines the whitelist of allowed ORDER BY fields
+// to prevent SQL injection attacks.
+var allowedRuleOrderByFields = map[string]bool{
+	"id":             true,
+	"sid":            true,
+	"agent_id":       true,
+	"user_id":        true,
+	"rule_type":      true,
+	"name":           true,
+	"listen_port":    true,
+	"target_port":    true,
+	"protocol":       true,
+	"status":         true,
+	"upload_bytes":   true,
+	"download_bytes": true,
+	"sort_order":     true,
+	"created_at":     true,
+	"updated_at":     true,
+}
+
 // ForwardRuleRepositoryImpl implements the forward.Repository interface.
 type ForwardRuleRepositoryImpl struct {
 	db     *gorm.DB
@@ -259,15 +279,15 @@ func (r *ForwardRuleRepositoryImpl) List(ctx context.Context, filter forward.Lis
 		return nil, 0, fmt.Errorf("failed to count forward rules: %w", err)
 	}
 
-	// Apply sorting
+	// Apply sorting with whitelist validation to prevent SQL injection
 	orderBy := filter.OrderBy
-	order := filter.Order
-	if orderBy == "" {
+	if orderBy == "" || !allowedRuleOrderByFields[orderBy] {
 		// Default: sort by sort_order ASC, then created_at DESC
 		query = query.Order("sort_order ASC, created_at DESC")
 	} else {
-		if order == "" {
-			order = "desc"
+		order := strings.ToUpper(filter.Order)
+		if order != "ASC" && order != "DESC" {
+			order = "DESC"
 		}
 		query = query.Order(fmt.Sprintf("%s %s", orderBy, order))
 	}
@@ -478,15 +498,15 @@ func (r *ForwardRuleRepositoryImpl) ListByUserID(ctx context.Context, userID uin
 		return nil, 0, fmt.Errorf("failed to count forward rules by user ID: %w", err)
 	}
 
-	// Apply sorting
+	// Apply sorting with whitelist validation to prevent SQL injection
 	orderBy := filter.OrderBy
-	order := filter.Order
-	if orderBy == "" {
+	if orderBy == "" || !allowedRuleOrderByFields[orderBy] {
 		// Default: sort by sort_order ASC, then created_at DESC
 		query = query.Order("sort_order ASC, created_at DESC")
 	} else {
-		if order == "" {
-			order = "desc"
+		order := strings.ToUpper(filter.Order)
+		if order != "ASC" && order != "DESC" {
+			order = "DESC"
 		}
 		query = query.Order(fmt.Sprintf("%s %s", orderBy, order))
 	}

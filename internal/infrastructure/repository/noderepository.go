@@ -17,6 +17,24 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
+// allowedNodeOrderByFields defines the whitelist of allowed ORDER BY fields
+// to prevent SQL injection attacks.
+var allowedNodeOrderByFields = map[string]bool{
+	"id":             true,
+	"sid":            true,
+	"name":           true,
+	"server_address": true,
+	"agent_port":     true,
+	"protocol":       true,
+	"status":         true,
+	"user_id":        true,
+	"region":         true,
+	"sort_order":     true,
+	"last_seen_at":   true,
+	"created_at":     true,
+	"updated_at":     true,
+}
+
 // NodeRepositoryImpl implements the node.NodeRepository interface
 type NodeRepositoryImpl struct {
 	db                    *gorm.DB
@@ -420,10 +438,14 @@ func (r *NodeRepositoryImpl) List(ctx context.Context, filter node.NodeFilter) (
 		return nil, 0, fmt.Errorf("failed to count nodes: %w", err)
 	}
 
-	// Apply sorting
-	orderClause := filter.SortFilter.OrderClause()
-	if orderClause != "" {
-		query = query.Order(orderClause)
+	// Apply sorting with whitelist validation to prevent SQL injection
+	sortBy := filter.SortFilter.SortBy
+	if sortBy != "" && allowedNodeOrderByFields[sortBy] {
+		order := "ASC"
+		if filter.SortFilter.IsDescending() {
+			order = "DESC"
+		}
+		query = query.Order(fmt.Sprintf("%s %s", sortBy, order))
 	} else {
 		query = query.Order("sort_order ASC, created_at DESC")
 	}
@@ -653,10 +675,14 @@ func (r *NodeRepositoryImpl) ListByUserID(ctx context.Context, userID uint, filt
 		return nil, 0, fmt.Errorf("failed to count user nodes: %w", err)
 	}
 
-	// Apply sorting
-	orderClause := filter.SortFilter.OrderClause()
-	if orderClause != "" {
-		query = query.Order(orderClause)
+	// Apply sorting with whitelist validation to prevent SQL injection
+	sortBy := filter.SortFilter.SortBy
+	if sortBy != "" && allowedNodeOrderByFields[sortBy] {
+		order := "ASC"
+		if filter.SortFilter.IsDescending() {
+			order = "DESC"
+		}
+		query = query.Order(fmt.Sprintf("%s %s", sortBy, order))
 	} else {
 		query = query.Order("created_at DESC")
 	}

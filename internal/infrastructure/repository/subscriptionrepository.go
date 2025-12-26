@@ -16,6 +16,20 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
+// allowedSubscriptionSortByFields defines the whitelist of allowed ORDER BY fields
+// to prevent SQL injection attacks.
+var allowedSubscriptionSortByFields = map[string]bool{
+	"id":         true,
+	"sid":        true,
+	"user_id":    true,
+	"plan_id":    true,
+	"status":     true,
+	"start_date": true,
+	"end_date":   true,
+	"created_at": true,
+	"updated_at": true,
+}
+
 type SubscriptionRepositoryImpl struct {
 	db     *gorm.DB
 	mapper mappers.SubscriptionMapper
@@ -322,11 +336,11 @@ func (r *SubscriptionRepositoryImpl) List(ctx context.Context, filter subscripti
 		return nil, 0, fmt.Errorf("failed to count subscriptions: %w", err)
 	}
 
-	sortBy := "created_at"
-	if filter.SortBy != "" {
-		sortBy = filter.SortBy
+	// Apply sorting with whitelist validation to prevent SQL injection
+	sortBy := filter.SortBy
+	if sortBy == "" || !allowedSubscriptionSortByFields[sortBy] {
+		sortBy = "created_at"
 	}
-
 	order := "DESC"
 	if !filter.SortDesc {
 		order = "ASC"

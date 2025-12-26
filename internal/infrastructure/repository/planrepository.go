@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"gorm.io/gorm"
 
@@ -15,6 +16,20 @@ import (
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
+
+// allowedPlanOrderByFields defines the whitelist of allowed ORDER BY fields
+// to prevent SQL injection attacks.
+var allowedPlanOrderByFields = map[string]bool{
+	"id":         true,
+	"sid":        true,
+	"name":       true,
+	"slug":       true,
+	"status":     true,
+	"is_public":  true,
+	"sort_order": true,
+	"created_at": true,
+	"updated_at": true,
+}
 
 type PlanRepositoryImpl struct {
 	db     *gorm.DB
@@ -213,12 +228,21 @@ func (r *PlanRepositoryImpl) List(ctx context.Context, filter subscription.PlanF
 
 	offset := (page - 1) * pageSize
 
-	sortBy := filter.SortBy
-	if sortBy == "" {
-		sortBy = "sort_order ASC, created_at DESC"
+	// Apply sorting with whitelist validation to prevent SQL injection
+	sortBy := strings.ToLower(filter.SortBy)
+	if sortBy == "" || !allowedPlanOrderByFields[sortBy] {
+		// Default: sort by sort_order ASC, then created_at DESC
+		query = query.Order("sort_order ASC, created_at DESC")
+	} else {
+		// Use DESC for time-based fields, ASC for others
+		order := "ASC"
+		if sortBy == "created_at" || sortBy == "updated_at" {
+			order = "DESC"
+		}
+		query = query.Order(sortBy + " " + order)
 	}
 
-	query = query.Offset(offset).Limit(pageSize).Order(sortBy)
+	query = query.Offset(offset).Limit(pageSize)
 
 	var planModels []*models.PlanModel
 	if err := query.Find(&planModels).Error; err != nil {

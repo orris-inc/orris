@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"strings"
 
 	"gorm.io/gorm"
 
@@ -14,6 +15,19 @@ import (
 	"github.com/orris-inc/orris/internal/shared/db"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
+
+// allowedUserOrderByFields defines the whitelist of allowed ORDER BY fields
+// to prevent SQL injection attacks.
+var allowedUserOrderByFields = map[string]bool{
+	"id":         true,
+	"sid":        true,
+	"email":      true,
+	"name":       true,
+	"role":       true,
+	"status":     true,
+	"created_at": true,
+	"updated_at": true,
+}
 
 // UserRepository implements the user repository interface with DDD patterns
 type UserRepository struct {
@@ -264,15 +278,16 @@ func (r *UserRepository) List(ctx context.Context, filter user.ListFilter) ([]*u
 		return nil, 0, fmt.Errorf("failed to count users: %w", err)
 	}
 
-	// Apply sorting
-	if filter.OrderBy != "" {
-		order := "ASC"
-		if filter.Order == "desc" {
+	// Apply sorting with whitelist validation to prevent SQL injection
+	orderBy := filter.OrderBy
+	if orderBy == "" || !allowedUserOrderByFields[orderBy] {
+		query = query.Order("created_at DESC")
+	} else {
+		order := strings.ToUpper(filter.Order)
+		if order != "ASC" && order != "DESC" {
 			order = "DESC"
 		}
-		query = query.Order(fmt.Sprintf("%s %s", filter.OrderBy, order))
-	} else {
-		query = query.Order("created_at DESC")
+		query = query.Order(fmt.Sprintf("%s %s", orderBy, order))
 	}
 
 	// Apply pagination

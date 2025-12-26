@@ -2,8 +2,14 @@
 package db
 
 import (
+	"regexp"
+
 	"gorm.io/gorm"
 )
+
+// validAliasPattern validates that a table alias contains only safe characters
+// (letters, numbers, underscores) and starts with a letter to prevent SQL injection.
+var validAliasPattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]*$`)
 
 // NotDeleted is a GORM scope that filters out soft-deleted records.
 // Use this scope when querying with Model().Where().Count() or similar patterns
@@ -21,12 +27,19 @@ func NotDeleted() func(db *gorm.DB) *gorm.DB {
 
 // NotDeletedWithAlias is a GORM scope that filters out soft-deleted records with a table alias.
 // Use this when joining tables and need to specify which table's deleted_at to check.
+// The alias parameter is validated to prevent SQL injection - it must contain only
+// letters, numbers, and underscores, and must start with a letter.
 //
 // Example usage:
 //
 //	db.Table("users u").Scopes(db.NotDeletedWithAlias("u")).Find(&results)
 func NotDeletedWithAlias(alias string) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
+		// Validate alias to prevent SQL injection
+		if !validAliasPattern.MatchString(alias) {
+			// Return unmodified query if alias is invalid (fail-safe)
+			return db.Where("deleted_at IS NULL")
+		}
 		return db.Where(alias + ".deleted_at IS NULL")
 	}
 }

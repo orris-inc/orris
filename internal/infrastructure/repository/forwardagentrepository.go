@@ -15,6 +15,19 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
+// allowedAgentOrderByFields defines the whitelist of allowed ORDER BY fields
+// to prevent SQL injection attacks.
+var allowedAgentOrderByFields = map[string]bool{
+	"id":           true,
+	"sid":          true,
+	"name":         true,
+	"status":       true,
+	"group_id":     true,
+	"last_seen_at": true,
+	"created_at":   true,
+	"updated_at":   true,
+}
+
 // ForwardAgentRepositoryImpl implements the forward.AgentRepository interface.
 type ForwardAgentRepositoryImpl struct {
 	db     *gorm.DB
@@ -253,14 +266,14 @@ func (r *ForwardAgentRepositoryImpl) List(ctx context.Context, filter forward.Ag
 		return nil, 0, fmt.Errorf("failed to count forward agents: %w", err)
 	}
 
-	// Apply sorting
+	// Apply sorting with whitelist validation to prevent SQL injection
 	orderBy := filter.OrderBy
-	order := filter.Order
-	if orderBy == "" {
+	if orderBy == "" || !allowedAgentOrderByFields[orderBy] {
 		orderBy = "created_at"
 	}
-	if order == "" {
-		order = "desc"
+	order := strings.ToUpper(filter.Order)
+	if order != "ASC" && order != "DESC" {
+		order = "DESC"
 	}
 	query = query.Order(fmt.Sprintf("%s %s", orderBy, order))
 
