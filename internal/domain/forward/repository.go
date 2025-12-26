@@ -1,6 +1,10 @@
 package forward
 
-import "context"
+import (
+	"context"
+
+	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
+)
 
 // Repository defines the interface for forward rule persistence.
 type Repository interface {
@@ -65,6 +69,16 @@ type Repository interface {
 
 	// UpdateSortOrders batch updates sort_order for multiple rules.
 	UpdateSortOrders(ctx context.Context, ruleOrders map[uint]int) error
+
+	// ListSystemRulesByTargetNodes returns enabled system rules targeting the specified nodes.
+	// Only includes rules with system scope (user_id IS NULL or 0).
+	// This is used for Node Plan subscription delivery where user rules should be excluded.
+	ListSystemRulesByTargetNodes(ctx context.Context, nodeIDs []uint) ([]*ForwardRule, error)
+
+	// ListUserRulesForDelivery returns enabled user rules for subscription delivery.
+	// Only includes rules with user scope (user_id = userID) and target_node_id set.
+	// This is used for Forward Plan subscription delivery.
+	ListUserRulesForDelivery(ctx context.Context, userID uint) ([]*ForwardRule, error)
 }
 
 // ListFilter defines the filtering options for listing forward rules.
@@ -73,7 +87,8 @@ type ListFilter struct {
 	PageSize         int
 	AgentID          uint
 	UserID           *uint
-	IncludeUserRules bool // When false (default), excludes rules with user_id set; when true, includes all rules
+	Scope            *vo.RuleScope // Filter by rule scope (system or user). Takes precedence over IncludeUserRules if set.
+	IncludeUserRules bool          // When false (default), excludes rules with user_id set; when true, includes all rules
 	Name             string
 	Protocol         string
 	Status           string

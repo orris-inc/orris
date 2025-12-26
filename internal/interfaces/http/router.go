@@ -335,7 +335,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		generateTokenUC, listTokensUC, revokeTokenUC, refreshSubscriptionTokenUC,
 	)
 
-	nodeRepo := adapters.NewNodeRepositoryAdapter(nodeRepoImpl, db, log)
+	nodeRepo := adapters.NewNodeRepositoryAdapter(nodeRepoImpl, forwardRuleRepo, db, log)
 	tokenValidator := adapters.NewSubscriptionTokenValidatorAdapter(db, log)
 
 	// Initialize subscription template loader

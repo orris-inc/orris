@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/orris-inc/orris/internal/application/node/usecases"
+	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
 	nodevo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
@@ -22,16 +23,18 @@ type NodeRepository interface {
 }
 
 type NodeRepositoryAdapter struct {
-	nodeRepo NodeRepository
-	db       *gorm.DB
-	logger   logger.Interface
+	nodeRepo        NodeRepository
+	forwardRuleRepo forward.Repository
+	db              *gorm.DB
+	logger          logger.Interface
 }
 
-func NewNodeRepositoryAdapter(nodeRepo NodeRepository, db *gorm.DB, logger logger.Interface) *NodeRepositoryAdapter {
+func NewNodeRepositoryAdapter(nodeRepo NodeRepository, forwardRuleRepo forward.Repository, db *gorm.DB, logger logger.Interface) *NodeRepositoryAdapter {
 	return &NodeRepositoryAdapter{
-		nodeRepo: nodeRepo,
-		db:       db,
-		logger:   logger,
+		nodeRepo:        nodeRepo,
+		forwardRuleRepo: forwardRuleRepo,
+		db:              db,
+		logger:          logger,
 	}
 }
 
@@ -272,23 +275,18 @@ func (r *NodeRepositoryAdapter) GetByTokenHash(ctx context.Context, tokenHash st
 
 // getForwardedNodes queries forward rules that target the given nodes and generates
 // additional subscription entries using the forward agent's public address.
+// Uses Repository method to ensure proper scope isolation (system rules only).
 func (r *NodeRepositoryAdapter) getForwardedNodes(ctx context.Context, nodeIDs []uint, nodeMap map[uint]*usecases.Node) []*usecases.Node {
 	if len(nodeIDs) == 0 {
 		return nil
 	}
 
-	// Query forward rules that target these nodes (all types with target node, enabled status)
-	// Important: Only include system/admin-created rules (user_id IS NULL or 0)
-	// User-created rules (with user_id) should only appear in their own subscription,
-	// not in other users' subscriptions
-	var forwardRules []models.ForwardRuleModel
-	if err := r.db.WithContext(ctx).
-		Where("target_node_id IN ?", nodeIDs).
-		Where("status = ?", "enabled").
-		Where("rule_type IN ?", []string{"direct", "entry", "chain", "direct_chain"}).
-		Where("user_id IS NULL OR user_id = 0").
-		Find(&forwardRules).Error; err != nil {
-		r.logger.Warnw("failed to query forward rules for nodes", "error", err)
+	// Use Repository method with encapsulated scope isolation logic
+	// Only includes system/admin-created rules (user_id IS NULL or 0)
+	// User-created rules are excluded to prevent cross-user data leakage
+	forwardRules, err := r.forwardRuleRepo.ListSystemRulesByTargetNodes(ctx, nodeIDs)
+	if err != nil {
+		r.logger.Warnw("failed to query system rules for nodes", "error", err)
 		return nil
 	}
 
@@ -299,7 +297,7 @@ func (r *NodeRepositoryAdapter) getForwardedNodes(ctx context.Context, nodeIDs [
 	// Collect agent IDs
 	agentIDSet := make(map[uint]bool)
 	for _, rule := range forwardRules {
-		agentIDSet[rule.AgentID] = true
+		agentIDSet[rule.AgentID()] = true
 	}
 
 	agentIDs := make([]uint, 0, len(agentIDSet))
@@ -326,17 +324,17 @@ func (r *NodeRepositoryAdapter) getForwardedNodes(ctx context.Context, nodeIDs [
 	// Generate forwarded node entries
 	var forwardedNodes []*usecases.Node
 	for _, rule := range forwardRules {
-		agent, ok := agentMap[rule.AgentID]
+		agent, ok := agentMap[rule.AgentID()]
 		if !ok || agent.PublicAddress == "" {
 			// Skip if agent not found or has no public address
 			continue
 		}
 
-		if rule.TargetNodeID == nil {
+		if rule.TargetNodeID() == nil {
 			continue
 		}
 
-		originalNode, ok := nodeMap[*rule.TargetNodeID]
+		originalNode, ok := nodeMap[*rule.TargetNodeID()]
 		if !ok {
 			continue
 		}
@@ -344,9 +342,9 @@ func (r *NodeRepositoryAdapter) getForwardedNodes(ctx context.Context, nodeIDs [
 		// Create a forwarded node entry with agent's public address
 		forwardedNode := &usecases.Node{
 			ID:                originalNode.ID,
-			Name:              rule.Name, // Use forward rule name
+			Name:              rule.Name(), // Use forward rule name
 			ServerAddress:     agent.PublicAddress,
-			SubscriptionPort:  rule.ListenPort,
+			SubscriptionPort:  rule.ListenPort(),
 			Protocol:          originalNode.Protocol,
 			EncryptionMethod:  originalNode.EncryptionMethod,
 			Password:          originalNode.Password,
@@ -368,6 +366,7 @@ func (r *NodeRepositoryAdapter) getForwardedNodes(ctx context.Context, nodeIDs [
 // getForwardPlanNodes returns nodes for forward plan subscriptions
 // For forward plans, users see their own forward rules as subscription nodes
 // Forward plans have no "origin" nodes - all nodes are forwarded by nature
+// Uses Repository method to ensure proper scope isolation (user's own rules only).
 func (r *NodeRepositoryAdapter) getForwardPlanNodes(ctx context.Context, userID uint, mode string) ([]*usecases.Node, error) {
 	// Forward plans have no origin nodes, return empty for origin mode
 	if mode == usecases.NodeModeOrigin {
@@ -375,14 +374,10 @@ func (r *NodeRepositoryAdapter) getForwardPlanNodes(ctx context.Context, userID 
 		return []*usecases.Node{}, nil
 	}
 
-	// Query user's enabled forward rules with target nodes
-	var forwardRules []models.ForwardRuleModel
-	if err := r.db.WithContext(ctx).
-		Where("user_id = ?", userID).
-		Where("status = ?", "enabled").
-		Where("target_node_id IS NOT NULL").
-		Where("rule_type IN ?", []string{"direct", "entry", "chain", "direct_chain"}).
-		Find(&forwardRules).Error; err != nil {
+	// Use Repository method with encapsulated scope isolation logic
+	// Only includes user's own rules with target_node_id set
+	forwardRules, err := r.forwardRuleRepo.ListUserRulesForDelivery(ctx, userID)
+	if err != nil {
 		r.logger.Errorw("failed to query user forward rules", "user_id", userID, "error", err)
 		return nil, err
 	}
@@ -396,10 +391,10 @@ func (r *NodeRepositoryAdapter) getForwardPlanNodes(ctx context.Context, userID 
 	nodeIDSet := make(map[uint]bool)
 	agentIDSet := make(map[uint]bool)
 	for _, rule := range forwardRules {
-		if rule.TargetNodeID != nil {
-			nodeIDSet[*rule.TargetNodeID] = true
+		if rule.TargetNodeID() != nil {
+			nodeIDSet[*rule.TargetNodeID()] = true
 		}
-		agentIDSet[rule.AgentID] = true
+		agentIDSet[rule.AgentID()] = true
 	}
 
 	// Convert to slices
@@ -493,16 +488,16 @@ func (r *NodeRepositoryAdapter) getForwardPlanNodes(ctx context.Context, userID 
 	// Generate forwarded node entries
 	var forwardedNodes []*usecases.Node
 	for _, rule := range forwardRules {
-		agent, ok := agentMap[rule.AgentID]
+		agent, ok := agentMap[rule.AgentID()]
 		if !ok || agent.PublicAddress == "" {
 			continue
 		}
 
-		if rule.TargetNodeID == nil {
+		if rule.TargetNodeID() == nil {
 			continue
 		}
 
-		targetNode, ok := nodeMap[*rule.TargetNodeID]
+		targetNode, ok := nodeMap[*rule.TargetNodeID()]
 		if !ok {
 			continue
 		}
@@ -516,9 +511,9 @@ func (r *NodeRepositoryAdapter) getForwardPlanNodes(ctx context.Context, userID 
 		// Build forwarded node
 		forwardedNode := &usecases.Node{
 			ID:               targetNode.ID,
-			Name:             rule.Name,
+			Name:             rule.Name(),
 			ServerAddress:    agent.PublicAddress,
-			SubscriptionPort: rule.ListenPort,
+			SubscriptionPort: rule.ListenPort(),
 			Protocol:         protocol,
 			Password:         "", // Will be filled with subscription UUID
 		}
@@ -771,15 +766,12 @@ func (r *NodeRepositoryAdapter) buildNodesWithConfigs(ctx context.Context, nodeM
 
 // getUserForwardNodes retrieves user's forward rules with target nodes as subscription nodes
 // Only returns forward rules where target_node_id is NOT NULL
+// Uses Repository method to ensure proper scope isolation (user's own rules only).
 func (r *NodeRepositoryAdapter) getUserForwardNodes(ctx context.Context, userID uint) ([]*usecases.Node, error) {
-	// Query user's enabled forward rules with target nodes
-	var forwardRules []models.ForwardRuleModel
-	if err := r.db.WithContext(ctx).
-		Where("user_id = ?", userID).
-		Where("status = ?", "enabled").
-		Where("target_node_id IS NOT NULL").
-		Where("rule_type IN ?", []string{"direct", "entry", "chain", "direct_chain"}).
-		Find(&forwardRules).Error; err != nil {
+	// Use Repository method with encapsulated scope isolation logic
+	// Only includes user's own rules with target_node_id set
+	forwardRules, err := r.forwardRuleRepo.ListUserRulesForDelivery(ctx, userID)
+	if err != nil {
 		r.logger.Errorw("failed to query user forward rules", "user_id", userID, "error", err)
 		return nil, err
 	}
@@ -792,10 +784,10 @@ func (r *NodeRepositoryAdapter) getUserForwardNodes(ctx context.Context, userID 
 	nodeIDSet := make(map[uint]bool)
 	agentIDSet := make(map[uint]bool)
 	for _, rule := range forwardRules {
-		if rule.TargetNodeID != nil {
-			nodeIDSet[*rule.TargetNodeID] = true
+		if rule.TargetNodeID() != nil {
+			nodeIDSet[*rule.TargetNodeID()] = true
 		}
-		agentIDSet[rule.AgentID] = true
+		agentIDSet[rule.AgentID()] = true
 	}
 
 	// Convert to slices
@@ -889,16 +881,16 @@ func (r *NodeRepositoryAdapter) getUserForwardNodes(ctx context.Context, userID 
 	// Generate forwarded node entries
 	var forwardedNodes []*usecases.Node
 	for _, rule := range forwardRules {
-		agent, ok := agentMap[rule.AgentID]
+		agent, ok := agentMap[rule.AgentID()]
 		if !ok || agent.PublicAddress == "" {
 			continue
 		}
 
-		if rule.TargetNodeID == nil {
+		if rule.TargetNodeID() == nil {
 			continue
 		}
 
-		targetNode, ok := nodeMap[*rule.TargetNodeID]
+		targetNode, ok := nodeMap[*rule.TargetNodeID()]
 		if !ok {
 			continue
 		}
@@ -912,9 +904,9 @@ func (r *NodeRepositoryAdapter) getUserForwardNodes(ctx context.Context, userID 
 		// Build forwarded node
 		forwardedNode := &usecases.Node{
 			ID:               targetNode.ID,
-			Name:             rule.Name,
+			Name:             rule.Name(),
 			ServerAddress:    agent.PublicAddress,
-			SubscriptionPort: rule.ListenPort,
+			SubscriptionPort: rule.ListenPort(),
 			Protocol:         protocol,
 			Password:         "", // Will be filled with subscription UUID
 		}

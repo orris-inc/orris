@@ -468,6 +468,15 @@ func (r *ForwardRule) IsUserOwned() bool {
 	return r.userID != nil && *r.userID != 0
 }
 
+// Scope returns the ownership scope of this rule.
+// System scope for admin-created rules, User scope for user-owned rules.
+func (r *ForwardRule) Scope() vo.RuleScope {
+	if r.IsUserOwned() {
+		return vo.UserScope(*r.userID)
+	}
+	return vo.SystemScope()
+}
+
 // RuleType returns the rule type.
 func (r *ForwardRule) RuleType() vo.ForwardRuleType {
 	return r.ruleType

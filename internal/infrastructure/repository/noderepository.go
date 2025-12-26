@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -422,8 +423,9 @@ func (r *NodeRepositoryImpl) List(ctx context.Context, filter node.NodeFilter) (
 		query = query.Where("status = ?", *filter.Status)
 	}
 	if filter.Tag != nil && *filter.Tag != "" {
-		// Search in JSON tags array
-		query = query.Where("JSON_CONTAINS(tags, ?)", fmt.Sprintf(`"%s"`, *filter.Tag))
+		// Search in JSON tags array using proper JSON encoding to handle special characters
+		tagJSON, _ := json.Marshal(*filter.Tag)
+		query = query.Where("JSON_CONTAINS(tags, ?)", string(tagJSON))
 	}
 	if len(filter.GroupIDs) > 0 {
 		// Use JSON_OVERLAPS to check if group_ids array contains any of the filter group IDs

@@ -596,3 +596,63 @@ func (r *ForwardRuleRepositoryImpl) UpdateSortOrders(ctx context.Context, ruleOr
 	r.logger.Infow("sort orders updated successfully", "count", len(ruleOrders))
 	return nil
 }
+
+// ListSystemRulesByTargetNodes returns enabled system rules targeting the specified nodes.
+// Only includes rules with system scope (user_id IS NULL or 0).
+// This is used for Node Plan subscription delivery where user rules should be excluded.
+func (r *ForwardRuleRepositoryImpl) ListSystemRulesByTargetNodes(ctx context.Context, nodeIDs []uint) ([]*forward.ForwardRule, error) {
+	if len(nodeIDs) == 0 {
+		return []*forward.ForwardRule{}, nil
+	}
+
+	var ruleModels []*models.ForwardRuleModel
+
+	tx := db.GetTxFromContext(ctx, r.db)
+	// Query enabled system rules (user_id IS NULL or 0) targeting the specified nodes
+	// This encapsulates the isolation logic that was previously scattered in SQL queries
+	if err := tx.
+		Where("target_node_id IN ?", nodeIDs).
+		Where("status = ?", "enabled").
+		Where("rule_type IN ?", []string{"direct", "entry", "chain", "direct_chain"}).
+		Where("user_id IS NULL OR user_id = 0").
+		Find(&ruleModels).Error; err != nil {
+		r.logger.Errorw("failed to list system rules by target nodes", "node_count", len(nodeIDs), "error", err)
+		return nil, fmt.Errorf("failed to list system rules by target nodes: %w", err)
+	}
+
+	entities, err := r.mapper.ToEntities(ruleModels)
+	if err != nil {
+		r.logger.Errorw("failed to map forward rule models to entities", "error", err)
+		return nil, fmt.Errorf("failed to map forward rules: %w", err)
+	}
+
+	return entities, nil
+}
+
+// ListUserRulesForDelivery returns enabled user rules for subscription delivery.
+// Only includes rules with user scope (user_id = userID) and target_node_id set.
+// This is used for Forward Plan subscription delivery.
+func (r *ForwardRuleRepositoryImpl) ListUserRulesForDelivery(ctx context.Context, userID uint) ([]*forward.ForwardRule, error) {
+	var ruleModels []*models.ForwardRuleModel
+
+	tx := db.GetTxFromContext(ctx, r.db)
+	// Query enabled user rules with target_node_id set
+	// This encapsulates the isolation logic for user-specific rule delivery
+	if err := tx.
+		Where("user_id = ?", userID).
+		Where("status = ?", "enabled").
+		Where("target_node_id IS NOT NULL").
+		Where("rule_type IN ?", []string{"direct", "entry", "chain", "direct_chain"}).
+		Find(&ruleModels).Error; err != nil {
+		r.logger.Errorw("failed to list user rules for delivery", "user_id", userID, "error", err)
+		return nil, fmt.Errorf("failed to list user rules for delivery: %w", err)
+	}
+
+	entities, err := r.mapper.ToEntities(ruleModels)
+	if err != nil {
+		r.logger.Errorw("failed to map forward rule models to entities", "error", err)
+		return nil, fmt.Errorf("failed to map forward rules: %w", err)
+	}
+
+	return entities, nil
+}

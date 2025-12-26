@@ -155,6 +155,29 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		if targetNode == nil {
 			return nil, errors.NewNotFoundError("target node", cmd.TargetNodeSID)
 		}
+
+		// Ownership constraint: prevent cross-ownership target node assignment
+		// User rules can only target user-owned nodes belonging to the same user
+		// System rules can only target system nodes (non-user-owned)
+		if cmd.UserID != nil && *cmd.UserID != 0 {
+			// User rule: target node must be owned by the same user
+			if !targetNode.IsOwnedBy(*cmd.UserID) {
+				uc.logger.Warnw("user rule cannot target node not owned by user",
+					"user_id", *cmd.UserID,
+					"target_node_sid", cmd.TargetNodeSID,
+				)
+				return nil, errors.NewForbiddenError("user rules can only target nodes owned by the same user")
+			}
+		} else {
+			// System rule: target node must not be user-owned
+			if targetNode.IsUserOwned() {
+				uc.logger.Warnw("system rule cannot target user-owned node",
+					"target_node_sid", cmd.TargetNodeSID,
+				)
+				return nil, errors.NewForbiddenError("system rules cannot target user-owned nodes")
+			}
+		}
+
 		nodeID := targetNode.ID()
 		targetNodeID = &nodeID
 	}

@@ -194,6 +194,31 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 				uc.logger.Warnw("target node not found", "node_sid", *cmd.TargetNodeSID)
 				return errors.NewNotFoundError("node", *cmd.TargetNodeSID)
 			}
+
+			// Ownership constraint: prevent cross-ownership target node assignment
+			// User rules can only target user-owned nodes belonging to the same user
+			// System rules can only target system nodes (non-user-owned)
+			if rule.IsUserOwned() {
+				// User rule: target node must be owned by the same user
+				if !targetNode.IsOwnedBy(*rule.UserID()) {
+					uc.logger.Warnw("user rule cannot target node not owned by user",
+						"rule_sid", cmd.ShortID,
+						"rule_user_id", *rule.UserID(),
+						"target_node_sid", *cmd.TargetNodeSID,
+					)
+					return errors.NewForbiddenError("user rules can only target nodes owned by the same user")
+				}
+			} else {
+				// System rule: target node must not be user-owned
+				if targetNode.IsUserOwned() {
+					uc.logger.Warnw("system rule cannot target user-owned node",
+						"rule_sid", cmd.ShortID,
+						"target_node_sid", *cmd.TargetNodeSID,
+					)
+					return errors.NewForbiddenError("system rules cannot target user-owned nodes")
+				}
+			}
+
 			nodeID := targetNode.ID()
 			targetNodeID = &nodeID
 		}
