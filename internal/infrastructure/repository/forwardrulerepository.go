@@ -280,7 +280,7 @@ func (r *ForwardRuleRepositoryImpl) List(ctx context.Context, filter forward.Lis
 	}
 
 	// Apply sorting with whitelist validation to prevent SQL injection
-	orderBy := filter.OrderBy
+	orderBy := strings.ToLower(filter.OrderBy)
 	if orderBy == "" || !allowedRuleOrderByFields[orderBy] {
 		// Default: sort by sort_order ASC, then created_at DESC
 		query = query.Order("sort_order ASC, created_at DESC")
@@ -499,7 +499,7 @@ func (r *ForwardRuleRepositoryImpl) ListByUserID(ctx context.Context, userID uin
 	}
 
 	// Apply sorting with whitelist validation to prevent SQL injection
-	orderBy := filter.OrderBy
+	orderBy := strings.ToLower(filter.OrderBy)
 	if orderBy == "" || !allowedRuleOrderByFields[orderBy] {
 		// Default: sort by sort_order ASC, then created_at DESC
 		query = query.Order("sort_order ASC, created_at DESC")

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -337,7 +338,7 @@ func (r *SubscriptionRepositoryImpl) List(ctx context.Context, filter subscripti
 	}
 
 	// Apply sorting with whitelist validation to prevent SQL injection
-	sortBy := filter.SortBy
+	sortBy := strings.ToLower(filter.SortBy)
 	if sortBy == "" || !allowedSubscriptionSortByFields[sortBy] {
 		sortBy = "created_at"
 	}

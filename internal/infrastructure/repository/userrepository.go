@@ -279,7 +279,7 @@ func (r *UserRepository) List(ctx context.Context, filter user.ListFilter) ([]*u
 	}
 
 	// Apply sorting with whitelist validation to prevent SQL injection
-	orderBy := filter.OrderBy
+	orderBy := strings.ToLower(filter.OrderBy)
 	if orderBy == "" || !allowedUserOrderByFields[orderBy] {
 		query = query.Order("created_at DESC")
 	} else {

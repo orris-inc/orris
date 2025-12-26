@@ -439,7 +439,7 @@ func (r *NodeRepositoryImpl) List(ctx context.Context, filter node.NodeFilter) (
 	}
 
 	// Apply sorting with whitelist validation to prevent SQL injection
-	sortBy := filter.SortFilter.SortBy
+	sortBy := strings.ToLower(filter.SortFilter.SortBy)
 	if sortBy != "" && allowedNodeOrderByFields[sortBy] {
 		order := "ASC"
 		if filter.SortFilter.IsDescending() {
@@ -676,7 +676,7 @@ func (r *NodeRepositoryImpl) ListByUserID(ctx context.Context, userID uint, filt
 	}
 
 	// Apply sorting with whitelist validation to prevent SQL injection
-	sortBy := filter.SortFilter.SortBy
+	sortBy := strings.ToLower(filter.SortFilter.SortBy)
 	if sortBy != "" && allowedNodeOrderByFields[sortBy] {
 		order := "ASC"
 		if filter.SortFilter.IsDescending() {

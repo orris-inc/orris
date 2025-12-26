@@ -267,7 +267,7 @@ func (r *ForwardAgentRepositoryImpl) List(ctx context.Context, filter forward.Ag
 	}
 
 	// Apply sorting with whitelist validation to prevent SQL injection
-	orderBy := filter.OrderBy
+	orderBy := strings.ToLower(filter.OrderBy)
 	if orderBy == "" || !allowedAgentOrderByFields[orderBy] {
 		orderBy = "created_at"
 	}
