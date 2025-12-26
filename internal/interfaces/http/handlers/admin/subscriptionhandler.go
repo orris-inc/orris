@@ -25,6 +25,7 @@ type SubscriptionHandler struct {
 	getUseCase        *usecases.GetSubscriptionUseCase
 	listUseCase       *usecases.ListUserSubscriptionsUseCase
 	cancelUseCase     *usecases.CancelSubscriptionUseCase
+	deleteUseCase     *usecases.DeleteSubscriptionUseCase
 	renewUseCase      *usecases.RenewSubscriptionUseCase
 	changePlanUseCase *usecases.ChangePlanUseCase
 	activateUseCase   *usecases.ActivateSubscriptionUseCase
@@ -38,6 +39,7 @@ func NewSubscriptionHandler(
 	getUC *usecases.GetSubscriptionUseCase,
 	listUC *usecases.ListUserSubscriptionsUseCase,
 	cancelUC *usecases.CancelSubscriptionUseCase,
+	deleteUC *usecases.DeleteSubscriptionUseCase,
 	renewUC *usecases.RenewSubscriptionUseCase,
 	changePlanUC *usecases.ChangePlanUseCase,
 	activateUC *usecases.ActivateSubscriptionUseCase,
@@ -49,6 +51,7 @@ func NewSubscriptionHandler(
 		getUseCase:        getUC,
 		listUseCase:       listUC,
 		cancelUseCase:     cancelUC,
+		deleteUseCase:     deleteUC,
 		renewUseCase:      renewUC,
 		changePlanUseCase: changePlanUC,
 		activateUseCase:   activateUC,
@@ -322,4 +325,24 @@ func (h *SubscriptionHandler) ChangePlan(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "Plan changed successfully", nil)
+}
+
+func (h *SubscriptionHandler) Delete(c *gin.Context) {
+	subscriptionID, err := h.parseSubscriptionID(c)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID")
+		return
+	}
+	if subscriptionID == 0 {
+		utils.ErrorResponse(c, http.StatusNotFound, "subscription not found")
+		return
+	}
+
+	if err := h.deleteUseCase.Execute(c.Request.Context(), subscriptionID); err != nil {
+		h.logger.Errorw("failed to delete subscription", "error", err, "subscription_id", subscriptionID)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Subscription deleted successfully", nil)
 }

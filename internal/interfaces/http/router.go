@@ -313,7 +313,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	)
 	adminSubscriptionHandler := adminHandlers.NewSubscriptionHandler(
 		subscriptionRepo, createSubscriptionUC, getSubscriptionUC, listUserSubscriptionsUC,
-		cancelSubscriptionUC, renewSubscriptionUC, changePlanUC,
+		cancelSubscriptionUC, deleteSubscriptionUC, renewSubscriptionUC, changePlanUC,
 		activateSubscriptionUC, log,
 	)
 	subscriptionOwnerMiddleware := middleware.NewSubscriptionOwnerMiddleware(subscriptionRepo, log)
@@ -885,6 +885,7 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		adminSubscriptions.GET("/:id", r.adminSubscriptionHandler.Get)
 		adminSubscriptions.PATCH("/:id/status", r.adminSubscriptionHandler.UpdateStatus)
 		adminSubscriptions.PATCH("/:id/plan", r.adminSubscriptionHandler.ChangePlan)
+		adminSubscriptions.DELETE("/:id", r.adminSubscriptionHandler.Delete)
 	}
 
 	// Admin resource group routes - full CRUD for resource groups
