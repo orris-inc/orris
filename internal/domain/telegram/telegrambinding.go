@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/id"
 )
 
@@ -46,7 +47,7 @@ func NewTelegramBinding(userID uint, telegramUserID int64, telegramUsername stri
 		return nil, fmt.Errorf("failed to generate SID: %w", err)
 	}
 
-	now := time.Now()
+	now := biztime.NowUTC()
 	return &TelegramBinding{
 		sid:              sid,
 		userID:           userID,
@@ -126,7 +127,7 @@ func (b *TelegramBinding) UpdatePreferences(notifyExpiring, notifyTraffic bool, 
 	b.notifyTraffic = notifyTraffic
 	b.expiringDays = expiringDays
 	b.trafficThreshold = trafficThreshold
-	b.updatedAt = time.Now()
+	b.updatedAt = biztime.NowUTC()
 	return nil
 }
 
@@ -138,7 +139,8 @@ func (b *TelegramBinding) CanNotifyExpiring() bool {
 	if b.lastExpiringNotifyAt == nil {
 		return true
 	}
-	return time.Since(*b.lastExpiringNotifyAt).Hours() >= NotifyWindowHours
+	// Use UTC time for consistent comparison
+	return biztime.NowUTC().Sub(*b.lastExpiringNotifyAt).Hours() >= NotifyWindowHours
 }
 
 // CanNotifyTraffic checks if traffic notification can be sent (deduplication)
@@ -149,19 +151,20 @@ func (b *TelegramBinding) CanNotifyTraffic() bool {
 	if b.lastTrafficNotifyAt == nil {
 		return true
 	}
-	return time.Since(*b.lastTrafficNotifyAt).Hours() >= NotifyWindowHours
+	// Use UTC time for consistent comparison
+	return biztime.NowUTC().Sub(*b.lastTrafficNotifyAt).Hours() >= NotifyWindowHours
 }
 
 // RecordExpiringNotification records that an expiring notification was sent
 func (b *TelegramBinding) RecordExpiringNotification() {
-	now := time.Now()
+	now := biztime.NowUTC()
 	b.lastExpiringNotifyAt = &now
 	b.updatedAt = now
 }
 
 // RecordTrafficNotification records that a traffic notification was sent
 func (b *TelegramBinding) RecordTrafficNotification() {
-	now := time.Now()
+	now := biztime.NowUTC()
 	b.lastTrafficNotifyAt = &now
 	b.updatedAt = now
 }
@@ -169,5 +172,5 @@ func (b *TelegramBinding) RecordTrafficNotification() {
 // UpdateTelegramUsername updates the telegram username
 func (b *TelegramBinding) UpdateTelegramUsername(username string) {
 	b.telegramUsername = username
-	b.updatedAt = time.Now()
+	b.updatedAt = biztime.NowUTC()
 }

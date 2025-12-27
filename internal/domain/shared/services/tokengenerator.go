@@ -6,7 +6,8 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"time"
+
+	"github.com/orris-inc/orris/internal/shared/biztime"
 )
 
 type TokenGenerator interface {
@@ -55,9 +56,10 @@ func NewOrderNumberGenerator() OrderNumberGenerator {
 }
 
 func (g *DefaultOrderNumberGenerator) Generate(prefix string) string {
+	now := biztime.NowUTC()
 	return fmt.Sprintf("%s%s%06d",
 		prefix,
-		time.Now().Format("20060102150405"),
-		time.Now().Nanosecond()%1000000,
+		now.Format("20060102150405"),
+		now.Nanosecond()%1000000,
 	)
 }

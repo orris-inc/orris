@@ -3,13 +3,13 @@ package repository
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"gorm.io/gorm"
 
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	vo "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/db"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -136,7 +136,7 @@ func (r *SubscriptionTokenRepositoryImpl) GetBySubscriptionID(ctx context.Contex
 
 func (r *SubscriptionTokenRepositoryImpl) GetActiveBySubscriptionID(ctx context.Context, subscriptionID uint) ([]*subscription.SubscriptionToken, error) {
 	var tokenModels []*models.SubscriptionTokenModel
-	now := time.Now()
+	now := biztime.NowUTC()
 
 	err := r.db.WithContext(ctx).
 		Where("subscription_id = ? AND is_active = ?", subscriptionID, true).
@@ -153,7 +153,7 @@ func (r *SubscriptionTokenRepositoryImpl) GetActiveBySubscriptionID(ctx context.
 }
 
 func (r *SubscriptionTokenRepositoryImpl) RevokeAllBySubscriptionID(ctx context.Context, subscriptionID uint) error {
-	now := time.Now()
+	now := biztime.NowUTC()
 	tx := db.GetTxFromContext(ctx, r.db)
 	result := tx.Model(&models.SubscriptionTokenModel{}).
 		Where("subscription_id = ?", subscriptionID).
@@ -172,7 +172,7 @@ func (r *SubscriptionTokenRepositoryImpl) RevokeAllBySubscriptionID(ctx context.
 }
 
 func (r *SubscriptionTokenRepositoryImpl) DeleteExpiredTokens(ctx context.Context) error {
-	now := time.Now()
+	now := biztime.NowUTC()
 	result := r.db.WithContext(ctx).
 		Where("expires_at < ? AND expires_at IS NOT NULL", now).
 		Delete(&models.SubscriptionTokenModel{})

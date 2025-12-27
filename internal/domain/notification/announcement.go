@@ -5,6 +5,7 @@ import (
 	"time"
 
 	vo "github.com/orris-inc/orris/internal/domain/notification/valueobjects"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 )
 
 type Announcement struct {
@@ -57,7 +58,7 @@ func NewAnnouncement(
 		return nil, fmt.Errorf("expires at must be after scheduled at")
 	}
 
-	now := time.Now()
+	now := biztime.NowUTC()
 	a := &Announcement{
 		title:            title,
 		content:          content,
@@ -186,7 +187,7 @@ func (a *Announcement) Publish() error {
 		return fmt.Errorf("cannot publish announcement with status %s", a.status)
 	}
 
-	now := time.Now()
+	now := biztime.NowUTC()
 	if a.scheduledAt != nil && now.Before(*a.scheduledAt) {
 		return fmt.Errorf("cannot publish before scheduled time")
 	}
@@ -222,7 +223,7 @@ func (a *Announcement) Update(title, content string, priority int, expiresAt *ti
 	a.content = content
 	a.priority = priority
 	a.expiresAt = expiresAt
-	a.updatedAt = time.Now()
+	a.updatedAt = biztime.NowUTC()
 
 	return nil
 }
@@ -237,7 +238,7 @@ func (a *Announcement) MarkAsExpired() error {
 	}
 
 	a.status = vo.AnnouncementStatusExpired
-	a.updatedAt = time.Now()
+	a.updatedAt = biztime.NowUTC()
 
 	return nil
 }
@@ -251,11 +252,7 @@ func (a *Announcement) IsExpired() bool {
 		return false
 	}
 
-	return time.Now().After(*a.expiresAt)
-}
-
-func (a *Announcement) recordEventUnsafe(event interface{}) {
-	a.events = append(a.events, event)
+	return biztime.NowUTC().After(*a.expiresAt)
 }
 
 func (a *Announcement) GetEvents() []interface{} {

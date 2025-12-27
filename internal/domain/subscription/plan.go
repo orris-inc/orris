@@ -5,6 +5,7 @@ import (
 	"time"
 
 	vo "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/id"
 )
 
@@ -60,7 +61,7 @@ func NewPlan(name, slug, description string, planType vo.PlanType) (*Plan, error
 		return nil, fmt.Errorf("failed to generate SID: %w", err)
 	}
 
-	now := time.Now()
+	now := biztime.NowUTC()
 	return &Plan{
 		sid:          sid,
 		name:         name,
@@ -231,7 +232,7 @@ func (p *Plan) Activate() error {
 		return nil
 	}
 	p.status = PlanStatusActive
-	p.updatedAt = time.Now()
+	p.updatedAt = biztime.NowUTC()
 	p.version++
 	return nil
 }
@@ -241,14 +242,14 @@ func (p *Plan) Deactivate() error {
 		return nil
 	}
 	p.status = PlanStatusInactive
-	p.updatedAt = time.Now()
+	p.updatedAt = biztime.NowUTC()
 	p.version++
 	return nil
 }
 
 func (p *Plan) UpdateDescription(description string) {
 	p.description = description
-	p.updatedAt = time.Now()
+	p.updatedAt = biztime.NowUTC()
 	p.version++
 }
 
@@ -257,7 +258,7 @@ func (p *Plan) UpdateFeatures(features *vo.PlanFeatures) error {
 		return fmt.Errorf("features cannot be nil")
 	}
 	p.features = features
-	p.updatedAt = time.Now()
+	p.updatedAt = biztime.NowUTC()
 	p.version++
 	return nil
 }
@@ -267,39 +268,39 @@ func (p *Plan) SetAPIRateLimit(limit uint) error {
 		return fmt.Errorf("API rate limit must be greater than 0")
 	}
 	p.apiRateLimit = limit
-	p.updatedAt = time.Now()
+	p.updatedAt = biztime.NowUTC()
 	p.version++
 	return nil
 }
 
 func (p *Plan) SetMaxUsers(max uint) {
 	p.maxUsers = max
-	p.updatedAt = time.Now()
+	p.updatedAt = biztime.NowUTC()
 	p.version++
 }
 
 func (p *Plan) SetMaxProjects(max uint) {
 	p.maxProjects = max
-	p.updatedAt = time.Now()
+	p.updatedAt = biztime.NowUTC()
 	p.version++
 }
 
 // SetNodeLimit sets the maximum number of user nodes
 func (p *Plan) SetNodeLimit(limit *int) {
 	p.nodeLimit = limit
-	p.updatedAt = time.Now()
+	p.updatedAt = biztime.NowUTC()
 	p.version++
 }
 
 func (p *Plan) SetSortOrder(order int) {
 	p.sortOrder = order
-	p.updatedAt = time.Now()
+	p.updatedAt = biztime.NowUTC()
 	p.version++
 }
 
 func (p *Plan) SetPublic(isPublic bool) {
 	p.isPublic = isPublic
-	p.updatedAt = time.Now()
+	p.updatedAt = biztime.NowUTC()
 	p.version++
 }
 

@@ -10,8 +10,8 @@ import (
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
-	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 // SubscriptionUsageRepositoryImpl implements the subscription.SubscriptionUsageRepository interface
@@ -175,8 +175,8 @@ func (r *SubscriptionUsageRepositoryImpl) GetTotalUsageBySubscriptionID(ctx cont
 func (r *SubscriptionUsageRepositoryImpl) AggregateDaily(ctx context.Context, date time.Time) error {
 	// Start a transaction for atomicity
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Calculate start and end of the day in business timezone
-		startOfDay := utils.StartOfDay(date)
+		// Calculate start and end of the day in business timezone, convert to UTC for query
+		startOfDay := biztime.StartOfDayUTC(date)
 		endOfDay := startOfDay.Add(24 * time.Hour)
 
 		// Aggregate usage by resource_type and resource_id for the day
@@ -235,8 +235,8 @@ func (r *SubscriptionUsageRepositoryImpl) AggregateDaily(ctx context.Context, da
 func (r *SubscriptionUsageRepositoryImpl) AggregateMonthly(ctx context.Context, year int, month int) error {
 	// Start a transaction for atomicity
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// Calculate start and end of the month in business timezone
-		startOfMonth := utils.StartOfMonth(year, time.Month(month))
+		// Calculate start and end of the month in business timezone, convert to UTC for query
+		startOfMonth := biztime.StartOfMonthUTC(year, time.Month(month))
 		endOfMonth := startOfMonth.AddDate(0, 1, 0)
 
 		// Aggregate usage by resource_type and resource_id for the month
@@ -321,8 +321,8 @@ func (r *SubscriptionUsageRepositoryImpl) GetDailyStats(ctx context.Context, res
 
 // GetMonthlyStats retrieves monthly usage statistics for a resource
 func (r *SubscriptionUsageRepositoryImpl) GetMonthlyStats(ctx context.Context, resourceType string, resourceID uint, year int) ([]*subscription.SubscriptionUsage, error) {
-	// Use business timezone for year boundaries
-	startOfYear := utils.StartOfYear(year)
+	// Use business timezone for year boundaries, convert to UTC for query
+	startOfYear := biztime.StartOfYearUTC(year)
 	endOfYear := startOfYear.AddDate(1, 0, 0)
 
 	var usageModels []*models.SubscriptionUsageModel
@@ -673,14 +673,17 @@ func (r *SubscriptionUsageRepositoryImpl) GetUsageTrend(ctx context.Context, res
 	}
 
 	// Determine date truncation based on granularity
+	// Use CONVERT_TZ to convert UTC to business timezone before formatting
+	// This ensures day/month boundaries align with business timezone
+	tzOffset := biztime.MySQLTimezoneOffset()
 	var dateFormat string
 	switch granularity {
 	case "hour":
-		dateFormat = "DATE_FORMAT(period, '%Y-%m-%d %H:00:00')"
+		dateFormat = fmt.Sprintf("DATE_FORMAT(CONVERT_TZ(period, '+00:00', '%s'), '%%Y-%%m-%%d %%H:00:00')", tzOffset)
 	case "day":
-		dateFormat = "DATE_FORMAT(period, '%Y-%m-%d')"
+		dateFormat = fmt.Sprintf("DATE_FORMAT(CONVERT_TZ(period, '+00:00', '%s'), '%%Y-%%m-%%d')", tzOffset)
 	case "month":
-		dateFormat = "DATE_FORMAT(period, '%Y-%m-01')"
+		dateFormat = fmt.Sprintf("DATE_FORMAT(CONVERT_TZ(period, '+00:00', '%s'), '%%Y-%%m-01')", tzOffset)
 	default:
 		r.logger.Errorw("invalid granularity", "granularity", granularity)
 		return nil, fmt.Errorf("invalid granularity: %s, must be one of: hour, day, month", granularity)
@@ -718,13 +721,17 @@ func (r *SubscriptionUsageRepositoryImpl) GetUsageTrend(ctx context.Context, res
 	}
 
 	// Convert to domain type
+	// Parse the period string in business timezone, then convert to UTC
 	trendPoints := make([]subscription.UsageTrendPoint, len(results))
 	for i, result := range results {
-		parsedTime, parseErr := time.Parse(timeLayout, result.Period)
+		parsedTime, parseErr := time.ParseInLocation(timeLayout, result.Period, biztime.Location())
 		if parseErr != nil {
 			r.logger.Warnw("failed to parse period", "period", result.Period, "layout", timeLayout, "error", parseErr)
 			// Use zero time if parsing fails
 			parsedTime = time.Time{}
+		} else {
+			// Convert to UTC for consistent storage/transport
+			parsedTime = parsedTime.UTC()
 		}
 		trendPoints[i] = subscription.UsageTrendPoint{
 			Period:   parsedTime,

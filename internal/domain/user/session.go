@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"time"
+
+	"github.com/orris-inc/orris/internal/shared/biztime"
 )
 
 type Session struct {
@@ -31,7 +33,7 @@ func NewSession(userID uint, deviceName, deviceType, ipAddress, userAgent string
 		return nil, fmt.Errorf("failed to generate session ID: %w", err)
 	}
 
-	now := time.Now()
+	now := biztime.NowUTC()
 	return &Session{
 		ID:             id,
 		UserID:         userID,
@@ -46,11 +48,11 @@ func NewSession(userID uint, deviceName, deviceType, ipAddress, userAgent string
 }
 
 func (s *Session) IsExpired() bool {
-	return time.Now().After(s.ExpiresAt)
+	return biztime.NowUTC().After(s.ExpiresAt)
 }
 
 func (s *Session) UpdateActivity() {
-	s.LastActivityAt = time.Now()
+	s.LastActivityAt = biztime.NowUTC()
 }
 
 func generateSessionID() (string, error) {

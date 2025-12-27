@@ -9,8 +9,8 @@ import (
 	"github.com/orris-inc/orris/internal/infrastructure/config"
 	"github.com/orris-inc/orris/internal/infrastructure/database"
 	"github.com/orris-inc/orris/internal/infrastructure/migration"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
-	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 var (
@@ -18,7 +18,6 @@ var (
 	configPath string
 	name       string
 	steps      int
-	version    int
 )
 
 func NewCommand() *cobra.Command {
@@ -73,20 +72,6 @@ func newStatusCommand() *cobra.Command {
 	}
 }
 
-func newForceCommand() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "force",
-		Short: "Force set migration version and clear dirty flag",
-		Long:  `Force the database migration to a specific version and clear the dirty flag. Use this to fix dirty migration state.`,
-		RunE:  runForce,
-	}
-
-	cmd.Flags().IntVarP(&version, "version", "v", 1, "Version to force (required)")
-	cmd.MarkFlagRequired("version")
-
-	return cmd
-}
-
 func newCreateCommand() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
@@ -120,9 +105,9 @@ func initEnv() (string, error) {
 		return "", fmt.Errorf("failed to initialize logger: %w", err)
 	}
 
-	// Initialize business timezone before database connection
-	if err := utils.InitTimezone(cfg.Server.Timezone); err != nil {
-		return "", fmt.Errorf("failed to initialize timezone: %w", err)
+	// Initialize business timezone for date boundary calculations
+	if err := biztime.Init(cfg.Server.Timezone); err != nil {
+		return "", fmt.Errorf("failed to initialize business timezone: %w", err)
 	}
 
 	if err := database.Init(&cfg.Database); err != nil {
@@ -219,34 +204,6 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 
 	return fmt.Errorf("status check is only supported with goose strategy")
-}
-
-func runForce(cmd *cobra.Command, args []string) error {
-	scriptsPath, err := initEnv()
-	if err != nil {
-		return err
-	}
-	defer logger.Sync()
-	defer database.Close()
-
-	logger.Info("forcing migration version",
-		"environment", env,
-		"version", version)
-
-	strategy := migration.NewGolangMigrateStrategy(scriptsPath)
-
-	if golangStrategy, ok := strategy.(*migration.GolangMigrateStrategy); ok {
-		if err := golangStrategy.Force(database.Get(), version); err != nil {
-			logger.Error("force migration failed", "error", err)
-			return fmt.Errorf("force migration failed: %w", err)
-		}
-
-		fmt.Printf("✅ Migration version forced to %d\n", version)
-		logger.Info("force migration completed successfully", "version", version)
-		return nil
-	}
-
-	return fmt.Errorf("force is only supported with golang-migrate strategy")
 }
 
 func runCreate(cmd *cobra.Command, args []string) error {

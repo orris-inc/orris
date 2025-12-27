@@ -7,9 +7,9 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
-	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 // GetUserForwardUsageQuery represents the input for getting user forward usage.
@@ -188,7 +188,7 @@ func (uc *GetUserForwardUsageUseCase) Execute(ctx context.Context, query GetUser
 	var trafficUsed uint64
 	if len(forwardSubscriptionIDs) > 0 {
 		// Adjust latestTo to end of day
-		latestTo = utils.AdjustToEndOfDay(latestTo)
+		latestTo = biztime.EndOfDayUTC(latestTo)
 
 		resourceType := string(subscription.ResourceTypeForwardRule)
 		usageSummary, err := uc.usageRepo.GetTotalUsageBySubscriptionIDs(

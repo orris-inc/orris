@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/id"
 )
 
@@ -52,7 +53,7 @@ func NewSubscriptionUsage(resourceType string, resourceID uint, subscriptionID *
 		return nil, fmt.Errorf("failed to generate SID: %w", err)
 	}
 
-	now := time.Now()
+	now := biztime.NowUTC()
 	return &SubscriptionUsage{
 		sid:            sid,
 		resourceType:   resourceType,
@@ -186,7 +187,7 @@ func (su *SubscriptionUsage) Accumulate(upload, download uint64) error {
 	su.upload += upload
 	su.download += download
 	su.total = su.upload + su.download
-	su.updatedAt = time.Now()
+	su.updatedAt = biztime.NowUTC()
 
 	return nil
 }
@@ -222,7 +223,7 @@ func (su *SubscriptionUsage) Reset() error {
 	su.upload = 0
 	su.download = 0
 	su.total = 0
-	su.updatedAt = time.Now()
+	su.updatedAt = biztime.NowUTC()
 	return nil
 }
 

@@ -5,6 +5,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/constants"
 )
 
@@ -32,7 +33,7 @@ func (PlanPricingModel) TableName() string {
 
 // BeforeCreate hook to set timestamps
 func (m *PlanPricingModel) BeforeCreate(tx *gorm.DB) error {
-	now := time.Now()
+	now := biztime.NowUTC()
 	if m.CreatedAt.IsZero() {
 		m.CreatedAt = now
 	}
@@ -44,6 +45,6 @@ func (m *PlanPricingModel) BeforeCreate(tx *gorm.DB) error {
 
 // BeforeUpdate hook to update timestamp
 func (m *PlanPricingModel) BeforeUpdate(tx *gorm.DB) error {
-	m.UpdatedAt = time.Now()
+	m.UpdatedAt = biztime.NowUTC()
 	return nil
 }

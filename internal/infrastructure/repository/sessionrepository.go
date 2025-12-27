@@ -2,11 +2,11 @@ package repository
 
 import (
 	"fmt"
-	"time"
 
 	"gorm.io/gorm"
 
 	"github.com/orris-inc/orris/internal/domain/user"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/errors"
 )
 
@@ -39,7 +39,7 @@ func (r *SessionRepository) GetByID(sessionID string) (*user.Session, error) {
 
 func (r *SessionRepository) GetByUserID(userID uint) ([]*user.Session, error) {
 	var sessions []*user.Session
-	err := r.db.Where("user_id = ? AND expires_at > ?", userID, time.Now()).
+	err := r.db.Where("user_id = ? AND expires_at > ?", userID, biztime.NowUTC()).
 		Order("last_activity_at DESC").
 		Find(&sessions).Error
 	if err != nil {
@@ -50,7 +50,7 @@ func (r *SessionRepository) GetByUserID(userID uint) ([]*user.Session, error) {
 
 func (r *SessionRepository) GetByTokenHash(tokenHash string) (*user.Session, error) {
 	var session user.Session
-	err := r.db.Where("token_hash = ? AND expires_at > ?", tokenHash, time.Now()).
+	err := r.db.Where("token_hash = ? AND expires_at > ?", tokenHash, biztime.NowUTC()).
 		First(&session).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -63,7 +63,7 @@ func (r *SessionRepository) GetByTokenHash(tokenHash string) (*user.Session, err
 
 func (r *SessionRepository) GetByRefreshTokenHash(refreshTokenHash string) (*user.Session, error) {
 	var session user.Session
-	err := r.db.Where("refresh_token_hash = ? AND expires_at > ?", refreshTokenHash, time.Now()).
+	err := r.db.Where("refresh_token_hash = ? AND expires_at > ?", refreshTokenHash, biztime.NowUTC()).
 		First(&session).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -104,7 +104,7 @@ func (r *SessionRepository) DeleteByUserID(userID uint) error {
 }
 
 func (r *SessionRepository) DeleteExpired() error {
-	if err := r.db.Where("expires_at <= ?", time.Now()).Delete(&user.Session{}).Error; err != nil {
+	if err := r.db.Where("expires_at <= ?", biztime.NowUTC()).Delete(&user.Session{}).Error; err != nil {
 		return fmt.Errorf("failed to delete expired sessions: %w", err)
 	}
 	return nil

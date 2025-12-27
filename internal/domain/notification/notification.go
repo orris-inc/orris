@@ -5,6 +5,7 @@ import (
 	"time"
 
 	vo "github.com/orris-inc/orris/internal/domain/notification/valueobjects"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 )
 
 type Notification struct {
@@ -47,7 +48,7 @@ func NewNotification(
 		return nil, fmt.Errorf("content exceeds maximum length of 5000 characters")
 	}
 
-	now := time.Now()
+	now := biztime.NowUTC()
 	n := &Notification{
 		userID:           userID,
 		notificationType: notificationType,
@@ -159,7 +160,7 @@ func (n *Notification) MarkAsRead() error {
 	}
 
 	n.readStatus = vo.ReadStatusRead
-	n.updatedAt = time.Now()
+	n.updatedAt = biztime.NowUTC()
 
 	return nil
 }
@@ -169,7 +170,7 @@ func (n *Notification) Archive() error {
 		return fmt.Errorf("notification is already archived")
 	}
 
-	now := time.Now()
+	now := biztime.NowUTC()
 	n.archivedAt = &now
 	n.updatedAt = now
 
@@ -178,10 +179,6 @@ func (n *Notification) Archive() error {
 
 func (n *Notification) IsArchived() bool {
 	return n.archivedAt != nil
-}
-
-func (n *Notification) recordEventUnsafe(event interface{}) {
-	n.events = append(n.events, event)
 }
 
 func (n *Notification) GetEvents() []interface{} {

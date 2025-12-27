@@ -9,6 +9,7 @@ import (
 	"time"
 
 	vo "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/id"
 
 	"github.com/google/uuid"
@@ -84,7 +85,7 @@ func NewSubscriptionWithSubject(subjectType string, subjectID, planID uint, star
 		return nil, fmt.Errorf("failed to generate link token: %w", err)
 	}
 
-	now := time.Now()
+	now := biztime.NowUTC()
 	s := &Subscription{
 		sid:                sid,
 		uuid:               subscriptionUUID,
@@ -347,7 +348,7 @@ func (s *Subscription) Activate() error {
 	}
 
 	s.status = vo.StatusActive
-	s.updatedAt = time.Now()
+	s.updatedAt = biztime.NowUTC()
 	s.version++
 
 	return nil
@@ -371,7 +372,7 @@ func (s *Subscription) Cancel(reason string) error {
 		return fmt.Errorf("cancel reason is required")
 	}
 
-	now := time.Now()
+	now := biztime.NowUTC()
 	s.status = vo.StatusCancelled
 	s.cancelledAt = &now
 	s.cancelReason = &reason
@@ -394,7 +395,7 @@ func (s *Subscription) Renew(endDate time.Time) error {
 	s.endDate = endDate
 	s.currentPeriodStart = s.currentPeriodEnd
 	s.currentPeriodEnd = endDate
-	s.updatedAt = time.Now()
+	s.updatedAt = biztime.NowUTC()
 	s.version++
 
 	if s.status == vo.StatusExpired {
@@ -418,7 +419,7 @@ func (s *Subscription) ChangePlan(newPlanID uint) error {
 	}
 
 	s.planID = newPlanID
-	s.updatedAt = time.Now()
+	s.updatedAt = biztime.NowUTC()
 	s.version++
 
 	return nil
@@ -426,7 +427,7 @@ func (s *Subscription) ChangePlan(newPlanID uint) error {
 
 // IsExpired checks if subscription is expired
 func (s *Subscription) IsExpired() bool {
-	return time.Now().After(s.endDate)
+	return biztime.NowUTC().After(s.endDate)
 }
 
 // IsActive checks if subscription is active and can be used
@@ -445,7 +446,7 @@ func (s *Subscription) MarkAsExpired() error {
 	}
 
 	s.status = vo.StatusExpired
-	s.updatedAt = time.Now()
+	s.updatedAt = biztime.NowUTC()
 	s.version++
 
 	return nil
@@ -458,7 +459,7 @@ func (s *Subscription) SetAutoRenew(autoRenew bool) {
 	}
 
 	s.autoRenew = autoRenew
-	s.updatedAt = time.Now()
+	s.updatedAt = biztime.NowUTC()
 	s.version++
 }
 
@@ -466,7 +467,7 @@ func (s *Subscription) SetAutoRenew(autoRenew bool) {
 // Deprecated: Use ResetLinkToken for resetting subscription link authentication
 func (s *Subscription) ResetUUID() {
 	s.uuid = uuid.New().String()
-	s.updatedAt = time.Now()
+	s.updatedAt = biztime.NowUTC()
 	s.version++
 }
 
@@ -478,7 +479,7 @@ func (s *Subscription) ResetLinkToken() error {
 		return fmt.Errorf("failed to generate new link token: %w", err)
 	}
 	s.linkToken = newToken
-	s.updatedAt = time.Now()
+	s.updatedAt = biztime.NowUTC()
 	s.version++
 	return nil
 }
@@ -491,7 +492,7 @@ func (s *Subscription) UpdateCurrentPeriod(start, end time.Time) error {
 
 	s.currentPeriodStart = start
 	s.currentPeriodEnd = end
-	s.updatedAt = time.Now()
+	s.updatedAt = biztime.NowUTC()
 	s.version++
 
 	return nil

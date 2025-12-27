@@ -7,6 +7,7 @@ import (
 	"time"
 
 	vo "github.com/orris-inc/orris/internal/domain/notification/valueobjects"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 )
 
 type NotificationTemplate struct {
@@ -54,7 +55,7 @@ func NewNotificationTemplate(
 		variables = []string{}
 	}
 
-	now := time.Now()
+	now := biztime.NowUTC()
 	return &NotificationTemplate{
 		templateType: templateType,
 		name:         name,
@@ -187,7 +188,7 @@ func (t *NotificationTemplate) Enable() {
 	}
 
 	t.enabled = true
-	t.updatedAt = time.Now()
+	t.updatedAt = biztime.NowUTC()
 }
 
 func (t *NotificationTemplate) Disable() {
@@ -196,7 +197,7 @@ func (t *NotificationTemplate) Disable() {
 	}
 
 	t.enabled = false
-	t.updatedAt = time.Now()
+	t.updatedAt = biztime.NowUTC()
 }
 
 func (t *NotificationTemplate) Update(name, title, content string, variables []string) error {
@@ -234,7 +235,7 @@ func (t *NotificationTemplate) Update(name, title, content string, variables []s
 	t.title = title
 	t.content = content
 	t.variables = variables
-	t.updatedAt = time.Now()
+	t.updatedAt = biztime.NowUTC()
 
 	return nil
 }

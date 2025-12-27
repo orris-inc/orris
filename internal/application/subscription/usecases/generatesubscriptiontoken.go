@@ -7,6 +7,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	vo "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -63,7 +64,7 @@ func (uc *GenerateSubscriptionTokenUseCase) Execute(ctx context.Context, cmd Gen
 		return nil, fmt.Errorf("invalid token scope: %w", err)
 	}
 
-	if cmd.ExpiresAt != nil && cmd.ExpiresAt.Before(time.Now()) {
+	if cmd.ExpiresAt != nil && cmd.ExpiresAt.Before(biztime.NowUTC()) {
 		return nil, fmt.Errorf("expiration time cannot be in the past")
 	}
 

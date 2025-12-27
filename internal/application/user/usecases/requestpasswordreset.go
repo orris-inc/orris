@@ -3,10 +3,19 @@ package usecases
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/orris-inc/orris/internal/domain/user"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
+)
+
+const (
+	// rateLimitWindow is the time window for rate limiting password reset requests
+	rateLimitWindow = 1 * time.Minute
+	// rateLimitCleanupInterval is how often expired entries are cleaned up
+	rateLimitCleanupInterval = 10 * time.Minute
 )
 
 type RequestPasswordResetCommand struct {
@@ -14,10 +23,12 @@ type RequestPasswordResetCommand struct {
 }
 
 type RequestPasswordResetUseCase struct {
-	userRepo     user.Repository
-	emailService EmailService
-	logger       logger.Interface
-	rateLimiter  map[string]time.Time
+	userRepo      user.Repository
+	emailService  EmailService
+	logger        logger.Interface
+	rateLimiter   map[string]time.Time
+	rateLimiterMu sync.Mutex
+	lastCleanup   time.Time
 }
 
 func NewRequestPasswordResetUseCase(
@@ -30,14 +41,14 @@ func NewRequestPasswordResetUseCase(
 		emailService: emailService,
 		logger:       logger,
 		rateLimiter:  make(map[string]time.Time),
+		lastCleanup:  biztime.NowUTC(),
 	}
 }
 
 func (uc *RequestPasswordResetUseCase) Execute(ctx context.Context, cmd RequestPasswordResetCommand) error {
-	if lastRequest, exists := uc.rateLimiter[cmd.Email]; exists {
-		if time.Since(lastRequest) < 1*time.Minute {
-			return fmt.Errorf("please wait before requesting another password reset")
-		}
+	// Check rate limit with mutex protection
+	if err := uc.checkRateLimit(cmd.Email); err != nil {
+		return err
 	}
 
 	existingUser, err := uc.userRepo.GetByEmail(ctx, cmd.Email)
@@ -70,9 +81,50 @@ func (uc *RequestPasswordResetUseCase) Execute(ctx context.Context, cmd RequestP
 		uc.logger.Warnw("failed to send password reset email", "error", err, "email", cmd.Email)
 	}
 
-	uc.rateLimiter[cmd.Email] = time.Now()
+	// Record rate limit with mutex protection
+	uc.recordRateLimit(cmd.Email)
 
 	uc.logger.Infow("password reset requested", "user_id", existingUser.ID())
 
 	return nil
+}
+
+// checkRateLimit checks if the email is rate limited and cleans up expired entries
+func (uc *RequestPasswordResetUseCase) checkRateLimit(email string) error {
+	uc.rateLimiterMu.Lock()
+	defer uc.rateLimiterMu.Unlock()
+
+	now := biztime.NowUTC()
+
+	// Periodically cleanup expired entries to prevent memory leak
+	if now.Sub(uc.lastCleanup) > rateLimitCleanupInterval {
+		uc.cleanupExpiredEntries(now)
+		uc.lastCleanup = now
+	}
+
+	if lastRequest, exists := uc.rateLimiter[email]; exists {
+		if now.Sub(lastRequest) < rateLimitWindow {
+			return fmt.Errorf("please wait before requesting another password reset")
+		}
+	}
+
+	return nil
+}
+
+// recordRateLimit records the rate limit timestamp for an email
+func (uc *RequestPasswordResetUseCase) recordRateLimit(email string) {
+	uc.rateLimiterMu.Lock()
+	defer uc.rateLimiterMu.Unlock()
+
+	uc.rateLimiter[email] = biztime.NowUTC()
+}
+
+// cleanupExpiredEntries removes entries older than rateLimitCleanupInterval
+// Must be called with rateLimiterMu held
+func (uc *RequestPasswordResetUseCase) cleanupExpiredEntries(now time.Time) {
+	for email, lastRequest := range uc.rateLimiter {
+		if now.Sub(lastRequest) > rateLimitCleanupInterval {
+			delete(uc.rateLimiter, email)
+		}
+	}
 }

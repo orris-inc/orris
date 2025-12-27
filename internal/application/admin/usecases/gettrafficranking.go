@@ -7,9 +7,9 @@ import (
 	dto "github.com/orris-inc/orris/internal/application/admin/dto"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/domain/user"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
-	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 const (
@@ -69,7 +69,7 @@ func (uc *GetTrafficRankingUseCase) ExecuteUserRanking(
 	limit := uc.getLimit(query)
 
 	// Adjust 'to' time to end of day to include all records from that day
-	adjustedTo := utils.AdjustToEndOfDay(query.To)
+	adjustedTo := biztime.EndOfDayUTC(query.To)
 
 	// Get top subscriptions by usage
 	topSubscriptions, err := uc.usageRepo.GetTopSubscriptionsByUsage(
@@ -215,7 +215,7 @@ func (uc *GetTrafficRankingUseCase) ExecuteSubscriptionRanking(
 	limit := uc.getLimit(query)
 
 	// Adjust 'to' time to end of day to include all records from that day
-	adjustedTo := utils.AdjustToEndOfDay(query.To)
+	adjustedTo := biztime.EndOfDayUTC(query.To)
 
 	// Get top subscriptions by usage
 	topSubscriptions, err := uc.usageRepo.GetTopSubscriptionsByUsage(

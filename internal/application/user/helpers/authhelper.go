@@ -9,6 +9,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/user"
 	"github.com/orris-inc/orris/internal/shared/authorization"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -80,7 +81,7 @@ func (h *AuthHelper) CreateSessionWithTokens(
 	expiresIn int64,
 ) (*SessionWithTokens, error) {
 	// Step 1: Create new session domain object
-	expiresAt := time.Now().Add(sessionDuration)
+	expiresAt := biztime.NowUTC().Add(sessionDuration)
 	session, err := user.NewSession(
 		userID,
 		deviceInfo.DeviceName,
@@ -125,7 +126,7 @@ func (h *AuthHelper) CreateAndSaveSessionWithTokens(
 	generateTokens func(userUUID string, sessionID string) (accessToken, refreshToken string, expiresIn int64, err error),
 ) (*SessionWithTokens, error) {
 	// Step 1: Create new session domain object
-	expiresAt := time.Now().Add(sessionDuration)
+	expiresAt := biztime.NowUTC().Add(sessionDuration)
 	session, err := user.NewSession(
 		userID,
 		deviceInfo.DeviceName,

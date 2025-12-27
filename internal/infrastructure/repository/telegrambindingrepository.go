@@ -7,6 +7,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/orris-inc/orris/internal/domain/telegram"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -115,7 +116,7 @@ func (r *TelegramBindingRepository) Delete(ctx context.Context, id uint) error {
 // FindBindingsForExpiringNotification finds bindings that need expiring notifications
 func (r *TelegramBindingRepository) FindBindingsForExpiringNotification(ctx context.Context) ([]*telegram.TelegramBinding, error) {
 	var models []TelegramBindingModel
-	threshold := time.Now().Add(-24 * time.Hour)
+	threshold := biztime.NowUTC().Add(-24 * time.Hour)
 
 	err := r.db.WithContext(ctx).
 		Where("notify_expiring = ?", true).
@@ -135,7 +136,7 @@ func (r *TelegramBindingRepository) FindBindingsForExpiringNotification(ctx cont
 // FindBindingsForTrafficNotification finds bindings that need traffic notifications
 func (r *TelegramBindingRepository) FindBindingsForTrafficNotification(ctx context.Context) ([]*telegram.TelegramBinding, error) {
 	var models []TelegramBindingModel
-	threshold := time.Now().Add(-24 * time.Hour)
+	threshold := biztime.NowUTC().Add(-24 * time.Hour)
 
 	err := r.db.WithContext(ctx).
 		Where("notify_traffic = ?", true).

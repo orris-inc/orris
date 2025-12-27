@@ -2,6 +2,8 @@ package dto
 
 import (
 	"time"
+
+	"github.com/orris-inc/orris/internal/shared/biztime"
 )
 
 type SubscriptionResponseDTO struct {
@@ -23,7 +25,7 @@ func ToSubscriptionResponseDTO(content, format string, nodeCount int, userAgent 
 		Content:     content,
 		Format:      format,
 		NodeCount:   nodeCount,
-		GeneratedAt: time.Now(),
+		GeneratedAt: biztime.NowUTC(),
 		UserAgent:   userAgent,
 	}
 }

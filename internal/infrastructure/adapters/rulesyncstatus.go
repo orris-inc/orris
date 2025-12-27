@@ -9,6 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/orris-inc/orris/internal/application/forward/dto"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -65,7 +66,7 @@ func (a *RuleSyncStatusAdapter) UpdateRuleStatus(ctx context.Context, agentID ui
 	}
 
 	// Store updated_at timestamp
-	hashData["updated_at"] = time.Now().Unix()
+	hashData["updated_at"] = biztime.NowUTC().Unix()
 
 	// Store all rules in Redis hash with TTL
 	pipe := a.redisClient.Pipeline()

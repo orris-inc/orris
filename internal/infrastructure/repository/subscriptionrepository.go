@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"gorm.io/gorm"
 
@@ -13,6 +12,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/db"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -271,7 +271,7 @@ func (r *SubscriptionRepositoryImpl) Delete(ctx context.Context, id uint) error 
 func (r *SubscriptionRepositoryImpl) FindExpiringSubscriptions(ctx context.Context, days int) ([]*subscription.Subscription, error) {
 	var models []*models.SubscriptionModel
 
-	now := time.Now()
+	now := biztime.NowUTC()
 	expiryThreshold := now.AddDate(0, 0, days)
 
 	if err := r.db.WithContext(ctx).
@@ -296,7 +296,7 @@ func (r *SubscriptionRepositoryImpl) FindExpiringSubscriptions(ctx context.Conte
 func (r *SubscriptionRepositoryImpl) FindExpiredSubscriptions(ctx context.Context) ([]*subscription.Subscription, error) {
 	var models []*models.SubscriptionModel
 
-	now := time.Now()
+	now := biztime.NowUTC()
 
 	if err := r.db.WithContext(ctx).
 		Where("end_date < ?", now).

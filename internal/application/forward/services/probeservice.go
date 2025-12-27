@@ -15,6 +15,7 @@ import (
 	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/infrastructure/auth"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -841,7 +842,7 @@ func (s *ProbeService) sendProbeTask(
 	msg := &dto.HubMessage{
 		Type:      dto.MsgTypeProbeTask,
 		AgentID:   agent.SID(),
-		Timestamp: time.Now().Unix(),
+		Timestamp: biztime.NowUTC().Unix(),
 		Data:      task,
 	}
 
@@ -930,7 +931,7 @@ func (s *ProbeService) sendTunnelPingTask(
 	msg := &dto.HubMessage{
 		Type:      dto.MsgTypeProbeTask,
 		AgentID:   agent.SID(),
-		Timestamp: time.Now().Unix(),
+		Timestamp: biztime.NowUTC().Unix(),
 		Data:      task,
 	}
 

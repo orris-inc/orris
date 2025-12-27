@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/orris-inc/orris/internal/domain/shared/services"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 )
 
 // AgentStatus represents the status of a forward agent
@@ -82,7 +83,7 @@ func NewForwardAgent(name string, publicAddress string, tunnelAddress string, re
 	// Generate token using the provided generator
 	plainToken, tokenHash := tokenGenerator(sid)
 
-	now := time.Now()
+	now := biztime.NowUTC()
 	agent := &ForwardAgent{
 		sid:            sid,
 		name:           name,
@@ -218,7 +219,7 @@ func (a *ForwardAgent) GroupID() *uint {
 // SetGroupID sets the resource group ID
 func (a *ForwardAgent) SetGroupID(groupID *uint) {
 	a.groupID = groupID
-	a.updatedAt = time.Now()
+	a.updatedAt = biztime.NowUTC()
 }
 
 // CreatedAt returns when the agent was created
@@ -248,7 +249,7 @@ func (a *ForwardAgent) SetID(id uint) error {
 func (a *ForwardAgent) SetAPIToken(plainToken, tokenHash string) {
 	a.apiToken = plainToken
 	a.tokenHash = tokenHash
-	a.updatedAt = time.Now()
+	a.updatedAt = biztime.NowUTC()
 }
 
 // VerifyAPIToken verifies if the provided plain token matches the stored hash
@@ -277,7 +278,7 @@ func (a *ForwardAgent) Enable() error {
 	}
 
 	a.status = AgentStatusEnabled
-	a.updatedAt = time.Now()
+	a.updatedAt = biztime.NowUTC()
 
 	return nil
 }
@@ -289,7 +290,7 @@ func (a *ForwardAgent) Disable() error {
 	}
 
 	a.status = AgentStatusDisabled
-	a.updatedAt = time.Now()
+	a.updatedAt = biztime.NowUTC()
 
 	return nil
 }
@@ -305,7 +306,7 @@ func (a *ForwardAgent) UpdateName(name string) error {
 	}
 
 	a.name = name
-	a.updatedAt = time.Now()
+	a.updatedAt = biztime.NowUTC()
 
 	return nil
 }
@@ -317,7 +318,7 @@ func (a *ForwardAgent) UpdateRemark(remark string) error {
 	}
 
 	a.remark = remark
-	a.updatedAt = time.Now()
+	a.updatedAt = biztime.NowUTC()
 
 	return nil
 }
@@ -336,7 +337,7 @@ func (a *ForwardAgent) UpdatePublicAddress(address string) error {
 	}
 
 	a.publicAddress = address
-	a.updatedAt = time.Now()
+	a.updatedAt = biztime.NowUTC()
 
 	return nil
 }
@@ -355,7 +356,7 @@ func (a *ForwardAgent) UpdateTunnelAddress(address string) error {
 	}
 
 	a.tunnelAddress = address
-	a.updatedAt = time.Now()
+	a.updatedAt = biztime.NowUTC()
 
 	return nil
 }

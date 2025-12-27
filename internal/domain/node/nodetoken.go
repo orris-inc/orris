@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/orris-inc/orris/internal/shared/biztime"
 )
 
 type NodeToken struct {
@@ -97,7 +99,7 @@ func (nt *NodeToken) IsExpired() bool {
 	if nt.expiresAt == nil {
 		return false
 	}
-	return time.Now().After(*nt.expiresAt)
+	return biztime.NowUTC().After(*nt.expiresAt)
 }
 
 func (nt *NodeToken) IsValid(plainToken string) bool {

@@ -3,6 +3,8 @@ package user
 import (
 	"fmt"
 	"time"
+
+	"github.com/orris-inc/orris/internal/shared/biztime"
 )
 
 type OAuthAccount struct {
@@ -35,7 +37,7 @@ func NewOAuthAccount(userID uint, provider, providerUserID, providerEmail string
 		return nil, fmt.Errorf("provider user ID is required")
 	}
 
-	now := time.Now()
+	now := biztime.NowUTC()
 	return &OAuthAccount{
 		UserID:         userID,
 		Provider:       provider,
@@ -50,7 +52,7 @@ func NewOAuthAccount(userID uint, provider, providerUserID, providerEmail string
 
 func (o *OAuthAccount) RecordLogin() {
 	o.LoginCount++
-	now := time.Now()
+	now := biztime.NowUTC()
 	o.LastLoginAt = &now
 	o.UpdatedAt = now
 }

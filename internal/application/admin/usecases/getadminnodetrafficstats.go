@@ -7,10 +7,10 @@ import (
 	dto "github.com/orris-inc/orris/internal/application/admin/dto"
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
-	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 // GetAdminNodeTrafficStatsQuery represents the query parameters for node traffic statistics
@@ -61,7 +61,7 @@ func (uc *GetAdminNodeTrafficStatsUseCase) Execute(
 	page, pageSize := uc.getPaginationParams(query)
 
 	// Adjust 'to' time to end of day to include all records from that day
-	adjustedTo := utils.AdjustToEndOfDay(query.To)
+	adjustedTo := biztime.EndOfDayUTC(query.To)
 
 	// Get usage data grouped by node (resource_type = "node")
 	resourceType := subscription.ResourceTypeNode.String()

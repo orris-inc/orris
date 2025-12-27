@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -47,7 +48,7 @@ func (uc *GenerateNodeTokenUseCase) Execute(ctx context.Context, cmd GenerateNod
 		return nil, err
 	}
 
-	if cmd.ExpiresAt != nil && cmd.ExpiresAt.Before(time.Now()) {
+	if cmd.ExpiresAt != nil && cmd.ExpiresAt.Before(biztime.NowUTC()) {
 		uc.logger.Warnw("expiration time is in the past", "sid", cmd.SID, "expires_at", cmd.ExpiresAt)
 		return nil, errors.NewValidationError("expiration time cannot be in the past")
 	}
@@ -85,7 +86,7 @@ func (uc *GenerateNodeTokenUseCase) Execute(ctx context.Context, cmd GenerateNod
 		Token:       plainToken,
 		TokenPrefix: tokenPrefix,
 		ExpiresAt:   cmd.ExpiresAt,
-		CreatedAt:   time.Now(),
+		CreatedAt:   biztime.NowUTC(),
 	}, nil
 }
 

@@ -8,6 +8,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/domain/telegram"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -189,7 +190,7 @@ func (uc *ProcessReminderUseCase) processTrafficUsage(ctx context.Context) (int,
 			}
 
 			// Get current period usage - use the earliest period start among these subscriptions
-			now := time.Now()
+			now := biztime.NowUTC()
 			periodStart := now
 			for _, sub := range planSubs {
 				if sub.CurrentPeriodStart().Before(periodStart) {
@@ -264,7 +265,7 @@ func (uc *ProcessReminderUseCase) buildExpiringMessage(subs []*subscription.Subs
 		msg += fmt.Sprintf("• Subscription `%s`: expires in *%d days* (%s)\n",
 			sub.SID(),
 			daysLeft,
-			sub.EndDate().Format("2006-01-02"),
+			biztime.FormatInBizTimezone(sub.EndDate(), "2006-01-02"),
 		)
 	}
 	msg += "\nPlease renew your subscription to avoid service interruption."

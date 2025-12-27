@@ -5,6 +5,7 @@ import (
 	"time"
 
 	vo "github.com/orris-inc/orris/internal/domain/user/valueobjects"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 )
 
 type PasswordHasher interface {
@@ -23,8 +24,8 @@ func (u *User) SetPassword(password *vo.Password, hasher PasswordHasher) error {
 	}
 
 	u.passwordHash = &hash
-	u.lastPasswordChangeAt = timePtr(time.Now())
-	u.updatedAt = time.Now()
+	u.lastPasswordChangeAt = timePtr(biztime.NowUTC())
+	u.updatedAt = biztime.NowUTC()
 	u.version++
 
 	return nil
@@ -51,8 +52,8 @@ func (u *User) GenerateEmailVerificationToken() (*vo.Token, error) {
 	}
 
 	u.emailVerificationToken = stringPtr(token.Hash())
-	u.emailVerificationExpiresAt = timePtr(time.Now().Add(24 * time.Hour))
-	u.updatedAt = time.Now()
+	u.emailVerificationExpiresAt = timePtr(biztime.NowUTC().Add(24 * time.Hour))
+	u.updatedAt = biztime.NowUTC()
 
 	return token, nil
 }
@@ -66,7 +67,7 @@ func (u *User) VerifyEmail(plainToken string) error {
 		return fmt.Errorf("no verification token found")
 	}
 
-	if u.emailVerificationExpiresAt == nil || time.Now().After(*u.emailVerificationExpiresAt) {
+	if u.emailVerificationExpiresAt == nil || biztime.NowUTC().After(*u.emailVerificationExpiresAt) {
 		return fmt.Errorf("verification token has expired")
 	}
 
@@ -82,7 +83,7 @@ func (u *User) VerifyEmail(plainToken string) error {
 	u.emailVerified = true
 	u.emailVerificationToken = nil
 	u.emailVerificationExpiresAt = nil
-	u.updatedAt = time.Now()
+	u.updatedAt = biztime.NowUTC()
 	u.version++
 
 	return nil
@@ -95,8 +96,8 @@ func (u *User) GeneratePasswordResetToken() (*vo.Token, error) {
 	}
 
 	u.passwordResetToken = stringPtr(token.Hash())
-	u.passwordResetExpiresAt = timePtr(time.Now().Add(30 * time.Minute))
-	u.updatedAt = time.Now()
+	u.passwordResetExpiresAt = timePtr(biztime.NowUTC().Add(30 * time.Minute))
+	u.updatedAt = biztime.NowUTC()
 
 	return token, nil
 }
@@ -106,7 +107,7 @@ func (u *User) ResetPassword(plainToken string, newPassword *vo.Password, hasher
 		return fmt.Errorf("no password reset token found")
 	}
 
-	if u.passwordResetExpiresAt == nil || time.Now().After(*u.passwordResetExpiresAt) {
+	if u.passwordResetExpiresAt == nil || biztime.NowUTC().After(*u.passwordResetExpiresAt) {
 		return fmt.Errorf("password reset token has expired")
 	}
 
@@ -137,12 +138,12 @@ func (u *User) RecordFailedLogin() {
 
 func (u *User) recordFailedLogin() {
 	u.failedLoginAttempts++
-	u.updatedAt = time.Now()
+	u.updatedAt = biztime.NowUTC()
 
 	const maxAttempts = 5
 	if u.failedLoginAttempts >= maxAttempts {
 		lockDuration := 30 * time.Minute
-		u.lockedUntil = timePtr(time.Now().Add(lockDuration))
+		u.lockedUntil = timePtr(biztime.NowUTC().Add(lockDuration))
 	}
 }
 
@@ -150,7 +151,7 @@ func (u *User) resetFailedLoginAttempts() {
 	if u.failedLoginAttempts > 0 {
 		u.failedLoginAttempts = 0
 		u.lockedUntil = nil
-		u.updatedAt = time.Now()
+		u.updatedAt = biztime.NowUTC()
 	}
 }
 
@@ -158,7 +159,7 @@ func (u *User) IsLocked() bool {
 	if u.lockedUntil == nil {
 		return false
 	}
-	return time.Now().Before(*u.lockedUntil)
+	return biztime.NowUTC().Before(*u.lockedUntil)
 }
 
 func (u *User) HasPassword() bool {

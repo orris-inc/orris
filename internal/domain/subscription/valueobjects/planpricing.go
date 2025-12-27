@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/id"
 )
 
@@ -65,7 +66,7 @@ func NewPlanPricing(planID uint, cycle BillingCycle, price uint64, currency stri
 		return nil, fmt.Errorf("failed to generate SID: %w", err)
 	}
 
-	now := time.Now()
+	now := biztime.NowUTC()
 	return &PlanPricing{
 		sid:          sid,
 		planID:       planID,
@@ -155,20 +156,20 @@ func (p *PlanPricing) UpdatePrice(newPrice uint64) error {
 		return ErrInvalidPrice
 	}
 	p.price = newPrice
-	p.updatedAt = time.Now()
+	p.updatedAt = biztime.NowUTC()
 	return nil
 }
 
 // Activate activates this pricing option
 func (p *PlanPricing) Activate() {
 	p.isActive = true
-	p.updatedAt = time.Now()
+	p.updatedAt = biztime.NowUTC()
 }
 
 // Deactivate deactivates this pricing option
 func (p *PlanPricing) Deactivate() {
 	p.isActive = false
-	p.updatedAt = time.Now()
+	p.updatedAt = biztime.NowUTC()
 }
 
 // Equals checks if two PlanPricing objects are equal

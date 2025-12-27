@@ -2,7 +2,6 @@ package database
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -13,7 +12,6 @@ import (
 
 	"github.com/orris-inc/orris/internal/shared/config"
 	appLogger "github.com/orris-inc/orris/internal/shared/logger"
-	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 var (
@@ -24,10 +22,9 @@ var (
 // Init initializes the database connection with minimal configuration
 func Init(cfg *config.DatabaseConfig) error {
 	// Build DSN with essential parameters
-	// Use business timezone from utils.Location() for consistent time handling
-	timezone := url.QueryEscape(utils.Location().String())
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=true&loc=%s",
-		cfg.Username, cfg.Password, cfg.Host, cfg.Port, cfg.Database, timezone)
+	// Use UTC for all database time operations to ensure consistency
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&collation=utf8mb4_general_ci&parseTime=true&loc=UTC",
+		cfg.Username, cfg.Password, cfg.Host, cfg.Port, cfg.Database)
 
 	// Create custom logger to filter schema queries
 	gormLogger := logger.New(

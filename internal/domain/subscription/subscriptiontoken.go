@@ -7,6 +7,7 @@ import (
 	"time"
 
 	vo "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/id"
 )
 
@@ -60,7 +61,7 @@ func NewSubscriptionToken(
 		return nil, errors.New("invalid token scope")
 	}
 
-	if expiresAt != nil && expiresAt.Before(time.Now()) {
+	if expiresAt != nil && expiresAt.Before(biztime.NowUTC()) {
 		return nil, errors.New("expiration time cannot be in the past")
 	}
 
@@ -79,7 +80,7 @@ func NewSubscriptionToken(
 		scope:          scope,
 		expiresAt:      expiresAt,
 		isActive:       true,
-		createdAt:      time.Now(),
+		createdAt:      biztime.NowUTC(),
 		usageCount:     0,
 	}, nil
 }
@@ -146,7 +147,7 @@ func (t *SubscriptionToken) IsExpired() bool {
 	if t.expiresAt == nil {
 		return false
 	}
-	return time.Now().After(*t.expiresAt)
+	return biztime.NowUTC().After(*t.expiresAt)
 }
 
 func (t *SubscriptionToken) Revoke() error {
@@ -154,7 +155,7 @@ func (t *SubscriptionToken) Revoke() error {
 		return errors.New("token is already revoked")
 	}
 
-	now := time.Now()
+	now := biztime.NowUTC()
 	t.revokedAt = &now
 	t.isActive = false
 
@@ -162,7 +163,7 @@ func (t *SubscriptionToken) Revoke() error {
 }
 
 func (t *SubscriptionToken) RecordUsage(ipAddress string) {
-	now := time.Now()
+	now := biztime.NowUTC()
 	t.lastUsedAt = &now
 	t.lastUsedIP = &ipAddress
 	t.usageCount++

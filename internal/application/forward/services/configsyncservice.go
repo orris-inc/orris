@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/application/forward/usecases"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/infrastructure/auth"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -177,7 +177,7 @@ func (s *ConfigSyncService) NotifyRuleChange(ctx context.Context, agentID uint, 
 	msg := &dto.HubMessage{
 		Type:      dto.MsgTypeConfigSync,
 		AgentID:   agent.SID(),
-		Timestamp: time.Now().Unix(),
+		Timestamp: biztime.NowUTC().Unix(),
 		Data:      syncData,
 	}
 
@@ -304,7 +304,7 @@ func (s *ConfigSyncService) FullSyncToAgent(ctx context.Context, agentID uint) e
 	msg := &dto.HubMessage{
 		Type:      dto.MsgTypeConfigSync,
 		AgentID:   agent.SID(),
-		Timestamp: time.Now().Unix(),
+		Timestamp: biztime.NowUTC().Unix(),
 		Data:      syncData,
 	}
 
@@ -965,7 +965,7 @@ func (s *ConfigSyncService) NotifyExitPortChange(ctx context.Context, exitAgentI
 		msg := &dto.HubMessage{
 			Type:      dto.MsgTypeConfigSync,
 			AgentID:   entryAgent.SID(),
-			Timestamp: time.Now().Unix(),
+			Timestamp: biztime.NowUTC().Unix(),
 			Data:      syncData,
 		}
 

@@ -10,6 +10,7 @@ import (
 	subdto "github.com/orris-inc/orris/internal/application/subscription/dto"
 	"github.com/orris-inc/orris/internal/application/subscription/usecases"
 	"github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -107,9 +108,9 @@ func (h *SubscriptionHandler) CreateSubscription(c *gin.Context) {
 		autoRenew = *req.AutoRenew
 	}
 
-	startDate := time.Now()
+	startDate := biztime.NowUTC()
 	if req.StartDate != nil {
-		startDate = *req.StartDate
+		startDate = req.StartDate.UTC()
 	}
 
 	// Validate plan SID format

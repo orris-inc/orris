@@ -2,9 +2,9 @@ package usecases
 
 import (
 	"context"
-	"time"
 
 	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -88,9 +88,10 @@ func (uc *CheckTrafficLimitUseCase) Execute(
 		}, nil
 	}
 
-	now := time.Now()
-	startOfMonth := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
-	endOfMonth := startOfMonth.AddDate(0, 1, 0)
+	// Calculate month boundaries in business timezone, then convert to UTC for query
+	bizNow := biztime.ToBizTimezone(biztime.NowUTC())
+	startOfMonth := biztime.StartOfMonthUTC(bizNow.Year(), bizNow.Month())
+	endOfMonth := biztime.EndOfMonthUTC(bizNow.Year(), bizNow.Month())
 
 	summary, err := uc.usageRepo.GetTotalUsage(ctx, subscription.ResourceTypeNode.String(), query.NodeID, startOfMonth, endOfMonth)
 	if err != nil {

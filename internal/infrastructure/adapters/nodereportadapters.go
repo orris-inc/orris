@@ -9,8 +9,8 @@ import (
 
 	nodeUsecases "github.com/orris-inc/orris/internal/application/node/usecases"
 	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
-	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 // SubscriptionUsageRecorderAdapter adapts to record subscription-based usage
@@ -47,8 +47,9 @@ func (a *SubscriptionUsageRecorderAdapter) RecordSubscriptionUsage(ctx context.C
 		return nil
 	}
 
-	// Create period for current hour aggregation in business timezone
-	period := utils.TruncateToHour()
+	// Create period for current hour aggregation
+	// Truncate to hour in business timezone, then convert to UTC for storage
+	period := biztime.TruncateToHourInBiz(biztime.NowUTC())
 
 	// Create domain entity
 	usage, err := subscription.NewSubscriptionUsage(subscription.ResourceTypeNode.String(), nodeID, &subscriptionID, period)
@@ -97,8 +98,9 @@ func (a *SubscriptionUsageRecorderAdapter) BatchRecordSubscriptionUsage(ctx cont
 		return nil
 	}
 
-	// Use current hour as period for consistent aggregation in business timezone
-	period := utils.TruncateToHour()
+	// Use current hour as period for consistent aggregation
+	// Truncate to hour in business timezone, then convert to UTC for storage
+	period := biztime.TruncateToHourInBiz(biztime.NowUTC())
 
 	// Process each item
 	validCount := 0
@@ -231,7 +233,7 @@ func (a *NodeSystemStatusUpdaterAdapter) UpdateSystemStatus(ctx context.Context,
 		"memory":     fmt.Sprintf("%.2f", memory*100), // Store as percentage string
 		"disk":       fmt.Sprintf("%.2f", disk*100),   // Store as percentage string
 		"uptime":     uptime,
-		"updated_at": time.Now().Unix(),
+		"updated_at": biztime.NowUTC().Unix(),
 	}
 
 	// Only store public IPs if provided

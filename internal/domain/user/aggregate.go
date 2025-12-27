@@ -8,6 +8,7 @@ import (
 
 	vo "github.com/orris-inc/orris/internal/domain/user/valueobjects"
 	"github.com/orris-inc/orris/internal/shared/authorization"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 )
 
 // User represents the user aggregate root (pure domain model without persistence concerns)
@@ -47,7 +48,7 @@ func NewUser(email *vo.Email, name *vo.Name, shortIDGenerator func() (string, er
 		return nil, fmt.Errorf("failed to generate short ID: %w", err)
 	}
 
-	now := time.Now()
+	now := biztime.NowUTC()
 	user := &User{
 		sid:       sid,
 		email:     email,
@@ -170,7 +171,7 @@ func (u *User) IsAdmin() bool {
 // SetRole sets the user's role
 func (u *User) SetRole(role authorization.UserRole) {
 	u.role = role
-	u.updatedAt = time.Now()
+	u.updatedAt = biztime.NowUTC()
 	u.version++
 }
 
@@ -217,7 +218,7 @@ func (u *User) UpdateEmail(newEmail *vo.Email) error {
 	}
 
 	u.email = newEmail
-	u.updatedAt = time.Now()
+	u.updatedAt = biztime.NowUTC()
 	u.version++
 
 	return nil
@@ -234,7 +235,7 @@ func (u *User) UpdateName(newName *vo.Name) error {
 	}
 
 	u.name = newName
-	u.updatedAt = time.Now()
+	u.updatedAt = biztime.NowUTC()
 	u.version++
 
 	return nil
@@ -251,7 +252,7 @@ func (u *User) Activate() error {
 	}
 
 	u.status = vo.StatusActive
-	u.updatedAt = time.Now()
+	u.updatedAt = biztime.NowUTC()
 	u.version++
 
 	return nil
@@ -268,7 +269,7 @@ func (u *User) Deactivate(reason string) error {
 	}
 
 	u.status = vo.StatusInactive
-	u.updatedAt = time.Now()
+	u.updatedAt = biztime.NowUTC()
 	u.version++
 
 	if reason == "" {
@@ -293,7 +294,7 @@ func (u *User) Suspend(reason string) error {
 	}
 
 	u.status = vo.StatusSuspended
-	u.updatedAt = time.Now()
+	u.updatedAt = biztime.NowUTC()
 	u.version++
 
 	return nil
@@ -310,7 +311,7 @@ func (u *User) Delete() error {
 	}
 
 	u.status = vo.StatusDeleted
-	u.updatedAt = time.Now()
+	u.updatedAt = biztime.NowUTC()
 	u.version++
 
 	return nil
@@ -375,7 +376,7 @@ func (u *User) ChangePassword(oldPassword, newPassword *vo.Password, hasher Pass
 
 	// Update password
 	u.passwordHash = &newHash
-	now := time.Now()
+	now := biztime.NowUTC()
 	u.lastPasswordChangeAt = &now
 	u.updatedAt = now
 	u.version++

@@ -24,9 +24,9 @@ import (
 	"github.com/orris-inc/orris/internal/infrastructure/repository"
 	httpRouter "github.com/orris-inc/orris/internal/interfaces/http"
 	"github.com/orris-inc/orris/internal/shared/authorization"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
-	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 var (
@@ -79,9 +79,9 @@ func run(cmd *cobra.Command, args []string) error {
 	gin.DebugPrintRouteFunc = func(httpMethod, absolutePath, handlerName string, nuHandlers int) {
 	}
 
-	// Initialize business timezone before database connection
-	utils.MustInitTimezone(cfg.Server.Timezone)
-	logger.Info("timezone initialized", "timezone", utils.Location().String())
+	// Initialize business timezone for date boundary calculations
+	biztime.MustInit(cfg.Server.Timezone)
+	logger.Info("business timezone initialized", "timezone", biztime.Location().String())
 
 	if err := database.Init(&cfg.Database); err != nil {
 		logger.Fatal("failed to initialize database", "error", err)

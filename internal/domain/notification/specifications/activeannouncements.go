@@ -1,10 +1,9 @@
 package specifications
 
 import (
-	"time"
-
 	"github.com/orris-inc/orris/internal/domain/notification"
 	vo "github.com/orris-inc/orris/internal/domain/notification/valueobjects"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 )
 
 type ActiveAnnouncements struct{}
@@ -23,7 +22,7 @@ func (s *ActiveAnnouncements) IsSatisfiedBy(entity interface{}) bool {
 		return false
 	}
 
-	now := time.Now()
+	now := biztime.NowUTC()
 
 	if scheduledAt := a.ScheduledAt(); scheduledAt != nil && now.Before(*scheduledAt) {
 		return false

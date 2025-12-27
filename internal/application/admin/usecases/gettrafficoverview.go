@@ -9,9 +9,9 @@ import (
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/domain/user"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
-	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 // GetTrafficOverviewQuery represents the query parameters for traffic overview
@@ -67,7 +67,7 @@ func (uc *GetTrafficOverviewUseCase) Execute(
 	}
 
 	// Adjust 'to' time to end of day to include all records from that day
-	adjustedTo := utils.AdjustToEndOfDay(query.To)
+	adjustedTo := biztime.EndOfDayUTC(query.To)
 
 	// Get platform total usage
 	totalUsage, err := uc.usageRepo.GetPlatformTotalUsage(ctx, query.ResourceType, query.From, adjustedTo)

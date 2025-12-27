@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/id"
 )
 
@@ -56,7 +57,7 @@ func NewResourceGroup(name string, planID uint, description string) (*ResourceGr
 		return nil, fmt.Errorf("failed to generate SID: %w", err)
 	}
 
-	now := time.Now()
+	now := biztime.NowUTC()
 	return &ResourceGroup{
 		sid:         sid,
 		name:        name,
@@ -177,7 +178,7 @@ func (g *ResourceGroup) UpdateName(name string) error {
 		return nil
 	}
 	g.name = name
-	g.updatedAt = time.Now()
+	g.updatedAt = biztime.NowUTC()
 	g.version++
 	return nil
 }
@@ -188,7 +189,7 @@ func (g *ResourceGroup) UpdateDescription(description string) {
 		return
 	}
 	g.description = description
-	g.updatedAt = time.Now()
+	g.updatedAt = biztime.NowUTC()
 	g.version++
 }
 
@@ -201,7 +202,7 @@ func (g *ResourceGroup) UpdatePlanID(planID uint) error {
 		return nil
 	}
 	g.planID = planID
-	g.updatedAt = time.Now()
+	g.updatedAt = biztime.NowUTC()
 	g.version++
 	return nil
 }
@@ -212,7 +213,7 @@ func (g *ResourceGroup) Activate() {
 		return
 	}
 	g.status = GroupStatusActive
-	g.updatedAt = time.Now()
+	g.updatedAt = biztime.NowUTC()
 	g.version++
 }
 
@@ -222,7 +223,7 @@ func (g *ResourceGroup) Deactivate() {
 		return
 	}
 	g.status = GroupStatusInactive
-	g.updatedAt = time.Now()
+	g.updatedAt = biztime.NowUTC()
 	g.version++
 }
 

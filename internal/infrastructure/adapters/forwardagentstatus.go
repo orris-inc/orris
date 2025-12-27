@@ -10,6 +10,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -67,7 +68,7 @@ func (a *ForwardAgentStatusAdapter) UpdateStatus(ctx context.Context, agentID ui
 		"active_connections": status.ActiveConnections,
 		"ws_listen_port":     status.WsListenPort,
 		"tls_listen_port":    status.TlsListenPort,
-		"updated_at":         time.Now().Unix(),
+		"updated_at":         biztime.NowUTC().Unix(),
 	})
 
 	// Store tunnel status as JSON if present

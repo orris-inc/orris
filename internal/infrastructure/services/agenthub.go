@@ -3,11 +3,13 @@ package services
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
 
 	"github.com/orris-inc/orris/internal/application/forward/dto"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -40,6 +42,38 @@ type AgentHubConn struct {
 	Send        chan *dto.HubMessage
 	LastSeen    time.Time
 	ConnectedAt time.Time
+	closed      atomic.Bool // Indicates if the connection has been closed
+}
+
+// TrySend attempts to send a message to the agent.
+// Returns false if the channel is closed or full.
+// Uses recover to handle the race condition between closed check and send.
+func (c *AgentHubConn) TrySend(msg *dto.HubMessage) (sent bool) {
+	if c.closed.Load() {
+		return false
+	}
+
+	// Recover from panic if channel is closed between the check and send
+	defer func() {
+		if r := recover(); r != nil {
+			sent = false
+		}
+	}()
+
+	select {
+	case c.Send <- msg:
+		return true
+	default:
+		return false
+	}
+}
+
+// Close marks the connection as closed and closes the send channel.
+// Safe to call multiple times.
+func (c *AgentHubConn) Close() {
+	if c.closed.CompareAndSwap(false, true) {
+		close(c.Send)
+	}
 }
 
 // NewAgentHub creates a new AgentHub instance.
@@ -83,19 +117,17 @@ func (h *AgentHub) RouteAgentMessage(agentID uint, msgType string, data any) boo
 // SendMessageToAgent sends a generic message to an agent.
 func (h *AgentHub) SendMessageToAgent(agentID uint, msg *dto.HubMessage) error {
 	h.agentsMu.RLock()
-	defer h.agentsMu.RUnlock()
-
 	agentConn, ok := h.agents[agentID]
+	h.agentsMu.RUnlock()
+
 	if !ok {
 		return ErrAgentNotConnected
 	}
 
-	select {
-	case agentConn.Send <- msg:
-		return nil
-	default:
+	if !agentConn.TrySend(msg) {
 		return ErrSendChannelFull
 	}
+	return nil
 }
 
 // SetOnAgentOnline sets the callback for agent online events.
@@ -115,7 +147,7 @@ func (h *AgentHub) RegisterAgent(agentID uint, conn *websocket.Conn) *AgentHubCo
 
 	// Close existing connection if any
 	if existing, ok := h.agents[agentID]; ok {
-		close(existing.Send)
+		existing.Close() // Use Close() to safely close the channel
 		existing.Conn.Close()
 	}
 
@@ -123,8 +155,8 @@ func (h *AgentHub) RegisterAgent(agentID uint, conn *websocket.Conn) *AgentHubCo
 		AgentID:     agentID,
 		Conn:        conn,
 		Send:        make(chan *dto.HubMessage, 256),
-		LastSeen:    time.Now(),
-		ConnectedAt: time.Now(),
+		LastSeen:    biztime.NowUTC(),
+		ConnectedAt: biztime.NowUTC(),
 	}
 	h.agents[agentID] = agentConn
 
@@ -145,7 +177,7 @@ func (h *AgentHub) UnregisterAgent(agentID uint) {
 	defer h.agentsMu.Unlock()
 
 	if conn, ok := h.agents[agentID]; ok {
-		close(conn.Send)
+		conn.Close() // Use Close() to safely close the channel
 		delete(h.agents, agentID)
 
 		h.logger.Infow("forward agent disconnected",
@@ -163,7 +195,7 @@ func (h *AgentHub) HandleAgentStatus(agentID uint, data any) {
 	// Update last seen
 	h.agentsMu.Lock()
 	if conn, ok := h.agents[agentID]; ok {
-		conn.LastSeen = time.Now()
+		conn.LastSeen = biztime.NowUTC()
 	}
 	h.agentsMu.Unlock()
 
@@ -180,9 +212,9 @@ func (h *AgentHub) HandleAgentStatus(agentID uint, data any) {
 // SendCommandToAgent sends a command to a specific agent.
 func (h *AgentHub) SendCommandToAgent(agentID uint, cmd *dto.CommandData) error {
 	h.agentsMu.RLock()
-	defer h.agentsMu.RUnlock()
-
 	agentConn, ok := h.agents[agentID]
+	h.agentsMu.RUnlock()
+
 	if !ok {
 		return ErrAgentNotConnected
 	}
@@ -190,16 +222,14 @@ func (h *AgentHub) SendCommandToAgent(agentID uint, cmd *dto.CommandData) error 
 	msg := &dto.HubMessage{
 		Type:      dto.MsgTypeCommand,
 		AgentID:   "", // Agent already knows its own ID; this field is primarily for logging/debug
-		Timestamp: time.Now().Unix(),
+		Timestamp: biztime.NowUTC().Unix(),
 		Data:      cmd,
 	}
 
-	select {
-	case agentConn.Send <- msg:
-		return nil
-	default:
+	if !agentConn.TrySend(msg) {
 		return ErrSendChannelFull
 	}
+	return nil
 }
 
 // IsAgentOnline checks if an agent is connected.

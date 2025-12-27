@@ -12,6 +12,15 @@ import (
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
+// toUTCPtr converts a *time.Time to UTC if not nil.
+func toUTCPtr(t *time.Time) *time.Time {
+	if t == nil {
+		return nil
+	}
+	utc := t.UTC()
+	return &utc
+}
+
 type CreateAnnouncementRequest struct {
 	Title       string     `json:"title" binding:"required" validate:"required,min=1,max=255"`
 	Content     string     `json:"content" binding:"required" validate:"required,min=1"`
@@ -27,8 +36,8 @@ func (r *CreateAnnouncementRequest) ToApplicationDTO(creatorID uint) appDto.Crea
 		Content:     r.Content,
 		Type:        r.Type,
 		Priority:    r.Priority,
-		ScheduledAt: r.ScheduledAt,
-		ExpiresAt:   r.ExpiresAt,
+		ScheduledAt: toUTCPtr(r.ScheduledAt),
+		ExpiresAt:   toUTCPtr(r.ExpiresAt),
 	}
 }
 
@@ -46,7 +55,7 @@ func (r *UpdateAnnouncementRequest) ToApplicationDTO() appDto.UpdateAnnouncement
 		Title:     r.Title,
 		Content:   r.Content,
 		Priority:  r.Priority,
-		ExpiresAt: r.ExpiresAt,
+		ExpiresAt: toUTCPtr(r.ExpiresAt),
 	}
 }
 

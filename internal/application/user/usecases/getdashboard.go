@@ -5,9 +5,9 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/user/dto"
 	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
-	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 // GetDashboardQuery represents the query parameters for user dashboard
@@ -93,7 +93,7 @@ func (uc *GetDashboardUseCase) Execute(
 	for _, sub := range subscriptions {
 		// Get usage for current period using aggregation
 		periodStart := sub.CurrentPeriodStart()
-		periodEnd := utils.AdjustToEndOfDay(sub.CurrentPeriodEnd())
+		periodEnd := biztime.EndOfDayUTC(sub.CurrentPeriodEnd())
 
 		usageSummary, err := uc.usageRepo.GetTotalUsageBySubscriptionID(ctx, sub.ID(), periodStart, periodEnd)
 		if err != nil {

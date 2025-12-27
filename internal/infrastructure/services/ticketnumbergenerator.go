@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"gorm.io/gorm"
 )
 
@@ -26,7 +26,8 @@ func (g *TicketNumberGenerator) Generate(ctx context.Context) (string, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
-	dateStr := time.Now().Format("20060102")
+	// Use business timezone to determine the date for ticket number
+	dateStr := biztime.FormatInBizTimezone(biztime.NowUTC(), "20060102")
 	prefix := fmt.Sprintf("T-%s-", dateStr)
 
 	seq, err := g.getNextSequence(ctx, dateStr)

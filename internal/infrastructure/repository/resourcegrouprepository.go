@@ -10,6 +10,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/resource"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/db"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -98,7 +99,7 @@ func (r *ResourceGroupRepositoryImpl) Delete(ctx context.Context, id uint) error
 		Where("id = ? AND deleted_at IS NULL", id).
 		Updates(map[string]any{
 			"status":     "inactive",
-			"deleted_at": gorm.Expr("NOW()"),
+			"deleted_at": biztime.NowUTC(),
 		})
 
 	if result.Error != nil {

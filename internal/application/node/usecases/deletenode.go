@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -49,6 +50,10 @@ func (uc *DeleteNodeUseCase) Execute(ctx context.Context, cmd DeleteNodeCommand)
 		uc.logger.Errorw("failed to get node by SID", "sid", cmd.SID, "error", err)
 		return nil, fmt.Errorf("failed to get node: %w", err)
 	}
+	if existingNode == nil {
+		uc.logger.Warnw("node not found", "sid", cmd.SID)
+		return nil, errors.NewNotFoundError("node not found")
+	}
 
 	nodeID := existingNode.ID()
 
@@ -66,7 +71,7 @@ func (uc *DeleteNodeUseCase) Execute(ctx context.Context, cmd DeleteNodeCommand)
 
 	return &DeleteNodeResult{
 		NodeID:    nodeID,
-		DeletedAt: time.Now().Format(time.RFC3339),
+		DeletedAt: biztime.NowUTC().Format(time.RFC3339),
 	}, nil
 }
 

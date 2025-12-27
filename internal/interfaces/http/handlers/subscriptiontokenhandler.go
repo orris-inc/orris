@@ -58,11 +58,18 @@ func (h *SubscriptionTokenHandler) GenerateToken(c *gin.Context) {
 		return
 	}
 
+	// Convert ExpiresAt to UTC if provided
+	var expiresAt *time.Time
+	if req.ExpiresAt != nil {
+		utc := req.ExpiresAt.UTC()
+		expiresAt = &utc
+	}
+
 	cmd := usecases.GenerateSubscriptionTokenCommand{
 		SubscriptionID: subscriptionID,
 		Name:           req.Name,
 		Scope:          req.Scope,
-		ExpiresAt:      req.ExpiresAt,
+		ExpiresAt:      expiresAt,
 	}
 
 	result, err := h.generateTokenUC.Execute(c.Request.Context(), cmd)

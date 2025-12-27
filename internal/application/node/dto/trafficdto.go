@@ -2,6 +2,8 @@ package dto
 
 import (
 	"time"
+
+	"github.com/orris-inc/orris/internal/shared/biztime"
 )
 
 type NodeTrafficDTO struct {
@@ -71,6 +73,6 @@ func NewNodeTrafficDTO(nodeID uint, nodeName string, upload, download, limit, us
 		TrafficUsed:    used,
 		UsagePercent:   CalculateUsagePercent(used, limit),
 		TrafficResetAt: resetAt,
-		UpdatedAt:      time.Now(),
+		UpdatedAt:      biztime.NowUTC(),
 	}
 }

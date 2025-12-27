@@ -8,6 +8,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	vo "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/user"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -150,7 +151,7 @@ func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, cmd CreateSubs
 
 	startDate := cmd.StartDate
 	if startDate.IsZero() {
-		startDate = time.Now()
+		startDate = biztime.NowUTC()
 	}
 
 	// Calculate subscription end date based on billing cycle

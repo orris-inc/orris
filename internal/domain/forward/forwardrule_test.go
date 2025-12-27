@@ -1709,8 +1709,8 @@ func TestForwardRule_Validate_RejectsInvalidRuleType(t *testing.T) {
 		1, shortID, 1, nil, // id, shortID, agentID, userID
 		vo.ForwardRuleType("invalid"),
 		0, nil, nil,
-		nil,               // tunnelHops
-		vo.TunnelTypeWS,   // tunnelType
+		nil,             // tunnelHops
+		vo.TunnelTypeWS, // tunnelType
 		"test", 8080,
 		"10.0.0.1", 9000, nil,
 		"", vo.IPVersionAuto, vo.ForwardProtocolTCP,
@@ -1906,9 +1906,9 @@ func TestCalculateNodeCount(t *testing.T) {
 			expectedCount: 2,
 		},
 		{
-			name:          "Chain_TwoNodes",
+			name:          "Chain_FourNodes", // Entry + 3 chain agents (2,3,4)
 			params:        validChainRuleParams(),
-			expectedCount: 2,
+			expectedCount: 4, // 1 (entry) + 3 (chain agents)
 		},
 		{
 			name: "DirectChain_EmptyChainAgentIDs_TwoNodes",

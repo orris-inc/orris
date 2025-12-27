@@ -6,9 +6,9 @@ import (
 
 	dto "github.com/orris-inc/orris/internal/application/admin/dto"
 	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
-	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 // GetTrafficTrendQuery represents the query parameters for traffic trend
@@ -54,7 +54,7 @@ func (uc *GetTrafficTrendUseCase) Execute(
 	}
 
 	// Adjust 'to' time to end of day to include all records from that day
-	adjustedTo := utils.AdjustToEndOfDay(query.To)
+	adjustedTo := biztime.EndOfDayUTC(query.To)
 
 	// Get usage trend data
 	trendPoints, err := uc.usageRepo.GetUsageTrend(
@@ -118,14 +118,17 @@ func (uc *GetTrafficTrendUseCase) validateQuery(query GetTrafficTrendQuery) erro
 }
 
 func (uc *GetTrafficTrendUseCase) formatPeriod(t time.Time, granularity string) string {
+	// Convert UTC to business timezone for display
+	// The period represents a business timezone boundary stored as UTC
+	bizTime := biztime.ToBizTimezone(t)
 	switch granularity {
 	case "hour":
-		return t.Format("2006-01-02 15:00")
+		return bizTime.Format("2006-01-02 15:00")
 	case "day":
-		return t.Format("2006-01-02")
+		return bizTime.Format("2006-01-02")
 	case "month":
-		return t.Format("2006-01")
+		return bizTime.Format("2006-01")
 	default:
-		return t.Format("2006-01-02 15:04:05")
+		return bizTime.Format("2006-01-02 15:04:05")
 	}
 }

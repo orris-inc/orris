@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+
+	"github.com/orris-inc/orris/internal/shared/biztime"
 )
 
 // StateInfo stores state-related information for OAuth flow
@@ -49,7 +51,7 @@ func (s *RedisStateStore) Set(ctx context.Context, state string, codeVerifier st
 
 	stateInfo := StateInfo{
 		CodeVerifier: codeVerifier,
-		CreatedAt:    time.Now(),
+		CreatedAt:    biztime.NowUTC(),
 	}
 
 	data, err := json.Marshal(stateInfo)

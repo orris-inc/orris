@@ -8,6 +8,7 @@ import (
 	"time"
 
 	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 )
 
 // ForwardRule represents the forward rule aggregate root.
@@ -281,7 +282,7 @@ func NewForwardRule(
 		return nil, fmt.Errorf("failed to generate SID: %w", err)
 	}
 
-	now := time.Now()
+	now := biztime.NowUTC()
 	return &ForwardRule{
 		sid:               sid,
 		agentID:           agentID,
@@ -783,8 +784,15 @@ func (r *ForwardRule) CalculateNodeCount() int {
 	switch r.ruleType {
 	case vo.ForwardRuleTypeDirect:
 		return 1 // Only entry agent
-	case vo.ForwardRuleTypeEntry, vo.ForwardRuleTypeChain:
+	case vo.ForwardRuleTypeEntry:
 		return 2 // Entry + Exit
+	case vo.ForwardRuleTypeChain:
+		// Chain: Entry -> Chain[0] -> ... -> Chain[n-1] -> Target
+		chainCount := 0
+		if r.chainAgentIDs != nil {
+			chainCount = len(r.chainAgentIDs)
+		}
+		return 1 + chainCount // Entry + Chain agents
 	case vo.ForwardRuleTypeDirectChain:
 		chainCount := 0
 		if r.chainAgentIDs != nil {
@@ -843,7 +851,7 @@ func (r *ForwardRule) Enable() error {
 		return nil
 	}
 	r.status = vo.ForwardStatusEnabled
-	r.updatedAt = time.Now()
+	r.updatedAt = biztime.NowUTC()
 	return nil
 }
 
@@ -853,7 +861,7 @@ func (r *ForwardRule) Disable() error {
 		return nil
 	}
 	r.status = vo.ForwardStatusDisabled
-	r.updatedAt = time.Now()
+	r.updatedAt = biztime.NowUTC()
 	return nil
 }
 
@@ -866,7 +874,7 @@ func (r *ForwardRule) UpdateName(name string) error {
 		return nil
 	}
 	r.name = name
-	r.updatedAt = time.Now()
+	r.updatedAt = biztime.NowUTC()
 	return nil
 }
 
@@ -879,7 +887,7 @@ func (r *ForwardRule) UpdateListenPort(port uint16) error {
 		return nil
 	}
 	r.listenPort = port
-	r.updatedAt = time.Now()
+	r.updatedAt = biztime.NowUTC()
 	return nil
 }
 
@@ -903,7 +911,7 @@ func (r *ForwardRule) UpdateTarget(address string, port uint16) error {
 	r.targetAddress = address
 	r.targetPort = port
 	r.targetNodeID = nil // clear targetNodeID when setting static address
-	r.updatedAt = time.Now()
+	r.updatedAt = biztime.NowUTC()
 	return nil
 }
 
@@ -918,7 +926,7 @@ func (r *ForwardRule) UpdateTargetNodeID(nodeID *uint) error {
 	// If nodeID is nil or 0, clear the targetNodeID
 	if nodeID == nil || *nodeID == 0 {
 		r.targetNodeID = nil
-		r.updatedAt = time.Now()
+		r.updatedAt = biztime.NowUTC()
 		return nil
 	}
 
@@ -930,7 +938,7 @@ func (r *ForwardRule) UpdateTargetNodeID(nodeID *uint) error {
 	r.targetNodeID = nodeID
 	r.targetAddress = "" // clear static address when setting node ID
 	r.targetPort = 0
-	r.updatedAt = time.Now()
+	r.updatedAt = biztime.NowUTC()
 	return nil
 }
 
@@ -946,7 +954,7 @@ func (r *ForwardRule) UpdateIPVersion(ipVersion vo.IPVersion) error {
 		return nil
 	}
 	r.ipVersion = ipVersion
-	r.updatedAt = time.Now()
+	r.updatedAt = biztime.NowUTC()
 	return nil
 }
 
@@ -959,7 +967,7 @@ func (r *ForwardRule) UpdateProtocol(protocol vo.ForwardProtocol) error {
 		return nil
 	}
 	r.protocol = protocol
-	r.updatedAt = time.Now()
+	r.updatedAt = biztime.NowUTC()
 	return nil
 }
 
@@ -969,7 +977,7 @@ func (r *ForwardRule) UpdateRemark(remark string) error {
 		return nil
 	}
 	r.remark = remark
-	r.updatedAt = time.Now()
+	r.updatedAt = biztime.NowUTC()
 	return nil
 }
 
@@ -995,7 +1003,7 @@ func (r *ForwardRule) UpdateTrafficMultiplier(multiplier *float64) error {
 	}
 
 	r.trafficMultiplier = multiplier
-	r.updatedAt = time.Now()
+	r.updatedAt = biztime.NowUTC()
 	return nil
 }
 
@@ -1006,7 +1014,7 @@ func (r *ForwardRule) UpdateSortOrder(order int) error {
 		return fmt.Errorf("sort order must be non-negative, got %d", order)
 	}
 	r.sortOrder = order
-	r.updatedAt = time.Now()
+	r.updatedAt = biztime.NowUTC()
 	return nil
 }
 
@@ -1022,7 +1030,7 @@ func (r *ForwardRule) UpdateBindIP(bindIP string) error {
 		}
 	}
 	r.bindIP = bindIP
-	r.updatedAt = time.Now()
+	r.updatedAt = biztime.NowUTC()
 	return nil
 }
 
@@ -1038,7 +1046,7 @@ func (r *ForwardRule) UpdateExitAgentID(exitAgentID uint) error {
 		return nil
 	}
 	r.exitAgentID = exitAgentID
-	r.updatedAt = time.Now()
+	r.updatedAt = biztime.NowUTC()
 	return nil
 }
 
@@ -1051,7 +1059,7 @@ func (r *ForwardRule) UpdateTunnelType(tunnelType vo.TunnelType) error {
 		return nil
 	}
 	r.tunnelType = tunnelType
-	r.updatedAt = time.Now()
+	r.updatedAt = biztime.NowUTC()
 	return nil
 }
 
@@ -1092,7 +1100,7 @@ func (r *ForwardRule) UpdateTunnelHops(tunnelHops *int) error {
 	}
 
 	r.tunnelHops = tunnelHops
-	r.updatedAt = time.Now()
+	r.updatedAt = biztime.NowUTC()
 	return nil
 }
 
@@ -1113,7 +1121,7 @@ func (r *ForwardRule) UpdateAgentID(agentID uint) error {
 		}
 	}
 	r.agentID = agentID
-	r.updatedAt = time.Now()
+	r.updatedAt = biztime.NowUTC()
 	return nil
 }
 
@@ -1141,7 +1149,7 @@ func (r *ForwardRule) UpdateChainAgentIDs(chainAgentIDs []uint) error {
 		seen[id] = true
 	}
 	r.chainAgentIDs = chainAgentIDs
-	r.updatedAt = time.Now()
+	r.updatedAt = biztime.NowUTC()
 	return nil
 }
 
@@ -1235,7 +1243,7 @@ func (r *ForwardRule) UpdateChainPortConfig(chainPortConfig map[uint]uint16) err
 	}
 
 	r.chainPortConfig = chainPortConfig
-	r.updatedAt = time.Now()
+	r.updatedAt = biztime.NowUTC()
 	return nil
 }
 
@@ -1296,7 +1304,7 @@ func (r *ForwardRule) UpdateDirectChainConfig(chainAgentIDs []uint, chainPortCon
 	// All validations passed, update both fields atomically
 	r.chainAgentIDs = chainAgentIDs
 	r.chainPortConfig = chainPortConfig
-	r.updatedAt = time.Now()
+	r.updatedAt = biztime.NowUTC()
 	return nil
 }
 
@@ -1304,14 +1312,14 @@ func (r *ForwardRule) UpdateDirectChainConfig(chainAgentIDs []uint, chainPortCon
 func (r *ForwardRule) RecordTraffic(upload, download int64) {
 	r.uploadBytes += upload
 	r.downloadBytes += download
-	r.updatedAt = time.Now()
+	r.updatedAt = biztime.NowUTC()
 }
 
 // ResetTraffic resets the traffic counters.
 func (r *ForwardRule) ResetTraffic() {
 	r.uploadBytes = 0
 	r.downloadBytes = 0
-	r.updatedAt = time.Now()
+	r.updatedAt = biztime.NowUTC()
 }
 
 // IsEnabled checks if the rule is enabled.

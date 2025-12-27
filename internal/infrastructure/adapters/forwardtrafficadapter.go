@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
-	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 // ForwardTrafficRecorder defines the interface for recording forward rule traffic
@@ -65,8 +65,9 @@ func (a *ForwardTrafficRecorderAdapter) RecordForwardTraffic(ctx context.Context
 		return nil
 	}
 
-	// Filter Forward-type subscriptions and record usage in business timezone
-	period := utils.TruncateToHour()
+	// Filter Forward-type subscriptions and record usage
+	// Truncate to hour in business timezone, then convert to UTC for storage
+	period := biztime.TruncateToHourInBiz(biztime.NowUTC())
 	recordedCount := 0
 
 	for _, sub := range activeSubscriptions {

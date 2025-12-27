@@ -9,6 +9,7 @@ import (
 
 	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/shared/services"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 )
 
 // Node represents the node aggregate root
@@ -84,7 +85,7 @@ func NewNode(
 		return nil, fmt.Errorf("failed to generate SID: %w", err)
 	}
 
-	now := time.Now()
+	now := biztime.NowUTC()
 	n := &Node{
 		sid:              sid,
 		name:             name,
@@ -265,14 +266,14 @@ func (n *Node) UserID() *uint {
 // SetUserID sets the owner user ID
 func (n *Node) SetUserID(userID *uint) {
 	n.userID = userID
-	n.updatedAt = time.Now()
+	n.updatedAt = biztime.NowUTC()
 	n.version++
 }
 
 // SetGroupIDs sets the resource group IDs
 func (n *Node) SetGroupIDs(groupIDs []uint) {
 	n.groupIDs = groupIDs
-	n.updatedAt = time.Now()
+	n.updatedAt = biztime.NowUTC()
 	n.version++
 }
 
@@ -284,7 +285,7 @@ func (n *Node) AddGroupID(groupID uint) bool {
 		}
 	}
 	n.groupIDs = append(n.groupIDs, groupID)
-	n.updatedAt = time.Now()
+	n.updatedAt = biztime.NowUTC()
 	n.version++
 	return true
 }
@@ -294,7 +295,7 @@ func (n *Node) RemoveGroupID(groupID uint) bool {
 	for i, id := range n.groupIDs {
 		if id == groupID {
 			n.groupIDs = append(n.groupIDs[:i], n.groupIDs[i+1:]...)
-			n.updatedAt = time.Now()
+			n.updatedAt = biztime.NowUTC()
 			n.version++
 			return true
 		}
@@ -365,7 +366,7 @@ func (n *Node) Activate() error {
 	}
 
 	n.status = vo.NodeStatusActive
-	n.updatedAt = time.Now()
+	n.updatedAt = biztime.NowUTC()
 	n.version++
 
 	return nil
@@ -382,7 +383,7 @@ func (n *Node) Deactivate() error {
 	}
 
 	n.status = vo.NodeStatusInactive
-	n.updatedAt = time.Now()
+	n.updatedAt = biztime.NowUTC()
 	n.version++
 
 	return nil
@@ -404,7 +405,7 @@ func (n *Node) EnterMaintenance(reason string) error {
 
 	n.status = vo.NodeStatusMaintenance
 	n.maintenanceReason = &reason
-	n.updatedAt = time.Now()
+	n.updatedAt = biztime.NowUTC()
 	n.version++
 
 	return nil
@@ -418,7 +419,7 @@ func (n *Node) ExitMaintenance() error {
 
 	n.status = vo.NodeStatusActive
 	n.maintenanceReason = nil
-	n.updatedAt = time.Now()
+	n.updatedAt = biztime.NowUTC()
 	n.version++
 
 	return nil
@@ -431,7 +432,7 @@ func (n *Node) UpdateServerAddress(address vo.ServerAddress) error {
 	}
 
 	n.serverAddress = address
-	n.updatedAt = time.Now()
+	n.updatedAt = biztime.NowUTC()
 	n.version++
 
 	return nil
@@ -448,7 +449,7 @@ func (n *Node) UpdateAgentPort(port uint16) error {
 	}
 
 	n.agentPort = port
-	n.updatedAt = time.Now()
+	n.updatedAt = biztime.NowUTC()
 	n.version++
 
 	return nil
@@ -469,7 +470,7 @@ func (n *Node) UpdateSubscriptionPort(port *uint16) error {
 	}
 
 	n.subscriptionPort = port
-	n.updatedAt = time.Now()
+	n.updatedAt = biztime.NowUTC()
 	n.version++
 
 	return nil
@@ -478,7 +479,7 @@ func (n *Node) UpdateSubscriptionPort(port *uint16) error {
 // UpdateEncryption updates the encryption configuration
 func (n *Node) UpdateEncryption(config vo.EncryptionConfig) error {
 	n.encryptionConfig = config
-	n.updatedAt = time.Now()
+	n.updatedAt = biztime.NowUTC()
 	n.version++
 
 	return nil
@@ -487,7 +488,7 @@ func (n *Node) UpdateEncryption(config vo.EncryptionConfig) error {
 // UpdatePlugin updates the plugin configuration
 func (n *Node) UpdatePlugin(config *vo.PluginConfig) error {
 	n.pluginConfig = config
-	n.updatedAt = time.Now()
+	n.updatedAt = biztime.NowUTC()
 	n.version++
 
 	return nil
@@ -500,7 +501,7 @@ func (n *Node) UpdateTrojanConfig(config *vo.TrojanConfig) error {
 	}
 
 	n.trojanConfig = config
-	n.updatedAt = time.Now()
+	n.updatedAt = biztime.NowUTC()
 	n.version++
 
 	return nil
@@ -509,7 +510,7 @@ func (n *Node) UpdateTrojanConfig(config *vo.TrojanConfig) error {
 // UpdateMetadata updates the node metadata
 func (n *Node) UpdateMetadata(metadata vo.NodeMetadata) error {
 	n.metadata = metadata
-	n.updatedAt = time.Now()
+	n.updatedAt = biztime.NowUTC()
 	n.version++
 
 	return nil
@@ -526,7 +527,7 @@ func (n *Node) UpdateName(name string) error {
 	}
 
 	n.name = name
-	n.updatedAt = time.Now()
+	n.updatedAt = biztime.NowUTC()
 	n.version++
 
 	return nil
@@ -535,7 +536,7 @@ func (n *Node) UpdateName(name string) error {
 // UpdateSortOrder updates the sort order
 func (n *Node) UpdateSortOrder(order int) error {
 	n.sortOrder = order
-	n.updatedAt = time.Now()
+	n.updatedAt = biztime.NowUTC()
 	n.version++
 
 	return nil
@@ -553,7 +554,7 @@ func (n *Node) GenerateAPIToken() (string, error) {
 
 	n.apiToken = plainToken
 	n.tokenHash = tokenHash
-	n.updatedAt = time.Now()
+	n.updatedAt = biztime.NowUTC()
 	n.version++
 
 	return plainToken, nil
