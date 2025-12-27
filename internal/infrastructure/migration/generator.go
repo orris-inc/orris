@@ -4,10 +4,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
+
+// migrationNamePattern only allows alphanumeric characters, underscores, and hyphens
+var migrationNamePattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
 // Generator handles creation of new migration files
 type Generator struct {
@@ -27,6 +32,12 @@ func NewGenerator(scriptsPath string) *Generator {
 func (g *Generator) CreateMigration(name string) error {
 	g.logger.Infow("creating new migration", "name", name)
 
+	// Validate migration name to prevent path traversal
+	name = strings.TrimSpace(name)
+	if !migrationNamePattern.MatchString(name) {
+		return fmt.Errorf("invalid migration name: only alphanumeric characters, underscores, and hyphens are allowed")
+	}
+
 	// Generate timestamp
 	timestamp := time.Now().Format("20060102150405")
 
@@ -36,6 +47,14 @@ func (g *Generator) CreateMigration(name string) error {
 
 	upFilePath := filepath.Join(g.scriptsPath, upFileName)
 	downFilePath := filepath.Join(g.scriptsPath, downFileName)
+
+	// Validate paths to prevent path traversal
+	if err := g.validatePath(upFilePath); err != nil {
+		return fmt.Errorf("invalid up file path: %w", err)
+	}
+	if err := g.validatePath(downFilePath); err != nil {
+		return fmt.Errorf("invalid down file path: %w", err)
+	}
 
 	// Ensure scripts directory exists
 	if err := os.MkdirAll(g.scriptsPath, 0755); err != nil {
@@ -58,6 +77,22 @@ func (g *Generator) CreateMigration(name string) error {
 		"up_file", upFilePath,
 		"down_file", downFilePath)
 
+	return nil
+}
+
+// validatePath ensures the file path is within the scripts directory
+func (g *Generator) validatePath(filePath string) error {
+	absPath, err := filepath.Abs(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute path: %w", err)
+	}
+	absBase, err := filepath.Abs(g.scriptsPath)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute base path: %w", err)
+	}
+	if !strings.HasPrefix(absPath, absBase+string(filepath.Separator)) {
+		return fmt.Errorf("path traversal detected")
+	}
 	return nil
 }
 
@@ -117,6 +152,14 @@ func (g *Generator) CreateUserTableMigration() error {
 
 	upFilePath := filepath.Join(g.scriptsPath, upFileName)
 	downFilePath := filepath.Join(g.scriptsPath, downFileName)
+
+	// Validate paths to prevent path traversal
+	if err := g.validatePath(upFilePath); err != nil {
+		return fmt.Errorf("invalid up file path: %w", err)
+	}
+	if err := g.validatePath(downFilePath); err != nil {
+		return fmt.Errorf("invalid down file path: %w", err)
+	}
 
 	// Ensure scripts directory exists
 	if err := os.MkdirAll(g.scriptsPath, 0755); err != nil {

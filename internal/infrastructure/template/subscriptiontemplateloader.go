@@ -45,6 +45,22 @@ func (l *SubscriptionTemplateLoader) Load() error {
 			filename := fmt.Sprintf("custom.%s%s", format, ext)
 			filePath := filepath.Join(l.path, filename)
 
+			// Validate path to prevent path traversal attacks
+			absPath, err := filepath.Abs(filePath)
+			if err != nil {
+				l.logger.Warnw("failed to get absolute path", "file", filePath, "error", err)
+				continue
+			}
+			absBase, err := filepath.Abs(l.path)
+			if err != nil {
+				l.logger.Warnw("failed to get absolute base path", "path", l.path, "error", err)
+				continue
+			}
+			if !strings.HasPrefix(absPath, absBase+string(filepath.Separator)) {
+				l.logger.Warnw("path traversal attempt detected", "file", filePath)
+				continue
+			}
+
 			content, err := os.ReadFile(filePath)
 			if err != nil {
 				if !os.IsNotExist(err) {

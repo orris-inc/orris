@@ -112,7 +112,9 @@ func (c *GitHubOAuthClient) fetchUserInfo(ctx context.Context, accessToken strin
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: httpClientTimeout,
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user info: %w", err)
@@ -146,7 +148,9 @@ func (c *GitHubOAuthClient) fetchPrimaryEmail(ctx context.Context, accessToken s
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 	req.Header.Set("Accept", "application/vnd.github.v3+json")
 
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: httpClientTimeout,
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", false, fmt.Errorf("failed to get user emails: %w", err)

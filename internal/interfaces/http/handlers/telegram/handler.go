@@ -1,6 +1,7 @@
 package telegram
 
 import (
+	"crypto/subtle"
 	"net/http"
 	"strconv"
 	"strings"
@@ -117,17 +118,23 @@ func (h *Handler) UpdatePreferences(c *gin.Context) {
 // HandleWebhook handles Telegram webhook updates
 // POST /webhooks/telegram
 func (h *Handler) HandleWebhook(c *gin.Context) {
-	// Verify webhook secret if configured
-	if h.webhookSecret != "" {
-		secretHeader := c.GetHeader("X-Telegram-Bot-Api-Secret-Token")
-		if secretHeader != h.webhookSecret {
-			h.logger.Warnw("webhook secret verification failed",
-				"expected_secret_configured", true,
-				"received_secret_empty", secretHeader == "",
-			)
-			utils.ErrorResponse(c, http.StatusUnauthorized, "invalid webhook secret")
-			return
-		}
+	// Verify webhook secret - REQUIRED for security
+	// If webhook secret is not configured, reject all requests to prevent unauthorized access
+	if h.webhookSecret == "" {
+		h.logger.Errorw("webhook secret not configured, rejecting request for security")
+		utils.ErrorResponse(c, http.StatusServiceUnavailable, "webhook not configured")
+		return
+	}
+
+	secretHeader := c.GetHeader("X-Telegram-Bot-Api-Secret-Token")
+	// Use constant-time comparison to prevent timing attacks
+	if subtle.ConstantTimeCompare([]byte(secretHeader), []byte(h.webhookSecret)) != 1 {
+		h.logger.Warnw("webhook secret verification failed",
+			"expected_secret_configured", true,
+			"received_secret_empty", secretHeader == "",
+		)
+		utils.ErrorResponse(c, http.StatusUnauthorized, "invalid webhook secret")
+		return
 	}
 
 	var update dto.WebhookUpdate

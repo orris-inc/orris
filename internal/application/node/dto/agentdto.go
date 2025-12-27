@@ -236,18 +236,12 @@ func generatePasswordForEncryptionMethod(sub *subscription.Subscription, secret 
 	mac.Write([]byte(sub.UUID()))
 	keyMaterial := mac.Sum(nil) // 32 bytes
 
-	// Check if SS2022 method
+	// SS2022 requires base64-encoded fixed-length key
 	if vo.IsSS2022Method(method) {
-		// SS2022 requires base64-encoded fixed-length key
 		keySize := vo.GetSS2022KeySize(method)
-		if keySize == 0 || keySize > len(keyMaterial) {
-			// Invalid key size, fallback to hex encoding
-			return hex.EncodeToString(keyMaterial)
+		if keySize > 0 && keySize <= len(keyMaterial) {
+			return base64.StdEncoding.EncodeToString(keyMaterial[:keySize])
 		}
-
-		// Use first N bytes of key material and encode with base64
-		key := keyMaterial[:keySize]
-		return base64.StdEncoding.EncodeToString(key)
 	}
 
 	// Traditional SS: hex-encoded (backward compatible)

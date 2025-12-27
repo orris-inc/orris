@@ -6,9 +6,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
+)
+
+const (
+	// httpClientTimeout is the timeout for HTTP requests to OAuth providers
+	httpClientTimeout = 30 * time.Second
 )
 
 type GoogleOAuthConfig struct {
@@ -87,7 +93,9 @@ func (c *GoogleOAuthClient) GetUserInfo(ctx context.Context, accessToken string)
 
 	req.Header.Set("Authorization", "Bearer "+accessToken)
 
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: httpClientTimeout,
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get user info: %w", err)

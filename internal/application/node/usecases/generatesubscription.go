@@ -187,6 +187,7 @@ func (n *Node) ToTrojanURI(password string) string {
 }
 
 // generateHMACPassword generates HMAC-SHA256 password from subscription UUID
+// Returns hex-encoded password for traditional SS compatibility
 // This must match the password generation in agentdto.go for agent authentication
 func generateHMACPassword(subscriptionUUID, secret string) string {
 	if subscriptionUUID == "" || secret == "" {
