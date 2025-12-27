@@ -149,6 +149,7 @@ type Node struct {
 	SubscriptionPort uint16 // port for client subscriptions (effective port)
 	Protocol         string // shadowsocks, trojan
 	EncryptionMethod string // for shadowsocks
+	TokenHash        string // Node token hash for SS2022 ServerKey derivation
 	Password         string
 	Plugin           string
 	PluginOpts       map[string]string

@@ -26,15 +26,43 @@ type NodeSystemStatusQuerier interface {
 	GetNodeSystemStatus(ctx context.Context, nodeID uint) (*NodeSystemStatus, error)
 }
 
-// NodeSystemStatus represents node system status metrics
+// NodeSystemStatus represents node system status metrics from Redis cache
 type NodeSystemStatus struct {
-	CPU        string
-	Memory     string
-	Disk       string
-	Uptime     int
-	UpdatedAt  int64
+	// System resources
+	CPUPercent    float64
+	MemoryPercent float64
+	MemoryUsed    uint64
+	MemoryTotal   uint64
+	MemoryAvail   uint64
+	DiskPercent   float64
+	DiskUsed      uint64
+	DiskTotal     uint64
+	UptimeSeconds int64
+
+	// System load
+	LoadAvg1  float64
+	LoadAvg5  float64
+	LoadAvg15 float64
+
+	// Network statistics
+	NetworkRxBytes uint64
+	NetworkTxBytes uint64
+	NetworkRxRate  uint64
+	NetworkTxRate  uint64
+
+	// Connection statistics
+	TCPConnections int
+	UDPConnections int
+
+	// Network info
 	PublicIPv4 string
 	PublicIPv6 string
+
+	// Agent info
+	AgentVersion string
+
+	// Metadata
+	UpdatedAt int64
 }
 
 // GetNodeUseCase handles the business logic for retrieving a node
@@ -108,15 +136,7 @@ func (uc *GetNodeUseCase) Execute(ctx context.Context, query GetNodeQuery) (*Get
 		)
 	} else if systemStatus != nil {
 		// Add system status to DTO
-		nodeDTO.SystemStatus = &dto.NodeSystemStatusDTO{
-			CPU:        systemStatus.CPU,
-			Memory:     systemStatus.Memory,
-			Disk:       systemStatus.Disk,
-			Uptime:     systemStatus.Uptime,
-			UpdatedAt:  systemStatus.UpdatedAt,
-			PublicIPv4: systemStatus.PublicIPv4,
-			PublicIPv6: systemStatus.PublicIPv6,
-		}
+		nodeDTO.SystemStatus = toNodeSystemStatusDTO(systemStatus)
 	}
 
 	uc.logger.Debugw("node retrieved", "sid", nodeEntity.SID())
@@ -133,4 +153,35 @@ func (uc *GetNodeUseCase) validateQuery(query GetNodeQuery) error {
 	}
 
 	return nil
+}
+
+// toNodeSystemStatusDTO converts internal NodeSystemStatus to DTO
+func toNodeSystemStatusDTO(status *NodeSystemStatus) *dto.NodeSystemStatusDTO {
+	if status == nil {
+		return nil
+	}
+	return &dto.NodeSystemStatusDTO{
+		CPUPercent:     status.CPUPercent,
+		MemoryPercent:  status.MemoryPercent,
+		MemoryUsed:     status.MemoryUsed,
+		MemoryTotal:    status.MemoryTotal,
+		MemoryAvail:    status.MemoryAvail,
+		DiskPercent:    status.DiskPercent,
+		DiskUsed:       status.DiskUsed,
+		DiskTotal:      status.DiskTotal,
+		UptimeSeconds:  status.UptimeSeconds,
+		LoadAvg1:       status.LoadAvg1,
+		LoadAvg5:       status.LoadAvg5,
+		LoadAvg15:      status.LoadAvg15,
+		NetworkRxBytes: status.NetworkRxBytes,
+		NetworkTxBytes: status.NetworkTxBytes,
+		NetworkRxRate:  status.NetworkRxRate,
+		NetworkTxRate:  status.NetworkTxRate,
+		TCPConnections: status.TCPConnections,
+		UDPConnections: status.UDPConnections,
+		PublicIPv4:     status.PublicIPv4,
+		PublicIPv6:     status.PublicIPv6,
+		AgentVersion:   status.AgentVersion,
+		UpdatedAt:      status.UpdatedAt,
+	}
 }

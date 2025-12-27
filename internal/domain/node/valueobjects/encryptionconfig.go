@@ -1,6 +1,8 @@
 package valueobjects
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
 )
@@ -102,4 +104,26 @@ func GetSS2022KeySize(method string) int {
 	default:
 		return 0
 	}
+}
+
+// GenerateSS2022ServerKey derives a server PSK from node token hash using HMAC-SHA256.
+// The returned key is base64-encoded with proper length for the encryption method.
+// For non-SS2022 methods, returns empty string.
+func GenerateSS2022ServerKey(tokenHash string, method string) string {
+	if tokenHash == "" || !IsSS2022Method(method) {
+		return ""
+	}
+
+	keySize := GetSS2022KeySize(method)
+	if keySize == 0 {
+		return ""
+	}
+
+	// Derive key material using HMAC-SHA256 with a fixed salt
+	mac := hmac.New(sha256.New, []byte("ss2022-server-key"))
+	mac.Write([]byte(tokenHash))
+	keyMaterial := mac.Sum(nil) // 32 bytes
+
+	// Truncate to required key size and encode as base64
+	return base64.StdEncoding.EncodeToString(keyMaterial[:keySize])
 }

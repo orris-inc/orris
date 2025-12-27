@@ -182,7 +182,8 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, link
 			ServerAddress:    resolveServerAddress(nodeModel.ServerAddress, nodeModel.PublicIPv4, nodeModel.PublicIPv6),
 			SubscriptionPort: subscriptionPort,
 			Protocol:         protocol,
-			Password:         "", // Password is not stored at node level; will be filled with subscription UUID
+			TokenHash:        nodeModel.TokenHash, // For SS2022 ServerKey derivation
+			Password:         "",                  // Password is not stored at node level; will be filled with subscription UUID
 		}
 
 		// Load Shadowsocks config from shadowsocks_configs table
@@ -347,6 +348,7 @@ func (r *NodeRepositoryAdapter) getForwardedNodes(ctx context.Context, nodeIDs [
 			SubscriptionPort:  rule.ListenPort(),
 			Protocol:          originalNode.Protocol,
 			EncryptionMethod:  originalNode.EncryptionMethod,
+			TokenHash:         originalNode.TokenHash, // Inherit for SS2022 ServerKey
 			Password:          originalNode.Password,
 			Plugin:            originalNode.Plugin,
 			PluginOpts:        originalNode.PluginOpts,
@@ -718,7 +720,8 @@ func (r *NodeRepositoryAdapter) buildNodesWithConfigs(ctx context.Context, nodeM
 			ServerAddress:    resolveServerAddress(nodeModel.ServerAddress, nodeModel.PublicIPv4, nodeModel.PublicIPv6),
 			SubscriptionPort: subscriptionPort,
 			Protocol:         protocol,
-			Password:         "", // Password is not stored at node level; will be filled with subscription UUID
+			TokenHash:        nodeModel.TokenHash, // For SS2022 ServerKey derivation
+			Password:         "",                  // Password is not stored at node level; will be filled with subscription UUID
 		}
 
 		// Load Shadowsocks config from shadowsocks_configs table

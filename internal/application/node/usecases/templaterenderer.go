@@ -88,7 +88,7 @@ func (r *TemplateRenderer) generateClashProxies(nodes []*Node, password string) 
 			}
 		} else {
 			// Adjust password for SS2022 methods
-			nodePassword := adjustPasswordForMethod(password, node.EncryptionMethod)
+			nodePassword := adjustPasswordForMethod(password, node.EncryptionMethod, node.TokenHash)
 
 			proxy = clashProxy{
 				Name:     node.Name,

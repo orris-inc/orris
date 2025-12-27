@@ -14,9 +14,9 @@ import (
 
 // adjustPasswordForMethod adjusts password format based on encryption method.
 // The input password is expected to be hex-encoded 32-byte HMAC key material.
-// For SS2022 methods, it converts to base64 with proper key length.
+// For SS2022 methods, it converts to base64 with proper key length and combines with serverKey.
 // For traditional SS methods, it keeps the hex format.
-func adjustPasswordForMethod(password string, method string) string {
+func adjustPasswordForMethod(password string, method string, tokenHash string) string {
 	if password == "" {
 		return password
 	}
@@ -37,8 +37,18 @@ func adjustPasswordForMethod(password string, method string) string {
 		return password
 	}
 
-	// Truncate to required key size and encode as base64
-	return base64.StdEncoding.EncodeToString(keyMaterial[:keySize])
+	// Generate user key (base64)
+	userKey := base64.StdEncoding.EncodeToString(keyMaterial[:keySize])
+
+	// Generate server key from tokenHash
+	serverKey := valueobjects.GenerateSS2022ServerKey(tokenHash, method)
+	if serverKey == "" {
+		// Fallback to user key only if no server key available
+		return userKey
+	}
+
+	// SS2022 password format: serverKey:userKey
+	return serverKey + ":" + userKey
 }
 
 type Base64Formatter struct{}
@@ -61,7 +71,7 @@ func (f *Base64Formatter) FormatWithPassword(nodes []*Node, password string) (st
 			link = node.ToTrojanURI(password)
 		} else {
 			// Adjust password for SS2022 methods
-			nodePassword := adjustPasswordForMethod(password, node.EncryptionMethod)
+			nodePassword := adjustPasswordForMethod(password, node.EncryptionMethod, node.TokenHash)
 
 			// Shadowsocks URI format: ss://base64(method:password)@host:port#remarks
 			auth := fmt.Sprintf("%s:%s", node.EncryptionMethod, nodePassword)
@@ -175,7 +185,7 @@ func (f *ClashFormatter) FormatWithPassword(nodes []*Node, password string) (str
 			}
 		} else {
 			// Adjust password for SS2022 methods
-			nodePassword := adjustPasswordForMethod(password, node.EncryptionMethod)
+			nodePassword := adjustPasswordForMethod(password, node.EncryptionMethod, node.TokenHash)
 
 			proxy = clashProxy{
 				Name:     node.Name,
@@ -240,7 +250,7 @@ func (f *V2RayFormatter) FormatWithPassword(nodes []*Node, password string) (str
 		}
 
 		// Adjust password for SS2022 methods
-		nodePassword := adjustPasswordForMethod(password, node.EncryptionMethod)
+		nodePassword := adjustPasswordForMethod(password, node.EncryptionMethod, node.TokenHash)
 
 		v2rayNode := v2rayNode{
 			Remarks:    node.Name,
@@ -316,7 +326,7 @@ func (f *SIP008Formatter) FormatWithPassword(nodes []*Node, password string) (st
 		}
 
 		// Adjust password for SS2022 methods
-		nodePassword := adjustPasswordForMethod(password, node.EncryptionMethod)
+		nodePassword := adjustPasswordForMethod(password, node.EncryptionMethod, node.TokenHash)
 
 		server := sip008Server{
 			ID:         fmt.Sprintf("node_%d", node.ID),
@@ -398,7 +408,7 @@ func (f *SurgeFormatter) FormatWithPassword(nodes []*Node, password string) (str
 			}
 		} else {
 			// Adjust password for SS2022 methods
-			nodePassword := adjustPasswordForMethod(password, node.EncryptionMethod)
+			nodePassword := adjustPasswordForMethod(password, node.EncryptionMethod, node.TokenHash)
 
 			// Shadowsocks format
 			line = fmt.Sprintf("%s = ss, %s, %d, encrypt-method=%s, password=%s, udp-relay=true",

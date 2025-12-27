@@ -47,15 +47,43 @@ type NodeOwnerDTO struct {
 	Name  string `json:"name" example:"John Doe" description:"User's display name"`
 }
 
-// NodeSystemStatusDTO represents real-time system status metrics
+// NodeSystemStatusDTO represents real-time system status metrics retrieved from Redis cache
 type NodeSystemStatusDTO struct {
-	CPU        string `json:"cpu" example:"45.50" description:"CPU usage percentage"`
-	Memory     string `json:"memory" example:"65.30" description:"Memory usage percentage"`
-	Disk       string `json:"disk" example:"80.20" description:"Disk usage percentage"`
-	Uptime     int    `json:"uptime" example:"86400" description:"Uptime in seconds"`
-	UpdatedAt  int64  `json:"updated_at" example:"1705324800" description:"Last update timestamp (Unix)"`
-	PublicIPv4 string `json:"public_ipv4,omitempty" example:"203.0.113.1" description:"Public IPv4 address reported by agent"`
-	PublicIPv6 string `json:"public_ipv6,omitempty" example:"2001:db8::1" description:"Public IPv6 address reported by agent"`
+	// System resources
+	CPUPercent    float64 `json:"cpu_percent" example:"45.50"`       // CPU usage percentage (0-100)
+	MemoryPercent float64 `json:"memory_percent" example:"65.30"`    // Memory usage percentage (0-100)
+	MemoryUsed    uint64  `json:"memory_used" example:"4294967296"`  // Memory used in bytes
+	MemoryTotal   uint64  `json:"memory_total" example:"8589934592"` // Total memory in bytes
+	MemoryAvail   uint64  `json:"memory_avail" example:"2147483648"` // Available memory in bytes
+	DiskPercent   float64 `json:"disk_percent" example:"80.20"`      // Disk usage percentage (0-100)
+	DiskUsed      uint64  `json:"disk_used" example:"42949672960"`   // Disk used in bytes
+	DiskTotal     uint64  `json:"disk_total" example:"107374182400"` // Total disk in bytes
+	UptimeSeconds int64   `json:"uptime_seconds" example:"86400"`    // System uptime in seconds
+
+	// System load
+	LoadAvg1  float64 `json:"load_avg_1" example:"0.85"`  // 1-minute load average
+	LoadAvg5  float64 `json:"load_avg_5" example:"0.72"`  // 5-minute load average
+	LoadAvg15 float64 `json:"load_avg_15" example:"0.68"` // 15-minute load average
+
+	// Network statistics
+	NetworkRxBytes uint64 `json:"network_rx_bytes" example:"1073741824"` // Total received bytes
+	NetworkTxBytes uint64 `json:"network_tx_bytes" example:"536870912"`  // Total transmitted bytes
+	NetworkRxRate  uint64 `json:"network_rx_rate" example:"10485760"`    // Current receive rate in bytes per second
+	NetworkTxRate  uint64 `json:"network_tx_rate" example:"5242880"`     // Current transmit rate in bytes per second
+
+	// Connection statistics
+	TCPConnections int `json:"tcp_connections" example:"150"` // Number of TCP connections
+	UDPConnections int `json:"udp_connections" example:"20"`  // Number of UDP connections
+
+	// Network info
+	PublicIPv4 string `json:"public_ipv4,omitempty" example:"203.0.113.1"` // Public IPv4 address
+	PublicIPv6 string `json:"public_ipv6,omitempty" example:"2001:db8::1"` // Public IPv6 address
+
+	// Agent info
+	AgentVersion string `json:"agent_version,omitempty" example:"1.2.0"` // Agent software version
+
+	// Metadata
+	UpdatedAt int64 `json:"updated_at" example:"1705324800"` // Last update timestamp (Unix seconds)
 }
 
 type CreateNodeDTO struct {

@@ -224,24 +224,50 @@ func NewNodeSystemStatusUpdaterAdapter(
 }
 
 // UpdateSystemStatus updates node system status metrics in Redis
-func (a *NodeSystemStatusUpdaterAdapter) UpdateSystemStatus(ctx context.Context, nodeID uint, cpu, memory, disk float64, uptime int, publicIPv4, publicIPv6 string) error {
+func (a *NodeSystemStatusUpdaterAdapter) UpdateSystemStatus(ctx context.Context, nodeID uint, status *nodeUsecases.NodeStatusUpdate) error {
 	key := fmt.Sprintf("node:%d:status", nodeID)
 
 	// Store status in Redis hash with 5 minutes TTL
 	data := map[string]interface{}{
-		"cpu":        fmt.Sprintf("%.2f", cpu*100),    // Store as percentage string
-		"memory":     fmt.Sprintf("%.2f", memory*100), // Store as percentage string
-		"disk":       fmt.Sprintf("%.2f", disk*100),   // Store as percentage string
-		"uptime":     uptime,
+		// System resources
+		"cpu_percent":    fmt.Sprintf("%.2f", status.CPUPercent),
+		"memory_percent": fmt.Sprintf("%.2f", status.MemoryPercent),
+		"memory_used":    fmt.Sprintf("%d", status.MemoryUsed),
+		"memory_total":   fmt.Sprintf("%d", status.MemoryTotal),
+		"memory_avail":   fmt.Sprintf("%d", status.MemoryAvail),
+		"disk_percent":   fmt.Sprintf("%.2f", status.DiskPercent),
+		"disk_used":      fmt.Sprintf("%d", status.DiskUsed),
+		"disk_total":     fmt.Sprintf("%d", status.DiskTotal),
+		"uptime_seconds": fmt.Sprintf("%d", status.UptimeSeconds),
+
+		// System load
+		"load_avg_1":  fmt.Sprintf("%.2f", status.LoadAvg1),
+		"load_avg_5":  fmt.Sprintf("%.2f", status.LoadAvg5),
+		"load_avg_15": fmt.Sprintf("%.2f", status.LoadAvg15),
+
+		// Network statistics
+		"network_rx_bytes": fmt.Sprintf("%d", status.NetworkRxBytes),
+		"network_tx_bytes": fmt.Sprintf("%d", status.NetworkTxBytes),
+		"network_rx_rate":  fmt.Sprintf("%d", status.NetworkRxRate),
+		"network_tx_rate":  fmt.Sprintf("%d", status.NetworkTxRate),
+
+		// Connection statistics
+		"tcp_connections": fmt.Sprintf("%d", status.TCPConnections),
+		"udp_connections": fmt.Sprintf("%d", status.UDPConnections),
+
+		// Agent info
+		"agent_version": status.AgentVersion,
+
+		// Metadata
 		"updated_at": biztime.NowUTC().Unix(),
 	}
 
 	// Only store public IPs if provided
-	if publicIPv4 != "" {
-		data["public_ipv4"] = publicIPv4
+	if status.PublicIPv4 != "" {
+		data["public_ipv4"] = status.PublicIPv4
 	}
-	if publicIPv6 != "" {
-		data["public_ipv6"] = publicIPv6
+	if status.PublicIPv6 != "" {
+		data["public_ipv6"] = status.PublicIPv6
 	}
 
 	pipe := a.redisClient.Pipeline()
@@ -259,12 +285,10 @@ func (a *NodeSystemStatusUpdaterAdapter) UpdateSystemStatus(ctx context.Context,
 
 	a.logger.Debugw("node system status updated in redis",
 		"node_id", nodeID,
-		"cpu", cpu,
-		"memory", memory,
-		"disk", disk,
-		"uptime", uptime,
-		"public_ipv4", publicIPv4,
-		"public_ipv6", publicIPv6,
+		"cpu_percent", status.CPUPercent,
+		"memory_percent", status.MemoryPercent,
+		"disk_percent", status.DiskPercent,
+		"uptime_seconds", status.UptimeSeconds,
 	)
 
 	return nil
@@ -306,30 +330,86 @@ func (a *NodeSystemStatusQuerierAdapter) GetNodeSystemStatus(ctx context.Context
 		return nil, nil
 	}
 
-	// Parse values
-	status := &nodeUsecases.NodeSystemStatus{
-		CPU:        values["cpu"],
-		Memory:     values["memory"],
-		Disk:       values["disk"],
-		PublicIPv4: values["public_ipv4"],
-		PublicIPv6: values["public_ipv6"],
-	}
-
-	// Parse uptime
-	if uptimeStr, ok := values["uptime"]; ok {
-		if uptime, err := fmt.Sscanf(uptimeStr, "%d", &status.Uptime); err == nil && uptime == 1 {
-			// Uptime parsed successfully
-		}
-	}
-
-	// Parse updated_at
-	if updatedAtStr, ok := values["updated_at"]; ok {
-		if updatedAt, err := fmt.Sscanf(updatedAtStr, "%d", &status.UpdatedAt); err == nil && updatedAt == 1 {
-			// UpdatedAt parsed successfully
-		}
-	}
+	// Parse values into NodeSystemStatus
+	status := parseNodeSystemStatus(values)
 
 	return status, nil
+}
+
+// parseNodeSystemStatus parses Redis hash values into NodeSystemStatus
+func parseNodeSystemStatus(values map[string]string) *nodeUsecases.NodeSystemStatus {
+	status := &nodeUsecases.NodeSystemStatus{
+		PublicIPv4:   values["public_ipv4"],
+		PublicIPv6:   values["public_ipv6"],
+		AgentVersion: values["agent_version"],
+	}
+
+	// Parse float64 fields
+	if v, ok := values["cpu_percent"]; ok {
+		fmt.Sscanf(v, "%f", &status.CPUPercent)
+	}
+	if v, ok := values["memory_percent"]; ok {
+		fmt.Sscanf(v, "%f", &status.MemoryPercent)
+	}
+	if v, ok := values["disk_percent"]; ok {
+		fmt.Sscanf(v, "%f", &status.DiskPercent)
+	}
+	if v, ok := values["load_avg_1"]; ok {
+		fmt.Sscanf(v, "%f", &status.LoadAvg1)
+	}
+	if v, ok := values["load_avg_5"]; ok {
+		fmt.Sscanf(v, "%f", &status.LoadAvg5)
+	}
+	if v, ok := values["load_avg_15"]; ok {
+		fmt.Sscanf(v, "%f", &status.LoadAvg15)
+	}
+
+	// Parse uint64 fields
+	if v, ok := values["memory_used"]; ok {
+		fmt.Sscanf(v, "%d", &status.MemoryUsed)
+	}
+	if v, ok := values["memory_total"]; ok {
+		fmt.Sscanf(v, "%d", &status.MemoryTotal)
+	}
+	if v, ok := values["memory_avail"]; ok {
+		fmt.Sscanf(v, "%d", &status.MemoryAvail)
+	}
+	if v, ok := values["disk_used"]; ok {
+		fmt.Sscanf(v, "%d", &status.DiskUsed)
+	}
+	if v, ok := values["disk_total"]; ok {
+		fmt.Sscanf(v, "%d", &status.DiskTotal)
+	}
+	if v, ok := values["network_rx_bytes"]; ok {
+		fmt.Sscanf(v, "%d", &status.NetworkRxBytes)
+	}
+	if v, ok := values["network_tx_bytes"]; ok {
+		fmt.Sscanf(v, "%d", &status.NetworkTxBytes)
+	}
+	if v, ok := values["network_rx_rate"]; ok {
+		fmt.Sscanf(v, "%d", &status.NetworkRxRate)
+	}
+	if v, ok := values["network_tx_rate"]; ok {
+		fmt.Sscanf(v, "%d", &status.NetworkTxRate)
+	}
+
+	// Parse int64 fields
+	if v, ok := values["uptime_seconds"]; ok {
+		fmt.Sscanf(v, "%d", &status.UptimeSeconds)
+	}
+	if v, ok := values["updated_at"]; ok {
+		fmt.Sscanf(v, "%d", &status.UpdatedAt)
+	}
+
+	// Parse int fields
+	if v, ok := values["tcp_connections"]; ok {
+		fmt.Sscanf(v, "%d", &status.TCPConnections)
+	}
+	if v, ok := values["udp_connections"]; ok {
+		fmt.Sscanf(v, "%d", &status.UDPConnections)
+	}
+
+	return status
 }
 
 // GetMultipleNodeSystemStatus retrieves system status for multiple nodes in batch
@@ -354,32 +434,14 @@ func (a *NodeSystemStatusQuerierAdapter) GetMultipleNodeSystemStatus(ctx context
 		return result, fmt.Errorf("failed to get node statuses: %w", err)
 	}
 
-	// Parse results
+	// Parse results using shared helper function
 	for nodeID, cmd := range cmds {
 		values, err := cmd.Result()
 		if err != nil || len(values) == 0 {
 			continue
 		}
 
-		status := &nodeUsecases.NodeSystemStatus{
-			CPU:        values["cpu"],
-			Memory:     values["memory"],
-			Disk:       values["disk"],
-			PublicIPv4: values["public_ipv4"],
-			PublicIPv6: values["public_ipv6"],
-		}
-
-		// Parse uptime
-		if uptimeStr, ok := values["uptime"]; ok {
-			fmt.Sscanf(uptimeStr, "%d", &status.Uptime)
-		}
-
-		// Parse updated_at
-		if updatedAtStr, ok := values["updated_at"]; ok {
-			fmt.Sscanf(updatedAtStr, "%d", &status.UpdatedAt)
-		}
-
-		result[nodeID] = status
+		result[nodeID] = parseNodeSystemStatus(values)
 	}
 
 	return result, nil

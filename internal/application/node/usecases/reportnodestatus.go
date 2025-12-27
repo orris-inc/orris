@@ -3,8 +3,6 @@ package usecases
 import (
 	"context"
 	"fmt"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/orris-inc/orris/internal/application/node/dto"
@@ -22,9 +20,45 @@ type ReportNodeStatusResult struct {
 	Success bool
 }
 
-// NodeSystemStatusUpdater defines the interface for updating node system status
+// NodeStatusUpdate contains all status update data for Redis storage
+type NodeStatusUpdate struct {
+	// System resources
+	CPUPercent    float64
+	MemoryPercent float64
+	MemoryUsed    uint64
+	MemoryTotal   uint64
+	MemoryAvail   uint64
+	DiskPercent   float64
+	DiskUsed      uint64
+	DiskTotal     uint64
+	UptimeSeconds int64
+
+	// System load
+	LoadAvg1  float64
+	LoadAvg5  float64
+	LoadAvg15 float64
+
+	// Network statistics
+	NetworkRxBytes uint64
+	NetworkTxBytes uint64
+	NetworkRxRate  uint64
+	NetworkTxRate  uint64
+
+	// Connection statistics
+	TCPConnections int
+	UDPConnections int
+
+	// Network info
+	PublicIPv4 string
+	PublicIPv6 string
+
+	// Agent info
+	AgentVersion string
+}
+
+// NodeSystemStatusUpdater defines the interface for updating node system status in cache
 type NodeSystemStatusUpdater interface {
-	UpdateSystemStatus(ctx context.Context, nodeID uint, cpu, memory, disk float64, uptime int, publicIPv4, publicIPv6 string) error
+	UpdateSystemStatus(ctx context.Context, nodeID uint, status *NodeStatusUpdate) error
 }
 
 // NodeLastSeenUpdater defines the interface for updating node last_seen_at and public IPs
@@ -59,22 +93,44 @@ func (uc *ReportNodeStatusUseCase) Execute(ctx context.Context, cmd ReportNodeSt
 		return nil, fmt.Errorf("node_id is required")
 	}
 
-	// Parse percentage strings (e.g., "45%" -> 0.45)
-	cpu := parsePercentage(cmd.Status.CPU)
-	memory := parsePercentage(cmd.Status.Mem)
-	disk := parsePercentage(cmd.Status.Disk)
+	// Build status update from request
+	statusUpdate := &NodeStatusUpdate{
+		// System resources
+		CPUPercent:    cmd.Status.CPUPercent,
+		MemoryPercent: cmd.Status.MemoryPercent,
+		MemoryUsed:    cmd.Status.MemoryUsed,
+		MemoryTotal:   cmd.Status.MemoryTotal,
+		MemoryAvail:   cmd.Status.MemoryAvail,
+		DiskPercent:   cmd.Status.DiskPercent,
+		DiskUsed:      cmd.Status.DiskUsed,
+		DiskTotal:     cmd.Status.DiskTotal,
+		UptimeSeconds: cmd.Status.UptimeSeconds,
+
+		// System load
+		LoadAvg1:  cmd.Status.LoadAvg1,
+		LoadAvg5:  cmd.Status.LoadAvg5,
+		LoadAvg15: cmd.Status.LoadAvg15,
+
+		// Network statistics
+		NetworkRxBytes: cmd.Status.NetworkRxBytes,
+		NetworkTxBytes: cmd.Status.NetworkTxBytes,
+		NetworkRxRate:  cmd.Status.NetworkRxRate,
+		NetworkTxRate:  cmd.Status.NetworkTxRate,
+
+		// Connection statistics
+		TCPConnections: cmd.Status.TCPConnections,
+		UDPConnections: cmd.Status.UDPConnections,
+
+		// Network info
+		PublicIPv4: cmd.Status.PublicIPv4,
+		PublicIPv6: cmd.Status.PublicIPv6,
+
+		// Agent info
+		AgentVersion: cmd.Status.AgentVersion,
+	}
 
 	// Update node system status in Redis (always)
-	if err := uc.statusUpdater.UpdateSystemStatus(
-		ctx,
-		cmd.NodeID,
-		cpu,
-		memory,
-		disk,
-		cmd.Status.Uptime,
-		cmd.Status.PublicIPv4,
-		cmd.Status.PublicIPv6,
-	); err != nil {
+	if err := uc.statusUpdater.UpdateSystemStatus(ctx, cmd.NodeID, statusUpdate); err != nil {
 		uc.logger.Errorw("failed to update node system status",
 			"error", err,
 			"node_id", cmd.NodeID,
@@ -87,8 +143,8 @@ func (uc *ReportNodeStatusUseCase) Execute(ctx context.Context, cmd ReportNodeSt
 
 	uc.logger.Debugw("node status reported",
 		"node_id", cmd.NodeID,
-		"cpu", cmd.Status.CPU,
-		"memory", cmd.Status.Mem,
+		"cpu_percent", cmd.Status.CPUPercent,
+		"memory_percent", cmd.Status.MemoryPercent,
 	)
 
 	return &ReportNodeStatusResult{
@@ -112,18 +168,4 @@ func (uc *ReportNodeStatusUseCase) updateLastSeenAtThrottled(ctx context.Context
 			"node_id", nodeID,
 		)
 	}
-}
-
-// parsePercentage converts a percentage string (e.g., "45%") to a float64 (e.g., 0.45)
-func parsePercentage(s string) float64 {
-	s = strings.TrimSpace(s)
-	s = strings.TrimSuffix(s, "%")
-
-	value, err := strconv.ParseFloat(s, 64)
-	if err != nil {
-		return 0.0
-	}
-
-	// Convert percentage to decimal (0-100 -> 0.0-1.0)
-	return value / 100.0
 }

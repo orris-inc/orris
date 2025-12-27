@@ -68,14 +68,42 @@ type ReportSubscriptionUsageRequest struct {
 	Subscriptions []SubscriptionUsageItem `json:"subscriptions" binding:"required,dive"` // Array of subscription usage data
 }
 
-// ReportNodeStatusRequest represents node status report request
+// ReportNodeStatusRequest represents node status report request with procfs metrics
 type ReportNodeStatusRequest struct {
-	CPU        string `json:"CPU" binding:"required"`  // CPU usage percentage (format: "XX%")
-	Mem        string `json:"Mem" binding:"required"`  // Memory usage percentage (format: "XX%")
-	Disk       string `json:"Disk" binding:"required"` // Disk usage percentage (format: "XX%")
-	Uptime     int    `json:"Uptime" binding:"min=0"`  // System uptime in seconds
-	PublicIPv4 string `json:"public_ipv4,omitempty"`   // Public IPv4 address reported by agent
-	PublicIPv6 string `json:"public_ipv6,omitempty"`   // Public IPv6 address reported by agent
+	// System resources
+	CPUPercent    float64 `json:"cpu_percent" binding:"min=0,max=100"`    // CPU usage percentage (0-100)
+	MemoryPercent float64 `json:"memory_percent" binding:"min=0,max=100"` // Memory usage percentage (0-100)
+	MemoryUsed    uint64  `json:"memory_used"`                            // Memory used in bytes
+	MemoryTotal   uint64  `json:"memory_total"`                           // Total memory in bytes
+	MemoryAvail   uint64  `json:"memory_avail"`                           // Available memory in bytes (from procfs Meminfo)
+	DiskPercent   float64 `json:"disk_percent" binding:"min=0,max=100"`   // Disk usage percentage (0-100)
+	DiskUsed      uint64  `json:"disk_used"`                              // Disk used in bytes
+	DiskTotal     uint64  `json:"disk_total"`                             // Total disk in bytes
+	UptimeSeconds int64   `json:"uptime_seconds" binding:"min=0"`         // System uptime in seconds
+
+	// System load (from procfs LoadAvg)
+	LoadAvg1  float64 `json:"load_avg_1"`  // 1-minute load average
+	LoadAvg5  float64 `json:"load_avg_5"`  // 5-minute load average
+	LoadAvg15 float64 `json:"load_avg_15"` // 15-minute load average
+
+	// Network statistics (from procfs NetDev)
+	NetworkRxBytes uint64 `json:"network_rx_bytes"` // Total received bytes across all interfaces
+	NetworkTxBytes uint64 `json:"network_tx_bytes"` // Total transmitted bytes across all interfaces
+
+	// Network bandwidth (calculated by agent)
+	NetworkRxRate uint64 `json:"network_rx_rate"` // Current receive rate in bytes per second
+	NetworkTxRate uint64 `json:"network_tx_rate"` // Current transmit rate in bytes per second
+
+	// Connection statistics
+	TCPConnections int `json:"tcp_connections" binding:"min=0"` // Number of TCP connections
+	UDPConnections int `json:"udp_connections" binding:"min=0"` // Number of UDP connections
+
+	// Network info
+	PublicIPv4 string `json:"public_ipv4,omitempty"` // Public IPv4 address reported by agent
+	PublicIPv6 string `json:"public_ipv6,omitempty"` // Public IPv6 address reported by agent
+
+	// Agent info
+	AgentVersion string `json:"agent_version,omitempty"` // Agent software version
 }
 
 // OnlineSubscriptionItem represents a single online subscription connection
@@ -113,6 +141,9 @@ func ToNodeConfigResponse(n *node.Node) *NodeConfigResponse {
 	if n.Protocol().IsShadowsocks() {
 		config.Protocol = "shadowsocks"
 		config.EncryptionMethod = n.EncryptionConfig().Method()
+
+		// Generate server key for SS2022 methods
+		config.ServerKey = vo.GenerateSS2022ServerKey(n.TokenHash(), config.EncryptionMethod)
 
 		// Handle plugin configuration for Shadowsocks transport
 		if n.PluginConfig() != nil {
