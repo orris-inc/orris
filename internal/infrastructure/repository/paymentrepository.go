@@ -10,6 +10,7 @@ import (
 	vo "github.com/orris-inc/orris/internal/domain/payment/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 )
 
 type PaymentRepository struct {
@@ -142,7 +143,7 @@ func (r *PaymentRepository) GetExpiredPayments(ctx context.Context) ([]*payment.
 	var paymentModels []models.PaymentModel
 
 	if err := r.db.WithContext(ctx).
-		Where("payment_status = ? AND expired_at < ?", vo.PaymentStatusPending, gorm.Expr("NOW()")).
+		Where("payment_status = ? AND expired_at < ?", vo.PaymentStatusPending, biztime.NowUTC()).
 		Find(&paymentModels).Error; err != nil {
 		return nil, fmt.Errorf("failed to get expired payments: %w", err)
 	}

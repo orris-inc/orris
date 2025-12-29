@@ -10,6 +10,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/db"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -228,7 +229,7 @@ func (r *ForwardAgentRepositoryImpl) Delete(ctx context.Context, id uint) error 
 		Where("id = ? AND deleted_at IS NULL", id).
 		Updates(map[string]any{
 			"status":     "disabled",
-			"deleted_at": gorm.Expr("NOW()"),
+			"deleted_at": biztime.NowUTC(),
 		})
 
 	if result.Error != nil {
@@ -334,7 +335,7 @@ func (r *ForwardAgentRepositoryImpl) ExistsByName(ctx context.Context, name stri
 func (r *ForwardAgentRepositoryImpl) UpdateLastSeen(ctx context.Context, id uint) error {
 	result := r.db.WithContext(ctx).Model(&models.ForwardAgentModel{}).
 		Where("id = ?", id).
-		Update("last_seen_at", gorm.Expr("NOW()"))
+		Update("last_seen_at", biztime.NowUTC())
 
 	if result.Error != nil {
 		r.logger.Errorw("failed to update forward agent last_seen_at", "id", id, "error", result.Error)

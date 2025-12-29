@@ -6,6 +6,7 @@ import (
 
 	vo "github.com/orris-inc/orris/internal/domain/payment/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/shared/services"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 )
 
 type Payment struct {
@@ -45,7 +46,8 @@ func NewPayment(subscriptionID, userID uint, amount vo.Money, method vo.PaymentM
 
 	orderNoGen := services.NewOrderNumberGenerator()
 	orderNo := orderNoGen.Generate("PAY")
-	expiredAt := time.Now().Add(30 * time.Minute)
+	now := biztime.NowUTC()
+	expiredAt := now.Add(30 * time.Minute)
 
 	return &Payment{
 		orderNo:        orderNo,
@@ -56,8 +58,8 @@ func NewPayment(subscriptionID, userID uint, amount vo.Money, method vo.PaymentM
 		status:         vo.PaymentStatusPending,
 		expiredAt:      expiredAt,
 		metadata:       make(map[string]interface{}),
-		createdAt:      time.Now(),
-		updatedAt:      time.Now(),
+		createdAt:      now,
+		updatedAt:      now,
 	}, nil
 }
 
@@ -70,7 +72,7 @@ func (p *Payment) MarkAsPaid(transactionID string) error {
 		return fmt.Errorf("cannot mark payment as paid with status %s", p.status)
 	}
 
-	now := time.Now()
+	now := biztime.NowUTC()
 	p.status = vo.PaymentStatusPaid
 	p.transactionID = &transactionID
 	p.paidAt = &now
@@ -87,7 +89,7 @@ func (p *Payment) MarkAsFailed(reason string) error {
 
 	p.status = vo.PaymentStatusFailed
 	p.metadata["failure_reason"] = reason
-	p.updatedAt = time.Now()
+	p.updatedAt = biztime.NowUTC()
 	p.version++
 
 	return nil
@@ -99,7 +101,7 @@ func (p *Payment) MarkAsExpired() error {
 	}
 
 	p.status = vo.PaymentStatusExpired
-	p.updatedAt = time.Now()
+	p.updatedAt = biztime.NowUTC()
 	p.version++
 
 	return nil
@@ -109,11 +111,11 @@ func (p *Payment) SetGatewayInfo(gatewayOrderNo, paymentURL, qrCode string) {
 	p.gatewayOrderNo = &gatewayOrderNo
 	p.paymentURL = &paymentURL
 	p.qrCode = &qrCode
-	p.updatedAt = time.Now()
+	p.updatedAt = biztime.NowUTC()
 }
 
 func (p *Payment) IsExpired() bool {
-	return time.Now().After(p.expiredAt) && p.status == vo.PaymentStatusPending
+	return biztime.NowUTC().After(p.expiredAt) && p.status == vo.PaymentStatusPending
 }
 
 func (p *Payment) ID() uint {

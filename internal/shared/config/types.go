@@ -41,7 +41,7 @@ type DatabaseConfig struct {
 }
 
 func (d *DatabaseConfig) GetDSN() string {
-	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=Local",
+	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8mb4&parseTime=True&loc=UTC",
 		d.Username, d.Password, d.Host, d.Port, d.Database)
 }
 

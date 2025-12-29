@@ -13,6 +13,7 @@ import (
 	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/db"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -591,8 +592,11 @@ func (r *NodeRepositoryImpl) IncrementTraffic(ctx context.Context, nodeID uint, 
 // or older than the threshold (2 minutes). This moves the throttling logic to the database
 // layer for atomic operation.
 func (r *NodeRepositoryImpl) UpdateLastSeenAt(ctx context.Context, nodeID uint, publicIPv4, publicIPv6 string) error {
+	now := biztime.NowUTC()
+	threshold := now.Add(-2 * time.Minute)
+
 	updates := map[string]interface{}{
-		"last_seen_at": gorm.Expr("NOW()"),
+		"last_seen_at": now,
 	}
 
 	// Only update public IPs if provided
@@ -606,7 +610,7 @@ func (r *NodeRepositoryImpl) UpdateLastSeenAt(ctx context.Context, nodeID uint, 
 	// Use conditional update to prevent race conditions
 	// Only update if last_seen_at is NULL or older than 2 minutes
 	result := r.db.WithContext(ctx).Model(&models.NodeModel{}).
-		Where("id = ? AND (last_seen_at IS NULL OR last_seen_at < NOW() - INTERVAL 2 MINUTE)", nodeID).
+		Where("id = ? AND (last_seen_at IS NULL OR last_seen_at < ?)", nodeID, threshold).
 		Updates(updates)
 
 	if result.Error != nil {

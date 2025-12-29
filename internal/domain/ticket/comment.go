@@ -3,6 +3,8 @@ package ticket
 import (
 	"fmt"
 	"time"
+
+	"github.com/orris-inc/orris/internal/shared/biztime"
 )
 
 type Comment struct {
@@ -34,7 +36,7 @@ func NewComment(
 		return nil, fmt.Errorf("content exceeds maximum length of 5000 characters")
 	}
 
-	now := time.Now()
+	now := biztime.NowUTC()
 	return &Comment{
 		ticketID:   ticketID,
 		userID:     userID,
@@ -122,6 +124,6 @@ func (c *Comment) UpdateContent(content string) error {
 	}
 
 	c.content = content
-	c.updatedAt = time.Now()
+	c.updatedAt = biztime.NowUTC()
 	return nil
 }

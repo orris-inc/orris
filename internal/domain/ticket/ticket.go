@@ -5,6 +5,7 @@ import (
 	"time"
 
 	vo "github.com/orris-inc/orris/internal/domain/ticket/valueobjects"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/constants"
 )
 
@@ -59,7 +60,7 @@ func NewTicket(
 		return nil, fmt.Errorf("creator ID is required")
 	}
 
-	now := time.Now()
+	now := biztime.NowUTC()
 	slaDueTime := now.Add(time.Duration(priority.GetSLAHours()) * time.Hour)
 
 	t := &Ticket{
@@ -261,7 +262,7 @@ func (t *Ticket) AssignTo(assigneeID uint, assignedBy uint) error {
 	}
 
 	t.assigneeID = &assigneeID
-	t.updatedAt = time.Now()
+	t.updatedAt = biztime.NowUTC()
 	t.version++
 
 	if t.status.IsNew() {
@@ -285,16 +286,16 @@ func (t *Ticket) ChangeStatus(newStatus vo.TicketStatus, changedBy uint) error {
 	}
 
 	t.status = newStatus
-	t.updatedAt = time.Now()
+	t.updatedAt = biztime.NowUTC()
 	t.version++
 
 	if newStatus.IsResolved() && t.resolvedTime == nil {
-		now := time.Now()
+		now := biztime.NowUTC()
 		t.resolvedTime = &now
 	}
 
 	if newStatus.IsClosed() && t.closedAt == nil {
-		now := time.Now()
+		now := biztime.NowUTC()
 		t.closedAt = &now
 	}
 
@@ -316,7 +317,7 @@ func (t *Ticket) ChangePriority(newPriority vo.Priority, changedBy uint) error {
 	}
 
 	t.priority = newPriority
-	t.updatedAt = time.Now()
+	t.updatedAt = biztime.NowUTC()
 	t.version++
 
 	if !t.createdAt.IsZero() {
@@ -337,11 +338,11 @@ func (t *Ticket) AddComment(comment *Comment) error {
 	}
 
 	t.comments = append(t.comments, comment)
-	t.updatedAt = time.Now()
+	t.updatedAt = biztime.NowUTC()
 
 	if t.responseTime == nil && !comment.IsInternal() {
 		if comment.UserID() != t.creatorID {
-			now := time.Now()
+			now := biztime.NowUTC()
 			t.responseTime = &now
 		}
 	}
@@ -363,7 +364,7 @@ func (t *Ticket) Close(reason string, closedBy uint) error {
 	}
 
 	t.status = vo.StatusClosed
-	now := time.Now()
+	now := biztime.NowUTC()
 	t.closedAt = &now
 	t.updatedAt = now
 	t.version++
@@ -383,7 +384,7 @@ func (t *Ticket) Reopen(reason string, reopenedBy uint) error {
 	t.status = vo.StatusReopened
 	t.closedAt = nil
 	t.resolvedTime = nil
-	t.updatedAt = time.Now()
+	t.updatedAt = biztime.NowUTC()
 	t.version++
 
 	return nil
@@ -398,7 +399,7 @@ func (t *Ticket) IsOverdue() bool {
 		return false
 	}
 
-	return time.Now().After(*t.slaDueTime)
+	return biztime.NowUTC().After(*t.slaDueTime)
 }
 
 func (t *Ticket) MarkFirstResponse() error {
@@ -406,7 +407,7 @@ func (t *Ticket) MarkFirstResponse() error {
 		return fmt.Errorf("first response already marked")
 	}
 
-	now := time.Now()
+	now := biztime.NowUTC()
 	t.responseTime = &now
 	t.updatedAt = now
 
@@ -418,7 +419,7 @@ func (t *Ticket) MarkResolved() error {
 		return fmt.Errorf("ticket already marked as resolved")
 	}
 
-	now := time.Now()
+	now := biztime.NowUTC()
 	t.resolvedTime = &now
 	t.updatedAt = now
 
