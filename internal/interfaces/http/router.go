@@ -74,6 +74,7 @@ type Router struct {
 	userForwardRuleHandler      *forwardHandlers.UserForwardRuleHandler
 	agentHub                    *services.AgentHub
 	agentHubHandler             *agentHandlers.HubHandler
+	nodeHubHandler              *nodeHandlers.NodeHubHandler
 	configSyncService           *forwardServices.ConfigSyncService
 	trafficLimitEnforcementSvc  *forwardServices.TrafficLimitEnforcementService
 	authMiddleware              *middleware.AuthMiddleware
@@ -788,6 +789,13 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Initialize agent hub handler with config sync service
 	agentHubHandler := agentHandlers.NewHubHandler(agentHub, configSyncService, log)
 
+	// Initialize node status handler and register to agent hub
+	nodeStatusHandler := adapters.NewNodeStatusHandler(systemStatusUpdater, nodeRepoImpl, log)
+	agentHub.RegisterNodeStatusHandler(nodeStatusHandler)
+
+	// Initialize node hub handler
+	nodeHubHandler := nodeHandlers.NewNodeHubHandler(agentHub, log)
+
 	return &Router{
 		engine:                      engine,
 		userHandler:                 userHandler,
@@ -815,6 +823,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		userForwardRuleHandler:      userForwardRuleHandler,
 		agentHub:                    agentHub,
 		agentHubHandler:             agentHubHandler,
+		nodeHubHandler:              nodeHubHandler,
 		configSyncService:           configSyncService,
 		trafficLimitEnforcementSvc:  trafficLimitEnforcementSvc,
 		authMiddleware:              authMiddleware,
@@ -1054,7 +1063,9 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 
 	routes.SetupAgentHubRoutes(r.engine, &routes.AgentHubRouteConfig{
 		HubHandler:                  r.agentHubHandler,
+		NodeHubHandler:              r.nodeHubHandler,
 		ForwardAgentTokenMiddleware: r.forwardAgentTokenMiddleware,
+		NodeTokenMiddleware:         r.nodeTokenMiddleware,
 	})
 }
 

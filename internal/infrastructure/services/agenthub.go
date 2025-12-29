@@ -13,24 +13,35 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
-// AgentHub manages WebSocket connections for forward agents.
-// Simplified version: only supports forward agent connections for probe functionality.
+// AgentHub manages WebSocket connections for forward agents and node agents.
 type AgentHub struct {
 	// Forward agent connections: map[AgentID]*AgentHubConn
 	agents   map[uint]*AgentHubConn
 	agentsMu sync.RWMutex
 
+	// Node agent connections: map[NodeID]*NodeHubConn
+	nodes   map[uint]*NodeHubConn
+	nodesMu sync.RWMutex
+
 	// Status handler for forward agent
 	statusHandler   StatusHandler
 	statusHandlerMu sync.RWMutex
+
+	// Status handler for node agent
+	nodeStatusHandler   StatusHandler
+	nodeStatusHandlerMu sync.RWMutex
 
 	// Message handlers for specific message types (domain extensions)
 	messageHandlers   []MessageHandler
 	messageHandlersMu sync.RWMutex
 
-	// Callbacks
+	// Callbacks for forward agents
 	onAgentOnline  func(agentID uint)
 	onAgentOffline func(agentID uint)
+
+	// Callbacks for node agents
+	onNodeOnline  func(nodeID uint)
+	onNodeOffline func(nodeID uint)
 
 	logger logger.Interface
 }
@@ -76,10 +87,50 @@ func (c *AgentHubConn) Close() {
 	}
 }
 
+// NodeHubConn represents a node agent WebSocket connection.
+type NodeHubConn struct {
+	NodeID      uint
+	Conn        *websocket.Conn
+	Send        chan []byte // Generic byte channel for node messages
+	LastSeen    time.Time
+	ConnectedAt time.Time
+	closed      atomic.Bool
+}
+
+// TrySend attempts to send a message to the node.
+// Returns false if the channel is closed or full.
+func (c *NodeHubConn) TrySend(msg []byte) (sent bool) {
+	if c.closed.Load() {
+		return false
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			sent = false
+		}
+	}()
+
+	select {
+	case c.Send <- msg:
+		return true
+	default:
+		return false
+	}
+}
+
+// Close marks the connection as closed and closes the send channel.
+// Safe to call multiple times.
+func (c *NodeHubConn) Close() {
+	if c.closed.CompareAndSwap(false, true) {
+		close(c.Send)
+	}
+}
+
 // NewAgentHub creates a new AgentHub instance.
 func NewAgentHub(log logger.Interface) *AgentHub {
 	return &AgentHub{
 		agents:          make(map[uint]*AgentHubConn),
+		nodes:           make(map[uint]*NodeHubConn),
 		messageHandlers: make([]MessageHandler, 0),
 		logger:          log,
 	}
@@ -279,9 +330,148 @@ type MessageHandler interface {
 	HandleMessage(agentID uint, msgType string, data any) bool
 }
 
+// ============================================================================
+// Node Agent Methods
+// ============================================================================
+
+// RegisterNodeStatusHandler registers a status handler for node agent.
+func (h *AgentHub) RegisterNodeStatusHandler(handler StatusHandler) {
+	h.nodeStatusHandlerMu.Lock()
+	defer h.nodeStatusHandlerMu.Unlock()
+	h.nodeStatusHandler = handler
+	h.logger.Infow("node agent status handler registered")
+}
+
+// SetOnNodeOnline sets the callback for node online events.
+func (h *AgentHub) SetOnNodeOnline(fn func(nodeID uint)) {
+	h.onNodeOnline = fn
+}
+
+// SetOnNodeOffline sets the callback for node offline events.
+func (h *AgentHub) SetOnNodeOffline(fn func(nodeID uint)) {
+	h.onNodeOffline = fn
+}
+
+// RegisterNodeAgent registers a node agent WebSocket connection.
+func (h *AgentHub) RegisterNodeAgent(nodeID uint, conn *websocket.Conn) *NodeHubConn {
+	h.nodesMu.Lock()
+	defer h.nodesMu.Unlock()
+
+	// Close existing connection if any
+	if existing, ok := h.nodes[nodeID]; ok {
+		existing.Close()
+		existing.Conn.Close()
+	}
+
+	nodeConn := &NodeHubConn{
+		NodeID:      nodeID,
+		Conn:        conn,
+		Send:        make(chan []byte, 256),
+		LastSeen:    biztime.NowUTC(),
+		ConnectedAt: biztime.NowUTC(),
+	}
+	h.nodes[nodeID] = nodeConn
+
+	h.logger.Infow("node agent connected via websocket",
+		"node_id", nodeID,
+	)
+
+	if h.onNodeOnline != nil {
+		go h.onNodeOnline(nodeID)
+	}
+
+	return nodeConn
+}
+
+// UnregisterNodeAgent removes a node agent connection.
+func (h *AgentHub) UnregisterNodeAgent(nodeID uint) {
+	h.nodesMu.Lock()
+	defer h.nodesMu.Unlock()
+
+	if conn, ok := h.nodes[nodeID]; ok {
+		conn.Close()
+		delete(h.nodes, nodeID)
+
+		h.logger.Infow("node agent disconnected",
+			"node_id", nodeID,
+		)
+
+		if h.onNodeOffline != nil {
+			go h.onNodeOffline(nodeID)
+		}
+	}
+}
+
+// HandleNodeStatus handles status update from a node agent.
+func (h *AgentHub) HandleNodeStatus(nodeID uint, data any) {
+	// Update last seen
+	h.nodesMu.Lock()
+	if conn, ok := h.nodes[nodeID]; ok {
+		conn.LastSeen = biztime.NowUTC()
+	}
+	h.nodesMu.Unlock()
+
+	// Call registered status handler
+	h.nodeStatusHandlerMu.RLock()
+	handler := h.nodeStatusHandler
+	h.nodeStatusHandlerMu.RUnlock()
+
+	if handler != nil {
+		handler.HandleStatus(nodeID, data)
+	}
+}
+
+// IsNodeOnline checks if a node agent is connected.
+func (h *AgentHub) IsNodeOnline(nodeID uint) bool {
+	h.nodesMu.RLock()
+	defer h.nodesMu.RUnlock()
+	_, ok := h.nodes[nodeID]
+	return ok
+}
+
+// GetOnlineNodes returns list of online node IDs.
+func (h *AgentHub) GetOnlineNodes() []uint {
+	h.nodesMu.RLock()
+	defer h.nodesMu.RUnlock()
+
+	ids := make([]uint, 0, len(h.nodes))
+	for id := range h.nodes {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+// GetNodeSendChan returns the send channel for a node connection.
+func (h *AgentHub) GetNodeSendChan(nodeID uint) chan []byte {
+	h.nodesMu.RLock()
+	defer h.nodesMu.RUnlock()
+
+	if conn, ok := h.nodes[nodeID]; ok {
+		return conn.Send
+	}
+	return nil
+}
+
+// SendMessageToNode sends a message to a specific node.
+func (h *AgentHub) SendMessageToNode(nodeID uint, msg []byte) error {
+	h.nodesMu.RLock()
+	nodeConn, ok := h.nodes[nodeID]
+	h.nodesMu.RUnlock()
+
+	if !ok {
+		return ErrNodeNotConnected
+	}
+
+	if !nodeConn.TrySend(msg) {
+		return ErrSendChannelFull
+	}
+	return nil
+}
+
 // HubErrors defines agent hub related errors.
 var (
 	ErrAgentNotConnected = &HubError{Code: "AGENT_NOT_CONNECTED", Message: "agent not connected"}
+	ErrNodeNotConnected  = &HubError{Code: "NODE_NOT_CONNECTED", Message: "node not connected"}
 	ErrSendChannelFull   = &HubError{Code: "SEND_CHANNEL_FULL", Message: "send channel full"}
 )
 

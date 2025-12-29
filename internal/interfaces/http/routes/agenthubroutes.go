@@ -5,13 +5,16 @@ import (
 	"github.com/gin-gonic/gin"
 
 	agentHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/agent"
+	nodeHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/node"
 	"github.com/orris-inc/orris/internal/interfaces/http/middleware"
 )
 
 // AgentHubRouteConfig contains dependencies for agent hub routes.
 type AgentHubRouteConfig struct {
 	HubHandler                  *agentHandlers.HubHandler
+	NodeHubHandler              *nodeHandlers.NodeHubHandler
 	ForwardAgentTokenMiddleware *middleware.ForwardAgentTokenMiddleware
+	NodeTokenMiddleware         *middleware.NodeTokenMiddleware
 }
 
 // SetupAgentHubRoutes configures agent hub WebSocket routes.
@@ -25,5 +28,14 @@ func SetupAgentHubRoutes(engine *gin.Engine, cfg *AgentHubRouteConfig) {
 			cfg.ForwardAgentTokenMiddleware.RequireForwardAgentToken(),
 			cfg.HubHandler.ForwardAgentWS,
 		)
+
+		// Node agent WebSocket connection
+		// GET /ws/node-agent?token=xxx (authenticated by node token)
+		if cfg.NodeHubHandler != nil && cfg.NodeTokenMiddleware != nil {
+			wsAgent.GET("/node-agent",
+				cfg.NodeTokenMiddleware.RequireNodeTokenWS(),
+				cfg.NodeHubHandler.NodeAgentWS,
+			)
+		}
 	}
 }

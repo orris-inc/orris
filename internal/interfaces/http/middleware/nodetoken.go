@@ -115,6 +115,48 @@ func (m *NodeTokenMiddleware) RequireNodeTokenQuery() gin.HandlerFunc {
 	}
 }
 
+// RequireNodeTokenWS is a middleware for WebSocket connections that validates token from query parameter.
+// WebSocket connections cannot use custom headers during handshake, so token must be in query param.
+func (m *NodeTokenMiddleware) RequireNodeTokenWS() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// WebSocket uses token from query parameter
+		token := c.Query("token")
+
+		if token == "" {
+			m.logger.Warnw("WebSocket connection without token", "ip", c.ClientIP())
+			utils.ErrorResponse(c, http.StatusUnauthorized, "unauthorized")
+			c.Abort()
+			return
+		}
+
+		cmd := usecases.ValidateNodeTokenCommand{
+			PlainToken: token,
+		}
+
+		result, err := m.validateTokenUC.Execute(c.Request.Context(), cmd)
+		if err != nil {
+			m.logger.Warnw("WebSocket node token validation failed", "error", err, "ip", c.ClientIP())
+			utils.ErrorResponse(c, http.StatusUnauthorized, "unauthorized")
+			c.Abort()
+			return
+		}
+
+		// Store node info in context
+		c.Set("node_id", result.NodeID)
+		c.Set("node_sid", result.NodeSID)
+		c.Set("node_name", result.Name)
+
+		m.logger.Debugw("node authenticated for WebSocket connection",
+			"node_id", result.NodeID,
+			"node_sid", result.NodeSID,
+			"node_name", result.Name,
+			"ip", c.ClientIP(),
+		)
+
+		c.Next()
+	}
+}
+
 // RequireNodeTokenHeader is a middleware for RESTful API that validates X-Node-Token header
 func (m *NodeTokenMiddleware) RequireNodeTokenHeader() gin.HandlerFunc {
 	return func(c *gin.Context) {

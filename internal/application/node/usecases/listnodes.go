@@ -246,6 +246,8 @@ func (uc *ListNodesUseCase) Execute(ctx context.Context, query ListNodesQuery) (
 						LoadAvg15:      status.LoadAvg15,
 						NetworkRxBytes: status.NetworkRxBytes,
 						NetworkTxBytes: status.NetworkTxBytes,
+						NetworkRxRate:  status.NetworkRxRate,
+						NetworkTxRate:  status.NetworkTxRate,
 						TCPConnections: status.TCPConnections,
 						UDPConnections: status.UDPConnections,
 						PublicIPv4:     status.PublicIPv4,
