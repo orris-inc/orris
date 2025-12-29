@@ -346,6 +346,8 @@ type ListNodesRequest struct {
 	PageSize         int
 	Status           *string
 	IncludeUserNodes bool
+	SortBy           string
+	SortOrder        string
 }
 
 func parseListNodesRequest(c *gin.Context) (*ListNodesRequest, error) {
@@ -360,8 +362,10 @@ func parseListNodesRequest(c *gin.Context) (*ListNodesRequest, error) {
 	}
 
 	req := &ListNodesRequest{
-		Page:     page,
-		PageSize: pageSize,
+		Page:      page,
+		PageSize:  pageSize,
+		SortBy:    c.DefaultQuery("sort_by", "sort_order"),
+		SortOrder: c.DefaultQuery("sort_order", "asc"),
 	}
 
 	if status := c.Query("status"); status != "" {
@@ -383,5 +387,7 @@ func (r *ListNodesRequest) ToCommand() usecases.ListNodesQuery {
 		Offset:           offset,
 		Status:           r.Status,
 		IncludeUserNodes: r.IncludeUserNodes,
+		SortBy:           r.SortBy,
+		SortOrder:        r.SortOrder,
 	}
 }
