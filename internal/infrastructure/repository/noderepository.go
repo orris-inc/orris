@@ -815,3 +815,33 @@ func (r *NodeRepositoryImpl) ExistsByAddressForUserExcluding(ctx context.Context
 	}
 	return count > 0, nil
 }
+
+// GetPublicIPs retrieves the current public IPs for a node (excluding soft-deleted records)
+// Returns (ipv4, ipv6, error) - empty string if IP is not set
+func (r *NodeRepositoryImpl) GetPublicIPs(ctx context.Context, nodeID uint) (string, string, error) {
+	var model models.NodeModel
+	err := r.db.WithContext(ctx).
+		Scopes(db.NotDeleted()).
+		Select("id", "public_ipv4", "public_ipv6").
+		Where("id = ?", nodeID).
+		First(&model).Error
+
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return "", "", errors.NewNotFoundError("node not found")
+		}
+		r.logger.Errorw("failed to get public IPs", "node_id", nodeID, "error", err)
+		return "", "", fmt.Errorf("failed to get public IPs: %w", err)
+	}
+
+	ipv4 := ""
+	ipv6 := ""
+	if model.PublicIPv4 != nil {
+		ipv4 = *model.PublicIPv4
+	}
+	if model.PublicIPv6 != nil {
+		ipv6 = *model.PublicIPv6
+	}
+
+	return ipv4, ipv6, nil
+}

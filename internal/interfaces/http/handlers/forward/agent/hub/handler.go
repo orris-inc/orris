@@ -1,5 +1,5 @@
-// Package agent provides HTTP handlers for agent management.
-package agent
+// Package hub provides WebSocket hub handlers for forward agent connections.
+package hub
 
 import (
 	"context"
@@ -35,16 +35,16 @@ type ConfigSyncService interface {
 	FullSyncToAgent(ctx context.Context, agentID uint) error
 }
 
-// HubHandler handles WebSocket connections for forward agent hub.
-type HubHandler struct {
+// Handler handles WebSocket connections for forward agent hub.
+type Handler struct {
 	hub               *services.AgentHub
 	configSyncService ConfigSyncService
 	logger            logger.Interface
 }
 
-// NewHubHandler creates a new HubHandler.
-func NewHubHandler(hub *services.AgentHub, configSyncService ConfigSyncService, log logger.Interface) *HubHandler {
-	return &HubHandler{
+// NewHandler creates a new Handler.
+func NewHandler(hub *services.AgentHub, configSyncService ConfigSyncService, log logger.Interface) *Handler {
+	return &Handler{
 		hub:               hub,
 		configSyncService: configSyncService,
 		logger:            log,
@@ -53,7 +53,7 @@ func NewHubHandler(hub *services.AgentHub, configSyncService ConfigSyncService, 
 
 // ForwardAgentWS handles WebSocket connections from forward agents.
 // GET /ws/forward-agent
-func (h *HubHandler) ForwardAgentWS(c *gin.Context) {
+func (h *Handler) ForwardAgentWS(c *gin.Context) {
 	agentIDVal, exists := c.Get("forward_agent_id")
 	if !exists {
 		h.logger.Warnw("forward_agent_id not found in context for hub ws",
@@ -99,7 +99,7 @@ func (h *HubHandler) ForwardAgentWS(c *gin.Context) {
 }
 
 // readPump reads messages from agent WebSocket.
-func (h *HubHandler) readPump(agentID uint, conn *websocket.Conn) {
+func (h *Handler) readPump(agentID uint, conn *websocket.Conn) {
 	defer func() {
 		h.hub.UnregisterAgent(agentID)
 		conn.Close()
@@ -153,7 +153,7 @@ func (h *HubHandler) readPump(agentID uint, conn *websocket.Conn) {
 }
 
 // writePump writes messages to agent WebSocket.
-func (h *HubHandler) writePump(agentID uint, conn *websocket.Conn, send chan *dto.HubMessage) {
+func (h *Handler) writePump(agentID uint, conn *websocket.Conn, send chan *dto.HubMessage) {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
@@ -187,7 +187,7 @@ func (h *HubHandler) writePump(agentID uint, conn *websocket.Conn, send chan *dt
 }
 
 // handleAgentEvent processes event from agent.
-func (h *HubHandler) handleAgentEvent(agentID uint, data any) {
+func (h *Handler) handleAgentEvent(agentID uint, data any) {
 	dataBytes, err := json.Marshal(data)
 	if err != nil {
 		return

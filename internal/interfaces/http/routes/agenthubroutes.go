@@ -4,14 +4,14 @@ package routes
 import (
 	"github.com/gin-gonic/gin"
 
-	agentHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/agent"
+	forwardAgentHubHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward/agent/hub"
 	nodeHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/node"
 	"github.com/orris-inc/orris/internal/interfaces/http/middleware"
 )
 
 // AgentHubRouteConfig contains dependencies for agent hub routes.
 type AgentHubRouteConfig struct {
-	HubHandler                  *agentHandlers.HubHandler
+	HubHandler                  *forwardAgentHubHandlers.Handler
 	NodeHubHandler              *nodeHandlers.NodeHubHandler
 	ForwardAgentTokenMiddleware *middleware.ForwardAgentTokenMiddleware
 	NodeTokenMiddleware         *middleware.NodeTokenMiddleware

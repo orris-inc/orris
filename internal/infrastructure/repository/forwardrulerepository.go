@@ -657,3 +657,26 @@ func (r *ForwardRuleRepositoryImpl) ListUserRulesForDelivery(ctx context.Context
 
 	return entities, nil
 }
+
+// ListEnabledByTargetNodeID returns all enabled forward rules targeting a specific node.
+// This is used for notifying agents when a node's address changes.
+func (r *ForwardRuleRepositoryImpl) ListEnabledByTargetNodeID(ctx context.Context, nodeID uint) ([]*forward.ForwardRule, error) {
+	var ruleModels []*models.ForwardRuleModel
+
+	tx := db.GetTxFromContext(ctx, r.db)
+	if err := tx.
+		Where("target_node_id = ?", nodeID).
+		Where("status = ?", "enabled").
+		Find(&ruleModels).Error; err != nil {
+		r.logger.Errorw("failed to list enabled rules by target node ID", "node_id", nodeID, "error", err)
+		return nil, fmt.Errorf("failed to list enabled rules by target node ID: %w", err)
+	}
+
+	entities, err := r.mapper.ToEntities(ruleModels)
+	if err != nil {
+		r.logger.Errorw("failed to map forward rule models to entities", "error", err)
+		return nil, fmt.Errorf("failed to map forward rules: %w", err)
+	}
+
+	return entities, nil
+}

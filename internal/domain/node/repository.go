@@ -38,6 +38,9 @@ type NodeRepository interface {
 	ExistsByAddressForUser(ctx context.Context, address string, port int, userID uint) (bool, error)
 	// ExistsByAddressForUserExcluding checks if a node with the given address and port exists for a user, excluding a specific node
 	ExistsByAddressForUserExcluding(ctx context.Context, address string, port int, userID uint, excludeID uint) (bool, error)
+	// GetPublicIPs retrieves the current public IPs for a node
+	// Returns (ipv4, ipv6, error) - empty string if IP is not set
+	GetPublicIPs(ctx context.Context, nodeID uint) (string, string, error)
 }
 
 type NodeFilter struct {

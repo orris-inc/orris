@@ -46,9 +46,10 @@ type UpdateNodeResult struct {
 }
 
 type UpdateNodeUseCase struct {
-	logger            logger.Interface
-	nodeRepo          node.NodeRepository
-	resourceGroupRepo resource.Repository
+	logger                logger.Interface
+	nodeRepo              node.NodeRepository
+	resourceGroupRepo     resource.Repository
+	addressChangeNotifier NodeAddressChangeNotifier
 }
 
 func NewUpdateNodeUseCase(
@@ -61,6 +62,12 @@ func NewUpdateNodeUseCase(
 		nodeRepo:          nodeRepo,
 		resourceGroupRepo: resourceGroupRepo,
 	}
+}
+
+// SetAddressChangeNotifier sets the notifier for address changes.
+// This is used to break circular dependencies during initialization.
+func (uc *UpdateNodeUseCase) SetAddressChangeNotifier(notifier NodeAddressChangeNotifier) {
+	uc.addressChangeNotifier = notifier
 }
 
 func (uc *UpdateNodeUseCase) Execute(ctx context.Context, cmd UpdateNodeCommand) (*UpdateNodeResult, error) {
@@ -78,6 +85,10 @@ func (uc *UpdateNodeUseCase) Execute(ctx context.Context, cmd UpdateNodeCommand)
 		uc.logger.Errorw("failed to get node by SID", "sid", cmd.SID, "error", err)
 		return nil, errors.NewNotFoundError("node not found")
 	}
+
+	// Capture original values for address change detection
+	originalAddress := existingNode.ServerAddress().Value()
+	originalPort := int(existingNode.AgentPort())
 
 	// Check uniqueness constraints for name update
 	if cmd.Name != nil && *cmd.Name != existingNode.Name() {
@@ -144,6 +155,30 @@ func (uc *UpdateNodeUseCase) Execute(ctx context.Context, cmd UpdateNodeCommand)
 	}
 
 	uc.logger.Infow("node updated successfully", "sid", cmd.SID)
+
+	// Check if address or port changed and notify forward agents
+	addressChanged := originalAddress != newAddress || originalPort != newPort
+
+	if addressChanged && uc.addressChangeNotifier != nil {
+		uc.logger.Infow("node address changed, notifying forward agents",
+			"node_id", existingNode.ID(),
+			"old_address", originalAddress,
+			"new_address", newAddress,
+			"old_port", originalPort,
+			"new_port", newPort,
+		)
+		// Notify asynchronously to avoid blocking the response
+		nodeID := existingNode.ID()
+		go func() {
+			notifyCtx := context.Background()
+			if err := uc.addressChangeNotifier.NotifyNodeAddressChange(notifyCtx, nodeID); err != nil {
+				uc.logger.Warnw("failed to notify forward agents of node address change",
+					"error", err,
+					"node_id", nodeID,
+				)
+			}
+		}()
+	}
 
 	// Build and return result
 	return &UpdateNodeResult{

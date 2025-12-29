@@ -33,8 +33,11 @@ import (
 	"github.com/orris-inc/orris/internal/infrastructure/token"
 	"github.com/orris-inc/orris/internal/interfaces/http/handlers"
 	adminHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/admin"
-	agentHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/agent"
-	forwardHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward"
+	forwardAgentAPIHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward/agent/api"
+	forwardAgentCrudHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward/agent/crud"
+	forwardAgentHubHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward/agent/hub"
+	forwardRuleHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward/rule"
+	forwardUserHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward/user"
 	nodeHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/node"
 	telegramHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/telegram"
 	ticketHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/ticket"
@@ -68,12 +71,12 @@ type Router struct {
 	notificationHandler         *handlers.NotificationHandler
 	telegramHandler             *telegramHandlers.Handler
 	telegramService             *telegramApp.ServiceDDD
-	forwardRuleHandler          *forwardHandlers.ForwardHandler
-	forwardAgentHandler         *forwardHandlers.ForwardAgentHandler
-	forwardAgentAPIHandler      *forwardHandlers.AgentHandler
-	userForwardRuleHandler      *forwardHandlers.UserForwardRuleHandler
+	forwardRuleHandler          *forwardRuleHandlers.Handler
+	forwardAgentHandler         *forwardAgentCrudHandlers.Handler
+	forwardAgentAPIHandler      *forwardAgentAPIHandlers.Handler
+	userForwardRuleHandler      *forwardUserHandlers.Handler
 	agentHub                    *services.AgentHub
-	agentHubHandler             *agentHandlers.HubHandler
+	agentHubHandler             *forwardAgentHubHandlers.Handler
 	nodeHubHandler              *nodeHandlers.NodeHubHandler
 	configSyncService           *forwardServices.ConfigSyncService
 	trafficLimitEnforcementSvc  *forwardServices.TrafficLimitEnforcementService
@@ -517,7 +520,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	onlineSubscriptionTracker := adapters.NewOnlineSubscriptionTrackerAdapter(log)
 	subscriptionIDResolver := adapters.NewSubscriptionIDResolverAdapter(subscriptionRepo, log)
 	reportSubscriptionUsageUC := nodeUsecases.NewReportSubscriptionUsageUseCase(subscriptionUsageRecorder, subscriptionIDResolver, log)
-	reportNodeStatusUC := nodeUsecases.NewReportNodeStatusUseCase(systemStatusUpdater, nodeRepoImpl, log)
+	reportNodeStatusUC := nodeUsecases.NewReportNodeStatusUseCase(systemStatusUpdater, nodeRepoImpl, nodeRepoImpl, log)
 	reportOnlineSubscriptionsUC := nodeUsecases.NewReportOnlineSubscriptionsUseCase(onlineSubscriptionTracker, subscriptionIDResolver, log)
 
 	// Initialize RESTful Agent Handler
@@ -615,7 +618,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	serverBaseURL := cfg.Server.GetBaseURL()
 
 	// forwardAgentHandler will be initialized later after updateForwardAgentUC is available
-	var forwardAgentHandler *forwardHandlers.ForwardAgentHandler
+	var forwardAgentHandler *forwardAgentCrudHandlers.Handler
 
 	reportAgentStatusUC := forwardUsecases.NewReportAgentStatusUseCase(
 		forwardAgentRepo,
@@ -640,7 +643,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	)
 
 	// Initialize forward agent API handler for client to fetch rules and report traffic
-	forwardAgentAPIHandler := forwardHandlers.NewAgentHandler(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, reportAgentStatusUC, reportRuleSyncStatusUC, forwardAgentStatusAdapter, cfg.Forward.TokenSigningSecret, forwardTrafficRecorder, log)
+	forwardAgentAPIHandler := forwardAgentAPIHandlers.NewHandler(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, reportAgentStatusUC, reportRuleSyncStatusUC, forwardAgentStatusAdapter, cfg.Forward.TokenSigningSecret, forwardTrafficRecorder, log)
 
 	// Initialize forward agent token middleware
 	forwardAgentTokenMiddleware := middleware.NewForwardAgentTokenMiddleware(validateForwardAgentTokenUC, log)
@@ -666,11 +669,17 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Set port change notifier for exit agent port change detection
 	reportAgentStatusUC.SetPortChangeNotifier(configSyncService)
 
+	// Set node address change notifier for node IP change detection
+	reportNodeStatusUC.SetAddressChangeNotifier(configSyncService)
+
+	// Set node address change notifier for node update use case
+	updateNodeUC.SetAddressChangeNotifier(configSyncService)
+
 	// Now initialize updateForwardAgentUC with configSyncService for address change notification
 	updateForwardAgentUC = forwardUsecases.NewUpdateForwardAgentUseCase(forwardAgentRepo, resourceGroupRepo, configSyncService, log)
 
 	// Now initialize forwardAgentHandler after updateForwardAgentUC is available
-	forwardAgentHandler = forwardHandlers.NewForwardAgentHandler(
+	forwardAgentHandler = forwardAgentCrudHandlers.NewHandler(
 		createForwardAgentUC,
 		getForwardAgentUC,
 		listForwardAgentsUC,
@@ -744,7 +753,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	)
 
 	// Initialize user forward rule handler
-	userForwardRuleHandler := forwardHandlers.NewUserForwardRuleHandler(
+	userForwardRuleHandler := forwardUserHandlers.NewHandler(
 		createUserForwardRuleUC,
 		listUserForwardRulesUC,
 		getUserForwardUsageUC,
@@ -773,7 +782,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	)
 
 	// Initialize forward rule handler (after probeService is available)
-	forwardRuleHandler := forwardHandlers.NewForwardHandler(
+	forwardRuleHandler := forwardRuleHandlers.NewHandler(
 		createForwardRuleUC,
 		getForwardRuleUC,
 		updateForwardRuleUC,
@@ -787,7 +796,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	)
 
 	// Initialize agent hub handler with config sync service
-	agentHubHandler := agentHandlers.NewHubHandler(agentHub, configSyncService, log)
+	agentHubHandler := forwardAgentHubHandlers.NewHandler(agentHub, configSyncService, log)
 
 	// Initialize node status handler and register to agent hub
 	nodeStatusHandler := adapters.NewNodeStatusHandler(systemStatusUpdater, nodeRepoImpl, log)

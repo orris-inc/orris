@@ -54,6 +54,9 @@ func (uc *DeleteForwardRuleUseCase) Execute(ctx context.Context, cmd DeleteForwa
 	agentID := rule.AgentID()
 	ruleShortID := rule.SID()
 	wasEnabled := rule.IsEnabled()
+	ruleType := rule.RuleType().String()
+	exitAgentID := rule.ExitAgentID()
+	chainAgentIDs := rule.ChainAgentIDs()
 
 	// Delete the rule using the internal ID
 	if err := uc.repo.Delete(ctx, rule.ID()); err != nil {
@@ -65,11 +68,34 @@ func (uc *DeleteForwardRuleUseCase) Execute(ctx context.Context, cmd DeleteForwa
 
 	// Notify config sync asynchronously if rule was enabled (failure only logs warning, doesn't block)
 	if wasEnabled && uc.configSyncSvc != nil {
+		// Notify entry agent
 		go func() {
 			if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), agentID, ruleShortID, "removed"); err != nil {
-				uc.logger.Debugw("config sync notification skipped", "rule_id", ruleShortID, "reason", err.Error())
+				uc.logger.Debugw("config sync notification skipped for entry agent", "rule_id", ruleShortID, "agent_id", agentID, "reason", err.Error())
 			}
 		}()
+
+		// Notify additional agents based on rule type
+		switch ruleType {
+		case "entry":
+			// Notify exit agent for entry type rules
+			if exitAgentID != 0 {
+				go func() {
+					if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), exitAgentID, ruleShortID, "removed"); err != nil {
+						uc.logger.Debugw("config sync notification skipped for exit agent", "rule_id", ruleShortID, "agent_id", exitAgentID, "reason", err.Error())
+					}
+				}()
+			}
+		case "chain", "direct_chain":
+			// Notify all chain agents for chain and direct_chain type rules
+			for _, aid := range chainAgentIDs {
+				go func(agentID uint) {
+					if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), agentID, ruleShortID, "removed"); err != nil {
+						uc.logger.Debugw("config sync notification skipped for chain agent", "rule_id", ruleShortID, "agent_id", agentID, "reason", err.Error())
+					}
+				}(aid)
+			}
+		}
 	}
 
 	return nil

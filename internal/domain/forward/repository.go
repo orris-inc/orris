@@ -79,6 +79,10 @@ type Repository interface {
 	// Only includes rules with user scope (user_id = userID) and target_node_id set.
 	// This is used for Forward Plan subscription delivery.
 	ListUserRulesForDelivery(ctx context.Context, userID uint) ([]*ForwardRule, error)
+
+	// ListEnabledByTargetNodeID returns all enabled forward rules targeting a specific node.
+	// This is used for notifying agents when a node's address changes.
+	ListEnabledByTargetNodeID(ctx context.Context, nodeID uint) ([]*ForwardRule, error)
 }
 
 // ListFilter defines the filtering options for listing forward rules.

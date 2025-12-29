@@ -4,17 +4,20 @@ package routes
 import (
 	"github.com/gin-gonic/gin"
 
-	forwardHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward"
+	forwardAgentAPIHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward/agent/api"
+	forwardAgentCrudHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward/agent/crud"
+	forwardRuleHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward/rule"
+	forwardUserHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward/user"
 	"github.com/orris-inc/orris/internal/interfaces/http/middleware"
 	"github.com/orris-inc/orris/internal/shared/authorization"
 )
 
 // ForwardRouteConfig contains dependencies for forward routes.
 type ForwardRouteConfig struct {
-	ForwardRuleHandler          *forwardHandlers.ForwardHandler
-	ForwardAgentHandler         *forwardHandlers.ForwardAgentHandler
-	ForwardAgentAPIHandler      *forwardHandlers.AgentHandler
-	UserForwardHandler          *forwardHandlers.UserForwardRuleHandler
+	ForwardRuleHandler          *forwardRuleHandlers.Handler
+	ForwardAgentHandler         *forwardAgentCrudHandlers.Handler
+	ForwardAgentAPIHandler      *forwardAgentAPIHandlers.Handler
+	UserForwardHandler          *forwardUserHandlers.Handler
 	AuthMiddleware              *middleware.AuthMiddleware
 	ForwardAgentTokenMiddleware *middleware.ForwardAgentTokenMiddleware
 	ForwardRuleOwnerMiddleware  *middleware.ForwardRuleOwnerMiddleware

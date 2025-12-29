@@ -22,6 +22,7 @@ go.work
 /build/
 /dist/
 
+
 # IDE files
 .vscode/
 .idea/
@@ -88,3 +89,5 @@ release/
 # Generated SDK
 generated/
 sdk/
+
+docs/
