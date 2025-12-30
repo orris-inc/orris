@@ -11,6 +11,7 @@ import (
 	adminUsecases "github.com/orris-inc/orris/internal/application/admin/usecases"
 	forwardServices "github.com/orris-inc/orris/internal/application/forward/services"
 	forwardUsecases "github.com/orris-inc/orris/internal/application/forward/usecases"
+	nodeServices "github.com/orris-inc/orris/internal/application/node/services"
 	nodeUsecases "github.com/orris-inc/orris/internal/application/node/usecases"
 	notificationApp "github.com/orris-inc/orris/internal/application/notification"
 	paymentGateway "github.com/orris-inc/orris/internal/application/payment/paymentgateway"
@@ -801,6 +802,23 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Initialize node status handler and register to agent hub
 	nodeStatusHandler := adapters.NewNodeStatusHandler(systemStatusUpdater, nodeRepoImpl, log)
 	agentHub.RegisterNodeStatusHandler(nodeStatusHandler)
+
+	// Initialize node config sync service for pushing config to node agents
+	nodeConfigSyncService := nodeServices.NewNodeConfigSyncService(nodeRepoImpl, agentHub, log)
+
+	// Set OnNodeOnline callback to sync config when node agent connects
+	agentHub.SetOnNodeOnline(func(nodeID uint) {
+		ctx := context.Background()
+		if err := nodeConfigSyncService.FullSyncToNode(ctx, nodeID); err != nil {
+			log.Warnw("failed to sync config to node on connect",
+				"node_id", nodeID,
+				"error", err,
+			)
+		}
+	})
+
+	// Set config change notifier for node update use case
+	updateNodeUC.SetConfigChangeNotifier(nodeConfigSyncService)
 
 	// Initialize node hub handler
 	nodeHubHandler := nodeHandlers.NewNodeHubHandler(agentHub, log)

@@ -199,6 +199,57 @@ func (r *NodeRepositoryImpl) GetBySID(ctx context.Context, sid string) (*node.No
 	return entity, nil
 }
 
+// GetBySIDs retrieves nodes by their SIDs
+func (r *NodeRepositoryImpl) GetBySIDs(ctx context.Context, sids []string) ([]*node.Node, error) {
+	if len(sids) == 0 {
+		return []*node.Node{}, nil
+	}
+
+	var nodeModels []*models.NodeModel
+	if err := r.db.WithContext(ctx).Scopes(db.NotDeleted()).Where("sid IN ?", sids).Find(&nodeModels).Error; err != nil {
+		r.logger.Errorw("failed to get nodes by SIDs", "sids", sids, "error", err)
+		return nil, fmt.Errorf("failed to get nodes: %w", err)
+	}
+
+	// Collect node IDs for batch loading protocol configs
+	nodeIDs := make([]uint, len(nodeModels))
+	for i, m := range nodeModels {
+		nodeIDs[i] = m.ID
+	}
+
+	// Load shadowsocks configs
+	ssConfigsRaw, err := r.shadowsocksConfigRepo.GetByNodeIDs(ctx, nodeIDs)
+	if err != nil {
+		r.logger.Warnw("failed to load shadowsocks configs", "error", err)
+		ssConfigsRaw = make(map[uint]*ShadowsocksConfigData)
+	}
+
+	// Convert to mapper format
+	ssConfigs := make(map[uint]*mappers.ShadowsocksConfigData)
+	for nodeID, data := range ssConfigsRaw {
+		ssConfigs[nodeID] = &mappers.ShadowsocksConfigData{
+			EncryptionConfig: data.EncryptionConfig,
+			PluginConfig:     data.PluginConfig,
+		}
+	}
+
+	// Load trojan configs
+	trojanConfigs, err := r.trojanConfigRepo.GetByNodeIDs(ctx, nodeIDs)
+	if err != nil {
+		r.logger.Warnw("failed to load trojan configs", "error", err)
+		trojanConfigs = make(map[uint]*vo.TrojanConfig)
+	}
+
+	// Convert to entities
+	entities, err := r.mapper.ToEntities(nodeModels, ssConfigs, trojanConfigs)
+	if err != nil {
+		r.logger.Errorw("failed to map node models to entities", "error", err)
+		return nil, fmt.Errorf("failed to map nodes: %w", err)
+	}
+
+	return entities, nil
+}
+
 // GetByIDs retrieves nodes by their IDs
 func (r *NodeRepositoryImpl) GetByIDs(ctx context.Context, ids []uint) ([]*node.Node, error) {
 	if len(ids) == 0 {
@@ -319,7 +370,7 @@ func (r *NodeRepositoryImpl) Update(ctx context.Context, nodeEntity *node.Node) 
 			Select(
 				"name", "server_address", "agent_port", "subscription_port",
 				"protocol", "status", "region", "tags", "sort_order",
-				"maintenance_reason", "token_hash", "api_token", "group_ids", "version", "updated_at",
+				"maintenance_reason", "token_hash", "api_token", "group_ids", "route_config", "version", "updated_at",
 			).
 			Updates(model)
 
@@ -844,4 +895,70 @@ func (r *NodeRepositoryImpl) GetPublicIPs(ctx context.Context, nodeID uint) (str
 	}
 
 	return ipv4, ipv6, nil
+}
+
+// ValidateNodeSIDsForUser checks if all given node SIDs exist and belong to the specified user.
+// Returns slice of invalid SIDs (not found or not owned by user).
+func (r *NodeRepositoryImpl) ValidateNodeSIDsForUser(ctx context.Context, sids []string, userID uint) ([]string, error) {
+	if len(sids) == 0 {
+		return nil, nil
+	}
+
+	var existingSIDs []string
+	err := r.db.WithContext(ctx).Model(&models.NodeModel{}).
+		Scopes(db.NotDeleted()).
+		Where("sid IN ? AND user_id = ?", sids, userID).
+		Pluck("sid", &existingSIDs).Error
+	if err != nil {
+		r.logger.Errorw("failed to validate node SIDs for user", "sids", sids, "user_id", userID, "error", err)
+		return nil, fmt.Errorf("failed to validate node SIDs: %w", err)
+	}
+
+	// Find invalid SIDs (not in existing set)
+	existingSet := make(map[string]bool)
+	for _, sid := range existingSIDs {
+		existingSet[sid] = true
+	}
+
+	var invalidSIDs []string
+	for _, sid := range sids {
+		if !existingSet[sid] {
+			invalidSIDs = append(invalidSIDs, sid)
+		}
+	}
+
+	return invalidSIDs, nil
+}
+
+// ValidateNodeSIDsExist checks if all given node SIDs exist (for admin nodes).
+// Returns slice of invalid SIDs (not found).
+func (r *NodeRepositoryImpl) ValidateNodeSIDsExist(ctx context.Context, sids []string) ([]string, error) {
+	if len(sids) == 0 {
+		return nil, nil
+	}
+
+	var existingSIDs []string
+	err := r.db.WithContext(ctx).Model(&models.NodeModel{}).
+		Scopes(db.NotDeleted()).
+		Where("sid IN ?", sids).
+		Pluck("sid", &existingSIDs).Error
+	if err != nil {
+		r.logger.Errorw("failed to validate node SIDs existence", "sids", sids, "error", err)
+		return nil, fmt.Errorf("failed to validate node SIDs: %w", err)
+	}
+
+	// Find invalid SIDs (not in existing set)
+	existingSet := make(map[string]bool)
+	for _, sid := range existingSIDs {
+		existingSet[sid] = true
+	}
+
+	var invalidSIDs []string
+	for _, sid := range sids {
+		if !existingSet[sid] {
+			invalidSIDs = append(invalidSIDs, sid)
+		}
+	}
+
+	return invalidSIDs, nil
 }

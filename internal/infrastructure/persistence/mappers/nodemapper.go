@@ -43,6 +43,31 @@ type ShadowsocksConfigData struct {
 	PluginConfig     *vo.PluginConfig
 }
 
+// RouteConfigJSON represents the JSON structure for RouteConfig persistence
+type RouteConfigJSON struct {
+	Rules       []RouteRuleJSON `json:"rules,omitempty"`
+	FinalAction string          `json:"final_action"`
+}
+
+// RouteRuleJSON represents the JSON structure for a single routing rule
+type RouteRuleJSON struct {
+	Domain        []string `json:"domain,omitempty"`
+	DomainSuffix  []string `json:"domain_suffix,omitempty"`
+	DomainKeyword []string `json:"domain_keyword,omitempty"`
+	DomainRegex   []string `json:"domain_regex,omitempty"`
+	IPCIDR        []string `json:"ip_cidr,omitempty"`
+	SourceIPCIDR  []string `json:"source_ip_cidr,omitempty"`
+	IPIsPrivate   bool     `json:"ip_is_private,omitempty"`
+	GeoIP         []string `json:"geoip,omitempty"`
+	GeoSite       []string `json:"geosite,omitempty"`
+	Port          []uint16 `json:"port,omitempty"`
+	SourcePort    []uint16 `json:"source_port,omitempty"`
+	Protocol      []string `json:"protocol,omitempty"`
+	Network       []string `json:"network,omitempty"`
+	RuleSet       []string `json:"rule_set,omitempty"`
+	Outbound      string   `json:"outbound"`
+}
+
 // NodeMapperImpl is the concrete implementation of NodeMapper
 type NodeMapperImpl struct{}
 
@@ -107,6 +132,16 @@ func (m *NodeMapperImpl) ToEntity(model *models.NodeModel, encryptionConfig vo.E
 		}
 	}
 
+	// Parse routeConfig from JSON
+	var routeConfig *vo.RouteConfig
+	if len(model.RouteConfig) > 0 {
+		var routeJSON RouteConfigJSON
+		if err := json.Unmarshal(model.RouteConfig, &routeJSON); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal route_config: %w", err)
+		}
+		routeConfig = routeConfigFromJSON(&routeJSON)
+	}
+
 	// Reconstruct the domain entity
 	// Protocol-specific configs are passed from caller
 	nodeEntity, err := node.ReconstructNode(
@@ -128,6 +163,7 @@ func (m *NodeMapperImpl) ToEntity(model *models.NodeModel, encryptionConfig vo.E
 		model.APIToken,
 		model.SortOrder,
 		model.MaintenanceReason,
+		routeConfig,
 		model.LastSeenAt,
 		model.PublicIPv4,
 		model.PublicIPv6,
@@ -178,6 +214,17 @@ func (m *NodeMapperImpl) ToModel(entity *node.Node) (*models.NodeModel, error) {
 		groupIDsJSON = groupIDsBytes
 	}
 
+	// Prepare routeConfig JSON
+	var routeConfigJSON datatypes.JSON
+	if entity.RouteConfig() != nil {
+		routeJSON := routeConfigToJSON(entity.RouteConfig())
+		routeBytes, err := json.Marshal(routeJSON)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal route_config: %w", err)
+		}
+		routeConfigJSON = routeBytes
+	}
+
 	model := &models.NodeModel{
 		ID:                entity.ID(),
 		SID:               entity.SID(),
@@ -193,6 +240,7 @@ func (m *NodeMapperImpl) ToModel(entity *node.Node) (*models.NodeModel, error) {
 		Tags:              tagsJSON,
 		SortOrder:         entity.SortOrder(),
 		MaintenanceReason: entity.MaintenanceReason(),
+		RouteConfig:       routeConfigJSON,
 		TokenHash:         entity.TokenHash(),
 		APIToken:          entity.GetAPIToken(),
 		Version:           entity.Version(),
@@ -265,4 +313,78 @@ func (m *NodeMapperImpl) ToModels(entities []*node.Node) ([]*models.NodeModel, e
 	}
 
 	return models, nil
+}
+
+// routeConfigToJSON converts domain RouteConfig to JSON structure
+func routeConfigToJSON(rc *vo.RouteConfig) *RouteConfigJSON {
+	if rc == nil {
+		return nil
+	}
+
+	rules := make([]RouteRuleJSON, 0, len(rc.Rules()))
+	for _, rule := range rc.Rules() {
+		rules = append(rules, RouteRuleJSON{
+			Domain:        rule.Domain(),
+			DomainSuffix:  rule.DomainSuffix(),
+			DomainKeyword: rule.DomainKeyword(),
+			DomainRegex:   rule.DomainRegex(),
+			IPCIDR:        rule.IPCIDR(),
+			SourceIPCIDR:  rule.SourceIPCIDR(),
+			IPIsPrivate:   rule.IPIsPrivate(),
+			GeoIP:         rule.GeoIP(),
+			GeoSite:       rule.GeoSite(),
+			Port:          rule.Port(),
+			SourcePort:    rule.SourcePort(),
+			Protocol:      rule.Protocol(),
+			Network:       rule.Network(),
+			RuleSet:       rule.RuleSet(),
+			Outbound:      rule.Outbound().String(),
+		})
+	}
+
+	return &RouteConfigJSON{
+		Rules:       rules,
+		FinalAction: rc.FinalAction().String(),
+	}
+}
+
+// routeConfigFromJSON converts JSON structure to domain RouteConfig
+func routeConfigFromJSON(rcJSON *RouteConfigJSON) *vo.RouteConfig {
+	if rcJSON == nil {
+		return nil
+	}
+
+	finalAction := vo.OutboundType(rcJSON.FinalAction)
+	if !finalAction.IsValid() {
+		finalAction = vo.OutboundDirect // default fallback to direct
+	}
+
+	rules := make([]vo.RouteRule, 0, len(rcJSON.Rules))
+	for _, ruleJSON := range rcJSON.Rules {
+		outbound := vo.OutboundType(ruleJSON.Outbound)
+		if !outbound.IsValid() {
+			outbound = vo.OutboundDirect // default fallback to direct
+		}
+
+		rule := vo.ReconstructRouteRule(
+			ruleJSON.Domain,
+			ruleJSON.DomainSuffix,
+			ruleJSON.DomainKeyword,
+			ruleJSON.DomainRegex,
+			ruleJSON.IPCIDR,
+			ruleJSON.SourceIPCIDR,
+			ruleJSON.IPIsPrivate,
+			ruleJSON.GeoIP,
+			ruleJSON.GeoSite,
+			ruleJSON.Port,
+			ruleJSON.SourcePort,
+			ruleJSON.Protocol,
+			ruleJSON.Network,
+			ruleJSON.RuleSet,
+			outbound,
+		)
+		rules = append(rules, *rule)
+	}
+
+	return vo.ReconstructRouteConfig(rules, finalAction)
 }

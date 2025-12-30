@@ -6,6 +6,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/node/dto"
 	"github.com/orris-inc/orris/internal/domain/node"
+	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -67,8 +68,37 @@ func (uc *GetNodeConfigUseCase) Execute(ctx context.Context, cmd GetNodeConfigCo
 		return nil, fmt.Errorf("node is not active")
 	}
 
+	// Fetch referenced nodes if route config has node references
+	var referencedNodes []*node.Node
+	if n.RouteConfig() != nil && n.RouteConfig().HasNodeReferences() {
+		sids := n.RouteConfig().GetReferencedNodeSIDs()
+		if len(sids) > 0 {
+			referencedNodes, err = uc.nodeRepo.GetBySIDs(ctx, sids)
+			if err != nil {
+				uc.logger.Warnw("failed to fetch referenced nodes",
+					"node_id", cmd.NodeID,
+					"referenced_sids", sids,
+					"error", err,
+				)
+				// Continue without referenced nodes rather than failing
+			}
+		}
+	}
+
+	// Server key function for referenced nodes
+	serverKeyFunc := func(refNode *node.Node) string {
+		if refNode.Protocol().IsShadowsocks() {
+			return vo.GenerateShadowsocksServerPassword(refNode.TokenHash(), refNode.EncryptionConfig().Method())
+		}
+		// For Trojan, generate password from token hash for node-to-node forwarding
+		if refNode.Protocol().IsTrojan() {
+			return vo.GenerateTrojanServerPassword(refNode.TokenHash())
+		}
+		return ""
+	}
+
 	// Convert domain node to agent config response
-	config := dto.ToNodeConfigResponse(n)
+	config := dto.ToNodeConfigResponse(n, referencedNodes, serverKeyFunc)
 	if config == nil {
 		uc.logger.Errorw("failed to convert node to config response",
 			"node_id", cmd.NodeID,
@@ -85,6 +115,21 @@ func (uc *GetNodeConfigUseCase) Execute(ctx context.Context, cmd GetNodeConfigCo
 		"node_id", cmd.NodeID,
 		"protocol", config.Protocol,
 	)
+
+	// Debug: print outbound configurations
+	if len(config.Outbounds) > 0 {
+		for i, ob := range config.Outbounds {
+			uc.logger.Infow("outbound configuration",
+				"index", i,
+				"tag", ob.Tag,
+				"type", ob.Type,
+				"server", ob.Server,
+				"port", ob.Port,
+				"password_set", ob.Password != "",
+				"password_len", len(ob.Password),
+			)
+		}
+	}
 
 	return &GetNodeConfigResult{
 		Config: config,

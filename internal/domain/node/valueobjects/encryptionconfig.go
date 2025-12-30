@@ -127,3 +127,42 @@ func GenerateSS2022ServerKey(tokenHash string, method string) string {
 	// Truncate to required key size and encode as base64
 	return base64.StdEncoding.EncodeToString(keyMaterial[:keySize])
 }
+
+// GenerateShadowsocksServerPassword derives a Shadowsocks password from node token hash.
+// For SS2022 methods, returns base64-encoded key with proper length.
+// For traditional SS methods, returns hex-encoded 32-byte password.
+// This is used for node-to-node forwarding (outbound) scenarios.
+func GenerateShadowsocksServerPassword(tokenHash string, method string) string {
+	if tokenHash == "" {
+		return ""
+	}
+
+	// For SS2022 methods, use base64-encoded key
+	if IsSS2022Method(method) {
+		return GenerateSS2022ServerKey(tokenHash, method)
+	}
+
+	// For traditional SS methods, use hex-encoded password
+	mac := hmac.New(sha256.New, []byte("ss-server-password"))
+	mac.Write([]byte(tokenHash))
+	keyMaterial := mac.Sum(nil) // 32 bytes
+
+	return fmt.Sprintf("%x", keyMaterial)
+}
+
+// GenerateTrojanServerPassword derives a Trojan password from node token hash.
+// This is used for node-to-node forwarding (outbound) scenarios.
+// Returns a hex-encoded 32-byte password derived using HMAC-SHA256.
+func GenerateTrojanServerPassword(tokenHash string) string {
+	if tokenHash == "" {
+		return ""
+	}
+
+	// Derive password using HMAC-SHA256 with a fixed salt
+	mac := hmac.New(sha256.New, []byte("trojan-server-password"))
+	mac.Write([]byte(tokenHash))
+	keyMaterial := mac.Sum(nil) // 32 bytes
+
+	// Return as hex string (64 chars, common Trojan password format)
+	return fmt.Sprintf("%x", keyMaterial)
+}

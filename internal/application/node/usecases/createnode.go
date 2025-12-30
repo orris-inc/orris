@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/orris-inc/orris/internal/application/node/dto"
 	"github.com/orris-inc/orris/internal/domain/node"
 	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
 	"github.com/orris-inc/orris/internal/shared/errors"
@@ -30,6 +31,8 @@ type CreateNodeCommand struct {
 	Path              string
 	SNI               string
 	AllowInsecure     bool
+	// Route configuration for traffic splitting
+	Route *dto.RouteConfigDTO
 }
 
 type CreateNodeResult struct {
@@ -147,6 +150,20 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 	// Create metadata
 	metadata := vo.NewNodeMetadata(cmd.Region, cmd.Tags, cmd.Description)
 
+	// Convert route config from DTO if provided
+	var routeConfig *vo.RouteConfig
+	if cmd.Route != nil {
+		routeConfig, err = dto.FromRouteConfigDTO(cmd.Route)
+		if err != nil {
+			return nil, fmt.Errorf("invalid route config: %w", err)
+		}
+
+		// Validate node references in route config (admin nodes can reference any existing node)
+		if err := uc.validateRouteConfigNodeReferences(ctx, routeConfig); err != nil {
+			return nil, err
+		}
+	}
+
 	// Create node aggregate using domain constructor
 	nodeEntity, err := node.NewNode(
 		cmd.Name,
@@ -159,6 +176,7 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 		trojanConfig,
 		metadata,
 		cmd.SortOrder,
+		routeConfig,
 		id.NewNodeID,
 	)
 	if err != nil {
@@ -273,6 +291,33 @@ func (uc *CreateNodeUseCase) validateProtocolMethodCompatibility(protocol vo.Pro
 		}
 	}
 	// Trojan doesn't require encryption method validation - it uses TLS
+
+	return nil
+}
+
+// validateRouteConfigNodeReferences validates that all node SIDs referenced in route config exist.
+// For admin nodes (created via this use case), any existing node can be referenced.
+func (uc *CreateNodeUseCase) validateRouteConfigNodeReferences(ctx context.Context, routeConfig *vo.RouteConfig) error {
+	if routeConfig == nil {
+		return nil
+	}
+
+	referencedSIDs := routeConfig.GetReferencedNodeSIDs()
+	if len(referencedSIDs) == 0 {
+		return nil
+	}
+
+	// Admin nodes can reference any existing node
+	invalidSIDs, err := uc.nodeRepo.ValidateNodeSIDsExist(ctx, referencedSIDs)
+	if err != nil {
+		uc.logger.Errorw("failed to validate route config node references", "error", err)
+		return errors.NewInternalError("failed to validate route config")
+	}
+
+	if len(invalidSIDs) > 0 {
+		return errors.NewValidationError(
+			fmt.Sprintf("invalid node SIDs in route config (not found): %v", invalidSIDs))
+	}
 
 	return nil
 }

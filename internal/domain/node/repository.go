@@ -11,6 +11,7 @@ type NodeRepository interface {
 	Create(ctx context.Context, node *Node) error
 	GetByID(ctx context.Context, id uint) (*Node, error)
 	GetBySID(ctx context.Context, sid string) (*Node, error)
+	GetBySIDs(ctx context.Context, sids []string) ([]*Node, error)
 	GetByIDs(ctx context.Context, ids []uint) ([]*Node, error)
 	GetByToken(ctx context.Context, tokenHash string) (*Node, error)
 	Update(ctx context.Context, node *Node) error
@@ -41,6 +42,12 @@ type NodeRepository interface {
 	// GetPublicIPs retrieves the current public IPs for a node
 	// Returns (ipv4, ipv6, error) - empty string if IP is not set
 	GetPublicIPs(ctx context.Context, nodeID uint) (string, string, error)
+	// ValidateNodeSIDsForUser checks if all given node SIDs exist and belong to the specified user.
+	// Returns slice of invalid SIDs (not found or not owned by user).
+	ValidateNodeSIDsForUser(ctx context.Context, sids []string, userID uint) ([]string, error)
+	// ValidateNodeSIDsExist checks if all given node SIDs exist (for admin nodes).
+	// Returns slice of invalid SIDs (not found).
+	ValidateNodeSIDsExist(ctx context.Context, sids []string) ([]string, error)
 }
 
 type NodeFilter struct {

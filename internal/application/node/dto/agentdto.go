@@ -22,23 +22,101 @@ type AgentResponse struct {
 // NodeConfigResponse represents node configuration data for node agents
 // Compatible with sing-box inbound configuration
 type NodeConfigResponse struct {
-	NodeSID           string `json:"node_id" binding:"required"`                              // Node SID (Stripe-style: node_xxx)
-	Protocol          string `json:"protocol" binding:"required,oneof=shadowsocks trojan"`    // Protocol type
-	ServerHost        string `json:"server_host" binding:"required"`                          // Server hostname or IP address
-	ServerPort        int    `json:"server_port" binding:"required,min=1,max=65535"`          // Server port number
-	EncryptionMethod  string `json:"encryption_method,omitempty"`                             // Encryption method for Shadowsocks
-	ServerKey         string `json:"server_key,omitempty"`                                    // Server password for SS
-	TransportProtocol string `json:"transport_protocol" binding:"required,oneof=tcp ws grpc"` // Transport protocol (tcp, ws, grpc)
-	Host              string `json:"host,omitempty"`                                          // WebSocket host header
-	Path              string `json:"path,omitempty"`                                          // WebSocket path
-	ServiceName       string `json:"service_name,omitempty"`                                  // gRPC service name
-	SNI               string `json:"sni,omitempty"`                                           // TLS Server Name Indication
-	AllowInsecure     bool   `json:"allow_insecure"`                                          // Allow insecure TLS connection
-	EnableVless       bool   `json:"enable_vless"`                                            // Enable VLESS protocol
-	EnableXTLS        bool   `json:"enable_xtls"`                                             // Enable XTLS
-	SpeedLimit        uint64 `json:"speed_limit"`                                             // Speed limit in Mbps, 0 = unlimited
-	DeviceLimit       int    `json:"device_limit"`                                            // Device connection limit, 0 = unlimited
-	RuleListPath      string `json:"rule_list_path,omitempty"`                                // Path to routing rule list file
+	NodeSID           string          `json:"node_id" binding:"required"`                              // Node SID (Stripe-style: node_xxx)
+	Protocol          string          `json:"protocol" binding:"required,oneof=shadowsocks trojan"`    // Protocol type
+	ServerHost        string          `json:"server_host" binding:"required"`                          // Server hostname or IP address
+	ServerPort        int             `json:"server_port" binding:"required,min=1,max=65535"`          // Server port number
+	EncryptionMethod  string          `json:"encryption_method,omitempty"`                             // Encryption method for Shadowsocks
+	ServerKey         string          `json:"server_key,omitempty"`                                    // Server password for SS
+	TransportProtocol string          `json:"transport_protocol" binding:"required,oneof=tcp ws grpc"` // Transport protocol (tcp, ws, grpc)
+	Host              string          `json:"host,omitempty"`                                          // WebSocket host header
+	Path              string          `json:"path,omitempty"`                                          // WebSocket path
+	ServiceName       string          `json:"service_name,omitempty"`                                  // gRPC service name
+	SNI               string          `json:"sni,omitempty"`                                           // TLS Server Name Indication
+	AllowInsecure     bool            `json:"allow_insecure"`                                          // Allow insecure TLS connection
+	EnableVless       bool            `json:"enable_vless"`                                            // Enable VLESS protocol
+	EnableXTLS        bool            `json:"enable_xtls"`                                             // Enable XTLS
+	SpeedLimit        uint64          `json:"speed_limit"`                                             // Speed limit in Mbps, 0 = unlimited
+	DeviceLimit       int             `json:"device_limit"`                                            // Device connection limit, 0 = unlimited
+	RuleListPath      string          `json:"rule_list_path,omitempty"`                                // Path to routing rule list file (deprecated, use Route)
+	Route             *RouteConfigDTO `json:"route,omitempty"`                                         // Routing configuration for traffic splitting
+	Outbounds         []OutboundDTO   `json:"outbounds,omitempty"`                                     // Outbound configs for nodes referenced in route rules
+}
+
+// RouteConfigDTO represents the routing configuration for sing-box
+type RouteConfigDTO struct {
+	Rules []RouteRuleDTO `json:"rules,omitempty"` // Ordered list of routing rules
+	Final string         `json:"final"`           // Default outbound when no rules match (direct/block/proxy/node_xxx)
+}
+
+// RouteRuleDTO represents a single routing rule, compatible with sing-box route rule
+type RouteRuleDTO struct {
+	// Domain matching
+	Domain        []string `json:"domain,omitempty"`         // Exact domain match
+	DomainSuffix  []string `json:"domain_suffix,omitempty"`  // Domain suffix match
+	DomainKeyword []string `json:"domain_keyword,omitempty"` // Domain keyword match
+	DomainRegex   []string `json:"domain_regex,omitempty"`   // Domain regex match
+
+	// IP matching
+	IPCIDR       []string `json:"ip_cidr,omitempty"`        // Destination IP CIDR match
+	SourceIPCIDR []string `json:"source_ip_cidr,omitempty"` // Source IP CIDR match
+	IPIsPrivate  bool     `json:"ip_is_private,omitempty"`  // Match private/LAN IP addresses
+
+	// GeoIP/GeoSite matching
+	GeoIP   []string `json:"geoip,omitempty"`   // GeoIP country codes (cn, us, etc.)
+	GeoSite []string `json:"geosite,omitempty"` // GeoSite categories (cn, google, etc.)
+
+	// Port matching (using int instead of uint16 for JSON compatibility with sing-box)
+	Port       []int `json:"port,omitempty"`        // Destination port match
+	SourcePort []int `json:"source_port,omitempty"` // Source port match
+
+	// Protocol/Network matching
+	Protocol []string `json:"protocol,omitempty"` // Sniffed protocol match (http, tls, etc.)
+	Network  []string `json:"network,omitempty"`  // Network type match (tcp, udp)
+
+	// Rule set reference
+	RuleSet []string `json:"rule_set,omitempty"` // Rule set references
+
+	// Action
+	Outbound string `json:"outbound"` // Action: direct/block/proxy or node SID (node_xxx)
+}
+
+// OutboundDTO represents a sing-box outbound configuration.
+// Used when route rules reference other nodes as outbounds.
+type OutboundDTO struct {
+	Type   string `json:"type"`   // Protocol type: shadowsocks, trojan, direct, block
+	Tag    string `json:"tag"`    // Unique identifier for the outbound (node SID)
+	Server string `json:"server"` // Server hostname or IP address
+	Port   int    `json:"server_port"`
+
+	// Shadowsocks specific fields
+	Method     string `json:"method,omitempty"`      // Encryption method for SS
+	Password   string `json:"password,omitempty"`    // Password for SS/Trojan
+	Plugin     string `json:"plugin,omitempty"`      // SIP003 plugin name
+	PluginOpts string `json:"plugin_opts,omitempty"` // Plugin options string
+
+	// TLS fields (for Trojan)
+	TLS *OutboundTLSDTO `json:"tls,omitempty"` // TLS configuration
+
+	// Transport fields (for Trojan ws/grpc)
+	Transport *OutboundTransportDTO `json:"transport,omitempty"` // Transport configuration
+}
+
+// OutboundTLSDTO represents TLS configuration for outbound.
+type OutboundTLSDTO struct {
+	Enabled    bool     `json:"enabled"`               // Enable TLS
+	ServerName string   `json:"server_name,omitempty"` // SNI
+	Insecure   bool     `json:"insecure,omitempty"`    // Allow insecure TLS
+	DisableSNI bool     `json:"disable_sni,omitempty"` // Disable SNI
+	ALPN       []string `json:"alpn,omitempty"`        // ALPN protocols
+}
+
+// OutboundTransportDTO represents transport configuration for outbound.
+type OutboundTransportDTO struct {
+	Type        string            `json:"type"`                   // Transport type: ws, grpc
+	Path        string            `json:"path,omitempty"`         // WebSocket path
+	Headers     map[string]string `json:"headers,omitempty"`      // Custom headers for WS
+	ServiceName string            `json:"service_name,omitempty"` // gRPC service name
 }
 
 // NodeSubscriptionInfo represents individual subscription information for node access
@@ -117,16 +195,18 @@ type ReportOnlineSubscriptionsRequest struct {
 	Subscriptions []OnlineSubscriptionItem `json:"subscriptions" binding:"required,dive"` // Array of currently online subscriptions
 }
 
-// ToNodeConfigResponse converts a domain node entity to agent node config response
-// Supports both Shadowsocks and Trojan protocols with sing-box compatible configuration
-func ToNodeConfigResponse(n *node.Node) *NodeConfigResponse {
+// ToNodeConfigResponse converts a domain node entity to agent node config response.
+// Supports both Shadowsocks and Trojan protocols with sing-box compatible configuration.
+// referencedNodes: nodes referenced by route rules (outbound: "node_xxx"), can be nil.
+// serverKeyFunc: generates server key for each referenced node, can be nil.
+func ToNodeConfigResponse(n *node.Node, referencedNodes []*node.Node, serverKeyFunc func(*node.Node) string) *NodeConfigResponse {
 	if n == nil {
 		return nil
 	}
 
 	config := &NodeConfigResponse{
 		NodeSID:           n.SID(),
-		ServerHost:        n.ServerAddress().Value(),
+		ServerHost:        n.EffectiveServerAddress(),
 		ServerPort:        int(n.AgentPort()),
 		TransportProtocol: "tcp", // Default to TCP
 		EnableVless:       false,
@@ -184,7 +264,162 @@ func ToNodeConfigResponse(n *node.Node) *NodeConfigResponse {
 		}
 	}
 
+	// Convert route configuration if present
+	if n.RouteConfig() != nil {
+		config.Route = ToRouteConfigDTO(n.RouteConfig())
+	}
+
+	// Convert referenced nodes to outbounds
+	if len(referencedNodes) > 0 {
+		config.Outbounds = ToOutboundDTOs(referencedNodes, serverKeyFunc)
+	}
+
 	return config
+}
+
+// ToRouteConfigDTO converts domain RouteConfig to DTO
+func ToRouteConfigDTO(rc *vo.RouteConfig) *RouteConfigDTO {
+	if rc == nil {
+		return nil
+	}
+
+	rules := make([]RouteRuleDTO, 0, len(rc.Rules()))
+	for _, rule := range rc.Rules() {
+		rules = append(rules, ToRouteRuleDTO(&rule))
+	}
+
+	return &RouteConfigDTO{
+		Rules: rules,
+		Final: rc.FinalAction().String(),
+	}
+}
+
+// ToRouteRuleDTO converts domain RouteRule to DTO
+func ToRouteRuleDTO(rule *vo.RouteRule) RouteRuleDTO {
+	dto := RouteRuleDTO{
+		Domain:        rule.Domain(),
+		DomainSuffix:  rule.DomainSuffix(),
+		DomainKeyword: rule.DomainKeyword(),
+		DomainRegex:   rule.DomainRegex(),
+		IPCIDR:        rule.IPCIDR(),
+		SourceIPCIDR:  rule.SourceIPCIDR(),
+		IPIsPrivate:   rule.IPIsPrivate(),
+		GeoIP:         rule.GeoIP(),
+		GeoSite:       rule.GeoSite(),
+		Protocol:      rule.Protocol(),
+		Network:       rule.Network(),
+		RuleSet:       rule.RuleSet(),
+		Outbound:      rule.Outbound().String(),
+	}
+
+	// Convert uint16 ports to int
+	if len(rule.Port()) > 0 {
+		dto.Port = make([]int, len(rule.Port()))
+		for i, p := range rule.Port() {
+			dto.Port[i] = int(p)
+		}
+	}
+	if len(rule.SourcePort()) > 0 {
+		dto.SourcePort = make([]int, len(rule.SourcePort()))
+		for i, p := range rule.SourcePort() {
+			dto.SourcePort[i] = int(p)
+		}
+	}
+
+	return dto
+}
+
+// ToOutboundDTO converts a node entity to an OutboundDTO for sing-box outbound configuration.
+// The serverKey is used for Shadowsocks server password (pre-generated).
+func ToOutboundDTO(n *node.Node, serverKey string) *OutboundDTO {
+	if n == nil {
+		return nil
+	}
+
+	dto := &OutboundDTO{
+		Tag:    n.SID(),
+		Server: n.EffectiveServerAddress(),
+		Port:   int(n.EffectiveSubscriptionPort()),
+	}
+
+	if n.Protocol().IsShadowsocks() {
+		dto.Type = "shadowsocks"
+		dto.Method = n.EncryptionConfig().Method()
+		dto.Password = serverKey
+
+		// Handle plugin configuration
+		if n.PluginConfig() != nil {
+			dto.Plugin = n.PluginConfig().Plugin()
+			// Convert plugin opts map to string format
+			opts := n.PluginConfig().Opts()
+			if len(opts) > 0 {
+				var optsStr string
+				for k, v := range opts {
+					if optsStr != "" {
+						optsStr += ";"
+					}
+					optsStr += k + "=" + v
+				}
+				dto.PluginOpts = optsStr
+			}
+		}
+	} else if n.Protocol().IsTrojan() {
+		dto.Type = "trojan"
+		dto.Password = serverKey
+
+		// TLS configuration (Trojan always uses TLS)
+		dto.TLS = &OutboundTLSDTO{
+			Enabled: true,
+		}
+
+		if n.TrojanConfig() != nil {
+			tc := n.TrojanConfig()
+			dto.TLS.ServerName = tc.SNI()
+			dto.TLS.Insecure = tc.AllowInsecure()
+
+			// Transport configuration for ws/grpc
+			switch tc.TransportProtocol() {
+			case "ws":
+				dto.Transport = &OutboundTransportDTO{
+					Type: "ws",
+					Path: tc.Path(),
+				}
+				if tc.Host() != "" {
+					dto.Transport.Headers = map[string]string{"Host": tc.Host()}
+				}
+			case "grpc":
+				dto.Transport = &OutboundTransportDTO{
+					Type:        "grpc",
+					ServiceName: tc.Host(),
+				}
+			}
+		}
+	}
+
+	return dto
+}
+
+// ToOutboundDTOs converts a list of nodes to OutboundDTOs.
+// The serverKeyFunc generates the server key for each node based on its encryption method.
+func ToOutboundDTOs(nodes []*node.Node, serverKeyFunc func(n *node.Node) string) []OutboundDTO {
+	if len(nodes) == 0 {
+		return nil
+	}
+
+	dtos := make([]OutboundDTO, 0, len(nodes))
+	for _, n := range nodes {
+		if n == nil {
+			continue
+		}
+		serverKey := ""
+		if serverKeyFunc != nil {
+			serverKey = serverKeyFunc(n)
+		}
+		if dto := ToOutboundDTO(n, serverKey); dto != nil {
+			dtos = append(dtos, *dto)
+		}
+	}
+	return dtos
 }
 
 // ToNodeSubscriptionsResponse converts subscription list to agent subscriptions response
@@ -252,6 +487,124 @@ func generateSubscriptionName(sub *subscription.Subscription) string {
 		return ""
 	}
 	return fmt.Sprintf("user%d-sub%d", sub.UserID(), sub.ID())
+}
+
+// FromRouteConfigDTO converts RouteConfigDTO to domain RouteConfig
+func FromRouteConfigDTO(dto *RouteConfigDTO) (*vo.RouteConfig, error) {
+	if dto == nil {
+		return nil, nil
+	}
+
+	// Default final action to "direct" if not specified
+	finalStr := dto.Final
+	if finalStr == "" {
+		finalStr = "direct"
+	}
+
+	// Parse and validate final action
+	finalAction, err := vo.ParseOutboundType(finalStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid final action: %w", err)
+	}
+
+	// Create route config
+	config, err := vo.NewRouteConfig(finalAction)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create route config: %w", err)
+	}
+
+	// Convert and add rules
+	for i, ruleDTO := range dto.Rules {
+		rule, err := FromRouteRuleDTO(&ruleDTO)
+		if err != nil {
+			return nil, fmt.Errorf("invalid rule at index %d: %w", i, err)
+		}
+		if err := config.AddRule(*rule); err != nil {
+			return nil, fmt.Errorf("failed to add rule at index %d: %w", i, err)
+		}
+	}
+
+	return config, nil
+}
+
+// FromRouteRuleDTO converts RouteRuleDTO to domain RouteRule
+func FromRouteRuleDTO(dto *RouteRuleDTO) (*vo.RouteRule, error) {
+	if dto == nil {
+		return nil, nil
+	}
+
+	// Parse and validate outbound type
+	outbound, err := vo.ParseOutboundType(dto.Outbound)
+	if err != nil {
+		return nil, fmt.Errorf("invalid outbound type: %w", err)
+	}
+
+	// Create rule with outbound action
+	rule, err := vo.NewRouteRule(outbound)
+	if err != nil {
+		return nil, err
+	}
+
+	// Apply all conditions using builder pattern
+	if len(dto.Domain) > 0 {
+		rule.WithDomain(dto.Domain...)
+	}
+	if len(dto.DomainSuffix) > 0 {
+		rule.WithDomainSuffix(dto.DomainSuffix...)
+	}
+	if len(dto.DomainKeyword) > 0 {
+		rule.WithDomainKeyword(dto.DomainKeyword...)
+	}
+	if len(dto.DomainRegex) > 0 {
+		rule.WithDomainRegex(dto.DomainRegex...)
+	}
+	if len(dto.IPCIDR) > 0 {
+		rule.WithIPCIDR(dto.IPCIDR...)
+	}
+	if len(dto.SourceIPCIDR) > 0 {
+		rule.WithSourceIPCIDR(dto.SourceIPCIDR...)
+	}
+	if dto.IPIsPrivate {
+		rule.WithIPIsPrivate(true)
+	}
+	if len(dto.GeoIP) > 0 {
+		rule.WithGeoIP(dto.GeoIP...)
+	}
+	if len(dto.GeoSite) > 0 {
+		rule.WithGeoSite(dto.GeoSite...)
+	}
+	// Convert int ports to uint16
+	if len(dto.Port) > 0 {
+		ports := make([]uint16, len(dto.Port))
+		for i, p := range dto.Port {
+			if p < 1 || p > 65535 {
+				return nil, fmt.Errorf("invalid port number: %d (must be 1-65535)", p)
+			}
+			ports[i] = uint16(p)
+		}
+		rule.WithPort(ports...)
+	}
+	if len(dto.SourcePort) > 0 {
+		ports := make([]uint16, len(dto.SourcePort))
+		for i, p := range dto.SourcePort {
+			if p < 1 || p > 65535 {
+				return nil, fmt.Errorf("invalid source port number: %d (must be 1-65535)", p)
+			}
+			ports[i] = uint16(p)
+		}
+		rule.WithSourcePort(ports...)
+	}
+	if len(dto.Protocol) > 0 {
+		rule.WithProtocol(dto.Protocol...)
+	}
+	if len(dto.Network) > 0 {
+		rule.WithNetwork(dto.Network...)
+	}
+	if len(dto.RuleSet) > 0 {
+		rule.WithRuleSet(dto.RuleSet...)
+	}
+
+	return rule, nil
 }
 
 // generatePasswordForEncryptionMethod generates password based on encryption method type

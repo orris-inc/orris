@@ -2,8 +2,10 @@ package usecases
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	"github.com/orris-inc/orris/internal/application/node/dto"
 	"github.com/orris-inc/orris/internal/domain/node"
 	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/resource"
@@ -32,6 +34,9 @@ type UpdateNodeCommand struct {
 	TrojanPath              *string
 	TrojanSNI               *string
 	TrojanAllowInsecure     *bool
+	// Route configuration for traffic splitting
+	Route      *dto.RouteConfigDTO // Route config to set (nil = no change)
+	ClearRoute bool                // If true, clear the route config
 }
 
 type UpdateNodeResult struct {
@@ -50,6 +55,7 @@ type UpdateNodeUseCase struct {
 	nodeRepo              node.NodeRepository
 	resourceGroupRepo     resource.Repository
 	addressChangeNotifier NodeAddressChangeNotifier
+	configChangeNotifier  NodeConfigChangeNotifier
 }
 
 func NewUpdateNodeUseCase(
@@ -68,6 +74,12 @@ func NewUpdateNodeUseCase(
 // This is used to break circular dependencies during initialization.
 func (uc *UpdateNodeUseCase) SetAddressChangeNotifier(notifier NodeAddressChangeNotifier) {
 	uc.addressChangeNotifier = notifier
+}
+
+// SetConfigChangeNotifier sets the notifier for node configuration changes.
+// This is used to notify node agents when their configuration (including route) changes.
+func (uc *UpdateNodeUseCase) SetConfigChangeNotifier(notifier NodeConfigChangeNotifier) {
+	uc.configChangeNotifier = notifier
 }
 
 func (uc *UpdateNodeUseCase) Execute(ctx context.Context, cmd UpdateNodeCommand) (*UpdateNodeResult, error) {
@@ -142,6 +154,14 @@ func (uc *UpdateNodeUseCase) Execute(ctx context.Context, cmd UpdateNodeCommand)
 		}
 	}
 
+	// Validate route config node references before applying updates
+	if cmd.Route != nil {
+		if err := uc.validateRouteConfigNodeReferences(ctx, cmd.Route, existingNode); err != nil {
+			uc.logger.Errorw("failed to validate route config node references", "error", err, "sid", cmd.SID)
+			return nil, err
+		}
+	}
+
 	// Apply updates based on command fields
 	if err := uc.applyUpdates(existingNode, cmd); err != nil {
 		uc.logger.Errorw("failed to apply updates", "error", err, "sid", cmd.SID)
@@ -173,6 +193,20 @@ func (uc *UpdateNodeUseCase) Execute(ctx context.Context, cmd UpdateNodeCommand)
 			notifyCtx := context.Background()
 			if err := uc.addressChangeNotifier.NotifyNodeAddressChange(notifyCtx, nodeID); err != nil {
 				uc.logger.Warnw("failed to notify forward agents of node address change",
+					"error", err,
+					"node_id", nodeID,
+				)
+			}
+		}()
+	}
+
+	// Notify node agent of configuration change (including route config)
+	if uc.configChangeNotifier != nil {
+		nodeID := existingNode.ID()
+		go func() {
+			notifyCtx := context.Background()
+			if err := uc.configChangeNotifier.NotifyConfigChange(notifyCtx, nodeID); err != nil {
+				uc.logger.Warnw("failed to notify node agent of config change",
 					"error", err,
 					"node_id", nodeID,
 				)
@@ -323,6 +357,19 @@ func (uc *UpdateNodeUseCase) applyUpdates(n *node.Node, cmd UpdateNodeCommand) e
 		return err
 	}
 
+	// Update route config
+	if cmd.ClearRoute {
+		n.ClearRouteConfig()
+	} else if cmd.Route != nil {
+		routeConfig, err := dto.FromRouteConfigDTO(cmd.Route)
+		if err != nil {
+			return errors.NewValidationError("invalid route config: " + err.Error())
+		}
+		if err := n.UpdateRouteConfig(routeConfig); err != nil {
+			return errors.NewValidationError("failed to update route config: " + err.Error())
+		}
+	}
+
 	return nil
 }
 
@@ -337,7 +384,8 @@ func (uc *UpdateNodeUseCase) validateCommand(cmd UpdateNodeCommand) error {
 		cmd.Description == nil && cmd.SortOrder == nil && cmd.Status == nil &&
 		cmd.GroupSID == nil &&
 		cmd.TrojanTransportProtocol == nil && cmd.TrojanHost == nil &&
-		cmd.TrojanPath == nil && cmd.TrojanSNI == nil && cmd.TrojanAllowInsecure == nil {
+		cmd.TrojanPath == nil && cmd.TrojanSNI == nil && cmd.TrojanAllowInsecure == nil &&
+		cmd.Route == nil && !cmd.ClearRoute {
 		return errors.NewValidationError("at least one field must be provided for update")
 	}
 
@@ -351,6 +399,11 @@ func (uc *UpdateNodeUseCase) validateCommand(cmd UpdateNodeCommand) error {
 
 	if cmd.Method != nil && *cmd.Method == "" {
 		return errors.NewValidationError("encryption method cannot be empty")
+	}
+
+	// ClearRoute and Route are mutually exclusive
+	if cmd.ClearRoute && cmd.Route != nil {
+		return errors.NewValidationError("cannot set both ClearRoute and Route; use ClearRoute to remove config or Route to set new config")
 	}
 
 	return nil
@@ -464,6 +517,58 @@ func (uc *UpdateNodeUseCase) validateProtocolMethodCompatibility(protocol vo.Pro
 		if ssMethods[method] {
 			return errors.NewValidationError("encryption method '" + method + "' is not compatible with Trojan protocol")
 		}
+	}
+
+	return nil
+}
+
+// validateRouteConfigNodeReferences validates that all node SIDs referenced in route config exist
+// and belong to the same user (for user nodes) or exist globally (for admin nodes).
+func (uc *UpdateNodeUseCase) validateRouteConfigNodeReferences(ctx context.Context, routeDTO *dto.RouteConfigDTO, currentNode *node.Node) error {
+	if routeDTO == nil {
+		return nil
+	}
+
+	// Convert DTO to domain object to extract referenced node SIDs
+	routeConfig, err := dto.FromRouteConfigDTO(routeDTO)
+	if err != nil {
+		return errors.NewValidationError("invalid route config: " + err.Error())
+	}
+
+	referencedSIDs := routeConfig.GetReferencedNodeSIDs()
+	if len(referencedSIDs) == 0 {
+		return nil
+	}
+
+	// Check self-reference (cannot reference itself)
+	for _, sid := range referencedSIDs {
+		if sid == currentNode.SID() {
+			return errors.NewValidationError("route config cannot reference the node itself as outbound")
+		}
+	}
+
+	var invalidSIDs []string
+
+	if currentNode.IsUserOwned() {
+		// User-owned node: validate that referenced nodes belong to the same user
+		invalidSIDs, err = uc.nodeRepo.ValidateNodeSIDsForUser(ctx, referencedSIDs, *currentNode.UserID())
+	} else {
+		// Admin node: validate that referenced nodes exist (admin can reference any node)
+		invalidSIDs, err = uc.nodeRepo.ValidateNodeSIDsExist(ctx, referencedSIDs)
+	}
+
+	if err != nil {
+		uc.logger.Errorw("failed to validate route config node references", "error", err)
+		return errors.NewInternalError("failed to validate route config")
+	}
+
+	if len(invalidSIDs) > 0 {
+		if currentNode.IsUserOwned() {
+			return errors.NewValidationError(
+				fmt.Sprintf("invalid node SIDs in route config (not found or not owned by user): %v", invalidSIDs))
+		}
+		return errors.NewValidationError(
+			fmt.Sprintf("invalid node SIDs in route config (not found): %v", invalidSIDs))
 	}
 
 	return nil

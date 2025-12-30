@@ -6,6 +6,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/node/dto"
 	"github.com/orris-inc/orris/internal/domain/node"
+	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/infrastructure/config"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -78,6 +79,27 @@ func (uc *GetNodeSubscriptionsUseCase) Execute(ctx context.Context, cmd GetNodeS
 
 	// Convert subscriptions to agent subscriptions response
 	subscriptionInfos := dto.ToNodeSubscriptionsResponse(subscriptions, hmacSecret, encryptionMethod)
+
+	// Add a special node-to-node forwarding user for both Trojan and Shadowsocks
+	// This allows other nodes to forward traffic to this node using a derived password
+	var nodeForwardingPassword string
+	if nodeEntity.Protocol().IsTrojan() {
+		nodeForwardingPassword = vo.GenerateTrojanServerPassword(nodeEntity.TokenHash())
+	} else if nodeEntity.Protocol().IsShadowsocks() {
+		nodeForwardingPassword = vo.GenerateShadowsocksServerPassword(nodeEntity.TokenHash(), encryptionMethod)
+	}
+
+	if nodeForwardingPassword != "" {
+		forwardingUser := dto.NodeSubscriptionInfo{
+			SubscriptionSID: "node-forwarding",
+			Password:        nodeForwardingPassword,
+			Name:            fmt.Sprintf("node-forward-%s", nodeEntity.SID()),
+			SpeedLimit:      0, // unlimited
+			DeviceLimit:     0, // unlimited
+			ExpireTime:      0, // never expires
+		}
+		subscriptionInfos.Subscriptions = append(subscriptionInfos.Subscriptions, forwardingUser)
+	}
 
 	uc.logger.Debugw("node subscriptions retrieved",
 		"node_id", cmd.NodeID,

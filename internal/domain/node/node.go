@@ -32,9 +32,10 @@ type Node struct {
 	tokenHash         string
 	sortOrder         int
 	maintenanceReason *string
-	lastSeenAt        *time.Time // last time the node agent reported status
-	publicIPv4        *string    // public IPv4 address reported by agent
-	publicIPv6        *string    // public IPv6 address reported by agent
+	routeConfig       *vo.RouteConfig // routing configuration for traffic splitting
+	lastSeenAt        *time.Time      // last time the node agent reported status
+	publicIPv4        *string         // public IPv4 address reported by agent
+	publicIPv6        *string         // public IPv6 address reported by agent
 	version           int
 	createdAt         time.Time
 	updatedAt         time.Time
@@ -53,6 +54,7 @@ func NewNode(
 	trojanConfig *vo.TrojanConfig,
 	metadata vo.NodeMetadata,
 	sortOrder int,
+	routeConfig *vo.RouteConfig,
 	sidGenerator func() (string, error),
 ) (*Node, error) {
 	if name == "" {
@@ -71,6 +73,13 @@ func NewNode(
 	}
 	if protocol.IsTrojan() && trojanConfig == nil {
 		return nil, fmt.Errorf("trojan config is required for Trojan protocol")
+	}
+
+	// Validate route config if provided
+	if routeConfig != nil {
+		if err := routeConfig.Validate(); err != nil {
+			return nil, fmt.Errorf("invalid route config: %w", err)
+		}
 	}
 
 	tokenGen := services.NewTokenGenerator()
@@ -101,6 +110,7 @@ func NewNode(
 		apiToken:         plainToken,
 		tokenHash:        tokenHash,
 		sortOrder:        sortOrder,
+		routeConfig:      routeConfig,
 		version:          1,
 		createdAt:        now,
 		updatedAt:        now,
@@ -130,6 +140,7 @@ func ReconstructNode(
 	apiToken string,
 	sortOrder int,
 	maintenanceReason *string,
+	routeConfig *vo.RouteConfig,
 	lastSeenAt *time.Time,
 	publicIPv4 *string,
 	publicIPv6 *string,
@@ -174,6 +185,7 @@ func ReconstructNode(
 		apiToken:          apiToken,
 		sortOrder:         sortOrder,
 		maintenanceReason: maintenanceReason,
+		routeConfig:       routeConfig,
 		lastSeenAt:        lastSeenAt,
 		publicIPv4:        publicIPv4,
 		publicIPv6:        publicIPv6,
@@ -326,6 +338,11 @@ func (n *Node) SortOrder() int {
 // MaintenanceReason returns the maintenance reason
 func (n *Node) MaintenanceReason() *string {
 	return n.maintenanceReason
+}
+
+// RouteConfig returns the routing configuration
+func (n *Node) RouteConfig() *vo.RouteConfig {
+	return n.routeConfig
 }
 
 // Version returns the aggregate version for optimistic locking
@@ -542,6 +559,33 @@ func (n *Node) UpdateSortOrder(order int) error {
 	return nil
 }
 
+// UpdateRouteConfig updates the routing configuration
+func (n *Node) UpdateRouteConfig(config *vo.RouteConfig) error {
+	if config != nil {
+		if err := config.Validate(); err != nil {
+			return fmt.Errorf("invalid route config: %w", err)
+		}
+	}
+
+	n.routeConfig = config
+	n.updatedAt = biztime.NowUTC()
+	n.version++
+
+	return nil
+}
+
+// ClearRouteConfig removes the routing configuration
+func (n *Node) ClearRouteConfig() {
+	n.routeConfig = nil
+	n.updatedAt = biztime.NowUTC()
+	n.version++
+}
+
+// HasRouteConfig checks if the node has a routing configuration
+func (n *Node) HasRouteConfig() bool {
+	return n.routeConfig != nil
+}
+
 func (n *Node) GenerateAPIToken() (string, error) {
 	if n.tokenGenerator == nil {
 		n.tokenGenerator = services.NewTokenGenerator()
@@ -604,6 +648,19 @@ func (n *Node) PublicIPv4() *string {
 // PublicIPv6 returns the public IPv6 address reported by agent
 func (n *Node) PublicIPv6() *string {
 	return n.publicIPv6
+}
+
+// EffectiveServerAddress returns the server address to use for outbound connections.
+// If serverAddress is configured, it returns that; otherwise, it falls back to publicIPv4.
+// Returns empty string if neither is available.
+func (n *Node) EffectiveServerAddress() string {
+	if n.serverAddress.Value() != "" {
+		return n.serverAddress.Value()
+	}
+	if n.publicIPv4 != nil && *n.publicIPv4 != "" {
+		return *n.publicIPv4
+	}
+	return ""
 }
 
 // GetAPIToken returns the plain API token (only available after creation)

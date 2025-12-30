@@ -29,3 +29,12 @@ type GenerateNodeTokenExecutor interface {
 type GetNodeTrafficStatsExecutor interface {
 	Execute(ctx context.Context, query GetNodeTrafficStatsQuery) ([]*NodeTrafficStatsResult, error)
 }
+
+// NodeConfigChangeNotifier defines the interface for notifying node configuration changes.
+// When a node's configuration changes (including route config), the node agent needs to be notified
+// to reload its configuration.
+type NodeConfigChangeNotifier interface {
+	// NotifyConfigChange notifies the node agent about a configuration change.
+	// This is called when a node's configuration (including route config) is updated.
+	NotifyConfigChange(ctx context.Context, nodeID uint) error
+}

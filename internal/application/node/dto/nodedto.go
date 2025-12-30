@@ -38,6 +38,8 @@ type NodeDTO struct {
 	SystemStatus *NodeSystemStatusDTO `json:"system_status,omitempty" description:"Real-time system metrics from monitoring"`
 	// Owner information (for user-created nodes)
 	Owner *NodeOwnerDTO `json:"owner,omitempty" description:"Owner information for user-created nodes"`
+	// Route configuration for traffic splitting (sing-box compatible)
+	Route *RouteConfigDTO `json:"route,omitempty" description:"Routing configuration for traffic splitting"`
 }
 
 // NodeOwnerDTO represents the owner information for a user-created node
@@ -99,6 +101,7 @@ type CreateNodeDTO struct {
 	Tags             []string               `json:"tags,omitempty" example:"premium,fast" description:"Custom tags for categorization"`
 	CustomFields     map[string]interface{} `json:"custom_fields,omitempty" description:"Additional custom metadata fields"`
 	SortOrder        int                    `json:"sort_order" example:"100" description:"Display order for sorting nodes"`
+	Route            *RouteConfigDTO        `json:"route,omitempty" description:"Routing configuration for traffic splitting (sing-box compatible)"`
 }
 
 type UpdateNodeDTO struct {
@@ -114,6 +117,7 @@ type UpdateNodeDTO struct {
 	Tags             []string               `json:"tags,omitempty" example:"premium,fast" description:"Custom tags for categorization"`
 	CustomFields     map[string]interface{} `json:"custom_fields,omitempty" description:"Additional custom metadata fields"`
 	SortOrder        *int                   `json:"sort_order,omitempty" example:"100" description:"Display order for sorting nodes"`
+	Route            *RouteConfigDTO        `json:"route,omitempty" description:"Routing configuration for traffic splitting (sing-box compatible, null to clear)"`
 }
 
 type NodeListDTO struct {
@@ -181,6 +185,11 @@ func ToNodeDTO(n *node.Node) *NodeDTO {
 	}
 	if len(metadata.Tags()) > 0 {
 		dto.Tags = metadata.Tags()
+	}
+
+	// Map route configuration if present
+	if n.RouteConfig() != nil {
+		dto.Route = ToRouteConfigDTO(n.RouteConfig())
 	}
 
 	return dto

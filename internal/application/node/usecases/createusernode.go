@@ -171,7 +171,8 @@ func (uc *CreateUserNodeUseCase) Execute(ctx context.Context, cmd CreateUserNode
 		pluginConfig,
 		trojanConfig,
 		metadata,
-		0, // sortOrder not used for user nodes
+		0,   // sortOrder not used for user nodes
+		nil, // routeConfig - can be set later via UpdateRouteConfig
 		id.NewNodeID,
 	)
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/orris-inc/orris/internal/application/node/dto"
 	"github.com/orris-inc/orris/internal/application/node/usecases"
 	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
@@ -271,6 +272,8 @@ type CreateNodeRequest struct {
 	Path              string `json:"path,omitempty" example:"/trojan" comment:"WebSocket path"`
 	SNI               string `json:"sni,omitempty" example:"example.com" comment:"TLS Server Name Indication"`
 	AllowInsecure     bool   `json:"allow_insecure,omitempty" example:"true" comment:"Allow insecure TLS connection (for self-signed certs)"`
+	// Route configuration for traffic splitting (sing-box compatible)
+	Route *dto.RouteConfigDTO `json:"route,omitempty" comment:"Route configuration for traffic splitting"`
 }
 
 func (r *CreateNodeRequest) ToCommand() usecases.CreateNodeCommand {
@@ -292,6 +295,7 @@ func (r *CreateNodeRequest) ToCommand() usecases.CreateNodeCommand {
 		Path:              r.Path,
 		SNI:               r.SNI,
 		AllowInsecure:     r.AllowInsecure,
+		Route:             r.Route,
 	}
 }
 
@@ -315,6 +319,9 @@ type UpdateNodeRequest struct {
 	Path              *string `json:"path,omitempty" example:"/trojan" comment:"WebSocket path"`
 	SNI               *string `json:"sni,omitempty" example:"example.com" comment:"TLS Server Name Indication"`
 	AllowInsecure     *bool   `json:"allow_insecure,omitempty" example:"false" comment:"Allow insecure TLS connection"`
+	// Route configuration for traffic splitting (sing-box compatible)
+	Route      *dto.RouteConfigDTO `json:"route,omitempty" comment:"Route configuration for traffic splitting"`
+	ClearRoute bool                `json:"clear_route,omitempty" comment:"Set to true to clear route configuration"`
 }
 
 func (r *UpdateNodeRequest) ToCommand(sid string) usecases.UpdateNodeCommand {
@@ -338,6 +345,8 @@ func (r *UpdateNodeRequest) ToCommand(sid string) usecases.UpdateNodeCommand {
 		TrojanPath:              r.Path,
 		TrojanSNI:               r.SNI,
 		TrojanAllowInsecure:     r.AllowInsecure,
+		Route:                   r.Route,
+		ClearRoute:              r.ClearRoute,
 	}
 }
 
