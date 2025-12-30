@@ -353,9 +353,10 @@ func (r *NodeRepositoryImpl) Update(ctx context.Context, nodeEntity *node.Node) 
 		return fmt.Errorf("failed to map node entity: %w", err)
 	}
 
-	// Calculate the expected previous version for optimistic locking
-	// Domain layer increments version on each update, so we check against version - 1
-	expectedVersion := model.Version - 1
+	// Use the original version from when the entity was loaded for optimistic locking.
+	// This handles the case where multiple properties are updated in one operation,
+	// each incrementing the domain version, but we need to check against the DB version.
+	expectedVersion := nodeEntity.OriginalVersion()
 	if expectedVersion < 1 {
 		expectedVersion = 1
 	}

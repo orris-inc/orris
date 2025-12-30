@@ -37,6 +37,7 @@ type Node struct {
 	publicIPv4        *string         // public IPv4 address reported by agent
 	publicIPv6        *string         // public IPv6 address reported by agent
 	version           int
+	originalVersion   int // version when loaded from database, for optimistic locking
 	createdAt         time.Time
 	updatedAt         time.Time
 	tokenGenerator    services.TokenGenerator
@@ -190,6 +191,7 @@ func ReconstructNode(
 		publicIPv4:        publicIPv4,
 		publicIPv6:        publicIPv6,
 		version:           version,
+		originalVersion:   version, // preserve original version for optimistic locking
 		createdAt:         createdAt,
 		updatedAt:         updatedAt,
 		tokenGenerator:    services.NewTokenGenerator(),
@@ -348,6 +350,12 @@ func (n *Node) RouteConfig() *vo.RouteConfig {
 // Version returns the aggregate version for optimistic locking
 func (n *Node) Version() int {
 	return n.version
+}
+
+// OriginalVersion returns the version when the entity was loaded from database.
+// This is used for optimistic locking to detect concurrent modifications.
+func (n *Node) OriginalVersion() int {
+	return n.originalVersion
 }
 
 // CreatedAt returns when the node was created
