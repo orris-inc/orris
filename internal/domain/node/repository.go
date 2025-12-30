@@ -22,9 +22,9 @@ type NodeRepository interface {
 	ExistsByAddress(ctx context.Context, address string, port int) (bool, error)
 	ExistsByAddressExcluding(ctx context.Context, address string, port int, excludeID uint) (bool, error)
 	IncrementTraffic(ctx context.Context, nodeID uint, amount uint64) error
-	// UpdateLastSeenAt updates the last_seen_at timestamp and public IPs for a node
-	// Public IPs are optional - pass empty strings to skip updating them
-	UpdateLastSeenAt(ctx context.Context, nodeID uint, publicIPv4, publicIPv6 string) error
+	// UpdateLastSeenAt updates the last_seen_at timestamp, public IPs, and agent info for a node
+	// Public IPs and agent info are optional - pass empty strings to skip updating them
+	UpdateLastSeenAt(ctx context.Context, nodeID uint, publicIPv4, publicIPv6, agentVersion, platform, arch string) error
 	// GetLastSeenAt retrieves the last_seen_at timestamp for a node
 	GetLastSeenAt(ctx context.Context, nodeID uint) (*time.Time, error)
 	// ListByUserID returns nodes owned by a specific user

@@ -49,6 +49,9 @@ func (m *ForwardAgentMapperImpl) ToEntity(model *models.ForwardAgentModel) (*for
 		model.TunnelAddress,
 		model.Remark,
 		model.GroupID,
+		model.AgentVersion,
+		model.Platform,
+		model.Arch,
 		model.CreatedAt,
 		model.UpdatedAt,
 	)
@@ -76,6 +79,9 @@ func (m *ForwardAgentMapperImpl) ToModel(entity *forward.ForwardAgent) (*models.
 		Status:        string(entity.Status()),
 		Remark:        entity.Remark(),
 		GroupID:       entity.GroupID(),
+		AgentVersion:  entity.AgentVersion(),
+		Platform:      entity.Platform(),
+		Arch:          entity.Arch(),
 		CreatedAt:     entity.CreatedAt(),
 		UpdatedAt:     entity.UpdatedAt(),
 	}, nil

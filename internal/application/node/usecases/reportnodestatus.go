@@ -53,6 +53,8 @@ type NodeStatusUpdate struct {
 
 	// Agent info
 	AgentVersion string
+	Platform     string
+	Arch         string
 }
 
 // NodeSystemStatusUpdater defines the interface for updating node system status in cache
@@ -60,9 +62,9 @@ type NodeSystemStatusUpdater interface {
 	UpdateSystemStatus(ctx context.Context, nodeID uint, status *NodeStatusUpdate) error
 }
 
-// NodeLastSeenUpdater defines the interface for updating node last_seen_at and public IPs
+// NodeLastSeenUpdater defines the interface for updating node last_seen_at, public IPs, and agent info
 type NodeLastSeenUpdater interface {
-	UpdateLastSeenAt(ctx context.Context, nodeID uint, publicIPv4, publicIPv6 string) error
+	UpdateLastSeenAt(ctx context.Context, nodeID uint, publicIPv4, publicIPv6, agentVersion, platform, arch string) error
 }
 
 // NodePublicIPQuerier defines the interface for querying node public IPs
@@ -145,6 +147,8 @@ func (uc *ReportNodeStatusUseCase) Execute(ctx context.Context, cmd ReportNodeSt
 
 		// Agent info
 		AgentVersion: cmd.Status.AgentVersion,
+		Platform:     cmd.Status.Platform,
+		Arch:         cmd.Status.Arch,
 	}
 
 	// Update node system status in Redis (always)
@@ -159,8 +163,8 @@ func (uc *ReportNodeStatusUseCase) Execute(ctx context.Context, cmd ReportNodeSt
 	// Check for IP changes and notify forward agents if changed
 	uc.checkAndNotifyIPChange(ctx, cmd.NodeID, cmd.Status.PublicIPv4, cmd.Status.PublicIPv6)
 
-	// Update last_seen_at and public IPs in database (throttled to reduce DB writes)
-	uc.updateLastSeenAtThrottled(ctx, cmd.NodeID, cmd.Status.PublicIPv4, cmd.Status.PublicIPv6)
+	// Update last_seen_at, public IPs, and agent info in database (throttled to reduce DB writes)
+	uc.updateLastSeenAtThrottled(ctx, cmd.NodeID, cmd.Status.PublicIPv4, cmd.Status.PublicIPv6, cmd.Status.AgentVersion, cmd.Status.Platform, cmd.Status.Arch)
 
 	uc.logger.Debugw("node status reported",
 		"node_id", cmd.NodeID,
@@ -173,17 +177,17 @@ func (uc *ReportNodeStatusUseCase) Execute(ctx context.Context, cmd ReportNodeSt
 	}, nil
 }
 
-// updateLastSeenAtThrottled updates last_seen_at and public IPs
+// updateLastSeenAtThrottled updates last_seen_at, public IPs, and agent info
 // Throttling is now handled at the database layer using conditional update
 // to avoid race conditions when multiple requests arrive simultaneously
-func (uc *ReportNodeStatusUseCase) updateLastSeenAtThrottled(ctx context.Context, nodeID uint, publicIPv4, publicIPv6 string) {
+func (uc *ReportNodeStatusUseCase) updateLastSeenAtThrottled(ctx context.Context, nodeID uint, publicIPv4, publicIPv6, agentVersion, platform, arch string) {
 	if uc.lastSeenUpdater == nil {
 		return
 	}
 
 	// Database layer handles throttling with conditional update:
 	// only updates if last_seen_at is NULL or older than 2 minutes
-	if err := uc.lastSeenUpdater.UpdateLastSeenAt(ctx, nodeID, publicIPv4, publicIPv6); err != nil {
+	if err := uc.lastSeenUpdater.UpdateLastSeenAt(ctx, nodeID, publicIPv4, publicIPv6, agentVersion, platform, arch); err != nil {
 		uc.logger.Warnw("failed to update last_seen_at",
 			"error", err,
 			"node_id", nodeID,

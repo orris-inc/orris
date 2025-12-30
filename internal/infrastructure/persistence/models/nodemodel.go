@@ -36,6 +36,9 @@ type NodeModel struct {
 	LastSeenAt        *time.Time     `gorm:"index:idx_nodes_last_seen_at"`                 // last time the node agent reported status
 	PublicIPv4        *string        `gorm:"size:15"`                                      // public IPv4 address reported by agent
 	PublicIPv6        *string        `gorm:"size:45"`                                      // public IPv6 address reported by agent
+	AgentVersion      *string        `gorm:"size:50"`                                      // agent software version (e.g., "1.2.3")
+	Platform          *string        `gorm:"size:20"`                                      // OS platform (linux, darwin, windows)
+	Arch              *string        `gorm:"size:20"`                                      // CPU architecture (amd64, arm64, arm, 386)
 	Version           int            `gorm:"not null;default:1"`
 	CreatedAt         time.Time
 	UpdatedAt         time.Time

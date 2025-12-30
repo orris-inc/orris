@@ -25,9 +25,8 @@ type Config struct {
 }
 
 var (
-	appConfig     *Config
-	appConfigOnce sync.Once
-	appConfigMu   sync.RWMutex
+	appConfig   *Config
+	appConfigMu sync.RWMutex
 )
 
 // Load loads configuration from file and environment variables

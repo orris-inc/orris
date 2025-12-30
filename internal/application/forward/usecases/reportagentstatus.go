@@ -16,9 +16,9 @@ type AgentStatusUpdater interface {
 	UpdateStatus(ctx context.Context, agentID uint, status *dto.AgentStatusDTO) error
 }
 
-// AgentLastSeenUpdater defines the interface for updating agent last seen time.
+// AgentLastSeenUpdater defines the interface for updating agent last seen time and agent info.
 type AgentLastSeenUpdater interface {
-	UpdateLastSeen(ctx context.Context, agentID uint) error
+	UpdateLastSeen(ctx context.Context, agentID uint, agentVersion, platform, arch string) error
 }
 
 // ExitPortChangeNotifier defines the interface for notifying entry agents when exit agent's port changes.
@@ -119,10 +119,10 @@ func (uc *ReportAgentStatusUseCase) Execute(ctx context.Context, input *dto.Repo
 		}
 	}
 
-	// Update last_seen_at with rate limiting (avoid DB writes on every status report)
+	// Update last_seen_at and agent info with rate limiting (avoid DB writes on every status report)
 	if uc.shouldUpdateLastSeen(input.AgentID) {
 		if uc.lastSeenUpdater != nil {
-			if err := uc.lastSeenUpdater.UpdateLastSeen(ctx, input.AgentID); err != nil {
+			if err := uc.lastSeenUpdater.UpdateLastSeen(ctx, input.AgentID, input.Status.AgentVersion, input.Status.Platform, input.Status.Arch); err != nil {
 				uc.logger.Warnw("failed to update last_seen_at", "agent_id", input.AgentID, "error", err)
 				// Don't return error, status update was successful
 			} else {

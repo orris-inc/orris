@@ -181,7 +181,9 @@ type ReportNodeStatusRequest struct {
 	PublicIPv6 string `json:"public_ipv6,omitempty"` // Public IPv6 address reported by agent
 
 	// Agent info
-	AgentVersion string `json:"agent_version,omitempty"` // Agent software version
+	AgentVersion string `json:"agent_version,omitempty"` // Agent software version (e.g., "1.2.3")
+	Platform     string `json:"platform,omitempty"`      // OS platform (linux, darwin, windows)
+	Arch         string `json:"arch,omitempty"`          // CPU architecture (amd64, arm64, arm, 386)
 }
 
 // OnlineSubscriptionItem represents a single online subscription connection

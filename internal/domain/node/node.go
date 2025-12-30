@@ -36,6 +36,9 @@ type Node struct {
 	lastSeenAt        *time.Time      // last time the node agent reported status
 	publicIPv4        *string         // public IPv4 address reported by agent
 	publicIPv6        *string         // public IPv6 address reported by agent
+	agentVersion      *string         // agent software version (e.g., "1.2.3")
+	platform          *string         // OS platform (linux, darwin, windows)
+	arch              *string         // CPU architecture (amd64, arm64, arm, 386)
 	version           int
 	originalVersion   int // version when loaded from database, for optimistic locking
 	createdAt         time.Time
@@ -145,6 +148,9 @@ func ReconstructNode(
 	lastSeenAt *time.Time,
 	publicIPv4 *string,
 	publicIPv6 *string,
+	agentVersion *string,
+	platform *string,
+	arch *string,
 	version int,
 	createdAt, updatedAt time.Time,
 ) (*Node, error) {
@@ -190,6 +196,9 @@ func ReconstructNode(
 		lastSeenAt:        lastSeenAt,
 		publicIPv4:        publicIPv4,
 		publicIPv6:        publicIPv6,
+		agentVersion:      agentVersion,
+		platform:          platform,
+		arch:              arch,
 		version:           version,
 		originalVersion:   version, // preserve original version for optimistic locking
 		createdAt:         createdAt,
@@ -656,6 +665,21 @@ func (n *Node) PublicIPv4() *string {
 // PublicIPv6 returns the public IPv6 address reported by agent
 func (n *Node) PublicIPv6() *string {
 	return n.publicIPv6
+}
+
+// AgentVersion returns the agent software version
+func (n *Node) AgentVersion() *string {
+	return n.agentVersion
+}
+
+// AgentPlatform returns the OS platform
+func (n *Node) AgentPlatform() *string {
+	return n.platform
+}
+
+// AgentArch returns the CPU architecture
+func (n *Node) AgentArch() *string {
+	return n.arch
 }
 
 // EffectiveServerAddress returns the server address to use for outbound connections.

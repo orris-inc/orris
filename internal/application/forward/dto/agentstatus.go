@@ -25,6 +25,11 @@ type AgentStatusDTO struct {
 	// Tunnel configuration (for exit agent)
 	WsListenPort  uint16 `json:"ws_listen_port,omitempty"`  // WebSocket listen port for tunnel connections
 	TlsListenPort uint16 `json:"tls_listen_port,omitempty"` // TLS listen port for tunnel connections
+
+	// Agent info
+	AgentVersion string `json:"agent_version,omitempty"` // Agent software version (e.g., "1.2.3")
+	Platform     string `json:"platform,omitempty"`      // OS platform (linux, darwin, windows)
+	Arch         string `json:"arch,omitempty"`          // CPU architecture (amd64, arm64, arm, 386)
 }
 
 // ReportAgentStatusInput represents the input for ReportAgentStatus use case.

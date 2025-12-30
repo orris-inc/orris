@@ -45,6 +45,9 @@ type ForwardAgent struct {
 	tunnelAddress  string // IP or hostname only (no port), configure if agent may serve as relay/exit in any rule
 	remark         string
 	groupID        *uint // resource group ID
+	agentVersion   string // agent software version (e.g., "1.2.3")
+	platform       string // OS platform (linux, darwin, windows)
+	arch           string // CPU architecture (amd64, arm64, arm, 386)
 	createdAt      time.Time
 	updatedAt      time.Time
 	tokenGenerator services.TokenGenerator
@@ -113,6 +116,9 @@ func ReconstructForwardAgent(
 	tunnelAddress string,
 	remark string,
 	groupID *uint,
+	agentVersion string,
+	platform string,
+	arch string,
 	createdAt, updatedAt time.Time,
 ) (*ForwardAgent, error) {
 	if id == 0 {
@@ -156,6 +162,9 @@ func ReconstructForwardAgent(
 		tunnelAddress:  tunnelAddress,
 		remark:         remark,
 		groupID:        groupID,
+		agentVersion:   agentVersion,
+		platform:       platform,
+		arch:           arch,
 		createdAt:      createdAt,
 		updatedAt:      updatedAt,
 		tokenGenerator: services.NewTokenGenerator(),
@@ -220,6 +229,21 @@ func (a *ForwardAgent) GroupID() *uint {
 func (a *ForwardAgent) SetGroupID(groupID *uint) {
 	a.groupID = groupID
 	a.updatedAt = biztime.NowUTC()
+}
+
+// AgentVersion returns the agent software version
+func (a *ForwardAgent) AgentVersion() string {
+	return a.agentVersion
+}
+
+// Platform returns the OS platform
+func (a *ForwardAgent) Platform() string {
+	return a.platform
+}
+
+// Arch returns the CPU architecture
+func (a *ForwardAgent) Arch() string {
+	return a.arch
 }
 
 // CreatedAt returns when the agent was created

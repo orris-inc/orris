@@ -210,7 +210,7 @@ func NewAgentLastSeenUpdaterAdapter(repo forward.AgentRepository) *AgentLastSeen
 	return &AgentLastSeenUpdaterAdapter{repo: repo}
 }
 
-// UpdateLastSeen updates the last_seen_at timestamp for an agent.
-func (a *AgentLastSeenUpdaterAdapter) UpdateLastSeen(ctx context.Context, agentID uint) error {
-	return a.repo.UpdateLastSeen(ctx, agentID)
+// UpdateLastSeen updates the last_seen_at timestamp and agent info for an agent.
+func (a *AgentLastSeenUpdaterAdapter) UpdateLastSeen(ctx context.Context, agentID uint, agentVersion, platform, arch string) error {
+	return a.repo.UpdateLastSeen(ctx, agentID, agentVersion, platform, arch)
 }

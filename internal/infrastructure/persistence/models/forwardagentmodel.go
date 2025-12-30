@@ -20,6 +20,9 @@ type ForwardAgentModel struct {
 	Status        string `gorm:"not null;default:enabled;size:20;index:idx_forward_agent_status"`
 	Remark        string `gorm:"size:500"`
 	GroupID       *uint  `gorm:"index:idx_forward_agent_group_id"` // resource group ID
+	AgentVersion  string `gorm:"size:50"`                          // agent software version (e.g., "1.2.3")
+	Platform      string `gorm:"size:20"`                          // OS platform (linux, darwin, windows)
+	Arch          string `gorm:"size:20"`                          // CPU architecture (amd64, arm64, arm, 386)
 	LastSeenAt    *time.Time
 	CreatedAt     time.Time
 	UpdatedAt     time.Time

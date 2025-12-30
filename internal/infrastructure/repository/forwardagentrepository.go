@@ -331,11 +331,26 @@ func (r *ForwardAgentRepositoryImpl) ExistsByName(ctx context.Context, name stri
 	return count > 0, nil
 }
 
-// UpdateLastSeen updates the last_seen_at timestamp for an agent.
-func (r *ForwardAgentRepositoryImpl) UpdateLastSeen(ctx context.Context, id uint) error {
+// UpdateLastSeen updates the last_seen_at timestamp and agent info for an agent.
+func (r *ForwardAgentRepositoryImpl) UpdateLastSeen(ctx context.Context, id uint, agentVersion, platform, arch string) error {
+	updates := map[string]interface{}{
+		"last_seen_at": biztime.NowUTC(),
+	}
+
+	// Only update agent info if provided
+	if agentVersion != "" {
+		updates["agent_version"] = agentVersion
+	}
+	if platform != "" {
+		updates["platform"] = platform
+	}
+	if arch != "" {
+		updates["arch"] = arch
+	}
+
 	result := r.db.WithContext(ctx).Model(&models.ForwardAgentModel{}).
 		Where("id = ?", id).
-		Update("last_seen_at", biztime.NowUTC())
+		Updates(updates)
 
 	if result.Error != nil {
 		r.logger.Errorw("failed to update forward agent last_seen_at", "id", id, "error", result.Error)
@@ -346,6 +361,6 @@ func (r *ForwardAgentRepositoryImpl) UpdateLastSeen(ctx context.Context, id uint
 		return errors.NewNotFoundError("forward agent", fmt.Sprintf("%d", id))
 	}
 
-	r.logger.Debugw("forward agent last_seen_at updated", "id", id)
+	r.logger.Debugw("forward agent last_seen_at and agent info updated", "id", id, "agent_version", agentVersion)
 	return nil
 }

@@ -639,11 +639,11 @@ func (r *NodeRepositoryImpl) IncrementTraffic(ctx context.Context, nodeID uint, 
 	return nil
 }
 
-// UpdateLastSeenAt updates the last_seen_at timestamp and public IPs for a node
+// UpdateLastSeenAt updates the last_seen_at timestamp, public IPs, and agent info for a node
 // Uses conditional update to avoid race conditions: only updates if last_seen_at is NULL
 // or older than the threshold (2 minutes). This moves the throttling logic to the database
 // layer for atomic operation.
-func (r *NodeRepositoryImpl) UpdateLastSeenAt(ctx context.Context, nodeID uint, publicIPv4, publicIPv6 string) error {
+func (r *NodeRepositoryImpl) UpdateLastSeenAt(ctx context.Context, nodeID uint, publicIPv4, publicIPv6, agentVersion, platform, arch string) error {
 	now := biztime.NowUTC()
 	threshold := now.Add(-2 * time.Minute)
 
@@ -657,6 +657,17 @@ func (r *NodeRepositoryImpl) UpdateLastSeenAt(ctx context.Context, nodeID uint, 
 	}
 	if publicIPv6 != "" {
 		updates["public_ipv6"] = publicIPv6
+	}
+
+	// Only update agent info if provided
+	if agentVersion != "" {
+		updates["agent_version"] = agentVersion
+	}
+	if platform != "" {
+		updates["platform"] = platform
+	}
+	if arch != "" {
+		updates["arch"] = arch
 	}
 
 	// Use conditional update to prevent race conditions
@@ -676,6 +687,7 @@ func (r *NodeRepositoryImpl) UpdateLastSeenAt(ctx context.Context, nodeID uint, 
 			"node_id", nodeID,
 			"public_ipv4", publicIPv4,
 			"public_ipv6", publicIPv6,
+			"agent_version", agentVersion,
 		)
 	}
 	return nil

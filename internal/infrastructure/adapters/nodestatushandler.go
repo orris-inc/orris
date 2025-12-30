@@ -65,6 +65,8 @@ type NodeStatusData struct {
 
 	// Agent info
 	AgentVersion string `json:"agent_version,omitempty"`
+	Platform     string `json:"platform,omitempty"`
+	Arch         string `json:"arch,omitempty"`
 }
 
 // HandleStatus processes status update from a node agent.
@@ -122,6 +124,8 @@ func (h *NodeStatusHandler) HandleStatus(nodeID uint, data any) {
 
 		// Agent info
 		AgentVersion: status.AgentVersion,
+		Platform:     status.Platform,
+		Arch:         status.Arch,
 	}
 
 	// Persist status to Redis
@@ -134,9 +138,9 @@ func (h *NodeStatusHandler) HandleStatus(nodeID uint, data any) {
 		return
 	}
 
-	// Update last_seen_at (throttled at database layer)
+	// Update last_seen_at, public IPs, and agent info (throttled at database layer)
 	if h.lastSeenUpdater != nil {
-		if err := h.lastSeenUpdater.UpdateLastSeenAt(ctx, nodeID, status.PublicIPv4, status.PublicIPv6); err != nil {
+		if err := h.lastSeenUpdater.UpdateLastSeenAt(ctx, nodeID, status.PublicIPv4, status.PublicIPv6, status.AgentVersion, status.Platform, status.Arch); err != nil {
 			h.logger.Warnw("failed to update last_seen_at via websocket",
 				"error", err,
 				"node_id", nodeID,
