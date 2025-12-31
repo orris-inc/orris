@@ -55,6 +55,11 @@ func SetupNodeRoutes(engine *gin.Engine, config *NodeRouteConfig) {
 
 		// Version management endpoints
 		if config.NodeVersionHandler != nil {
+			// Batch update (must be registered before /:id to avoid conflicts)
+			nodes.POST("/batch-update",
+				authorization.RequireAdmin(),
+				config.NodeVersionHandler.BatchTriggerUpdate)
+
 			nodes.GET("/:id/version",
 				authorization.RequireAdmin(),
 				config.NodeVersionHandler.GetNodeVersion)

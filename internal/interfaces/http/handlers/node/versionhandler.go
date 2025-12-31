@@ -2,6 +2,7 @@
 package node
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -298,4 +299,220 @@ func hasNewerVersion(currentVersion, latestVersion string) bool {
 	//  0 if current == latest (no update)
 	// +1 if current > latest (current is newer, e.g., dev build)
 	return semver.Compare(current, latest) < 0
+}
+
+// Maximum number of nodes that can be updated in a single batch request.
+const maxBatchUpdateNodes = 1000
+
+// BatchTriggerUpdate handles POST /nodes/batch-update
+// Triggers update for multiple nodes at once.
+func (h *NodeVersionHandler) BatchTriggerUpdate(c *gin.Context) {
+	var req dto.BatchUpdateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Validate request - must specify exactly one of node_ids or update_all
+	hasNodeIDs := len(req.NodeIDs) > 0
+	if hasNodeIDs && req.UpdateAll {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Cannot specify both node_ids and update_all")
+		return
+	}
+	if !hasNodeIDs && !req.UpdateAll {
+		utils.ErrorResponse(c, http.StatusBadRequest, "Either node_ids or update_all must be specified")
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// Get latest release info once for all nodes
+	releaseInfo, err := h.releaseService.GetLatestRelease(ctx)
+	if err != nil {
+		h.logger.Errorw("failed to get latest release for batch update", "error", err)
+		utils.ErrorResponse(c, http.StatusServiceUnavailable, "Failed to get latest release information")
+		return
+	}
+
+	response := &dto.BatchUpdateResponse{
+		Succeeded: []dto.BatchUpdateSuccess{},
+		Failed:    []dto.BatchUpdateFailed{},
+		Skipped:   []dto.BatchUpdateSkipped{},
+	}
+
+	// Get target nodes
+	var nodes []*node.Node
+	if hasNodeIDs {
+		// Deduplicate node IDs
+		seen := make(map[string]bool)
+		uniqueIDs := make([]string, 0, len(req.NodeIDs))
+		for _, sid := range req.NodeIDs {
+			if !seen[sid] {
+				seen[sid] = true
+				uniqueIDs = append(uniqueIDs, sid)
+			}
+		}
+
+		// Get specified nodes
+		for _, sid := range uniqueIDs {
+			n, err := h.nodeRepo.GetBySID(ctx, sid)
+			if err != nil {
+				h.logger.Warnw("failed to get node for batch update", "sid", sid, "error", err)
+				response.Failed = append(response.Failed, dto.BatchUpdateFailed{
+					NodeID: sid,
+					Reason: "failed to retrieve node",
+				})
+				continue
+			}
+			if n == nil {
+				response.Failed = append(response.Failed, dto.BatchUpdateFailed{
+					NodeID: sid,
+					Reason: "node not found",
+				})
+				continue
+			}
+			nodes = append(nodes, n)
+		}
+	} else {
+		// Get all nodes for update_all mode with limit
+		filter := node.NodeFilter{}
+		filter.Page = 1
+		filter.PageSize = maxBatchUpdateNodes
+		allNodes, total, err := h.nodeRepo.List(ctx, filter)
+		if err != nil {
+			h.logger.Errorw("failed to list nodes for batch update", "error", err)
+			utils.ErrorResponse(c, http.StatusInternalServerError, "Failed to list nodes")
+			return
+		}
+		if total > int64(maxBatchUpdateNodes) {
+			h.logger.Warnw("batch update truncated due to limit",
+				"total", total,
+				"limit", maxBatchUpdateNodes,
+			)
+			response.Truncated = true
+		}
+		nodes = allNodes
+	}
+
+	// Process each node
+	for _, n := range nodes {
+		result := h.processSingleNodeUpdate(ctx, n, releaseInfo)
+		switch result.status {
+		case updateStatusSucceeded:
+			response.Succeeded = append(response.Succeeded, dto.BatchUpdateSuccess{
+				NodeID:        n.SID(),
+				CommandID:     result.commandID,
+				TargetVersion: releaseInfo.Version,
+			})
+		case updateStatusFailed:
+			response.Failed = append(response.Failed, dto.BatchUpdateFailed{
+				NodeID: n.SID(),
+				Reason: result.reason,
+			})
+		case updateStatusSkipped:
+			response.Skipped = append(response.Skipped, dto.BatchUpdateSkipped{
+				NodeID: n.SID(),
+				Reason: result.reason,
+			})
+		}
+	}
+
+	// Set total count
+	response.Total = len(response.Succeeded) + len(response.Failed) + len(response.Skipped)
+
+	h.logger.Infow("batch update completed",
+		"total", response.Total,
+		"succeeded", len(response.Succeeded),
+		"failed", len(response.Failed),
+		"skipped", len(response.Skipped),
+	)
+
+	utils.SuccessResponse(c, http.StatusOK, "Batch update processed", response)
+}
+
+// Update result status constants.
+const (
+	updateStatusSucceeded = "succeeded"
+	updateStatusFailed    = "failed"
+	updateStatusSkipped   = "skipped"
+)
+
+// nodeUpdateResult holds the result of a single node update attempt.
+type nodeUpdateResult struct {
+	status    string
+	commandID string
+	reason    string
+}
+
+// processSingleNodeUpdate processes update for a single node.
+func (h *NodeVersionHandler) processSingleNodeUpdate(
+	ctx context.Context,
+	n *node.Node,
+	releaseInfo *services.ReleaseInfo,
+) nodeUpdateResult {
+	// Check if node agent is online
+	if !h.agentHub.IsNodeOnline(n.ID()) {
+		return nodeUpdateResult{status: updateStatusSkipped, reason: "node agent is offline"}
+	}
+
+	// Check if platform and arch are set
+	if n.AgentPlatform() == nil || *n.AgentPlatform() == "" ||
+		n.AgentArch() == nil || *n.AgentArch() == "" {
+		return nodeUpdateResult{status: updateStatusSkipped, reason: "platform or architecture is unknown"}
+	}
+	platform := *n.AgentPlatform()
+	arch := *n.AgentArch()
+
+	// Check if update is needed
+	currentVersion := ""
+	if n.AgentVersion() != nil {
+		currentVersion = *n.AgentVersion()
+	}
+	if !hasNewerVersion(currentVersion, releaseInfo.Version) {
+		return nodeUpdateResult{status: updateStatusSkipped, reason: "already up to date"}
+	}
+
+	// Get download URL
+	downloadURL, err := h.releaseService.GetDownloadURL(ctx, platform, arch)
+	if err != nil {
+		return nodeUpdateResult{status: updateStatusFailed, reason: "no download available for platform/arch"}
+	}
+
+	// Get checksum (optional)
+	checksum, _ := h.releaseService.GetChecksum(ctx, platform, arch)
+
+	// Build update payload
+	updatePayload := &dto.NodeUpdatePayload{
+		Version:     releaseInfo.Version,
+		DownloadURL: downloadURL,
+		Checksum:    checksum,
+	}
+
+	// Build command
+	commandID := uuid.New().String()
+	cmd := &dto.NodeCommandData{
+		CommandID: commandID,
+		Action:    dto.NodeCmdActionUpdate,
+		Payload:   updatePayload,
+	}
+
+	// Send command
+	if err := h.agentHub.SendCommandToNode(n.ID(), cmd); err != nil {
+		if errors.Is(err, services.ErrNodeNotConnected) {
+			return nodeUpdateResult{status: updateStatusFailed, reason: "node disconnected during processing"}
+		}
+		if errors.Is(err, services.ErrSendChannelFull) {
+			return nodeUpdateResult{status: updateStatusFailed, reason: "command queue is full"}
+		}
+		return nodeUpdateResult{status: updateStatusFailed, reason: "failed to send command"}
+	}
+
+	h.logger.Infow("update command sent to node",
+		"node_id", n.ID(),
+		"sid", n.SID(),
+		"command_id", commandID,
+		"target_version", releaseInfo.Version,
+	)
+
+	return nodeUpdateResult{status: updateStatusSucceeded, commandID: commandID}
 }

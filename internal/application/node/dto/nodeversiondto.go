@@ -19,3 +19,37 @@ type NodeUpdatePayload struct {
 	DownloadURL string `json:"download_url"` // Download URL for the binary
 	Checksum    string `json:"checksum"`     // SHA256 checksum (if available)
 }
+
+// BatchUpdateRequest is the request body for batch update API.
+type BatchUpdateRequest struct {
+	NodeIDs   []string `json:"node_ids"`   // Optional: specific node IDs to update
+	UpdateAll bool     `json:"update_all"` // Optional: update all nodes with available updates
+}
+
+// BatchUpdateResponse is the response for batch update API.
+type BatchUpdateResponse struct {
+	Total     int                  `json:"total"`
+	Succeeded []BatchUpdateSuccess `json:"succeeded"`
+	Failed    []BatchUpdateFailed  `json:"failed"`
+	Skipped   []BatchUpdateSkipped `json:"skipped"`
+	Truncated bool                 `json:"truncated,omitempty"` // True if results were truncated due to limit
+}
+
+// BatchUpdateSuccess represents a successfully triggered update.
+type BatchUpdateSuccess struct {
+	NodeID        string `json:"node_id"`
+	CommandID     string `json:"command_id"`
+	TargetVersion string `json:"target_version"`
+}
+
+// BatchUpdateFailed represents a failed update attempt.
+type BatchUpdateFailed struct {
+	NodeID string `json:"node_id"`
+	Reason string `json:"reason"`
+}
+
+// BatchUpdateSkipped represents a skipped node.
+type BatchUpdateSkipped struct {
+	NodeID string `json:"node_id"`
+	Reason string `json:"reason"`
+}

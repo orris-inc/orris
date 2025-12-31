@@ -18,15 +18,19 @@ import (
 )
 
 const (
-	// GitHub API endpoint for latest release
-	githubReleaseURL = "https://api.github.com/repos/orris-inc/orris-client/releases/latest"
-
 	// Cache TTL for release info
 	releaseCacheTTL = 1 * time.Hour
 
 	// HTTP request timeout
 	httpTimeout = 10 * time.Second
 )
+
+// GitHubRepoConfig contains configuration for a GitHub repository.
+type GitHubRepoConfig struct {
+	Owner       string // Repository owner (e.g., "orris-inc")
+	Repo        string // Repository name (e.g., "orris-client")
+	AssetPrefix string // Asset name prefix (e.g., "orris-client")
+}
 
 // ReleaseInfo contains information about a GitHub release.
 type ReleaseInfo struct {
@@ -46,6 +50,7 @@ type releaseCache struct {
 
 // GitHubReleaseService fetches release information from GitHub.
 type GitHubReleaseService struct {
+	config     GitHubRepoConfig
 	httpClient *http.Client
 	cache      *releaseCache
 	cacheMu    sync.RWMutex
@@ -53,9 +58,10 @@ type GitHubReleaseService struct {
 	logger     logger.Interface
 }
 
-// NewGitHubReleaseService creates a new GitHubReleaseService.
-func NewGitHubReleaseService(log logger.Interface) *GitHubReleaseService {
+// NewGitHubReleaseService creates a new GitHubReleaseService with the given repository config.
+func NewGitHubReleaseService(config GitHubRepoConfig, log logger.Interface) *GitHubReleaseService {
 	return &GitHubReleaseService{
+		config: config,
 		httpClient: &http.Client{
 			Timeout: httpTimeout,
 		},
@@ -114,7 +120,9 @@ func (s *GitHubReleaseService) GetLatestRelease(ctx context.Context) (*ReleaseIn
 
 // fetchFromGitHub fetches release information from GitHub API.
 func (s *GitHubReleaseService) fetchFromGitHub(ctx context.Context) (*ReleaseInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, githubReleaseURL, nil)
+	// Build GitHub API URL from config
+	releaseURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", s.config.Owner, s.config.Repo)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, releaseURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -169,8 +177,8 @@ func (s *GitHubReleaseService) fetchFromGitHub(ctx context.Context) (*ReleaseInf
 }
 
 // parseAssets converts GitHub assets to platform-arch -> download_url mapping and finds checksums.txt URL.
-// Expected asset name format: orris-client-{os}-{arch}
-// Example: orris-client-linux-amd64, orris-client-linux-arm64
+// Expected asset name format: {assetPrefix}-{os}-{arch}
+// Example: orris-client-linux-amd64, orrisp-linux-arm64
 // Checksum file: checksums.txt (contains all platform checksums in one file)
 func (s *GitHubReleaseService) parseAssets(assets []githubAsset) (binaries map[string]string, checksumURL string) {
 	binaries = make(map[string]string)
@@ -194,15 +202,18 @@ func (s *GitHubReleaseService) parseAssets(assets []githubAsset) (binaries map[s
 		}
 
 		// Handle binary files
-		// Extract os-arch from name
-		// Format: orris-client-linux-amd64 -> linux-amd64
-		parts := strings.Split(name, "-")
-		if len(parts) >= 4 {
-			// orris-client-linux-amd64 -> ["orris", "client", "linux", "amd64"]
-			os := parts[len(parts)-2]
-			arch := parts[len(parts)-1]
-			key := fmt.Sprintf("%s-%s", os, arch)
-			binaries[key] = asset.BrowserDownloadURL
+		// Extract os-arch from name using configured asset prefix
+		// Format: {prefix}-{os}-{arch} -> {os}-{arch}
+		prefix := s.config.AssetPrefix + "-"
+		if strings.HasPrefix(name, prefix) {
+			suffix := strings.TrimPrefix(name, prefix)
+			parts := strings.Split(suffix, "-")
+			if len(parts) >= 2 {
+				os := parts[0]
+				arch := parts[1]
+				key := fmt.Sprintf("%s-%s", os, arch)
+				binaries[key] = asset.BrowserDownloadURL
+			}
 		}
 	}
 
@@ -330,14 +341,18 @@ func (s *GitHubReleaseService) fetchAndParseChecksums(ctx context.Context, check
 			continue
 		}
 
-		// Extract platform-arch from filename
-		// Format: orris-client-linux-amd64 -> linux-amd64
-		filenameParts := strings.Split(filename, "-")
-		if len(filenameParts) >= 4 {
-			os := filenameParts[len(filenameParts)-2]
-			arch := filenameParts[len(filenameParts)-1]
-			key := fmt.Sprintf("%s-%s", os, arch)
-			checksumData[key] = checksum
+		// Extract platform-arch from filename using configured asset prefix
+		// Format: {prefix}-{os}-{arch} -> {os}-{arch}
+		prefix := s.config.AssetPrefix + "-"
+		if strings.HasPrefix(filename, prefix) {
+			suffix := strings.TrimPrefix(filename, prefix)
+			parts := strings.Split(suffix, "-")
+			if len(parts) >= 2 {
+				os := parts[0]
+				arch := parts[1]
+				key := fmt.Sprintf("%s-%s", os, arch)
+				checksumData[key] = checksum
+			}
 		}
 	}
 

@@ -361,15 +361,26 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Initialize node system status querier adapter
 	nodeStatusQuerier := adapters.NewNodeSystemStatusQuerierAdapter(redisClient, log)
 
-	// Initialize GitHub release service for version checking (used by list use cases)
-	githubReleaseService := services.NewGitHubReleaseService(log)
+	// Initialize GitHub release services for version checking
+	// Forward agent uses orris-client repository
+	forwardAgentReleaseService := services.NewGitHubReleaseService(services.GitHubRepoConfig{
+		Owner:       "orris-inc",
+		Repo:        "orris-client",
+		AssetPrefix: "orris-client",
+	}, log)
+	// Node agent uses orrisp repository
+	nodeAgentReleaseService := services.NewGitHubReleaseService(services.GitHubRepoConfig{
+		Owner:       "orris-inc",
+		Repo:        "orrisp",
+		AssetPrefix: "orrisp",
+	}, log)
 
 	// Initialize node use cases
 	createNodeUC := nodeUsecases.NewCreateNodeUseCase(nodeRepoImpl, log)
 	getNodeUC := nodeUsecases.NewGetNodeUseCase(nodeRepoImpl, resourceGroupRepo, nodeStatusQuerier, log)
 	updateNodeUC := nodeUsecases.NewUpdateNodeUseCase(log, nodeRepoImpl, resourceGroupRepo)
 	deleteNodeUC := nodeUsecases.NewDeleteNodeUseCase(nodeRepoImpl, log)
-	listNodesUC := nodeUsecases.NewListNodesUseCase(nodeRepoImpl, resourceGroupRepo, userRepo, nodeStatusQuerier, githubReleaseService, log)
+	listNodesUC := nodeUsecases.NewListNodesUseCase(nodeRepoImpl, resourceGroupRepo, userRepo, nodeStatusQuerier, nodeAgentReleaseService, log)
 	generateNodeTokenUC := nodeUsecases.NewGenerateNodeTokenUseCase(nodeRepoImpl, log)
 	generateNodeInstallScriptUC := nodeUsecases.NewGenerateNodeInstallScriptUseCase(nodeRepoImpl, log)
 
@@ -607,7 +618,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// updateForwardAgentUC will be initialized later after configSyncService is available
 	var updateForwardAgentUC *forwardUsecases.UpdateForwardAgentUseCase
 	deleteForwardAgentUC := forwardUsecases.NewDeleteForwardAgentUseCase(forwardAgentRepo, log)
-	listForwardAgentsUC := forwardUsecases.NewListForwardAgentsUseCase(forwardAgentRepo, forwardAgentStatusAdapter, githubReleaseService, log)
+	listForwardAgentsUC := forwardUsecases.NewListForwardAgentsUseCase(forwardAgentRepo, forwardAgentStatusAdapter, forwardAgentReleaseService, log)
 	enableForwardAgentUC := forwardUsecases.NewEnableForwardAgentUseCase(forwardAgentRepo, log)
 	disableForwardAgentUC := forwardUsecases.NewDisableForwardAgentUseCase(forwardAgentRepo, log)
 	regenerateForwardAgentTokenUC := forwardUsecases.NewRegenerateForwardAgentTokenUseCase(forwardAgentRepo, agentTokenSvc, log)
@@ -706,13 +717,13 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Initialize version handlers
 	forwardAgentVersionHandler := forwardAgentCrudHandlers.NewVersionHandler(
 		forwardAgentRepo,
-		githubReleaseService,
+		forwardAgentReleaseService,
 		agentHub,
 		log,
 	)
 	nodeVersionHandler := nodeHandlers.NewNodeVersionHandler(
 		nodeRepoImpl,
-		githubReleaseService,
+		nodeAgentReleaseService,
 		agentHub,
 		log,
 	)

@@ -88,6 +88,9 @@ func SetupForwardRoutes(engine *gin.Engine, cfg *ForwardRouteConfig) {
 
 		// Version management
 		if cfg.ForwardAgentVersionHandler != nil {
+			// Batch update (must be registered before /:id to avoid conflicts)
+			forwardAgents.POST("/batch-update", cfg.ForwardAgentVersionHandler.BatchTriggerUpdate)
+
 			forwardAgents.GET("/:id/version", cfg.ForwardAgentVersionHandler.GetAgentVersion)
 			forwardAgents.POST("/:id/update", cfg.ForwardAgentVersionHandler.TriggerUpdate)
 		}
