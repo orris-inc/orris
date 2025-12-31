@@ -16,6 +16,7 @@ import (
 type ForwardRouteConfig struct {
 	ForwardRuleHandler          *forwardRuleHandlers.Handler
 	ForwardAgentHandler         *forwardAgentCrudHandlers.Handler
+	ForwardAgentVersionHandler  *forwardAgentCrudHandlers.VersionHandler
 	ForwardAgentAPIHandler      *forwardAgentAPIHandlers.Handler
 	UserForwardHandler          *forwardUserHandlers.Handler
 	AuthMiddleware              *middleware.AuthMiddleware
@@ -84,6 +85,12 @@ func SetupForwardRoutes(engine *gin.Engine, cfg *ForwardRouteConfig) {
 
 		// Install script
 		forwardAgents.GET("/:id/install-script", cfg.ForwardAgentHandler.GetInstallScript)
+
+		// Version management
+		if cfg.ForwardAgentVersionHandler != nil {
+			forwardAgents.GET("/:id/version", cfg.ForwardAgentVersionHandler.GetAgentVersion)
+			forwardAgents.POST("/:id/update", cfg.ForwardAgentVersionHandler.TriggerUpdate)
+		}
 	}
 
 	// User forward rules API (requires authentication and quota limits)

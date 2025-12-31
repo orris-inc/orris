@@ -4,6 +4,7 @@ package usecases
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/orris-inc/orris/internal/application/forward/dto"
@@ -16,9 +17,14 @@ type AgentStatusUpdater interface {
 	UpdateStatus(ctx context.Context, agentID uint, status *dto.AgentStatusDTO) error
 }
 
-// AgentLastSeenUpdater defines the interface for updating agent last seen time and agent info.
+// AgentLastSeenUpdater defines the interface for updating agent last seen time.
 type AgentLastSeenUpdater interface {
-	UpdateLastSeen(ctx context.Context, agentID uint, agentVersion, platform, arch string) error
+	UpdateLastSeen(ctx context.Context, agentID uint) error
+}
+
+// AgentInfoUpdater defines the interface for updating agent info (version, platform, arch).
+type AgentInfoUpdater interface {
+	UpdateAgentInfo(ctx context.Context, agentID uint, agentVersion, platform, arch string) error
 }
 
 // ExitPortChangeNotifier defines the interface for notifying entry agents when exit agent's port changes.
@@ -33,11 +39,13 @@ type ReportAgentStatusUseCase struct {
 	statusUpdater      AgentStatusUpdater
 	statusQuerier      AgentStatusQuerier
 	lastSeenUpdater    AgentLastSeenUpdater
+	agentInfoUpdater   AgentInfoUpdater
 	portChangeNotifier ExitPortChangeNotifier
 	logger             logger.Interface
 
 	// Rate limiting for last_seen_at updates
 	lastSeenInterval time.Duration
+	lastSeenMu       sync.RWMutex
 	lastSeenCache    map[uint]time.Time
 }
 
@@ -47,6 +55,7 @@ func NewReportAgentStatusUseCase(
 	statusUpdater AgentStatusUpdater,
 	statusQuerier AgentStatusQuerier,
 	lastSeenUpdater AgentLastSeenUpdater,
+	agentInfoUpdater AgentInfoUpdater,
 	logger logger.Interface,
 ) *ReportAgentStatusUseCase {
 	return &ReportAgentStatusUseCase{
@@ -54,6 +63,7 @@ func NewReportAgentStatusUseCase(
 		statusUpdater:    statusUpdater,
 		statusQuerier:    statusQuerier,
 		lastSeenUpdater:  lastSeenUpdater,
+		agentInfoUpdater: agentInfoUpdater,
 		logger:           logger,
 		lastSeenInterval: 2 * time.Minute,
 		lastSeenCache:    make(map[uint]time.Time),
@@ -77,19 +87,15 @@ func (uc *ReportAgentStatusUseCase) Execute(ctx context.Context, input *dto.Repo
 		return fmt.Errorf("agent not found: %d", input.AgentID)
 	}
 
-	// Check if tunnel ports have changed (for exit agent port change notification)
-	var oldWsPort, oldTlsPort uint16
-	hasTunnelPorts := input.Status.WsListenPort > 0 || input.Status.TlsListenPort > 0
-	if uc.statusQuerier != nil && hasTunnelPorts {
-		oldStatus, err := uc.statusQuerier.GetStatus(ctx, input.AgentID)
+	// Get old status from Redis for change detection
+	var oldStatus *dto.AgentStatusDTO
+	if uc.statusQuerier != nil {
+		oldStatus, err = uc.statusQuerier.GetStatus(ctx, input.AgentID)
 		if err != nil {
-			uc.logger.Warnw("failed to get old status for port change detection",
+			uc.logger.Warnw("failed to get old status for change detection",
 				"agent_id", input.AgentID,
 				"error", err,
 			)
-		} else if oldStatus != nil {
-			oldWsPort = oldStatus.WsListenPort
-			oldTlsPort = oldStatus.TlsListenPort
 		}
 	}
 
@@ -100,33 +106,20 @@ func (uc *ReportAgentStatusUseCase) Execute(ctx context.Context, input *dto.Repo
 	}
 
 	// Notify entry agents if tunnel ports have changed
-	wsPortChanged := input.Status.WsListenPort > 0 && oldWsPort > 0 && oldWsPort != input.Status.WsListenPort
-	tlsPortChanged := input.Status.TlsListenPort > 0 && oldTlsPort > 0 && oldTlsPort != input.Status.TlsListenPort
-	if uc.portChangeNotifier != nil && (wsPortChanged || tlsPortChanged) {
-		uc.logger.Infow("exit agent tunnel port changed, notifying entry agents",
-			"agent_id", input.AgentID,
-			"old_ws_port", oldWsPort,
-			"new_ws_port", input.Status.WsListenPort,
-			"old_tls_port", oldTlsPort,
-			"new_tls_port", input.Status.TlsListenPort,
-		)
-		if err := uc.portChangeNotifier.NotifyExitPortChange(ctx, input.AgentID); err != nil {
-			uc.logger.Infow("port change notification skipped",
-				"agent_id", input.AgentID,
-				"reason", err.Error(),
-			)
-			// Don't return error, status update was successful
-		}
-	}
+	uc.handlePortChange(ctx, input.AgentID, oldStatus, input.Status)
 
-	// Update last_seen_at and agent info with rate limiting (avoid DB writes on every status report)
+	// Update agent info immediately if changed (no rate limiting for version updates)
+	uc.handleAgentInfoChange(ctx, input.AgentID, oldStatus, input.Status)
+
+	// Update last_seen_at with rate limiting (avoid DB writes on every status report)
 	if uc.shouldUpdateLastSeen(input.AgentID) {
 		if uc.lastSeenUpdater != nil {
-			if err := uc.lastSeenUpdater.UpdateLastSeen(ctx, input.AgentID, input.Status.AgentVersion, input.Status.Platform, input.Status.Arch); err != nil {
+			if err := uc.lastSeenUpdater.UpdateLastSeen(ctx, input.AgentID); err != nil {
 				uc.logger.Warnw("failed to update last_seen_at", "agent_id", input.AgentID, "error", err)
-				// Don't return error, status update was successful
 			} else {
+				uc.lastSeenMu.Lock()
 				uc.lastSeenCache[input.AgentID] = time.Now()
+				uc.lastSeenMu.Unlock()
 			}
 		}
 	}
@@ -141,9 +134,78 @@ func (uc *ReportAgentStatusUseCase) Execute(ctx context.Context, input *dto.Repo
 	return nil
 }
 
+// handlePortChange notifies entry agents if tunnel ports have changed.
+func (uc *ReportAgentStatusUseCase) handlePortChange(ctx context.Context, agentID uint, oldStatus, newStatus *dto.AgentStatusDTO) {
+	if uc.portChangeNotifier == nil {
+		return
+	}
+
+	var oldWsPort, oldTlsPort uint16
+	if oldStatus != nil {
+		oldWsPort = oldStatus.WsListenPort
+		oldTlsPort = oldStatus.TlsListenPort
+	}
+
+	wsPortChanged := newStatus.WsListenPort > 0 && oldWsPort > 0 && oldWsPort != newStatus.WsListenPort
+	tlsPortChanged := newStatus.TlsListenPort > 0 && oldTlsPort > 0 && oldTlsPort != newStatus.TlsListenPort
+
+	if wsPortChanged || tlsPortChanged {
+		uc.logger.Infow("exit agent tunnel port changed, notifying entry agents",
+			"agent_id", agentID,
+			"old_ws_port", oldWsPort,
+			"new_ws_port", newStatus.WsListenPort,
+			"old_tls_port", oldTlsPort,
+			"new_tls_port", newStatus.TlsListenPort,
+		)
+		if err := uc.portChangeNotifier.NotifyExitPortChange(ctx, agentID); err != nil {
+			uc.logger.Infow("port change notification skipped",
+				"agent_id", agentID,
+				"reason", err.Error(),
+			)
+		}
+	}
+}
+
+// handleAgentInfoChange updates agent info in DB immediately if changed.
+func (uc *ReportAgentStatusUseCase) handleAgentInfoChange(ctx context.Context, agentID uint, oldStatus, newStatus *dto.AgentStatusDTO) {
+	if uc.agentInfoUpdater == nil {
+		return
+	}
+
+	// Check if agent info has changed
+	var oldVersion, oldPlatform, oldArch string
+	if oldStatus != nil {
+		oldVersion = oldStatus.AgentVersion
+		oldPlatform = oldStatus.Platform
+		oldArch = oldStatus.Arch
+	}
+
+	versionChanged := newStatus.AgentVersion != "" && newStatus.AgentVersion != oldVersion
+	platformChanged := newStatus.Platform != "" && newStatus.Platform != oldPlatform
+	archChanged := newStatus.Arch != "" && newStatus.Arch != oldArch
+
+	if versionChanged || platformChanged || archChanged {
+		uc.logger.Infow("agent info changed, updating immediately",
+			"agent_id", agentID,
+			"old_version", oldVersion,
+			"new_version", newStatus.AgentVersion,
+			"old_platform", oldPlatform,
+			"new_platform", newStatus.Platform,
+			"old_arch", oldArch,
+			"new_arch", newStatus.Arch,
+		)
+		if err := uc.agentInfoUpdater.UpdateAgentInfo(ctx, agentID, newStatus.AgentVersion, newStatus.Platform, newStatus.Arch); err != nil {
+			uc.logger.Warnw("failed to update agent info", "agent_id", agentID, "error", err)
+		}
+	}
+}
+
 // shouldUpdateLastSeen checks if we should update last_seen_at based on rate limiting.
 func (uc *ReportAgentStatusUseCase) shouldUpdateLastSeen(agentID uint) bool {
+	uc.lastSeenMu.RLock()
 	lastUpdate, exists := uc.lastSeenCache[agentID]
+	uc.lastSeenMu.RUnlock()
+
 	if !exists {
 		return true
 	}

@@ -44,6 +44,7 @@ const (
 	CmdActionRestartRule  = "restart_rule"
 	CmdActionStopRule     = "stop_rule"
 	CmdActionProbe        = "probe"
+	CmdActionUpdate       = "update" // Update agent binary
 )
 
 // AgentEventData represents an agent event payload.

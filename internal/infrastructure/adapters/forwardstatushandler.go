@@ -6,24 +6,25 @@ import (
 	"encoding/json"
 
 	"github.com/orris-inc/orris/internal/application/forward/dto"
+	"github.com/orris-inc/orris/internal/application/forward/usecases"
 	"github.com/orris-inc/orris/internal/infrastructure/services"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // ForwardStatusHandler handles status updates from forward agents.
 type ForwardStatusHandler struct {
-	statusAdapter *ForwardAgentStatusAdapter
-	logger        logger.Interface
+	reportStatusUC *usecases.ReportAgentStatusUseCase
+	logger         logger.Interface
 }
 
 // NewForwardStatusHandler creates a new ForwardStatusHandler.
 func NewForwardStatusHandler(
-	statusAdapter *ForwardAgentStatusAdapter,
+	reportStatusUC *usecases.ReportAgentStatusUseCase,
 	log logger.Interface,
 ) *ForwardStatusHandler {
 	return &ForwardStatusHandler{
-		statusAdapter: statusAdapter,
-		logger:        log,
+		reportStatusUC: reportStatusUC,
+		logger:         log,
 	}
 }
 
@@ -48,10 +49,15 @@ func (h *ForwardStatusHandler) HandleStatus(agentID uint, data any) {
 		return
 	}
 
-	// Persist status to Redis
+	// Use the same use case as HTTP handler to ensure consistent behavior
+	// This will update both Redis status and DB last_seen_at/agent_info
 	ctx := context.Background()
-	if err := h.statusAdapter.UpdateStatus(ctx, agentID, &status); err != nil {
-		h.logger.Errorw("failed to update forward agent status",
+	input := &dto.ReportAgentStatusInput{
+		AgentID: agentID,
+		Status:  &status,
+	}
+	if err := h.reportStatusUC.Execute(ctx, input); err != nil {
+		h.logger.Errorw("failed to report forward agent status",
 			"error", err,
 			"agent_id", agentID,
 		)

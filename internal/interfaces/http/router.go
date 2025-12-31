@@ -74,6 +74,7 @@ type Router struct {
 	telegramService             *telegramApp.ServiceDDD
 	forwardRuleHandler          *forwardRuleHandlers.Handler
 	forwardAgentHandler         *forwardAgentCrudHandlers.Handler
+	forwardAgentVersionHandler  *forwardAgentCrudHandlers.VersionHandler
 	forwardAgentAPIHandler      *forwardAgentAPIHandlers.Handler
 	userForwardRuleHandler      *forwardUserHandlers.Handler
 	agentHub                    *services.AgentHub
@@ -608,8 +609,9 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	regenerateForwardAgentTokenUC := forwardUsecases.NewRegenerateForwardAgentTokenUseCase(forwardAgentRepo, agentTokenSvc, log)
 	validateForwardAgentTokenUC := forwardUsecases.NewValidateForwardAgentTokenUseCase(forwardAgentRepo, log)
 
-	// Initialize agent last seen updater for status reporting
+	// Initialize agent last seen updater and agent info updater for status reporting
 	agentLastSeenUpdater := adapters.NewAgentLastSeenUpdaterAdapter(forwardAgentRepo)
+	agentInfoUpdater := adapters.NewAgentInfoUpdaterAdapter(forwardAgentRepo)
 	getAgentStatusUC := forwardUsecases.NewGetAgentStatusUseCase(forwardAgentRepo, forwardAgentStatusAdapter, log)
 	getRuleOverallStatusUC := forwardUsecases.NewGetRuleOverallStatusUseCase(forwardRuleRepo, forwardAgentRepo, ruleSyncStatusAdapter, log)
 	getForwardAgentTokenUC := forwardUsecases.NewGetForwardAgentTokenUseCase(forwardAgentRepo, log)
@@ -626,6 +628,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		forwardAgentStatusAdapter,
 		forwardAgentStatusAdapter, // statusQuerier (same adapter implements both interfaces)
 		agentLastSeenUpdater,
+		agentInfoUpdater,
 		log,
 	)
 	reportRuleSyncStatusUC := forwardUsecases.NewReportRuleSyncStatusUseCase(
@@ -653,7 +656,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	agentHub := services.NewAgentHub(log)
 
 	// Register forward status handler to process forward agent status updates
-	forwardStatusHandler := adapters.NewForwardStatusHandler(forwardAgentStatusAdapter, log)
+	forwardStatusHandler := adapters.NewForwardStatusHandler(reportAgentStatusUC, log)
 	agentHub.RegisterStatusHandler(forwardStatusHandler)
 
 	// Initialize and register probe service for forward domain
@@ -694,6 +697,15 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		getRuleOverallStatusUC,
 		generateInstallScriptUC,
 		serverBaseURL,
+	)
+
+	// Initialize GitHub release service and version handler
+	githubReleaseService := services.NewGitHubReleaseService(log)
+	forwardAgentVersionHandler := forwardAgentCrudHandlers.NewVersionHandler(
+		forwardAgentRepo,
+		githubReleaseService,
+		agentHub,
+		log,
 	)
 
 	// Now initialize forward rule use cases with configSyncService
@@ -846,6 +858,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		telegramService:             telegramServiceDDD,
 		forwardRuleHandler:          forwardRuleHandler,
 		forwardAgentHandler:         forwardAgentHandler,
+		forwardAgentVersionHandler:  forwardAgentVersionHandler,
 		forwardAgentAPIHandler:      forwardAgentAPIHandler,
 		userForwardRuleHandler:      userForwardRuleHandler,
 		agentHub:                    agentHub,
@@ -1080,6 +1093,7 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 	routes.SetupForwardRoutes(r.engine, &routes.ForwardRouteConfig{
 		ForwardRuleHandler:          r.forwardRuleHandler,
 		ForwardAgentHandler:         r.forwardAgentHandler,
+		ForwardAgentVersionHandler:  r.forwardAgentVersionHandler,
 		ForwardAgentAPIHandler:      r.forwardAgentAPIHandler,
 		UserForwardHandler:          r.userForwardRuleHandler,
 		AuthMiddleware:              r.authMiddleware,

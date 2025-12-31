@@ -832,6 +832,20 @@ func (m *MockForwardAgentRepository) UpdateLastSeen(ctx context.Context, id uint
 	return nil
 }
 
+// UpdateAgentInfo updates the agent info (version, platform, arch) for an agent.
+func (m *MockForwardAgentRepository) UpdateAgentInfo(ctx context.Context, id uint, agentVersion, platform, arch string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	// In mock, we just check if agent exists
+	_, exists := m.agents[id]
+	if !exists {
+		return nil // Agent not found, no-op
+	}
+
+	return nil
+}
+
 // Helper methods for testing
 
 // AddAgent adds an agent to the mock repository (for test setup).

@@ -332,25 +332,10 @@ func (r *ForwardAgentRepositoryImpl) ExistsByName(ctx context.Context, name stri
 }
 
 // UpdateLastSeen updates the last_seen_at timestamp and agent info for an agent.
-func (r *ForwardAgentRepositoryImpl) UpdateLastSeen(ctx context.Context, id uint, agentVersion, platform, arch string) error {
-	updates := map[string]interface{}{
-		"last_seen_at": biztime.NowUTC(),
-	}
-
-	// Only update agent info if provided
-	if agentVersion != "" {
-		updates["agent_version"] = agentVersion
-	}
-	if platform != "" {
-		updates["platform"] = platform
-	}
-	if arch != "" {
-		updates["arch"] = arch
-	}
-
+func (r *ForwardAgentRepositoryImpl) UpdateLastSeen(ctx context.Context, id uint) error {
 	result := r.db.WithContext(ctx).Model(&models.ForwardAgentModel{}).
 		Where("id = ?", id).
-		Updates(updates)
+		Update("last_seen_at", biztime.NowUTC())
 
 	if result.Error != nil {
 		r.logger.Errorw("failed to update forward agent last_seen_at", "id", id, "error", result.Error)
@@ -361,6 +346,41 @@ func (r *ForwardAgentRepositoryImpl) UpdateLastSeen(ctx context.Context, id uint
 		return errors.NewNotFoundError("forward agent", fmt.Sprintf("%d", id))
 	}
 
-	r.logger.Debugw("forward agent last_seen_at and agent info updated", "id", id, "agent_version", agentVersion)
+	r.logger.Debugw("forward agent last_seen_at updated", "id", id)
+	return nil
+}
+
+// UpdateAgentInfo updates the agent info (version, platform, arch) for an agent.
+func (r *ForwardAgentRepositoryImpl) UpdateAgentInfo(ctx context.Context, id uint, agentVersion, platform, arch string) error {
+	updates := map[string]interface{}{}
+
+	if agentVersion != "" {
+		updates["agent_version"] = agentVersion
+	}
+	if platform != "" {
+		updates["platform"] = platform
+	}
+	if arch != "" {
+		updates["arch"] = arch
+	}
+
+	if len(updates) == 0 {
+		return nil
+	}
+
+	result := r.db.WithContext(ctx).Model(&models.ForwardAgentModel{}).
+		Where("id = ?", id).
+		Updates(updates)
+
+	if result.Error != nil {
+		r.logger.Errorw("failed to update forward agent info", "id", id, "error", result.Error)
+		return fmt.Errorf("failed to update agent info: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return errors.NewNotFoundError("forward agent", fmt.Sprintf("%d", id))
+	}
+
+	r.logger.Infow("forward agent info updated", "id", id, "version", agentVersion, "platform", platform, "arch", arch)
 	return nil
 }
