@@ -257,6 +257,8 @@ func (a *NodeSystemStatusUpdaterAdapter) UpdateSystemStatus(ctx context.Context,
 
 		// Agent info
 		"agent_version": status.AgentVersion,
+		"platform":      status.Platform,
+		"arch":          status.Arch,
 
 		// Metadata
 		"updated_at": biztime.NowUTC().Unix(),
@@ -342,6 +344,8 @@ func parseNodeSystemStatus(values map[string]string) *nodeUsecases.NodeSystemSta
 		PublicIPv4:   values["public_ipv4"],
 		PublicIPv6:   values["public_ipv6"],
 		AgentVersion: values["agent_version"],
+		Platform:     values["platform"],
+		Arch:         values["arch"],
 	}
 
 	// Parse float64 fields

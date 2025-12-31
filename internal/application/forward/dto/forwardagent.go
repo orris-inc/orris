@@ -14,8 +14,9 @@ type ForwardAgentDTO struct {
 	TunnelAddress string          `json:"tunnel_address,omitempty"` // IP or hostname only (no port), configure if agent may serve as relay/exit in any rule
 	Status        string          `json:"status"`
 	Remark        string          `json:"remark"`
-	GroupSID      *string         `json:"group_id,omitempty"`      // Resource group SID this agent belongs to
-	AgentVersion  string          `json:"agent_version,omitempty"` // Agent software version (e.g., "1.2.3"), extracted from system_status for easy display
+	GroupSID      *string         `json:"group_id,omitempty"` // Resource group SID this agent belongs to
+	AgentVersion  string          `json:"agent_version"`      // Agent software version (e.g., "1.2.3"), extracted from system_status for easy display
+	HasUpdate     bool            `json:"has_update"`         // True if a newer version is available
 	CreatedAt     string          `json:"created_at"`
 	UpdatedAt     string          `json:"updated_at"`
 	SystemStatus  *AgentStatusDTO `json:"system_status,omitempty"`
@@ -34,6 +35,7 @@ func ToForwardAgentDTO(agent *forward.ForwardAgent) *ForwardAgentDTO {
 		TunnelAddress: agent.TunnelAddress(),
 		Status:        string(agent.Status()),
 		Remark:        agent.Remark(),
+		AgentVersion:  agent.AgentVersion(),
 		CreatedAt:     agent.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:     agent.UpdatedAt().Format("2006-01-02T15:04:05Z07:00"),
 	}

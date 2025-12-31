@@ -7,7 +7,14 @@ import (
 	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/version"
 )
+
+// LatestVersionQuerier provides access to the latest agent version.
+type LatestVersionQuerier interface {
+	// GetVersion returns the latest available agent version (e.g., "1.2.3").
+	GetVersion(ctx context.Context) (string, error)
+}
 
 // ListForwardAgentsQuery represents the input for listing forward agents.
 type ListForwardAgentsQuery struct {
@@ -29,21 +36,24 @@ type ListForwardAgentsResult struct {
 
 // ListForwardAgentsUseCase handles listing forward agents.
 type ListForwardAgentsUseCase struct {
-	repo          forward.AgentRepository
-	statusQuerier AgentStatusQuerier
-	logger        logger.Interface
+	repo           forward.AgentRepository
+	statusQuerier  AgentStatusQuerier
+	versionQuerier LatestVersionQuerier
+	logger         logger.Interface
 }
 
 // NewListForwardAgentsUseCase creates a new ListForwardAgentsUseCase.
 func NewListForwardAgentsUseCase(
 	repo forward.AgentRepository,
 	statusQuerier AgentStatusQuerier,
+	versionQuerier LatestVersionQuerier,
 	logger logger.Interface,
 ) *ListForwardAgentsUseCase {
 	return &ListForwardAgentsUseCase{
-		repo:          repo,
-		statusQuerier: statusQuerier,
-		logger:        logger,
+		repo:           repo,
+		statusQuerier:  statusQuerier,
+		versionQuerier: versionQuerier,
+		logger:         logger,
 	}
 }
 
@@ -106,8 +116,26 @@ func (uc *ListForwardAgentsUseCase) Execute(ctx context.Context, query ListForwa
 				if idx, ok := idToIndexMap[agentID]; ok && status != nil {
 					dtos[idx].SystemStatus = status
 					// Extract agent version to top-level field for easy display
-					dtos[idx].AgentVersion = status.AgentVersion
+					// Only override if Redis has a non-empty version (prefer real-time over DB)
+					if status.AgentVersion != "" {
+						dtos[idx].AgentVersion = status.AgentVersion
+					}
 				}
+			}
+		}
+	}
+
+	// Query latest version and calculate HasUpdate for each agent
+	if uc.versionQuerier != nil {
+		latestVersion, err := uc.versionQuerier.GetVersion(ctx)
+		if err != nil {
+			uc.logger.Warnw("failed to get latest version, continuing without update check",
+				"error", err,
+			)
+		} else {
+			// Set HasUpdate for each agent by comparing versions
+			for i := range dtos {
+				dtos[i].HasUpdate = version.HasNewerVersion(dtos[i].AgentVersion, latestVersion)
 			}
 		}
 	}

@@ -27,6 +27,9 @@ type ReportStatusRequest struct {
 	TunnelStatus      map[string]string `json:"tunnel_status,omitempty"`   // Key is Stripe-style rule ID (e.g., "fr_xK9mP2vL3nQ")
 	WsListenPort      uint16            `json:"ws_listen_port,omitempty"`  // WebSocket listen port for exit agent tunnel connections
 	TlsListenPort     uint16            `json:"tls_listen_port,omitempty"` // TLS listen port for exit agent tunnel connections
+	AgentVersion      string            `json:"agent_version,omitempty"`   // Agent software version (e.g., "1.2.3")
+	Platform          string            `json:"platform,omitempty"`        // OS platform (linux, darwin, windows)
+	Arch              string            `json:"arch,omitempty"`            // CPU architecture (amd64, arm64, arm, 386)
 }
 
 // ReportRuleSyncStatusRequest represents rule sync status report request from forward client
@@ -85,6 +88,9 @@ func (h *Handler) ReportStatus(c *gin.Context) {
 		TunnelStatus:      req.TunnelStatus,
 		WsListenPort:      req.WsListenPort,
 		TlsListenPort:     req.TlsListenPort,
+		AgentVersion:      req.AgentVersion,
+		Platform:          req.Platform,
+		Arch:              req.Arch,
 	}
 
 	// Execute use case

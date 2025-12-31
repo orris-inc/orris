@@ -61,6 +61,8 @@ type NodeSystemStatus struct {
 
 	// Agent info
 	AgentVersion string
+	Platform     string
+	Arch         string
 
 	// Metadata
 	UpdatedAt int64
@@ -138,9 +140,11 @@ func (uc *GetNodeUseCase) Execute(ctx context.Context, query GetNodeQuery) (*Get
 	} else if systemStatus != nil {
 		// Add system status to DTO
 		nodeDTO.SystemStatus = toNodeSystemStatusDTO(systemStatus)
-		// Extract agent version to top-level field for easy display
+		// Extract agent info to top-level fields for easy display
 		// Normalize version format by removing "v" prefix for consistency
 		nodeDTO.AgentVersion = strings.TrimPrefix(systemStatus.AgentVersion, "v")
+		nodeDTO.Platform = systemStatus.Platform
+		nodeDTO.Arch = systemStatus.Arch
 	}
 
 	uc.logger.Debugw("node retrieved", "sid", nodeEntity.SID())
@@ -186,6 +190,8 @@ func toNodeSystemStatusDTO(status *NodeSystemStatus) *dto.NodeSystemStatusDTO {
 		PublicIPv4:     status.PublicIPv4,
 		PublicIPv6:     status.PublicIPv6,
 		AgentVersion:   status.AgentVersion,
+		Platform:       status.Platform,
+		Arch:           status.Arch,
 		UpdatedAt:      status.UpdatedAt,
 	}
 }

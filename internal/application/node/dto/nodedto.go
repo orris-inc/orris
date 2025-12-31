@@ -31,6 +31,9 @@ type NodeDTO struct {
 	IsOnline          bool       `json:"is_online" example:"true" description:"Indicates if the node agent is online (reported within 5 minutes)"`
 	LastSeenAt        *time.Time `json:"last_seen_at,omitempty" example:"2024-01-15T14:20:00Z" description:"Last time the node agent reported status"`
 	AgentVersion      string     `json:"agent_version,omitempty" example:"1.2.0" description:"Agent software version, extracted from system_status for easy display"`
+	Platform          string     `json:"platform,omitempty" example:"linux" description:"OS platform (linux, darwin, windows)"`
+	Arch              string     `json:"arch,omitempty" example:"amd64" description:"CPU architecture (amd64, arm64, arm, 386)"`
+	HasUpdate         bool       `json:"has_update" example:"true" description:"True if a newer agent version is available"`
 	GroupSIDs         []string   `json:"group_ids,omitempty" example:"[\"rg_xK9mP2vL3nQ\"]" description:"Resource group SIDs this node belongs to"`
 	Version           int        `json:"version" example:"1" description:"Version number for optimistic locking"`
 	CreatedAt         time.Time  `json:"created_at" example:"2024-01-15T10:30:00Z" description:"Timestamp when the node was created"`
@@ -84,6 +87,8 @@ type NodeSystemStatusDTO struct {
 
 	// Agent info
 	AgentVersion string `json:"agent_version,omitempty" example:"1.2.0"` // Agent software version
+	Platform     string `json:"platform,omitempty" example:"linux"`      // OS platform (linux, darwin, windows)
+	Arch         string `json:"arch,omitempty" example:"amd64"`          // CPU architecture (amd64, arm64, arm, 386)
 
 	// Metadata
 	UpdatedAt int64 `json:"updated_at" example:"1705324800"` // Last update timestamp (Unix seconds)
@@ -164,6 +169,17 @@ func ToNodeDTO(n *node.Node) *NodeDTO {
 		Version:           n.Version(),
 		CreatedAt:         n.CreatedAt(),
 		UpdatedAt:         n.UpdatedAt(),
+	}
+
+	// Map agent info fields
+	if n.AgentVersion() != nil {
+		dto.AgentVersion = *n.AgentVersion()
+	}
+	if n.AgentPlatform() != nil {
+		dto.Platform = *n.AgentPlatform()
+	}
+	if n.AgentArch() != nil {
+		dto.Arch = *n.AgentArch()
 	}
 
 	if n.PluginConfig() != nil {

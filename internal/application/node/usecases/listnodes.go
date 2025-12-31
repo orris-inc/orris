@@ -10,6 +10,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/user"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	sharedquery "github.com/orris-inc/orris/internal/shared/query"
+	"github.com/orris-inc/orris/internal/shared/version"
 )
 
 type ListNodesQuery struct {
@@ -48,11 +49,18 @@ type MultipleNodeSystemStatusQuerier interface {
 	GetMultipleNodeSystemStatus(ctx context.Context, nodeIDs []uint) (map[uint]*NodeSystemStatus, error)
 }
 
+// LatestVersionQuerier provides access to the latest agent version.
+type LatestVersionQuerier interface {
+	// GetVersion returns the latest available agent version (e.g., "1.2.3").
+	GetVersion(ctx context.Context) (string, error)
+}
+
 type ListNodesUseCase struct {
 	nodeRepo          node.NodeRepository
 	resourceGroupRepo resource.Repository
 	userRepo          user.Repository
 	statusQuerier     MultipleNodeSystemStatusQuerier
+	versionQuerier    LatestVersionQuerier
 	logger            logger.Interface
 }
 
@@ -61,6 +69,7 @@ func NewListNodesUseCase(
 	resourceGroupRepo resource.Repository,
 	userRepo user.Repository,
 	statusQuerier MultipleNodeSystemStatusQuerier,
+	versionQuerier LatestVersionQuerier,
 	logger logger.Interface,
 ) *ListNodesUseCase {
 	return &ListNodesUseCase{
@@ -68,6 +77,7 @@ func NewListNodesUseCase(
 		resourceGroupRepo: resourceGroupRepo,
 		userRepo:          userRepo,
 		statusQuerier:     statusQuerier,
+		versionQuerier:    versionQuerier,
 		logger:            logger,
 	}
 }
@@ -254,12 +264,31 @@ func (uc *ListNodesUseCase) Execute(ctx context.Context, query ListNodesQuery) (
 						PublicIPv4:     status.PublicIPv4,
 						PublicIPv6:     status.PublicIPv6,
 						AgentVersion:   status.AgentVersion,
+						Platform:       status.Platform,
+						Arch:           status.Arch,
 						UpdatedAt:      status.UpdatedAt,
 					}
-					// Extract agent version to top-level field for easy display
+					// Extract agent info to top-level fields for easy display
 					// Normalize version format by removing "v" prefix for consistency
 					nodeDTOs[idx].AgentVersion = strings.TrimPrefix(status.AgentVersion, "v")
+					nodeDTOs[idx].Platform = status.Platform
+					nodeDTOs[idx].Arch = status.Arch
 				}
+			}
+		}
+	}
+
+	// Query latest version and calculate HasUpdate for each node
+	if uc.versionQuerier != nil {
+		latestVersion, err := uc.versionQuerier.GetVersion(ctx)
+		if err != nil {
+			uc.logger.Warnw("failed to get latest version, continuing without update check",
+				"error", err,
+			)
+		} else {
+			// Set HasUpdate for each node by comparing versions
+			for i := range nodeDTOs {
+				nodeDTOs[i].HasUpdate = version.HasNewerVersion(nodeDTOs[i].AgentVersion, latestVersion)
 			}
 		}
 	}

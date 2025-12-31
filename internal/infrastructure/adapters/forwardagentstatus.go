@@ -98,6 +98,9 @@ func (a *ForwardAgentStatusAdapter) UpdateStatus(ctx context.Context, agentID ui
 		"cpu", status.CPUPercent,
 		"memory", status.MemoryPercent,
 		"active_rules", status.ActiveRules,
+		"agent_version", status.AgentVersion,
+		"platform", status.Platform,
+		"arch", status.Arch,
 	)
 
 	return nil
