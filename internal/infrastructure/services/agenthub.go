@@ -2,6 +2,7 @@
 package services
 
 import (
+	"encoding/json"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -9,6 +10,7 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/orris-inc/orris/internal/application/forward/dto"
+	nodedto "github.com/orris-inc/orris/internal/application/node/dto"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -463,6 +465,33 @@ func (h *AgentHub) SendMessageToNode(nodeID uint, msg []byte) error {
 	}
 
 	if !nodeConn.TrySend(msg) {
+		return ErrSendChannelFull
+	}
+	return nil
+}
+
+// SendCommandToNode sends a command to a specific node agent.
+func (h *AgentHub) SendCommandToNode(nodeID uint, cmd *nodedto.NodeCommandData) error {
+	h.nodesMu.RLock()
+	nodeConn, ok := h.nodes[nodeID]
+	h.nodesMu.RUnlock()
+
+	if !ok {
+		return ErrNodeNotConnected
+	}
+
+	msg := &nodedto.NodeHubMessage{
+		Type:      nodedto.NodeMsgTypeCommand,
+		Timestamp: biztime.NowUTC().Unix(),
+		Data:      cmd,
+	}
+
+	msgBytes, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+
+	if !nodeConn.TrySend(msgBytes) {
 		return ErrSendChannelFull
 	}
 	return nil

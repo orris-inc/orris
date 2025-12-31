@@ -12,6 +12,7 @@ import (
 // NodeRouteConfig holds dependencies for node routes
 type NodeRouteConfig struct {
 	NodeHandler         *handlers.NodeHandler
+	NodeVersionHandler  *nodeHandlers.NodeVersionHandler
 	UserNodeHandler     *nodeHandlers.UserNodeHandler
 	SubscriptionHandler *handlers.NodeSubscriptionHandler
 	AuthMiddleware      *middleware.AuthMiddleware
@@ -51,6 +52,16 @@ func SetupNodeRoutes(engine *gin.Engine, config *NodeRouteConfig) {
 		nodes.GET("/:id/install-script",
 			authorization.RequireAdmin(),
 			config.NodeHandler.GetInstallScript)
+
+		// Version management endpoints
+		if config.NodeVersionHandler != nil {
+			nodes.GET("/:id/version",
+				authorization.RequireAdmin(),
+				config.NodeVersionHandler.GetNodeVersion)
+			nodes.POST("/:id/update",
+				authorization.RequireAdmin(),
+				config.NodeVersionHandler.TriggerUpdate)
+		}
 
 		// Generic parameterized routes (must come LAST)
 		nodes.GET("/:id",

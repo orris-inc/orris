@@ -38,6 +38,7 @@ const (
 	NodeCmdActionReloadConfig = "reload_config"
 	NodeCmdActionRestart      = "restart"
 	NodeCmdActionStop         = "stop"
+	NodeCmdActionUpdate       = "update" // Update node agent binary
 )
 
 // NodeEventData represents a node agent event payload.

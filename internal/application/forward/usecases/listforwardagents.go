@@ -105,6 +105,8 @@ func (uc *ListForwardAgentsUseCase) Execute(ctx context.Context, query ListForwa
 			for agentID, status := range statusMap {
 				if idx, ok := idToIndexMap[agentID]; ok && status != nil {
 					dtos[idx].SystemStatus = status
+					// Extract agent version to top-level field for easy display
+					dtos[idx].AgentVersion = status.AgentVersion
 				}
 			}
 		}

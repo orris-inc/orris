@@ -80,6 +80,7 @@ type Router struct {
 	agentHub                    *services.AgentHub
 	agentHubHandler             *forwardAgentHubHandlers.Handler
 	nodeHubHandler              *nodeHandlers.NodeHubHandler
+	nodeVersionHandler          *nodeHandlers.NodeVersionHandler
 	configSyncService           *forwardServices.ConfigSyncService
 	trafficLimitEnforcementSvc  *forwardServices.TrafficLimitEnforcementService
 	authMiddleware              *middleware.AuthMiddleware
@@ -699,10 +700,16 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		serverBaseURL,
 	)
 
-	// Initialize GitHub release service and version handler
+	// Initialize GitHub release service and version handlers
 	githubReleaseService := services.NewGitHubReleaseService(log)
 	forwardAgentVersionHandler := forwardAgentCrudHandlers.NewVersionHandler(
 		forwardAgentRepo,
+		githubReleaseService,
+		agentHub,
+		log,
+	)
+	nodeVersionHandler := nodeHandlers.NewNodeVersionHandler(
+		nodeRepoImpl,
 		githubReleaseService,
 		agentHub,
 		log,
@@ -864,6 +871,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		agentHub:                    agentHub,
 		agentHubHandler:             agentHubHandler,
 		nodeHubHandler:              nodeHubHandler,
+		nodeVersionHandler:          nodeVersionHandler,
 		configSyncService:           configSyncService,
 		trafficLimitEnforcementSvc:  trafficLimitEnforcementSvc,
 		authMiddleware:              authMiddleware,
@@ -1043,6 +1051,7 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 
 	routes.SetupNodeRoutes(r.engine, &routes.NodeRouteConfig{
 		NodeHandler:         r.nodeHandler,
+		NodeVersionHandler:  r.nodeVersionHandler,
 		UserNodeHandler:     r.userNodeHandler,
 		SubscriptionHandler: r.nodeSubscriptionHandler,
 		AuthMiddleware:      r.authMiddleware,

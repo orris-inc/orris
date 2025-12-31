@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/orris-inc/orris/internal/application/node/dto"
 	domainNode "github.com/orris-inc/orris/internal/domain/node"
@@ -137,6 +138,9 @@ func (uc *GetNodeUseCase) Execute(ctx context.Context, query GetNodeQuery) (*Get
 	} else if systemStatus != nil {
 		// Add system status to DTO
 		nodeDTO.SystemStatus = toNodeSystemStatusDTO(systemStatus)
+		// Extract agent version to top-level field for easy display
+		// Normalize version format by removing "v" prefix for consistency
+		nodeDTO.AgentVersion = strings.TrimPrefix(systemStatus.AgentVersion, "v")
 	}
 
 	uc.logger.Debugw("node retrieved", "sid", nodeEntity.SID())

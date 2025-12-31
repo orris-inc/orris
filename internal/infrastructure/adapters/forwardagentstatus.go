@@ -68,6 +68,9 @@ func (a *ForwardAgentStatusAdapter) UpdateStatus(ctx context.Context, agentID ui
 		"active_connections": status.ActiveConnections,
 		"ws_listen_port":     status.WsListenPort,
 		"tls_listen_port":    status.TlsListenPort,
+		"agent_version":      status.AgentVersion,
+		"platform":           status.Platform,
+		"arch":               status.Arch,
 		"updated_at":         biztime.NowUTC().Unix(),
 	})
 
@@ -191,6 +194,11 @@ func (a *ForwardAgentStatusAdapter) parseStatus(values map[string]string) *dto.A
 			status.TunnelStatus = tunnelStatus
 		}
 	}
+
+	// Parse agent info
+	status.AgentVersion = values["agent_version"]
+	status.Platform = values["platform"]
+	status.Arch = values["arch"]
 
 	return status
 }

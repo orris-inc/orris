@@ -2,6 +2,7 @@ package usecases
 
 import (
 	"context"
+	"strings"
 
 	"github.com/orris-inc/orris/internal/application/node/dto"
 	"github.com/orris-inc/orris/internal/domain/node"
@@ -255,6 +256,9 @@ func (uc *ListNodesUseCase) Execute(ctx context.Context, query ListNodesQuery) (
 						AgentVersion:   status.AgentVersion,
 						UpdatedAt:      status.UpdatedAt,
 					}
+					// Extract agent version to top-level field for easy display
+					// Normalize version format by removing "v" prefix for consistency
+					nodeDTOs[idx].AgentVersion = strings.TrimPrefix(status.AgentVersion, "v")
 				}
 			}
 		}
