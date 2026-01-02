@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/mod/semver"
 	"golang.org/x/sync/singleflight"
 
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -23,6 +24,9 @@ const (
 
 	// HTTP request timeout
 	httpTimeout = 10 * time.Second
+
+	// Cooldown period for force refresh to prevent DoS attacks
+	forceRefreshCooldown = 10 * time.Second
 )
 
 // GitHubRepoConfig contains configuration for a GitHub repository.
@@ -50,12 +54,13 @@ type releaseCache struct {
 
 // GitHubReleaseService fetches release information from GitHub.
 type GitHubReleaseService struct {
-	config     GitHubRepoConfig
-	httpClient *http.Client
-	cache      *releaseCache
-	cacheMu    sync.RWMutex
-	fetchGroup singleflight.Group // Prevents cache stampede on concurrent requests
-	logger     logger.Interface
+	config           GitHubRepoConfig
+	httpClient       *http.Client
+	cache            *releaseCache
+	cacheMu          sync.RWMutex
+	lastForceRefresh time.Time          // Last force refresh time for cooldown
+	fetchGroup       singleflight.Group // Prevents cache stampede on concurrent requests
+	logger           logger.Interface
 }
 
 // NewGitHubReleaseService creates a new GitHubReleaseService with the given repository config.
@@ -218,6 +223,81 @@ func (s *GitHubReleaseService) parseAssets(assets []githubAsset) (binaries map[s
 	}
 
 	return binaries, checksumURL
+}
+
+// GetLatestReleaseWithVersionCheck fetches the latest release, automatically refreshing cache
+// if currentVersion >= cached version (indicating cache may be stale).
+// This provides smart cache invalidation without manual intervention.
+// Includes cooldown protection to prevent DoS attacks via frequent refresh requests.
+func (s *GitHubReleaseService) GetLatestReleaseWithVersionCheck(ctx context.Context, currentVersion string) (*ReleaseInfo, error) {
+	info, err := s.GetLatestRelease(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// If current version >= cached version, cache may be stale, consider force refresh
+	if currentVersion != "" && !s.hasNewerVersion(currentVersion, info.Version) {
+		// Atomically check and update cooldown to prevent race condition (TOCTOU)
+		shouldRefresh := false
+		s.cacheMu.Lock()
+		if time.Since(s.lastForceRefresh) >= forceRefreshCooldown {
+			s.lastForceRefresh = time.Now()
+			shouldRefresh = true
+		}
+		s.cacheMu.Unlock()
+
+		if !shouldRefresh {
+			s.logger.Debugw("force refresh skipped due to cooldown",
+				"current_version", currentVersion,
+				"cached_version", info.Version,
+			)
+			return info, nil
+		}
+
+		s.logger.Infow("cache may be stale, refreshing release info",
+			"current_version", currentVersion,
+			"cached_version", info.Version,
+		)
+
+		s.InvalidateCache()
+		return s.GetLatestRelease(ctx)
+	}
+
+	return info, nil
+}
+
+// hasNewerVersion checks if latestVersion is newer than currentVersion using semver.
+func (s *GitHubReleaseService) hasNewerVersion(currentVersion, latestVersion string) bool {
+	if latestVersion == "" {
+		return false
+	}
+	if currentVersion == "" || currentVersion == "dev" {
+		return true
+	}
+
+	current := s.normalizeVersion(currentVersion)
+	latest := s.normalizeVersion(latestVersion)
+
+	if !semver.IsValid(current) {
+		return true
+	}
+	if !semver.IsValid(latest) {
+		return false
+	}
+
+	return semver.Compare(current, latest) < 0
+}
+
+// normalizeVersion ensures version string has "v" prefix for semver compatibility.
+func (s *GitHubReleaseService) normalizeVersion(version string) string {
+	if version == "" {
+		return ""
+	}
+	version = strings.TrimSpace(version)
+	if !strings.HasPrefix(version, "v") {
+		return "v" + version
+	}
+	return version
 }
 
 // GetDownloadURL returns the download URL for a specific platform and architecture.

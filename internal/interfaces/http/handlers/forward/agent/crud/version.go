@@ -62,8 +62,8 @@ func (h *VersionHandler) GetAgentVersion(c *gin.Context) {
 		return
 	}
 
-	// Get latest release from GitHub
-	releaseInfo, err := h.releaseService.GetLatestRelease(c.Request.Context())
+	// Get latest release from GitHub (with smart cache refresh)
+	releaseInfo, err := h.releaseService.GetLatestReleaseWithVersionCheck(c.Request.Context(), agent.AgentVersion())
 	if err != nil {
 		h.logger.Warnw("failed to get latest release", "error", err)
 		// Return partial info without latest version
@@ -145,8 +145,8 @@ func (h *VersionHandler) TriggerUpdate(c *gin.Context) {
 		return
 	}
 
-	// Get latest release from GitHub
-	releaseInfo, err := h.releaseService.GetLatestRelease(c.Request.Context())
+	// Get latest release from GitHub (with smart cache refresh)
+	releaseInfo, err := h.releaseService.GetLatestReleaseWithVersionCheck(c.Request.Context(), agent.AgentVersion())
 	if err != nil {
 		h.logger.Errorw("failed to get latest release", "error", err)
 		utils.ErrorResponse(c, http.StatusServiceUnavailable, "Failed to get latest release information")
@@ -305,21 +305,13 @@ func (h *VersionHandler) BatchTriggerUpdate(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
-	// Get latest release info once for all agents
-	releaseInfo, err := h.releaseService.GetLatestRelease(ctx)
-	if err != nil {
-		h.logger.Errorw("failed to get latest release for batch update", "error", err)
-		utils.ErrorResponse(c, http.StatusServiceUnavailable, "Failed to get latest release information")
-		return
-	}
-
 	response := &dto.BatchUpdateResponse{
 		Succeeded: []dto.BatchUpdateSuccess{},
 		Failed:    []dto.BatchUpdateFailed{},
 		Skipped:   []dto.BatchUpdateSkipped{},
 	}
 
-	// Get target agents
+	// Get target agents first (needed for smart cache refresh)
 	var agents []*forward.ForwardAgent
 	if hasAgentIDs {
 		// Deduplicate agent IDs
@@ -372,6 +364,24 @@ func (h *VersionHandler) BatchTriggerUpdate(c *gin.Context) {
 			response.Truncated = true
 		}
 		agents = allAgents
+	}
+
+	// Find highest version among agents for smart cache refresh
+	// This ensures cache is refreshed if any agent has version >= cached version
+	highestVersion := ""
+	for _, agent := range agents {
+		agentVersion := agent.AgentVersion()
+		if agentVersion != "" && (highestVersion == "" || !hasNewerVersion(agentVersion, highestVersion)) {
+			highestVersion = agentVersion
+		}
+	}
+
+	// Get latest release info with smart cache refresh
+	releaseInfo, err := h.releaseService.GetLatestReleaseWithVersionCheck(ctx, highestVersion)
+	if err != nil {
+		h.logger.Errorw("failed to get latest release for batch update", "error", err)
+		utils.ErrorResponse(c, http.StatusServiceUnavailable, "Failed to get latest release information")
+		return
 	}
 
 	// Process each agent

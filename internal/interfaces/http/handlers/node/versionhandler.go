@@ -76,8 +76,8 @@ func (h *NodeVersionHandler) GetNodeVersion(c *gin.Context) {
 		arch = *n.AgentArch()
 	}
 
-	// Get latest release from GitHub
-	releaseInfo, err := h.releaseService.GetLatestRelease(c.Request.Context())
+	// Get latest release from GitHub (with smart cache refresh)
+	releaseInfo, err := h.releaseService.GetLatestReleaseWithVersionCheck(c.Request.Context(), currentVersion)
 	if err != nil {
 		h.logger.Warnw("failed to get latest release", "error", err)
 		// Return partial info without latest version
@@ -162,8 +162,14 @@ func (h *NodeVersionHandler) TriggerUpdate(c *gin.Context) {
 	platform := *n.AgentPlatform()
 	arch := *n.AgentArch()
 
-	// Get latest release from GitHub
-	releaseInfo, err := h.releaseService.GetLatestRelease(c.Request.Context())
+	// Get current version for smart cache refresh
+	currentVersion := ""
+	if n.AgentVersion() != nil {
+		currentVersion = *n.AgentVersion()
+	}
+
+	// Get latest release from GitHub (with smart cache refresh)
+	releaseInfo, err := h.releaseService.GetLatestReleaseWithVersionCheck(c.Request.Context(), currentVersion)
 	if err != nil {
 		h.logger.Errorw("failed to get latest release", "error", err)
 		utils.ErrorResponse(c, http.StatusServiceUnavailable, "Failed to get latest release information")
@@ -171,10 +177,6 @@ func (h *NodeVersionHandler) TriggerUpdate(c *gin.Context) {
 	}
 
 	// Check if there is an update available using semver comparison
-	currentVersion := ""
-	if n.AgentVersion() != nil {
-		currentVersion = *n.AgentVersion()
-	}
 	if !hasNewerVersion(currentVersion, releaseInfo.Version) {
 		utils.ErrorResponse(c, http.StatusConflict, "Node agent is already at the latest version")
 		return
@@ -326,21 +328,13 @@ func (h *NodeVersionHandler) BatchTriggerUpdate(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
-	// Get latest release info once for all nodes
-	releaseInfo, err := h.releaseService.GetLatestRelease(ctx)
-	if err != nil {
-		h.logger.Errorw("failed to get latest release for batch update", "error", err)
-		utils.ErrorResponse(c, http.StatusServiceUnavailable, "Failed to get latest release information")
-		return
-	}
-
 	response := &dto.BatchUpdateResponse{
 		Succeeded: []dto.BatchUpdateSuccess{},
 		Failed:    []dto.BatchUpdateFailed{},
 		Skipped:   []dto.BatchUpdateSkipped{},
 	}
 
-	// Get target nodes
+	// Get target nodes first (needed for smart cache refresh)
 	var nodes []*node.Node
 	if hasNodeIDs {
 		// Deduplicate node IDs
@@ -392,6 +386,26 @@ func (h *NodeVersionHandler) BatchTriggerUpdate(c *gin.Context) {
 			response.Truncated = true
 		}
 		nodes = allNodes
+	}
+
+	// Find highest version among nodes for smart cache refresh
+	// This ensures cache is refreshed if any node has version >= cached version
+	highestVersion := ""
+	for _, n := range nodes {
+		if n.AgentVersion() != nil {
+			nodeVersion := *n.AgentVersion()
+			if nodeVersion != "" && (highestVersion == "" || !hasNewerVersion(nodeVersion, highestVersion)) {
+				highestVersion = nodeVersion
+			}
+		}
+	}
+
+	// Get latest release info with smart cache refresh
+	releaseInfo, err := h.releaseService.GetLatestReleaseWithVersionCheck(ctx, highestVersion)
+	if err != nil {
+		h.logger.Errorw("failed to get latest release for batch update", "error", err)
+		utils.ErrorResponse(c, http.StatusServiceUnavailable, "Failed to get latest release information")
+		return
 	}
 
 	// Process each node
