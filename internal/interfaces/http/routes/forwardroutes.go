@@ -17,6 +17,7 @@ type ForwardRouteConfig struct {
 	ForwardRuleHandler          *forwardRuleHandlers.Handler
 	ForwardAgentHandler         *forwardAgentCrudHandlers.Handler
 	ForwardAgentVersionHandler  *forwardAgentCrudHandlers.VersionHandler
+	ForwardAgentSSEHandler      *forwardAgentCrudHandlers.ForwardAgentSSEHandler
 	ForwardAgentAPIHandler      *forwardAgentAPIHandlers.Handler
 	UserForwardHandler          *forwardUserHandlers.Handler
 	AuthMiddleware              *middleware.AuthMiddleware
@@ -62,6 +63,11 @@ func SetupForwardRoutes(engine *gin.Engine, cfg *ForwardRouteConfig) {
 	forwardAgents.Use(cfg.AuthMiddleware.RequireAuth())
 	forwardAgents.Use(authorization.RequireAdmin())
 	{
+		// SSE endpoint for real-time agent events (must be registered before /:id)
+		if cfg.ForwardAgentSSEHandler != nil {
+			forwardAgents.GET("/events", cfg.ForwardAgentSSEHandler.Events)
+		}
+
 		// Collection operations
 		forwardAgents.POST("", cfg.ForwardAgentHandler.CreateAgent)
 		forwardAgents.GET("", cfg.ForwardAgentHandler.ListAgents)

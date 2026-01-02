@@ -22,6 +22,8 @@ import (
 	"github.com/orris-inc/orris/internal/application/user"
 	"github.com/orris-inc/orris/internal/application/user/helpers"
 	"github.com/orris-inc/orris/internal/application/user/usecases"
+	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/infrastructure/adapters"
 	"github.com/orris-inc/orris/internal/infrastructure/auth"
 	"github.com/orris-inc/orris/internal/infrastructure/cache"
@@ -75,12 +77,15 @@ type Router struct {
 	forwardRuleHandler          *forwardRuleHandlers.Handler
 	forwardAgentHandler         *forwardAgentCrudHandlers.Handler
 	forwardAgentVersionHandler  *forwardAgentCrudHandlers.VersionHandler
+	forwardAgentSSEHandler      *forwardAgentCrudHandlers.ForwardAgentSSEHandler
 	forwardAgentAPIHandler      *forwardAgentAPIHandlers.Handler
 	userForwardRuleHandler      *forwardUserHandlers.Handler
 	agentHub                    *services.AgentHub
 	agentHubHandler             *forwardAgentHubHandlers.Handler
 	nodeHubHandler              *nodeHandlers.NodeHubHandler
 	nodeVersionHandler          *nodeHandlers.NodeVersionHandler
+	nodeSSEHandler              *nodeHandlers.NodeSSEHandler
+	adminHub                    *services.AdminHub
 	configSyncService           *forwardServices.ConfigSyncService
 	trafficLimitEnforcementSvc  *forwardServices.TrafficLimitEnforcementService
 	authMiddleware              *middleware.AuthMiddleware
@@ -668,7 +673,9 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	forwardAgentTokenMiddleware := middleware.NewForwardAgentTokenMiddleware(validateForwardAgentTokenUC, log)
 
 	// Initialize agent hub for forward agent WebSocket connections (probe functionality)
-	agentHub := services.NewAgentHub(log)
+	agentHub := services.NewAgentHub(log, &services.AgentHubConfig{
+		NodeStatusTimeoutMs: 5000, // 5 seconds timeout for node status
+	})
 
 	// Register forward status handler to process forward agent status updates
 	forwardStatusHandler := adapters.NewForwardStatusHandler(reportAgentStatusUC, log)
@@ -838,14 +845,102 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Initialize node config sync service for pushing config to node agents
 	nodeConfigSyncService := nodeServices.NewNodeConfigSyncService(nodeRepoImpl, agentHub, log)
 
-	// Set OnNodeOnline callback to sync config when node agent connects
+	// Initialize admin hub for SSE connections to frontend (must be before callbacks)
+	adminHub := services.NewAdminHub(log, &services.AdminHubConfig{
+		StatusThrottleMs: 1000, // 1 second throttle for node status updates
+	})
+
+	// Set AdminHub on nodeStatusHandler for SSE broadcasting
+	nodeStatusHandler.SetAdminHub(adminHub, &nodeSIDResolverAdapter{repo: nodeRepoImpl})
+
+	// Set AdminHub on forwardStatusHandler for SSE broadcasting
+	forwardStatusHandler.SetAdminHub(adminHub, &agentSIDResolverAdapter{repo: forwardAgentRepo})
+
+	// Set OnNodeOnline callback to sync config and broadcast SSE event
 	agentHub.SetOnNodeOnline(func(nodeID uint) {
 		ctx := context.Background()
+
+		// Sync config to node
 		if err := nodeConfigSyncService.FullSyncToNode(ctx, nodeID); err != nil {
 			log.Warnw("failed to sync config to node on connect",
 				"node_id", nodeID,
 				"error", err,
 			)
+		}
+
+		// Broadcast SSE event
+		n, err := nodeRepoImpl.GetByID(ctx, nodeID)
+		if err != nil {
+			log.Warnw("failed to get node for SSE broadcast",
+				"node_id", nodeID,
+				"error", err,
+			)
+			return
+		}
+		if n != nil {
+			adminHub.BroadcastNodeOnline(n.SID(), n.Name())
+		}
+	})
+
+	// Set OnNodeOffline callback to broadcast SSE event
+	agentHub.SetOnNodeOffline(func(nodeID uint) {
+		ctx := context.Background()
+
+		// Broadcast SSE event
+		n, err := nodeRepoImpl.GetByID(ctx, nodeID)
+		if err != nil {
+			log.Warnw("failed to get node for SSE broadcast",
+				"node_id", nodeID,
+				"error", err,
+			)
+			return
+		}
+		if n != nil {
+			adminHub.BroadcastNodeOffline(n.SID(), n.Name())
+		}
+	})
+
+	// Set OnAgentOnline callback to sync config and broadcast SSE event
+	agentHub.SetOnAgentOnline(func(agentID uint) {
+		ctx := context.Background()
+
+		// Sync config to forward agent
+		if err := configSyncService.FullSyncToAgent(ctx, agentID); err != nil {
+			log.Warnw("failed to sync config to agent on connect",
+				"agent_id", agentID,
+				"error", err,
+			)
+		}
+
+		// Broadcast SSE event
+		agent, err := forwardAgentRepo.GetByID(ctx, agentID)
+		if err != nil {
+			log.Warnw("failed to get agent for SSE broadcast",
+				"agent_id", agentID,
+				"error", err,
+			)
+			return
+		}
+		if agent != nil {
+			adminHub.BroadcastForwardAgentOnline(agent.SID(), agent.Name())
+		}
+	})
+
+	// Set OnAgentOffline callback to broadcast SSE event
+	agentHub.SetOnAgentOffline(func(agentID uint) {
+		ctx := context.Background()
+
+		// Broadcast SSE event
+		agent, err := forwardAgentRepo.GetByID(ctx, agentID)
+		if err != nil {
+			log.Warnw("failed to get agent for SSE broadcast",
+				"agent_id", agentID,
+				"error", err,
+			)
+			return
+		}
+		if agent != nil {
+			adminHub.BroadcastForwardAgentOffline(agent.SID(), agent.Name())
 		}
 	})
 
@@ -854,6 +949,12 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	// Initialize node hub handler
 	nodeHubHandler := nodeHandlers.NewNodeHubHandler(agentHub, log)
+
+	// Initialize node SSE handler
+	nodeSSEHandler := nodeHandlers.NewNodeSSEHandler(adminHub, log)
+
+	// Initialize forward agent SSE handler
+	forwardAgentSSEHandler := forwardAgentCrudHandlers.NewForwardAgentSSEHandler(adminHub, log)
 
 	return &Router{
 		engine:                      engine,
@@ -879,12 +980,15 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		forwardRuleHandler:          forwardRuleHandler,
 		forwardAgentHandler:         forwardAgentHandler,
 		forwardAgentVersionHandler:  forwardAgentVersionHandler,
+		forwardAgentSSEHandler:      forwardAgentSSEHandler,
 		forwardAgentAPIHandler:      forwardAgentAPIHandler,
 		userForwardRuleHandler:      userForwardRuleHandler,
 		agentHub:                    agentHub,
 		agentHubHandler:             agentHubHandler,
 		nodeHubHandler:              nodeHubHandler,
 		nodeVersionHandler:          nodeVersionHandler,
+		nodeSSEHandler:              nodeSSEHandler,
+		adminHub:                    adminHub,
 		configSyncService:           configSyncService,
 		trafficLimitEnforcementSvc:  trafficLimitEnforcementSvc,
 		authMiddleware:              authMiddleware,
@@ -1065,6 +1169,7 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 	routes.SetupNodeRoutes(r.engine, &routes.NodeRouteConfig{
 		NodeHandler:         r.nodeHandler,
 		NodeVersionHandler:  r.nodeVersionHandler,
+		NodeSSEHandler:      r.nodeSSEHandler,
 		UserNodeHandler:     r.userNodeHandler,
 		SubscriptionHandler: r.nodeSubscriptionHandler,
 		AuthMiddleware:      r.authMiddleware,
@@ -1116,6 +1221,7 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		ForwardRuleHandler:          r.forwardRuleHandler,
 		ForwardAgentHandler:         r.forwardAgentHandler,
 		ForwardAgentVersionHandler:  r.forwardAgentVersionHandler,
+		ForwardAgentSSEHandler:      r.forwardAgentSSEHandler,
 		ForwardAgentAPIHandler:      r.forwardAgentAPIHandler,
 		UserForwardHandler:          r.userForwardRuleHandler,
 		AuthMiddleware:              r.authMiddleware,
@@ -1150,4 +1256,34 @@ func (r *Router) Shutdown() {
 // GetTelegramService returns the telegram service for scheduler use
 func (r *Router) GetTelegramService() *telegramApp.ServiceDDD {
 	return r.telegramService
+}
+
+// nodeSIDResolverAdapter adapts node repository for SID resolution.
+type nodeSIDResolverAdapter struct {
+	repo node.NodeRepository
+}
+
+// GetSIDByID resolves node internal ID to Stripe-style SID.
+func (a *nodeSIDResolverAdapter) GetSIDByID(nodeID uint) (string, bool) {
+	ctx := context.Background()
+	n, err := a.repo.GetByID(ctx, nodeID)
+	if err != nil || n == nil {
+		return "", false
+	}
+	return n.SID(), true
+}
+
+// agentSIDResolverAdapter adapts forward agent repository for SID resolution.
+type agentSIDResolverAdapter struct {
+	repo forward.AgentRepository
+}
+
+// GetSIDByID resolves forward agent internal ID to Stripe-style SID and name.
+func (a *agentSIDResolverAdapter) GetSIDByID(agentID uint) (string, string, bool) {
+	ctx := context.Background()
+	agent, err := a.repo.GetByID(ctx, agentID)
+	if err != nil || agent == nil {
+		return "", "", false
+	}
+	return agent.SID(), agent.Name(), true
 }

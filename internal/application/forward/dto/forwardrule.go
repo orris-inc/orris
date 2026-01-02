@@ -98,6 +98,12 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 	nodeCount := rule.CalculateNodeCount()
 	isAuto := rule.GetTrafficMultiplier() == nil
 
+	// direct and direct_chain types do not use tunnel, so tunnel_type should be empty
+	tunnelType := ""
+	if !rule.RuleType().IsDirect() && !rule.RuleType().IsDirectChain() {
+		tunnelType = rule.TunnelType().String()
+	}
+
 	return &ForwardRuleDTO{
 		ID:                         rule.SID(),
 		AgentID:                    "", // populated later via PopulateAgentInfo
@@ -125,7 +131,7 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 		NodeCount:                  nodeCount,
 		IsAutoMultiplier:           isAuto,
 		SortOrder:                  rule.SortOrder(),
-		TunnelType:                 rule.TunnelType().String(),
+		TunnelType:                 tunnelType,
 		TunnelHops:                 rule.TunnelHops(),
 		internalAgentID:            rule.AgentID(),
 		internalExitAgentID:        rule.ExitAgentID(),

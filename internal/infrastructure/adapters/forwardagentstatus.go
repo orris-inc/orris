@@ -58,12 +58,22 @@ func (a *ForwardAgentStatusAdapter) UpdateStatus(ctx context.Context, agentID ui
 		"memory_percent":     fmt.Sprintf("%.2f", status.MemoryPercent),
 		"memory_used":        status.MemoryUsed,
 		"memory_total":       status.MemoryTotal,
+		"memory_avail":       status.MemoryAvail,
 		"disk_percent":       fmt.Sprintf("%.2f", status.DiskPercent),
 		"disk_used":          status.DiskUsed,
 		"disk_total":         status.DiskTotal,
 		"uptime_seconds":     status.UptimeSeconds,
+		"load_avg_1":         fmt.Sprintf("%.2f", status.LoadAvg1),
+		"load_avg_5":         fmt.Sprintf("%.2f", status.LoadAvg5),
+		"load_avg_15":        fmt.Sprintf("%.2f", status.LoadAvg15),
+		"network_rx_bytes":   status.NetworkRxBytes,
+		"network_tx_bytes":   status.NetworkTxBytes,
+		"network_rx_rate":    status.NetworkRxRate,
+		"network_tx_rate":    status.NetworkTxRate,
 		"tcp_connections":    status.TCPConnections,
 		"udp_connections":    status.UDPConnections,
+		"public_ipv4":        status.PublicIPv4,
+		"public_ipv6":        status.PublicIPv6,
 		"active_rules":       status.ActiveRules,
 		"active_connections": status.ActiveConnections,
 		"ws_listen_port":     status.WsListenPort,
@@ -170,12 +180,20 @@ func (a *ForwardAgentStatusAdapter) parseStatus(values map[string]string) *dto.A
 	fmt.Sscanf(values["cpu_percent"], "%f", &status.CPUPercent)
 	fmt.Sscanf(values["memory_percent"], "%f", &status.MemoryPercent)
 	fmt.Sscanf(values["disk_percent"], "%f", &status.DiskPercent)
+	fmt.Sscanf(values["load_avg_1"], "%f", &status.LoadAvg1)
+	fmt.Sscanf(values["load_avg_5"], "%f", &status.LoadAvg5)
+	fmt.Sscanf(values["load_avg_15"], "%f", &status.LoadAvg15)
 
 	// Parse uint64 values
 	fmt.Sscanf(values["memory_used"], "%d", &status.MemoryUsed)
 	fmt.Sscanf(values["memory_total"], "%d", &status.MemoryTotal)
+	fmt.Sscanf(values["memory_avail"], "%d", &status.MemoryAvail)
 	fmt.Sscanf(values["disk_used"], "%d", &status.DiskUsed)
 	fmt.Sscanf(values["disk_total"], "%d", &status.DiskTotal)
+	fmt.Sscanf(values["network_rx_bytes"], "%d", &status.NetworkRxBytes)
+	fmt.Sscanf(values["network_tx_bytes"], "%d", &status.NetworkTxBytes)
+	fmt.Sscanf(values["network_rx_rate"], "%d", &status.NetworkRxRate)
+	fmt.Sscanf(values["network_tx_rate"], "%d", &status.NetworkTxRate)
 
 	// Parse int64 values
 	fmt.Sscanf(values["uptime_seconds"], "%d", &status.UptimeSeconds)
@@ -197,6 +215,10 @@ func (a *ForwardAgentStatusAdapter) parseStatus(values map[string]string) *dto.A
 			status.TunnelStatus = tunnelStatus
 		}
 	}
+
+	// Parse public IP addresses
+	status.PublicIPv4 = values["public_ipv4"]
+	status.PublicIPv6 = values["public_ipv6"]
 
 	// Parse agent info
 	status.AgentVersion = values["agent_version"]

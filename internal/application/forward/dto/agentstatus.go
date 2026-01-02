@@ -8,14 +8,30 @@ type AgentStatusDTO struct {
 	MemoryPercent float64 `json:"memory_percent"`
 	MemoryUsed    uint64  `json:"memory_used"`
 	MemoryTotal   uint64  `json:"memory_total"`
+	MemoryAvail   uint64  `json:"memory_avail"`
 	DiskPercent   float64 `json:"disk_percent"`
 	DiskUsed      uint64  `json:"disk_used"`
 	DiskTotal     uint64  `json:"disk_total"`
 	UptimeSeconds int64   `json:"uptime_seconds"`
 
+	// System load average
+	LoadAvg1  float64 `json:"load_avg_1"`
+	LoadAvg5  float64 `json:"load_avg_5"`
+	LoadAvg15 float64 `json:"load_avg_15"`
+
+	// Network statistics
+	NetworkRxBytes uint64 `json:"network_rx_bytes"` // Total received bytes
+	NetworkTxBytes uint64 `json:"network_tx_bytes"` // Total transmitted bytes
+	NetworkRxRate  uint64 `json:"network_rx_rate"`  // Current receive rate (bytes/sec)
+	NetworkTxRate  uint64 `json:"network_tx_rate"`  // Current transmit rate (bytes/sec)
+
 	// Network connections
 	TCPConnections int `json:"tcp_connections"`
 	UDPConnections int `json:"udp_connections"`
+
+	// Public IP addresses
+	PublicIPv4 string `json:"public_ipv4,omitempty"`
+	PublicIPv6 string `json:"public_ipv6,omitempty"`
 
 	// Forward status
 	ActiveRules       int               `json:"active_rules"`

@@ -11,9 +11,16 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
+// AgentSIDResolver resolves forward agent internal ID to Stripe-style SID.
+type AgentSIDResolver interface {
+	GetSIDByID(agentID uint) (sid string, name string, ok bool)
+}
+
 // ForwardStatusHandler handles status updates from forward agents.
 type ForwardStatusHandler struct {
 	reportStatusUC *usecases.ReportAgentStatusUseCase
+	adminHub       *services.AdminHub
+	sidResolver    AgentSIDResolver
 	logger         logger.Interface
 }
 
@@ -26,6 +33,12 @@ func NewForwardStatusHandler(
 		reportStatusUC: reportStatusUC,
 		logger:         log,
 	}
+}
+
+// SetAdminHub sets the AdminHub for SSE broadcasting.
+func (h *ForwardStatusHandler) SetAdminHub(hub *services.AdminHub, resolver AgentSIDResolver) {
+	h.adminHub = hub
+	h.sidResolver = resolver
 }
 
 // HandleStatus processes status update from a forward agent.
@@ -73,6 +86,13 @@ func (h *ForwardStatusHandler) HandleStatus(agentID uint, data any) {
 		"platform", status.Platform,
 		"arch", status.Arch,
 	)
+
+	// Broadcast status update via SSE (throttled by AdminHub)
+	if h.adminHub != nil && h.sidResolver != nil {
+		if agentSID, _, ok := h.sidResolver.GetSIDByID(agentID); ok {
+			h.adminHub.BroadcastForwardAgentStatus(agentSID, &status)
+		}
+	}
 }
 
 // Ensure ForwardStatusHandler implements StatusHandler interface.

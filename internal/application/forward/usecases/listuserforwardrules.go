@@ -181,6 +181,11 @@ func (uc *ListUserForwardRulesUseCase) populateSyncStatus(ctx context.Context, d
 	ruleAgentMap := dto.CollectAllAgentIDsForRules(dtos)
 
 	for _, ruleDTO := range dtos {
+		// Skip disabled rules - they are not synced to agents
+		if ruleDTO.Status == "disabled" {
+			continue
+		}
+
 		ruleAgentIDs := ruleAgentMap[ruleDTO.ID]
 		if len(ruleAgentIDs) == 0 {
 			continue

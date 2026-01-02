@@ -15,6 +15,14 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
+// AgentHubConfig holds configuration for AgentHub.
+type AgentHubConfig struct {
+	// NodeStatusTimeoutMs is the timeout in milliseconds for node status updates.
+	// If a node doesn't report status within this duration, it's considered offline.
+	// Default: 5000 (5 seconds)
+	NodeStatusTimeoutMs int64
+}
+
 // AgentHub manages WebSocket connections for forward agents and node agents.
 type AgentHub struct {
 	// Forward agent connections: map[AgentID]*AgentHubConn
@@ -44,6 +52,13 @@ type AgentHub struct {
 	// Callbacks for node agents
 	onNodeOnline  func(nodeID uint)
 	onNodeOffline func(nodeID uint)
+
+	// Configuration
+	nodeStatusTimeout time.Duration
+
+	// Shutdown signal
+	done     chan struct{}
+	shutdown atomic.Bool
 
 	logger logger.Interface
 }
@@ -129,12 +144,101 @@ func (c *NodeHubConn) Close() {
 }
 
 // NewAgentHub creates a new AgentHub instance.
-func NewAgentHub(log logger.Interface) *AgentHub {
-	return &AgentHub{
-		agents:          make(map[uint]*AgentHubConn),
-		nodes:           make(map[uint]*NodeHubConn),
-		messageHandlers: make([]MessageHandler, 0),
-		logger:          log,
+func NewAgentHub(log logger.Interface, config *AgentHubConfig) *AgentHub {
+	nodeTimeout := 5 * time.Second // default 5 seconds
+	if config != nil && config.NodeStatusTimeoutMs > 0 {
+		nodeTimeout = time.Duration(config.NodeStatusTimeoutMs) * time.Millisecond
+	}
+
+	h := &AgentHub{
+		agents:            make(map[uint]*AgentHubConn),
+		nodes:             make(map[uint]*NodeHubConn),
+		messageHandlers:   make([]MessageHandler, 0),
+		nodeStatusTimeout: nodeTimeout,
+		done:              make(chan struct{}),
+		logger:            log,
+	}
+
+	// Start background timeout checker
+	go h.nodeTimeoutChecker()
+
+	return h
+}
+
+// Shutdown stops the AgentHub and releases resources.
+// Safe to call multiple times.
+func (h *AgentHub) Shutdown() {
+	if !h.shutdown.CompareAndSwap(false, true) {
+		return // Already shutdown
+	}
+
+	close(h.done)
+}
+
+// nodeTimeoutChecker periodically checks for nodes that haven't reported status.
+func (h *AgentHub) nodeTimeoutChecker() {
+	// Check interval: half of timeout duration, minimum 1 second
+	interval := h.nodeStatusTimeout / 2
+	if interval < time.Second {
+		interval = time.Second
+	}
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-h.done:
+			return
+		case <-ticker.C:
+			h.checkNodeTimeouts()
+		}
+	}
+}
+
+// checkNodeTimeouts checks all nodes and disconnects those that have timed out.
+func (h *AgentHub) checkNodeTimeouts() {
+	now := biztime.NowUTC()
+
+	// Collect timed out nodes under read lock
+	h.nodesMu.RLock()
+	var timedOutNodes []uint
+	for nodeID, conn := range h.nodes {
+		if now.Sub(conn.LastSeen) > h.nodeStatusTimeout {
+			timedOutNodes = append(timedOutNodes, nodeID)
+		}
+	}
+	h.nodesMu.RUnlock()
+
+	// Disconnect timed out nodes
+	for _, nodeID := range timedOutNodes {
+		h.logger.Warnw("node status timeout, disconnecting",
+			"node_id", nodeID,
+			"timeout", h.nodeStatusTimeout,
+		)
+		h.disconnectNode(nodeID)
+	}
+}
+
+// disconnectNode disconnects a node due to timeout.
+func (h *AgentHub) disconnectNode(nodeID uint) {
+	h.nodesMu.Lock()
+	conn, ok := h.nodes[nodeID]
+	if ok {
+		conn.Close()
+		conn.Conn.Close()
+		delete(h.nodes, nodeID)
+	}
+	h.nodesMu.Unlock()
+
+	if ok {
+		h.logger.Infow("node agent disconnected due to timeout",
+			"node_id", nodeID,
+		)
+
+		if h.onNodeOffline != nil {
+			go h.onNodeOffline(nodeID)
+		}
 	}
 }
 

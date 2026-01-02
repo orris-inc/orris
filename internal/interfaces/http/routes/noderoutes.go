@@ -13,6 +13,7 @@ import (
 type NodeRouteConfig struct {
 	NodeHandler         *handlers.NodeHandler
 	NodeVersionHandler  *nodeHandlers.NodeVersionHandler
+	NodeSSEHandler      *nodeHandlers.NodeSSEHandler
 	UserNodeHandler     *nodeHandlers.UserNodeHandler
 	SubscriptionHandler *handlers.NodeSubscriptionHandler
 	AuthMiddleware      *middleware.AuthMiddleware
@@ -52,6 +53,13 @@ func SetupNodeRoutes(engine *gin.Engine, config *NodeRouteConfig) {
 		nodes.GET("/:id/install-script",
 			authorization.RequireAdmin(),
 			config.NodeHandler.GetInstallScript)
+
+		// SSE endpoint for real-time node events (must be registered before /:id)
+		if config.NodeSSEHandler != nil {
+			nodes.GET("/events",
+				authorization.RequireAdmin(),
+				config.NodeSSEHandler.Events)
+		}
 
 		// Version management endpoints
 		if config.NodeVersionHandler != nil {

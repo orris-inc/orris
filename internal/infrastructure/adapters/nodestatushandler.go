@@ -10,10 +10,17 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
+// NodeSIDResolver resolves node internal ID to Stripe-style SID.
+type NodeSIDResolver interface {
+	GetSIDByID(nodeID uint) (string, bool)
+}
+
 // NodeStatusHandler handles status updates from node agents via WebSocket.
 type NodeStatusHandler struct {
 	statusUpdater   nodeUsecases.NodeSystemStatusUpdater
 	lastSeenUpdater nodeUsecases.NodeLastSeenUpdater
+	sidResolver     NodeSIDResolver
+	adminHub        *services.AdminHub
 	logger          logger.Interface
 }
 
@@ -28,6 +35,12 @@ func NewNodeStatusHandler(
 		lastSeenUpdater: lastSeenUpdater,
 		logger:          log,
 	}
+}
+
+// SetAdminHub sets the AdminHub for SSE broadcasting.
+func (h *NodeStatusHandler) SetAdminHub(hub *services.AdminHub, resolver NodeSIDResolver) {
+	h.adminHub = hub
+	h.sidResolver = resolver
 }
 
 // NodeStatusData represents the status data format from node agent WebSocket.
@@ -154,6 +167,13 @@ func (h *NodeStatusHandler) HandleStatus(nodeID uint, data any) {
 		"memory", status.MemoryPercent,
 		"uptime", status.UptimeSeconds,
 	)
+
+	// Broadcast status update via SSE (throttled by AdminHub)
+	if h.adminHub != nil && h.sidResolver != nil {
+		if nodeSID, ok := h.sidResolver.GetSIDByID(nodeID); ok {
+			h.adminHub.BroadcastNodeStatus(nodeSID, statusUpdate)
+		}
+	}
 }
 
 // Ensure NodeStatusHandler implements StatusHandler interface.
