@@ -59,6 +59,10 @@ func (h *ForwardAgentSSEHandler) Events(c *gin.Context) {
 		"agent_filters", agentFilters,
 	)
 
+	// Send initial agent status immediately after connection
+	// This ensures the client gets current status without waiting for the next broadcast cycle
+	h.GetAdminHub().BroadcastAgentStatusToConn(conn)
+
 	// Run event loop
 	h.RunEventLoop(c, conn, connID, userID, "forward agent SSE")
 }

@@ -87,12 +87,9 @@ func (h *ForwardStatusHandler) HandleStatus(agentID uint, data any) {
 		"arch", status.Arch,
 	)
 
-	// Broadcast status update via SSE (throttled by AdminHub)
-	if h.adminHub != nil && h.sidResolver != nil {
-		if agentSID, _, ok := h.sidResolver.GetSIDByID(agentID); ok {
-			h.adminHub.BroadcastForwardAgentStatus(agentSID, &status)
-		}
-	}
+	// Note: Status is now broadcast via aggregated SSE push in AdminHub.agentBroadcastLoop()
+	// instead of individual pushes. This reduces push frequency and allows clients to
+	// receive all agent statuses in a single batch event.
 }
 
 // Ensure ForwardStatusHandler implements StatusHandler interface.

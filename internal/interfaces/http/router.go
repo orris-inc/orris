@@ -856,6 +856,14 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Set AdminHub on forwardStatusHandler for SSE broadcasting
 	forwardStatusHandler.SetAdminHub(adminHub, &agentSIDResolverAdapter{repo: forwardAgentRepo})
 
+	// Set AgentStatusQuerier on AdminHub for aggregated SSE broadcasting
+	agentStatusQuerierAdapter := adapters.NewAgentStatusQuerierAdapter(forwardAgentRepo, forwardAgentStatusAdapter, log)
+	adminHub.SetAgentStatusQuerier(agentStatusQuerierAdapter)
+
+	// Set NodeStatusQuerier on AdminHub for aggregated SSE broadcasting
+	nodeStatusQuerierAdapter := adapters.NewNodeStatusQuerierAdapter(nodeRepoImpl, nodeStatusQuerier, log)
+	adminHub.SetNodeStatusQuerier(nodeStatusQuerierAdapter)
+
 	// Set OnNodeOnline callback to sync config and broadcast SSE event
 	agentHub.SetOnNodeOnline(func(nodeID uint) {
 		ctx := context.Background()

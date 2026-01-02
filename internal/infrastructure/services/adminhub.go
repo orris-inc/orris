@@ -18,18 +18,20 @@ type AgentEventType string
 
 // Node agent event types for SSE.
 const (
-	NodeEventOnline  AgentEventType = "node:online"
-	NodeEventOffline AgentEventType = "node:offline"
-	NodeEventStatus  AgentEventType = "node:status"
-	NodeEventUpdated AgentEventType = "node:updated"
+	NodeEventOnline      AgentEventType = "node:online"
+	NodeEventOffline     AgentEventType = "node:offline"
+	NodeEventStatus      AgentEventType = "node:status"
+	NodeEventUpdated     AgentEventType = "node:updated"
+	NodeEventBatchStatus AgentEventType = "nodes:status" // Batch status for aggregated push
 )
 
 // Forward agent event types for SSE.
 const (
-	ForwardAgentEventOnline  AgentEventType = "agent:online"
-	ForwardAgentEventOffline AgentEventType = "agent:offline"
-	ForwardAgentEventStatus  AgentEventType = "agent:status"
-	ForwardAgentEventUpdated AgentEventType = "agent:updated"
+	ForwardAgentEventOnline      AgentEventType = "agent:online"
+	ForwardAgentEventOffline     AgentEventType = "agent:offline"
+	ForwardAgentEventStatus      AgentEventType = "agent:status"
+	ForwardAgentEventUpdated     AgentEventType = "agent:updated"
+	ForwardAgentEventBatchStatus AgentEventType = "agents:status" // Batch status for aggregated push
 )
 
 // AgentEvent represents an SSE event for agent status updates.
@@ -40,6 +42,33 @@ type AgentEvent struct {
 	AgentName string         `json:"agentName,omitempty"`
 	Timestamp int64          `json:"timestamp"`
 	Data      any            `json:"data,omitempty"`
+}
+
+// BatchAgentStatusEvent represents a batch status event for aggregated push.
+type BatchAgentStatusEvent struct {
+	Type      AgentEventType              `json:"type"`
+	Timestamp int64                       `json:"timestamp"`
+	Agents    map[string]*AgentStatusData `json:"agents"` // agentSID -> status data
+}
+
+// AgentStatusData holds status data for a single agent in batch events.
+type AgentStatusData struct {
+	Name   string `json:"name,omitempty"`
+	Status any    `json:"status"`
+}
+
+// AgentStatusQuerier queries agent status from storage.
+type AgentStatusQuerier interface {
+	// GetBatchStatus returns status for multiple agents by their SIDs.
+	// Returns a map of agentSID -> (name, status).
+	GetBatchStatus(agentSIDs []string) (map[string]*AgentStatusData, error)
+}
+
+// NodeStatusQuerier queries node status from storage.
+type NodeStatusQuerier interface {
+	// GetBatchStatus returns status for multiple nodes by their SIDs.
+	// Returns a map of nodeSID -> (name, status).
+	GetBatchStatus(nodeSIDs []string) (map[string]*AgentStatusData, error)
 }
 
 // SSEConn represents an SSE connection from admin frontend.
@@ -111,13 +140,17 @@ type AdminHub struct {
 	statusThrottle   map[string]time.Time
 	statusThrottleMu sync.RWMutex
 
-	// Agent status throttling: map[agentSID]lastPushTime
-	agentThrottle   map[string]time.Time
-	agentThrottleMu sync.RWMutex
+	// Agent status querier for batch status retrieval (optional)
+	agentStatusQuerier AgentStatusQuerier
+
+	// Node status querier for batch status retrieval (optional)
+	nodeStatusQuerier NodeStatusQuerier
 
 	// Configuration
 	maxConnsPerUser  int
 	statusThrottleMs int64
+	agentBroadcastMs int64 // Aggregated broadcast interval for agents (default: 5000ms)
+	nodeBroadcastMs  int64 // Aggregated broadcast interval for nodes (default: 5000ms)
 
 	// Shutdown signal
 	done     chan struct{}
@@ -129,13 +162,17 @@ type AdminHub struct {
 // AdminHubConfig holds configuration for AdminHub.
 type AdminHubConfig struct {
 	MaxConnsPerUser  int   // Max SSE connections per user (default: 5)
-	StatusThrottleMs int64 // Throttle interval for status events in ms (default: 5000)
+	StatusThrottleMs int64 // Throttle interval for status events in ms (default: 5000) - used for cleanup
+	AgentBroadcastMs int64 // Aggregated broadcast interval for agent status in ms (default: 5000, min: 1000)
+	NodeBroadcastMs  int64 // Aggregated broadcast interval for node status in ms (default: 5000, min: 1000)
 }
 
 // NewAdminHub creates a new AdminHub instance.
 func NewAdminHub(log logger.Interface, config *AdminHubConfig) *AdminHub {
 	maxConns := 5
 	throttleMs := int64(5000)
+	agentBroadcastMs := int64(5000)
+	nodeBroadcastMs := int64(5000)
 
 	if config != nil {
 		if config.MaxConnsPerUser > 0 {
@@ -144,21 +181,30 @@ func NewAdminHub(log logger.Interface, config *AdminHubConfig) *AdminHub {
 		if config.StatusThrottleMs > 0 {
 			throttleMs = config.StatusThrottleMs
 		}
+		if config.AgentBroadcastMs >= 1000 {
+			agentBroadcastMs = config.AgentBroadcastMs
+		}
+		if config.NodeBroadcastMs >= 1000 {
+			nodeBroadcastMs = config.NodeBroadcastMs
+		}
 	}
 
 	h := &AdminHub{
 		conns:            make(map[string]*SSEConn),
 		userConns:        make(map[uint]int),
 		statusThrottle:   make(map[string]time.Time),
-		agentThrottle:    make(map[string]time.Time),
 		maxConnsPerUser:  maxConns,
 		statusThrottleMs: throttleMs,
+		agentBroadcastMs: agentBroadcastMs,
+		nodeBroadcastMs:  nodeBroadcastMs,
 		done:             make(chan struct{}),
 		logger:           log,
 	}
 
-	// Start background cleanup goroutine
+	// Start background goroutines
 	go h.cleanupLoop()
+	go h.agentBroadcastLoop()
+	go h.nodeBroadcastLoop()
 
 	return h
 }
@@ -417,14 +463,8 @@ func (h *AdminHub) BroadcastForwardAgentUpdated(agentSID string, changes any) {
 }
 
 // BroadcastForwardAgent sends a forward agent event to all matching SSE connections.
+// Note: For status events, use the aggregated broadcast via agentBroadcastLoop instead.
 func (h *AdminHub) BroadcastForwardAgent(event *AgentEvent) {
-	// Check throttling for status events
-	if event.Type == ForwardAgentEventStatus {
-		if !h.shouldPushAgentStatus(event.AgentID) {
-			return
-		}
-	}
-
 	data, err := h.formatSSEEvent(event)
 	if err != nil {
 		h.logger.Errorw("failed to format SSE event",
@@ -473,23 +513,6 @@ func (h *AdminHub) shouldPushStatus(nodeSID string) bool {
 	return true
 }
 
-// shouldPushAgentStatus checks if agent status event should be pushed (throttle check).
-func (h *AdminHub) shouldPushAgentStatus(agentSID string) bool {
-	now := biztime.NowUTC()
-	throttleDuration := time.Duration(h.statusThrottleMs) * time.Millisecond
-
-	h.agentThrottleMu.Lock()
-	defer h.agentThrottleMu.Unlock()
-
-	lastPush, exists := h.agentThrottle[agentSID]
-	if exists && now.Sub(lastPush) < throttleDuration {
-		return false
-	}
-
-	h.agentThrottle[agentSID] = now
-	return true
-}
-
 // formatSSEEvent formats an event as SSE data.
 func (h *AdminHub) formatSSEEvent(event *AgentEvent) ([]byte, error) {
 	data, err := json.Marshal(event)
@@ -515,13 +538,417 @@ func (h *AdminHub) CleanupThrottleCache() {
 		}
 	}
 	h.statusThrottleMu.Unlock()
+}
 
-	// Cleanup agent status throttle
-	h.agentThrottleMu.Lock()
-	for agentSID, lastPush := range h.agentThrottle {
-		if now.Sub(lastPush) > threshold {
-			delete(h.agentThrottle, agentSID)
+// SetAgentStatusQuerier sets the agent status querier for batch status retrieval.
+// Must be called before any SSE connections are established.
+func (h *AdminHub) SetAgentStatusQuerier(querier AgentStatusQuerier) {
+	h.agentStatusQuerier = querier
+}
+
+// agentBroadcastLoop periodically broadcasts aggregated agent status to SSE connections.
+func (h *AdminHub) agentBroadcastLoop() {
+	interval := time.Duration(h.agentBroadcastMs) * time.Millisecond
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-h.done:
+			return
+		case <-ticker.C:
+			h.broadcastAggregatedAgentStatus()
 		}
 	}
-	h.agentThrottleMu.Unlock()
+}
+
+// broadcastAggregatedAgentStatus collects all subscribed agent SIDs and broadcasts their status.
+func (h *AdminHub) broadcastAggregatedAgentStatus() {
+	if h.agentStatusQuerier == nil {
+		return
+	}
+
+	// Collect all unique agent SIDs from all connections
+	h.connsMu.RLock()
+	if len(h.conns) == 0 {
+		h.connsMu.RUnlock()
+		return
+	}
+
+	// Build a set of unique agent SIDs and track which connections subscribe to all
+	allAgentSIDs := make(map[string]struct{})
+	hasSubscribeAll := false
+	subscribeAllConns := make([]*SSEConn, 0)
+	filteredConns := make([]*SSEConn, 0)
+
+	for _, conn := range h.conns {
+		if conn.AgentFilters == nil {
+			// This connection subscribes to all agents
+			hasSubscribeAll = true
+			subscribeAllConns = append(subscribeAllConns, conn)
+		} else {
+			filteredConns = append(filteredConns, conn)
+			for agentSID := range conn.AgentFilters {
+				allAgentSIDs[agentSID] = struct{}{}
+			}
+		}
+	}
+	h.connsMu.RUnlock()
+
+	// If no agents to query, skip
+	if len(allAgentSIDs) == 0 && !hasSubscribeAll {
+		return
+	}
+
+	// Query batch status from storage
+	// If hasSubscribeAll is true, we pass nil to get all agents
+	var queryAgentSIDs []string
+	if hasSubscribeAll {
+		queryAgentSIDs = nil // nil means get all
+	} else {
+		queryAgentSIDs = make([]string, 0, len(allAgentSIDs))
+		for sid := range allAgentSIDs {
+			queryAgentSIDs = append(queryAgentSIDs, sid)
+		}
+	}
+
+	statusMap, err := h.agentStatusQuerier.GetBatchStatus(queryAgentSIDs)
+	if err != nil {
+		h.logger.Errorw("failed to get batch agent status",
+			"error", err,
+			"agent_count", len(queryAgentSIDs),
+		)
+		return
+	}
+
+	if len(statusMap) == 0 {
+		return
+	}
+
+	// Build and send batch events per connection type
+	// This ensures each connection only receives agents they subscribed to
+	timestamp := biztime.NowUTC().Unix()
+
+	// For connections that subscribe to all agents, send full status map
+	if len(subscribeAllConns) > 0 {
+		fullEvent := &BatchAgentStatusEvent{
+			Type:      ForwardAgentEventBatchStatus,
+			Timestamp: timestamp,
+			Agents:    statusMap,
+		}
+		fullData, err := h.formatBatchSSEEvent(fullEvent)
+		if err != nil {
+			h.logger.Errorw("failed to format full batch SSE event",
+				"error", err,
+			)
+		} else {
+			for _, conn := range subscribeAllConns {
+				if !conn.TrySend(fullData) {
+					h.logger.Warnw("failed to send batch SSE event, channel full",
+						"conn_id", conn.ID,
+					)
+				}
+			}
+		}
+	}
+
+	// For connections with specific filters, send only their subscribed agents
+	for _, conn := range filteredConns {
+		filteredStatus := make(map[string]*AgentStatusData)
+		for agentSID := range conn.AgentFilters {
+			if status, ok := statusMap[agentSID]; ok {
+				filteredStatus[agentSID] = status
+			}
+		}
+
+		if len(filteredStatus) == 0 {
+			continue
+		}
+
+		filteredEvent := &BatchAgentStatusEvent{
+			Type:      ForwardAgentEventBatchStatus,
+			Timestamp: timestamp,
+			Agents:    filteredStatus,
+		}
+		filteredData, err := h.formatBatchSSEEvent(filteredEvent)
+		if err != nil {
+			h.logger.Errorw("failed to format filtered batch SSE event",
+				"error", err,
+				"conn_id", conn.ID,
+			)
+			continue
+		}
+
+		if !conn.TrySend(filteredData) {
+			h.logger.Warnw("failed to send batch SSE event, channel full",
+				"conn_id", conn.ID,
+			)
+		}
+	}
+}
+
+// formatBatchSSEEvent formats a batch event as SSE data.
+func (h *AdminHub) formatBatchSSEEvent(event *BatchAgentStatusEvent) ([]byte, error) {
+	data, err := json.Marshal(event)
+	if err != nil {
+		return nil, err
+	}
+
+	// SSE format: "event: <type>\ndata: <json>\n\n"
+	return []byte(fmt.Sprintf("event: %s\ndata: %s\n\n", event.Type, data)), nil
+}
+
+// BroadcastAgentStatusToConn sends current agent status to a specific connection.
+// Used for initial status push when a new SSE connection is established.
+func (h *AdminHub) BroadcastAgentStatusToConn(conn *SSEConn) {
+	if h.agentStatusQuerier == nil {
+		return
+	}
+
+	// Get agent SIDs this connection is interested in
+	var agentSIDs []string
+	if conn.AgentFilters == nil {
+		agentSIDs = nil // nil means get all
+	} else {
+		agentSIDs = make([]string, 0, len(conn.AgentFilters))
+		for sid := range conn.AgentFilters {
+			agentSIDs = append(agentSIDs, sid)
+		}
+	}
+
+	statusMap, err := h.agentStatusQuerier.GetBatchStatus(agentSIDs)
+	if err != nil {
+		h.logger.Errorw("failed to get initial agent status",
+			"error", err,
+			"conn_id", conn.ID,
+		)
+		return
+	}
+
+	if len(statusMap) == 0 {
+		return
+	}
+
+	// Build and send batch event
+	batchEvent := &BatchAgentStatusEvent{
+		Type:      ForwardAgentEventBatchStatus,
+		Timestamp: biztime.NowUTC().Unix(),
+		Agents:    statusMap,
+	}
+
+	data, err := h.formatBatchSSEEvent(batchEvent)
+	if err != nil {
+		h.logger.Errorw("failed to format initial batch SSE event",
+			"error", err,
+			"conn_id", conn.ID,
+		)
+		return
+	}
+
+	if !conn.TrySend(data) {
+		h.logger.Warnw("failed to send initial batch SSE event, channel full",
+			"conn_id", conn.ID,
+		)
+	}
+}
+
+// SetNodeStatusQuerier sets the node status querier for batch status retrieval.
+// Must be called before any SSE connections are established.
+func (h *AdminHub) SetNodeStatusQuerier(querier NodeStatusQuerier) {
+	h.nodeStatusQuerier = querier
+}
+
+// nodeBroadcastLoop periodically broadcasts aggregated node status to SSE connections.
+func (h *AdminHub) nodeBroadcastLoop() {
+	interval := time.Duration(h.nodeBroadcastMs) * time.Millisecond
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-h.done:
+			return
+		case <-ticker.C:
+			h.broadcastAggregatedNodeStatus()
+		}
+	}
+}
+
+// broadcastAggregatedNodeStatus collects all subscribed node SIDs and broadcasts their status.
+func (h *AdminHub) broadcastAggregatedNodeStatus() {
+	if h.nodeStatusQuerier == nil {
+		return
+	}
+
+	// Collect all unique node SIDs from all connections
+	h.connsMu.RLock()
+	if len(h.conns) == 0 {
+		h.connsMu.RUnlock()
+		return
+	}
+
+	// Build a set of unique node SIDs and track which connections subscribe to all
+	allNodeSIDs := make(map[string]struct{})
+	hasSubscribeAll := false
+	subscribeAllConns := make([]*SSEConn, 0)
+	filteredConns := make([]*SSEConn, 0)
+
+	for _, conn := range h.conns {
+		if conn.NodeFilters == nil {
+			// This connection subscribes to all nodes
+			hasSubscribeAll = true
+			subscribeAllConns = append(subscribeAllConns, conn)
+		} else {
+			filteredConns = append(filteredConns, conn)
+			for nodeSID := range conn.NodeFilters {
+				allNodeSIDs[nodeSID] = struct{}{}
+			}
+		}
+	}
+	h.connsMu.RUnlock()
+
+	// If no nodes to query, skip
+	if len(allNodeSIDs) == 0 && !hasSubscribeAll {
+		return
+	}
+
+	// Query batch status from storage
+	// If hasSubscribeAll is true, we pass nil to get all nodes
+	var queryNodeSIDs []string
+	if hasSubscribeAll {
+		queryNodeSIDs = nil // nil means get all
+	} else {
+		queryNodeSIDs = make([]string, 0, len(allNodeSIDs))
+		for sid := range allNodeSIDs {
+			queryNodeSIDs = append(queryNodeSIDs, sid)
+		}
+	}
+
+	statusMap, err := h.nodeStatusQuerier.GetBatchStatus(queryNodeSIDs)
+	if err != nil {
+		h.logger.Errorw("failed to get batch node status",
+			"error", err,
+			"node_count", len(queryNodeSIDs),
+		)
+		return
+	}
+
+	if len(statusMap) == 0 {
+		return
+	}
+
+	// Build and send batch events per connection type
+	// This ensures each connection only receives nodes they subscribed to
+	timestamp := biztime.NowUTC().Unix()
+
+	// For connections that subscribe to all nodes, send full status map
+	if len(subscribeAllConns) > 0 {
+		fullEvent := &BatchAgentStatusEvent{
+			Type:      NodeEventBatchStatus,
+			Timestamp: timestamp,
+			Agents:    statusMap,
+		}
+		fullData, err := h.formatBatchSSEEvent(fullEvent)
+		if err != nil {
+			h.logger.Errorw("failed to format full batch node SSE event",
+				"error", err,
+			)
+		} else {
+			for _, conn := range subscribeAllConns {
+				if !conn.TrySend(fullData) {
+					h.logger.Warnw("failed to send batch node SSE event, channel full",
+						"conn_id", conn.ID,
+					)
+				}
+			}
+		}
+	}
+
+	// For connections with specific filters, send only their subscribed nodes
+	for _, conn := range filteredConns {
+		filteredStatus := make(map[string]*AgentStatusData)
+		for nodeSID := range conn.NodeFilters {
+			if status, ok := statusMap[nodeSID]; ok {
+				filteredStatus[nodeSID] = status
+			}
+		}
+
+		if len(filteredStatus) == 0 {
+			continue
+		}
+
+		filteredEvent := &BatchAgentStatusEvent{
+			Type:      NodeEventBatchStatus,
+			Timestamp: timestamp,
+			Agents:    filteredStatus,
+		}
+		filteredData, err := h.formatBatchSSEEvent(filteredEvent)
+		if err != nil {
+			h.logger.Errorw("failed to format filtered batch node SSE event",
+				"error", err,
+				"conn_id", conn.ID,
+			)
+			continue
+		}
+
+		if !conn.TrySend(filteredData) {
+			h.logger.Warnw("failed to send batch node SSE event, channel full",
+				"conn_id", conn.ID,
+			)
+		}
+	}
+}
+
+// BroadcastNodeStatusToConn sends current node status to a specific connection.
+// Used for initial status push when a new SSE connection is established.
+func (h *AdminHub) BroadcastNodeStatusToConn(conn *SSEConn) {
+	if h.nodeStatusQuerier == nil {
+		return
+	}
+
+	// Get node SIDs this connection is interested in
+	var nodeSIDs []string
+	if conn.NodeFilters == nil {
+		nodeSIDs = nil // nil means get all
+	} else {
+		nodeSIDs = make([]string, 0, len(conn.NodeFilters))
+		for sid := range conn.NodeFilters {
+			nodeSIDs = append(nodeSIDs, sid)
+		}
+	}
+
+	statusMap, err := h.nodeStatusQuerier.GetBatchStatus(nodeSIDs)
+	if err != nil {
+		h.logger.Errorw("failed to get initial node status",
+			"error", err,
+			"conn_id", conn.ID,
+		)
+		return
+	}
+
+	if len(statusMap) == 0 {
+		return
+	}
+
+	// Build and send batch event
+	batchEvent := &BatchAgentStatusEvent{
+		Type:      NodeEventBatchStatus,
+		Timestamp: biztime.NowUTC().Unix(),
+		Agents:    statusMap,
+	}
+
+	data, err := h.formatBatchSSEEvent(batchEvent)
+	if err != nil {
+		h.logger.Errorw("failed to format initial batch node SSE event",
+			"error", err,
+			"conn_id", conn.ID,
+		)
+		return
+	}
+
+	if !conn.TrySend(data) {
+		h.logger.Warnw("failed to send initial batch node SSE event, channel full",
+			"conn_id", conn.ID,
+		)
+	}
 }

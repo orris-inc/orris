@@ -59,6 +59,10 @@ func (h *NodeSSEHandler) Events(c *gin.Context) {
 		"node_filters", nodeFilters,
 	)
 
+	// Send initial node status immediately after connection
+	// This ensures the client gets current status without waiting for the next broadcast cycle
+	h.GetAdminHub().BroadcastNodeStatusToConn(conn)
+
 	// Run event loop
 	h.RunEventLoop(c, conn, connID, userID, "node SSE")
 }

@@ -136,12 +136,9 @@ func (h *NodeStatusHandler) HandleStatus(nodeID uint, data any) {
 		"uptime", status.UptimeSeconds,
 	)
 
-	// Broadcast status update via SSE (throttled by AdminHub)
-	if h.adminHub != nil && h.sidResolver != nil {
-		if nodeSID, ok := h.sidResolver.GetSIDByID(nodeID); ok {
-			h.adminHub.BroadcastNodeStatus(nodeSID, statusUpdate)
-		}
-	}
+	// Note: Status is now broadcast via aggregated SSE push in AdminHub.nodeBroadcastLoop()
+	// instead of individual pushes. This reduces push frequency and allows clients to
+	// receive all node statuses in a single batch event.
 }
 
 // Ensure NodeStatusHandler implements StatusHandler interface.
