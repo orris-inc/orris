@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	commondto "github.com/orris-inc/orris/internal/application/common/dto"
 	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
@@ -96,34 +97,36 @@ func (h *Handler) ReportStatus(c *gin.Context) {
 
 	// Convert request to DTO
 	statusDTO := &dto.AgentStatusDTO{
-		CPUPercent:        req.CPUPercent,
-		MemoryPercent:     req.MemoryPercent,
-		MemoryUsed:        req.MemoryUsed,
-		MemoryTotal:       req.MemoryTotal,
-		MemoryAvail:       req.MemoryAvail,
-		DiskPercent:       req.DiskPercent,
-		DiskUsed:          req.DiskUsed,
-		DiskTotal:         req.DiskTotal,
-		UptimeSeconds:     req.UptimeSeconds,
-		LoadAvg1:          req.LoadAvg1,
-		LoadAvg5:          req.LoadAvg5,
-		LoadAvg15:         req.LoadAvg15,
-		NetworkRxBytes:    req.NetworkRxBytes,
-		NetworkTxBytes:    req.NetworkTxBytes,
-		NetworkRxRate:     req.NetworkRxRate,
-		NetworkTxRate:     req.NetworkTxRate,
-		TCPConnections:    req.TCPConnections,
-		UDPConnections:    req.UDPConnections,
-		PublicIPv4:        req.PublicIPv4,
-		PublicIPv6:        req.PublicIPv6,
+		SystemStatus: commondto.SystemStatus{
+			CPUPercent:     req.CPUPercent,
+			MemoryPercent:  req.MemoryPercent,
+			MemoryUsed:     req.MemoryUsed,
+			MemoryTotal:    req.MemoryTotal,
+			MemoryAvail:    req.MemoryAvail,
+			DiskPercent:    req.DiskPercent,
+			DiskUsed:       req.DiskUsed,
+			DiskTotal:      req.DiskTotal,
+			UptimeSeconds:  req.UptimeSeconds,
+			LoadAvg1:       req.LoadAvg1,
+			LoadAvg5:       req.LoadAvg5,
+			LoadAvg15:      req.LoadAvg15,
+			NetworkRxBytes: req.NetworkRxBytes,
+			NetworkTxBytes: req.NetworkTxBytes,
+			NetworkRxRate:  req.NetworkRxRate,
+			NetworkTxRate:  req.NetworkTxRate,
+			TCPConnections: req.TCPConnections,
+			UDPConnections: req.UDPConnections,
+			PublicIPv4:     req.PublicIPv4,
+			PublicIPv6:     req.PublicIPv6,
+			AgentVersion:   req.AgentVersion,
+			Platform:       req.Platform,
+			Arch:           req.Arch,
+		},
 		ActiveRules:       req.ActiveRules,
 		ActiveConnections: req.ActiveConnections,
 		TunnelStatus:      req.TunnelStatus,
 		WsListenPort:      req.WsListenPort,
 		TlsListenPort:     req.TlsListenPort,
-		AgentVersion:      req.AgentVersion,
-		Platform:          req.Platform,
-		Arch:              req.Arch,
 	}
 
 	// Execute use case

@@ -7,8 +7,10 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	commondto "github.com/orris-inc/orris/internal/application/common/dto"
 	nodeUsecases "github.com/orris-inc/orris/internal/application/node/usecases"
 	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/infrastructure/adapters/systemstatus"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -227,50 +229,38 @@ func NewNodeSystemStatusUpdaterAdapter(
 func (a *NodeSystemStatusUpdaterAdapter) UpdateSystemStatus(ctx context.Context, nodeID uint, status *nodeUsecases.NodeStatusUpdate) error {
 	key := fmt.Sprintf("node:%d:status", nodeID)
 
-	// Store status in Redis hash with 5 minutes TTL
-	data := map[string]interface{}{
-		// System resources
-		"cpu_percent":    fmt.Sprintf("%.2f", status.CPUPercent),
-		"memory_percent": fmt.Sprintf("%.2f", status.MemoryPercent),
-		"memory_used":    fmt.Sprintf("%d", status.MemoryUsed),
-		"memory_total":   fmt.Sprintf("%d", status.MemoryTotal),
-		"memory_avail":   fmt.Sprintf("%d", status.MemoryAvail),
-		"disk_percent":   fmt.Sprintf("%.2f", status.DiskPercent),
-		"disk_used":      fmt.Sprintf("%d", status.DiskUsed),
-		"disk_total":     fmt.Sprintf("%d", status.DiskTotal),
-		"uptime_seconds": fmt.Sprintf("%d", status.UptimeSeconds),
-
-		// System load
-		"load_avg_1":  fmt.Sprintf("%.2f", status.LoadAvg1),
-		"load_avg_5":  fmt.Sprintf("%.2f", status.LoadAvg5),
-		"load_avg_15": fmt.Sprintf("%.2f", status.LoadAvg15),
-
-		// Network statistics
-		"network_rx_bytes": fmt.Sprintf("%d", status.NetworkRxBytes),
-		"network_tx_bytes": fmt.Sprintf("%d", status.NetworkTxBytes),
-		"network_rx_rate":  fmt.Sprintf("%d", status.NetworkRxRate),
-		"network_tx_rate":  fmt.Sprintf("%d", status.NetworkTxRate),
-
-		// Connection statistics
-		"tcp_connections": fmt.Sprintf("%d", status.TCPConnections),
-		"udp_connections": fmt.Sprintf("%d", status.UDPConnections),
-
-		// Agent info
-		"agent_version": status.AgentVersion,
-		"platform":      status.Platform,
-		"arch":          status.Arch,
-
-		// Metadata
-		"updated_at": biztime.NowUTC().Unix(),
+	// Convert NodeStatusUpdate to SystemStatus for shared serialization
+	sysStatus := &commondto.SystemStatus{
+		CPUPercent:     status.CPUPercent,
+		MemoryPercent:  status.MemoryPercent,
+		MemoryUsed:     status.MemoryUsed,
+		MemoryTotal:    status.MemoryTotal,
+		MemoryAvail:    status.MemoryAvail,
+		DiskPercent:    status.DiskPercent,
+		DiskUsed:       status.DiskUsed,
+		DiskTotal:      status.DiskTotal,
+		UptimeSeconds:  status.UptimeSeconds,
+		LoadAvg1:       status.LoadAvg1,
+		LoadAvg5:       status.LoadAvg5,
+		LoadAvg15:      status.LoadAvg15,
+		NetworkRxBytes: status.NetworkRxBytes,
+		NetworkTxBytes: status.NetworkTxBytes,
+		NetworkRxRate:  status.NetworkRxRate,
+		NetworkTxRate:  status.NetworkTxRate,
+		TCPConnections: status.TCPConnections,
+		UDPConnections: status.UDPConnections,
+		PublicIPv4:     status.PublicIPv4,
+		PublicIPv6:     status.PublicIPv6,
+		AgentVersion:   status.AgentVersion,
+		Platform:       status.Platform,
+		Arch:           status.Arch,
 	}
 
-	// Only store public IPs if provided
-	if status.PublicIPv4 != "" {
-		data["public_ipv4"] = status.PublicIPv4
-	}
-	if status.PublicIPv6 != "" {
-		data["public_ipv6"] = status.PublicIPv6
-	}
+	// Use shared helper to convert to Redis fields
+	data := systemstatus.ToRedisFields(sysStatus)
+
+	// Add metadata
+	data[systemstatus.FieldUpdatedAt] = fmt.Sprintf("%d", biztime.NowUTC().Unix())
 
 	pipe := a.redisClient.Pipeline()
 	pipe.HSet(ctx, key, data)
@@ -339,78 +329,40 @@ func (a *NodeSystemStatusQuerierAdapter) GetNodeSystemStatus(ctx context.Context
 }
 
 // parseNodeSystemStatus parses Redis hash values into NodeSystemStatus
+// using the shared systemstatus parser for common fields.
 func parseNodeSystemStatus(values map[string]string) *nodeUsecases.NodeSystemStatus {
+	// Use shared parser for common system status fields
+	sysStatus := systemstatus.ParseSystemStatus(values)
+
 	status := &nodeUsecases.NodeSystemStatus{
-		PublicIPv4:   values["public_ipv4"],
-		PublicIPv6:   values["public_ipv6"],
-		AgentVersion: values["agent_version"],
-		Platform:     values["platform"],
-		Arch:         values["arch"],
+		CPUPercent:     sysStatus.CPUPercent,
+		MemoryPercent:  sysStatus.MemoryPercent,
+		MemoryUsed:     sysStatus.MemoryUsed,
+		MemoryTotal:    sysStatus.MemoryTotal,
+		MemoryAvail:    sysStatus.MemoryAvail,
+		DiskPercent:    sysStatus.DiskPercent,
+		DiskUsed:       sysStatus.DiskUsed,
+		DiskTotal:      sysStatus.DiskTotal,
+		UptimeSeconds:  sysStatus.UptimeSeconds,
+		LoadAvg1:       sysStatus.LoadAvg1,
+		LoadAvg5:       sysStatus.LoadAvg5,
+		LoadAvg15:      sysStatus.LoadAvg15,
+		NetworkRxBytes: sysStatus.NetworkRxBytes,
+		NetworkTxBytes: sysStatus.NetworkTxBytes,
+		NetworkRxRate:  sysStatus.NetworkRxRate,
+		NetworkTxRate:  sysStatus.NetworkTxRate,
+		TCPConnections: sysStatus.TCPConnections,
+		UDPConnections: sysStatus.UDPConnections,
+		PublicIPv4:     sysStatus.PublicIPv4,
+		PublicIPv6:     sysStatus.PublicIPv6,
+		AgentVersion:   sysStatus.AgentVersion,
+		Platform:       sysStatus.Platform,
+		Arch:           sysStatus.Arch,
 	}
 
-	// Parse float64 fields
-	if v, ok := values["cpu_percent"]; ok {
-		fmt.Sscanf(v, "%f", &status.CPUPercent)
-	}
-	if v, ok := values["memory_percent"]; ok {
-		fmt.Sscanf(v, "%f", &status.MemoryPercent)
-	}
-	if v, ok := values["disk_percent"]; ok {
-		fmt.Sscanf(v, "%f", &status.DiskPercent)
-	}
-	if v, ok := values["load_avg_1"]; ok {
-		fmt.Sscanf(v, "%f", &status.LoadAvg1)
-	}
-	if v, ok := values["load_avg_5"]; ok {
-		fmt.Sscanf(v, "%f", &status.LoadAvg5)
-	}
-	if v, ok := values["load_avg_15"]; ok {
-		fmt.Sscanf(v, "%f", &status.LoadAvg15)
-	}
-
-	// Parse uint64 fields
-	if v, ok := values["memory_used"]; ok {
-		fmt.Sscanf(v, "%d", &status.MemoryUsed)
-	}
-	if v, ok := values["memory_total"]; ok {
-		fmt.Sscanf(v, "%d", &status.MemoryTotal)
-	}
-	if v, ok := values["memory_avail"]; ok {
-		fmt.Sscanf(v, "%d", &status.MemoryAvail)
-	}
-	if v, ok := values["disk_used"]; ok {
-		fmt.Sscanf(v, "%d", &status.DiskUsed)
-	}
-	if v, ok := values["disk_total"]; ok {
-		fmt.Sscanf(v, "%d", &status.DiskTotal)
-	}
-	if v, ok := values["network_rx_bytes"]; ok {
-		fmt.Sscanf(v, "%d", &status.NetworkRxBytes)
-	}
-	if v, ok := values["network_tx_bytes"]; ok {
-		fmt.Sscanf(v, "%d", &status.NetworkTxBytes)
-	}
-	if v, ok := values["network_rx_rate"]; ok {
-		fmt.Sscanf(v, "%d", &status.NetworkRxRate)
-	}
-	if v, ok := values["network_tx_rate"]; ok {
-		fmt.Sscanf(v, "%d", &status.NetworkTxRate)
-	}
-
-	// Parse int64 fields
-	if v, ok := values["uptime_seconds"]; ok {
-		fmt.Sscanf(v, "%d", &status.UptimeSeconds)
-	}
-	if v, ok := values["updated_at"]; ok {
+	// Parse UpdatedAt which is specific to NodeSystemStatus
+	if v, ok := values[systemstatus.FieldUpdatedAt]; ok {
 		fmt.Sscanf(v, "%d", &status.UpdatedAt)
-	}
-
-	// Parse int fields
-	if v, ok := values["tcp_connections"]; ok {
-		fmt.Sscanf(v, "%d", &status.TCPConnections)
-	}
-	if v, ok := values["udp_connections"]; ok {
-		fmt.Sscanf(v, "%d", &status.UDPConnections)
 	}
 
 	return status

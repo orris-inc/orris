@@ -10,6 +10,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/infrastructure/adapters/systemstatus"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -17,6 +18,16 @@ import (
 const (
 	forwardAgentStatusKeyPrefix = "forward_agent:%d:status"
 	forwardAgentStatusTTL       = 5 * time.Minute
+
+	// MaxTunnelStatusEntries limits the number of tunnel status entries to prevent memory exhaustion.
+	MaxTunnelStatusEntries = 100
+
+	// MaxTunnelStatusValueLen limits the length of each tunnel status value.
+	MaxTunnelStatusValueLen = 64
+
+	// MaxTunnelStatusKeyLen limits the length of each tunnel status key.
+	// Rule SID format: "fr_xK9mP2vL3nQ" (15 chars max)
+	MaxTunnelStatusKeyLen = 32
 )
 
 // ForwardAgentStatusUpdater updates forward agent status in Redis.
@@ -51,42 +62,46 @@ func NewForwardAgentStatusAdapter(
 func (a *ForwardAgentStatusAdapter) UpdateStatus(ctx context.Context, agentID uint, status *dto.AgentStatusDTO) error {
 	key := fmt.Sprintf(forwardAgentStatusKeyPrefix, agentID)
 
+	// Get base system status fields
+	fields := systemstatus.ToRedisFields(&status.SystemStatus)
+
+	// Add forward-specific fields
+	fields["active_rules"] = status.ActiveRules
+	fields["active_connections"] = status.ActiveConnections
+	fields["ws_listen_port"] = status.WsListenPort
+	fields["tls_listen_port"] = status.TlsListenPort
+	fields["updated_at"] = biztime.NowUTC().Unix()
+
 	// Store status in Redis hash with TTL
 	pipe := a.redisClient.Pipeline()
-	pipe.HSet(ctx, key, map[string]interface{}{
-		"cpu_percent":        fmt.Sprintf("%.2f", status.CPUPercent),
-		"memory_percent":     fmt.Sprintf("%.2f", status.MemoryPercent),
-		"memory_used":        status.MemoryUsed,
-		"memory_total":       status.MemoryTotal,
-		"memory_avail":       status.MemoryAvail,
-		"disk_percent":       fmt.Sprintf("%.2f", status.DiskPercent),
-		"disk_used":          status.DiskUsed,
-		"disk_total":         status.DiskTotal,
-		"uptime_seconds":     status.UptimeSeconds,
-		"load_avg_1":         fmt.Sprintf("%.2f", status.LoadAvg1),
-		"load_avg_5":         fmt.Sprintf("%.2f", status.LoadAvg5),
-		"load_avg_15":        fmt.Sprintf("%.2f", status.LoadAvg15),
-		"network_rx_bytes":   status.NetworkRxBytes,
-		"network_tx_bytes":   status.NetworkTxBytes,
-		"network_rx_rate":    status.NetworkRxRate,
-		"network_tx_rate":    status.NetworkTxRate,
-		"tcp_connections":    status.TCPConnections,
-		"udp_connections":    status.UDPConnections,
-		"public_ipv4":        status.PublicIPv4,
-		"public_ipv6":        status.PublicIPv6,
-		"active_rules":       status.ActiveRules,
-		"active_connections": status.ActiveConnections,
-		"ws_listen_port":     status.WsListenPort,
-		"tls_listen_port":    status.TlsListenPort,
-		"agent_version":      status.AgentVersion,
-		"platform":           status.Platform,
-		"arch":               status.Arch,
-		"updated_at":         biztime.NowUTC().Unix(),
-	})
+	pipe.HSet(ctx, key, fields)
 
-	// Store tunnel status as JSON if present
+	// Store tunnel status as JSON if present (with size limits to prevent memory exhaustion)
 	if len(status.TunnelStatus) > 0 {
-		tunnelJSON, err := json.Marshal(status.TunnelStatus)
+		// Limit map size, key lengths, and value lengths
+		limitedTunnelStatus := make(map[string]string)
+		count := 0
+		for k, v := range status.TunnelStatus {
+			if count >= MaxTunnelStatusEntries {
+				a.logger.Warnw("tunnel status entries truncated",
+					"agent_id", agentID,
+					"max", MaxTunnelStatusEntries,
+				)
+				break
+			}
+			// Skip entries with keys that are too long (invalid rule SID)
+			if len(k) > MaxTunnelStatusKeyLen {
+				continue
+			}
+			// Truncate value if too long
+			if len(v) > MaxTunnelStatusValueLen {
+				v = v[:MaxTunnelStatusValueLen]
+			}
+			limitedTunnelStatus[k] = v
+			count++
+		}
+
+		tunnelJSON, err := json.Marshal(limitedTunnelStatus)
 		if err == nil {
 			pipe.HSet(ctx, key, "tunnel_status", string(tunnelJSON))
 		}
@@ -174,37 +189,13 @@ func (a *ForwardAgentStatusAdapter) GetMultipleStatus(ctx context.Context, agent
 }
 
 func (a *ForwardAgentStatusAdapter) parseStatus(values map[string]string) *dto.AgentStatusDTO {
-	status := &dto.AgentStatusDTO{}
+	status := &dto.AgentStatusDTO{
+		SystemStatus: systemstatus.ParseSystemStatus(values),
+	}
 
-	// Parse float values
-	fmt.Sscanf(values["cpu_percent"], "%f", &status.CPUPercent)
-	fmt.Sscanf(values["memory_percent"], "%f", &status.MemoryPercent)
-	fmt.Sscanf(values["disk_percent"], "%f", &status.DiskPercent)
-	fmt.Sscanf(values["load_avg_1"], "%f", &status.LoadAvg1)
-	fmt.Sscanf(values["load_avg_5"], "%f", &status.LoadAvg5)
-	fmt.Sscanf(values["load_avg_15"], "%f", &status.LoadAvg15)
-
-	// Parse uint64 values
-	fmt.Sscanf(values["memory_used"], "%d", &status.MemoryUsed)
-	fmt.Sscanf(values["memory_total"], "%d", &status.MemoryTotal)
-	fmt.Sscanf(values["memory_avail"], "%d", &status.MemoryAvail)
-	fmt.Sscanf(values["disk_used"], "%d", &status.DiskUsed)
-	fmt.Sscanf(values["disk_total"], "%d", &status.DiskTotal)
-	fmt.Sscanf(values["network_rx_bytes"], "%d", &status.NetworkRxBytes)
-	fmt.Sscanf(values["network_tx_bytes"], "%d", &status.NetworkTxBytes)
-	fmt.Sscanf(values["network_rx_rate"], "%d", &status.NetworkRxRate)
-	fmt.Sscanf(values["network_tx_rate"], "%d", &status.NetworkTxRate)
-
-	// Parse int64 values
-	fmt.Sscanf(values["uptime_seconds"], "%d", &status.UptimeSeconds)
-
-	// Parse int values
-	fmt.Sscanf(values["tcp_connections"], "%d", &status.TCPConnections)
-	fmt.Sscanf(values["udp_connections"], "%d", &status.UDPConnections)
+	// Parse forward-specific fields
 	fmt.Sscanf(values["active_rules"], "%d", &status.ActiveRules)
 	fmt.Sscanf(values["active_connections"], "%d", &status.ActiveConnections)
-
-	// Parse uint16 values
 	fmt.Sscanf(values["ws_listen_port"], "%d", &status.WsListenPort)
 	fmt.Sscanf(values["tls_listen_port"], "%d", &status.TlsListenPort)
 
@@ -215,15 +206,6 @@ func (a *ForwardAgentStatusAdapter) parseStatus(values map[string]string) *dto.A
 			status.TunnelStatus = tunnelStatus
 		}
 	}
-
-	// Parse public IP addresses
-	status.PublicIPv4 = values["public_ipv4"]
-	status.PublicIPv6 = values["public_ipv6"]
-
-	// Parse agent info
-	status.AgentVersion = values["agent_version"]
-	status.Platform = values["platform"]
-	status.Arch = values["arch"]
 
 	return status
 }

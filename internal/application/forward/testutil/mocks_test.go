@@ -5,6 +5,7 @@ import (
 	"context"
 	"testing"
 
+	commondto "github.com/orris-inc/orris/internal/application/common/dto"
 	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
@@ -20,10 +21,10 @@ func TestMockForwardRuleRepository(t *testing.T) {
 		1,   // agentID
 		nil, // userID
 		vo.ForwardRuleTypeDirect,
-		0,   // exitAgentID
-		nil, // chainAgentIDs
-		nil, // chainPortConfig
-		nil, // tunnelHops
+		0,               // exitAgentID
+		nil,             // chainAgentIDs
+		nil,             // chainPortConfig
+		nil,             // tunnelHops
 		vo.TunnelTypeWS, // tunnelType
 		"test-rule",
 		8080,
@@ -118,7 +119,7 @@ func TestMockForwardRuleRepository_ErrorInjection(t *testing.T) {
 		0,
 		nil,
 		nil,
-		nil,              // tunnelHops
+		nil,             // tunnelHops
 		vo.TunnelTypeWS, // tunnelType
 		"test-rule",
 		8080,
@@ -263,8 +264,10 @@ func TestMockAgentStatusQuerier(t *testing.T) {
 
 	// Set up test status
 	status := &dto.AgentStatusDTO{
-		CPUPercent:        50.0,
-		MemoryPercent:     60.0,
+		SystemStatus: commondto.SystemStatus{
+			CPUPercent:    50.0,
+			MemoryPercent: 60.0,
+		},
 		ActiveRules:       5,
 		ActiveConnections: 10,
 	}

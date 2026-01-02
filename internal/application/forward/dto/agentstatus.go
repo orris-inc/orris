@@ -1,51 +1,18 @@
 // Package dto provides data transfer objects for the forward domain.
 package dto
 
-// AgentStatusDTO represents the status data reported by a forward agent.
+import commondto "github.com/orris-inc/orris/internal/application/common/dto"
+
+// AgentStatusDTO extends SystemStatus with forward-specific fields.
 type AgentStatusDTO struct {
-	// System resources
-	CPUPercent    float64 `json:"cpu_percent"`
-	MemoryPercent float64 `json:"memory_percent"`
-	MemoryUsed    uint64  `json:"memory_used"`
-	MemoryTotal   uint64  `json:"memory_total"`
-	MemoryAvail   uint64  `json:"memory_avail"`
-	DiskPercent   float64 `json:"disk_percent"`
-	DiskUsed      uint64  `json:"disk_used"`
-	DiskTotal     uint64  `json:"disk_total"`
-	UptimeSeconds int64   `json:"uptime_seconds"`
+	commondto.SystemStatus
 
-	// System load average
-	LoadAvg1  float64 `json:"load_avg_1"`
-	LoadAvg5  float64 `json:"load_avg_5"`
-	LoadAvg15 float64 `json:"load_avg_15"`
-
-	// Network statistics
-	NetworkRxBytes uint64 `json:"network_rx_bytes"` // Total received bytes
-	NetworkTxBytes uint64 `json:"network_tx_bytes"` // Total transmitted bytes
-	NetworkRxRate  uint64 `json:"network_rx_rate"`  // Current receive rate (bytes/sec)
-	NetworkTxRate  uint64 `json:"network_tx_rate"`  // Current transmit rate (bytes/sec)
-
-	// Network connections
-	TCPConnections int `json:"tcp_connections"`
-	UDPConnections int `json:"udp_connections"`
-
-	// Public IP addresses
-	PublicIPv4 string `json:"public_ipv4,omitempty"`
-	PublicIPv6 string `json:"public_ipv6,omitempty"`
-
-	// Forward status
+	// Forward-specific fields
 	ActiveRules       int               `json:"active_rules"`
 	ActiveConnections int               `json:"active_connections"`
-	TunnelStatus      map[string]string `json:"tunnel_status,omitempty"` // Key is Stripe-style rule ID (e.g., "fr_xK9mP2vL3nQ")
-
-	// Tunnel configuration (for exit agent)
-	WsListenPort  uint16 `json:"ws_listen_port,omitempty"`  // WebSocket listen port for tunnel connections
-	TlsListenPort uint16 `json:"tls_listen_port,omitempty"` // TLS listen port for tunnel connections
-
-	// Agent info
-	AgentVersion string `json:"agent_version,omitempty"` // Agent software version (e.g., "1.2.3")
-	Platform     string `json:"platform,omitempty"`      // OS platform (linux, darwin, windows)
-	Arch         string `json:"arch,omitempty"`          // CPU architecture (amd64, arm64, arm, 386)
+	TunnelStatus      map[string]string `json:"tunnel_status,omitempty"`
+	WsListenPort      uint16            `json:"ws_listen_port,omitempty"`
+	TlsListenPort     uint16            `json:"tls_listen_port,omitempty"`
 }
 
 // ReportAgentStatusInput represents the input for ReportAgentStatus use case.

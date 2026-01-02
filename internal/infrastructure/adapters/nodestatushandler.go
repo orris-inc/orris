@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 
+	commondto "github.com/orris-inc/orris/internal/application/common/dto"
 	nodeUsecases "github.com/orris-inc/orris/internal/application/node/usecases"
 	"github.com/orris-inc/orris/internal/infrastructure/services"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -44,42 +45,9 @@ func (h *NodeStatusHandler) SetAdminHub(hub *services.AdminHub, resolver NodeSID
 }
 
 // NodeStatusData represents the status data format from node agent WebSocket.
-// This matches the ReportNodeStatusRequest format for consistency.
+// This matches the ReportNodeStatusRequest format for consistency by embedding SystemStatus.
 type NodeStatusData struct {
-	// System resources
-	CPUPercent    float64 `json:"cpu_percent"`
-	MemoryPercent float64 `json:"memory_percent"`
-	MemoryUsed    uint64  `json:"memory_used"`
-	MemoryTotal   uint64  `json:"memory_total"`
-	MemoryAvail   uint64  `json:"memory_avail"`
-	DiskPercent   float64 `json:"disk_percent"`
-	DiskUsed      uint64  `json:"disk_used"`
-	DiskTotal     uint64  `json:"disk_total"`
-	UptimeSeconds int64   `json:"uptime_seconds"`
-
-	// System load
-	LoadAvg1  float64 `json:"load_avg_1"`
-	LoadAvg5  float64 `json:"load_avg_5"`
-	LoadAvg15 float64 `json:"load_avg_15"`
-
-	// Network statistics
-	NetworkRxBytes uint64 `json:"network_rx_bytes"`
-	NetworkTxBytes uint64 `json:"network_tx_bytes"`
-	NetworkRxRate  uint64 `json:"network_rx_rate"`
-	NetworkTxRate  uint64 `json:"network_tx_rate"`
-
-	// Connection statistics
-	TCPConnections int `json:"tcp_connections"`
-	UDPConnections int `json:"udp_connections"`
-
-	// Network info
-	PublicIPv4 string `json:"public_ipv4,omitempty"`
-	PublicIPv6 string `json:"public_ipv6,omitempty"`
-
-	// Agent info
-	AgentVersion string `json:"agent_version,omitempty"`
-	Platform     string `json:"platform,omitempty"`
-	Arch         string `json:"arch,omitempty"`
+	commondto.SystemStatus
 }
 
 // HandleStatus processes status update from a node agent.
