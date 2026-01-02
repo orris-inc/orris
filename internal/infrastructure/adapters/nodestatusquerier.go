@@ -7,6 +7,7 @@ import (
 
 	nodeUsecases "github.com/orris-inc/orris/internal/application/node/usecases"
 	"github.com/orris-inc/orris/internal/domain/node"
+	nodevo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/services"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -38,7 +39,7 @@ func NewNodeStatusQuerierAdapter(
 }
 
 // GetBatchStatus returns status for multiple nodes by their SIDs.
-// If nodeSIDs is nil, returns status for all enabled nodes.
+// If nodeSIDs is nil, returns status for all active nodes.
 // Returns a map of nodeSID -> (name, status).
 func (a *NodeStatusQuerierAdapter) GetBatchStatus(nodeSIDs []string) (map[string]*services.AgentStatusData, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), batchNodeStatusQueryTimeout)
@@ -50,10 +51,10 @@ func (a *NodeStatusQuerierAdapter) GetBatchStatus(nodeSIDs []string) (map[string
 	var err error
 
 	if nodeSIDs == nil {
-		// Get all nodes (no status filter as nodes don't have enabled/disabled status like agents)
-		enabledStatus := "enabled"
+		// Get all active nodes
+		activeStatus := string(nodevo.NodeStatusActive)
 		nodes, _, err = a.nodeRepo.List(ctx, node.NodeFilter{
-			Status: &enabledStatus,
+			Status: &activeStatus,
 		})
 		if err != nil {
 			a.logger.Errorw("failed to list nodes",

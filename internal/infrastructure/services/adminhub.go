@@ -76,10 +76,14 @@ type SSEConn struct {
 	ID           string
 	UserID       uint
 	Send         chan []byte
-	NodeFilters  map[string]bool // nil means subscribe to all nodes
-	AgentFilters map[string]bool // nil means subscribe to all agents
+	NodeFilters  map[string]bool // nil means subscribe to all nodes (if SubscribedToNodes is true)
+	AgentFilters map[string]bool // nil means subscribe to all agents (if SubscribedToAgents is true)
 	ConnectedAt  time.Time
 	closed       atomic.Bool
+
+	// Subscription type flags - explicitly track what this connection subscribes to
+	SubscribedToNodes  bool // true if this connection receives node events
+	SubscribedToAgents bool // true if this connection receives forward agent events
 }
 
 // TrySend attempts to send data to the SSE connection.
@@ -112,6 +116,10 @@ func (c *SSEConn) Close() {
 
 // ShouldReceive checks if this connection should receive events for the given node.
 func (c *SSEConn) ShouldReceive(nodeSID string) bool {
+	// First check if this connection subscribes to node events at all
+	if !c.SubscribedToNodes {
+		return false
+	}
 	if c.NodeFilters == nil {
 		return true // No filter, receive all
 	}
@@ -120,6 +128,10 @@ func (c *SSEConn) ShouldReceive(nodeSID string) bool {
 
 // ShouldReceiveAgent checks if this connection should receive events for the given agent.
 func (c *SSEConn) ShouldReceiveAgent(agentSID string) bool {
+	// First check if this connection subscribes to agent events at all
+	if !c.SubscribedToAgents {
+		return false
+	}
 	if c.AgentFilters == nil {
 		return true // No filter, receive all
 	}
@@ -248,15 +260,24 @@ func (h *AdminHub) Shutdown() {
 	h.connsMu.Unlock()
 }
 
-// RegisterConn registers a new SSE connection for node events.
+// RegisterConn registers a new SSE connection for node events only.
 // Returns the connection or nil if max connections exceeded or hub is shutdown.
 func (h *AdminHub) RegisterConn(connID string, userID uint, nodeFilters []string) *SSEConn {
-	return h.RegisterConnWithFilters(connID, userID, nodeFilters, nil)
+	return h.RegisterConnWithSubscription(connID, userID, nodeFilters, nil, true, false)
 }
 
-// RegisterConnWithFilters registers a new SSE connection with both node and agent filters.
+// RegisterConnWithFilters registers a new SSE connection for agent events only.
+// This is used by forward agent SSE handler.
 // Returns the connection or nil if max connections exceeded or hub is shutdown.
 func (h *AdminHub) RegisterConnWithFilters(connID string, userID uint, nodeFilters, agentFilters []string) *SSEConn {
+	return h.RegisterConnWithSubscription(connID, userID, nodeFilters, agentFilters, false, true)
+}
+
+// RegisterConnWithSubscription registers a new SSE connection with explicit subscription types.
+// subscribeNodes: if true, this connection receives node events
+// subscribeAgents: if true, this connection receives forward agent events
+// Returns the connection or nil if max connections exceeded or hub is shutdown.
+func (h *AdminHub) RegisterConnWithSubscription(connID string, userID uint, nodeFilters, agentFilters []string, subscribeNodes, subscribeAgents bool) *SSEConn {
 	// Check if shutdown
 	if h.shutdown.Load() {
 		return nil
@@ -281,12 +302,14 @@ func (h *AdminHub) RegisterConnWithFilters(connID string, userID uint, nodeFilte
 	}
 
 	conn := &SSEConn{
-		ID:           connID,
-		UserID:       userID,
-		Send:         make(chan []byte, 64),
-		NodeFilters:  nodeFilterMap,
-		AgentFilters: agentFilterMap,
-		ConnectedAt:  biztime.NowUTC(),
+		ID:                 connID,
+		UserID:             userID,
+		Send:               make(chan []byte, 64),
+		NodeFilters:        nodeFilterMap,
+		AgentFilters:       agentFilterMap,
+		ConnectedAt:        biztime.NowUTC(),
+		SubscribedToNodes:  subscribeNodes,
+		SubscribedToAgents: subscribeAgents,
 	}
 
 	// IMPORTANT: Always acquire locks in consistent order (connsMu -> userConnsMu)
@@ -316,6 +339,8 @@ func (h *AdminHub) RegisterConnWithFilters(connID string, userID uint, nodeFilte
 		"user_id", userID,
 		"node_filters", nodeFilters,
 		"agent_filters", agentFilters,
+		"subscribe_nodes", subscribeNodes,
+		"subscribe_agents", subscribeAgents,
 	)
 
 	return conn
@@ -568,7 +593,7 @@ func (h *AdminHub) broadcastAggregatedAgentStatus() {
 		return
 	}
 
-	// Collect all unique agent SIDs from all connections
+	// Collect all unique agent SIDs from connections that subscribe to agent events
 	h.connsMu.RLock()
 	if len(h.conns) == 0 {
 		h.connsMu.RUnlock()
@@ -582,6 +607,11 @@ func (h *AdminHub) broadcastAggregatedAgentStatus() {
 	filteredConns := make([]*SSEConn, 0)
 
 	for _, conn := range h.conns {
+		// Skip connections that don't subscribe to agent events
+		if !conn.SubscribedToAgents {
+			continue
+		}
+
 		if conn.AgentFilters == nil {
 			// This connection subscribes to all agents
 			hasSubscribeAll = true
@@ -780,7 +810,7 @@ func (h *AdminHub) broadcastAggregatedNodeStatus() {
 		return
 	}
 
-	// Collect all unique node SIDs from all connections
+	// Collect all unique node SIDs from connections that subscribe to node events
 	h.connsMu.RLock()
 	if len(h.conns) == 0 {
 		h.connsMu.RUnlock()
@@ -794,6 +824,11 @@ func (h *AdminHub) broadcastAggregatedNodeStatus() {
 	filteredConns := make([]*SSEConn, 0)
 
 	for _, conn := range h.conns {
+		// Skip connections that don't subscribe to node events
+		if !conn.SubscribedToNodes {
+			continue
+		}
+
 		if conn.NodeFilters == nil {
 			// This connection subscribes to all nodes
 			hasSubscribeAll = true

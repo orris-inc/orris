@@ -848,6 +848,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Initialize admin hub for SSE connections to frontend (must be before callbacks)
 	adminHub := services.NewAdminHub(log, &services.AdminHubConfig{
 		StatusThrottleMs: 1000, // 1 second throttle for node status updates
+		AgentBroadcastMs: 1000, // 1 second interval for aggregated agent status broadcast
+		NodeBroadcastMs:  1000, // 1 second interval for aggregated node status broadcast
 	})
 
 	// Set AdminHub on nodeStatusHandler for SSE broadcasting
