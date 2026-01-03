@@ -5,6 +5,7 @@ import (
 	"context"
 	"time"
 
+	commondto "github.com/orris-inc/orris/internal/application/common/dto"
 	nodeUsecases "github.com/orris-inc/orris/internal/application/node/usecases"
 	"github.com/orris-inc/orris/internal/domain/node"
 	nodevo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
@@ -118,12 +119,38 @@ func (a *NodeStatusQuerierAdapter) GetBatchStatus(nodeSIDs []string) (map[string
 	return result, nil
 }
 
-// toStatusResponse converts internal status to response format.
-func (a *NodeStatusQuerierAdapter) toStatusResponse(status *nodeUsecases.NodeSystemStatus) *nodeUsecases.NodeSystemStatus {
+// toStatusResponse converts internal NodeSystemStatus to commondto.SystemStatus for consistent JSON output.
+// This ensures the SSE response uses snake_case field names matching the forward agent events.
+func (a *NodeStatusQuerierAdapter) toStatusResponse(status *nodeUsecases.NodeSystemStatus) *commondto.SystemStatus {
 	if status == nil {
 		return nil
 	}
-	return status
+	return &commondto.SystemStatus{
+		CPUPercent:     status.CPUPercent,
+		MemoryPercent:  status.MemoryPercent,
+		MemoryUsed:     status.MemoryUsed,
+		MemoryTotal:    status.MemoryTotal,
+		MemoryAvail:    status.MemoryAvail,
+		DiskPercent:    status.DiskPercent,
+		DiskUsed:       status.DiskUsed,
+		DiskTotal:      status.DiskTotal,
+		UptimeSeconds:  status.UptimeSeconds,
+		LoadAvg1:       status.LoadAvg1,
+		LoadAvg5:       status.LoadAvg5,
+		LoadAvg15:      status.LoadAvg15,
+		NetworkRxBytes: status.NetworkRxBytes,
+		NetworkTxBytes: status.NetworkTxBytes,
+		NetworkRxRate:  status.NetworkRxRate,
+		NetworkTxRate:  status.NetworkTxRate,
+		TCPConnections: status.TCPConnections,
+		UDPConnections: status.UDPConnections,
+		PublicIPv4:     status.PublicIPv4,
+		PublicIPv6:     status.PublicIPv6,
+		AgentVersion:   status.AgentVersion,
+		Platform:       status.Platform,
+		Arch:           status.Arch,
+		UpdatedAt:      status.UpdatedAt,
+	}
 }
 
 // Ensure NodeStatusQuerierAdapter implements NodeStatusQuerier interface.

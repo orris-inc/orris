@@ -105,4 +105,7 @@ type SystemStatus struct {
 
 	// Entropy pool
 	EntropyAvailable uint64 `json:"entropy_available"`
+
+	// Metadata
+	UpdatedAt int64 `json:"updated_at,omitempty"`
 }

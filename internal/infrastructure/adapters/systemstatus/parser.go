@@ -127,6 +127,9 @@ func ParseSystemStatus(values map[string]string) commondto.SystemStatus {
 	// Entropy pool
 	fmt.Sscanf(values[FieldEntropyAvailable], "%d", &status.EntropyAvailable)
 
+	// Metadata
+	fmt.Sscanf(values[FieldUpdatedAt], "%d", &status.UpdatedAt)
+
 	return status
 }
 
