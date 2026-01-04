@@ -64,6 +64,73 @@ type NodeSystemStatus struct {
 	Platform     string
 	Arch         string
 
+	// CPU details
+	CPUCores     int
+	CPUModelName string
+	CPUMHz       float64
+
+	// Swap memory
+	SwapTotal   uint64
+	SwapUsed    uint64
+	SwapPercent float64
+
+	// Disk I/O
+	DiskReadBytes  uint64
+	DiskWriteBytes uint64
+	DiskReadRate   uint64
+	DiskWriteRate  uint64
+	DiskIOPS       uint64
+
+	// Pressure Stall Information (PSI)
+	PSICPUSome    float64
+	PSICPUFull    float64
+	PSIMemorySome float64
+	PSIMemoryFull float64
+	PSIIOSome     float64
+	PSIIOFull     float64
+
+	// Network extended stats
+	NetworkRxPackets uint64
+	NetworkTxPackets uint64
+	NetworkRxErrors  uint64
+	NetworkTxErrors  uint64
+	NetworkRxDropped uint64
+	NetworkTxDropped uint64
+
+	// Socket statistics
+	SocketsUsed      int
+	SocketsTCPInUse  int
+	SocketsUDPInUse  int
+	SocketsTCPOrphan int
+	SocketsTCPTW     int
+
+	// Process statistics
+	ProcessesTotal   uint64
+	ProcessesRunning uint64
+	ProcessesBlocked uint64
+
+	// File descriptors
+	FileNrAllocated uint64
+	FileNrMax       uint64
+
+	// Context switches and interrupts
+	ContextSwitches uint64
+	Interrupts      uint64
+
+	// Kernel info
+	KernelVersion string
+	Hostname      string
+
+	// Virtual memory statistics
+	VMPageIn  uint64
+	VMPageOut uint64
+	VMSwapIn  uint64
+	VMSwapOut uint64
+	VMOOMKill uint64
+
+	// Entropy pool
+	EntropyAvailable uint64
+
 	// Metadata
 	UpdatedAt int64
 }
@@ -192,6 +259,73 @@ func toNodeSystemStatusDTO(status *NodeSystemStatus) *dto.NodeSystemStatusDTO {
 		AgentVersion:   status.AgentVersion,
 		Platform:       status.Platform,
 		Arch:           status.Arch,
-		UpdatedAt:      status.UpdatedAt,
+		CPUCores:       status.CPUCores,
+		CPUModelName:   status.CPUModelName,
+		CPUMHz:         status.CPUMHz,
+
+		// Swap memory
+		SwapTotal:   status.SwapTotal,
+		SwapUsed:    status.SwapUsed,
+		SwapPercent: status.SwapPercent,
+
+		// Disk I/O
+		DiskReadBytes:  status.DiskReadBytes,
+		DiskWriteBytes: status.DiskWriteBytes,
+		DiskReadRate:   status.DiskReadRate,
+		DiskWriteRate:  status.DiskWriteRate,
+		DiskIOPS:       status.DiskIOPS,
+
+		// Pressure Stall Information (PSI)
+		PSICPUSome:    status.PSICPUSome,
+		PSICPUFull:    status.PSICPUFull,
+		PSIMemorySome: status.PSIMemorySome,
+		PSIMemoryFull: status.PSIMemoryFull,
+		PSIIOSome:     status.PSIIOSome,
+		PSIIOFull:     status.PSIIOFull,
+
+		// Network extended stats
+		NetworkRxPackets: status.NetworkRxPackets,
+		NetworkTxPackets: status.NetworkTxPackets,
+		NetworkRxErrors:  status.NetworkRxErrors,
+		NetworkTxErrors:  status.NetworkTxErrors,
+		NetworkRxDropped: status.NetworkRxDropped,
+		NetworkTxDropped: status.NetworkTxDropped,
+
+		// Socket statistics
+		SocketsUsed:      status.SocketsUsed,
+		SocketsTCPInUse:  status.SocketsTCPInUse,
+		SocketsUDPInUse:  status.SocketsUDPInUse,
+		SocketsTCPOrphan: status.SocketsTCPOrphan,
+		SocketsTCPTW:     status.SocketsTCPTW,
+
+		// Process statistics
+		ProcessesTotal:   status.ProcessesTotal,
+		ProcessesRunning: status.ProcessesRunning,
+		ProcessesBlocked: status.ProcessesBlocked,
+
+		// File descriptors
+		FileNrAllocated: status.FileNrAllocated,
+		FileNrMax:       status.FileNrMax,
+
+		// Context switches and interrupts
+		ContextSwitches: status.ContextSwitches,
+		Interrupts:      status.Interrupts,
+
+		// Kernel info
+		KernelVersion: status.KernelVersion,
+		Hostname:      status.Hostname,
+
+		// Virtual memory statistics
+		VMPageIn:  status.VMPageIn,
+		VMPageOut: status.VMPageOut,
+		VMSwapIn:  status.VMSwapIn,
+		VMSwapOut: status.VMSwapOut,
+		VMOOMKill: status.VMOOMKill,
+
+		// Entropy pool
+		EntropyAvailable: status.EntropyAvailable,
+
+		// Metadata
+		UpdatedAt: status.UpdatedAt,
 	}
 }

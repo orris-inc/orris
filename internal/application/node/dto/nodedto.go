@@ -90,6 +90,73 @@ type NodeSystemStatusDTO struct {
 	Platform     string `json:"platform,omitempty" example:"linux"`      // OS platform (linux, darwin, windows)
 	Arch         string `json:"arch,omitempty" example:"amd64"`          // CPU architecture (amd64, arm64, arm, 386)
 
+	// CPU details
+	CPUCores     int     `json:"cpu_cores" example:"4"`                          // Number of CPU cores
+	CPUModelName string  `json:"cpu_model_name" example:"AMD EPYC 9654 96-Core"` // CPU model name
+	CPUMHz       float64 `json:"cpu_mhz" example:"2396.4"`                       // CPU frequency in MHz
+
+	// Swap memory
+	SwapTotal   uint64  `json:"swap_total" example:"8589934592"`   // Total swap memory in bytes
+	SwapUsed    uint64  `json:"swap_used" example:"1073741824"`    // Used swap memory in bytes
+	SwapPercent float64 `json:"swap_percent" example:"12.50"`      // Swap usage percentage (0-100)
+
+	// Disk I/O
+	DiskReadBytes  uint64 `json:"disk_read_bytes" example:"1073741824"`  // Total disk read bytes
+	DiskWriteBytes uint64 `json:"disk_write_bytes" example:"536870912"`  // Total disk write bytes
+	DiskReadRate   uint64 `json:"disk_read_rate" example:"10485760"`     // Disk read rate in bytes per second
+	DiskWriteRate  uint64 `json:"disk_write_rate" example:"5242880"`     // Disk write rate in bytes per second
+	DiskIOPS       uint64 `json:"disk_iops" example:"1000"`              // Disk I/O operations per second
+
+	// Pressure Stall Information (PSI)
+	PSICPUSome    float64 `json:"psi_cpu_some" example:"0.50"`    // CPU pressure (some)
+	PSICPUFull    float64 `json:"psi_cpu_full" example:"0.10"`    // CPU pressure (full)
+	PSIMemorySome float64 `json:"psi_memory_some" example:"0.30"` // Memory pressure (some)
+	PSIMemoryFull float64 `json:"psi_memory_full" example:"0.05"` // Memory pressure (full)
+	PSIIOSome     float64 `json:"psi_io_some" example:"0.20"`     // I/O pressure (some)
+	PSIIOFull     float64 `json:"psi_io_full" example:"0.02"`     // I/O pressure (full)
+
+	// Network extended stats
+	NetworkRxPackets uint64 `json:"network_rx_packets" example:"1000000"`  // Total received packets
+	NetworkTxPackets uint64 `json:"network_tx_packets" example:"500000"`   // Total transmitted packets
+	NetworkRxErrors  uint64 `json:"network_rx_errors" example:"10"`        // Receive errors
+	NetworkTxErrors  uint64 `json:"network_tx_errors" example:"5"`         // Transmit errors
+	NetworkRxDropped uint64 `json:"network_rx_dropped" example:"2"`        // Receive dropped packets
+	NetworkTxDropped uint64 `json:"network_tx_dropped" example:"1"`        // Transmit dropped packets
+
+	// Socket statistics
+	SocketsUsed      int `json:"sockets_used" example:"500"`       // Total sockets in use
+	SocketsTCPInUse  int `json:"sockets_tcp_in_use" example:"300"` // TCP sockets in use
+	SocketsUDPInUse  int `json:"sockets_udp_in_use" example:"50"`  // UDP sockets in use
+	SocketsTCPOrphan int `json:"sockets_tcp_orphan" example:"10"`  // Orphaned TCP sockets
+	SocketsTCPTW     int `json:"sockets_tcp_tw" example:"100"`     // TCP TIME_WAIT sockets
+
+	// Process statistics
+	ProcessesTotal   uint64 `json:"processes_total" example:"200"`   // Total number of processes
+	ProcessesRunning uint64 `json:"processes_running" example:"5"`   // Running processes
+	ProcessesBlocked uint64 `json:"processes_blocked" example:"0"`   // Blocked processes
+
+	// File descriptors
+	FileNrAllocated uint64 `json:"file_nr_allocated" example:"10000"` // Allocated file descriptors
+	FileNrMax       uint64 `json:"file_nr_max" example:"100000"`      // Maximum file descriptors
+
+	// Context switches and interrupts
+	ContextSwitches uint64 `json:"context_switches" example:"1000000"` // Context switches per second
+	Interrupts      uint64 `json:"interrupts" example:"500000"`        // Interrupts per second
+
+	// Kernel info
+	KernelVersion string `json:"kernel_version,omitempty" example:"5.15.0-generic"` // Kernel version
+	Hostname      string `json:"hostname,omitempty" example:"server-01"`            // Server hostname
+
+	// Virtual memory statistics
+	VMPageIn  uint64 `json:"vm_page_in" example:"1000000"`  // Pages paged in
+	VMPageOut uint64 `json:"vm_page_out" example:"500000"`  // Pages paged out
+	VMSwapIn  uint64 `json:"vm_swap_in" example:"1000"`     // Pages swapped in
+	VMSwapOut uint64 `json:"vm_swap_out" example:"500"`     // Pages swapped out
+	VMOOMKill uint64 `json:"vm_oom_kill" example:"0"`       // OOM killer invocations
+
+	// Entropy pool
+	EntropyAvailable uint64 `json:"entropy_available" example:"3500"` // Available entropy bits
+
 	// Metadata
 	UpdatedAt int64 `json:"updated_at" example:"1705324800"` // Last update timestamp (Unix seconds)
 }

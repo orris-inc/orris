@@ -254,6 +254,71 @@ func (a *NodeSystemStatusUpdaterAdapter) UpdateSystemStatus(ctx context.Context,
 		AgentVersion:   status.AgentVersion,
 		Platform:       status.Platform,
 		Arch:           status.Arch,
+		CPUCores:       status.CPUCores,
+		CPUModelName:   status.CPUModelName,
+		CPUMHz:         status.CPUMHz,
+
+		// Swap memory
+		SwapTotal:   status.SwapTotal,
+		SwapUsed:    status.SwapUsed,
+		SwapPercent: status.SwapPercent,
+
+		// Disk I/O
+		DiskReadBytes:  status.DiskReadBytes,
+		DiskWriteBytes: status.DiskWriteBytes,
+		DiskReadRate:   status.DiskReadRate,
+		DiskWriteRate:  status.DiskWriteRate,
+		DiskIOPS:       status.DiskIOPS,
+
+		// Pressure Stall Information (PSI)
+		PSICPUSome:    status.PSICPUSome,
+		PSICPUFull:    status.PSICPUFull,
+		PSIMemorySome: status.PSIMemorySome,
+		PSIMemoryFull: status.PSIMemoryFull,
+		PSIIOSome:     status.PSIIOSome,
+		PSIIOFull:     status.PSIIOFull,
+
+		// Network extended stats
+		NetworkRxPackets: status.NetworkRxPackets,
+		NetworkTxPackets: status.NetworkTxPackets,
+		NetworkRxErrors:  status.NetworkRxErrors,
+		NetworkTxErrors:  status.NetworkTxErrors,
+		NetworkRxDropped: status.NetworkRxDropped,
+		NetworkTxDropped: status.NetworkTxDropped,
+
+		// Socket statistics
+		SocketsUsed:      status.SocketsUsed,
+		SocketsTCPInUse:  status.SocketsTCPInUse,
+		SocketsUDPInUse:  status.SocketsUDPInUse,
+		SocketsTCPOrphan: status.SocketsTCPOrphan,
+		SocketsTCPTW:     status.SocketsTCPTW,
+
+		// Process statistics
+		ProcessesTotal:   status.ProcessesTotal,
+		ProcessesRunning: status.ProcessesRunning,
+		ProcessesBlocked: status.ProcessesBlocked,
+
+		// File descriptors
+		FileNrAllocated: status.FileNrAllocated,
+		FileNrMax:       status.FileNrMax,
+
+		// Context switches and interrupts
+		ContextSwitches: status.ContextSwitches,
+		Interrupts:      status.Interrupts,
+
+		// Kernel info
+		KernelVersion: status.KernelVersion,
+		Hostname:      status.Hostname,
+
+		// Virtual memory statistics
+		VMPageIn:  status.VMPageIn,
+		VMPageOut: status.VMPageOut,
+		VMSwapIn:  status.VMSwapIn,
+		VMSwapOut: status.VMSwapOut,
+		VMOOMKill: status.VMOOMKill,
+
+		// Entropy pool
+		EntropyAvailable: status.EntropyAvailable,
 	}
 
 	// Use shared helper to convert to Redis fields
@@ -279,8 +344,6 @@ func (a *NodeSystemStatusUpdaterAdapter) UpdateSystemStatus(ctx context.Context,
 		"node_id", nodeID,
 		"cpu_percent", status.CPUPercent,
 		"memory_percent", status.MemoryPercent,
-		"disk_percent", status.DiskPercent,
-		"uptime_seconds", status.UptimeSeconds,
 	)
 
 	return nil
@@ -358,11 +421,74 @@ func parseNodeSystemStatus(values map[string]string) *nodeUsecases.NodeSystemSta
 		AgentVersion:   sysStatus.AgentVersion,
 		Platform:       sysStatus.Platform,
 		Arch:           sysStatus.Arch,
-	}
+		CPUCores:       sysStatus.CPUCores,
+		CPUModelName:   sysStatus.CPUModelName,
+		CPUMHz:         sysStatus.CPUMHz,
 
-	// Parse UpdatedAt which is specific to NodeSystemStatus
-	if v, ok := values[systemstatus.FieldUpdatedAt]; ok {
-		fmt.Sscanf(v, "%d", &status.UpdatedAt)
+		// Swap memory
+		SwapTotal:   sysStatus.SwapTotal,
+		SwapUsed:    sysStatus.SwapUsed,
+		SwapPercent: sysStatus.SwapPercent,
+
+		// Disk I/O
+		DiskReadBytes:  sysStatus.DiskReadBytes,
+		DiskWriteBytes: sysStatus.DiskWriteBytes,
+		DiskReadRate:   sysStatus.DiskReadRate,
+		DiskWriteRate:  sysStatus.DiskWriteRate,
+		DiskIOPS:       sysStatus.DiskIOPS,
+
+		// Pressure Stall Information (PSI)
+		PSICPUSome:    sysStatus.PSICPUSome,
+		PSICPUFull:    sysStatus.PSICPUFull,
+		PSIMemorySome: sysStatus.PSIMemorySome,
+		PSIMemoryFull: sysStatus.PSIMemoryFull,
+		PSIIOSome:     sysStatus.PSIIOSome,
+		PSIIOFull:     sysStatus.PSIIOFull,
+
+		// Network extended stats
+		NetworkRxPackets: sysStatus.NetworkRxPackets,
+		NetworkTxPackets: sysStatus.NetworkTxPackets,
+		NetworkRxErrors:  sysStatus.NetworkRxErrors,
+		NetworkTxErrors:  sysStatus.NetworkTxErrors,
+		NetworkRxDropped: sysStatus.NetworkRxDropped,
+		NetworkTxDropped: sysStatus.NetworkTxDropped,
+
+		// Socket statistics
+		SocketsUsed:      sysStatus.SocketsUsed,
+		SocketsTCPInUse:  sysStatus.SocketsTCPInUse,
+		SocketsUDPInUse:  sysStatus.SocketsUDPInUse,
+		SocketsTCPOrphan: sysStatus.SocketsTCPOrphan,
+		SocketsTCPTW:     sysStatus.SocketsTCPTW,
+
+		// Process statistics
+		ProcessesTotal:   sysStatus.ProcessesTotal,
+		ProcessesRunning: sysStatus.ProcessesRunning,
+		ProcessesBlocked: sysStatus.ProcessesBlocked,
+
+		// File descriptors
+		FileNrAllocated: sysStatus.FileNrAllocated,
+		FileNrMax:       sysStatus.FileNrMax,
+
+		// Context switches and interrupts
+		ContextSwitches: sysStatus.ContextSwitches,
+		Interrupts:      sysStatus.Interrupts,
+
+		// Kernel info
+		KernelVersion: sysStatus.KernelVersion,
+		Hostname:      sysStatus.Hostname,
+
+		// Virtual memory statistics
+		VMPageIn:  sysStatus.VMPageIn,
+		VMPageOut: sysStatus.VMPageOut,
+		VMSwapIn:  sysStatus.VMSwapIn,
+		VMSwapOut: sysStatus.VMSwapOut,
+		VMOOMKill: sysStatus.VMOOMKill,
+
+		// Entropy pool
+		EntropyAvailable: sysStatus.EntropyAvailable,
+
+		// Metadata
+		UpdatedAt: sysStatus.UpdatedAt,
 	}
 
 	return status
