@@ -59,7 +59,9 @@ func (uc *RegisterWithPasswordUseCase) Execute(ctx context.Context, cmd Register
 		return nil, fmt.Errorf("failed to check email existence: %w", err)
 	}
 	if exists {
-		return nil, fmt.Errorf("user with email %s already exists", cmd.Email)
+		// Use generic error message to prevent email enumeration attacks
+		uc.logger.Infow("registration attempt with existing email", "email", email.String())
+		return nil, fmt.Errorf("registration failed, please check your information or try logging in")
 	}
 
 	name, err := vo.NewName(cmd.Name)

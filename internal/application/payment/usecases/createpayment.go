@@ -67,6 +67,12 @@ func (uc *CreatePaymentUseCase) Execute(ctx context.Context, cmd CreatePaymentCo
 		return nil, fmt.Errorf("failed to get subscription: %w", err)
 	}
 
+	// Verify user owns this subscription
+	if sub.UserID() != cmd.UserID {
+		uc.logger.Warnw("unauthorized payment attempt", "subscription_id", cmd.SubscriptionID, "user_id", cmd.UserID, "owner_id", sub.UserID())
+		return nil, fmt.Errorf("permission denied: you don't own this subscription")
+	}
+
 	if sub.Status() != subscriptionVO.StatusInactive && sub.Status() != subscriptionVO.StatusPendingPayment {
 		return nil, fmt.Errorf("subscription status invalid for payment: %s", sub.Status())
 	}

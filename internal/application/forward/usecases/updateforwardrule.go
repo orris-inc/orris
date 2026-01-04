@@ -97,6 +97,33 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 		if agent == nil {
 			return errors.NewNotFoundError("forward agent", *cmd.AgentShortID)
 		}
+
+		// Validate current listen port against new agent's allowed port range
+		// Use the new listenPort if provided, otherwise use rule's current listenPort
+		portToCheck := rule.ListenPort()
+		if cmd.ListenPort != nil {
+			portToCheck = *cmd.ListenPort
+		}
+		if !agent.IsPortAllowed(portToCheck) {
+			return errors.NewValidationError(
+				fmt.Sprintf("listen port %d is not allowed for agent %s, allowed ranges: %s",
+					portToCheck, *cmd.AgentShortID, agent.AllowedPortRange().String()))
+		}
+
+		// Check if the port is already in use on the new agent (when changing agents)
+		// This check is needed even if the port number stays the same
+		// Note: We exclude current rule since we're changing its agent
+		if agent.ID() != rule.AgentID() {
+			inUse, err := uc.repo.IsPortInUseByAgent(ctx, agent.ID(), portToCheck, rule.ID())
+			if err != nil {
+				uc.logger.Errorw("failed to check listen port on new agent", "agent_id", agent.ID(), "port", portToCheck, "error", err)
+				return fmt.Errorf("failed to check listen port: %w", err)
+			}
+			if inUse {
+				return errors.NewConflictError("listen port is already in use on target agent", fmt.Sprintf("%d", portToCheck))
+			}
+		}
+
 		if err := rule.UpdateAgentID(agent.ID()); err != nil {
 			return errors.NewValidationError(err.Error())
 		}
@@ -137,7 +164,10 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 	}
 
 	// Update chain port config (for direct_chain and hybrid chain type rules)
+	// Also validate that each port is within the corresponding agent's allowed port range
+	// and check for port conflicts on each chain agent
 	if cmd.ChainPortConfig != nil {
+		oldChainPortConfig := rule.ChainPortConfig()
 		chainPortConfig := make(map[uint]uint16, len(cmd.ChainPortConfig))
 		for shortID, port := range cmd.ChainPortConfig {
 			chainAgent, err := uc.agentRepo.GetBySID(ctx, shortID)
@@ -147,6 +177,27 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 			}
 			if chainAgent == nil {
 				return errors.NewNotFoundError("chain forward agent in chain_port_config", shortID)
+			}
+			// Validate port against chain agent's allowed port range
+			if !chainAgent.IsPortAllowed(port) {
+				return errors.NewValidationError(
+					fmt.Sprintf("listen port %d is not allowed for chain agent %s, allowed ranges: %s",
+						port, shortID, chainAgent.AllowedPortRange().String()))
+			}
+			// Check if the port changed for this agent (skip conflict check if port unchanged)
+			oldPort, hadOldPort := oldChainPortConfig[chainAgent.ID()]
+			if !hadOldPort || oldPort != port {
+				// Port is new or changed, check for conflicts (excluding current rule)
+				inUse, err := uc.repo.IsPortInUseByAgent(ctx, chainAgent.ID(), port, rule.ID())
+				if err != nil {
+					uc.logger.Errorw("failed to check chain agent port", "chain_agent_id", chainAgent.ID(), "port", port, "error", err)
+					return fmt.Errorf("failed to check chain agent port: %w", err)
+				}
+				if inUse {
+					return errors.NewConflictError(
+						fmt.Sprintf("listen port %d is already in use on chain agent %s", port, shortID),
+						fmt.Sprintf("%d", port))
+				}
 			}
 			chainPortConfig[chainAgent.ID()] = port
 		}
@@ -163,15 +214,38 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 	}
 
 	if cmd.ListenPort != nil {
-		// Check if the new port is already in use by another rule
+		// Check if the new port is already in use by another rule on the same agent
+		// Note: rule.AgentID() returns the updated agent ID if AgentShortID was provided earlier
 		if *cmd.ListenPort != rule.ListenPort() {
-			exists, err := uc.repo.ExistsByListenPort(ctx, *cmd.ListenPort)
+			inUse, err := uc.repo.IsPortInUseByAgent(ctx, rule.AgentID(), *cmd.ListenPort, rule.ID())
 			if err != nil {
-				uc.logger.Errorw("failed to check listen port", "port", *cmd.ListenPort, "error", err)
+				uc.logger.Errorw("failed to check listen port", "agent_id", rule.AgentID(), "port", *cmd.ListenPort, "error", err)
 				return fmt.Errorf("failed to check listen port: %w", err)
 			}
-			if exists {
-				return errors.NewConflictError("listen port is already in use", fmt.Sprintf("%d", *cmd.ListenPort))
+			if inUse {
+				return errors.NewConflictError("listen port is already in use on this agent", fmt.Sprintf("%d", *cmd.ListenPort))
+			}
+
+			// Validate listen port against agent's allowed port range
+			// Use the agent from updated AgentShortID if provided, otherwise get current agent
+			var agentForPortCheck *forward.ForwardAgent
+			if cmd.AgentShortID != nil {
+				agentForPortCheck, err = uc.agentRepo.GetBySID(ctx, *cmd.AgentShortID)
+				if err != nil {
+					uc.logger.Errorw("failed to get agent for port validation", "agent_short_id", *cmd.AgentShortID, "error", err)
+					return fmt.Errorf("failed to validate agent: %w", err)
+				}
+			} else {
+				agentForPortCheck, err = uc.agentRepo.GetByID(ctx, rule.AgentID())
+				if err != nil {
+					uc.logger.Errorw("failed to get agent for port validation", "agent_id", rule.AgentID(), "error", err)
+					return fmt.Errorf("failed to validate agent: %w", err)
+				}
+			}
+			if agentForPortCheck != nil && !agentForPortCheck.IsPortAllowed(*cmd.ListenPort) {
+				return errors.NewValidationError(
+					fmt.Sprintf("listen port %d is not allowed for this agent, allowed ranges: %s",
+						*cmd.ListenPort, agentForPortCheck.AllowedPortRange().String()))
 			}
 		}
 		if err := rule.UpdateListenPort(*cmd.ListenPort); err != nil {

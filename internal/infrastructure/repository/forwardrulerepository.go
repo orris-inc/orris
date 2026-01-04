@@ -389,6 +389,61 @@ func (r *ForwardRuleRepositoryImpl) ExistsByListenPort(ctx context.Context, port
 	return count > 0, nil
 }
 
+// ExistsByAgentIDAndListenPort checks if a rule with the given agent ID and listen port exists.
+// This is used for auto-assigning ports within an agent's scope.
+func (r *ForwardRuleRepositoryImpl) ExistsByAgentIDAndListenPort(ctx context.Context, agentID uint, port uint16) (bool, error) {
+	var count int64
+	tx := db.GetTxFromContext(ctx, r.db)
+	err := tx.Model(&models.ForwardRuleModel{}).
+		Scopes(db.NotDeleted()).
+		Where("agent_id = ? AND listen_port = ?", agentID, port).
+		Count(&count).Error
+	if err != nil {
+		r.logger.Errorw("failed to check forward rule existence by agent and port", "agent_id", agentID, "port", port, "error", err)
+		return false, fmt.Errorf("failed to check forward rule existence: %w", err)
+	}
+	return count > 0, nil
+}
+
+// IsPortInUseByAgent checks if a port is in use by the specified agent across all rules.
+// This includes both main rule ports (agent_id + listen_port) and chain_port_config entries.
+func (r *ForwardRuleRepositoryImpl) IsPortInUseByAgent(ctx context.Context, agentID uint, port uint16, excludeRuleID uint) (bool, error) {
+	var count int64
+	tx := db.GetTxFromContext(ctx, r.db)
+
+	// Build query to check both:
+	// 1. Main rule: agent_id = ? AND listen_port = ?
+	// 2. Chain port config: JSON_EXTRACT(chain_port_config, '$."<agent_id>"') = port
+	// Note: MySQL JSON keys are strings, so we use the agent ID as a string key
+	query := tx.Model(&models.ForwardRuleModel{}).
+		Scopes(db.NotDeleted())
+
+	// Exclude specific rule if provided (for update scenarios)
+	if excludeRuleID > 0 {
+		query = query.Where("id != ?", excludeRuleID)
+	}
+
+	// Check main rule ports OR chain_port_config entries
+	// Use CAST for explicit type conversion to ensure correct comparison
+	// JSON_EXTRACT returns JSON value, CAST converts it to unsigned integer for comparison
+	err := query.Where(
+		"(agent_id = ? AND listen_port = ?) OR (chain_port_config IS NOT NULL AND CAST(JSON_EXTRACT(chain_port_config, CONCAT('$.\"', ?, '\"')) AS UNSIGNED) = ?)",
+		agentID, port, agentID, port,
+	).Count(&count).Error
+
+	if err != nil {
+		r.logger.Errorw("failed to check port in use by agent",
+			"agent_id", agentID,
+			"port", port,
+			"exclude_rule_id", excludeRuleID,
+			"error", err,
+		)
+		return false, fmt.Errorf("failed to check port in use: %w", err)
+	}
+
+	return count > 0, nil
+}
+
 // UpdateTraffic updates the traffic counters for a rule.
 func (r *ForwardRuleRepositoryImpl) UpdateTraffic(ctx context.Context, id uint, upload, download int64) error {
 	tx := db.GetTxFromContext(ctx, r.db)

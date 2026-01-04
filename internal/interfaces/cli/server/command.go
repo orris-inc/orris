@@ -133,6 +133,10 @@ func run(cmd *cobra.Command, args []string) error {
 
 	logger.Info("shutting down server...")
 
+	// Shutdown router first (closes SSE connections, flushes traffic data, etc.)
+	// This must happen before HTTP server shutdown to allow connections to close gracefully
+	router.Shutdown()
+
 	// Shutdown HTTP Server
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

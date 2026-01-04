@@ -50,8 +50,8 @@ type TrafficItem struct {
 	DownloadBytes int64  `json:"download_bytes"`
 }
 
-// TrafficBufferWriter defines the interface for writing traffic entries to a buffer.
-type TrafficBufferWriter interface {
+// RuleTrafficBufferWriter defines the interface for writing rule traffic entries to a buffer.
+type RuleTrafficBufferWriter interface {
 	AddTraffic(ruleID uint, upload, download int64)
 }
 
@@ -64,7 +64,7 @@ type cachedRuleInfo struct {
 // TrafficMessageHandler handles traffic messages from forward agents.
 // It implements the MessageHandler interface.
 type TrafficMessageHandler struct {
-	buffer   TrafficBufferWriter
+	buffer   RuleTrafficBufferWriter
 	ruleRepo forward.Repository
 	logger   logger.Interface
 
@@ -76,7 +76,7 @@ type TrafficMessageHandler struct {
 
 // NewTrafficMessageHandler creates a new TrafficMessageHandler.
 func NewTrafficMessageHandler(
-	buffer TrafficBufferWriter,
+	buffer RuleTrafficBufferWriter,
 	ruleRepo forward.Repository,
 	log logger.Interface,
 ) *TrafficMessageHandler {

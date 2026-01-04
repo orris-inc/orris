@@ -8,6 +8,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/ticket/usecases"
 	vo "github.com/orris-inc/orris/internal/domain/ticket/valueobjects"
+	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
@@ -160,9 +161,11 @@ func (h *TicketHandler) AddComment(c *gin.Context) {
 	}
 
 	userID, _ := c.Get("user_id")
+	userRole := c.GetString(constants.ContextKeyUserRole)
 	cmd := usecases.AddCommentCommand{
 		TicketID:   ticketID,
 		UserID:     userID.(uint),
+		UserRoles:  []string{userRole},
 		Content:    req.Content,
 		IsInternal: req.IsInternal,
 	}
@@ -197,6 +200,7 @@ func (h *TicketHandler) UpdateTicketStatus(c *gin.Context) {
 	}
 
 	userID, _ := c.Get("user_id")
+	userRole := c.GetString(constants.ContextKeyUserRole)
 
 	// Map string status to vo.TicketStatus
 	var newStatus vo.TicketStatus
@@ -220,6 +224,7 @@ func (h *TicketHandler) UpdateTicketStatus(c *gin.Context) {
 		TicketID:  ticketID,
 		NewStatus: newStatus,
 		ChangedBy: userID.(uint),
+		UserRoles: []string{userRole},
 	}
 
 	result, err := h.changeStatusUC.Execute(c.Request.Context(), cmd)

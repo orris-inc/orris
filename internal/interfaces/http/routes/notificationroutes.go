@@ -69,11 +69,10 @@ func SetupNotificationRoutes(engine *gin.Engine, config *NotificationRouteConfig
 
 	templates := engine.Group("/notification-templates")
 	templates.Use(config.AuthMiddleware.RequireAuth())
+	templates.Use(authorization.RequireAdmin())
 	{
 		templates.GET("", config.NotificationHandler.ListTemplates)
 		templates.POST("/render", config.NotificationHandler.RenderTemplate)
-		templates.POST("",
-			authorization.RequireAdmin(),
-			config.NotificationHandler.CreateTemplate)
+		templates.POST("", config.NotificationHandler.CreateTemplate)
 	}
 }

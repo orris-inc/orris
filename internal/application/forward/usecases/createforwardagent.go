@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/orris-inc/orris/internal/domain/forward"
+	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -12,10 +13,11 @@ import (
 
 // CreateForwardAgentCommand represents the input for creating a forward agent.
 type CreateForwardAgentCommand struct {
-	Name          string
-	PublicAddress string
-	TunnelAddress string
-	Remark        string
+	Name             string
+	PublicAddress    string
+	TunnelAddress    string
+	Remark           string
+	AllowedPortRange string // Port range string (e.g., "80,443,8000-9000"), empty means all ports allowed
 }
 
 // CreateForwardAgentResult represents the output of creating a forward agent.
@@ -70,11 +72,29 @@ func (uc *CreateForwardAgentUseCase) Execute(ctx context.Context, cmd CreateForw
 		return nil, errors.NewConflictError("agent name already exists", cmd.Name)
 	}
 
+	// Parse allowed port range if provided
+	var portRange *vo.PortRange
+	if cmd.AllowedPortRange != "" {
+		portRange, err = vo.ParsePortRange(cmd.AllowedPortRange)
+		if err != nil {
+			uc.logger.Errorw("invalid allowed port range", "range", cmd.AllowedPortRange, "error", err)
+			return nil, errors.NewValidationError(fmt.Sprintf("invalid allowed port range: %v", err))
+		}
+	}
+
 	// Create domain entity with HMAC-based token generator
 	agent, err := forward.NewForwardAgent(cmd.Name, cmd.PublicAddress, cmd.TunnelAddress, cmd.Remark, id.NewForwardAgentID, uc.tokenGen.Generate)
 	if err != nil {
 		uc.logger.Errorw("failed to create forward agent entity", "error", err)
 		return nil, fmt.Errorf("failed to create forward agent: %w", err)
+	}
+
+	// Set allowed port range if provided
+	if portRange != nil {
+		if err := agent.SetAllowedPortRange(portRange); err != nil {
+			uc.logger.Errorw("failed to set allowed port range", "error", err)
+			return nil, errors.NewValidationError(fmt.Sprintf("invalid allowed port range: %v", err))
+		}
 	}
 
 	// Persist

@@ -9,14 +9,14 @@ import (
 )
 
 const (
-	// SubTrafficNumShards is the number of shards for subscription traffic buffer partitioning.
-	SubTrafficNumShards = 16
+	// SubscriptionTrafficNumShards is the number of shards for subscription traffic buffer partitioning.
+	SubscriptionTrafficNumShards = 16
 
-	// SubTrafficFlushInterval is the interval for flushing traffic data to Redis.
-	SubTrafficFlushInterval = 5 * time.Second
+	// SubscriptionTrafficFlushInterval is the interval for flushing subscription traffic data to Redis.
+	SubscriptionTrafficFlushInterval = 5 * time.Second
 
-	// SubTrafficMaxRetryCount is the maximum number of flush retry attempts before dropping data.
-	SubTrafficMaxRetryCount = 10
+	// SubscriptionTrafficMaxRetryCount is the maximum number of flush retry attempts before dropping data.
+	SubscriptionTrafficMaxRetryCount = 10
 )
 
 // SubscriptionTrafficEntry represents a single subscription traffic record with retry tracking.
@@ -47,7 +47,7 @@ type subscriptionBufferShard struct {
 
 // SubscriptionTrafficBuffer is a sharded in-memory buffer for subscription traffic data.
 type SubscriptionTrafficBuffer struct {
-	shards      [SubTrafficNumShards]*subscriptionBufferShard
+	shards      [SubscriptionTrafficNumShards]*subscriptionBufferShard
 	cache       SubscriptionTrafficCacheWriter
 	logger      logger.Interface
 	flushTicker *time.Ticker
@@ -60,12 +60,12 @@ func NewSubscriptionTrafficBuffer(cache SubscriptionTrafficCacheWriter, log logg
 	b := &SubscriptionTrafficBuffer{
 		cache:       cache,
 		logger:      log,
-		flushTicker: time.NewTicker(SubTrafficFlushInterval),
+		flushTicker: time.NewTicker(SubscriptionTrafficFlushInterval),
 		done:        make(chan struct{}),
 	}
 
 	// Initialize all shards
-	for i := 0; i < SubTrafficNumShards; i++ {
+	for i := 0; i < SubscriptionTrafficNumShards; i++ {
 		b.shards[i] = &subscriptionBufferShard{
 			entries: make(map[subscriptionTrafficKey]*SubscriptionTrafficEntry),
 		}
@@ -76,7 +76,7 @@ func NewSubscriptionTrafficBuffer(cache SubscriptionTrafficCacheWriter, log logg
 
 // getShard returns the shard for a given subscriptionID using modulo sharding.
 func (b *SubscriptionTrafficBuffer) getShard(subscriptionID uint) *subscriptionBufferShard {
-	return b.shards[subscriptionID%SubTrafficNumShards]
+	return b.shards[subscriptionID%SubscriptionTrafficNumShards]
 }
 
 // AddTraffic adds traffic data to the buffer (thread-safe).
@@ -113,8 +113,8 @@ func (b *SubscriptionTrafficBuffer) Start() {
 	b.wg.Add(1)
 	go b.flushLoop()
 	b.logger.Infow("subscription traffic buffer started",
-		"shards", SubTrafficNumShards,
-		"flush_interval", SubTrafficFlushInterval.String(),
+		"shards", SubscriptionTrafficNumShards,
+		"flush_interval", SubscriptionTrafficFlushInterval.String(),
 	)
 }
 
@@ -150,7 +150,7 @@ func (b *SubscriptionTrafficBuffer) flush() {
 	failedCount := 0
 	droppedCount := 0
 
-	for i := 0; i < SubTrafficNumShards; i++ {
+	for i := 0; i < SubscriptionTrafficNumShards; i++ {
 		shard := b.shards[i]
 
 		// Fast swap to minimize lock hold time
@@ -163,7 +163,7 @@ func (b *SubscriptionTrafficBuffer) flush() {
 			if entry.Upload > 0 || entry.Download > 0 {
 				if err := b.cache.IncrementSubscriptionTraffic(ctx, entry.NodeID, entry.SubscriptionID, entry.Upload, entry.Download); err != nil {
 					entry.RetryCount++
-					if entry.RetryCount >= SubTrafficMaxRetryCount {
+					if entry.RetryCount >= SubscriptionTrafficMaxRetryCount {
 						// Drop data after max retries to prevent memory accumulation
 						b.logger.Errorw("subscription traffic data dropped after max retries",
 							"node_id", entry.NodeID,

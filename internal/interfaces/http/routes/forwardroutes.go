@@ -6,6 +6,7 @@ import (
 
 	forwardAgentAPIHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward/agent/api"
 	forwardAgentCrudHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward/agent/crud"
+	forwardAgentHubHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward/agent/hub"
 	forwardRuleHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward/rule"
 	forwardUserHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward/user"
 	"github.com/orris-inc/orris/internal/interfaces/http/middleware"
@@ -18,6 +19,7 @@ type ForwardRouteConfig struct {
 	ForwardAgentHandler         *forwardAgentCrudHandlers.Handler
 	ForwardAgentVersionHandler  *forwardAgentCrudHandlers.VersionHandler
 	ForwardAgentSSEHandler      *forwardAgentCrudHandlers.ForwardAgentSSEHandler
+	ForwardAgentHubHandler      *forwardAgentHubHandlers.Handler // For broadcast operations
 	ForwardAgentAPIHandler      *forwardAgentAPIHandlers.Handler
 	UserForwardHandler          *forwardUserHandlers.Handler
 	AuthMiddleware              *middleware.AuthMiddleware
@@ -99,6 +101,16 @@ func SetupForwardRoutes(engine *gin.Engine, cfg *ForwardRouteConfig) {
 
 			forwardAgents.GET("/:id/version", cfg.ForwardAgentVersionHandler.GetAgentVersion)
 			forwardAgents.POST("/:id/update", cfg.ForwardAgentVersionHandler.TriggerUpdate)
+		}
+
+		// Broadcast operations (requires hub handler)
+		if cfg.ForwardAgentHubHandler != nil {
+			// POST /forward-agents/broadcast-url-change
+			// Notifies all connected agents that API URL has changed
+			forwardAgents.POST("/broadcast-url-change", cfg.ForwardAgentHubHandler.BroadcastAPIURLChanged)
+			// POST /forward-agents/:id/url-change
+			// Notifies a specific connected agent that API URL has changed
+			forwardAgents.POST("/:id/url-change", cfg.ForwardAgentHubHandler.NotifyAPIURLChanged)
 		}
 	}
 

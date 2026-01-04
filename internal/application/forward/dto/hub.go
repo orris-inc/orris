@@ -40,12 +40,20 @@ type CommandData struct {
 
 // Command action constants.
 const (
-	CmdActionReloadConfig = "reload_config"
-	CmdActionRestartRule  = "restart_rule"
-	CmdActionStopRule     = "stop_rule"
-	CmdActionProbe        = "probe"
-	CmdActionUpdate       = "update" // Update agent binary
+	CmdActionReloadConfig   = "reload_config"
+	CmdActionRestartRule    = "restart_rule"
+	CmdActionStopRule       = "stop_rule"
+	CmdActionProbe          = "probe"
+	CmdActionUpdate         = "update"          // Update agent binary
+	CmdActionAPIURLChanged  = "api_url_changed" // API URL changed, agent should reconnect
+	CmdActionConfigRelocate = "config_relocate" // Configuration relocated to new server
 )
+
+// APIURLChangedPayload contains the new API URL for agent reconnection.
+type APIURLChangedPayload struct {
+	NewURL string `json:"new_url"`
+	Reason string `json:"reason,omitempty"`
+}
 
 // AgentEventData represents an agent event payload.
 type AgentEventData struct {

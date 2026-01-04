@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"time"
 
+	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/shared/services"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 )
@@ -35,22 +36,23 @@ var domainNameRegex = regexp.MustCompile(`^([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-
 // - As entry in rule A, exit in rule B, relay in rule C, etc.
 // The role is determined by the rule configuration, not the agent itself.
 type ForwardAgent struct {
-	id             uint
-	sid            string // Stripe-style prefixed ID (fa_xxx)
-	name           string
-	tokenHash      string
-	apiToken       string // stored token for retrieval
-	status         AgentStatus
-	publicAddress  string // optional public address for Entry to obtain Exit connection information
-	tunnelAddress  string // IP or hostname only (no port), configure if agent may serve as relay/exit in any rule
-	remark         string
-	groupID        *uint // resource group ID
-	agentVersion   string // agent software version (e.g., "1.2.3")
-	platform       string // OS platform (linux, darwin, windows)
-	arch           string // CPU architecture (amd64, arm64, arm, 386)
-	createdAt      time.Time
-	updatedAt      time.Time
-	tokenGenerator services.TokenGenerator
+	id               uint
+	sid              string // Stripe-style prefixed ID (fa_xxx)
+	name             string
+	tokenHash        string
+	apiToken         string // stored token for retrieval
+	status           AgentStatus
+	publicAddress    string // optional public address for Entry to obtain Exit connection information
+	tunnelAddress    string // IP or hostname only (no port), configure if agent may serve as relay/exit in any rule
+	remark           string
+	groupID          *uint         // resource group ID
+	agentVersion     string        // agent software version (e.g., "1.2.3")
+	platform         string        // OS platform (linux, darwin, windows)
+	arch             string        // CPU architecture (amd64, arm64, arm, 386)
+	allowedPortRange *vo.PortRange // allowed listen port range (nil means all ports allowed)
+	createdAt        time.Time
+	updatedAt        time.Time
+	tokenGenerator   services.TokenGenerator
 }
 
 // TokenGenerator is a function that generates a token for a given short ID.
@@ -119,6 +121,7 @@ func ReconstructForwardAgent(
 	agentVersion string,
 	platform string,
 	arch string,
+	allowedPortRange *vo.PortRange,
 	createdAt, updatedAt time.Time,
 ) (*ForwardAgent, error) {
 	if id == 0 {
@@ -152,22 +155,23 @@ func ReconstructForwardAgent(
 	}
 
 	return &ForwardAgent{
-		id:             id,
-		sid:            sid,
-		name:           name,
-		tokenHash:      tokenHash,
-		apiToken:       apiToken,
-		status:         status,
-		publicAddress:  publicAddress,
-		tunnelAddress:  tunnelAddress,
-		remark:         remark,
-		groupID:        groupID,
-		agentVersion:   agentVersion,
-		platform:       platform,
-		arch:           arch,
-		createdAt:      createdAt,
-		updatedAt:      updatedAt,
-		tokenGenerator: services.NewTokenGenerator(),
+		id:               id,
+		sid:              sid,
+		name:             name,
+		tokenHash:        tokenHash,
+		apiToken:         apiToken,
+		status:           status,
+		publicAddress:    publicAddress,
+		tunnelAddress:    tunnelAddress,
+		remark:           remark,
+		groupID:          groupID,
+		agentVersion:     agentVersion,
+		platform:         platform,
+		arch:             arch,
+		allowedPortRange: allowedPortRange,
+		createdAt:        createdAt,
+		updatedAt:        updatedAt,
+		tokenGenerator:   services.NewTokenGenerator(),
 	}, nil
 }
 
@@ -450,4 +454,31 @@ func validateTunnelAddress(address string) error {
 	}
 
 	return fmt.Errorf("invalid tunnel address format: must be a valid IP address or domain name")
+}
+
+// AllowedPortRange returns the allowed port range configuration
+func (a *ForwardAgent) AllowedPortRange() *vo.PortRange {
+	return a.allowedPortRange
+}
+
+// SetAllowedPortRange sets the allowed port range.
+// Pass nil to allow all ports.
+func (a *ForwardAgent) SetAllowedPortRange(portRange *vo.PortRange) error {
+	if portRange != nil {
+		if err := portRange.Validate(); err != nil {
+			return err
+		}
+	}
+	a.allowedPortRange = portRange
+	a.updatedAt = biztime.NowUTC()
+	return nil
+}
+
+// IsPortAllowed checks if a port is allowed for this agent.
+// Returns true if no port range is configured (all ports allowed).
+func (a *ForwardAgent) IsPortAllowed(port uint16) bool {
+	if a.allowedPortRange == nil {
+		return true
+	}
+	return a.allowedPortRange.Contains(port)
 }

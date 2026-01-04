@@ -9,59 +9,59 @@ import (
 )
 
 const (
-	// NumShards is the number of shards for traffic buffer partitioning.
-	NumShards = 16
+	// RuleTrafficNumShards is the number of shards for rule traffic buffer partitioning.
+	RuleTrafficNumShards = 16
 
-	// FlushInterval is the interval for flushing traffic data to Redis.
-	FlushInterval = 5 * time.Second
+	// RuleTrafficFlushInterval is the interval for flushing rule traffic data to Redis.
+	RuleTrafficFlushInterval = 5 * time.Second
 
-	// MaxRetryCount is the maximum number of flush retry attempts before dropping data.
+	// RuleTrafficMaxRetryCount is the maximum number of flush retry attempts before dropping data.
 	// After this many failed attempts, data will be dropped with a warning log.
-	MaxRetryCount = 10
+	RuleTrafficMaxRetryCount = 10
 )
 
-// TrafficEntry represents a single traffic record with retry tracking.
-type TrafficEntry struct {
+// RuleTrafficEntry represents a single rule traffic record with retry tracking.
+type RuleTrafficEntry struct {
 	RuleID     uint
 	Upload     int64
 	Download   int64
 	RetryCount int // Number of failed flush attempts
 }
 
-// ForwardTrafficCacheWriter defines the interface for writing traffic data to Redis (decoupled).
-type ForwardTrafficCacheWriter interface {
+// RuleTrafficCacheWriter defines the interface for writing rule traffic data to Redis.
+type RuleTrafficCacheWriter interface {
 	IncrementRuleTraffic(ctx context.Context, ruleID uint, upload, download int64) error
 }
 
-// bufferShard is a single shard containing traffic entries with its own mutex.
-type bufferShard struct {
+// ruleBufferShard is a single shard containing rule traffic entries with its own mutex.
+type ruleBufferShard struct {
 	mu      sync.Mutex
-	entries map[uint]*TrafficEntry // ruleID -> accumulated traffic
+	entries map[uint]*RuleTrafficEntry // ruleID -> accumulated traffic
 }
 
-// TrafficBuffer is a sharded in-memory buffer for traffic data.
-type TrafficBuffer struct {
-	shards      [NumShards]*bufferShard
-	cache       ForwardTrafficCacheWriter
+// RuleTrafficBuffer is a sharded in-memory buffer for rule traffic data.
+type RuleTrafficBuffer struct {
+	shards      [RuleTrafficNumShards]*ruleBufferShard
+	cache       RuleTrafficCacheWriter
 	logger      logger.Interface
 	flushTicker *time.Ticker
 	done        chan struct{}
 	wg          sync.WaitGroup
 }
 
-// NewTrafficBuffer creates a new TrafficBuffer instance.
-func NewTrafficBuffer(cache ForwardTrafficCacheWriter, log logger.Interface) *TrafficBuffer {
-	b := &TrafficBuffer{
+// NewRuleTrafficBuffer creates a new RuleTrafficBuffer instance.
+func NewRuleTrafficBuffer(cache RuleTrafficCacheWriter, log logger.Interface) *RuleTrafficBuffer {
+	b := &RuleTrafficBuffer{
 		cache:       cache,
 		logger:      log,
-		flushTicker: time.NewTicker(FlushInterval),
+		flushTicker: time.NewTicker(RuleTrafficFlushInterval),
 		done:        make(chan struct{}),
 	}
 
 	// Initialize all shards
-	for i := 0; i < NumShards; i++ {
-		b.shards[i] = &bufferShard{
-			entries: make(map[uint]*TrafficEntry),
+	for i := 0; i < RuleTrafficNumShards; i++ {
+		b.shards[i] = &ruleBufferShard{
+			entries: make(map[uint]*RuleTrafficEntry),
 		}
 	}
 
@@ -69,12 +69,12 @@ func NewTrafficBuffer(cache ForwardTrafficCacheWriter, log logger.Interface) *Tr
 }
 
 // getShard returns the shard for a given ruleID using modulo sharding.
-func (b *TrafficBuffer) getShard(ruleID uint) *bufferShard {
-	return b.shards[ruleID%NumShards]
+func (b *RuleTrafficBuffer) getShard(ruleID uint) *ruleBufferShard {
+	return b.shards[ruleID%RuleTrafficNumShards]
 }
 
 // Add adds a traffic entry to the buffer (thread-safe).
-func (b *TrafficBuffer) Add(entry *TrafficEntry) {
+func (b *RuleTrafficBuffer) Add(entry *RuleTrafficEntry) {
 	if entry == nil {
 		return
 	}
@@ -82,8 +82,8 @@ func (b *TrafficBuffer) Add(entry *TrafficEntry) {
 }
 
 // AddTraffic adds traffic data to the buffer (thread-safe).
-// This method is used by TrafficMessageHandler via the TrafficBufferWriter interface.
-func (b *TrafficBuffer) AddTraffic(ruleID uint, upload, download int64) {
+// This method is used by TrafficMessageHandler via the RuleTrafficBufferWriter interface.
+func (b *RuleTrafficBuffer) AddTraffic(ruleID uint, upload, download int64) {
 	// Skip zero traffic entries
 	if upload == 0 && download == 0 {
 		return
@@ -97,7 +97,7 @@ func (b *TrafficBuffer) AddTraffic(ruleID uint, upload, download int64) {
 		existing.Upload += upload
 		existing.Download += download
 	} else {
-		shard.entries[ruleID] = &TrafficEntry{
+		shard.entries[ruleID] = &RuleTrafficEntry{
 			RuleID:   ruleID,
 			Upload:   upload,
 			Download: download,
@@ -106,17 +106,17 @@ func (b *TrafficBuffer) AddTraffic(ruleID uint, upload, download int64) {
 }
 
 // Start starts the background flush goroutine.
-func (b *TrafficBuffer) Start() {
+func (b *RuleTrafficBuffer) Start() {
 	b.wg.Add(1)
 	go b.flushLoop()
-	b.logger.Infow("traffic buffer started",
-		"shards", NumShards,
-		"flush_interval", FlushInterval.String(),
+	b.logger.Infow("rule traffic buffer started",
+		"shards", RuleTrafficNumShards,
+		"flush_interval", RuleTrafficFlushInterval.String(),
 	)
 }
 
 // Stop stops the buffer and flushes remaining data.
-func (b *TrafficBuffer) Stop() {
+func (b *RuleTrafficBuffer) Stop() {
 	close(b.done)
 	b.wg.Wait()
 	b.flushTicker.Stop()
@@ -124,11 +124,11 @@ func (b *TrafficBuffer) Stop() {
 	// Final flush to ensure no data is lost
 	b.flush()
 
-	b.logger.Infow("traffic buffer stopped")
+	b.logger.Infow("rule traffic buffer stopped")
 }
 
 // flushLoop is the background loop that periodically flushes traffic data.
-func (b *TrafficBuffer) flushLoop() {
+func (b *RuleTrafficBuffer) flushLoop() {
 	defer b.wg.Done()
 	for {
 		select {
@@ -141,28 +141,28 @@ func (b *TrafficBuffer) flushLoop() {
 }
 
 // flush flushes all accumulated traffic data to Redis.
-func (b *TrafficBuffer) flush() {
+func (b *RuleTrafficBuffer) flush() {
 	ctx := context.Background()
 	flushedCount := 0
 	failedCount := 0
 	droppedCount := 0
 
-	for i := 0; i < NumShards; i++ {
+	for i := 0; i < RuleTrafficNumShards; i++ {
 		shard := b.shards[i]
 
 		// Fast swap to minimize lock hold time
 		shard.mu.Lock()
 		entries := shard.entries
-		shard.entries = make(map[uint]*TrafficEntry)
+		shard.entries = make(map[uint]*RuleTrafficEntry)
 		shard.mu.Unlock()
 
 		for _, entry := range entries {
 			if entry.Upload > 0 || entry.Download > 0 {
 				if err := b.cache.IncrementRuleTraffic(ctx, entry.RuleID, entry.Upload, entry.Download); err != nil {
 					entry.RetryCount++
-					if entry.RetryCount >= MaxRetryCount {
+					if entry.RetryCount >= RuleTrafficMaxRetryCount {
 						// Drop data after max retries to prevent memory accumulation
-						b.logger.Errorw("traffic data dropped after max retries",
+						b.logger.Errorw("rule traffic data dropped after max retries",
 							"rule_id", entry.RuleID,
 							"upload", entry.Upload,
 							"download", entry.Download,
@@ -172,7 +172,7 @@ func (b *TrafficBuffer) flush() {
 						droppedCount++
 						continue
 					}
-					b.logger.Warnw("failed to flush traffic to redis, will retry",
+					b.logger.Warnw("failed to flush rule traffic to redis, will retry",
 						"rule_id", entry.RuleID,
 						"upload", entry.Upload,
 						"download", entry.Download,
@@ -190,7 +190,7 @@ func (b *TrafficBuffer) flush() {
 	}
 
 	if flushedCount > 0 || failedCount > 0 || droppedCount > 0 {
-		b.logger.Debugw("traffic buffer flushed to redis",
+		b.logger.Debugw("rule traffic buffer flushed to redis",
 			"flushed_count", flushedCount,
 			"failed_count", failedCount,
 			"dropped_count", droppedCount,
@@ -199,7 +199,7 @@ func (b *TrafficBuffer) flush() {
 }
 
 // reAddEntry re-adds a failed entry back to its shard for retry.
-func (b *TrafficBuffer) reAddEntry(entry *TrafficEntry) {
+func (b *RuleTrafficBuffer) reAddEntry(entry *RuleTrafficEntry) {
 	shard := b.getShard(entry.RuleID)
 	shard.mu.Lock()
 	defer shard.mu.Unlock()
@@ -213,7 +213,7 @@ func (b *TrafficBuffer) reAddEntry(entry *TrafficEntry) {
 			existing.RetryCount = entry.RetryCount
 		}
 	} else {
-		shard.entries[entry.RuleID] = &TrafficEntry{
+		shard.entries[entry.RuleID] = &RuleTrafficEntry{
 			RuleID:     entry.RuleID,
 			Upload:     entry.Upload,
 			Download:   entry.Download,

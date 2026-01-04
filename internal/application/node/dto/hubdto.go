@@ -35,11 +35,19 @@ type NodeCommandData struct {
 
 // Node command action constants.
 const (
-	NodeCmdActionReloadConfig = "reload_config"
-	NodeCmdActionRestart      = "restart"
-	NodeCmdActionStop         = "stop"
-	NodeCmdActionUpdate       = "update" // Update node agent binary
+	NodeCmdActionReloadConfig   = "reload_config"
+	NodeCmdActionRestart        = "restart"
+	NodeCmdActionStop           = "stop"
+	NodeCmdActionUpdate         = "update"          // Update node agent binary
+	NodeCmdActionAPIURLChanged  = "api_url_changed" // API URL changed, node should reconnect
+	NodeCmdActionConfigRelocate = "config_relocate" // Configuration relocated to new server
 )
+
+// NodeAPIURLChangedPayload contains the new API URL for node reconnection.
+type NodeAPIURLChangedPayload struct {
+	NewURL string `json:"new_url"`
+	Reason string `json:"reason,omitempty"`
+}
 
 // NodeEventData represents a node agent event payload.
 type NodeEventData struct {

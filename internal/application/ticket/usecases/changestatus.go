@@ -14,6 +14,7 @@ type ChangeStatusCommand struct {
 	TicketID  uint
 	NewStatus vo.TicketStatus
 	ChangedBy uint
+	UserRoles []string
 }
 
 type ChangeStatusResult struct {
@@ -50,6 +51,12 @@ func (uc *ChangeStatusUseCase) Execute(ctx context.Context, cmd ChangeStatusComm
 	if err != nil {
 		uc.logger.Errorw("failed to get ticket", "ticket_id", cmd.TicketID, "error", err)
 		return nil, errors.NewNotFoundError(fmt.Sprintf("ticket %d not found", cmd.TicketID))
+	}
+
+	// Check if user has permission to modify this ticket
+	if !t.CanBeViewedBy(cmd.ChangedBy, cmd.UserRoles) {
+		uc.logger.Warnw("user cannot modify ticket status", "ticket_id", cmd.TicketID, "user_id", cmd.ChangedBy)
+		return nil, errors.NewForbiddenError("permission denied: cannot modify ticket status")
 	}
 
 	oldStatus := t.Status()

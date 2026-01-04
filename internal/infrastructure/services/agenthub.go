@@ -3,10 +3,13 @@ package services
 
 import (
 	"encoding/json"
+	"fmt"
+	"net/url"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
 	"github.com/orris-inc/orris/internal/application/forward/dto"
@@ -599,6 +602,165 @@ func (h *AgentHub) SendCommandToNode(nodeID uint, cmd *nodedto.NodeCommandData) 
 		return ErrSendChannelFull
 	}
 	return nil
+}
+
+// extractURLHost extracts the host from a URL for safe logging (avoids leaking credentials).
+func extractURLHost(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return "<invalid-url>"
+	}
+	return parsed.Host
+}
+
+// BroadcastAPIURLChanged notifies all connected agents that the API URL has changed.
+// Agents should update their local configuration and reconnect to the new URL.
+// Returns (agents_notified, agents_online) to ensure consistency.
+func (h *AgentHub) BroadcastAPIURLChanged(newURL, reason string) (notified int, online int) {
+	h.agentsMu.RLock()
+	defer h.agentsMu.RUnlock()
+
+	payload := &dto.APIURLChangedPayload{
+		NewURL: newURL,
+		Reason: reason,
+	}
+
+	cmd := &dto.CommandData{
+		CommandID: fmt.Sprintf("api_url_changed_%s", uuid.NewString()),
+		Action:    dto.CmdActionAPIURLChanged,
+		Payload:   payload,
+	}
+
+	msg := &dto.HubMessage{
+		Type:      dto.MsgTypeCommand,
+		Timestamp: biztime.NowUTC().Unix(),
+		Data:      cmd,
+	}
+
+	urlHost := extractURLHost(newURL)
+	online = len(h.agents)
+	for agentID, conn := range h.agents {
+		if conn.TrySend(msg) {
+			notified++
+			h.logger.Infow("sent API URL change notification to agent",
+				"agent_id", agentID,
+				"url_host", urlHost,
+			)
+		} else {
+			h.logger.Warnw("failed to send API URL change notification to agent",
+				"agent_id", agentID,
+				"url_host", urlHost,
+			)
+		}
+	}
+
+	h.logger.Infow("broadcasted API URL change to agents",
+		"url_host", urlHost,
+		"reason", reason,
+		"agents_notified", notified,
+		"agents_total", online,
+	)
+
+	return notified, online
+}
+
+// NotifyAgentAPIURLChanged notifies a specific agent that the API URL has changed.
+func (h *AgentHub) NotifyAgentAPIURLChanged(agentID uint, newURL, reason string) error {
+	payload := &dto.APIURLChangedPayload{
+		NewURL: newURL,
+		Reason: reason,
+	}
+
+	cmd := &dto.CommandData{
+		CommandID: fmt.Sprintf("api_url_changed_%s", uuid.NewString()),
+		Action:    dto.CmdActionAPIURLChanged,
+		Payload:   payload,
+	}
+
+	return h.SendCommandToAgent(agentID, cmd)
+}
+
+// BroadcastNodeAPIURLChanged notifies all connected node agents that the API URL has changed.
+// Node agents should update their local configuration and reconnect to the new URL.
+// Returns (nodes_notified, nodes_online) to ensure consistency.
+func (h *AgentHub) BroadcastNodeAPIURLChanged(newURL, reason string) (notified int, online int) {
+	h.nodesMu.RLock()
+	defer h.nodesMu.RUnlock()
+
+	payload := &nodedto.NodeAPIURLChangedPayload{
+		NewURL: newURL,
+		Reason: reason,
+	}
+
+	cmd := &nodedto.NodeCommandData{
+		CommandID: fmt.Sprintf("api_url_changed_%s", uuid.NewString()),
+		Action:    nodedto.NodeCmdActionAPIURLChanged,
+		Payload:   payload,
+	}
+
+	msg := &nodedto.NodeHubMessage{
+		Type:      nodedto.NodeMsgTypeCommand,
+		Timestamp: biztime.NowUTC().Unix(),
+		Data:      cmd,
+	}
+
+	msgBytes, err := json.Marshal(msg)
+	if err != nil {
+		h.logger.Errorw("failed to marshal node API URL change message",
+			"error", err,
+		)
+		return 0, len(h.nodes)
+	}
+
+	urlHost := extractURLHost(newURL)
+	online = len(h.nodes)
+	for nodeID, conn := range h.nodes {
+		if conn.TrySend(msgBytes) {
+			notified++
+			h.logger.Infow("sent API URL change notification to node",
+				"node_id", nodeID,
+				"url_host", urlHost,
+			)
+		} else {
+			h.logger.Warnw("failed to send API URL change notification to node",
+				"node_id", nodeID,
+				"url_host", urlHost,
+			)
+		}
+	}
+
+	h.logger.Infow("broadcasted API URL change to nodes",
+		"url_host", urlHost,
+		"reason", reason,
+		"nodes_notified", notified,
+		"nodes_total", online,
+	)
+
+	return notified, online
+}
+
+// NotifyNodeAPIURLChanged notifies a specific node that the API URL has changed.
+func (h *AgentHub) NotifyNodeAPIURLChanged(nodeID uint, newURL, reason string) error {
+	payload := &nodedto.NodeAPIURLChangedPayload{
+		NewURL: newURL,
+		Reason: reason,
+	}
+
+	cmd := &nodedto.NodeCommandData{
+		CommandID: fmt.Sprintf("api_url_changed_%s", uuid.NewString()),
+		Action:    nodedto.NodeCmdActionAPIURLChanged,
+		Payload:   payload,
+	}
+
+	return h.SendCommandToNode(nodeID, cmd)
+}
+
+// BroadcastAllAPIURLChanged notifies all connected agents (forward + node) that the API URL has changed.
+// Returns (forward_notified, forward_online, node_notified, node_online).
+func (h *AgentHub) BroadcastAllAPIURLChanged(newURL, reason string) (forwardNotified, forwardOnline, nodeNotified, nodeOnline int) {
+	forwardNotified, forwardOnline = h.BroadcastAPIURLChanged(newURL, reason)
+	nodeNotified, nodeOnline = h.BroadcastNodeAPIURLChanged(newURL, reason)
+	return
 }
 
 // HubErrors defines agent hub related errors.

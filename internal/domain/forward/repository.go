@@ -45,6 +45,17 @@ type Repository interface {
 	// ExistsByListenPort checks if a rule with the given listen port exists.
 	ExistsByListenPort(ctx context.Context, port uint16) (bool, error)
 
+	// ExistsByAgentIDAndListenPort checks if a rule with the given agent ID and listen port exists.
+	// This is used for auto-assigning ports within an agent's scope.
+	ExistsByAgentIDAndListenPort(ctx context.Context, agentID uint, port uint16) (bool, error)
+
+	// IsPortInUseByAgent checks if a port is in use by the specified agent across all rules.
+	// This includes both:
+	// - Rules where agent_id matches and listen_port matches (main rule ports)
+	// - Rules where chain_port_config contains the agent with the specified port
+	// The excludeRuleID parameter can be used to exclude a specific rule from the check (useful for updates).
+	IsPortInUseByAgent(ctx context.Context, agentID uint, port uint16, excludeRuleID uint) (bool, error)
+
 	// UpdateTraffic updates the traffic counters for a rule.
 	UpdateTraffic(ctx context.Context, id uint, upload, download int64) error
 

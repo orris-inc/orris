@@ -1,9 +1,11 @@
 package mappers
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/orris-inc/orris/internal/domain/forward"
+	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 )
 
@@ -38,6 +40,15 @@ func (m *ForwardAgentMapperImpl) ToEntity(model *models.ForwardAgentModel) (*for
 		return nil, fmt.Errorf("invalid agent status: %s", model.Status)
 	}
 
+	// Parse allowed port range from JSON string
+	var allowedPortRange *vo.PortRange
+	if model.AllowedPortRange != nil && *model.AllowedPortRange != "" {
+		allowedPortRange = &vo.PortRange{}
+		if err := json.Unmarshal([]byte(*model.AllowedPortRange), allowedPortRange); err != nil {
+			return nil, fmt.Errorf("failed to parse allowed_port_range: %w", err)
+		}
+	}
+
 	entity, err := forward.ReconstructForwardAgent(
 		model.ID,
 		model.SID,
@@ -52,6 +63,7 @@ func (m *ForwardAgentMapperImpl) ToEntity(model *models.ForwardAgentModel) (*for
 		model.AgentVersion,
 		model.Platform,
 		model.Arch,
+		allowedPortRange,
 		model.CreatedAt,
 		model.UpdatedAt,
 	)
@@ -68,22 +80,34 @@ func (m *ForwardAgentMapperImpl) ToModel(entity *forward.ForwardAgent) (*models.
 		return nil, nil
 	}
 
+	// Serialize allowed port range to JSON string
+	var allowedPortRange *string
+	if entity.AllowedPortRange() != nil && !entity.AllowedPortRange().IsEmpty() {
+		data, err := json.Marshal(entity.AllowedPortRange())
+		if err != nil {
+			return nil, fmt.Errorf("failed to serialize allowed_port_range: %w", err)
+		}
+		jsonStr := string(data)
+		allowedPortRange = &jsonStr
+	}
+
 	return &models.ForwardAgentModel{
-		ID:            entity.ID(),
-		SID:           entity.SID(),
-		Name:          entity.Name(),
-		TokenHash:     entity.TokenHash(),
-		APIToken:      entity.GetAPIToken(),
-		PublicAddress: entity.PublicAddress(),
-		TunnelAddress: entity.TunnelAddress(),
-		Status:        string(entity.Status()),
-		Remark:        entity.Remark(),
-		GroupID:       entity.GroupID(),
-		AgentVersion:  entity.AgentVersion(),
-		Platform:      entity.Platform(),
-		Arch:          entity.Arch(),
-		CreatedAt:     entity.CreatedAt(),
-		UpdatedAt:     entity.UpdatedAt(),
+		ID:               entity.ID(),
+		SID:              entity.SID(),
+		Name:             entity.Name(),
+		TokenHash:        entity.TokenHash(),
+		APIToken:         entity.GetAPIToken(),
+		PublicAddress:    entity.PublicAddress(),
+		TunnelAddress:    entity.TunnelAddress(),
+		Status:           string(entity.Status()),
+		Remark:           entity.Remark(),
+		GroupID:          entity.GroupID(),
+		AgentVersion:     entity.AgentVersion(),
+		Platform:         entity.Platform(),
+		Arch:             entity.Arch(),
+		AllowedPortRange: allowedPortRange,
+		CreatedAt:        entity.CreatedAt(),
+		UpdatedAt:        entity.UpdatedAt(),
 	}, nil
 }
 

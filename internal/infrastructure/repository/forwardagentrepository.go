@@ -197,15 +197,16 @@ func (r *ForwardAgentRepositoryImpl) Update(ctx context.Context, agent *forward.
 	result := r.db.WithContext(ctx).Model(&models.ForwardAgentModel{}).
 		Where("id = ?", model.ID).
 		Updates(map[string]any{
-			"name":           model.Name,
-			"token_hash":     model.TokenHash,
-			"api_token":      model.APIToken,
-			"status":         model.Status,
-			"public_address": model.PublicAddress,
-			"tunnel_address": model.TunnelAddress,
-			"remark":         model.Remark,
-			"group_id":       model.GroupID,
-			"updated_at":     model.UpdatedAt,
+			"name":               model.Name,
+			"token_hash":         model.TokenHash,
+			"api_token":          model.APIToken,
+			"status":             model.Status,
+			"public_address":     model.PublicAddress,
+			"tunnel_address":     model.TunnelAddress,
+			"remark":             model.Remark,
+			"group_id":           model.GroupID,
+			"allowed_port_range": model.AllowedPortRange,
+			"updated_at":         model.UpdatedAt,
 		})
 
 	if result.Error != nil {

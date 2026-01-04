@@ -280,6 +280,54 @@ func (m *MockForwardRuleRepository) ExistsByListenPort(ctx context.Context, port
 	return exists, nil
 }
 
+// ExistsByAgentIDAndListenPort checks if a rule with the given agent ID and listen port exists.
+func (m *MockForwardRuleRepository) ExistsByAgentIDAndListenPort(ctx context.Context, agentID uint, port uint16) (bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.existsError != nil {
+		return false, m.existsError
+	}
+
+	for _, rule := range m.rules {
+		if rule.AgentID() == agentID && rule.ListenPort() == port {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// IsPortInUseByAgent checks if a port is in use by the specified agent across all rules.
+// This includes both main rule ports and chain_port_config entries.
+func (m *MockForwardRuleRepository) IsPortInUseByAgent(ctx context.Context, agentID uint, port uint16, excludeRuleID uint) (bool, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.existsError != nil {
+		return false, m.existsError
+	}
+
+	for _, rule := range m.rules {
+		// Skip excluded rule
+		if excludeRuleID > 0 && rule.ID() == excludeRuleID {
+			continue
+		}
+
+		// Check main rule port
+		if rule.AgentID() == agentID && rule.ListenPort() == port {
+			return true, nil
+		}
+
+		// Check chain_port_config
+		for chainAgentID, chainPort := range rule.ChainPortConfig() {
+			if chainAgentID == agentID && chainPort == port {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
 // UpdateTraffic updates the traffic counters for a rule.
 func (m *MockForwardRuleRepository) UpdateTraffic(ctx context.Context, id uint, upload, download int64) error {
 	m.mu.Lock()

@@ -1,8 +1,14 @@
 #!/bin/bash
 # Orris One-Click Installation Script
-# Usage: curl -fsSL https://raw.githubusercontent.com/orris-inc/orris/main/install.sh | bash
+# Usage:
+#   Install: curl -fsSL https://raw.githubusercontent.com/orris-inc/orris/main/install.sh | bash
+#   Update:  curl -fsSL https://raw.githubusercontent.com/orris-inc/orris/main/install.sh | bash -s -- update
+#   Or locally: ./install.sh update
 
 set -e
+
+# Command (install or update)
+ACTION="${1:-install}"
 
 # Colors
 RED='\033[0;31m'
@@ -267,7 +273,7 @@ print_summary() {
     echo "    $DOCKER_COMPOSE ps        # View status"
     echo "    $DOCKER_COMPOSE logs -f   # View logs"
     echo "    $DOCKER_COMPOSE down      # Stop services"
-    echo "    $DOCKER_COMPOSE pull      # Update images"
+    echo "    ./install.sh update       # Update to latest version"
     echo ""
 
     if [ -n "$DOMAIN" ]; then
@@ -279,8 +285,50 @@ print_summary() {
     log_info "For more information, visit: https://github.com/orris-inc/orris"
 }
 
+# Update function - pulls latest images, runs migrations, and restarts services
+do_update() {
+    echo -e "${BLUE}"
+    echo "  ___  ____  ____  ___  ____  "
+    echo " / _ \|  _ \|  _ \|_ _|/ ___| "
+    echo "| | | | |_) | |_) || | \___ \ "
+    echo "| |_| |  _ <|  _ < | |  ___) |"
+    echo " \___/|_| \_\_| \_\___||____/ "
+    echo -e "${NC}"
+    echo -e "${GREEN}Orris Update${NC}"
+    echo ""
+
+    check_dependencies
+
+    # Check if we're in the right directory (has docker-compose.yml)
+    if [ ! -f "docker-compose.yml" ]; then
+        log_error "docker-compose.yml not found in current directory."
+        log_error "Please run this command from your Orris installation directory."
+        exit 1
+    fi
+
+    log_info "Pulling latest images..."
+    $DOCKER_COMPOSE pull
+
+    log_info "Running database migrations..."
+    docker exec orris_app /app/orris migrate up
+
+    log_info "Restarting services..."
+    $DOCKER_COMPOSE up -d
+
+    echo ""
+    echo -e "${GREEN}========================================${NC}"
+    echo -e "${GREEN}   Update Complete!${NC}"
+    echo -e "${GREEN}========================================${NC}"
+    echo ""
+    echo "  Useful commands:"
+    echo "    $DOCKER_COMPOSE ps        # View status"
+    echo "    $DOCKER_COMPOSE logs -f   # View logs"
+    echo ""
+    log_info "Update completed successfully!"
+}
+
 # Main installation flow
-main() {
+do_install() {
     print_banner
     check_dependencies
     prompt_config
@@ -293,5 +341,39 @@ main() {
     print_summary
 }
 
-# Run main function
-main
+# Show usage
+show_usage() {
+    echo "Usage: $0 [command]"
+    echo ""
+    echo "Commands:"
+    echo "  install   Install Orris (default)"
+    echo "  update    Update Orris to the latest version"
+    echo "  help      Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  $0              # Install Orris"
+    echo "  $0 install      # Install Orris"
+    echo "  $0 update       # Update existing installation"
+    echo ""
+    echo "Remote usage:"
+    echo "  curl -fsSL https://raw.githubusercontent.com/orris-inc/orris/main/install.sh | bash"
+    echo "  curl -fsSL https://raw.githubusercontent.com/orris-inc/orris/main/install.sh | bash -s -- update"
+}
+
+# Main entry point
+case "$ACTION" in
+    install)
+        do_install
+        ;;
+    update)
+        do_update
+        ;;
+    help|--help|-h)
+        show_usage
+        ;;
+    *)
+        log_error "Unknown command: $ACTION"
+        show_usage
+        exit 1
+        ;;
+esac

@@ -12,6 +12,7 @@ import (
 // NodeRouteConfig holds dependencies for node routes
 type NodeRouteConfig struct {
 	NodeHandler         *handlers.NodeHandler
+	NodeHubHandler      *nodeHandlers.NodeHubHandler
 	NodeVersionHandler  *nodeHandlers.NodeVersionHandler
 	NodeSSEHandler      *nodeHandlers.NodeSSEHandler
 	UserNodeHandler     *nodeHandlers.UserNodeHandler
@@ -74,6 +75,18 @@ func SetupNodeRoutes(engine *gin.Engine, config *NodeRouteConfig) {
 			nodes.POST("/:id/update",
 				authorization.RequireAdmin(),
 				config.NodeVersionHandler.TriggerUpdate)
+		}
+
+		// Hub management endpoints (broadcast commands to connected nodes)
+		if config.NodeHubHandler != nil {
+			nodes.POST("/broadcast-url-change",
+				authorization.RequireAdmin(),
+				config.NodeHubHandler.BroadcastAPIURLChanged)
+			// POST /nodes/:id/url-change
+			// Notifies a specific connected node that API URL has changed
+			nodes.POST("/:id/url-change",
+				authorization.RequireAdmin(),
+				config.NodeHubHandler.NotifyAPIURLChanged)
 		}
 
 		// Generic parameterized routes (must come LAST)

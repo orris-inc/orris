@@ -71,19 +71,21 @@ func NewHandler(
 // CreateForwardAgentRequest represents a request to create a forward agent.
 // An agent can participate in multiple rules with different roles (entry/relay/exit) simultaneously.
 type CreateForwardAgentRequest struct {
-	Name          string `json:"name" binding:"required" example:"Production Agent"`
-	PublicAddress string `json:"public_address,omitempty" example:"203.0.113.1"`
-	TunnelAddress string `json:"tunnel_address,omitempty" example:"192.168.1.100"` // IP or hostname only (no port), configure if agent may serve as relay/exit in any rule
-	Remark        string `json:"remark,omitempty" example:"Forward agent for production environment"`
+	Name             string `json:"name" binding:"required" example:"Production Agent"`
+	PublicAddress    string `json:"public_address,omitempty" example:"203.0.113.1"`
+	TunnelAddress    string `json:"tunnel_address,omitempty" example:"192.168.1.100"` // IP or hostname only (no port), configure if agent may serve as relay/exit in any rule
+	Remark           string `json:"remark,omitempty" example:"Forward agent for production environment"`
+	AllowedPortRange string `json:"allowed_port_range,omitempty" example:"80,443,8000-9000"`
 }
 
 // UpdateForwardAgentRequest represents a request to update a forward agent.
 type UpdateForwardAgentRequest struct {
-	Name          *string `json:"name,omitempty" example:"Updated Agent Name"`
-	PublicAddress *string `json:"public_address,omitempty" example:"203.0.113.2"`
-	TunnelAddress *string `json:"tunnel_address,omitempty" example:"192.168.1.100"` // IP or hostname only (no port), configure if agent may serve as relay/exit in any rule
-	Remark        *string `json:"remark,omitempty" example:"Updated remark"`
-	GroupSID      *string `json:"group_sid,omitempty" example:"rg_xK9mP2vL3nQ"` // Resource group SID to associate with (use empty string to remove)
+	Name             *string `json:"name,omitempty" example:"Updated Agent Name"`
+	PublicAddress    *string `json:"public_address,omitempty" example:"203.0.113.2"`
+	TunnelAddress    *string `json:"tunnel_address,omitempty" example:"192.168.1.100"` // IP or hostname only (no port), configure if agent may serve as relay/exit in any rule
+	Remark           *string `json:"remark,omitempty" example:"Updated remark"`
+	GroupSID         *string `json:"group_sid,omitempty" example:"rg_xK9mP2vL3nQ"` // Resource group SID to associate with (use empty string to remove)
+	AllowedPortRange *string `json:"allowed_port_range,omitempty" example:"80,443,8000-9000"`
 }
 
 // UpdateAgentStatusRequest represents a request to update forward agent status.
@@ -101,10 +103,11 @@ func (h *Handler) CreateAgent(c *gin.Context) {
 	}
 
 	cmd := usecases.CreateForwardAgentCommand{
-		Name:          req.Name,
-		PublicAddress: req.PublicAddress,
-		TunnelAddress: req.TunnelAddress,
-		Remark:        req.Remark,
+		Name:             req.Name,
+		PublicAddress:    req.PublicAddress,
+		TunnelAddress:    req.TunnelAddress,
+		Remark:           req.Remark,
+		AllowedPortRange: req.AllowedPortRange,
 	}
 
 	result, err := h.createAgentUC.Execute(c.Request.Context(), cmd)
@@ -180,12 +183,13 @@ func (h *Handler) UpdateAgent(c *gin.Context) {
 	}
 
 	cmd := usecases.UpdateForwardAgentCommand{
-		ShortID:       shortID,
-		Name:          req.Name,
-		PublicAddress: req.PublicAddress,
-		TunnelAddress: req.TunnelAddress,
-		Remark:        req.Remark,
-		GroupSID:      req.GroupSID,
+		ShortID:          shortID,
+		Name:             req.Name,
+		PublicAddress:    req.PublicAddress,
+		TunnelAddress:    req.TunnelAddress,
+		Remark:           req.Remark,
+		GroupSID:         req.GroupSID,
+		AllowedPortRange: req.AllowedPortRange,
 	}
 
 	if err := h.updateAgentUC.Execute(c.Request.Context(), cmd); err != nil {

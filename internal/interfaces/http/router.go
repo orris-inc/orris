@@ -89,8 +89,8 @@ type Router struct {
 	configSyncService            *forwardServices.ConfigSyncService
 	trafficLimitEnforcementSvc   *forwardServices.TrafficLimitEnforcementService
 	forwardTrafficCache          cache.ForwardTrafficCache
-	trafficBuffer                *forwardServices.TrafficBuffer
-	trafficFlushDone             chan struct{}
+	ruleTrafficBuffer            *forwardServices.RuleTrafficBuffer
+	ruleTrafficFlushDone         chan struct{}
 	subscriptionTrafficCache     cache.SubscriptionTrafficCache
 	subscriptionTrafficBuffer    *nodeServices.SubscriptionTrafficBuffer
 	subscriptionTrafficFlushDone chan struct{}
@@ -224,7 +224,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	adminResetPasswordUC := usecases.NewAdminResetPasswordUseCase(userRepo, sessionRepo, hasher, emailService, log)
 	initiateOAuthUC := usecases.NewInitiateOAuthLoginUseCase(googleClient, githubClient, log, stateStore)
 	handleOAuthUC := usecases.NewHandleOAuthCallbackUseCase(userRepo, oauthRepo, sessionRepo, googleClient, githubClient, jwtService, initiateOAuthUC, authHelper, cfg.Auth.Session, log)
-	refreshTokenUC := usecases.NewRefreshTokenUseCase(sessionRepo, jwtService, authHelper, log)
+	refreshTokenUC := usecases.NewRefreshTokenUseCase(userRepo, sessionRepo, jwtService, authHelper, log)
 	logoutUC := usecases.NewLogoutUseCase(sessionRepo, log)
 
 	authHandler := handlers.NewAuthHandler(
@@ -706,22 +706,22 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		log,
 	)
 
-	// Initialize traffic buffer for batching traffic updates
-	trafficBuffer := forwardServices.NewTrafficBuffer(forwardTrafficCache, log)
-	trafficBuffer.Start()
+	// Initialize rule traffic buffer for batching traffic updates
+	ruleTrafficBuffer := forwardServices.NewRuleTrafficBuffer(forwardTrafficCache, log)
+	ruleTrafficBuffer.Start()
 
 	// Initialize and register traffic message handler for WebSocket traffic updates
 	trafficMessageHandler := services.NewTrafficMessageHandler(
-		trafficBuffer,
+		ruleTrafficBuffer,
 		forwardRuleRepo,
 		log,
 	)
 	agentHub.RegisterMessageHandler(trafficMessageHandler)
 
-	// Create done channel for traffic flush scheduler
-	trafficFlushDone := make(chan struct{})
+	// Create done channel for rule traffic flush scheduler
+	ruleTrafficFlushDone := make(chan struct{})
 
-	// Start forward traffic flush scheduler (Redis -> MySQL)
+	// Start rule traffic flush scheduler (Redis -> MySQL)
 	go func() {
 		ticker := time.NewTicker(2 * time.Minute)
 		defer ticker.Stop()
@@ -730,9 +730,9 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 			case <-ticker.C:
 				ctx := context.Background()
 				if err := forwardTrafficCache.FlushToDatabase(ctx); err != nil {
-					log.Errorw("failed to flush forward traffic to database", "error", err)
+					log.Errorw("failed to flush rule traffic to database", "error", err)
 				}
-			case <-trafficFlushDone:
+			case <-ruleTrafficFlushDone:
 				return
 			}
 		}
@@ -882,7 +882,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	)
 
 	// Initialize agent hub handler
-	agentHubHandler := forwardAgentHubHandlers.NewHandler(agentHub, log)
+	agentHubHandler := forwardAgentHubHandlers.NewHandler(agentHub, forwardAgentRepo, log)
 
 	// Initialize node status handler and register to agent hub
 	nodeStatusHandler := adapters.NewNodeStatusHandler(systemStatusUpdater, nodeRepoImpl, log)
@@ -1035,7 +1035,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	}()
 
 	// Initialize node hub handler with traffic buffer support
-	nodeHubHandler := nodeHandlers.NewNodeHubHandler(agentHub, subscriptionTrafficBuffer, subscriptionIDResolver, log)
+	nodeHubHandler := nodeHandlers.NewNodeHubHandler(agentHub, nodeRepoImpl, subscriptionTrafficBuffer, subscriptionIDResolver, log)
 
 	// Initialize node SSE handler
 	nodeSSEHandler := nodeHandlers.NewNodeSSEHandler(adminHub, log)
@@ -1079,8 +1079,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		configSyncService:            configSyncService,
 		trafficLimitEnforcementSvc:   trafficLimitEnforcementSvc,
 		forwardTrafficCache:          forwardTrafficCache,
-		trafficBuffer:                trafficBuffer,
-		trafficFlushDone:             trafficFlushDone,
+		ruleTrafficBuffer:            ruleTrafficBuffer,
+		ruleTrafficFlushDone:         ruleTrafficFlushDone,
 		subscriptionTrafficCache:     subscriptionTrafficCache,
 		subscriptionTrafficBuffer:    subscriptionTrafficBuffer,
 		subscriptionTrafficFlushDone: subscriptionTrafficFlushDone,
@@ -1240,28 +1240,37 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		// Public endpoints (no authentication required)
 		plans.GET("/public", r.planHandler.GetPublicPlans)
 
-		// Protected endpoints
+		// Protected endpoints (read operations)
 		plansProtected := plans.Group("")
 		plansProtected.Use(r.authMiddleware.RequireAuth())
 		{
-			// Collection operations (no ID parameter)
-			plansProtected.POST("", r.planHandler.CreatePlan)
+			// Read operations - available to all authenticated users
 			plansProtected.GET("", r.planHandler.ListPlans)
+			plansProtected.GET("/:id", r.planHandler.GetPlan)
+			plansProtected.GET("/:id/pricings", r.planHandler.GetPlanPricings)
+		}
+
+		// Admin-only endpoints (write operations)
+		plansAdmin := plans.Group("")
+		plansAdmin.Use(r.authMiddleware.RequireAuth())
+		plansAdmin.Use(authorization.RequireAdmin())
+		{
+			// Collection operations (no ID parameter)
+			plansAdmin.POST("", r.planHandler.CreatePlan)
 
 			// Specific action endpoints (must come BEFORE /:id to avoid conflicts)
 			// Using PATCH for state changes as per RESTful best practices
-			plansProtected.PATCH("/:id/status", r.planHandler.UpdatePlanStatus)
-			plansProtected.GET("/:id/pricings", r.planHandler.GetPlanPricings)
+			plansAdmin.PATCH("/:id/status", r.planHandler.UpdatePlanStatus)
 
 			// Generic parameterized routes (must come LAST)
-			plansProtected.GET("/:id", r.planHandler.GetPlan)
-			plansProtected.PUT("/:id", r.planHandler.UpdatePlan)
-			plansProtected.DELETE("/:id", r.planHandler.DeletePlan)
+			plansAdmin.PUT("/:id", r.planHandler.UpdatePlan)
+			plansAdmin.DELETE("/:id", r.planHandler.DeletePlan)
 		}
 	}
 
 	routes.SetupNodeRoutes(r.engine, &routes.NodeRouteConfig{
 		NodeHandler:         r.nodeHandler,
+		NodeHubHandler:      r.nodeHubHandler,
 		NodeVersionHandler:  r.nodeVersionHandler,
 		NodeSSEHandler:      r.nodeSSEHandler,
 		UserNodeHandler:     r.userNodeHandler,
@@ -1316,6 +1325,7 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		ForwardAgentHandler:         r.forwardAgentHandler,
 		ForwardAgentVersionHandler:  r.forwardAgentVersionHandler,
 		ForwardAgentSSEHandler:      r.forwardAgentSSEHandler,
+		ForwardAgentHubHandler:      r.agentHubHandler,
 		ForwardAgentAPIHandler:      r.forwardAgentAPIHandler,
 		UserForwardHandler:          r.userForwardRuleHandler,
 		AuthMiddleware:              r.authMiddleware,
@@ -1344,14 +1354,19 @@ func (r *Router) Run(addr string) error {
 
 // Shutdown gracefully shuts down the router
 func (r *Router) Shutdown() {
-	// Stop forward traffic flush scheduler goroutine
-	if r.trafficFlushDone != nil {
-		close(r.trafficFlushDone)
+	// Close all SSE connections first to allow HTTP server shutdown to proceed quickly
+	if r.adminHub != nil {
+		r.adminHub.Shutdown()
 	}
 
-	// Stop forward traffic buffer (flushes remaining data to Redis)
-	if r.trafficBuffer != nil {
-		r.trafficBuffer.Stop()
+	// Stop rule traffic flush scheduler goroutine
+	if r.ruleTrafficFlushDone != nil {
+		close(r.ruleTrafficFlushDone)
+	}
+
+	// Stop rule traffic buffer (flushes remaining data to Redis)
+	if r.ruleTrafficBuffer != nil {
+		r.ruleTrafficBuffer.Stop()
 	}
 
 	// Final flush forward traffic from Redis to MySQL

@@ -1,6 +1,7 @@
 package usecases
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/orris-inc/orris/internal/application/user/helpers"
@@ -18,6 +19,7 @@ type RefreshTokenResult struct {
 }
 
 type RefreshTokenUseCase struct {
+	userRepo    user.Repository
 	sessionRepo user.SessionRepository
 	jwtService  JWTService
 	authHelper  *helpers.AuthHelper
@@ -25,12 +27,14 @@ type RefreshTokenUseCase struct {
 }
 
 func NewRefreshTokenUseCase(
+	userRepo user.Repository,
 	sessionRepo user.SessionRepository,
 	jwtService JWTService,
 	authHelper *helpers.AuthHelper,
 	logger logger.Interface,
 ) *RefreshTokenUseCase {
 	return &RefreshTokenUseCase{
+		userRepo:    userRepo,
 		sessionRepo: sessionRepo,
 		jwtService:  jwtService,
 		authHelper:  authHelper,
@@ -38,7 +42,7 @@ func NewRefreshTokenUseCase(
 	}
 }
 
-func (uc *RefreshTokenUseCase) Execute(cmd RefreshTokenCommand) (*RefreshTokenResult, error) {
+func (uc *RefreshTokenUseCase) Execute(ctx context.Context, cmd RefreshTokenCommand) (*RefreshTokenResult, error) {
 	refreshTokenHash := uc.authHelper.HashToken(cmd.RefreshToken)
 
 	session, err := uc.sessionRepo.GetByRefreshTokenHash(refreshTokenHash)
@@ -49,6 +53,27 @@ func (uc *RefreshTokenUseCase) Execute(cmd RefreshTokenCommand) (*RefreshTokenRe
 
 	if session.IsExpired() {
 		return nil, fmt.Errorf("session has expired")
+	}
+
+	// Validate user status - ensure user is still active before issuing new token
+	existingUser, err := uc.userRepo.GetByID(ctx, session.UserID)
+	if err != nil {
+		uc.logger.Errorw("failed to get user", "error", err, "user_id", session.UserID)
+		return nil, fmt.Errorf("failed to validate user")
+	}
+	if existingUser == nil {
+		uc.logger.Warnw("user not found during token refresh", "user_id", session.UserID)
+		return nil, fmt.Errorf("user not found")
+	}
+
+	// Check if user can still perform actions (not suspended, inactive, or deleted)
+	if validationErr := uc.authHelper.ValidateUserCanPerformAction(existingUser); validationErr != nil {
+		uc.logger.Warnw("user cannot perform actions during token refresh",
+			"user_id", session.UserID,
+			"status", existingUser.Status(),
+			"error", validationErr.Message,
+		)
+		return nil, fmt.Errorf("account is not active")
 	}
 
 	newAccessToken, err := uc.jwtService.Refresh(cmd.RefreshToken)

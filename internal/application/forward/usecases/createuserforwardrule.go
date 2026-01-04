@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 	"fmt"
+	"math/rand"
 
 	"github.com/orris-inc/orris/internal/domain/forward"
 	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
@@ -23,7 +24,7 @@ type CreateUserForwardRuleCommand struct {
 	TunnelHops         *int              // number of hops using tunnel (nil=full tunnel, N=first N hops use tunnel) - for chain type only
 	TunnelType         string            // tunnel type: ws or tls (default: ws)
 	Name               string
-	ListenPort         uint16 // required for all types (direct, entry, chain, direct_chain)
+	ListenPort         uint16 // listen port (0 = auto-assign from agent's allowed range)
 	TargetAddress      string // required for all types (mutually exclusive with TargetNodeSID)
 	TargetPort         uint16 // required for all types (mutually exclusive with TargetNodeSID)
 	TargetNodeSID      string // optional for all types (Stripe-style short ID without prefix)
@@ -101,6 +102,24 @@ func (uc *CreateUserForwardRuleUseCase) Execute(ctx context.Context, cmd CreateU
 	}
 	agentID := agent.ID()
 
+	// Auto-assign listen port if not specified
+	if cmd.ListenPort == 0 {
+		port, err := uc.assignAvailablePort(ctx, agent)
+		if err != nil {
+			uc.logger.Errorw("failed to auto-assign listen port", "agent_id", agentID, "user_id", cmd.UserID, "error", err)
+			return nil, err
+		}
+		cmd.ListenPort = port
+		uc.logger.Infow("auto-assigned listen port", "port", port, "agent_id", agentID, "user_id", cmd.UserID)
+	}
+
+	// Validate listen port against agent's allowed port range
+	if !agent.IsPortAllowed(cmd.ListenPort) {
+		return nil, errors.NewValidationError(
+			fmt.Sprintf("listen port %d is not allowed for this agent, allowed ranges: %s",
+				cmd.ListenPort, agent.AllowedPortRange().String()))
+	}
+
 	// Resolve ExitAgentShortID to internal ID (if provided)
 	var exitAgentID uint
 	if cmd.ExitAgentShortID != "" {
@@ -133,6 +152,8 @@ func (uc *CreateUserForwardRuleUseCase) Execute(ctx context.Context, cmd CreateU
 	}
 
 	// Resolve ChainPortConfig short IDs to internal IDs (if provided for direct_chain type)
+	// Also validate that each port is within the corresponding agent's allowed port range
+	// and check for port conflicts on each chain agent
 	var chainPortConfig map[uint]uint16
 	if len(cmd.ChainPortConfig) > 0 {
 		chainPortConfig = make(map[uint]uint16, len(cmd.ChainPortConfig))
@@ -144,6 +165,23 @@ func (uc *CreateUserForwardRuleUseCase) Execute(ctx context.Context, cmd CreateU
 			}
 			if chainAgent == nil {
 				return nil, errors.NewNotFoundError("chain forward agent in chain_port_config", shortID)
+			}
+			// Validate port against chain agent's allowed port range
+			if !chainAgent.IsPortAllowed(port) {
+				return nil, errors.NewValidationError(
+					fmt.Sprintf("listen port %d is not allowed for chain agent %s, allowed ranges: %s",
+						port, shortID, chainAgent.AllowedPortRange().String()))
+			}
+			// Check if the port is already in use on this chain agent (including other rules' chain_port_config)
+			inUse, err := uc.repo.IsPortInUseByAgent(ctx, chainAgent.ID(), port, 0)
+			if err != nil {
+				uc.logger.Errorw("failed to check chain agent port", "chain_agent_id", chainAgent.ID(), "port", port, "user_id", cmd.UserID, "error", err)
+				return nil, fmt.Errorf("failed to check chain agent port: %w", err)
+			}
+			if inUse {
+				return nil, errors.NewConflictError(
+					fmt.Sprintf("listen port %d is already in use on chain agent %s", port, shortID),
+					fmt.Sprintf("%d", port))
 			}
 			chainPortConfig[chainAgent.ID()] = port
 		}
@@ -181,15 +219,15 @@ func (uc *CreateUserForwardRuleUseCase) Execute(ctx context.Context, cmd CreateU
 		return nil, err
 	}
 
-	// Check if listen port is already in use
-	exists, err := uc.repo.ExistsByListenPort(ctx, cmd.ListenPort)
+	// Check if listen port is already in use on this agent (including other rules' chain_port_config)
+	inUse, err := uc.repo.IsPortInUseByAgent(ctx, agentID, cmd.ListenPort, 0)
 	if err != nil {
-		uc.logger.Errorw("failed to check existing forward rule", "port", cmd.ListenPort, "user_id", cmd.UserID, "error", err)
+		uc.logger.Errorw("failed to check existing forward rule", "agent_id", agentID, "port", cmd.ListenPort, "user_id", cmd.UserID, "error", err)
 		return nil, fmt.Errorf("failed to check existing rule: %w", err)
 	}
-	if exists {
-		uc.logger.Warnw("listen port already in use", "port", cmd.ListenPort, "user_id", cmd.UserID)
-		return nil, errors.NewConflictError("listen port is already in use", fmt.Sprintf("%d", cmd.ListenPort))
+	if inUse {
+		uc.logger.Warnw("listen port already in use on this agent", "agent_id", agentID, "port", cmd.ListenPort, "user_id", cmd.UserID)
+		return nil, errors.NewConflictError("listen port is already in use on this agent", fmt.Sprintf("%d", cmd.ListenPort))
 	}
 
 	// Create domain entity with user_id
@@ -288,9 +326,6 @@ func (uc *CreateUserForwardRuleUseCase) validateCommand(_ context.Context, cmd C
 	// Type-specific validation
 	switch ruleType {
 	case vo.ForwardRuleTypeDirect:
-		if cmd.ListenPort == 0 {
-			return errors.NewValidationError("listen_port is required for direct forward")
-		}
 		// Either targetAddress+targetPort OR targetNodeSID must be provided
 		hasTarget := cmd.TargetAddress != "" && cmd.TargetPort != 0
 		hasTargetNode := targetNodeID != nil && *targetNodeID != 0
@@ -301,9 +336,6 @@ func (uc *CreateUserForwardRuleUseCase) validateCommand(_ context.Context, cmd C
 			return errors.NewValidationError("target_address+target_port and target_node_id are mutually exclusive for direct forward")
 		}
 	case vo.ForwardRuleTypeEntry:
-		if cmd.ListenPort == 0 {
-			return errors.NewValidationError("listen_port is required for entry forward")
-		}
 		if cmd.ExitAgentShortID == "" {
 			return errors.NewValidationError("exit_agent_id is required for entry forward")
 		}
@@ -317,9 +349,6 @@ func (uc *CreateUserForwardRuleUseCase) validateCommand(_ context.Context, cmd C
 			return errors.NewValidationError("target_address+target_port and target_node_id are mutually exclusive for entry forward")
 		}
 	case vo.ForwardRuleTypeChain:
-		if cmd.ListenPort == 0 {
-			return errors.NewValidationError("listen_port is required for chain forward")
-		}
 		if len(cmd.ChainAgentShortIDs) == 0 {
 			return errors.NewValidationError("chain_agent_ids is required for chain forward (at least 1 intermediate agent)")
 		}
@@ -367,4 +396,47 @@ func (uc *CreateUserForwardRuleUseCase) validateCommand(_ context.Context, cmd C
 	}
 
 	return nil
+}
+
+// Default port range for auto-assignment when agent has no port restrictions.
+const (
+	userDefaultPortRangeStart = 10000
+	userDefaultPortRangeEnd   = 60000
+	userMaxPortAssignAttempts = 100
+)
+
+// assignAvailablePort finds an available port for the given agent.
+// If the agent has allowed port ranges configured, picks from those ranges.
+// Otherwise, uses the default range (10000-60000).
+// Note: Port uniqueness is checked per-agent, not globally.
+func (uc *CreateUserForwardRuleUseCase) assignAvailablePort(ctx context.Context, agent *forward.ForwardAgent) (uint16, error) {
+	portRange := agent.AllowedPortRange()
+	agentID := agent.ID()
+
+	for i := 0; i < userMaxPortAssignAttempts; i++ {
+		var port uint16
+		if portRange != nil && !portRange.IsEmpty() {
+			// Use agent's allowed port range
+			port = portRange.RandomPort()
+		} else {
+			// Use default range
+			port = uint16(userDefaultPortRangeStart + rand.Intn(userDefaultPortRangeEnd-userDefaultPortRangeStart+1))
+		}
+
+		// Defensive check: ensure port is within agent's allowed range
+		if !agent.IsPortAllowed(port) {
+			continue
+		}
+
+		// Check if port is already in use on this agent (including chain_port_config)
+		inUse, err := uc.repo.IsPortInUseByAgent(ctx, agentID, port, 0)
+		if err != nil {
+			return 0, fmt.Errorf("failed to check port availability: %w", err)
+		}
+		if !inUse {
+			return port, nil
+		}
+	}
+
+	return 0, errors.NewValidationError("failed to find available port after maximum attempts")
 }

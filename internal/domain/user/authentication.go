@@ -31,13 +31,18 @@ func (u *User) SetPassword(password *vo.Password, hasher PasswordHasher) error {
 	return nil
 }
 
+// VerifyPassword verifies the password against the stored hash.
+// Note: This method does NOT record failed login attempts - the caller is responsible
+// for calling RecordFailedLogin() on failure to avoid double-counting.
+// On success, it resets the failed login counter.
 func (u *User) VerifyPassword(plainPassword string, hasher PasswordHasher) error {
 	if u.passwordHash == nil || *u.passwordHash == "" {
 		return fmt.Errorf("user has no password set")
 	}
 
 	if err := hasher.Verify(plainPassword, *u.passwordHash); err != nil {
-		u.recordFailedLogin()
+		// Do not call recordFailedLogin() here - caller handles this via RecordFailedLogin()
+		// to avoid double-counting when use case layer also records the failure
 		return fmt.Errorf("invalid password")
 	}
 

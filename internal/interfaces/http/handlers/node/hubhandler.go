@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -12,7 +13,9 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/node/dto"
 	"github.com/orris-inc/orris/internal/application/node/usecases"
+	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/infrastructure/services"
+	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
@@ -53,6 +56,7 @@ type trafficReport struct {
 // NodeHubHandler handles WebSocket connections for node agents.
 type NodeHubHandler struct {
 	hub                  *services.AgentHub
+	nodeRepo             node.NodeRepository
 	trafficBuffer        SubscriptionTrafficBufferWriter
 	subscriptionResolver usecases.SubscriptionIDResolver
 	logger               logger.Interface
@@ -61,12 +65,14 @@ type NodeHubHandler struct {
 // NewNodeHubHandler creates a new NodeHubHandler.
 func NewNodeHubHandler(
 	hub *services.AgentHub,
+	nodeRepo node.NodeRepository,
 	trafficBuffer SubscriptionTrafficBufferWriter,
 	subscriptionResolver usecases.SubscriptionIDResolver,
 	log logger.Interface,
 ) *NodeHubHandler {
 	return &NodeHubHandler{
 		hub:                  hub,
+		nodeRepo:             nodeRepo,
 		trafficBuffer:        trafficBuffer,
 		subscriptionResolver: subscriptionResolver,
 		logger:               log,
@@ -339,4 +345,147 @@ func (h *NodeHubHandler) handleTrafficEvent(nodeID uint, extra any) {
 			"added_count", addedCount,
 		)
 	}
+}
+
+// BroadcastAPIURLChangedRequest represents the request body for broadcasting API URL change to nodes.
+type BroadcastAPIURLChangedRequest struct {
+	NewURL string `json:"new_url" binding:"required,url" example:"https://new-api.example.com"`
+	Reason string `json:"reason,omitempty" example:"server migration"`
+}
+
+// BroadcastAPIURLChangedResponse represents the response for API URL change broadcast to nodes.
+type BroadcastAPIURLChangedResponse struct {
+	NodesNotified int `json:"nodes_notified"`
+	NodesOnline   int `json:"nodes_online"`
+}
+
+// BroadcastAPIURLChanged handles POST /nodes/broadcast-url-change
+// Notifies connected node agents that the API URL has changed.
+// Nodes should update their local configuration and reconnect to the new URL.
+func (h *NodeHubHandler) BroadcastAPIURLChanged(c *gin.Context) {
+	var req BroadcastAPIURLChangedRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid request body for broadcast API URL change to nodes",
+			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid request: "+err.Error())
+		return
+	}
+
+	notified, online := h.hub.BroadcastNodeAPIURLChanged(req.NewURL, req.Reason)
+
+	// Get operator info for audit logging
+	var operatorID any = "unknown"
+	if userID, exists := c.Get("user_id"); exists {
+		operatorID = userID
+	}
+
+	h.logger.Infow("API URL change broadcast to nodes completed",
+		"url_host", extractURLHost(req.NewURL),
+		"reason", req.Reason,
+		"nodes_notified", notified,
+		"nodes_online", online,
+		"operator_id", operatorID,
+		"ip", c.ClientIP(),
+	)
+
+	utils.SuccessResponse(c, http.StatusOK, "API URL change broadcast to nodes completed", &BroadcastAPIURLChangedResponse{
+		NodesNotified: notified,
+		NodesOnline:   online,
+	})
+}
+
+// NotifyAPIURLChangedRequest represents the request body for notifying a single node of API URL change.
+type NotifyAPIURLChangedRequest struct {
+	NewURL string `json:"new_url" binding:"required,url" example:"https://new-api.example.com"`
+	Reason string `json:"reason,omitempty" example:"server migration"`
+}
+
+// NotifyAPIURLChangedResponse represents the response for single node API URL change notification.
+type NotifyAPIURLChangedResponse struct {
+	NodeID   string `json:"node_id"`
+	Notified bool   `json:"notified"`
+}
+
+// NotifyAPIURLChanged handles POST /nodes/:id/url-change
+// Notifies a specific connected node that the API URL has changed.
+func (h *NodeHubHandler) NotifyAPIURLChanged(c *gin.Context) {
+	nodeSID, err := parseNodeSID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	var req NotifyAPIURLChangedRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid request body for notify API URL change",
+			"error", err,
+			"node_sid", nodeSID,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid request: "+err.Error())
+		return
+	}
+
+	// Get node by SID to retrieve internal ID
+	n, err := h.nodeRepo.GetBySID(c.Request.Context(), nodeSID)
+	if err != nil {
+		h.logger.Errorw("failed to get node",
+			"node_sid", nodeSID,
+			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+	if n == nil {
+		utils.ErrorResponseWithError(c, errors.NewNotFoundError("node not found"))
+		return
+	}
+
+	err = h.hub.NotifyNodeAPIURLChanged(n.ID(), req.NewURL, req.Reason)
+	if err != nil {
+		h.logger.Warnw("failed to notify node of API URL change",
+			"error", err,
+			"node_id", n.ID(),
+			"node_sid", nodeSID,
+			"url_host", extractURLHost(req.NewURL),
+			"ip", c.ClientIP(),
+		)
+		utils.SuccessResponse(c, http.StatusOK, "node not connected or send failed", &NotifyAPIURLChangedResponse{
+			NodeID:   nodeSID,
+			Notified: false,
+		})
+		return
+	}
+
+	// Get operator info for audit logging
+	var operatorID any = "unknown"
+	if userID, exists := c.Get("user_id"); exists {
+		operatorID = userID
+	}
+
+	h.logger.Infow("API URL change notification sent to node",
+		"node_id", n.ID(),
+		"node_sid", nodeSID,
+		"url_host", extractURLHost(req.NewURL),
+		"reason", req.Reason,
+		"operator_id", operatorID,
+		"ip", c.ClientIP(),
+	)
+
+	utils.SuccessResponse(c, http.StatusOK, "API URL change notification sent", &NotifyAPIURLChangedResponse{
+		NodeID:   nodeSID,
+		Notified: true,
+	})
+}
+
+// extractURLHost extracts the host from a URL for safe logging (avoids leaking credentials).
+func extractURLHost(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return "<invalid-url>"
+	}
+	return parsed.Host
 }

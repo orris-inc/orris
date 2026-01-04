@@ -4,13 +4,17 @@ package hub
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 
 	"github.com/orris-inc/orris/internal/application/forward/dto"
+	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/infrastructure/services"
+	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
@@ -31,15 +35,17 @@ var upgrader = websocket.Upgrader{
 
 // Handler handles WebSocket connections for forward agent hub.
 type Handler struct {
-	hub    *services.AgentHub
-	logger logger.Interface
+	hub       *services.AgentHub
+	agentRepo forward.AgentRepository
+	logger    logger.Interface
 }
 
 // NewHandler creates a new Handler.
-func NewHandler(hub *services.AgentHub, log logger.Interface) *Handler {
+func NewHandler(hub *services.AgentHub, agentRepo forward.AgentRepository, log logger.Interface) *Handler {
 	return &Handler{
-		hub:    hub,
-		logger: log,
+		hub:       hub,
+		agentRepo: agentRepo,
+		logger:    log,
 	}
 }
 
@@ -193,4 +199,162 @@ func (h *Handler) handleAgentEvent(agentID uint, data any) {
 		"event_type", event.EventType,
 		"message", event.Message,
 	)
+}
+
+// BroadcastAPIURLChangedRequest represents the request body for broadcasting API URL change to forward agents.
+type BroadcastAPIURLChangedRequest struct {
+	NewURL string `json:"new_url" binding:"required,url" example:"https://new-api.example.com"`
+	Reason string `json:"reason,omitempty" example:"server migration"`
+}
+
+// BroadcastAPIURLChangedResponse represents the response for API URL change broadcast to forward agents.
+type BroadcastAPIURLChangedResponse struct {
+	AgentsNotified int `json:"agents_notified"`
+	AgentsOnline   int `json:"agents_online"`
+}
+
+// BroadcastAPIURLChanged handles POST /forward-agents/broadcast-url-change
+// Notifies connected forward agents that the API URL has changed.
+// Forward agents should update their local configuration and reconnect to the new URL.
+// Note: For nodes, use POST /nodes/broadcast-url-change instead.
+func (h *Handler) BroadcastAPIURLChanged(c *gin.Context) {
+	var req BroadcastAPIURLChangedRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid request body for broadcast API URL change",
+			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid request: "+err.Error())
+		return
+	}
+
+	notified, online := h.hub.BroadcastAPIURLChanged(req.NewURL, req.Reason)
+
+	// Get operator info for audit logging
+	var operatorID any = "unknown"
+	if userID, exists := c.Get("user_id"); exists {
+		operatorID = userID
+	}
+
+	h.logger.Infow("API URL change broadcast to forward agents completed",
+		"url_host", extractURLHost(req.NewURL),
+		"reason", req.Reason,
+		"agents_notified", notified,
+		"agents_online", online,
+		"operator_id", operatorID,
+		"ip", c.ClientIP(),
+	)
+
+	utils.SuccessResponse(c, http.StatusOK, "API URL change broadcast to forward agents completed", &BroadcastAPIURLChangedResponse{
+		AgentsNotified: notified,
+		AgentsOnline:   online,
+	})
+}
+
+// NotifyAPIURLChangedRequest represents the request body for notifying a single agent of API URL change.
+type NotifyAPIURLChangedRequest struct {
+	NewURL string `json:"new_url" binding:"required,url" example:"https://new-api.example.com"`
+	Reason string `json:"reason,omitempty" example:"server migration"`
+}
+
+// NotifyAPIURLChangedResponse represents the response for single agent API URL change notification.
+type NotifyAPIURLChangedResponse struct {
+	AgentID  string `json:"agent_id"`
+	Notified bool   `json:"notified"`
+}
+
+// NotifyAPIURLChanged handles POST /forward-agents/:id/url-change
+// Notifies a specific connected forward agent that the API URL has changed.
+func (h *Handler) NotifyAPIURLChanged(c *gin.Context) {
+	agentSID, err := parseAgentSID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	var req NotifyAPIURLChangedRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid request body for notify API URL change",
+			"error", err,
+			"agent_sid", agentSID,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid request: "+err.Error())
+		return
+	}
+
+	// Get agent by SID to retrieve internal ID
+	agent, err := h.agentRepo.GetBySID(c.Request.Context(), agentSID)
+	if err != nil {
+		h.logger.Errorw("failed to get agent",
+			"agent_sid", agentSID,
+			"error", err,
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+	if agent == nil {
+		utils.ErrorResponseWithError(c, errors.NewNotFoundError("forward agent not found"))
+		return
+	}
+
+	err = h.hub.NotifyAgentAPIURLChanged(agent.ID(), req.NewURL, req.Reason)
+	if err != nil {
+		h.logger.Warnw("failed to notify agent of API URL change",
+			"error", err,
+			"agent_id", agent.ID(),
+			"agent_sid", agentSID,
+			"url_host", extractURLHost(req.NewURL),
+			"ip", c.ClientIP(),
+		)
+		utils.SuccessResponse(c, http.StatusOK, "agent not connected or send failed", &NotifyAPIURLChangedResponse{
+			AgentID:  agentSID,
+			Notified: false,
+		})
+		return
+	}
+
+	// Get operator info for audit logging
+	var operatorID any = "unknown"
+	if userID, exists := c.Get("user_id"); exists {
+		operatorID = userID
+	}
+
+	h.logger.Infow("API URL change notification sent to forward agent",
+		"agent_id", agent.ID(),
+		"agent_sid", agentSID,
+		"url_host", extractURLHost(req.NewURL),
+		"reason", req.Reason,
+		"operator_id", operatorID,
+		"ip", c.ClientIP(),
+	)
+
+	utils.SuccessResponse(c, http.StatusOK, "API URL change notification sent", &NotifyAPIURLChangedResponse{
+		AgentID:  agentSID,
+		Notified: true,
+	})
+}
+
+// parseAgentSID validates a prefixed agent ID and returns the SID (e.g., "fa_xK9mP2vL3nQ").
+func parseAgentSID(c *gin.Context) (string, error) {
+	prefixedID := c.Param("id")
+	if prefixedID == "" {
+		return "", errors.NewValidationError("forward agent ID is required")
+	}
+
+	if err := id.ValidatePrefix(prefixedID, id.PrefixForwardAgent); err != nil {
+		return "", errors.NewValidationError("invalid forward agent ID format, expected fa_xxxxx")
+	}
+
+	return prefixedID, nil
+}
+
+// extractURLHost extracts the host from a URL for safe logging (avoids leaking credentials).
+func extractURLHost(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return "<invalid-url>"
+	}
+	return parsed.Host
 }

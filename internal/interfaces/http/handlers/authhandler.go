@@ -329,7 +329,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 
 	cmd := usecases.RefreshTokenCommand{RefreshToken: refreshToken}
 
-	result, err := h.refreshTokenUseCase.Execute(cmd)
+	result, err := h.refreshTokenUseCase.Execute(c.Request.Context(), cmd)
 	if err != nil {
 		h.logger.Errorw("token refresh failed", "error", err)
 		utils.ErrorResponse(c, http.StatusUnauthorized, err.Error())

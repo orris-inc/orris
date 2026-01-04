@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/orris-inc/orris/internal/domain/forward"
+	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/resource"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -12,12 +13,13 @@ import (
 
 // UpdateForwardAgentCommand represents the input for updating a forward agent.
 type UpdateForwardAgentCommand struct {
-	ShortID       string // External API identifier
-	Name          *string
-	PublicAddress *string
-	TunnelAddress *string
-	Remark        *string
-	GroupSID      *string // Resource group SID (empty string to remove association)
+	ShortID          string // External API identifier
+	Name             *string
+	PublicAddress    *string
+	TunnelAddress    *string
+	Remark           *string
+	GroupSID         *string // Resource group SID (empty string to remove association)
+	AllowedPortRange *string // nil: no update, empty string: clear (allow all), non-empty: set new range
 }
 
 // UpdateForwardAgentUseCase handles forward agent updates.
@@ -106,6 +108,30 @@ func (uc *UpdateForwardAgentUseCase) Execute(ctx context.Context, cmd UpdateForw
 			}
 			groupID := group.ID()
 			agent.SetGroupID(&groupID)
+		}
+	}
+
+	// Handle AllowedPortRange update
+	// Note: We use a "forward-compatible" approach - existing rules continue to work,
+	// only new/updated rules must comply with the new port range.
+	// This prevents service disruption when adjusting port policies.
+	if cmd.AllowedPortRange != nil {
+		if *cmd.AllowedPortRange == "" {
+			// Empty string means clear the port range (allow all ports)
+			if err := agent.SetAllowedPortRange(nil); err != nil {
+				return errors.NewValidationError(err.Error())
+			}
+		} else {
+			// Parse and set the new port range
+			portRange, err := vo.ParsePortRange(*cmd.AllowedPortRange)
+			if err != nil {
+				uc.logger.Errorw("invalid allowed port range", "range", *cmd.AllowedPortRange, "error", err)
+				return errors.NewValidationError(fmt.Sprintf("invalid allowed port range: %v", err))
+			}
+
+			if err := agent.SetAllowedPortRange(portRange); err != nil {
+				return errors.NewValidationError(err.Error())
+			}
 		}
 	}
 
