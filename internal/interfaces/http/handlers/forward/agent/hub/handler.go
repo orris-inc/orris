@@ -2,7 +2,6 @@
 package hub
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -30,24 +29,17 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-// ConfigSyncService defines the interface for full sync on agent connection.
-type ConfigSyncService interface {
-	FullSyncToAgent(ctx context.Context, agentID uint) error
-}
-
 // Handler handles WebSocket connections for forward agent hub.
 type Handler struct {
-	hub               *services.AgentHub
-	configSyncService ConfigSyncService
-	logger            logger.Interface
+	hub    *services.AgentHub
+	logger logger.Interface
 }
 
 // NewHandler creates a new Handler.
-func NewHandler(hub *services.AgentHub, configSyncService ConfigSyncService, log logger.Interface) *Handler {
+func NewHandler(hub *services.AgentHub, log logger.Interface) *Handler {
 	return &Handler{
-		hub:               hub,
-		configSyncService: configSyncService,
-		logger:            log,
+		hub:    hub,
+		logger: log,
 	}
 }
 
@@ -81,17 +73,8 @@ func (h *Handler) ForwardAgentWS(c *gin.Context) {
 		"ip", c.ClientIP(),
 	)
 
-	// Perform full config sync to agent (asynchronously)
-	if h.configSyncService != nil {
-		go func() {
-			if err := h.configSyncService.FullSyncToAgent(c.Request.Context(), agentID); err != nil {
-				h.logger.Warnw("failed to perform full config sync on agent connection",
-					"agent_id", agentID,
-					"error", err,
-				)
-			}
-		}()
-	}
+	// Note: Full config sync is handled by OnAgentOnline callback in router.go
+	// to centralize the logic and avoid duplicate sync calls.
 
 	// Start read and write pumps
 	go h.writePump(agentID, conn, agentConn.Send)
@@ -188,6 +171,13 @@ func (h *Handler) writePump(agentID uint, conn *websocket.Conn, send chan *dto.H
 
 // handleAgentEvent processes event from agent.
 func (h *Handler) handleAgentEvent(agentID uint, data any) {
+	// Route to registered message handlers first (e.g., TrafficMessageHandler)
+	// This allows domain-specific handlers to process events like "traffic"
+	if h.hub.RouteAgentMessage(agentID, dto.MsgTypeEvent, data) {
+		return // Event was handled by a registered handler
+	}
+
+	// Fallback: log unhandled events
 	dataBytes, err := json.Marshal(data)
 	if err != nil {
 		return

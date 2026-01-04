@@ -54,49 +54,56 @@ import (
 
 // Router represents the HTTP router configuration
 type Router struct {
-	engine                      *gin.Engine
-	userHandler                 *handlers.UserHandler
-	authHandler                 *handlers.AuthHandler
-	profileHandler              *handlers.ProfileHandler
-	dashboardHandler            *handlers.DashboardHandler
-	subscriptionHandler         *handlers.SubscriptionHandler
-	adminSubscriptionHandler    *adminHandlers.SubscriptionHandler
-	adminResourceGroupHandler   *adminHandlers.ResourceGroupHandler
-	adminTrafficStatsHandler    *adminHandlers.TrafficStatsHandler
-	planHandler                 *handlers.PlanHandler
-	subscriptionTokenHandler    *handlers.SubscriptionTokenHandler
-	paymentHandler              *handlers.PaymentHandler
-	nodeHandler                 *handlers.NodeHandler
-	nodeSubscriptionHandler     *handlers.NodeSubscriptionHandler
-	userNodeHandler             *nodeHandlers.UserNodeHandler
-	agentHandler                *nodeHandlers.AgentHandler
-	ticketHandler               *ticketHandlers.TicketHandler
-	notificationHandler         *handlers.NotificationHandler
-	telegramHandler             *telegramHandlers.Handler
-	telegramService             *telegramApp.ServiceDDD
-	forwardRuleHandler          *forwardRuleHandlers.Handler
-	forwardAgentHandler         *forwardAgentCrudHandlers.Handler
-	forwardAgentVersionHandler  *forwardAgentCrudHandlers.VersionHandler
-	forwardAgentSSEHandler      *forwardAgentCrudHandlers.ForwardAgentSSEHandler
-	forwardAgentAPIHandler      *forwardAgentAPIHandlers.Handler
-	userForwardRuleHandler      *forwardUserHandlers.Handler
-	agentHub                    *services.AgentHub
-	agentHubHandler             *forwardAgentHubHandlers.Handler
-	nodeHubHandler              *nodeHandlers.NodeHubHandler
-	nodeVersionHandler          *nodeHandlers.NodeVersionHandler
-	nodeSSEHandler              *nodeHandlers.NodeSSEHandler
-	adminHub                    *services.AdminHub
-	configSyncService           *forwardServices.ConfigSyncService
-	trafficLimitEnforcementSvc  *forwardServices.TrafficLimitEnforcementService
-	authMiddleware              *middleware.AuthMiddleware
-	subscriptionOwnerMiddleware *middleware.SubscriptionOwnerMiddleware
-	nodeTokenMiddleware         *middleware.NodeTokenMiddleware
-	nodeOwnerMiddleware         *middleware.NodeOwnerMiddleware
-	nodeQuotaMiddleware         *middleware.NodeQuotaMiddleware
-	forwardAgentTokenMiddleware *middleware.ForwardAgentTokenMiddleware
-	forwardRuleOwnerMiddleware  *middleware.ForwardRuleOwnerMiddleware
-	forwardQuotaMiddleware      *middleware.ForwardQuotaMiddleware
-	rateLimiter                 *middleware.RateLimiter
+	engine                       *gin.Engine
+	userHandler                  *handlers.UserHandler
+	authHandler                  *handlers.AuthHandler
+	profileHandler               *handlers.ProfileHandler
+	dashboardHandler             *handlers.DashboardHandler
+	subscriptionHandler          *handlers.SubscriptionHandler
+	adminSubscriptionHandler     *adminHandlers.SubscriptionHandler
+	adminResourceGroupHandler    *adminHandlers.ResourceGroupHandler
+	adminTrafficStatsHandler     *adminHandlers.TrafficStatsHandler
+	planHandler                  *handlers.PlanHandler
+	subscriptionTokenHandler     *handlers.SubscriptionTokenHandler
+	paymentHandler               *handlers.PaymentHandler
+	nodeHandler                  *handlers.NodeHandler
+	nodeSubscriptionHandler      *handlers.NodeSubscriptionHandler
+	userNodeHandler              *nodeHandlers.UserNodeHandler
+	agentHandler                 *nodeHandlers.AgentHandler
+	ticketHandler                *ticketHandlers.TicketHandler
+	notificationHandler          *handlers.NotificationHandler
+	telegramHandler              *telegramHandlers.Handler
+	telegramService              *telegramApp.ServiceDDD
+	forwardRuleHandler           *forwardRuleHandlers.Handler
+	forwardAgentHandler          *forwardAgentCrudHandlers.Handler
+	forwardAgentVersionHandler   *forwardAgentCrudHandlers.VersionHandler
+	forwardAgentSSEHandler       *forwardAgentCrudHandlers.ForwardAgentSSEHandler
+	forwardAgentAPIHandler       *forwardAgentAPIHandlers.Handler
+	userForwardRuleHandler       *forwardUserHandlers.Handler
+	agentHub                     *services.AgentHub
+	agentHubHandler              *forwardAgentHubHandlers.Handler
+	nodeHubHandler               *nodeHandlers.NodeHubHandler
+	nodeVersionHandler           *nodeHandlers.NodeVersionHandler
+	nodeSSEHandler               *nodeHandlers.NodeSSEHandler
+	adminHub                     *services.AdminHub
+	configSyncService            *forwardServices.ConfigSyncService
+	trafficLimitEnforcementSvc   *forwardServices.TrafficLimitEnforcementService
+	forwardTrafficCache          cache.ForwardTrafficCache
+	trafficBuffer                *forwardServices.TrafficBuffer
+	trafficFlushDone             chan struct{}
+	subscriptionTrafficCache     cache.SubscriptionTrafficCache
+	subscriptionTrafficBuffer    *nodeServices.SubscriptionTrafficBuffer
+	subscriptionTrafficFlushDone chan struct{}
+	logger                       logger.Interface
+	authMiddleware               *middleware.AuthMiddleware
+	subscriptionOwnerMiddleware  *middleware.SubscriptionOwnerMiddleware
+	nodeTokenMiddleware          *middleware.NodeTokenMiddleware
+	nodeOwnerMiddleware          *middleware.NodeOwnerMiddleware
+	nodeQuotaMiddleware          *middleware.NodeQuotaMiddleware
+	forwardAgentTokenMiddleware  *middleware.ForwardAgentTokenMiddleware
+	forwardRuleOwnerMiddleware   *middleware.ForwardRuleOwnerMiddleware
+	forwardQuotaMiddleware       *middleware.ForwardQuotaMiddleware
+	rateLimiter                  *middleware.RateLimiter
 }
 
 type jwtServiceAdapter struct {
@@ -692,6 +699,45 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Register rule sync status handler for WebSocket-based status reporting
 	agentHub.RegisterMessageHandler(reportRuleSyncStatusUC)
 
+	// Initialize forward traffic cache for real-time traffic updates
+	forwardTrafficCache := cache.NewRedisForwardTrafficCache(
+		redisClient,
+		forwardRuleRepo,
+		log,
+	)
+
+	// Initialize traffic buffer for batching traffic updates
+	trafficBuffer := forwardServices.NewTrafficBuffer(forwardTrafficCache, log)
+	trafficBuffer.Start()
+
+	// Initialize and register traffic message handler for WebSocket traffic updates
+	trafficMessageHandler := services.NewTrafficMessageHandler(
+		trafficBuffer,
+		forwardRuleRepo,
+		log,
+	)
+	agentHub.RegisterMessageHandler(trafficMessageHandler)
+
+	// Create done channel for traffic flush scheduler
+	trafficFlushDone := make(chan struct{})
+
+	// Start forward traffic flush scheduler (Redis -> MySQL)
+	go func() {
+		ticker := time.NewTicker(2 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				ctx := context.Background()
+				if err := forwardTrafficCache.FlushToDatabase(ctx); err != nil {
+					log.Errorw("failed to flush forward traffic to database", "error", err)
+				}
+			case <-trafficFlushDone:
+				return
+			}
+		}
+	}()
+
 	// Set port change notifier for exit agent port change detection
 	reportAgentStatusUC.SetPortChangeNotifier(configSyncService)
 
@@ -835,8 +881,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		probeService,
 	)
 
-	// Initialize agent hub handler with config sync service
-	agentHubHandler := forwardAgentHubHandlers.NewHandler(agentHub, configSyncService, log)
+	// Initialize agent hub handler
+	agentHubHandler := forwardAgentHubHandlers.NewHandler(agentHub, log)
 
 	// Initialize node status handler and register to agent hub
 	nodeStatusHandler := adapters.NewNodeStatusHandler(systemStatusUpdater, nodeRepoImpl, log)
@@ -957,8 +1003,39 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Set config change notifier for node update use case
 	updateNodeUC.SetConfigChangeNotifier(nodeConfigSyncService)
 
-	// Initialize node hub handler
-	nodeHubHandler := nodeHandlers.NewNodeHubHandler(agentHub, log)
+	// Initialize subscription traffic cache for real-time traffic updates (Node Agent)
+	subscriptionTrafficCache := cache.NewRedisSubscriptionTrafficCache(
+		redisClient,
+		subscriptionUsageRepo,
+		log,
+	)
+
+	// Initialize subscription traffic buffer for batching traffic updates (Node Agent)
+	subscriptionTrafficBuffer := nodeServices.NewSubscriptionTrafficBuffer(subscriptionTrafficCache, log)
+	subscriptionTrafficBuffer.Start()
+
+	// Create done channel for subscription traffic flush scheduler
+	subscriptionTrafficFlushDone := make(chan struct{})
+
+	// Start subscription traffic flush scheduler (Redis -> MySQL)
+	go func() {
+		ticker := time.NewTicker(2 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				ctx := context.Background()
+				if err := subscriptionTrafficCache.FlushToDatabase(ctx); err != nil {
+					log.Errorw("failed to flush subscription traffic to database", "error", err)
+				}
+			case <-subscriptionTrafficFlushDone:
+				return
+			}
+		}
+	}()
+
+	// Initialize node hub handler with traffic buffer support
+	nodeHubHandler := nodeHandlers.NewNodeHubHandler(agentHub, subscriptionTrafficBuffer, subscriptionIDResolver, log)
 
 	// Initialize node SSE handler
 	nodeSSEHandler := nodeHandlers.NewNodeSSEHandler(adminHub, log)
@@ -967,49 +1044,56 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	forwardAgentSSEHandler := forwardAgentCrudHandlers.NewForwardAgentSSEHandler(adminHub, log)
 
 	return &Router{
-		engine:                      engine,
-		userHandler:                 userHandler,
-		authHandler:                 authHandler,
-		profileHandler:              profileHandler,
-		dashboardHandler:            dashboardHandler,
-		subscriptionHandler:         subscriptionHandler,
-		adminSubscriptionHandler:    adminSubscriptionHandler,
-		adminResourceGroupHandler:   adminResourceGroupHandler,
-		adminTrafficStatsHandler:    adminTrafficStatsHandler,
-		planHandler:                 planHandler,
-		subscriptionTokenHandler:    subscriptionTokenHandler,
-		paymentHandler:              paymentHandler,
-		nodeHandler:                 nodeHandler,
-		nodeSubscriptionHandler:     nodeSubscriptionHandler,
-		userNodeHandler:             userNodeHandler,
-		agentHandler:                agentHandler,
-		ticketHandler:               ticketHandler,
-		notificationHandler:         notificationHandler,
-		telegramHandler:             telegramHandler,
-		telegramService:             telegramServiceDDD,
-		forwardRuleHandler:          forwardRuleHandler,
-		forwardAgentHandler:         forwardAgentHandler,
-		forwardAgentVersionHandler:  forwardAgentVersionHandler,
-		forwardAgentSSEHandler:      forwardAgentSSEHandler,
-		forwardAgentAPIHandler:      forwardAgentAPIHandler,
-		userForwardRuleHandler:      userForwardRuleHandler,
-		agentHub:                    agentHub,
-		agentHubHandler:             agentHubHandler,
-		nodeHubHandler:              nodeHubHandler,
-		nodeVersionHandler:          nodeVersionHandler,
-		nodeSSEHandler:              nodeSSEHandler,
-		adminHub:                    adminHub,
-		configSyncService:           configSyncService,
-		trafficLimitEnforcementSvc:  trafficLimitEnforcementSvc,
-		authMiddleware:              authMiddleware,
-		subscriptionOwnerMiddleware: subscriptionOwnerMiddleware,
-		nodeTokenMiddleware:         nodeTokenMiddleware,
-		nodeOwnerMiddleware:         nodeOwnerMiddleware,
-		nodeQuotaMiddleware:         nodeQuotaMiddleware,
-		forwardAgentTokenMiddleware: forwardAgentTokenMiddleware,
-		forwardRuleOwnerMiddleware:  forwardRuleOwnerMiddleware,
-		forwardQuotaMiddleware:      forwardQuotaMiddleware,
-		rateLimiter:                 rateLimiter,
+		engine:                       engine,
+		userHandler:                  userHandler,
+		authHandler:                  authHandler,
+		profileHandler:               profileHandler,
+		dashboardHandler:             dashboardHandler,
+		subscriptionHandler:          subscriptionHandler,
+		adminSubscriptionHandler:     adminSubscriptionHandler,
+		adminResourceGroupHandler:    adminResourceGroupHandler,
+		adminTrafficStatsHandler:     adminTrafficStatsHandler,
+		planHandler:                  planHandler,
+		subscriptionTokenHandler:     subscriptionTokenHandler,
+		paymentHandler:               paymentHandler,
+		nodeHandler:                  nodeHandler,
+		nodeSubscriptionHandler:      nodeSubscriptionHandler,
+		userNodeHandler:              userNodeHandler,
+		agentHandler:                 agentHandler,
+		ticketHandler:                ticketHandler,
+		notificationHandler:          notificationHandler,
+		telegramHandler:              telegramHandler,
+		telegramService:              telegramServiceDDD,
+		forwardRuleHandler:           forwardRuleHandler,
+		forwardAgentHandler:          forwardAgentHandler,
+		forwardAgentVersionHandler:   forwardAgentVersionHandler,
+		forwardAgentSSEHandler:       forwardAgentSSEHandler,
+		forwardAgentAPIHandler:       forwardAgentAPIHandler,
+		userForwardRuleHandler:       userForwardRuleHandler,
+		agentHub:                     agentHub,
+		agentHubHandler:              agentHubHandler,
+		nodeHubHandler:               nodeHubHandler,
+		nodeVersionHandler:           nodeVersionHandler,
+		nodeSSEHandler:               nodeSSEHandler,
+		adminHub:                     adminHub,
+		configSyncService:            configSyncService,
+		trafficLimitEnforcementSvc:   trafficLimitEnforcementSvc,
+		forwardTrafficCache:          forwardTrafficCache,
+		trafficBuffer:                trafficBuffer,
+		trafficFlushDone:             trafficFlushDone,
+		subscriptionTrafficCache:     subscriptionTrafficCache,
+		subscriptionTrafficBuffer:    subscriptionTrafficBuffer,
+		subscriptionTrafficFlushDone: subscriptionTrafficFlushDone,
+		logger:                       log,
+		authMiddleware:               authMiddleware,
+		subscriptionOwnerMiddleware:  subscriptionOwnerMiddleware,
+		nodeTokenMiddleware:          nodeTokenMiddleware,
+		nodeOwnerMiddleware:          nodeOwnerMiddleware,
+		nodeQuotaMiddleware:          nodeQuotaMiddleware,
+		forwardAgentTokenMiddleware:  forwardAgentTokenMiddleware,
+		forwardRuleOwnerMiddleware:   forwardRuleOwnerMiddleware,
+		forwardQuotaMiddleware:       forwardQuotaMiddleware,
+		rateLimiter:                  rateLimiter,
 	}
 }
 
@@ -1260,7 +1344,41 @@ func (r *Router) Run(addr string) error {
 
 // Shutdown gracefully shuts down the router
 func (r *Router) Shutdown() {
-	// Reserved for future cleanup tasks
+	// Stop forward traffic flush scheduler goroutine
+	if r.trafficFlushDone != nil {
+		close(r.trafficFlushDone)
+	}
+
+	// Stop forward traffic buffer (flushes remaining data to Redis)
+	if r.trafficBuffer != nil {
+		r.trafficBuffer.Stop()
+	}
+
+	// Final flush forward traffic from Redis to MySQL
+	if r.forwardTrafficCache != nil {
+		ctx := context.Background()
+		if err := r.forwardTrafficCache.FlushToDatabase(ctx); err != nil {
+			r.logger.Errorw("failed to flush forward traffic to database on shutdown", "error", err)
+		}
+	}
+
+	// Stop subscription traffic flush scheduler goroutine
+	if r.subscriptionTrafficFlushDone != nil {
+		close(r.subscriptionTrafficFlushDone)
+	}
+
+	// Stop subscription traffic buffer (flushes remaining data to Redis)
+	if r.subscriptionTrafficBuffer != nil {
+		r.subscriptionTrafficBuffer.Stop()
+	}
+
+	// Final flush subscription traffic from Redis to MySQL
+	if r.subscriptionTrafficCache != nil {
+		ctx := context.Background()
+		if err := r.subscriptionTrafficCache.FlushToDatabase(ctx); err != nil {
+			r.logger.Errorw("failed to flush subscription traffic to database on shutdown", "error", err)
+		}
+	}
 }
 
 // GetTelegramService returns the telegram service for scheduler use

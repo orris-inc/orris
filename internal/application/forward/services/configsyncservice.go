@@ -194,7 +194,7 @@ func (s *ConfigSyncService) NotifyRuleChange(ctx context.Context, agentID uint, 
 
 // FullSyncToAgent performs a full configuration sync to an agent (typically on reconnection).
 func (s *ConfigSyncService) FullSyncToAgent(ctx context.Context, agentID uint) error {
-	s.logger.Infow("performing full config sync to agent",
+	s.logger.Debugw("performing full config sync to agent",
 		"agent_id", agentID,
 	)
 
@@ -219,7 +219,7 @@ func (s *ConfigSyncService) FullSyncToAgent(ctx context.Context, agentID uint) e
 		return err
 	}
 
-	s.logger.Infow("fetched enabled rules for full sync",
+	s.logger.Debugw("fetched enabled rules for full sync",
 		"agent_id", agentID,
 		"rule_count", len(rules),
 	)
@@ -257,10 +257,9 @@ func (s *ConfigSyncService) FullSyncToAgent(ctx context.Context, agentID uint) e
 	// Generate client token for this agent
 	clientToken := s.converter.GenerateClientToken(agent.SID())
 
-	s.logger.Infow("generated client token for full sync",
+	s.logger.Debugw("generated client token for full sync",
 		"agent_id", agentID,
 		"short_id", agent.SID(),
-		"client_token", clientToken,
 	)
 
 	// Build full sync data

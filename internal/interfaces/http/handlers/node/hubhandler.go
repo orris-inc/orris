@@ -2,6 +2,7 @@
 package node
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -10,15 +11,28 @@ import (
 	"github.com/gorilla/websocket"
 
 	"github.com/orris-inc/orris/internal/application/node/dto"
+	"github.com/orris-inc/orris/internal/application/node/usecases"
 	"github.com/orris-inc/orris/internal/infrastructure/services"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
+// SubscriptionTrafficBufferWriter defines the interface for writing subscription traffic to buffer.
+type SubscriptionTrafficBufferWriter interface {
+	AddTraffic(nodeID, subscriptionID uint, upload, download int64)
+}
+
 const (
 	nodeWriteWait  = 10 * time.Second
 	nodePongWait   = 60 * time.Second
 	nodePingPeriod = 30 * time.Second
+
+	// eventTypeTraffic is the event type for traffic updates from node agents.
+	eventTypeTraffic = "traffic"
+
+	// maxTrafficPerReport is the maximum traffic bytes allowed per single report (1TB).
+	// Prevents integer overflow attacks.
+	maxNodeTrafficPerReport int64 = 1 << 40
 )
 
 var nodeUpgrader = websocket.Upgrader{
@@ -29,17 +43,33 @@ var nodeUpgrader = websocket.Upgrader{
 	},
 }
 
+// trafficReport represents traffic data for a single subscription (matches orrisp api.TrafficReport).
+type trafficReport struct {
+	SubscriptionSID string `json:"subscription_id"`
+	Upload          int64  `json:"upload"`
+	Download        int64  `json:"download"`
+}
+
 // NodeHubHandler handles WebSocket connections for node agents.
 type NodeHubHandler struct {
-	hub    *services.AgentHub
-	logger logger.Interface
+	hub                  *services.AgentHub
+	trafficBuffer        SubscriptionTrafficBufferWriter
+	subscriptionResolver usecases.SubscriptionIDResolver
+	logger               logger.Interface
 }
 
 // NewNodeHubHandler creates a new NodeHubHandler.
-func NewNodeHubHandler(hub *services.AgentHub, log logger.Interface) *NodeHubHandler {
+func NewNodeHubHandler(
+	hub *services.AgentHub,
+	trafficBuffer SubscriptionTrafficBufferWriter,
+	subscriptionResolver usecases.SubscriptionIDResolver,
+	log logger.Interface,
+) *NodeHubHandler {
 	return &NodeHubHandler{
-		hub:    hub,
-		logger: log,
+		hub:                  hub,
+		trafficBuffer:        trafficBuffer,
+		subscriptionResolver: subscriptionResolver,
+		logger:               log,
 	}
 }
 
@@ -190,9 +220,123 @@ func (h *NodeHubHandler) handleNodeEvent(nodeID uint, data any) {
 		return
 	}
 
-	h.logger.Infow("node agent event received",
+	// Handle traffic event
+	if event.EventType == eventTypeTraffic {
+		h.handleTrafficEvent(nodeID, event.Extra)
+		return
+	}
+
+	h.logger.Debugw("node agent event received",
 		"node_id", nodeID,
 		"event_type", event.EventType,
 		"message", event.Message,
 	)
+}
+
+// handleTrafficEvent processes traffic data from node agent.
+func (h *NodeHubHandler) handleTrafficEvent(nodeID uint, extra any) {
+	if extra == nil {
+		return
+	}
+
+	// Parse traffic data from Extra field
+	extraBytes, err := json.Marshal(extra)
+	if err != nil {
+		h.logger.Warnw("failed to marshal traffic extra data",
+			"error", err,
+			"node_id", nodeID,
+		)
+		return
+	}
+
+	var reports []trafficReport
+	if err := json.Unmarshal(extraBytes, &reports); err != nil {
+		h.logger.Warnw("failed to parse traffic reports",
+			"error", err,
+			"node_id", nodeID,
+		)
+		return
+	}
+
+	if len(reports) == 0 {
+		return
+	}
+
+	h.logger.Debugw("traffic event received",
+		"node_id", nodeID,
+		"reports_count", len(reports),
+	)
+
+	// Collect unique subscription SIDs
+	sids := make([]string, 0, len(reports))
+	for _, r := range reports {
+		if r.SubscriptionSID != "" {
+			sids = append(sids, r.SubscriptionSID)
+		}
+	}
+
+	if len(sids) == 0 {
+		return
+	}
+
+	// Resolve subscription SIDs to internal IDs
+	ctx := context.Background()
+	sidToID, err := h.subscriptionResolver.GetIDsBySIDs(ctx, sids)
+	if err != nil {
+		h.logger.Warnw("failed to resolve subscription SIDs",
+			"error", err,
+			"node_id", nodeID,
+		)
+		return
+	}
+
+	// Add traffic to buffer
+	addedCount := 0
+	for _, r := range reports {
+		// Skip if SID not resolved
+		subID, ok := sidToID[r.SubscriptionSID]
+		if !ok {
+			h.logger.Debugw("subscription SID not found, skipping",
+				"subscription_sid", r.SubscriptionSID,
+				"node_id", nodeID,
+			)
+			continue
+		}
+
+		// Validate traffic values
+		if r.Upload < 0 || r.Download < 0 {
+			h.logger.Warnw("negative traffic rejected",
+				"subscription_sid", r.SubscriptionSID,
+				"node_id", nodeID,
+			)
+			continue
+		}
+
+		// Reject excessively large values to prevent integer overflow
+		if r.Upload > maxNodeTrafficPerReport || r.Download > maxNodeTrafficPerReport {
+			h.logger.Warnw("excessive traffic rejected",
+				"subscription_sid", r.SubscriptionSID,
+				"node_id", nodeID,
+				"upload", r.Upload,
+				"download", r.Download,
+			)
+			continue
+		}
+
+		// Skip zero traffic
+		if r.Upload == 0 && r.Download == 0 {
+			continue
+		}
+
+		// Add to buffer (will be flushed to Redis periodically)
+		h.trafficBuffer.AddTraffic(nodeID, subID, r.Upload, r.Download)
+		addedCount++
+	}
+
+	if addedCount > 0 {
+		h.logger.Debugw("traffic added to buffer",
+			"node_id", nodeID,
+			"added_count", addedCount,
+		)
+	}
 }

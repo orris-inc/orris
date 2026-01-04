@@ -297,6 +297,10 @@ func (h *ResourceGroupHandler) AddNodes(c *gin.Context) {
 			utils.ErrorResponse(c, http.StatusNotFound, "resource group not found")
 			return
 		}
+		if err == resource.ErrGroupPlanTypeMismatchNode {
+			utils.ErrorResponse(c, http.StatusBadRequest, "resource group's plan type is not node, cannot add node resources")
+			return
+		}
 		h.logger.Errorw("failed to add nodes to resource group", "error", err, "sid", sid)
 		utils.ErrorResponseWithError(c, err)
 		return

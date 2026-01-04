@@ -317,7 +317,7 @@ func (h *AgentHub) RegisterAgent(agentID uint, conn *websocket.Conn) *AgentHubCo
 	}
 	h.agents[agentID] = agentConn
 
-	h.logger.Infow("forward agent connected via websocket",
+	h.logger.Debugw("forward agent connected via websocket",
 		"agent_id", agentID,
 	)
 
