@@ -13,7 +13,8 @@ curl -fsSL https://raw.githubusercontent.com/orris-inc/orris/main/install.sh | \
   DOMAIN=orris.example.com \
   ADMIN_EMAIL=admin@example.com \
   ADMIN_PASSWORD=your-password \
-```bash
+  bash
+```
 
 ## Detailed Installation
 

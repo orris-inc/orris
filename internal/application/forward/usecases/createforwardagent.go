@@ -18,6 +18,7 @@ type CreateForwardAgentCommand struct {
 	TunnelAddress    string
 	Remark           string
 	AllowedPortRange string // Port range string (e.g., "80,443,8000-9000"), empty means all ports allowed
+	SortOrder        *int   // Custom sort order for UI display (nil: use default 0, non-nil: set explicitly)
 }
 
 // CreateForwardAgentResult represents the output of creating a forward agent.
@@ -95,6 +96,11 @@ func (uc *CreateForwardAgentUseCase) Execute(ctx context.Context, cmd CreateForw
 			uc.logger.Errorw("failed to set allowed port range", "error", err)
 			return nil, errors.NewValidationError(fmt.Sprintf("invalid allowed port range: %v", err))
 		}
+	}
+
+	// Set sort order if explicitly provided
+	if cmd.SortOrder != nil {
+		agent.UpdateSortOrder(*cmd.SortOrder)
 	}
 
 	// Persist

@@ -19,6 +19,8 @@ type ListUserForwardAgentsQuery struct {
 	PageSize int
 	Name     string
 	Status   string
+	OrderBy  string
+	Order    string
 }
 
 // ListUserForwardAgentsResult represents the output of listing user's forward agents.
@@ -175,6 +177,8 @@ func (uc *ListUserForwardAgentsUseCase) Execute(ctx context.Context, query ListU
 		PageSize: query.PageSize,
 		Name:     query.Name,
 		Status:   query.Status,
+		OrderBy:  query.OrderBy,
+		Order:    query.Order,
 		GroupIDs: groupIDs,
 	}
 

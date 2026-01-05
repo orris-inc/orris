@@ -46,6 +46,8 @@ func (h *Handler) ListAgents(c *gin.Context) {
 		PageSize: pageSize,
 		Name:     c.Query("name"),
 		Status:   c.Query("status"),
+		OrderBy:  c.DefaultQuery("sort_by", "created_at"),
+		Order:    c.DefaultQuery("order", "desc"),
 	}
 
 	result, err := h.listAgentsUC.Execute(c.Request.Context(), query)

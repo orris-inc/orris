@@ -24,6 +24,7 @@ type ForwardAgentModel struct {
 	Platform         string  `gorm:"size:20"`                          // OS platform (linux, darwin, windows)
 	Arch             string  `gorm:"size:20"`                          // CPU architecture (amd64, arm64, arm, 386)
 	AllowedPortRange *string `gorm:"column:allowed_port_range;type:text"`
+	SortOrder        int     `gorm:"not null;default:0"`
 	LastSeenAt       *time.Time
 	CreatedAt        time.Time
 	UpdatedAt        time.Time

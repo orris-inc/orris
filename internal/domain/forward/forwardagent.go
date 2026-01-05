@@ -50,6 +50,7 @@ type ForwardAgent struct {
 	platform         string        // OS platform (linux, darwin, windows)
 	arch             string        // CPU architecture (amd64, arm64, arm, 386)
 	allowedPortRange *vo.PortRange // allowed listen port range (nil means all ports allowed)
+	sortOrder        int           // custom sort order for UI display
 	createdAt        time.Time
 	updatedAt        time.Time
 	tokenGenerator   services.TokenGenerator
@@ -122,6 +123,7 @@ func ReconstructForwardAgent(
 	platform string,
 	arch string,
 	allowedPortRange *vo.PortRange,
+	sortOrder int,
 	createdAt, updatedAt time.Time,
 ) (*ForwardAgent, error) {
 	if id == 0 {
@@ -169,6 +171,7 @@ func ReconstructForwardAgent(
 		platform:         platform,
 		arch:             arch,
 		allowedPortRange: allowedPortRange,
+		sortOrder:        sortOrder,
 		createdAt:        createdAt,
 		updatedAt:        updatedAt,
 		tokenGenerator:   services.NewTokenGenerator(),
@@ -481,4 +484,15 @@ func (a *ForwardAgent) IsPortAllowed(port uint16) bool {
 		return true
 	}
 	return a.allowedPortRange.Contains(port)
+}
+
+// SortOrder returns the custom sort order for UI display
+func (a *ForwardAgent) SortOrder() int {
+	return a.sortOrder
+}
+
+// UpdateSortOrder updates the custom sort order for UI display
+func (a *ForwardAgent) UpdateSortOrder(order int) {
+	a.sortOrder = order
+	a.updatedAt = biztime.NowUTC()
 }

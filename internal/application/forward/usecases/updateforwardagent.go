@@ -20,6 +20,7 @@ type UpdateForwardAgentCommand struct {
 	Remark           *string
 	GroupSID         *string // Resource group SID (empty string to remove association)
 	AllowedPortRange *string // nil: no update, empty string: clear (allow all), non-empty: set new range
+	SortOrder        *int    // nil: no update, non-nil: set new sort order
 }
 
 // UpdateForwardAgentUseCase handles forward agent updates.
@@ -133,6 +134,11 @@ func (uc *UpdateForwardAgentUseCase) Execute(ctx context.Context, cmd UpdateForw
 				return errors.NewValidationError(err.Error())
 			}
 		}
+	}
+
+	// Handle SortOrder update
+	if cmd.SortOrder != nil {
+		agent.UpdateSortOrder(*cmd.SortOrder)
 	}
 
 	// Persist changes

@@ -24,6 +24,7 @@ var allowedAgentOrderByFields = map[string]bool{
 	"name":         true,
 	"status":       true,
 	"group_id":     true,
+	"sort_order":   true,
 	"last_seen_at": true,
 	"created_at":   true,
 	"updated_at":   true,
@@ -206,6 +207,7 @@ func (r *ForwardAgentRepositoryImpl) Update(ctx context.Context, agent *forward.
 			"remark":             model.Remark,
 			"group_id":           model.GroupID,
 			"allowed_port_range": model.AllowedPortRange,
+			"sort_order":         model.SortOrder,
 			"updated_at":         model.UpdatedAt,
 		})
 

@@ -76,6 +76,7 @@ type CreateForwardAgentRequest struct {
 	TunnelAddress    string `json:"tunnel_address,omitempty" example:"192.168.1.100"` // IP or hostname only (no port), configure if agent may serve as relay/exit in any rule
 	Remark           string `json:"remark,omitempty" example:"Forward agent for production environment"`
 	AllowedPortRange string `json:"allowed_port_range,omitempty" example:"80,443,8000-9000"`
+	SortOrder        *int   `json:"sort_order,omitempty" example:"100"` // Custom sort order for UI display (lower values appear first)
 }
 
 // UpdateForwardAgentRequest represents a request to update a forward agent.
@@ -86,6 +87,7 @@ type UpdateForwardAgentRequest struct {
 	Remark           *string `json:"remark,omitempty" example:"Updated remark"`
 	GroupSID         *string `json:"group_sid,omitempty" example:"rg_xK9mP2vL3nQ"` // Resource group SID to associate with (use empty string to remove)
 	AllowedPortRange *string `json:"allowed_port_range,omitempty" example:"80,443,8000-9000"`
+	SortOrder        *int    `json:"sort_order,omitempty" example:"100"` // Custom sort order for UI display (lower values appear first)
 }
 
 // UpdateAgentStatusRequest represents a request to update forward agent status.
@@ -108,6 +110,7 @@ func (h *Handler) CreateAgent(c *gin.Context) {
 		TunnelAddress:    req.TunnelAddress,
 		Remark:           req.Remark,
 		AllowedPortRange: req.AllowedPortRange,
+		SortOrder:        req.SortOrder, // nil if not provided, allowing explicit 0 value
 	}
 
 	result, err := h.createAgentUC.Execute(c.Request.Context(), cmd)
@@ -154,8 +157,8 @@ func (h *Handler) ListAgents(c *gin.Context) {
 		PageSize: pageSize,
 		Name:     c.Query("name"),
 		Status:   c.Query("status"),
-		OrderBy:  c.Query("order_by"),
-		Order:    c.Query("order"),
+		OrderBy:  c.DefaultQuery("sort_by", "sort_order"),
+		Order:    c.DefaultQuery("order", "asc"),
 	}
 
 	result, err := h.listAgentsUC.Execute(c.Request.Context(), query)
@@ -190,6 +193,7 @@ func (h *Handler) UpdateAgent(c *gin.Context) {
 		Remark:           req.Remark,
 		GroupSID:         req.GroupSID,
 		AllowedPortRange: req.AllowedPortRange,
+		SortOrder:        req.SortOrder,
 	}
 
 	if err := h.updateAgentUC.Execute(c.Request.Context(), cmd); err != nil {
