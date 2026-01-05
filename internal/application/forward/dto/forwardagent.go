@@ -18,7 +18,8 @@ type ForwardAgentDTO struct {
 	AgentVersion     string          `json:"agent_version"`      // Agent software version (e.g., "1.2.3"), extracted from system_status for easy display
 	HasUpdate        bool            `json:"has_update"`         // True if a newer version is available
 	AllowedPortRange string          `json:"allowed_port_range,omitempty"`
-	SortOrder        int             `json:"sort_order"` // Custom sort order for UI display
+	BlockedProtocols []string        `json:"blocked_protocols,omitempty"` // Protocols blocked by this agent
+	SortOrder        int             `json:"sort_order"`                  // Custom sort order for UI display
 	CreatedAt        string          `json:"created_at"`
 	UpdatedAt        string          `json:"updated_at"`
 	SystemStatus     *AgentStatusDTO `json:"system_status,omitempty"`
@@ -44,6 +45,7 @@ func ToForwardAgentDTO(agent *forward.ForwardAgent) *ForwardAgentDTO {
 		Remark:           agent.Remark(),
 		AgentVersion:     agent.AgentVersion(),
 		AllowedPortRange: allowedPortRange,
+		BlockedProtocols: agent.BlockedProtocols().ToStringSlice(),
 		SortOrder:        agent.SortOrder(),
 		CreatedAt:        agent.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:        agent.UpdatedAt().Format("2006-01-02T15:04:05Z07:00"),

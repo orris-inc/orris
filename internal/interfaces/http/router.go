@@ -747,8 +747,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Set node address change notifier for node update use case
 	updateNodeUC.SetAddressChangeNotifier(configSyncService)
 
-	// Now initialize updateForwardAgentUC with configSyncService for address change notification
-	updateForwardAgentUC = forwardUsecases.NewUpdateForwardAgentUseCase(forwardAgentRepo, resourceGroupRepo, configSyncService, log)
+	// Now initialize updateForwardAgentUC with configSyncService for address change and config change notification
+	updateForwardAgentUC = forwardUsecases.NewUpdateForwardAgentUseCase(forwardAgentRepo, resourceGroupRepo, configSyncService, configSyncService, log)
 
 	// Now initialize forwardAgentHandler after updateForwardAgentUC is available
 	forwardAgentHandler = forwardAgentCrudHandlers.NewHandler(

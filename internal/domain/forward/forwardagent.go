@@ -45,12 +45,13 @@ type ForwardAgent struct {
 	publicAddress    string // optional public address for Entry to obtain Exit connection information
 	tunnelAddress    string // IP or hostname only (no port), configure if agent may serve as relay/exit in any rule
 	remark           string
-	groupID          *uint         // resource group ID
-	agentVersion     string        // agent software version (e.g., "1.2.3")
-	platform         string        // OS platform (linux, darwin, windows)
-	arch             string        // CPU architecture (amd64, arm64, arm, 386)
-	allowedPortRange *vo.PortRange // allowed listen port range (nil means all ports allowed)
-	sortOrder        int           // custom sort order for UI display
+	groupID          *uint               // resource group ID
+	agentVersion     string              // agent software version (e.g., "1.2.3")
+	platform         string              // OS platform (linux, darwin, windows)
+	arch             string              // CPU architecture (amd64, arm64, arm, 386)
+	allowedPortRange *vo.PortRange       // allowed listen port range (nil means all ports allowed)
+	blockedProtocols vo.BlockedProtocols // protocols blocked by this agent (nil means no blocking)
+	sortOrder        int                 // custom sort order for UI display
 	createdAt        time.Time
 	updatedAt        time.Time
 	tokenGenerator   services.TokenGenerator
@@ -123,6 +124,7 @@ func ReconstructForwardAgent(
 	platform string,
 	arch string,
 	allowedPortRange *vo.PortRange,
+	blockedProtocols vo.BlockedProtocols,
 	sortOrder int,
 	createdAt, updatedAt time.Time,
 ) (*ForwardAgent, error) {
@@ -171,6 +173,7 @@ func ReconstructForwardAgent(
 		platform:         platform,
 		arch:             arch,
 		allowedPortRange: allowedPortRange,
+		blockedProtocols: blockedProtocols,
 		sortOrder:        sortOrder,
 		createdAt:        createdAt,
 		updatedAt:        updatedAt,
@@ -484,6 +487,18 @@ func (a *ForwardAgent) IsPortAllowed(port uint16) bool {
 		return true
 	}
 	return a.allowedPortRange.Contains(port)
+}
+
+// BlockedProtocols returns the blocked protocols configuration
+func (a *ForwardAgent) BlockedProtocols() vo.BlockedProtocols {
+	return a.blockedProtocols
+}
+
+// SetBlockedProtocols sets the blocked protocols.
+// Pass nil to allow all protocols.
+func (a *ForwardAgent) SetBlockedProtocols(protocols vo.BlockedProtocols) {
+	a.blockedProtocols = protocols
+	a.updatedAt = biztime.NowUTC()
 }
 
 // SortOrder returns the custom sort order for UI display

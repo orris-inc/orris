@@ -18,17 +18,19 @@ type UpdateForwardAgentCommand struct {
 	PublicAddress    *string
 	TunnelAddress    *string
 	Remark           *string
-	GroupSID         *string // Resource group SID (empty string to remove association)
-	AllowedPortRange *string // nil: no update, empty string: clear (allow all), non-empty: set new range
-	SortOrder        *int    // nil: no update, non-nil: set new sort order
+	GroupSID         *string   // Resource group SID (empty string to remove association)
+	AllowedPortRange *string   // nil: no update, empty string: clear (allow all), non-empty: set new range
+	BlockedProtocols *[]string // nil: no update, empty slice: clear (allow all), non-empty: set new protocols
+	SortOrder        *int      // nil: no update, non-nil: set new sort order
 }
 
 // UpdateForwardAgentUseCase handles forward agent updates.
 type UpdateForwardAgentUseCase struct {
-	repo                  forward.AgentRepository
-	resourceGroupRepo     resource.Repository
-	addressChangeNotifier AgentAddressChangeNotifier
-	logger                logger.Interface
+	repo                    forward.AgentRepository
+	resourceGroupRepo       resource.Repository
+	addressChangeNotifier   AgentAddressChangeNotifier
+	agentConfigNotifier     AgentConfigChangeNotifier
+	logger                  logger.Interface
 }
 
 // NewUpdateForwardAgentUseCase creates a new UpdateForwardAgentUseCase.
@@ -36,13 +38,15 @@ func NewUpdateForwardAgentUseCase(
 	repo forward.AgentRepository,
 	resourceGroupRepo resource.Repository,
 	addressChangeNotifier AgentAddressChangeNotifier,
+	agentConfigNotifier AgentConfigChangeNotifier,
 	logger logger.Interface,
 ) *UpdateForwardAgentUseCase {
 	return &UpdateForwardAgentUseCase{
-		repo:                  repo,
-		resourceGroupRepo:     resourceGroupRepo,
-		addressChangeNotifier: addressChangeNotifier,
-		logger:                logger,
+		repo:                    repo,
+		resourceGroupRepo:       resourceGroupRepo,
+		addressChangeNotifier:   addressChangeNotifier,
+		agentConfigNotifier:     agentConfigNotifier,
+		logger:                  logger,
 	}
 }
 
@@ -63,9 +67,10 @@ func (uc *UpdateForwardAgentUseCase) Execute(ctx context.Context, cmd UpdateForw
 		return errors.NewNotFoundError("forward agent", cmd.ShortID)
 	}
 
-	// Track original address values to detect changes
+	// Track original values to detect changes
 	originalPublicAddress := agent.PublicAddress()
 	originalTunnelAddress := agent.TunnelAddress()
+	originalBlockedProtocols := agent.BlockedProtocols().ToStringSlice()
 
 	// Update fields
 	if cmd.Name != nil {
@@ -136,6 +141,33 @@ func (uc *UpdateForwardAgentUseCase) Execute(ctx context.Context, cmd UpdateForw
 		}
 	}
 
+	// Handle BlockedProtocols update
+	if cmd.BlockedProtocols != nil {
+		if len(*cmd.BlockedProtocols) == 0 {
+			// Empty slice means clear blocked protocols (allow all protocols)
+			uc.logger.Infow("clearing blocked protocols",
+				"short_id", cmd.ShortID,
+				"old_blocked_protocols", originalBlockedProtocols,
+			)
+			agent.SetBlockedProtocols(nil)
+		} else {
+			// Validate protocols
+			invalidProtocols := vo.ValidateBlockedProtocols(*cmd.BlockedProtocols)
+			if len(invalidProtocols) > 0 {
+				uc.logger.Errorw("invalid blocked protocols", "protocols", *cmd.BlockedProtocols, "invalid", invalidProtocols)
+				return errors.NewValidationError(fmt.Sprintf("invalid blocked protocols: %v, valid protocols are: %v", invalidProtocols, vo.ValidBlockedProtocolNames()))
+			}
+			// Set the new blocked protocols
+			uc.logger.Infow("updating blocked protocols",
+				"short_id", cmd.ShortID,
+				"old_blocked_protocols", originalBlockedProtocols,
+				"new_blocked_protocols", *cmd.BlockedProtocols,
+			)
+			blockedProtocols := vo.NewBlockedProtocols(*cmd.BlockedProtocols)
+			agent.SetBlockedProtocols(blockedProtocols)
+		}
+	}
+
 	// Handle SortOrder update
 	if cmd.SortOrder != nil {
 		agent.UpdateSortOrder(*cmd.SortOrder)
@@ -147,7 +179,11 @@ func (uc *UpdateForwardAgentUseCase) Execute(ctx context.Context, cmd UpdateForw
 		return fmt.Errorf("failed to update forward agent: %w", err)
 	}
 
-	uc.logger.Infow("forward agent updated successfully", "id", agent.ID(), "short_id", agent.SID())
+	uc.logger.Infow("forward agent updated successfully",
+		"id", agent.ID(),
+		"short_id", agent.SID(),
+		"blocked_protocols", agent.BlockedProtocols().ToStringSlice(),
+	)
 
 	// Check if address changed and notify related agents
 	addressChanged := (cmd.PublicAddress != nil && *cmd.PublicAddress != originalPublicAddress) ||
@@ -175,5 +211,40 @@ func (uc *UpdateForwardAgentUseCase) Execute(ctx context.Context, cmd UpdateForw
 		}()
 	}
 
+	// Check if blocked protocols changed and notify the agent
+	blockedProtocolsChanged := cmd.BlockedProtocols != nil && !slicesEqual(originalBlockedProtocols, agent.BlockedProtocols().ToStringSlice())
+	if blockedProtocolsChanged && uc.agentConfigNotifier != nil {
+		agentID := agent.ID()
+		uc.logger.Infow("agent blocked protocols changed, notifying agent",
+			"agent_id", agentID,
+			"short_id", agent.SID(),
+			"old_blocked_protocols", originalBlockedProtocols,
+			"new_blocked_protocols", agent.BlockedProtocols().ToStringSlice(),
+		)
+
+		// Notify asynchronously to avoid blocking the API response
+		go func() {
+			if err := uc.agentConfigNotifier.NotifyAgentBlockedProtocolsChange(context.Background(), agentID); err != nil {
+				uc.logger.Warnw("failed to notify agent blocked protocols change",
+					"agent_id", agentID,
+					"error", err,
+				)
+			}
+		}()
+	}
+
 	return nil
+}
+
+// slicesEqual checks if two string slices are equal (order matters).
+func slicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

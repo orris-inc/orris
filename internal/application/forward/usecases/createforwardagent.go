@@ -17,8 +17,9 @@ type CreateForwardAgentCommand struct {
 	PublicAddress    string
 	TunnelAddress    string
 	Remark           string
-	AllowedPortRange string // Port range string (e.g., "80,443,8000-9000"), empty means all ports allowed
-	SortOrder        *int   // Custom sort order for UI display (nil: use default 0, non-nil: set explicitly)
+	AllowedPortRange string   // Port range string (e.g., "80,443,8000-9000"), empty means all ports allowed
+	BlockedProtocols []string // Protocols to block (e.g., ["socks5", "http_connect"]), empty means no blocking
+	SortOrder        *int     // Custom sort order for UI display (nil: use default 0, non-nil: set explicitly)
 }
 
 // CreateForwardAgentResult represents the output of creating a forward agent.
@@ -83,6 +84,15 @@ func (uc *CreateForwardAgentUseCase) Execute(ctx context.Context, cmd CreateForw
 		}
 	}
 
+	// Validate blocked protocols if provided
+	if len(cmd.BlockedProtocols) > 0 {
+		invalidProtocols := vo.ValidateBlockedProtocols(cmd.BlockedProtocols)
+		if len(invalidProtocols) > 0 {
+			uc.logger.Errorw("invalid blocked protocols", "protocols", cmd.BlockedProtocols, "invalid", invalidProtocols)
+			return nil, errors.NewValidationError(fmt.Sprintf("invalid blocked protocols: %v, valid protocols are: %v", invalidProtocols, vo.ValidBlockedProtocolNames()))
+		}
+	}
+
 	// Create domain entity with HMAC-based token generator
 	agent, err := forward.NewForwardAgent(cmd.Name, cmd.PublicAddress, cmd.TunnelAddress, cmd.Remark, id.NewForwardAgentID, uc.tokenGen.Generate)
 	if err != nil {
@@ -96,6 +106,12 @@ func (uc *CreateForwardAgentUseCase) Execute(ctx context.Context, cmd CreateForw
 			uc.logger.Errorw("failed to set allowed port range", "error", err)
 			return nil, errors.NewValidationError(fmt.Sprintf("invalid allowed port range: %v", err))
 		}
+	}
+
+	// Set blocked protocols if provided
+	if len(cmd.BlockedProtocols) > 0 {
+		blockedProtocols := vo.NewBlockedProtocols(cmd.BlockedProtocols)
+		agent.SetBlockedProtocols(blockedProtocols)
 	}
 
 	// Set sort order if explicitly provided

@@ -49,6 +49,16 @@ func (m *ForwardAgentMapperImpl) ToEntity(model *models.ForwardAgentModel) (*for
 		}
 	}
 
+	// Parse blocked protocols from JSON
+	var blockedProtocols vo.BlockedProtocols
+	if len(model.BlockedProtocols) > 0 {
+		var protocols []string
+		if err := json.Unmarshal(model.BlockedProtocols, &protocols); err != nil {
+			return nil, fmt.Errorf("failed to parse blocked_protocols: %w", err)
+		}
+		blockedProtocols = vo.NewBlockedProtocols(protocols)
+	}
+
 	entity, err := forward.ReconstructForwardAgent(
 		model.ID,
 		model.SID,
@@ -64,6 +74,7 @@ func (m *ForwardAgentMapperImpl) ToEntity(model *models.ForwardAgentModel) (*for
 		model.Platform,
 		model.Arch,
 		allowedPortRange,
+		blockedProtocols,
 		model.SortOrder,
 		model.CreatedAt,
 		model.UpdatedAt,
@@ -92,6 +103,16 @@ func (m *ForwardAgentMapperImpl) ToModel(entity *forward.ForwardAgent) (*models.
 		allowedPortRange = &jsonStr
 	}
 
+	// Serialize blocked protocols to JSON
+	var blockedProtocols []byte
+	if len(entity.BlockedProtocols()) > 0 {
+		var err error
+		blockedProtocols, err = json.Marshal(entity.BlockedProtocols().ToStringSlice())
+		if err != nil {
+			return nil, fmt.Errorf("failed to serialize blocked_protocols: %w", err)
+		}
+	}
+
 	return &models.ForwardAgentModel{
 		ID:               entity.ID(),
 		SID:              entity.SID(),
@@ -107,6 +128,7 @@ func (m *ForwardAgentMapperImpl) ToModel(entity *forward.ForwardAgent) (*models.
 		Platform:         entity.Platform(),
 		Arch:             entity.Arch(),
 		AllowedPortRange: allowedPortRange,
+		BlockedProtocols: blockedProtocols,
 		SortOrder:        entity.SortOrder(),
 		CreatedAt:        entity.CreatedAt(),
 		UpdatedAt:        entity.UpdatedAt(),

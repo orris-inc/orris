@@ -3,6 +3,7 @@ package models
 import (
 	"time"
 
+	"gorm.io/datatypes"
 	"gorm.io/gorm"
 
 	"github.com/orris-inc/orris/internal/shared/constants"
@@ -10,21 +11,22 @@ import (
 
 // ForwardAgentModel represents the database persistence model for forward agents.
 type ForwardAgentModel struct {
-	ID               uint    `gorm:"primarykey"`
-	SID              string  `gorm:"column:sid;not null;size:20;uniqueIndex:idx_forward_agent_sid"` // Stripe-style prefixed ID (fa_xxx)
-	Name             string  `gorm:"not null;size:100;index:idx_forward_agent_name"`
-	TokenHash        string  `gorm:"not null;size:64;index:idx_forward_agent_token_hash"`
-	APIToken         string  `gorm:"column:api_token;size:255"` // stored token for retrieval
-	PublicAddress    string  `gorm:"size:255"`                  // public address for agent access (nullable)
-	TunnelAddress    string  `gorm:"size:255"`                  // tunnel address for entry to connect to exit (nullable, overrides public_address)
-	Status           string  `gorm:"not null;default:enabled;size:20;index:idx_forward_agent_status"`
-	Remark           string  `gorm:"size:500"`
-	GroupID          *uint   `gorm:"index:idx_forward_agent_group_id"` // resource group ID
-	AgentVersion     string  `gorm:"size:50"`                          // agent software version (e.g., "1.2.3")
-	Platform         string  `gorm:"size:20"`                          // OS platform (linux, darwin, windows)
-	Arch             string  `gorm:"size:20"`                          // CPU architecture (amd64, arm64, arm, 386)
-	AllowedPortRange *string `gorm:"column:allowed_port_range;type:text"`
-	SortOrder        int     `gorm:"not null;default:0"`
+	ID               uint           `gorm:"primarykey"`
+	SID              string         `gorm:"column:sid;not null;size:20;uniqueIndex:idx_forward_agent_sid"` // Stripe-style prefixed ID (fa_xxx)
+	Name             string         `gorm:"not null;size:100;index:idx_forward_agent_name"`
+	TokenHash        string         `gorm:"not null;size:64;index:idx_forward_agent_token_hash"`
+	APIToken         string         `gorm:"column:api_token;size:255"` // stored token for retrieval
+	PublicAddress    string         `gorm:"size:255"`                  // public address for agent access (nullable)
+	TunnelAddress    string         `gorm:"size:255"`                  // tunnel address for entry to connect to exit (nullable, overrides public_address)
+	Status           string         `gorm:"not null;default:enabled;size:20;index:idx_forward_agent_status"`
+	Remark           string         `gorm:"size:500"`
+	GroupID          *uint          `gorm:"index:idx_forward_agent_group_id"` // resource group ID
+	AgentVersion     string         `gorm:"size:50"`                          // agent software version (e.g., "1.2.3")
+	Platform         string         `gorm:"size:20"`                          // OS platform (linux, darwin, windows)
+	Arch             string         `gorm:"size:20"`                          // CPU architecture (amd64, arm64, arm, 386)
+	AllowedPortRange *string        `gorm:"column:allowed_port_range;type:text"`
+	BlockedProtocols datatypes.JSON `gorm:"column:blocked_protocols;type:json"` // protocols blocked by this agent
+	SortOrder        int            `gorm:"not null;default:0"`
 	LastSeenAt       *time.Time
 	CreatedAt        time.Time
 	UpdatedAt        time.Time

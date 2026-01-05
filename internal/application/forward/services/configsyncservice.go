@@ -266,10 +266,11 @@ func (s *ConfigSyncService) FullSyncToAgent(ctx context.Context, agentID uint) e
 	// Note: token_signing_secret is no longer included for security reasons.
 	// Agents should use the server for token verification.
 	syncData := &dto.ConfigSyncData{
-		Version:     version,
-		FullSync:    true,
-		Added:       ruleSyncDataList,
-		ClientToken: clientToken,
+		Version:          version,
+		FullSync:         true,
+		Added:            ruleSyncDataList,
+		ClientToken:      clientToken,
+		BlockedProtocols: agent.BlockedProtocols().ToStringSlice(),
 	}
 
 	// Send sync message to agent
@@ -281,6 +282,7 @@ func (s *ConfigSyncService) FullSyncToAgent(ctx context.Context, agentID uint) e
 		"agent_id", agentID,
 		"version", version,
 		"rule_count", len(ruleSyncDataList),
+		"blocked_protocols", agent.BlockedProtocols().ToStringSlice(),
 	)
 
 	return nil
@@ -581,4 +583,59 @@ func (s *ConfigSyncService) NotifyNodeAddressChange(ctx context.Context, nodeID 
 	}
 
 	return lastErr
+}
+
+// NotifyAgentBlockedProtocolsChange notifies an agent when its blocked protocols configuration changes.
+// This sends an incremental sync with only the updated blocked protocols list.
+func (s *ConfigSyncService) NotifyAgentBlockedProtocolsChange(ctx context.Context, agentID uint) error {
+	s.logger.Infow("notifying agent of blocked protocols change",
+		"agent_id", agentID,
+	)
+
+	// Check if agent is online
+	if !s.notifier.IsAgentOnline(agentID) {
+		s.logger.Debugw("agent offline, skipping blocked protocols sync",
+			"agent_id", agentID,
+		)
+		return nil
+	}
+
+	// Get agent to retrieve current blocked protocols
+	agent, err := s.agentRepo.GetByID(ctx, agentID)
+	if err != nil {
+		s.logger.Errorw("failed to get agent for blocked protocols sync",
+			"agent_id", agentID,
+			"error", err,
+		)
+		return err
+	}
+	if agent == nil {
+		s.logger.Warnw("agent not found for blocked protocols sync",
+			"agent_id", agentID,
+		)
+		return forward.ErrAgentNotFound
+	}
+
+	// Increment global version
+	version := s.notifier.IncrementVersion()
+
+	// Build incremental sync data with only blocked protocols
+	syncData := &dto.ConfigSyncData{
+		Version:          version,
+		FullSync:         false,
+		BlockedProtocols: agent.BlockedProtocols().ToStringSlice(),
+	}
+
+	// Send sync message to agent
+	if err := s.notifier.SendToAgent(ctx, agentID, syncData); err != nil {
+		return err
+	}
+
+	s.logger.Infow("blocked protocols sync notification sent",
+		"agent_id", agentID,
+		"version", version,
+		"blocked_protocols", agent.BlockedProtocols().ToStringSlice(),
+	)
+
+	return nil
 }

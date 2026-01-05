@@ -30,10 +30,10 @@ type CreateUserForwardRuleCommand struct {
 	TargetNodeSID      string // optional for all types (Stripe-style short ID without prefix)
 	BindIP             string // optional bind IP address for outbound connections
 	IPVersion          string // auto, ipv4, ipv6 (default: auto)
-	Protocol           string
-	TrafficMultiplier  *float64 // optional traffic multiplier (nil for auto-calculation, 0-1000000)
-	SortOrder          *int     // optional sort order (nil defaults to 0)
-	Remark             string
+	Protocol          string
+	TrafficMultiplier *float64 // optional traffic multiplier (nil for auto-calculation, 0-1000000)
+	SortOrder         *int     // optional sort order (nil defaults to 0)
+	Remark            string
 }
 
 // CreateUserForwardRuleResult represents the output of creating a user forward rule.

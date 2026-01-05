@@ -35,9 +35,9 @@ type ForwardRule struct {
 	remark            string
 	uploadBytes       int64
 	downloadBytes     int64
-	trafficMultiplier *float64 // traffic multiplier for display. nil means auto-calculate based on node count
-	sortOrder         int
-	createdAt         time.Time
+	trafficMultiplier *float64             // traffic multiplier for display. nil means auto-calculate based on node count
+	sortOrder int
+	createdAt time.Time
 	updatedAt         time.Time
 }
 

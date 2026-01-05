@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/infrastructure/services/protocol"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -38,17 +39,19 @@ type Manager struct {
 
 // ForwardingRule represents an active forwarding rule.
 type ForwardingRule struct {
-	ID            uint
-	ListenPort    uint16
-	TargetAddress string
-	TargetPort    uint16
-	Protocol      string
-	cancel        context.CancelFunc
-	tcpListener   net.Listener
-	udpConn       *net.UDPConn
-	uploadBytes   atomic.Int64
-	downloadBytes atomic.Int64
-	running       atomic.Bool
+	ID               uint
+	ListenPort       uint16
+	TargetAddress    string
+	TargetPort       uint16
+	Protocol         string
+	cancel           context.CancelFunc
+	tcpListener      net.Listener
+	udpConn          *net.UDPConn
+	uploadBytes      atomic.Int64
+	downloadBytes    atomic.Int64
+	running          atomic.Bool
+	blockedProtocols map[string]struct{} // protocols to block (O(1) lookup)
+	sniffer          *protocol.Sniffer
 }
 
 // NewManager creates a new forwarding manager.
@@ -61,12 +64,15 @@ func NewManager(repo forward.Repository, logger logger.Interface) *Manager {
 }
 
 // SetTrafficRecorder sets the traffic recorder.
+// This method is thread-safe.
 func (m *Manager) SetTrafficRecorder(recorder TrafficRecorder) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.trafficRecorder = recorder
 }
 
 // Start starts forwarding for a rule.
-func (m *Manager) Start(ruleID uint, listenPort uint16, targetAddress string, targetPort uint16, protocol string) error {
+func (m *Manager) Start(ruleID uint, listenPort uint16, targetAddress string, targetPort uint16, protocolType string, blockedProtocols []string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -81,14 +87,23 @@ func (m *Manager) Start(ruleID uint, listenPort uint16, targetAddress string, ta
 		ListenPort:    listenPort,
 		TargetAddress: targetAddress,
 		TargetPort:    targetPort,
-		Protocol:      protocol,
+		Protocol:      protocolType,
 		cancel:        cancel,
+	}
+
+	// Initialize blocked protocols map for O(1) lookup
+	if len(blockedProtocols) > 0 {
+		rule.blockedProtocols = make(map[string]struct{}, len(blockedProtocols))
+		for _, p := range blockedProtocols {
+			rule.blockedProtocols[p] = struct{}{}
+		}
+		rule.sniffer = protocol.NewSniffer()
 	}
 
 	target := net.JoinHostPort(targetAddress, fmt.Sprintf("%d", targetPort))
 
 	// Start TCP forwarding
-	if protocol == "tcp" || protocol == "both" {
+	if protocolType == "tcp" || protocolType == "both" {
 		listener, err := net.Listen("tcp", fmt.Sprintf(":%d", listenPort))
 		if err != nil {
 			cancel()
@@ -99,7 +114,7 @@ func (m *Manager) Start(ruleID uint, listenPort uint16, targetAddress string, ta
 	}
 
 	// Start UDP forwarding
-	if protocol == "udp" || protocol == "both" {
+	if protocolType == "udp" || protocolType == "both" {
 		addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf(":%d", listenPort))
 		if err != nil {
 			if rule.tcpListener != nil {
@@ -128,7 +143,7 @@ func (m *Manager) Start(ruleID uint, listenPort uint16, targetAddress string, ta
 		"rule_id", ruleID,
 		"listen_port", listenPort,
 		"target", target,
-		"protocol", protocol)
+		"protocol", protocolType)
 
 	return nil
 }
@@ -255,6 +270,30 @@ func (m *Manager) handleTCP(ctx context.Context, rule *ForwardingRule, target st
 func (m *Manager) handleTCPConnection(ctx context.Context, rule *ForwardingRule, clientConn net.Conn, target string) {
 	defer clientConn.Close()
 
+	var conn net.Conn = clientConn
+
+	// Protocol filtering
+	if rule.sniffer != nil && len(rule.blockedProtocols) > 0 {
+		info, peekedConn, err := rule.sniffer.Sniff(clientConn)
+		if err != nil {
+			// Sniff failed - data may have been partially read, connection is corrupted
+			m.logger.Warnw("protocol sniff failed, closing connection",
+				"rule_id", rule.ID,
+				"error", err)
+			return
+		}
+
+		// Check if protocol is blocked (O(1) map lookup)
+		if _, blocked := rule.blockedProtocols[string(info.Protocol)]; blocked {
+			m.logger.Infow("blocked protocol detected",
+				"rule_id", rule.ID,
+				"protocol", info.Protocol,
+				"client", clientConn.RemoteAddr().String())
+			return // close connection
+		}
+		conn = peekedConn
+	}
+
 	// Connect to target
 	targetConn, err := net.DialTimeout("tcp", target, 10*time.Second)
 	if err != nil {
@@ -263,18 +302,20 @@ func (m *Manager) handleTCPConnection(ctx context.Context, rule *ForwardingRule,
 	}
 	defer targetConn.Close()
 
-	// Create a channel to signal completion
-	done := make(chan struct{})
+	// Create a buffered channel to prevent goroutine leaks.
+	// Buffer size of 2 ensures both goroutines can send without blocking,
+	// even if the receiver exits early due to context cancellation.
+	done := make(chan struct{}, 2)
 
 	// Copy data bidirectionally
 	go func() {
-		n, _ := io.Copy(targetConn, clientConn)
+		n, _ := io.Copy(targetConn, conn)
 		rule.uploadBytes.Add(n)
 		done <- struct{}{}
 	}()
 
 	go func() {
-		n, _ := io.Copy(clientConn, targetConn)
+		n, _ := io.Copy(conn, targetConn)
 		rule.downloadBytes.Add(n)
 		done <- struct{}{}
 	}()
@@ -282,6 +323,12 @@ func (m *Manager) handleTCPConnection(ctx context.Context, rule *ForwardingRule,
 	// Wait for context cancellation or both goroutines to finish
 	select {
 	case <-ctx.Done():
+		// Close connections to unblock io.Copy goroutines
+		clientConn.Close()
+		targetConn.Close()
+		// Drain the done channel to ensure goroutines complete
+		<-done
+		<-done
 		return
 	case <-done:
 		<-done
@@ -421,6 +468,9 @@ func (m *Manager) handleUDP(ctx context.Context, rule *ForwardingRule, target st
 }
 
 // StartEnabledRules starts all enabled rules from the database.
+// Note: BlockedProtocols is now managed at the Agent level, not per-rule.
+// This method starts rules without protocol blocking. For protocol blocking,
+// use Start() directly with the agent's blocked protocols list.
 func (m *Manager) StartEnabledRules(ctx context.Context) error {
 	rules, err := m.repo.ListEnabled(ctx)
 	if err != nil {
@@ -434,6 +484,7 @@ func (m *Manager) StartEnabledRules(ctx context.Context) error {
 			rule.TargetAddress(),
 			rule.TargetPort(),
 			rule.Protocol().String(),
+			nil, // BlockedProtocols now handled at agent level
 		); err != nil {
 			m.logger.Warnw("failed to start forwarding rule",
 				"rule_id", rule.ID(),

@@ -75,10 +75,10 @@ type CreateForwardRuleRequest struct {
 	TargetNodeID      string            `json:"target_node_id,omitempty" example:"node_xK9mP2vL3nQ"`
 	BindIP            string            `json:"bind_ip,omitempty" example:"192.168.1.1"`
 	IPVersion         string            `json:"ip_version,omitempty" binding:"omitempty,oneof=auto ipv4 ipv6" example:"auto"`
-	Protocol          string            `json:"protocol" binding:"required,oneof=tcp udp both" example:"tcp"`
-	TrafficMultiplier *float64          `json:"traffic_multiplier,omitempty" binding:"omitempty,gte=0,lte=1000000" example:"1.5"`
-	SortOrder         *int              `json:"sort_order,omitempty" binding:"omitempty,gte=0" example:"100"`
-	Remark            string            `json:"remark,omitempty" example:"Forward to internal MySQL server"`
+	Protocol          string   `json:"protocol" binding:"required,oneof=tcp udp both" example:"tcp"`
+	TrafficMultiplier *float64 `json:"traffic_multiplier,omitempty" binding:"omitempty,gte=0,lte=1000000" example:"1.5"`
+	SortOrder         *int     `json:"sort_order,omitempty" binding:"omitempty,gte=0" example:"100"`
+	Remark            string   `json:"remark,omitempty" example:"Forward to internal MySQL server"`
 }
 
 // UpdateForwardRuleRequest represents a request to update a forward rule.
@@ -96,10 +96,10 @@ type UpdateForwardRuleRequest struct {
 	TargetNodeID      *string           `json:"target_node_id,omitempty" example:"node_xK9mP2vL3nQ"`
 	BindIP            *string           `json:"bind_ip,omitempty" example:"192.168.1.1"`
 	IPVersion         *string           `json:"ip_version,omitempty" binding:"omitempty,oneof=auto ipv4 ipv6" example:"auto"`
-	Protocol          *string           `json:"protocol,omitempty" binding:"omitempty,oneof=tcp udp both" example:"tcp"`
-	TrafficMultiplier *float64          `json:"traffic_multiplier,omitempty" binding:"omitempty,gte=0,lte=1000000" example:"1.5"`
-	SortOrder         *int              `json:"sort_order,omitempty" example:"100"`
-	Remark            *string           `json:"remark,omitempty" example:"Updated remark"`
+	Protocol          *string  `json:"protocol,omitempty" binding:"omitempty,oneof=tcp udp both" example:"tcp"`
+	TrafficMultiplier *float64 `json:"traffic_multiplier,omitempty" binding:"omitempty,gte=0,lte=1000000" example:"1.5"`
+	SortOrder         *int     `json:"sort_order,omitempty" example:"100"`
+	Remark            *string  `json:"remark,omitempty" example:"Updated remark"`
 }
 
 // UpdateStatusRequest represents a request to update forward rule status.

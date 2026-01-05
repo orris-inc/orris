@@ -27,10 +27,10 @@ type UpdateForwardRuleCommand struct {
 	TargetNodeSID      *string // nil means no update, empty string means clear, non-empty means set to this node
 	BindIP             *string // nil means no update, empty string means clear
 	IPVersion          *string // auto, ipv4, ipv6
-	Protocol           *string
-	TrafficMultiplier  *float64 // nil means no update (0-1000000)
-	SortOrder          *int     // nil means no update
-	Remark             *string
+	Protocol          *string
+	TrafficMultiplier *float64 // nil means no update (0-1000000)
+	SortOrder         *int     // nil means no update
+	Remark            *string
 }
 
 // UpdateForwardRuleUseCase handles forward rule updates.

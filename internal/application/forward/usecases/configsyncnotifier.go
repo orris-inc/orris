@@ -27,3 +27,12 @@ type NodeAddressChangeNotifier interface {
 	// This is called when a node's public_ipv4 or public_ipv6 changes.
 	NotifyNodeAddressChange(ctx context.Context, nodeID uint) error
 }
+
+// AgentConfigChangeNotifier defines the interface for notifying agent configuration changes.
+// This is used when agent-level settings (like blocked_protocols) change and need to be
+// synced to the agent.
+type AgentConfigChangeNotifier interface {
+	// NotifyAgentBlockedProtocolsChange notifies an agent that its blocked protocols changed.
+	// This triggers a full sync to deliver the updated configuration.
+	NotifyAgentBlockedProtocolsChange(ctx context.Context, agentID uint) error
+}
