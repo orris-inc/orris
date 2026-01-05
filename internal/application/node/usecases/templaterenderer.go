@@ -44,7 +44,7 @@ func (r *TemplateRenderer) RenderClash(nodes []*Node, password string) (string, 
 
 	// Replace placeholders
 	result := strings.Replace(tmpl, "# {{PROXIES}}", proxiesYAML, 1)
-	result = strings.Replace(result, "{{PROXY_NAMES}}", proxyNames, -1)
+	result = strings.ReplaceAll(result, "{{PROXY_NAMES}}", proxyNames)
 
 	return result, nil
 }
@@ -143,119 +143,11 @@ func (r *TemplateRenderer) extractProxyNames(nodes []*Node) string {
 	return strings.Join(names, ", ")
 }
 
-// quoteYAMLString wraps string in quotes if it contains YAML special characters
+// quoteYAMLString wraps node name in single quotes for YAML flow-style arrays.
+// Single quotes in the name are escaped by doubling them (YAML spec).
 func quoteYAMLString(s string) string {
-	if s == "" {
-		return "''"
-	}
-
-	// Check if string needs quoting
-	if needsYAMLQuoting(s) {
-		// Use single quotes and escape any existing single quotes by doubling them
-		escaped := strings.ReplaceAll(s, "'", "''")
-		return "'" + escaped + "'"
-	}
-
-	return s
-}
-
-// needsYAMLQuoting checks if a string requires quoting in YAML
-func needsYAMLQuoting(s string) bool {
-	// Special characters that require quoting
-	if strings.ContainsAny(s, ",:[]{}#&*!|>'\"%@`\\<>=~\n\r\t") {
-		return true
-	}
-
-	// Strings starting with special characters
-	if len(s) > 0 {
-		first := s[0]
-		if first == '-' || first == '?' || first == ' ' || first == '.' ||
-			first == '!' || first == '&' || first == '*' || first == '"' ||
-			first == '\'' || first == '|' || first == '>' || first == '@' ||
-			first == '`' || first == '[' || first == '{' {
-			return true
-		}
-	}
-
-	// Strings ending with special characters
-	if len(s) > 0 {
-		last := s[len(s)-1]
-		if last == ' ' || last == ':' {
-			return true
-		}
-	}
-
-	// YAML boolean keywords (case-insensitive)
-	lower := strings.ToLower(s)
-	switch lower {
-	case "true", "false", "yes", "no", "on", "off",
-		"null", "~",
-		".inf", "-.inf", "+.inf", ".nan":
-		return true
-	}
-
-	// Pure numeric strings (avoid being parsed as numbers)
-	if isNumericString(s) {
-		return true
-	}
-
-	// Octal (0o) or hexadecimal (0x) format
-	if len(s) >= 2 && s[0] == '0' {
-		second := s[1]
-		if second == 'o' || second == 'O' || second == 'x' || second == 'X' {
-			return true
-		}
-	}
-
-	return false
-}
-
-// isNumericString checks if string looks like a number
-func isNumericString(s string) bool {
-	if len(s) == 0 {
-		return false
-	}
-
-	start := 0
-	if s[0] == '+' || s[0] == '-' {
-		start = 1
-		if len(s) == 1 {
-			return false
-		}
-	}
-
-	hasDigit := false
-	hasDot := false
-	hasE := false
-
-	for i := start; i < len(s); i++ {
-		c := s[i]
-		switch {
-		case c >= '0' && c <= '9':
-			hasDigit = true
-		case c == '.':
-			if hasDot || hasE {
-				return false
-			}
-			hasDot = true
-		case c == 'e' || c == 'E':
-			if hasE || !hasDigit {
-				return false
-			}
-			hasE = true
-			hasDigit = false // Need digit after 'e'
-			if i+1 < len(s) && (s[i+1] == '+' || s[i+1] == '-') {
-				i++
-			}
-		case c == '_':
-			// YAML allows underscores in numbers (e.g., 1_000_000)
-			continue
-		default:
-			return false
-		}
-	}
-
-	return hasDigit
+	escaped := strings.ReplaceAll(s, "'", "''")
+	return "'" + escaped + "'"
 }
 
 // RenderSurge renders Surge template with node data (placeholder for future implementation)

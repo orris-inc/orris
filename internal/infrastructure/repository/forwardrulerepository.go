@@ -671,6 +671,7 @@ func (r *ForwardRuleRepositoryImpl) ListSystemRulesByTargetNodes(ctx context.Con
 		Where("status = ?", "enabled").
 		Where("rule_type IN ?", []string{"direct", "entry", "chain", "direct_chain"}).
 		Where("user_id IS NULL OR user_id = 0").
+		Order("sort_order ASC").
 		Find(&ruleModels).Error; err != nil {
 		r.logger.Errorw("failed to list system rules by target nodes", "node_count", len(nodeIDs), "error", err)
 		return nil, fmt.Errorf("failed to list system rules by target nodes: %w", err)
@@ -699,6 +700,7 @@ func (r *ForwardRuleRepositoryImpl) ListUserRulesForDelivery(ctx context.Context
 		Where("status = ?", "enabled").
 		Where("target_node_id IS NOT NULL").
 		Where("rule_type IN ?", []string{"direct", "entry", "chain", "direct_chain"}).
+		Order("sort_order ASC").
 		Find(&ruleModels).Error; err != nil {
 		r.logger.Errorw("failed to list user rules for delivery", "user_id", userID, "error", err)
 		return nil, fmt.Errorf("failed to list user rules for delivery: %w", err)

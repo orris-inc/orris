@@ -170,31 +170,20 @@ func handleMigrations(environment string) error {
 		return nil
 	}
 
-	// Check if goose table exists (first startup detection)
-	initialized, err := gooseStrategy.IsInitialized(database.Get())
+	// Check current migration version
+	version, err := gooseStrategy.GetVersion(database.Get())
 	if err != nil {
-		logger.Warn("failed to check goose initialization", "error", err)
-		return nil
-	}
-
-	if !initialized {
-		// First startup: execute all migrations
-		logger.Info("first startup detected, running migrations")
-		if err := gooseStrategy.Migrate(database.Get()); err != nil {
-			return fmt.Errorf("failed to run initial migrations: %w", err)
-		}
-		logger.Info("initial migrations completed successfully")
+		logger.Warn("failed to get migration version", "error", err)
 	} else {
-		// Already initialized: just show current version
-		version, err := gooseStrategy.GetVersion(database.Get())
-		if err != nil {
-			logger.Warn("failed to check migration status", "error", err)
-		} else {
-			logger.Info("current migration version", "version", version)
-		}
+		logger.Info("current migration version", "version", version)
 	}
 
-	logger.Info("migration check completed")
+	// Check for pending migrations and warn if any
+	if err := gooseStrategy.Status(database.Get()); err != nil {
+		logger.Warn("failed to check migration status", "error", err)
+	}
+
+	logger.Info("migration check completed, run 'migrate up' to apply pending migrations")
 
 	return nil
 }

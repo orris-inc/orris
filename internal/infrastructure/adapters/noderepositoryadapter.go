@@ -110,6 +110,7 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, link
 	if err := r.db.WithContext(ctx).
 		Where("id IN ?", nodeIDs).
 		Where("status = ?", string(nodevo.NodeStatusActive)).
+		Order("sort_order ASC").
 		Find(&nodeModels).Error; err != nil {
 		r.logger.Errorw("failed to query nodes", "error", err)
 		return nil, err
@@ -311,6 +312,7 @@ func (r *NodeRepositoryAdapter) getForwardedNodes(ctx context.Context, nodeIDs [
 	if err := r.db.WithContext(ctx).
 		Where("id IN ?", agentIDs).
 		Where("status = ?", "enabled").
+		Order("sort_order ASC").
 		Find(&agents).Error; err != nil {
 		r.logger.Warnw("failed to query forward agents", "error", err)
 		return nil
@@ -415,6 +417,7 @@ func (r *NodeRepositoryAdapter) getForwardPlanNodes(ctx context.Context, userID 
 		if err := r.db.WithContext(ctx).
 			Where("id IN ?", nodeIDs).
 			Where("status = ?", string(nodevo.NodeStatusActive)).
+			Order("sort_order ASC").
 			Find(&nodeModels).Error; err != nil {
 			r.logger.Errorw("failed to query target nodes", "error", err)
 			return nil, err
@@ -475,6 +478,7 @@ func (r *NodeRepositoryAdapter) getForwardPlanNodes(ctx context.Context, userID 
 		if err := r.db.WithContext(ctx).
 			Where("id IN ?", agentIDs).
 			Where("status = ?", "enabled").
+			Order("sort_order ASC").
 			Find(&agents).Error; err != nil {
 			r.logger.Warnw("failed to query forward agents", "error", err)
 			return nil, err
@@ -601,6 +605,7 @@ func (r *NodeRepositoryAdapter) getHybridPlanNodes(ctx context.Context, userID u
 			if err := r.db.WithContext(ctx).
 				Where("id IN ?", nodeIDs).
 				Where("status = ?", string(nodevo.NodeStatusActive)).
+				Order("sort_order ASC").
 				Find(&nodeModels).Error; err != nil {
 				r.logger.Errorw("failed to query nodes", "error", err)
 				return nil, err
@@ -809,6 +814,7 @@ func (r *NodeRepositoryAdapter) getUserForwardNodes(ctx context.Context, userID 
 		if err := r.db.WithContext(ctx).
 			Where("id IN ?", nodeIDs).
 			Where("status = ?", string(nodevo.NodeStatusActive)).
+			Order("sort_order ASC").
 			Find(&nodeModels).Error; err != nil {
 			r.logger.Errorw("failed to query target nodes", "error", err)
 			return nil, err
@@ -869,6 +875,7 @@ func (r *NodeRepositoryAdapter) getUserForwardNodes(ctx context.Context, userID 
 		if err := r.db.WithContext(ctx).
 			Where("id IN ?", agentIDs).
 			Where("status = ?", "enabled").
+			Order("sort_order ASC").
 			Find(&agents).Error; err != nil {
 			r.logger.Warnw("failed to query forward agents", "error", err)
 			return nil, err
