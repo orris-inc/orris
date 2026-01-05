@@ -74,6 +74,7 @@ type Router struct {
 	notificationHandler          *handlers.NotificationHandler
 	telegramHandler              *telegramHandlers.Handler
 	telegramService              *telegramApp.ServiceDDD
+	telegramPollingService       *telegramInfra.PollingService
 	forwardRuleHandler           *forwardRuleHandlers.Handler
 	forwardAgentHandler          *forwardAgentCrudHandlers.Handler
 	forwardAgentVersionHandler   *forwardAgentCrudHandlers.VersionHandler
@@ -463,6 +464,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Initialize Telegram notification components (only if configured)
 	var telegramHandler *telegramHandlers.Handler
 	var telegramServiceDDD *telegramApp.ServiceDDD
+	var telegramPollingService *telegramInfra.PollingService
 	if cfg.Telegram.IsConfigured() {
 		// Initialize Telegram Bot Service
 		telegramBotService := telegramInfra.NewBotService(cfg.Telegram)
@@ -484,21 +486,46 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 			log,
 		)
 
-		// Initialize Telegram Handler
+		// Initialize Telegram Handler (for webhook mode)
 		telegramHandler = telegramHandlers.NewHandler(telegramServiceDDD, log, cfg.Telegram.WebhookSecret)
 
-		// Setup Telegram webhook only if explicitly configured
-		if webhookURL := cfg.Telegram.GetWebhookURL(); webhookURL != "" {
-			if err := telegramBotService.SetWebhook(webhookURL); err != nil {
+		// Setup based on mode: webhook or polling
+		if cfg.Telegram.UsePolling() {
+			// Polling mode: no webhook URL configured
+			log.Infow("Telegram bot using polling mode (no webhook_url configured)")
+			serviceAdapter := telegramInfra.NewServiceAdapter(
+				telegramServiceDDD,
+				func(ctx context.Context, telegramUserID int64, telegramUsername, verifyCode string) error {
+					_, err := telegramServiceDDD.BindFromWebhook(ctx, telegramUserID, telegramUsername, verifyCode)
+					return err
+				},
+				func(ctx context.Context, telegramUserID int64) (bool, error) {
+					status, err := telegramServiceDDD.GetBindingStatusByTelegramID(ctx, telegramUserID)
+					if err != nil {
+						return false, err
+					}
+					return status.IsBound, nil
+				},
+			)
+			updateHandler := telegramInfra.NewPollingUpdateHandler(serviceAdapter, log)
+			telegramPollingService = telegramInfra.NewPollingService(telegramBotService, updateHandler, log)
+		} else {
+			// Webhook mode: webhook URL is configured
+			if err := telegramBotService.SetWebhook(cfg.Telegram.GetWebhookURL()); err != nil {
 				log.Warnw("Failed to set Telegram webhook",
 					"error", err,
-					"webhook_url", webhookURL)
+					"webhook_url", cfg.Telegram.GetWebhookURL())
 			} else {
-				log.Infow("Telegram webhook configured", "webhook_url", webhookURL)
+				log.Infow("Telegram webhook configured", "webhook_url", cfg.Telegram.GetWebhookURL())
 			}
 		}
 
-		log.Infow("Telegram notification service initialized")
+		log.Infow("Telegram notification service initialized", "mode", func() string {
+			if cfg.Telegram.UsePolling() {
+				return "polling"
+			}
+			return "webhook"
+		}())
 	} else {
 		log.Infow("Telegram notification service not configured, skipping")
 	}
@@ -1064,6 +1091,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		notificationHandler:          notificationHandler,
 		telegramHandler:              telegramHandler,
 		telegramService:              telegramServiceDDD,
+		telegramPollingService:       telegramPollingService,
 		forwardRuleHandler:           forwardRuleHandler,
 		forwardAgentHandler:          forwardAgentHandler,
 		forwardAgentVersionHandler:   forwardAgentVersionHandler,
@@ -1354,6 +1382,11 @@ func (r *Router) Run(addr string) error {
 
 // Shutdown gracefully shuts down the router
 func (r *Router) Shutdown() {
+	// Stop telegram polling service if running
+	if r.telegramPollingService != nil {
+		r.telegramPollingService.Stop()
+	}
+
 	// Close all SSE connections first to allow HTTP server shutdown to proceed quickly
 	if r.adminHub != nil {
 		r.adminHub.Shutdown()
@@ -1399,6 +1432,14 @@ func (r *Router) Shutdown() {
 // GetTelegramService returns the telegram service for scheduler use
 func (r *Router) GetTelegramService() *telegramApp.ServiceDDD {
 	return r.telegramService
+}
+
+// StartTelegramPolling starts the telegram polling service if configured
+func (r *Router) StartTelegramPolling(ctx context.Context) error {
+	if r.telegramPollingService != nil {
+		return r.telegramPollingService.Start(ctx)
+	}
+	return nil
 }
 
 // nodeSIDResolverAdapter adapts node repository for SID resolution.

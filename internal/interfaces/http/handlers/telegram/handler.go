@@ -173,7 +173,11 @@ func (h *Handler) HandleWebhook(c *gin.Context) {
 
 func (h *Handler) handleBindCommand(c *gin.Context, telegramUserID int64, username, code string) {
 	if code == "" {
-		_ = h.service.SendBotMessage(telegramUserID, "Please provide a verification code. Usage: /bind <code>")
+		msg := "⚠️ *缺少验证码 / Missing Code*\n\n" +
+			"用法 Usage: `/bind <code>`\n\n" +
+			"请在网站设置页面获取验证码\n" +
+			"Get your code from website settings"
+		_ = h.service.SendBotMessage(telegramUserID, msg)
 		utils.SuccessResponse(c, http.StatusOK, "error", gin.H{"message": "missing code"})
 		return
 	}
@@ -184,56 +188,101 @@ func (h *Handler) handleBindCommand(c *gin.Context, telegramUserID int64, userna
 			"telegram_user_id", telegramUserID,
 			"error", err,
 		)
-		_ = h.service.SendBotMessage(telegramUserID, "Binding failed: "+err.Error())
-		utils.SuccessResponse(c, http.StatusOK, "error", gin.H{"message": err.Error()})
+		msg := "❌ *绑定失败 / Binding Failed*\n\n" +
+			"验证码无效或已过期\n" +
+			"Invalid or expired verification code\n\n" +
+			"请检查验证码后重试\n" +
+			"Please check your code and try again"
+		_ = h.service.SendBotMessage(telegramUserID, msg)
+		utils.SuccessResponse(c, http.StatusOK, "error", gin.H{"message": "binding failed"})
 		return
 	}
 
 	// Send success message with reply keyboard for easy access to commands
-	_ = h.service.SendBotMessageWithKeyboard(telegramUserID, "✅ *Binding successful!* You will now receive notifications.\n\nUse the buttons below or type /status to check your settings.")
+	msg := "✅ *绑定成功 / Binding Successful*\n\n" +
+		"🔔 您将收到以下通知 / You will receive:\n" +
+		"• 订阅到期提醒 / Expiry reminders\n" +
+		"• 流量使用警告 / Traffic alerts\n\n" +
+		"使用 /status 查看设置，/unbind 解绑"
+	_ = h.service.SendBotMessageWithKeyboard(telegramUserID, msg)
 	utils.SuccessResponse(c, http.StatusOK, "success", resp)
 }
 
 func (h *Handler) handleUnbindCommand(c *gin.Context, telegramUserID int64) {
 	err := h.service.UnbindByTelegramID(c.Request.Context(), telegramUserID)
 	if err != nil {
-		_ = h.service.SendBotMessage(telegramUserID, "Unbind failed: "+err.Error())
-		utils.SuccessResponse(c, http.StatusOK, "error", gin.H{"message": err.Error()})
+		h.logger.Errorw("failed to unbind telegram from webhook",
+			"telegram_user_id", telegramUserID,
+			"error", err,
+		)
+		msg := "❌ *解绑失败 / Unbind Failed*\n\n" +
+			"操作失败，请稍后重试\n" +
+			"Operation failed, please try again later"
+		_ = h.service.SendBotMessage(telegramUserID, msg)
+		utils.SuccessResponse(c, http.StatusOK, "error", gin.H{"message": "unbind failed"})
 		return
 	}
 
-	_ = h.service.SendBotMessage(telegramUserID, "✅ Successfully unbound. You will no longer receive notifications.")
+	msg := "✅ *已解绑 / Account Unbound*\n\n" +
+		"🔕 您将不再收到通知\n" +
+		"You will no longer receive notifications\n\n" +
+		"随时使用 /bind <code> 重新连接"
+	_ = h.service.SendBotMessage(telegramUserID, msg)
 	utils.SuccessResponse(c, http.StatusOK, "success", nil)
 }
 
 func (h *Handler) handleStatusCommand(c *gin.Context, telegramUserID int64) {
 	status, err := h.service.GetBindingStatusByTelegramID(c.Request.Context(), telegramUserID)
 	if err != nil {
-		_ = h.service.SendBotMessage(telegramUserID, "Failed to get status: "+err.Error())
+		h.logger.Errorw("failed to get binding status from webhook",
+			"telegram_user_id", telegramUserID,
+			"error", err,
+		)
+		msg := "❌ *错误 / Error*\n\n" +
+			"获取状态失败，请稍后重试\n" +
+			"Failed to get status, please try again later"
+		_ = h.service.SendBotMessage(telegramUserID, msg)
 		utils.SuccessResponse(c, http.StatusOK, "error", nil)
 		return
 	}
 
 	if !status.IsBound {
-		_ = h.service.SendBotMessage(telegramUserID, "❌ You are not bound to any account.\n\nTo bind your account:\n1. Go to your account settings on the website\n2. Click 'Bind Telegram'\n3. Copy the verification code\n4. Send /bind <code> here")
+		msg := "🔗 *未连接 / Not Connected*\n\n" +
+			"您的 Telegram 尚未绑定账户\n\n" +
+			"*绑定步骤 / How to connect:*\n" +
+			"1️⃣ 访问网站设置页面\n" +
+			"2️⃣ 点击「绑定 Telegram」\n" +
+			"3️⃣ 复制验证码\n" +
+			"4️⃣ 发送 `/bind <验证码>`"
+		_ = h.service.SendBotMessage(telegramUserID, msg)
 	} else {
-		msg := "📊 *Notification Settings*\n\n" +
-			"Expiring Notifications: " + boolToStatus(status.Binding.NotifyExpiring) + "\n" +
-			"Traffic Notifications: " + boolToStatus(status.Binding.NotifyTraffic) + "\n" +
-			"Expiring Days: " + strconv.Itoa(status.Binding.ExpiringDays) + " days\n" +
-			"Traffic Threshold: " + strconv.Itoa(status.Binding.TrafficThreshold) + "%"
+		msg := "📊 *通知设置 / Settings*\n\n" +
+			"*状态 Status:* 🟢 已连接 Connected\n\n" +
+			"┌ *到期提醒 / Expiry Reminders*\n" +
+			"│ " + boolToStatusBilingual(status.Binding.NotifyExpiring) + "\n" +
+			"│ 提前 " + strconv.Itoa(status.Binding.ExpiringDays) + " 天提醒\n" +
+			"└\n" +
+			"┌ *流量警告 / Traffic Alerts*\n" +
+			"│ " + boolToStatusBilingual(status.Binding.NotifyTraffic) + "\n" +
+			"│ 阈值 Threshold: " + strconv.Itoa(status.Binding.TrafficThreshold) + "%\n" +
+			"└\n\n" +
+			"_在网站修改设置 / Modify on website_"
 		_ = h.service.SendBotMessage(telegramUserID, msg)
 	}
 	utils.SuccessResponse(c, http.StatusOK, "success", nil)
 }
 
 func (h *Handler) handleHelpCommand(c *gin.Context, telegramUserID int64) {
-	helpMsg := "🤖 *Available Commands*\n\n" +
-		"/bind <code> - Bind your account using the verification code\n" +
-		"/unbind - Unbind your account\n" +
-		"/status - View your notification settings\n" +
-		"/help - Show this help message\n\n" +
-		"To get started, visit your account settings on the website to get a verification code."
+	helpMsg := "🤖 *Orris 通知机器人*\n\n" +
+		"订阅到期和流量使用提醒服务\n" +
+		"Subscription & traffic notification service\n\n" +
+		"*命令 Commands:*\n" +
+		"├ /bind `<code>` — 绑定账户 Link account\n" +
+		"├ /status — 查看设置 View settings\n" +
+		"├ /unbind — 解绑账户 Disconnect\n" +
+		"└ /help — 显示帮助 Show help\n\n" +
+		"*开始使用 Getting Started:*\n" +
+		"在网站设置页面获取验证码，然后发送 `/bind <code>` 完成绑定"
 	// Send help message with reply keyboard for easy access to commands
 	_ = h.service.SendBotMessageWithKeyboard(telegramUserID, helpMsg)
 	utils.SuccessResponse(c, http.StatusOK, "success", nil)
@@ -244,4 +293,11 @@ func boolToStatus(b bool) string {
 		return "✅ ON"
 	}
 	return "❌ OFF"
+}
+
+func boolToStatusBilingual(b bool) string {
+	if b {
+		return "✅ 开启 ON"
+	}
+	return "❌ 关闭 OFF"
 }

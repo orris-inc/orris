@@ -54,6 +54,53 @@ func (s *BotService) DeleteWebhook() error {
 	return s.makeRequest(url, nil)
 }
 
+// GetUpdates retrieves updates using long polling
+// offset: Identifier of the first update to be returned
+// timeout: Timeout in seconds for long polling (0-60)
+func (s *BotService) GetUpdates(offset int64, timeout int) ([]Update, error) {
+	apiURL := fmt.Sprintf("%s/getUpdates", s.baseURL)
+
+	body := map[string]any{
+		"timeout": timeout,
+	}
+	if offset > 0 {
+		body["offset"] = offset
+	}
+
+	jsonBody, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request body: %w", err)
+	}
+
+	// Create a client with extended timeout for long polling
+	client := &http.Client{
+		Timeout: time.Duration(timeout+10) * time.Second,
+	}
+
+	req, err := http.NewRequest(http.MethodPost, apiURL, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var result getUpdatesResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	if !result.OK {
+		return nil, fmt.Errorf("telegram API error: %s", result.Description)
+	}
+
+	return result.Result, nil
+}
+
 // SendMessage sends a plain text message to a chat
 func (s *BotService) SendMessage(chatID int64, text string) error {
 	url := fmt.Sprintf("%s/sendMessage", s.baseURL)
@@ -117,6 +164,43 @@ type ReplyKeyboardMarkup struct {
 type apiResponse struct {
 	OK          bool   `json:"ok"`
 	Description string `json:"description,omitempty"`
+}
+
+// Update represents a Telegram update from getUpdates or webhook
+type Update struct {
+	UpdateID int64    `json:"update_id"`
+	Message  *Message `json:"message,omitempty"`
+}
+
+// Message represents a Telegram message
+type Message struct {
+	MessageID int64  `json:"message_id"`
+	From      *User  `json:"from,omitempty"`
+	Chat      *Chat  `json:"chat"`
+	Date      int64  `json:"date"`
+	Text      string `json:"text,omitempty"`
+}
+
+// User represents a Telegram user
+type User struct {
+	ID        int64  `json:"id"`
+	IsBot     bool   `json:"is_bot"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name,omitempty"`
+	Username  string `json:"username,omitempty"`
+}
+
+// Chat represents a Telegram chat
+type Chat struct {
+	ID   int64  `json:"id"`
+	Type string `json:"type"`
+}
+
+// getUpdatesResponse represents the response from getUpdates API
+type getUpdatesResponse struct {
+	OK          bool     `json:"ok"`
+	Result      []Update `json:"result"`
+	Description string   `json:"description,omitempty"`
 }
 
 // getMeResponse represents the response from getMe API

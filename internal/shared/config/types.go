@@ -183,8 +183,9 @@ type TelegramConfig struct {
 	// BotToken is the Telegram bot token from @BotFather
 	BotToken string `mapstructure:"bot_token"`
 	// WebhookURL is the public URL for receiving Telegram updates
+	// If empty, polling mode will be used instead
 	WebhookURL string `mapstructure:"webhook_url"`
-	// WebhookSecret is used to verify webhook requests (optional)
+	// WebhookSecret is used to verify webhook requests (required for webhook mode)
 	WebhookSecret string `mapstructure:"webhook_secret"`
 }
 
@@ -196,4 +197,9 @@ func (t *TelegramConfig) IsConfigured() bool {
 // GetWebhookURL returns the webhook URL if explicitly configured
 func (t *TelegramConfig) GetWebhookURL() string {
 	return t.WebhookURL
+}
+
+// UsePolling returns true if polling mode should be used (no webhook URL configured)
+func (t *TelegramConfig) UsePolling() bool {
+	return t.WebhookURL == ""
 }

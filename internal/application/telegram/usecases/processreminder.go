@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/orris-inc/orris/internal/domain/subscription"
@@ -254,7 +255,9 @@ func (uc *ProcessReminderUseCase) processTrafficUsage(ctx context.Context) (int,
 }
 
 func (uc *ProcessReminderUseCase) buildExpiringMessage(subs []*subscription.Subscription, days int) string {
-	msg := fmt.Sprintf("*Subscription Expiring Soon*\n\nThe following subscriptions will expire within %d days:\n\n", days)
+	msg := fmt.Sprintf("⏰ *订阅即将到期 / Expiring Soon*\n\n"+
+		"您有 %d 个订阅将在 %d 天内到期\n"+
+		"%d subscription(s) expiring within %d days:\n\n", len(subs), days, len(subs), days)
 	for _, sub := range subs {
 		// Use ceiling to ensure 23.5 hours shows as 1 day, not 0
 		hoursLeft := time.Until(sub.EndDate()).Hours()
@@ -262,28 +265,54 @@ func (uc *ProcessReminderUseCase) buildExpiringMessage(subs []*subscription.Subs
 		if daysLeft < 0 {
 			daysLeft = 0
 		}
-		msg += fmt.Sprintf("• Subscription `%s`: expires in *%d days* (%s)\n",
+		urgency := "🟡"
+		if daysLeft <= 1 {
+			urgency = "🔴"
+		} else if daysLeft <= 3 {
+			urgency = "🟠"
+		}
+		msg += fmt.Sprintf("%s `%s`\n   └ *%d 天后到期* / Expires in *%d day(s)*\n   └ %s\n",
+			urgency,
 			sub.SID(),
+			daysLeft,
 			daysLeft,
 			biztime.FormatInBizTimezone(sub.EndDate(), "2006-01-02"),
 		)
 	}
-	msg += "\nPlease renew your subscription to avoid service interruption."
+	msg += "\n💡 请及时续费，避免服务中断\nRenew now to avoid interruption"
 	return msg
 }
 
 func (uc *ProcessReminderUseCase) buildTrafficMessage(subs []highUsageInfo, threshold int) string {
-	msg := fmt.Sprintf("*Traffic Usage Alert*\n\nThe following plans have reached %d%% of their traffic limit:\n\n", threshold)
+	msg := fmt.Sprintf("📊 *流量使用警告 / Traffic Alert*\n\n"+
+		"以下套餐已使用超过 %d%% 流量\n"+
+		"Plans exceeded %d%% traffic usage:\n\n", threshold, threshold)
 	for _, item := range subs {
-		msg += fmt.Sprintf("• Plan `%s`: *%d%%* used (%s / %s)\n",
+		bar := buildProgressBar(item.Percent)
+		msg += fmt.Sprintf("📦 `%s`\n"+
+			"   %s *%d%%*\n"+
+			"   已用 Used: %s / %s\n\n",
 			item.PlanName,
+			bar,
 			item.Percent,
 			formatBytes(item.UsedBytes),
 			formatBytes(item.Limit),
 		)
 	}
-	msg += "\nConsider upgrading your plan or reducing usage."
+	msg += "💡 请注意流量使用，或考虑升级套餐\nMonitor usage or consider upgrading"
 	return msg
+}
+
+func buildProgressBar(percent int) string {
+	filled := percent / 10
+	if filled < 0 {
+		filled = 0
+	}
+	if filled > 10 {
+		filled = 10
+	}
+	empty := 10 - filled
+	return "▓" + strings.Repeat("█", filled) + strings.Repeat("░", empty) + "▓"
 }
 
 func formatBytes(bytes uint64) string {

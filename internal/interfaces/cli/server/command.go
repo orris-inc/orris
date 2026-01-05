@@ -22,6 +22,7 @@ import (
 	"github.com/orris-inc/orris/internal/infrastructure/database"
 	"github.com/orris-inc/orris/internal/infrastructure/migration"
 	"github.com/orris-inc/orris/internal/infrastructure/repository"
+	"github.com/orris-inc/orris/internal/infrastructure/scheduler"
 	httpRouter "github.com/orris-inc/orris/internal/interfaces/http"
 	"github.com/orris-inc/orris/internal/shared/authorization"
 	"github.com/orris-inc/orris/internal/shared/biztime"
@@ -106,6 +107,24 @@ func run(cmd *cobra.Command, args []string) error {
 	router := httpRouter.NewRouter(userAppService, database.Get(), cfg, logger.NewLogger())
 	router.SetupRoutes(cfg)
 
+	// Start telegram services if configured
+	var reminderScheduler *scheduler.ReminderScheduler
+	if telegramService := router.GetTelegramService(); telegramService != nil {
+		// Start reminder scheduler
+		reminderScheduler = scheduler.NewReminderScheduler(
+			telegramService.GetProcessReminderUseCase(),
+			logger.NewLogger(),
+		)
+		ctx := context.Background()
+		go reminderScheduler.Start(ctx)
+		logger.Info("telegram reminder scheduler started")
+
+		// Start polling service if configured (when no webhook URL)
+		if err := router.StartTelegramPolling(ctx); err != nil {
+			logger.Warn("failed to start telegram polling service", "error", err)
+		}
+	}
+
 	// HTTP Server setup
 	srv := &http.Server{
 		Addr:         cfg.Server.GetAddr(),
@@ -133,6 +152,12 @@ func run(cmd *cobra.Command, args []string) error {
 
 	logger.Info("shutting down server...")
 
+	// Stop reminder scheduler if running
+	if reminderScheduler != nil {
+		reminderScheduler.Stop()
+		logger.Info("telegram reminder scheduler stopped")
+	}
+
 	// Shutdown router first (closes SSE connections, flushes traffic data, etc.)
 	// This must happen before HTTP server shutdown to allow connections to close gracefully
 	router.Shutdown()
@@ -149,7 +174,7 @@ func run(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func handleMigrations(environment string) error {
+func handleMigrations(_ string) error {
 	if skipMigrationCheck {
 		logger.Info("skipping migration check")
 		return nil
