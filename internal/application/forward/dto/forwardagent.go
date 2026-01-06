@@ -2,6 +2,8 @@
 package dto
 
 import (
+	"time"
+
 	"github.com/orris-inc/orris/internal/domain/forward"
 )
 
@@ -20,6 +22,9 @@ type ForwardAgentDTO struct {
 	AllowedPortRange string          `json:"allowed_port_range,omitempty"`
 	BlockedProtocols []string        `json:"blocked_protocols,omitempty"` // Protocols blocked by this agent
 	SortOrder        int             `json:"sort_order"`                  // Custom sort order for UI display
+	MuteNotification bool            `json:"mute_notification"`           // Mute online/offline notifications for this agent
+	IsOnline         bool            `json:"is_online"`                   // Indicates if the agent is online (reported within 5 minutes)
+	LastSeenAt       *time.Time      `json:"last_seen_at,omitempty"`      // Last time the agent reported status
 	CreatedAt        string          `json:"created_at"`
 	UpdatedAt        string          `json:"updated_at"`
 	SystemStatus     *AgentStatusDTO `json:"system_status,omitempty"`
@@ -47,6 +52,9 @@ func ToForwardAgentDTO(agent *forward.ForwardAgent) *ForwardAgentDTO {
 		AllowedPortRange: allowedPortRange,
 		BlockedProtocols: agent.BlockedProtocols().ToStringSlice(),
 		SortOrder:        agent.SortOrder(),
+		MuteNotification: agent.MuteNotification(),
+		IsOnline:         agent.IsOnline(),
+		LastSeenAt:       agent.LastSeenAt(),
 		CreatedAt:        agent.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:        agent.UpdatedAt().Format("2006-01-02T15:04:05Z07:00"),
 	}

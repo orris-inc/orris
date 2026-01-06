@@ -31,6 +31,7 @@ type Node struct {
 	apiToken          string
 	tokenHash         string
 	sortOrder         int
+	muteNotification  bool // mute online/offline notifications for this node
 	maintenanceReason *string
 	routeConfig       *vo.RouteConfig // routing configuration for traffic splitting
 	lastSeenAt        *time.Time      // last time the node agent reported status
@@ -143,6 +144,7 @@ func ReconstructNode(
 	tokenHash string,
 	apiToken string,
 	sortOrder int,
+	muteNotification bool,
 	maintenanceReason *string,
 	routeConfig *vo.RouteConfig,
 	lastSeenAt *time.Time,
@@ -191,6 +193,7 @@ func ReconstructNode(
 		tokenHash:         tokenHash,
 		apiToken:          apiToken,
 		sortOrder:         sortOrder,
+		muteNotification:  muteNotification,
 		maintenanceReason: maintenanceReason,
 		routeConfig:       routeConfig,
 		lastSeenAt:        lastSeenAt,
@@ -574,6 +577,18 @@ func (n *Node) UpdateSortOrder(order int) error {
 	n.version++
 
 	return nil
+}
+
+// MuteNotification returns whether notifications are muted for this node
+func (n *Node) MuteNotification() bool {
+	return n.muteNotification
+}
+
+// SetMuteNotification sets the mute notification flag
+func (n *Node) SetMuteNotification(mute bool) {
+	n.muteNotification = mute
+	n.updatedAt = biztime.NowUTC()
+	n.version++
 }
 
 // UpdateRouteConfig updates the routing configuration

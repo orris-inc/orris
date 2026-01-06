@@ -32,8 +32,17 @@ type UpdatePreferencesRequest struct {
 
 // WebhookUpdate represents a Telegram webhook update
 type WebhookUpdate struct {
-	UpdateID int64           `json:"update_id"`
-	Message  *WebhookMessage `json:"message,omitempty"`
+	UpdateID      int64           `json:"update_id"`
+	Message       *WebhookMessage `json:"message,omitempty"`
+	CallbackQuery *CallbackQuery  `json:"callback_query,omitempty"`
+}
+
+// CallbackQuery represents a callback query from an inline keyboard button
+type CallbackQuery struct {
+	ID      string          `json:"id"`
+	From    *TelegramUser   `json:"from"`
+	Message *WebhookMessage `json:"message,omitempty"`
+	Data    string          `json:"data,omitempty"`
 }
 
 // WebhookMessage represents a Telegram message

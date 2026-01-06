@@ -21,6 +21,7 @@ type NodeDTO struct {
 	Tags             []string               `json:"tags,omitempty" example:"premium,fast" description:"Custom tags for categorization"`
 	CustomFields     map[string]interface{} `json:"custom_fields,omitempty" description:"Additional custom metadata fields"`
 	SortOrder        int                    `json:"sort_order" example:"100" description:"Display order for sorting nodes"`
+	MuteNotification bool                   `json:"mute_notification" example:"false" description:"Mute online/offline notifications for this node"`
 	// Trojan specific fields
 	TransportProtocol string     `json:"transport_protocol,omitempty" example:"tcp" enums:"tcp,ws,grpc" description:"Transport protocol for Trojan (tcp, ws, grpc)"`
 	Host              string     `json:"host,omitempty" example:"cdn.example.com" description:"WebSocket host header or gRPC service name"`
@@ -96,16 +97,16 @@ type NodeSystemStatusDTO struct {
 	CPUMHz       float64 `json:"cpu_mhz" example:"2396.4"`                       // CPU frequency in MHz
 
 	// Swap memory
-	SwapTotal   uint64  `json:"swap_total" example:"8589934592"`   // Total swap memory in bytes
-	SwapUsed    uint64  `json:"swap_used" example:"1073741824"`    // Used swap memory in bytes
-	SwapPercent float64 `json:"swap_percent" example:"12.50"`      // Swap usage percentage (0-100)
+	SwapTotal   uint64  `json:"swap_total" example:"8589934592"` // Total swap memory in bytes
+	SwapUsed    uint64  `json:"swap_used" example:"1073741824"`  // Used swap memory in bytes
+	SwapPercent float64 `json:"swap_percent" example:"12.50"`    // Swap usage percentage (0-100)
 
 	// Disk I/O
-	DiskReadBytes  uint64 `json:"disk_read_bytes" example:"1073741824"`  // Total disk read bytes
-	DiskWriteBytes uint64 `json:"disk_write_bytes" example:"536870912"`  // Total disk write bytes
-	DiskReadRate   uint64 `json:"disk_read_rate" example:"10485760"`     // Disk read rate in bytes per second
-	DiskWriteRate  uint64 `json:"disk_write_rate" example:"5242880"`     // Disk write rate in bytes per second
-	DiskIOPS       uint64 `json:"disk_iops" example:"1000"`              // Disk I/O operations per second
+	DiskReadBytes  uint64 `json:"disk_read_bytes" example:"1073741824"` // Total disk read bytes
+	DiskWriteBytes uint64 `json:"disk_write_bytes" example:"536870912"` // Total disk write bytes
+	DiskReadRate   uint64 `json:"disk_read_rate" example:"10485760"`    // Disk read rate in bytes per second
+	DiskWriteRate  uint64 `json:"disk_write_rate" example:"5242880"`    // Disk write rate in bytes per second
+	DiskIOPS       uint64 `json:"disk_iops" example:"1000"`             // Disk I/O operations per second
 
 	// Pressure Stall Information (PSI)
 	PSICPUSome    float64 `json:"psi_cpu_some" example:"0.50"`    // CPU pressure (some)
@@ -116,12 +117,12 @@ type NodeSystemStatusDTO struct {
 	PSIIOFull     float64 `json:"psi_io_full" example:"0.02"`     // I/O pressure (full)
 
 	// Network extended stats
-	NetworkRxPackets uint64 `json:"network_rx_packets" example:"1000000"`  // Total received packets
-	NetworkTxPackets uint64 `json:"network_tx_packets" example:"500000"`   // Total transmitted packets
-	NetworkRxErrors  uint64 `json:"network_rx_errors" example:"10"`        // Receive errors
-	NetworkTxErrors  uint64 `json:"network_tx_errors" example:"5"`         // Transmit errors
-	NetworkRxDropped uint64 `json:"network_rx_dropped" example:"2"`        // Receive dropped packets
-	NetworkTxDropped uint64 `json:"network_tx_dropped" example:"1"`        // Transmit dropped packets
+	NetworkRxPackets uint64 `json:"network_rx_packets" example:"1000000"` // Total received packets
+	NetworkTxPackets uint64 `json:"network_tx_packets" example:"500000"`  // Total transmitted packets
+	NetworkRxErrors  uint64 `json:"network_rx_errors" example:"10"`       // Receive errors
+	NetworkTxErrors  uint64 `json:"network_tx_errors" example:"5"`        // Transmit errors
+	NetworkRxDropped uint64 `json:"network_rx_dropped" example:"2"`       // Receive dropped packets
+	NetworkTxDropped uint64 `json:"network_tx_dropped" example:"1"`       // Transmit dropped packets
 
 	// Socket statistics
 	SocketsUsed      int `json:"sockets_used" example:"500"`       // Total sockets in use
@@ -131,9 +132,9 @@ type NodeSystemStatusDTO struct {
 	SocketsTCPTW     int `json:"sockets_tcp_tw" example:"100"`     // TCP TIME_WAIT sockets
 
 	// Process statistics
-	ProcessesTotal   uint64 `json:"processes_total" example:"200"`   // Total number of processes
-	ProcessesRunning uint64 `json:"processes_running" example:"5"`   // Running processes
-	ProcessesBlocked uint64 `json:"processes_blocked" example:"0"`   // Blocked processes
+	ProcessesTotal   uint64 `json:"processes_total" example:"200"` // Total number of processes
+	ProcessesRunning uint64 `json:"processes_running" example:"5"` // Running processes
+	ProcessesBlocked uint64 `json:"processes_blocked" example:"0"` // Blocked processes
 
 	// File descriptors
 	FileNrAllocated uint64 `json:"file_nr_allocated" example:"10000"` // Allocated file descriptors
@@ -148,11 +149,11 @@ type NodeSystemStatusDTO struct {
 	Hostname      string `json:"hostname,omitempty" example:"server-01"`            // Server hostname
 
 	// Virtual memory statistics
-	VMPageIn  uint64 `json:"vm_page_in" example:"1000000"`  // Pages paged in
-	VMPageOut uint64 `json:"vm_page_out" example:"500000"`  // Pages paged out
-	VMSwapIn  uint64 `json:"vm_swap_in" example:"1000"`     // Pages swapped in
-	VMSwapOut uint64 `json:"vm_swap_out" example:"500"`     // Pages swapped out
-	VMOOMKill uint64 `json:"vm_oom_kill" example:"0"`       // OOM killer invocations
+	VMPageIn  uint64 `json:"vm_page_in" example:"1000000"` // Pages paged in
+	VMPageOut uint64 `json:"vm_page_out" example:"500000"` // Pages paged out
+	VMSwapIn  uint64 `json:"vm_swap_in" example:"1000"`    // Pages swapped in
+	VMSwapOut uint64 `json:"vm_swap_out" example:"500"`    // Pages swapped out
+	VMOOMKill uint64 `json:"vm_oom_kill" example:"0"`      // OOM killer invocations
 
 	// Entropy pool
 	EntropyAvailable uint64 `json:"entropy_available" example:"3500"` // Available entropy bits
@@ -190,6 +191,7 @@ type UpdateNodeDTO struct {
 	Tags             []string               `json:"tags,omitempty" example:"premium,fast" description:"Custom tags for categorization"`
 	CustomFields     map[string]interface{} `json:"custom_fields,omitempty" description:"Additional custom metadata fields"`
 	SortOrder        *int                   `json:"sort_order,omitempty" example:"100" description:"Display order for sorting nodes"`
+	MuteNotification *bool                  `json:"mute_notification,omitempty" example:"false" description:"Mute online/offline notifications for this node"`
 	Route            *RouteConfigDTO        `json:"route,omitempty" description:"Routing configuration for traffic splitting (sing-box compatible, null to clear)"`
 }
 
@@ -230,6 +232,7 @@ func ToNodeDTO(n *node.Node) *NodeDTO {
 		EncryptionMethod:  n.EncryptionConfig().Method(),
 		Status:            n.Status().String(),
 		SortOrder:         n.SortOrder(),
+		MuteNotification:  n.MuteNotification(),
 		MaintenanceReason: n.MaintenanceReason(),
 		IsOnline:          n.IsOnline(),
 		LastSeenAt:        n.LastSeenAt(),

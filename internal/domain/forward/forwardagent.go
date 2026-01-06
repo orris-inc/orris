@@ -52,6 +52,8 @@ type ForwardAgent struct {
 	allowedPortRange *vo.PortRange       // allowed listen port range (nil means all ports allowed)
 	blockedProtocols vo.BlockedProtocols // protocols blocked by this agent (nil means no blocking)
 	sortOrder        int                 // custom sort order for UI display
+	muteNotification bool                // mute online/offline notifications for this agent
+	lastSeenAt       *time.Time          // last time the agent reported status
 	createdAt        time.Time
 	updatedAt        time.Time
 	tokenGenerator   services.TokenGenerator
@@ -126,6 +128,8 @@ func ReconstructForwardAgent(
 	allowedPortRange *vo.PortRange,
 	blockedProtocols vo.BlockedProtocols,
 	sortOrder int,
+	muteNotification bool,
+	lastSeenAt *time.Time,
 	createdAt, updatedAt time.Time,
 ) (*ForwardAgent, error) {
 	if id == 0 {
@@ -175,6 +179,8 @@ func ReconstructForwardAgent(
 		allowedPortRange: allowedPortRange,
 		blockedProtocols: blockedProtocols,
 		sortOrder:        sortOrder,
+		muteNotification: muteNotification,
+		lastSeenAt:       lastSeenAt,
 		createdAt:        createdAt,
 		updatedAt:        updatedAt,
 		tokenGenerator:   services.NewTokenGenerator(),
@@ -509,5 +515,35 @@ func (a *ForwardAgent) SortOrder() int {
 // UpdateSortOrder updates the custom sort order for UI display
 func (a *ForwardAgent) UpdateSortOrder(order int) {
 	a.sortOrder = order
+	a.updatedAt = biztime.NowUTC()
+}
+
+// MuteNotification returns whether notifications are muted for this agent
+func (a *ForwardAgent) MuteNotification() bool {
+	return a.muteNotification
+}
+
+// SetMuteNotification sets the mute notification flag
+func (a *ForwardAgent) SetMuteNotification(mute bool) {
+	a.muteNotification = mute
+	a.updatedAt = biztime.NowUTC()
+}
+
+// LastSeenAt returns the last time the agent reported status
+func (a *ForwardAgent) LastSeenAt() *time.Time {
+	return a.lastSeenAt
+}
+
+// IsOnline checks if agent is online (reported within 5 minutes)
+func (a *ForwardAgent) IsOnline() bool {
+	if a.lastSeenAt == nil {
+		return false
+	}
+	return time.Since(*a.lastSeenAt) < 5*time.Minute
+}
+
+// UpdateLastSeen updates the last seen timestamp
+func (a *ForwardAgent) UpdateLastSeen(t time.Time) {
+	a.lastSeenAt = &t
 	a.updatedAt = biztime.NowUTC()
 }

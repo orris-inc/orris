@@ -15,29 +15,35 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
+// SubscriptionTrafficBufferWriter defines the interface for writing subscription traffic to buffer.
+// Defined here to avoid cross-layer dependency on handlers package.
+type SubscriptionTrafficBufferWriter interface {
+	AddTraffic(nodeID, subscriptionID uint, upload, download int64)
+}
+
 // SubscriptionUsageRecorderAdapter adapts to record subscription-based usage
 // This adapter records usage by subscription_id for proper usage tracking
 //
-// Architecture: Agent → Adapter → MySQL
+// Architecture: Agent → Adapter → SubscriptionTrafficBuffer → Redis → MySQL
 type SubscriptionUsageRecorderAdapter struct {
-	subscriptionUsageRepo subscription.SubscriptionUsageRepository
-	logger                logger.Interface
+	trafficBuffer SubscriptionTrafficBufferWriter
+	logger        logger.Interface
 }
 
 // NewSubscriptionUsageRecorderAdapter creates a new subscription usage recorder adapter
-// Note: Directly writes to database for simplicity and reliability
+// Note: Writes to SubscriptionTrafficBuffer for unified traffic aggregation
 func NewSubscriptionUsageRecorderAdapter(
-	subscriptionUsageRepo subscription.SubscriptionUsageRepository,
+	trafficBuffer SubscriptionTrafficBufferWriter,
 	logger logger.Interface,
 ) nodeUsecases.SubscriptionUsageRecorder {
 	return &SubscriptionUsageRecorderAdapter{
-		subscriptionUsageRepo: subscriptionUsageRepo,
-		logger:                logger,
+		trafficBuffer: trafficBuffer,
+		logger:        logger,
 	}
 }
 
-// RecordSubscriptionUsage records subscription usage data directly to database
-func (a *SubscriptionUsageRecorderAdapter) RecordSubscriptionUsage(ctx context.Context, nodeID uint, subscriptionID uint, upload, download int64) error {
+// RecordSubscriptionUsage records subscription usage data to buffer
+func (a *SubscriptionUsageRecorderAdapter) RecordSubscriptionUsage(_ context.Context, nodeID uint, subscriptionID uint, upload, download int64) error {
 	// Validate subscription ID
 	if subscriptionID == 0 {
 		a.logger.Warnw("invalid subscription ID", "subscription_id", subscriptionID)
@@ -49,42 +55,10 @@ func (a *SubscriptionUsageRecorderAdapter) RecordSubscriptionUsage(ctx context.C
 		return nil
 	}
 
-	// Create period for current hour aggregation
-	// Truncate to hour in business timezone, then convert to UTC for storage
-	period := biztime.TruncateToHourInBiz(biztime.NowUTC())
+	// Write to traffic buffer for unified aggregation
+	a.trafficBuffer.AddTraffic(nodeID, subscriptionID, upload, download)
 
-	// Create domain entity
-	usage, err := subscription.NewSubscriptionUsage(subscription.ResourceTypeNode.String(), nodeID, &subscriptionID, period)
-	if err != nil {
-		a.logger.Errorw("failed to create subscription usage entity",
-			"error", err,
-			"node_id", nodeID,
-			"subscription_id", subscriptionID,
-		)
-		return err
-	}
-
-	// Accumulate usage
-	if err := usage.Accumulate(uint64(upload), uint64(download)); err != nil {
-		a.logger.Errorw("failed to accumulate usage",
-			"error", err,
-			"node_id", nodeID,
-			"subscription_id", subscriptionID,
-		)
-		return err
-	}
-
-	// Record in repository
-	if err := a.subscriptionUsageRepo.RecordUsage(ctx, usage); err != nil {
-		a.logger.Errorw("failed to record subscription usage",
-			"error", err,
-			"subscription_id", subscriptionID,
-			"node_id", nodeID,
-		)
-		return err
-	}
-
-	a.logger.Debugw("subscription usage recorded",
+	a.logger.Debugw("subscription usage added to buffer",
 		"subscription_id", subscriptionID,
 		"node_id", nodeID,
 		"upload", upload,
@@ -94,19 +68,14 @@ func (a *SubscriptionUsageRecorderAdapter) RecordSubscriptionUsage(ctx context.C
 	return nil
 }
 
-// BatchRecordSubscriptionUsage records multiple subscriptions' usage data directly to database
-func (a *SubscriptionUsageRecorderAdapter) BatchRecordSubscriptionUsage(ctx context.Context, nodeID uint, items []nodeUsecases.SubscriptionUsageItem) error {
+// BatchRecordSubscriptionUsage records multiple subscriptions' usage data to buffer
+func (a *SubscriptionUsageRecorderAdapter) BatchRecordSubscriptionUsage(_ context.Context, nodeID uint, items []nodeUsecases.SubscriptionUsageItem) error {
 	if len(items) == 0 {
 		return nil
 	}
 
-	// Use current hour as period for consistent aggregation
-	// Truncate to hour in business timezone, then convert to UTC for storage
-	period := biztime.TruncateToHourInBiz(biztime.NowUTC())
-
 	// Process each item
 	validCount := 0
-	errorCount := 0
 
 	for _, item := range items {
 		// Skip invalid subscription IDs
@@ -123,55 +92,16 @@ func (a *SubscriptionUsageRecorderAdapter) BatchRecordSubscriptionUsage(ctx cont
 			continue
 		}
 
-		// Create domain entity
-		subID := item.SubscriptionID
-		usage, err := subscription.NewSubscriptionUsage(subscription.ResourceTypeNode.String(), nodeID, &subID, period)
-		if err != nil {
-			a.logger.Errorw("failed to create subscription usage entity in batch",
-				"error", err,
-				"node_id", nodeID,
-				"subscription_id", item.SubscriptionID,
-			)
-			errorCount++
-			continue
-		}
-
-		// Accumulate usage
-		if err := usage.Accumulate(uint64(item.Upload), uint64(item.Download)); err != nil {
-			a.logger.Errorw("failed to accumulate usage in batch",
-				"error", err,
-				"node_id", nodeID,
-				"subscription_id", item.SubscriptionID,
-			)
-			errorCount++
-			continue
-		}
-
-		// Record in repository
-		if err := a.subscriptionUsageRepo.RecordUsage(ctx, usage); err != nil {
-			a.logger.Errorw("failed to record subscription usage in batch",
-				"error", err,
-				"node_id", nodeID,
-				"subscription_id", item.SubscriptionID,
-			)
-			errorCount++
-			continue
-		}
-
+		// Write to traffic buffer for unified aggregation
+		a.trafficBuffer.AddTraffic(nodeID, item.SubscriptionID, item.Upload, item.Download)
 		validCount++
 	}
 
-	a.logger.Infow("subscription usage batch processed",
+	a.logger.Debugw("subscription usage batch added to buffer",
 		"node_id", nodeID,
-		"success_count", validCount,
-		"error_count", errorCount,
+		"valid_count", validCount,
 		"total_count", len(items),
 	)
-
-	// Return error if all items failed
-	if validCount == 0 && errorCount > 0 {
-		return fmt.Errorf("failed to record any usage in batch")
-	}
 
 	return nil
 }

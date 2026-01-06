@@ -56,8 +56,19 @@ func NewProcessReminderUseCase(
 	}
 }
 
+// SetBotService sets the bot service for sending messages.
+// This allows injecting the bot service after the use case is created.
+func (uc *ProcessReminderUseCase) SetBotService(botService TelegramMessageSender) {
+	uc.botService = botService
+}
+
 // ProcessReminders implements the scheduler.ReminderProcessor interface
 func (uc *ProcessReminderUseCase) ProcessReminders(ctx context.Context) error {
+	if uc.botService == nil {
+		uc.logger.Debugw("reminder processing skipped: bot service not available")
+		return nil
+	}
+
 	expiringCount, expiringErrors := uc.processExpiringSubscriptions(ctx)
 	trafficCount, trafficErrors := uc.processTrafficUsage(ctx)
 

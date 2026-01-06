@@ -86,6 +86,11 @@ type SubscriptionTrafficCache interface {
 	// GetSubscriptionTraffic returns the real-time traffic for a node:subscription pair.
 	GetSubscriptionTraffic(ctx context.Context, nodeID, subscriptionID uint) (upload, download int64, exists bool)
 
+	// GetTotalTrafficBySubscriptionIDs returns the total real-time traffic (upload + download)
+	// for the given subscription IDs, aggregated across all nodes.
+	// This is used for quota checking where we need to combine Redis real-time values with MySQL persisted values.
+	GetTotalTrafficBySubscriptionIDs(ctx context.Context, subscriptionIDs []uint) (map[uint]uint64, error)
+
 	// FlushToDatabase flushes all pending traffic to MySQL subscription_usages table.
 	FlushToDatabase(ctx context.Context) error
 }
@@ -361,4 +366,106 @@ func (c *RedisSubscriptionTrafficCache) atomicUpdateLastFlushed(ctx context.Cont
 		return false, err
 	}
 	return result == 1, nil
+}
+
+// GetTotalTrafficBySubscriptionIDs returns the total real-time traffic (upload + download)
+// for the given subscription IDs, aggregated across all nodes.
+// It scans all active keys in Redis and sums up the traffic for each requested subscription.
+// Note: This returns only the unflushed real-time traffic, not the persisted MySQL values.
+func (c *RedisSubscriptionTrafficCache) GetTotalTrafficBySubscriptionIDs(ctx context.Context, subscriptionIDs []uint) (map[uint]uint64, error) {
+	if len(subscriptionIDs) == 0 {
+		return make(map[uint]uint64), nil
+	}
+
+	// Build a set for quick lookup
+	subscriptionIDSet := make(map[uint]struct{}, len(subscriptionIDs))
+	for _, id := range subscriptionIDs {
+		subscriptionIDSet[id] = struct{}{}
+	}
+
+	// Initialize result map
+	result := make(map[uint]uint64, len(subscriptionIDs))
+	for _, id := range subscriptionIDs {
+		result[id] = 0
+	}
+
+	// Get all active keys from the set
+	keys, err := c.client.SMembers(ctx, activeSubscriptionsSetKey).Result()
+	if err != nil && err != redis.Nil {
+		c.logger.Errorw("failed to get active subscriptions set for quota check", "error", err)
+		return nil, fmt.Errorf("failed to get active subscriptions: %w", err)
+	}
+
+	if len(keys) == 0 {
+		return result, nil
+	}
+
+	// Filter keys that match our target subscriptions and build pipeline
+	type keyInfo struct {
+		key            string
+		subscriptionID uint
+	}
+	matchingKeys := make([]keyInfo, 0)
+
+	for _, key := range keys {
+		_, subscriptionID, err := parseSubscriptionTrafficKey(key)
+		if err != nil {
+			c.logger.Warnw("failed to parse subscription traffic key", "key", key, "error", err)
+			continue
+		}
+
+		// Only process keys for subscriptions we care about
+		if _, ok := subscriptionIDSet[subscriptionID]; ok {
+			matchingKeys = append(matchingKeys, keyInfo{key: key, subscriptionID: subscriptionID})
+		}
+	}
+
+	if len(matchingKeys) == 0 {
+		return result, nil
+	}
+
+	// Use pipeline for batch Redis queries (performance optimization)
+	pipe := c.client.Pipeline()
+	cmds := make([]*redis.MapStringStringCmd, len(matchingKeys))
+	for i, ki := range matchingKeys {
+		cmds[i] = pipe.HGetAll(ctx, ki.key)
+	}
+
+	_, err = pipe.Exec(ctx)
+	if err != nil && err != redis.Nil {
+		c.logger.Warnw("failed to execute pipeline for quota check", "error", err)
+		// Fallback: return partial results (zeros)
+		return result, nil
+	}
+
+	// Process pipeline results
+	for i, cmd := range cmds {
+		values, err := cmd.Result()
+		if err != nil || len(values) == 0 {
+			continue
+		}
+
+		// Parse current values and last_flushed values
+		currentUpload, _ := strconv.ParseInt(values[subFieldUpload], 10, 64)
+		currentDownload, _ := strconv.ParseInt(values[subFieldDownload], 10, 64)
+		lastFlushedUpload, _ := strconv.ParseInt(values[subFieldLastFlushedUpload], 10, 64)
+		lastFlushedDownload, _ := strconv.ParseInt(values[subFieldLastFlushedDownload], 10, 64)
+
+		// Calculate unflushed traffic (traffic that hasn't been persisted to MySQL yet)
+		uploadDelta := currentUpload - lastFlushedUpload
+		downloadDelta := currentDownload - lastFlushedDownload
+
+		// Ensure non-negative values
+		if uploadDelta < 0 {
+			uploadDelta = 0
+		}
+		if downloadDelta < 0 {
+			downloadDelta = 0
+		}
+
+		// Add to result
+		result[matchingKeys[i].subscriptionID] += uint64(uploadDelta + downloadDelta)
+	}
+
+	return result, nil
 }

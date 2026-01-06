@@ -313,6 +313,7 @@ type UpdateNodeRequest struct {
 	Description      *string           `json:"description,omitempty" example:"Updated description"`
 	SortOrder        *int              `json:"sort_order,omitempty" example:"2"`
 	GroupSID         *string           `json:"group_sid,omitempty" example:"rg_xK9mP2vL3nQ" comment:"Resource group SID to associate with (use empty string to remove)"`
+	MuteNotification *bool             `json:"mute_notification,omitempty" example:"false" comment:"Mute online/offline notifications for this node"`
 	// Trojan specific fields
 	TransportProtocol *string `json:"transport_protocol,omitempty" binding:"omitempty,oneof=tcp ws grpc" example:"ws" comment:"Transport protocol for Trojan (tcp, ws, grpc)"`
 	Host              *string `json:"host,omitempty" example:"cdn.example.com" comment:"WebSocket host header or gRPC service name"`
@@ -340,6 +341,7 @@ func (r *UpdateNodeRequest) ToCommand(sid string) usecases.UpdateNodeCommand {
 		Description:             r.Description,
 		SortOrder:               r.SortOrder,
 		GroupSID:                r.GroupSID,
+		MuteNotification:        r.MuteNotification,
 		TrojanTransportProtocol: r.TransportProtocol,
 		TrojanHost:              r.Host,
 		TrojanPath:              r.Path,

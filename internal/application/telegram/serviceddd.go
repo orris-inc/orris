@@ -131,11 +131,19 @@ func (s *ServiceDDD) GetBindingStatusByTelegramID(ctx context.Context, telegramU
 
 // SendBotMessage sends a message via the telegram bot
 func (s *ServiceDDD) SendBotMessage(chatID int64, text string) error {
+	if s.botService == nil {
+		s.logger.Debugw("telegram message skipped: bot service not available", "chat_id", chatID)
+		return nil
+	}
 	return s.botService.SendMessage(chatID, text)
 }
 
 // SendBotMessageWithKeyboard sends a message with a reply keyboard via the telegram bot
 func (s *ServiceDDD) SendBotMessageWithKeyboard(chatID int64, text string) error {
+	if s.botService == nil {
+		s.logger.Debugw("telegram message skipped: bot service not available", "chat_id", chatID)
+		return nil
+	}
 	keyboard := s.botService.GetDefaultReplyKeyboard()
 	return s.botService.SendMessageWithKeyboard(chatID, text, keyboard)
 }
@@ -143,4 +151,18 @@ func (s *ServiceDDD) SendBotMessageWithKeyboard(chatID int64, text string) error
 // GetProcessReminderUseCase returns the reminder processor for scheduler use
 func (s *ServiceDDD) GetProcessReminderUseCase() *usecases.ProcessReminderUseCase {
 	return s.processReminderUC
+}
+
+// SetBotService sets the BotService for sending messages.
+// This method allows injecting the BotService after ServiceDDD is created,
+// supporting dependency injection patterns where BotService is created later.
+func (s *ServiceDDD) SetBotService(botService BotService) {
+	s.botService = botService
+	// Also update the use cases that need the bot service
+	if s.processReminderUC != nil {
+		s.processReminderUC.SetBotService(botService)
+	}
+	if s.getStatusUC != nil {
+		s.getStatusUC.SetBotLinkProvider(botService)
+	}
 }

@@ -28,6 +28,7 @@ type UpdateNodeCommand struct {
 	SortOrder        *int
 	Status           *string
 	GroupSID         *string // Resource group SID (empty string to remove association)
+	MuteNotification *bool   // nil: no update, non-nil: set mute notification flag
 	// Trojan specific fields
 	TrojanTransportProtocol *string
 	TrojanHost              *string
@@ -325,6 +326,11 @@ func (uc *UpdateNodeUseCase) applyUpdates(n *node.Node, cmd UpdateNodeCommand) e
 		}
 	}
 
+	// Update mute notification
+	if cmd.MuteNotification != nil {
+		n.SetMuteNotification(*cmd.MuteNotification)
+	}
+
 	// Update status
 	if cmd.Status != nil {
 		status := vo.NodeStatus(*cmd.Status)
@@ -382,7 +388,7 @@ func (uc *UpdateNodeUseCase) validateCommand(cmd UpdateNodeCommand) error {
 		cmd.SubscriptionPort == nil && cmd.Method == nil && cmd.Plugin == nil &&
 		len(cmd.PluginOpts) == 0 && cmd.Region == nil && cmd.Tags == nil &&
 		cmd.Description == nil && cmd.SortOrder == nil && cmd.Status == nil &&
-		cmd.GroupSID == nil &&
+		cmd.GroupSID == nil && cmd.MuteNotification == nil &&
 		cmd.TrojanTransportProtocol == nil && cmd.TrojanHost == nil &&
 		cmd.TrojanPath == nil && cmd.TrojanSNI == nil && cmd.TrojanAllowInsecure == nil &&
 		cmd.Route == nil && !cmd.ClearRoute {

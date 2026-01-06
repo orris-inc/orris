@@ -3,11 +3,11 @@ package middleware
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 
+	"github.com/orris-inc/orris/internal/application/subscription/usecases"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/shared/constants"
@@ -17,27 +17,27 @@ import (
 
 // ForwardQuotaMiddleware enforces forward rule quotas based on user's subscription plan
 type ForwardQuotaMiddleware struct {
-	forwardRuleRepo       forward.Repository
-	subscriptionRepo      subscription.SubscriptionRepository
-	subscriptionUsageRepo subscription.SubscriptionUsageRepository
-	planRepo              subscription.PlanRepository
-	logger                logger.Interface
+	forwardRuleRepo  forward.Repository
+	subscriptionRepo subscription.SubscriptionRepository
+	planRepo         subscription.PlanRepository
+	quotaService     usecases.QuotaService
+	logger           logger.Interface
 }
 
 // NewForwardQuotaMiddleware creates a new forward quota middleware
 func NewForwardQuotaMiddleware(
 	forwardRuleRepo forward.Repository,
 	subscriptionRepo subscription.SubscriptionRepository,
-	subscriptionUsageRepo subscription.SubscriptionUsageRepository,
 	planRepo subscription.PlanRepository,
+	quotaService usecases.QuotaService,
 	logger logger.Interface,
 ) *ForwardQuotaMiddleware {
 	return &ForwardQuotaMiddleware{
-		forwardRuleRepo:       forwardRuleRepo,
-		subscriptionRepo:      subscriptionRepo,
-		subscriptionUsageRepo: subscriptionUsageRepo,
-		planRepo:              planRepo,
-		logger:                logger,
+		forwardRuleRepo:  forwardRuleRepo,
+		subscriptionRepo: subscriptionRepo,
+		planRepo:         planRepo,
+		quotaService:     quotaService,
+		logger:           logger,
 	}
 }
 
@@ -165,7 +165,8 @@ func (m *ForwardQuotaMiddleware) CheckRuleLimit() gin.HandlerFunc {
 	}
 }
 
-// CheckTrafficLimit verifies that the user hasn't exceeded their forward traffic limit
+// CheckTrafficLimit verifies that the user hasn't exceeded their forward traffic limit.
+// Uses QuotaService for unified quota calculation.
 func (m *ForwardQuotaMiddleware) CheckTrafficLimit() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, exists := c.Get("user_id")
@@ -192,10 +193,10 @@ func (m *ForwardQuotaMiddleware) CheckTrafficLimit() gin.HandlerFunc {
 			return
 		}
 
-		// Get user's active subscriptions
-		subscriptions, err := m.subscriptionRepo.GetActiveByUserID(c.Request.Context(), currentUserID)
+		// Use QuotaService to check if user's forward quota is exceeded
+		exceeded, err := m.quotaService.CheckUserForwardQuotaExceeded(c.Request.Context(), currentUserID)
 		if err != nil {
-			m.logger.Errorw("failed to get active subscriptions for traffic quota check",
+			m.logger.Errorw("failed to check forward quota using QuotaService",
 				"user_id", currentUserID,
 				"error", err,
 			)
@@ -204,111 +205,9 @@ func (m *ForwardQuotaMiddleware) CheckTrafficLimit() gin.HandlerFunc {
 			return
 		}
 
-		// If no subscriptions, deny access
-		if len(subscriptions) == 0 {
-			m.logger.Warnw("user has no active subscription for forward traffic",
-				"user_id", currentUserID,
-			)
-			utils.ErrorResponse(c, http.StatusForbidden, "no active subscription with forward feature")
-			c.Abort()
-			return
-		}
-
-		// Find the highest traffic limit among all active Forward-type subscriptions
-		// and collect their subscription IDs for traffic query
-		var maxTrafficLimit uint64
-		var forwardSubscriptionIDs []uint
-		for _, sub := range subscriptions {
-			plan, err := m.planRepo.GetByID(c.Request.Context(), sub.PlanID())
-			if err != nil {
-				m.logger.Warnw("failed to get plan for subscription",
-					"subscription_id", sub.ID(),
-					"plan_id", sub.PlanID(),
-					"error", err,
-				)
-				continue
-			}
-
-			if plan == nil {
-				continue
-			}
-
-			// Skip non-forward plans
-			if !plan.PlanType().IsForward() {
-				continue
-			}
-
-			// Collect Forward-type subscription ID
-			forwardSubscriptionIDs = append(forwardSubscriptionIDs, sub.ID())
-
-			planFeatures := plan.Features()
-			if planFeatures == nil {
-				continue
-			}
-
-			limit, err := planFeatures.GetTrafficLimit()
-			if err != nil {
-				m.logger.Warnw("failed to get traffic limit from plan",
-					"subscription_id", sub.ID(),
-					"error", err,
-				)
-				continue
-			}
-
-			// 0 means unlimited
-			if limit == 0 {
-				c.Next()
-				return
-			}
-
-			if limit > maxTrafficLimit {
-				maxTrafficLimit = limit
-			}
-		}
-
-		// If no Forward-type subscriptions found, deny access
-		if len(forwardSubscriptionIDs) == 0 {
-			m.logger.Warnw("user has no active forward subscription",
-				"user_id", currentUserID,
-			)
-			utils.ErrorResponse(c, http.StatusForbidden, "no active subscription with forward feature")
-			c.Abort()
-			return
-		}
-
-		// If maxTrafficLimit is still 0 after checking all subscriptions, it means unlimited
-		if maxTrafficLimit == 0 {
-			c.Next()
-			return
-		}
-
-		// Get total forward traffic from subscription_usages table
-		usageSummary, err := m.subscriptionUsageRepo.GetTotalUsageBySubscriptionIDs(
-			c.Request.Context(),
-			subscription.ResourceTypeForwardRule.String(),
-			forwardSubscriptionIDs,
-			time.Time{}, // No time range limit - get all historical usage
-			time.Time{},
-		)
-		if err != nil {
-			m.logger.Errorw("failed to get user's total forward traffic from subscription_usages",
-				"user_id", currentUserID,
-				"subscription_ids", forwardSubscriptionIDs,
-				"error", err,
-			)
-			utils.ErrorResponse(c, http.StatusInternalServerError, "failed to check traffic quota")
-			c.Abort()
-			return
-		}
-
-		totalTraffic := usageSummary.Total
-
-		// Check if traffic limit exceeded
-		if totalTraffic >= maxTrafficLimit {
+		if exceeded {
 			m.logger.Warnw("user exceeded forward traffic limit",
 				"user_id", currentUserID,
-				"total_traffic", totalTraffic,
-				"max_limit", maxTrafficLimit,
 			)
 			utils.ErrorResponse(c, http.StatusForbidden, "forward traffic limit exceeded")
 			c.Abort()

@@ -22,15 +22,16 @@ type UpdateForwardAgentCommand struct {
 	AllowedPortRange *string   // nil: no update, empty string: clear (allow all), non-empty: set new range
 	BlockedProtocols *[]string // nil: no update, empty slice: clear (allow all), non-empty: set new protocols
 	SortOrder        *int      // nil: no update, non-nil: set new sort order
+	MuteNotification *bool     // nil: no update, non-nil: set mute notification flag
 }
 
 // UpdateForwardAgentUseCase handles forward agent updates.
 type UpdateForwardAgentUseCase struct {
-	repo                    forward.AgentRepository
-	resourceGroupRepo       resource.Repository
-	addressChangeNotifier   AgentAddressChangeNotifier
-	agentConfigNotifier     AgentConfigChangeNotifier
-	logger                  logger.Interface
+	repo                  forward.AgentRepository
+	resourceGroupRepo     resource.Repository
+	addressChangeNotifier AgentAddressChangeNotifier
+	agentConfigNotifier   AgentConfigChangeNotifier
+	logger                logger.Interface
 }
 
 // NewUpdateForwardAgentUseCase creates a new UpdateForwardAgentUseCase.
@@ -42,11 +43,11 @@ func NewUpdateForwardAgentUseCase(
 	logger logger.Interface,
 ) *UpdateForwardAgentUseCase {
 	return &UpdateForwardAgentUseCase{
-		repo:                    repo,
-		resourceGroupRepo:       resourceGroupRepo,
-		addressChangeNotifier:   addressChangeNotifier,
-		agentConfigNotifier:     agentConfigNotifier,
-		logger:                  logger,
+		repo:                  repo,
+		resourceGroupRepo:     resourceGroupRepo,
+		addressChangeNotifier: addressChangeNotifier,
+		agentConfigNotifier:   agentConfigNotifier,
+		logger:                logger,
 	}
 }
 
@@ -171,6 +172,11 @@ func (uc *UpdateForwardAgentUseCase) Execute(ctx context.Context, cmd UpdateForw
 	// Handle SortOrder update
 	if cmd.SortOrder != nil {
 		agent.UpdateSortOrder(*cmd.SortOrder)
+	}
+
+	// Handle MuteNotification update
+	if cmd.MuteNotification != nil {
+		agent.SetMuteNotification(*cmd.MuteNotification)
 	}
 
 	// Persist changes

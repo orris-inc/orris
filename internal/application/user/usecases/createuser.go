@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/orris-inc/orris/internal/application/user/dto"
 	domainUser "github.com/orris-inc/orris/internal/domain/user"
@@ -12,10 +13,26 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
+// AdminNewUserNotifier is the interface for notifying admins about new users
+type AdminNewUserNotifier interface {
+	NotifyNewUser(ctx context.Context, cmd AdminNewUserCommand) error
+}
+
+// AdminNewUserCommand contains data for new user notification
+type AdminNewUserCommand struct {
+	UserID    uint
+	UserSID   string
+	Email     string
+	Name      string
+	Source    string
+	CreatedAt time.Time
+}
+
 // CreateUserUseCase handles the business logic for creating a user
 type CreateUserUseCase struct {
-	userRepo domainUser.Repository
-	logger   logger.Interface
+	userRepo      domainUser.Repository
+	adminNotifier AdminNewUserNotifier // Optional, can be nil
+	logger        logger.Interface
 }
 
 // NewCreateUserUseCase creates a new create user use case
@@ -27,6 +44,11 @@ func NewCreateUserUseCase(
 		userRepo: userRepo,
 		logger:   logger,
 	}
+}
+
+// SetAdminNotifier sets the admin notifier (optional dependency injection)
+func (uc *CreateUserUseCase) SetAdminNotifier(notifier AdminNewUserNotifier) {
+	uc.adminNotifier = notifier
 }
 
 // Execute executes the create user use case
@@ -84,6 +106,25 @@ func (uc *CreateUserUseCase) Execute(ctx context.Context, request dto.CreateUser
 	}
 
 	uc.logger.Infow("user created successfully", "id", response.ID, "email", response.Email)
+
+	// Notify admins about new user (async, non-blocking)
+	if uc.adminNotifier != nil {
+		go func() {
+			notifyCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if err := uc.adminNotifier.NotifyNewUser(notifyCtx, AdminNewUserCommand{
+				UserID:    userEntity.ID(),
+				UserSID:   userEntity.SID(),
+				Email:     userEntity.Email().String(),
+				Name:      userEntity.Name().String(),
+				Source:    "admin_create",
+				CreatedAt: userEntity.CreatedAt(),
+			}); err != nil {
+				uc.logger.Warnw("failed to notify admins about new user", "user_id", userEntity.ID(), "error", err)
+			}
+		}()
+	}
+
 	return response, nil
 }
 

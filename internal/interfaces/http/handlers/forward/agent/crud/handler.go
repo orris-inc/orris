@@ -90,6 +90,7 @@ type UpdateForwardAgentRequest struct {
 	AllowedPortRange *string   `json:"allowed_port_range,omitempty" example:"80,443,8000-9000"`
 	BlockedProtocols *[]string `json:"blocked_protocols,omitempty"`        // Protocols to block (nil: no update, empty array: clear, non-empty: set new)
 	SortOrder        *int      `json:"sort_order,omitempty" example:"100"` // Custom sort order for UI display (lower values appear first)
+	MuteNotification *bool     `json:"mute_notification,omitempty"`        // Mute online/offline notifications for this agent
 }
 
 // UpdateAgentStatusRequest represents a request to update forward agent status.
@@ -198,6 +199,7 @@ func (h *Handler) UpdateAgent(c *gin.Context) {
 		AllowedPortRange: req.AllowedPortRange,
 		BlockedProtocols: req.BlockedProtocols,
 		SortOrder:        req.SortOrder,
+		MuteNotification: req.MuteNotification,
 	}
 
 	if err := h.updateAgentUC.Execute(c.Request.Context(), cmd); err != nil {

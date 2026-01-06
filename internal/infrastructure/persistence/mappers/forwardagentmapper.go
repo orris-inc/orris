@@ -76,6 +76,8 @@ func (m *ForwardAgentMapperImpl) ToEntity(model *models.ForwardAgentModel) (*for
 		allowedPortRange,
 		blockedProtocols,
 		model.SortOrder,
+		model.MuteNotification,
+		model.LastSeenAt,
 		model.CreatedAt,
 		model.UpdatedAt,
 	)
@@ -130,6 +132,8 @@ func (m *ForwardAgentMapperImpl) ToModel(entity *forward.ForwardAgent) (*models.
 		AllowedPortRange: allowedPortRange,
 		BlockedProtocols: blockedProtocols,
 		SortOrder:        entity.SortOrder(),
+		MuteNotification: entity.MuteNotification(),
+		LastSeenAt:       entity.LastSeenAt(),
 		CreatedAt:        entity.CreatedAt(),
 		UpdatedAt:        entity.UpdatedAt(),
 	}, nil

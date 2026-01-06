@@ -42,6 +42,12 @@ func NewGetBindingStatusUseCase(
 	}
 }
 
+// SetBotLinkProvider sets the bot link provider.
+// This allows injecting the provider after the use case is created.
+func (uc *GetBindingStatusUseCase) SetBotLinkProvider(provider BotLinkProvider) {
+	uc.botLinkProvider = provider
+}
+
 // Execute retrieves the binding status
 func (uc *GetBindingStatusUseCase) Execute(ctx context.Context, userID uint) (*dto.BindingStatusResponse, error) {
 	botLink := ""

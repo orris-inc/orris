@@ -29,6 +29,7 @@ type NodeModel struct {
 	Region            *string        `gorm:"size:100"`
 	Tags              datatypes.JSON
 	SortOrder         int            `gorm:"not null;default:0"`
+	MuteNotification  bool           `gorm:"not null;default:false"` // mute online/offline notifications
 	MaintenanceReason *string        `gorm:"size:500"`
 	RouteConfig       datatypes.JSON `gorm:"column:route_config"`                          // routing configuration for traffic splitting (JSON)
 	TokenHash         string         `gorm:"not null;uniqueIndex:idx_token_hash;size:255"` // hashed API token for node authentication

@@ -107,23 +107,28 @@ func run(cmd *cobra.Command, args []string) error {
 	router := httpRouter.NewRouter(userAppService, database.Get(), cfg, logger.NewLogger())
 	router.SetupRoutes(cfg)
 
-	// Start telegram services if configured
+	// Start telegram services using BotServiceManager
 	var reminderScheduler *scheduler.ReminderScheduler
+	ctx := context.Background()
+
+	// Start BotServiceManager (handles both polling and webhook modes with hot-reload)
+	if err := router.StartTelegramPolling(ctx); err != nil {
+		logger.Warn("failed to start telegram bot service", "error", err)
+	}
+
+	// Start reminder scheduler if telegram service is available
 	if telegramService := router.GetTelegramService(); telegramService != nil {
-		// Start reminder scheduler
 		reminderScheduler = scheduler.NewReminderScheduler(
 			telegramService.GetProcessReminderUseCase(),
 			logger.NewLogger(),
 		)
-		ctx := context.Background()
 		go reminderScheduler.Start(ctx)
 		logger.Info("telegram reminder scheduler started")
-
-		// Start polling service if configured (when no webhook URL)
-		if err := router.StartTelegramPolling(ctx); err != nil {
-			logger.Warn("failed to start telegram polling service", "error", err)
-		}
 	}
+
+	// Start usage aggregation scheduler
+	router.StartUsageAggregationScheduler(ctx)
+	logger.Info("usage aggregation scheduler started")
 
 	// HTTP Server setup
 	srv := &http.Server{
@@ -188,6 +193,19 @@ func handleMigrations(_ string) error {
 		return nil
 	}
 
+	// Check if scripts directory exists, skip status check if not (e.g., production deployment)
+	if _, err := os.Stat(scriptsPath); os.IsNotExist(err) {
+		// Still try to get current version from database
+		strategy := migration.NewGooseStrategy(scriptsPath)
+		if gooseStrategy, ok := strategy.(*migration.GooseStrategy); ok {
+			if version, err := gooseStrategy.GetVersion(database.Get()); err == nil {
+				logger.Info("current migration version", "version", version)
+			}
+		}
+		logger.Info("migration scripts directory not found, skipping status check (this is normal in production)")
+		return nil
+	}
+
 	strategy := migration.NewGooseStrategy(scriptsPath)
 	gooseStrategy, ok := strategy.(*migration.GooseStrategy)
 	if !ok {
@@ -200,15 +218,8 @@ func handleMigrations(_ string) error {
 	if err != nil {
 		logger.Warn("failed to get migration version", "error", err)
 	} else {
-		logger.Info("current migration version", "version", version)
+		logger.Info("current database migration version", "version", version)
 	}
-
-	// Check for pending migrations and warn if any
-	if err := gooseStrategy.Status(database.Get()); err != nil {
-		logger.Warn("failed to check migration status", "error", err)
-	}
-
-	logger.Info("migration check completed, run 'migrate up' to apply pending migrations")
 
 	return nil
 }

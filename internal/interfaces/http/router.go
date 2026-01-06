@@ -17,8 +17,11 @@ import (
 	paymentGateway "github.com/orris-inc/orris/internal/application/payment/paymentgateway"
 	paymentUsecases "github.com/orris-inc/orris/internal/application/payment/usecases"
 	resourceUsecases "github.com/orris-inc/orris/internal/application/resource/usecases"
+	settingApp "github.com/orris-inc/orris/internal/application/setting"
 	subscriptionUsecases "github.com/orris-inc/orris/internal/application/subscription/usecases"
 	telegramApp "github.com/orris-inc/orris/internal/application/telegram"
+	telegramAdminApp "github.com/orris-inc/orris/internal/application/telegram/admin"
+	telegramAdminUsecases "github.com/orris-inc/orris/internal/application/telegram/admin/usecases"
 	"github.com/orris-inc/orris/internal/application/user"
 	"github.com/orris-inc/orris/internal/application/user/helpers"
 	"github.com/orris-inc/orris/internal/application/user/usecases"
@@ -30,6 +33,7 @@ import (
 	"github.com/orris-inc/orris/internal/infrastructure/config"
 	"github.com/orris-inc/orris/internal/infrastructure/email"
 	"github.com/orris-inc/orris/internal/infrastructure/repository"
+	"github.com/orris-inc/orris/internal/infrastructure/scheduler"
 	"github.com/orris-inc/orris/internal/infrastructure/services"
 	telegramInfra "github.com/orris-inc/orris/internal/infrastructure/telegram"
 	"github.com/orris-inc/orris/internal/infrastructure/template"
@@ -47,6 +51,7 @@ import (
 	"github.com/orris-inc/orris/internal/interfaces/http/middleware"
 	"github.com/orris-inc/orris/internal/interfaces/http/routes"
 	"github.com/orris-inc/orris/internal/shared/authorization"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	shareddb "github.com/orris-inc/orris/internal/shared/db"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/services/markdown"
@@ -63,6 +68,10 @@ type Router struct {
 	adminSubscriptionHandler     *adminHandlers.SubscriptionHandler
 	adminResourceGroupHandler    *adminHandlers.ResourceGroupHandler
 	adminTrafficStatsHandler     *adminHandlers.TrafficStatsHandler
+	adminTelegramHandler         *adminHandlers.AdminTelegramHandler
+	adminNotificationService     *telegramAdminApp.ServiceDDD
+	settingHandler               *adminHandlers.SettingHandler
+	settingService               *settingApp.ServiceDDD
 	planHandler                  *handlers.PlanHandler
 	subscriptionTokenHandler     *handlers.SubscriptionTokenHandler
 	paymentHandler               *handlers.PaymentHandler
@@ -74,7 +83,7 @@ type Router struct {
 	notificationHandler          *handlers.NotificationHandler
 	telegramHandler              *telegramHandlers.Handler
 	telegramService              *telegramApp.ServiceDDD
-	telegramPollingService       *telegramInfra.PollingService
+	telegramBotManager           *telegramInfra.BotServiceManager
 	forwardRuleHandler           *forwardRuleHandlers.Handler
 	forwardAgentHandler          *forwardAgentCrudHandlers.Handler
 	forwardAgentVersionHandler   *forwardAgentCrudHandlers.VersionHandler
@@ -95,6 +104,8 @@ type Router struct {
 	subscriptionTrafficCache     cache.SubscriptionTrafficCache
 	subscriptionTrafficBuffer    *nodeServices.SubscriptionTrafficBuffer
 	subscriptionTrafficFlushDone chan struct{}
+	adminNotificationScheduler   *scheduler.AdminNotificationScheduler
+	usageAggregationScheduler    *scheduler.UsageAggregationScheduler
 	logger                       logger.Interface
 	authMiddleware               *middleware.AuthMiddleware
 	subscriptionOwnerMiddleware  *middleware.SubscriptionOwnerMiddleware
@@ -244,6 +255,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	subscriptionPlanRepo := repository.NewPlanRepository(db, log)
 	subscriptionTokenRepo := repository.NewSubscriptionTokenRepository(db, log)
 	subscriptionUsageRepo := repository.NewSubscriptionUsageRepository(db, log)
+	subscriptionUsageStatsRepo := repository.NewSubscriptionUsageStatsRepository(db, log)
 	planPricingRepo := repository.NewPlanPricingRepository(db, log)
 	paymentRepo := repository.NewPaymentRepository(db)
 
@@ -283,6 +295,16 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	)
 	resetSubscriptionLinkUC := subscriptionUsecases.NewResetSubscriptionLinkUseCase(
 		subscriptionRepo, subscriptionPlanRepo, userRepo, log, subscriptionBaseURL,
+	)
+	aggregateUsageUC := subscriptionUsecases.NewAggregateUsageUseCase(
+		subscriptionUsageRepo, subscriptionUsageStatsRepo, log,
+	)
+
+	// Initialize usage aggregation scheduler with default retention days (90 days)
+	usageAggregationScheduler := scheduler.NewUsageAggregationScheduler(
+		aggregateUsageUC,
+		scheduler.DefaultRetentionDays,
+		log,
 	)
 
 	createPlanUC := subscriptionUsecases.NewCreatePlanUseCase(
@@ -461,74 +483,108 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	notificationHandler := handlers.NewNotificationHandler(notificationServiceDDD, log)
 
-	// Initialize Telegram notification components (only if configured)
+	// Initialize System Setting components
+	settingRepo := repository.NewSystemSettingRepository(db, log)
+	settingServiceDDD := settingApp.NewServiceDDD(settingRepo, cfg.Telegram, apiBaseURL, nil, log)
+	settingHandler := adminHandlers.NewSettingHandler(settingServiceDDD, log)
+	settingProvider := settingServiceDDD.GetSettingProvider()
+
+	// Initialize Telegram notification components using BotServiceManager for hot-reload support
 	var telegramHandler *telegramHandlers.Handler
 	var telegramServiceDDD *telegramApp.ServiceDDD
-	var telegramPollingService *telegramInfra.PollingService
-	if cfg.Telegram.IsConfigured() {
-		// Initialize Telegram Bot Service
-		telegramBotService := telegramInfra.NewBotService(cfg.Telegram)
+	var telegramBotManager *telegramInfra.BotServiceManager
 
-		// Initialize Telegram Verify Store (using existing redisClient)
-		telegramVerifyStore := cache.NewTelegramVerifyStore(redisClient)
+	// Initialize Telegram base components (regardless of initial config state)
+	// These components don't depend on whether Telegram is currently configured
+	telegramVerifyStore := cache.NewTelegramVerifyStore(redisClient)
+	telegramBindingRepo := repository.NewTelegramBindingRepository(db, log)
 
-		// Initialize Telegram Binding Repository
-		telegramBindingRepo := repository.NewTelegramBindingRepository(db, log)
+	// Initialize Telegram ServiceDDD (initially without BotService, will be managed by BotServiceManager)
+	telegramServiceDDD = telegramApp.NewServiceDDD(
+		telegramBindingRepo,
+		subscriptionRepo,
+		subscriptionUsageRepo,
+		subscriptionPlanRepo,
+		telegramVerifyStore,
+		nil, // BotService will be managed by BotServiceManager
+		log,
+	)
 
-		// Initialize Telegram ServiceDDD
-		telegramServiceDDD = telegramApp.NewServiceDDD(
-			telegramBindingRepo,
-			subscriptionRepo,
-			subscriptionUsageRepo,
-			subscriptionPlanRepo,
-			telegramVerifyStore,
-			telegramBotService,
-			log,
-		)
-
-		// Initialize Telegram Handler (for webhook mode)
-		telegramHandler = telegramHandlers.NewHandler(telegramServiceDDD, log, cfg.Telegram.WebhookSecret)
-
-		// Setup based on mode: webhook or polling
-		if cfg.Telegram.UsePolling() {
-			// Polling mode: no webhook URL configured
-			log.Infow("Telegram bot using polling mode (no webhook_url configured)")
-			serviceAdapter := telegramInfra.NewServiceAdapter(
-				telegramServiceDDD,
-				func(ctx context.Context, telegramUserID int64, telegramUsername, verifyCode string) error {
-					_, err := telegramServiceDDD.BindFromWebhook(ctx, telegramUserID, telegramUsername, verifyCode)
-					return err
-				},
-				func(ctx context.Context, telegramUserID int64) (bool, error) {
-					status, err := telegramServiceDDD.GetBindingStatusByTelegramID(ctx, telegramUserID)
-					if err != nil {
-						return false, err
-					}
-					return status.IsBound, nil
-				},
-			)
-			updateHandler := telegramInfra.NewPollingUpdateHandler(serviceAdapter, log)
-			telegramPollingService = telegramInfra.NewPollingService(telegramBotService, updateHandler, log)
-		} else {
-			// Webhook mode: webhook URL is configured
-			if err := telegramBotService.SetWebhook(cfg.Telegram.GetWebhookURL()); err != nil {
-				log.Warnw("Failed to set Telegram webhook",
-					"error", err,
-					"webhook_url", cfg.Telegram.GetWebhookURL())
-			} else {
-				log.Infow("Telegram webhook configured", "webhook_url", cfg.Telegram.GetWebhookURL())
+	// Create UpdateHandler for polling mode
+	serviceAdapter := telegramInfra.NewServiceAdapter(
+		telegramServiceDDD,
+		func(ctx context.Context, telegramUserID int64, telegramUsername, verifyCode string) error {
+			_, err := telegramServiceDDD.BindFromWebhook(ctx, telegramUserID, telegramUsername, verifyCode)
+			return err
+		},
+		func(ctx context.Context, telegramUserID int64) (bool, error) {
+			status, err := telegramServiceDDD.GetBindingStatusByTelegramID(ctx, telegramUserID)
+			if err != nil {
+				return false, err
 			}
-		}
+			return status.IsBound, nil
+		},
+	)
+	updateHandler := telegramInfra.NewPollingUpdateHandler(serviceAdapter, log)
 
-		log.Infow("Telegram notification service initialized", "mode", func() string {
-			if cfg.Telegram.UsePolling() {
-				return "polling"
-			}
-			return "webhook"
-		}())
-	} else {
-		log.Infow("Telegram notification service not configured, skipping")
-	}
+	// Create BotServiceManager with hot-reload support
+	telegramBotManager = telegramInfra.NewBotServiceManager(settingProvider, updateHandler, log)
+
+	// Inject BotServiceManager into ServiceAdapter (break circular dependency)
+	serviceAdapter.SetBotServiceGetter(telegramBotManager)
+
+	// Create DynamicBotService and inject into telegramServiceDDD
+	// This allows the service to send messages via webhook mode with hot-reload support
+	dynamicBotService := telegramInfra.NewDynamicBotService(telegramBotManager, log)
+	telegramServiceDDD.SetBotService(dynamicBotService)
+
+	// Subscribe BotServiceManager to setting changes for hot-reload
+	settingServiceDDD.Subscribe(telegramBotManager)
+
+	// Inject telegramTester to break circular dependency
+	// BotServiceManager implements TelegramConnectionTester interface
+	settingServiceDDD.SetTelegramTester(telegramBotManager)
+
+	// Initialize Telegram Handler (webhook secret will be retrieved dynamically from SettingProvider)
+	// For initial webhook secret, use env config as fallback
+	initialWebhookSecret := cfg.Telegram.WebhookSecret
+	telegramHandler = telegramHandlers.NewHandler(telegramServiceDDD, log, initialWebhookSecret)
+
+	// Inject SettingProvider for hot-reload support of webhook secret from database
+	telegramHandler.SetWebhookSecretProvider(settingProvider)
+
+	log.Infow("telegram components initialized with hot-reload support")
+
+	// Initialize admin notification components
+	var adminTelegramHandler *adminHandlers.AdminTelegramHandler
+	var adminNotificationServiceDDD *telegramAdminApp.ServiceDDD
+
+	// Admin notification initialization - uses BotServiceManager's BotService when available
+	adminVerifyStore := cache.NewAdminTelegramVerifyStore(redisClient)
+	adminBindingRepo := repository.NewAdminTelegramBindingRepository(db, log)
+	userRoleChecker := adapters.NewUserRoleCheckerAdapter(userRepo)
+
+	// Create admin notification service with DynamicBotService for message sending
+	// Note: dynamicBotService was already created above for telegramServiceDDD
+	// Reusing it here enables hot-reload support for admin notifications as well
+	adminNotificationServiceDDD = telegramAdminApp.NewServiceDDD(
+		adminBindingRepo,
+		adminVerifyStore,
+		dynamicBotService,  // BotService - uses DynamicBotService for hot-reload
+		telegramBotManager, // BotLinkProvider - get bot link from manager
+		userRoleChecker,
+		log,
+	)
+
+	adminTelegramHandler = adminHandlers.NewAdminTelegramHandler(adminNotificationServiceDDD, log)
+
+	// Inject admin service into telegram handler for /adminbind command support (webhook mode)
+	telegramHandler.SetAdminService(adminNotificationServiceDDD)
+
+	// Inject admin binder into service adapter for /adminbind command support (polling mode)
+	serviceAdapter.SetAdminBinder(adminNotificationServiceDDD)
+
+	log.Infow("admin notification components initialized")
 
 	// Create profile handler
 	profileHandler := handlers.NewProfileHandler(userService)
@@ -570,8 +626,18 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	getNodeConfigUC := nodeUsecases.NewGetNodeConfigUseCase(nodeRepoImpl, log)
 	getNodeSubscriptionsUC := nodeUsecases.NewGetNodeSubscriptionsUseCase(subscriptionRepo, nodeRepoImpl, log)
 
+	// Initialize subscription traffic cache and buffer for RESTful agent traffic reporting
+	// This is also used later by forwardQuotaMiddleware and nodeHubHandler
+	subscriptionTrafficCache := cache.NewRedisSubscriptionTrafficCache(
+		redisClient,
+		subscriptionUsageRepo,
+		log,
+	)
+	subscriptionTrafficBuffer := nodeServices.NewSubscriptionTrafficBuffer(subscriptionTrafficCache, log)
+	subscriptionTrafficBuffer.Start()
+
 	// Initialize agent report use cases with adapters
-	subscriptionUsageRecorder := adapters.NewSubscriptionUsageRecorderAdapter(subscriptionUsageRepo, log)
+	subscriptionUsageRecorder := adapters.NewSubscriptionUsageRecorderAdapter(subscriptionTrafficBuffer, log)
 	systemStatusUpdater := adapters.NewNodeSystemStatusUpdaterAdapter(redisClient, log)
 	onlineSubscriptionTracker := adapters.NewOnlineSubscriptionTrackerAdapter(log)
 	subscriptionIDResolver := adapters.NewSubscriptionIDResolverAdapter(subscriptionRepo, log)
@@ -591,6 +657,31 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	// Initialize forward agent repository (rule repo initialized earlier)
 	forwardAgentRepo := repository.NewForwardAgentRepository(db, log)
+
+	// Initialize admin notification processor and scheduler for offline alerts
+	// (requires forwardAgentRepo, nodeRepoImpl, and other repos to be initialized)
+	alertDeduplicator := cache.NewAlertDeduplicator(redisClient)
+	adminNotificationProcessor := telegramAdminApp.NewAdminNotificationProcessor(
+		adminBindingRepo,
+		userRepo,
+		subscriptionRepo,
+		subscriptionUsageRepo,
+		nodeRepoImpl,
+		forwardAgentRepo,
+		alertDeduplicator,
+		&botServiceProviderAdapter{telegramBotManager},
+		log,
+	)
+	adminNotificationScheduler := scheduler.NewAdminNotificationScheduler(adminNotificationProcessor, log)
+
+	// Initialize mute notification service and inject into telegram handler
+	muteNotificationUC := telegramAdminUsecases.NewMuteNotificationUseCase(forwardAgentRepo, nodeRepoImpl, log)
+	telegramHandler.SetMuteService(muteNotificationUC)
+	telegramHandler.SetCallbackAnswerer(dynamicBotService)
+
+	// Inject mute service and callback answerer into service adapter for polling mode callback query handling
+	serviceAdapter.SetMuteService(muteNotificationUC)
+	serviceAdapter.SetCallbackAnswerer(dynamicBotService)
 
 	// Initialize resource group membership use cases (need node and agent repos)
 	manageNodesUC := resourceUsecases.NewManageResourceGroupNodesUseCase(resourceGroupRepo, nodeRepoImpl, subscriptionPlanRepo, log)
@@ -885,14 +976,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		log,
 	)
 
-	// Initialize forward quota middleware
-	forwardQuotaMiddleware := middleware.NewForwardQuotaMiddleware(
-		forwardRuleRepo,
-		subscriptionRepo,
-		subscriptionUsageRepo,
-		subscriptionPlanRepo,
-		log,
-	)
+	// forwardQuotaMiddleware will be initialized after subscriptionTrafficCache is created
+	var forwardQuotaMiddleware *middleware.ForwardQuotaMiddleware
 
 	// Initialize forward rule handler (after probeService is available)
 	forwardRuleHandler := forwardRuleHandlers.NewHandler(
@@ -939,7 +1024,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	nodeStatusQuerierAdapter := adapters.NewNodeStatusQuerierAdapter(nodeRepoImpl, nodeStatusQuerier, log)
 	adminHub.SetNodeStatusQuerier(nodeStatusQuerierAdapter)
 
-	// Set OnNodeOnline callback to sync config and broadcast SSE event
+	// Set OnNodeOnline callback to sync config, broadcast SSE event, and send Telegram notification
 	agentHub.SetOnNodeOnline(func(nodeID uint) {
 		ctx := context.Background()
 
@@ -951,7 +1036,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 			)
 		}
 
-		// Broadcast SSE event
+		// Get node info
 		n, err := nodeRepoImpl.GetByID(ctx, nodeID)
 		if err != nil {
 			log.Warnw("failed to get node for SSE broadcast",
@@ -960,30 +1045,72 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 			)
 			return
 		}
-		if n != nil {
-			adminHub.BroadcastNodeOnline(n.SID(), n.Name())
+		if n == nil {
+			return
+		}
+
+		// Broadcast SSE event
+		adminHub.BroadcastNodeOnline(n.SID(), n.Name())
+
+		// Send Telegram notification (real-time online alert)
+		cmd := telegramAdminApp.NotifyNodeOnlineCommand{
+			NodeID:           nodeID,
+			NodeSID:          n.SID(),
+			NodeName:         n.Name(),
+			MuteNotification: n.MuteNotification(),
+		}
+		if err := adminNotificationServiceDDD.NotifyNodeOnline(ctx, cmd); err != nil {
+			log.Errorw("failed to send node online notification",
+				"node_sid", n.SID(),
+				"error", err,
+			)
 		}
 	})
 
-	// Set OnNodeOffline callback to broadcast SSE event
+	// Set OnNodeOffline callback to broadcast SSE event and send Telegram notification
 	agentHub.SetOnNodeOffline(func(nodeID uint) {
 		ctx := context.Background()
 
-		// Broadcast SSE event
+		// Get node info
 		n, err := nodeRepoImpl.GetByID(ctx, nodeID)
 		if err != nil {
-			log.Warnw("failed to get node for SSE broadcast",
+			log.Warnw("failed to get node for offline notification",
 				"node_id", nodeID,
 				"error", err,
 			)
 			return
 		}
-		if n != nil {
-			adminHub.BroadcastNodeOffline(n.SID(), n.Name())
+		if n == nil {
+			return
+		}
+
+		// Broadcast SSE event
+		adminHub.BroadcastNodeOffline(n.SID(), n.Name())
+
+		// Send Telegram notification (real-time offline alert)
+		var lastSeenAt time.Time
+		if n.LastSeenAt() != nil {
+			lastSeenAt = *n.LastSeenAt()
+		} else {
+			lastSeenAt = biztime.NowUTC()
+		}
+		cmd := telegramAdminApp.NotifyNodeOfflineCommand{
+			NodeID:           nodeID,
+			NodeSID:          n.SID(),
+			NodeName:         n.Name(),
+			LastSeenAt:       lastSeenAt,
+			OfflineMinutes:   0, // Just disconnected
+			MuteNotification: n.MuteNotification(),
+		}
+		if err := adminNotificationServiceDDD.NotifyNodeOffline(ctx, cmd); err != nil {
+			log.Errorw("failed to send node offline notification",
+				"node_sid", n.SID(),
+				"error", err,
+			)
 		}
 	})
 
-	// Set OnAgentOnline callback to sync config and broadcast SSE event
+	// Set OnAgentOnline callback to sync config, broadcast SSE event, and send Telegram notification
 	agentHub.SetOnAgentOnline(func(agentID uint) {
 		ctx := context.Background()
 
@@ -995,7 +1122,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 			)
 		}
 
-		// Broadcast SSE event
+		// Get agent info
 		agent, err := forwardAgentRepo.GetByID(ctx, agentID)
 		if err != nil {
 			log.Warnw("failed to get agent for SSE broadcast",
@@ -1004,42 +1131,85 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 			)
 			return
 		}
-		if agent != nil {
-			adminHub.BroadcastForwardAgentOnline(agent.SID(), agent.Name())
+		if agent == nil {
+			return
+		}
+
+		// Broadcast SSE event
+		adminHub.BroadcastForwardAgentOnline(agent.SID(), agent.Name())
+
+		// Send Telegram notification (real-time online alert)
+		cmd := telegramAdminApp.NotifyAgentOnlineCommand{
+			AgentID:          agentID,
+			AgentSID:         agent.SID(),
+			AgentName:        agent.Name(),
+			MuteNotification: agent.MuteNotification(),
+		}
+		if err := adminNotificationServiceDDD.NotifyAgentOnline(ctx, cmd); err != nil {
+			log.Errorw("failed to send agent online notification",
+				"agent_sid", agent.SID(),
+				"error", err,
+			)
 		}
 	})
 
-	// Set OnAgentOffline callback to broadcast SSE event
+	// Set OnAgentOffline callback to broadcast SSE event and send Telegram notification
 	agentHub.SetOnAgentOffline(func(agentID uint) {
 		ctx := context.Background()
 
-		// Broadcast SSE event
+		// Get agent info
 		agent, err := forwardAgentRepo.GetByID(ctx, agentID)
 		if err != nil {
-			log.Warnw("failed to get agent for SSE broadcast",
+			log.Warnw("failed to get agent for offline notification",
 				"agent_id", agentID,
 				"error", err,
 			)
 			return
 		}
-		if agent != nil {
-			adminHub.BroadcastForwardAgentOffline(agent.SID(), agent.Name())
+		if agent == nil {
+			return
+		}
+
+		// Broadcast SSE event
+		adminHub.BroadcastForwardAgentOffline(agent.SID(), agent.Name())
+
+		// Send Telegram notification (real-time offline alert)
+		cmd := telegramAdminApp.NotifyAgentOfflineCommand{
+			AgentID:          agentID,
+			AgentSID:         agent.SID(),
+			AgentName:        agent.Name(),
+			LastSeenAt:       biztime.NowUTC(), // Use current time as agent doesn't track LastSeenAt
+			OfflineMinutes:   0,                // Just disconnected
+			MuteNotification: agent.MuteNotification(),
+		}
+		if err := adminNotificationServiceDDD.NotifyAgentOffline(ctx, cmd); err != nil {
+			log.Errorw("failed to send agent offline notification",
+				"agent_sid", agent.SID(),
+				"error", err,
+			)
 		}
 	})
 
 	// Set config change notifier for node update use case
 	updateNodeUC.SetConfigChangeNotifier(nodeConfigSyncService)
 
-	// Initialize subscription traffic cache for real-time traffic updates (Node Agent)
-	subscriptionTrafficCache := cache.NewRedisSubscriptionTrafficCache(
-		redisClient,
+	// Initialize QuotaService for unified quota calculation
+	quotaService := subscriptionUsecases.NewQuotaService(
+		subscriptionRepo,
 		subscriptionUsageRepo,
+		subscriptionUsageStatsRepo,
+		subscriptionPlanRepo,
 		log,
 	)
 
-	// Initialize subscription traffic buffer for batching traffic updates (Node Agent)
-	subscriptionTrafficBuffer := nodeServices.NewSubscriptionTrafficBuffer(subscriptionTrafficCache, log)
-	subscriptionTrafficBuffer.Start()
+	// Initialize forward quota middleware with QuotaService for unified quota check
+	forwardQuotaMiddleware = middleware.NewForwardQuotaMiddleware(
+		forwardRuleRepo,
+		subscriptionRepo,
+		subscriptionPlanRepo,
+		quotaService,
+		log,
+	)
 
 	// Create done channel for subscription traffic flush scheduler
 	subscriptionTrafficFlushDone := make(chan struct{})
@@ -1080,6 +1250,10 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		adminSubscriptionHandler:     adminSubscriptionHandler,
 		adminResourceGroupHandler:    adminResourceGroupHandler,
 		adminTrafficStatsHandler:     adminTrafficStatsHandler,
+		adminTelegramHandler:         adminTelegramHandler,
+		adminNotificationService:     adminNotificationServiceDDD,
+		settingHandler:               settingHandler,
+		settingService:               settingServiceDDD,
 		planHandler:                  planHandler,
 		subscriptionTokenHandler:     subscriptionTokenHandler,
 		paymentHandler:               paymentHandler,
@@ -1091,7 +1265,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		notificationHandler:          notificationHandler,
 		telegramHandler:              telegramHandler,
 		telegramService:              telegramServiceDDD,
-		telegramPollingService:       telegramPollingService,
+		telegramBotManager:           telegramBotManager,
 		forwardRuleHandler:           forwardRuleHandler,
 		forwardAgentHandler:          forwardAgentHandler,
 		forwardAgentVersionHandler:   forwardAgentVersionHandler,
@@ -1112,6 +1286,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		subscriptionTrafficCache:     subscriptionTrafficCache,
 		subscriptionTrafficBuffer:    subscriptionTrafficBuffer,
 		subscriptionTrafficFlushDone: subscriptionTrafficFlushDone,
+		adminNotificationScheduler:   adminNotificationScheduler,
+		usageAggregationScheduler:    usageAggregationScheduler,
 		logger:                       log,
 		authMiddleware:               authMiddleware,
 		subscriptionOwnerMiddleware:  subscriptionOwnerMiddleware,
@@ -1218,6 +1394,17 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		adminTrafficStats.GET("/ranking/users", r.adminTrafficStatsHandler.GetUserRanking)
 		adminTrafficStats.GET("/ranking/subscriptions", r.adminTrafficStatsHandler.GetSubscriptionRanking)
 		adminTrafficStats.GET("/trend", r.adminTrafficStatsHandler.GetTrend)
+	}
+
+	// Admin telegram routes (only if handler is initialized)
+	if r.adminTelegramHandler != nil {
+		adminTelegram := r.engine.Group("/admin/telegram")
+		adminTelegram.Use(r.authMiddleware.RequireAuth(), authorization.RequireAdmin())
+		{
+			adminTelegram.GET("/binding", r.adminTelegramHandler.GetBindingStatus)
+			adminTelegram.DELETE("/binding", r.adminTelegramHandler.Unbind)
+			adminTelegram.PATCH("/preferences", r.adminTelegramHandler.UpdatePreferences)
+		}
 	}
 
 	// User subscription routes - only own subscriptions
@@ -1368,6 +1555,14 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		ForwardAgentTokenMiddleware: r.forwardAgentTokenMiddleware,
 		NodeTokenMiddleware:         r.nodeTokenMiddleware,
 	})
+
+	// Setup Setting routes (Admin only)
+	if r.settingHandler != nil {
+		routes.SetupSettingRoutes(r.engine, &routes.SettingRouteConfig{
+			Handler:        r.settingHandler,
+			AuthMiddleware: r.authMiddleware,
+		})
+	}
 }
 
 // GetEngine returns the Gin engine
@@ -1382,9 +1577,19 @@ func (r *Router) Run(addr string) error {
 
 // Shutdown gracefully shuts down the router
 func (r *Router) Shutdown() {
-	// Stop telegram polling service if running
-	if r.telegramPollingService != nil {
-		r.telegramPollingService.Stop()
+	// Stop admin notification scheduler first
+	if r.adminNotificationScheduler != nil {
+		r.adminNotificationScheduler.Stop()
+	}
+
+	// Stop usage aggregation scheduler
+	if r.usageAggregationScheduler != nil {
+		r.usageAggregationScheduler.Stop()
+	}
+
+	// Stop telegram bot service manager if running
+	if r.telegramBotManager != nil {
+		r.telegramBotManager.Stop()
 	}
 
 	// Close all SSE connections first to allow HTTP server shutdown to proceed quickly
@@ -1434,12 +1639,43 @@ func (r *Router) GetTelegramService() *telegramApp.ServiceDDD {
 	return r.telegramService
 }
 
-// StartTelegramPolling starts the telegram polling service if configured
+// GetAdminNotificationService returns the admin notification service for scheduler use
+func (r *Router) GetAdminNotificationService() *telegramAdminApp.ServiceDDD {
+	return r.adminNotificationService
+}
+
+// GetTelegramBotManager returns the telegram bot service manager
+func (r *Router) GetTelegramBotManager() *telegramInfra.BotServiceManager {
+	return r.telegramBotManager
+}
+
+// GetSettingService returns the setting service
+func (r *Router) GetSettingService() *settingApp.ServiceDDD {
+	return r.settingService
+}
+
+// StartTelegramPolling starts the telegram bot service using BotServiceManager
 func (r *Router) StartTelegramPolling(ctx context.Context) error {
-	if r.telegramPollingService != nil {
-		return r.telegramPollingService.Start(ctx)
+	if r.telegramBotManager == nil {
+		return nil
 	}
+	if err := r.telegramBotManager.Start(ctx); err != nil {
+		return err
+	}
+
+	// Start admin notification scheduler after telegram bot manager
+	if r.adminNotificationScheduler != nil {
+		r.adminNotificationScheduler.Start(ctx)
+	}
+
 	return nil
+}
+
+// StartUsageAggregationScheduler starts the usage aggregation scheduler
+func (r *Router) StartUsageAggregationScheduler(ctx context.Context) {
+	if r.usageAggregationScheduler != nil {
+		r.usageAggregationScheduler.Start(ctx)
+	}
 }
 
 // nodeSIDResolverAdapter adapts node repository for SID resolution.
@@ -1470,4 +1706,20 @@ func (a *agentSIDResolverAdapter) GetSIDByID(agentID uint) (string, string, bool
 		return "", "", false
 	}
 	return agent.SID(), agent.Name(), true
+}
+
+// botServiceProviderAdapter adapts BotServiceManager to satisfy telegramAdminApp.BotServiceProvider interface.
+// The interface expects GetBotService() to return usecases.TelegramMessageSender,
+// but BotServiceManager returns *BotService which implements the same method signature.
+type botServiceProviderAdapter struct {
+	manager *telegramInfra.BotServiceManager
+}
+
+// GetBotService returns the BotService as TelegramMessageSender interface.
+func (a *botServiceProviderAdapter) GetBotService() telegramAdminUsecases.TelegramMessageSender {
+	bs := a.manager.GetBotService()
+	if bs == nil {
+		return nil
+	}
+	return bs
 }

@@ -26,8 +26,11 @@ const (
 	PrefixSubscriptionToken = "stoken"
 	PrefixSubscriptionUsage = "usage"
 	PrefixPlanPricing       = "price"
-	PrefixResourceGroup     = "rg"
-	PrefixTelegramBinding   = "tg_bind"
+	PrefixResourceGroup            = "rg"
+	PrefixTelegramBinding          = "tg_bind"
+	PrefixAdminTelegramBinding     = "atg_bind"
+	PrefixSetting                  = "setting"
+	PrefixSubscriptionUsageStats   = "usagestat"
 )
 
 // Generate creates a random short ID with the specified length using Base62 encoding.
@@ -245,4 +248,34 @@ func NewTelegramBindingID() (string, error) {
 // ParseTelegramBindingID extracts the short ID from a Telegram Binding prefixed ID.
 func ParseTelegramBindingID(prefixedID string) (string, error) {
 	return ExtractShortID(prefixedID, PrefixTelegramBinding)
+}
+
+// NewAdminTelegramBindingID generates a new Admin Telegram Binding SID (atg_bind_xxx).
+func NewAdminTelegramBindingID() (string, error) {
+	return NewSID(PrefixAdminTelegramBinding)
+}
+
+// ParseAdminTelegramBindingID extracts the short ID from an Admin Telegram Binding prefixed ID.
+func ParseAdminTelegramBindingID(prefixedID string) (string, error) {
+	return ExtractShortID(prefixedID, PrefixAdminTelegramBinding)
+}
+
+// NewSettingID generates a new Setting SID (setting_xxx).
+func NewSettingID() (string, error) {
+	return NewSID(PrefixSetting)
+}
+
+// ParseSettingID extracts the short ID from a Setting prefixed ID.
+func ParseSettingID(prefixedID string) (string, error) {
+	return ExtractShortID(prefixedID, PrefixSetting)
+}
+
+// NewSubscriptionUsageStatsID generates a new Subscription Usage Stats SID (usagestat_xxx).
+func NewSubscriptionUsageStatsID() (string, error) {
+	return NewSID(PrefixSubscriptionUsageStats)
+}
+
+// ParseSubscriptionUsageStatsID extracts the short ID from a Subscription Usage Stats prefixed ID.
+func ParseSubscriptionUsageStatsID(prefixedID string) (string, error) {
+	return ExtractShortID(prefixedID, PrefixSubscriptionUsageStats)
 }

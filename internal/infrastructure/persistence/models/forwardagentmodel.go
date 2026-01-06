@@ -27,6 +27,7 @@ type ForwardAgentModel struct {
 	AllowedPortRange *string        `gorm:"column:allowed_port_range;type:text"`
 	BlockedProtocols datatypes.JSON `gorm:"column:blocked_protocols;type:json"` // protocols blocked by this agent
 	SortOrder        int            `gorm:"not null;default:0"`
+	MuteNotification bool           `gorm:"not null;default:false"` // mute online/offline notifications
 	LastSeenAt       *time.Time
 	CreatedAt        time.Time
 	UpdatedAt        time.Time

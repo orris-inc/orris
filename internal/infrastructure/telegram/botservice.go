@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -54,10 +55,69 @@ func (s *BotService) DeleteWebhook() error {
 	return s.makeRequest(url, nil)
 }
 
+// BotCommand represents a bot command for the command menu
+type BotCommand struct {
+	Command     string `json:"command"`     // Command text without leading slash (e.g., "help")
+	Description string `json:"description"` // Description of the command
+}
+
+// SetMyCommands sets the list of bot commands shown in the command menu
+// This enables command auto-completion when users type "/"
+func (s *BotService) SetMyCommands(commands []BotCommand) error {
+	url := fmt.Sprintf("%s/setMyCommands", s.baseURL)
+	body := map[string]any{
+		"commands": commands,
+	}
+	return s.makeRequest(url, body)
+}
+
+// SetMyCommandsForAdmins sets commands visible only to admin users
+// Uses BotCommandScopeChat to set commands for specific chat IDs
+func (s *BotService) SetMyCommandsForChat(chatID int64, commands []BotCommand) error {
+	url := fmt.Sprintf("%s/setMyCommands", s.baseURL)
+	body := map[string]any{
+		"commands": commands,
+		"scope": map[string]any{
+			"type":    "chat",
+			"chat_id": chatID,
+		},
+	}
+	return s.makeRequest(url, body)
+}
+
+// GetDefaultUserCommands returns the default command list for regular users
+func GetDefaultUserCommands() []BotCommand {
+	return []BotCommand{
+		{Command: "bind", Description: "绑定账户 / Link account"},
+		{Command: "status", Description: "查看状态 / View status"},
+		{Command: "unbind", Description: "解绑账户 / Unlink account"},
+		{Command: "help", Description: "显示帮助 / Show help"},
+	}
+}
+
+// GetAdminCommands returns the command list including admin commands
+func GetAdminCommands() []BotCommand {
+	return []BotCommand{
+		{Command: "bind", Description: "绑定账户 / Link account"},
+		{Command: "status", Description: "查看状态 / View status"},
+		{Command: "unbind", Description: "解绑账户 / Unlink account"},
+		{Command: "adminbind", Description: "绑定管理员 / Link admin"},
+		{Command: "adminstatus", Description: "管理员状态 / Admin status"},
+		{Command: "adminunbind", Description: "解绑管理员 / Unlink admin"},
+		{Command: "help", Description: "显示帮助 / Show help"},
+	}
+}
+
 // GetUpdates retrieves updates using long polling
 // offset: Identifier of the first update to be returned
 // timeout: Timeout in seconds for long polling (0-60)
 func (s *BotService) GetUpdates(offset int64, timeout int) ([]Update, error) {
+	return s.GetUpdatesWithContext(context.Background(), offset, timeout)
+}
+
+// GetUpdatesWithContext retrieves updates using long polling with context support.
+// The context can be used to cancel the long polling request for graceful shutdown.
+func (s *BotService) GetUpdatesWithContext(ctx context.Context, offset int64, timeout int) ([]Update, error) {
 	apiURL := fmt.Sprintf("%s/getUpdates", s.baseURL)
 
 	body := map[string]any{
@@ -77,7 +137,7 @@ func (s *BotService) GetUpdates(offset int64, timeout int) ([]Update, error) {
 		Timeout: time.Duration(timeout+10) * time.Second,
 	}
 
-	req, err := http.NewRequest(http.MethodPost, apiURL, bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
@@ -101,8 +161,20 @@ func (s *BotService) GetUpdates(offset int64, timeout int) ([]Update, error) {
 	return result.Result, nil
 }
 
-// SendMessage sends a plain text message to a chat
+// SendMessage sends a plain text message to a chat (HTML format)
 func (s *BotService) SendMessage(chatID int64, text string) error {
+	url := fmt.Sprintf("%s/sendMessage", s.baseURL)
+	body := map[string]any{
+		"chat_id":    chatID,
+		"text":       text,
+		"parse_mode": "HTML",
+	}
+
+	return s.makeRequest(url, body)
+}
+
+// SendMessagePlain sends a plain text message without any formatting
+func (s *BotService) SendMessagePlain(chatID int64, text string) error {
 	url := fmt.Sprintf("%s/sendMessage", s.baseURL)
 	body := map[string]any{
 		"chat_id": chatID,
@@ -113,6 +185,7 @@ func (s *BotService) SendMessage(chatID int64, text string) error {
 }
 
 // SendMessageMarkdown sends a markdown formatted message to a chat
+// Deprecated: Use SendMessage with HTML format instead
 func (s *BotService) SendMessageMarkdown(chatID int64, text string) error {
 	url := fmt.Sprintf("%s/sendMessage", s.baseURL)
 	body := map[string]any{
@@ -124,14 +197,84 @@ func (s *BotService) SendMessageMarkdown(chatID int64, text string) error {
 	return s.makeRequest(url, body)
 }
 
-// SendMessageWithKeyboard sends a message with a reply keyboard
+// SendMessageWithKeyboard sends a message with a reply keyboard (HTML format)
 func (s *BotService) SendMessageWithKeyboard(chatID int64, text string, keyboard any) error {
 	url := fmt.Sprintf("%s/sendMessage", s.baseURL)
 	body := map[string]any{
 		"chat_id":      chatID,
 		"text":         text,
-		"parse_mode":   "Markdown",
+		"parse_mode":   "HTML",
 		"reply_markup": keyboard,
+	}
+
+	return s.makeRequest(url, body)
+}
+
+// SendMessageWithInlineKeyboard sends a message with an inline keyboard (HTML format)
+func (s *BotService) SendMessageWithInlineKeyboard(chatID int64, text string, keyboard any) error {
+	url := fmt.Sprintf("%s/sendMessage", s.baseURL)
+	body := map[string]any{
+		"chat_id":      chatID,
+		"text":         text,
+		"parse_mode":   "HTML",
+		"reply_markup": keyboard,
+	}
+
+	return s.makeRequest(url, body)
+}
+
+// EditMessageText edits the text of a message (HTML format)
+func (s *BotService) EditMessageText(chatID int64, messageID int64, text string) error {
+	url := fmt.Sprintf("%s/editMessageText", s.baseURL)
+	body := map[string]any{
+		"chat_id":    chatID,
+		"message_id": messageID,
+		"text":       text,
+		"parse_mode": "HTML",
+	}
+
+	return s.makeRequest(url, body)
+}
+
+// EditMessageWithInlineKeyboard edits a message with an inline keyboard (HTML format)
+func (s *BotService) EditMessageWithInlineKeyboard(chatID int64, messageID int64, text string, keyboard any) error {
+	url := fmt.Sprintf("%s/editMessageText", s.baseURL)
+	body := map[string]any{
+		"chat_id":      chatID,
+		"message_id":   messageID,
+		"text":         text,
+		"parse_mode":   "HTML",
+		"reply_markup": keyboard,
+	}
+
+	return s.makeRequest(url, body)
+}
+
+// EditMessageReplyMarkup edits only the inline keyboard of a message
+func (s *BotService) EditMessageReplyMarkup(chatID int64, messageID int64, keyboard any) error {
+	url := fmt.Sprintf("%s/editMessageReplyMarkup", s.baseURL)
+	body := map[string]any{
+		"chat_id":    chatID,
+		"message_id": messageID,
+	}
+	if keyboard != nil {
+		body["reply_markup"] = keyboard
+	}
+
+	return s.makeRequest(url, body)
+}
+
+// AnswerCallbackQuery answers a callback query from an inline keyboard
+func (s *BotService) AnswerCallbackQuery(callbackQueryID string, text string, showAlert bool) error {
+	url := fmt.Sprintf("%s/answerCallbackQuery", s.baseURL)
+	body := map[string]any{
+		"callback_query_id": callbackQueryID,
+	}
+	if text != "" {
+		body["text"] = text
+	}
+	if showAlert {
+		body["show_alert"] = true
 	}
 
 	return s.makeRequest(url, body)
@@ -160,6 +303,46 @@ type ReplyKeyboardMarkup struct {
 	OneTimeKeyboard bool               `json:"one_time_keyboard,omitempty"`
 }
 
+// InlineKeyboardButton represents a button in an inline keyboard
+type InlineKeyboardButton struct {
+	Text         string `json:"text"`
+	CallbackData string `json:"callback_data,omitempty"`
+	URL          string `json:"url,omitempty"`
+}
+
+// InlineKeyboardMarkup represents an inline keyboard
+type InlineKeyboardMarkup struct {
+	InlineKeyboard [][]InlineKeyboardButton `json:"inline_keyboard"`
+}
+
+// NewInlineKeyboard creates a new inline keyboard with the given rows
+func NewInlineKeyboard(rows ...[]InlineKeyboardButton) *InlineKeyboardMarkup {
+	return &InlineKeyboardMarkup{
+		InlineKeyboard: rows,
+	}
+}
+
+// NewInlineKeyboardRow creates a row of inline buttons
+func NewInlineKeyboardRow(buttons ...InlineKeyboardButton) []InlineKeyboardButton {
+	return buttons
+}
+
+// NewInlineKeyboardButton creates a callback button
+func NewInlineKeyboardButton(text, callbackData string) InlineKeyboardButton {
+	return InlineKeyboardButton{
+		Text:         text,
+		CallbackData: callbackData,
+	}
+}
+
+// NewInlineKeyboardButtonURL creates a URL button
+func NewInlineKeyboardButtonURL(text, url string) InlineKeyboardButton {
+	return InlineKeyboardButton{
+		Text: text,
+		URL:  url,
+	}
+}
+
 // apiResponse represents a Telegram API response
 type apiResponse struct {
 	OK          bool   `json:"ok"`
@@ -168,8 +351,17 @@ type apiResponse struct {
 
 // Update represents a Telegram update from getUpdates or webhook
 type Update struct {
-	UpdateID int64    `json:"update_id"`
-	Message  *Message `json:"message,omitempty"`
+	UpdateID      int64          `json:"update_id"`
+	Message       *Message       `json:"message,omitempty"`
+	CallbackQuery *CallbackQuery `json:"callback_query,omitempty"`
+}
+
+// CallbackQuery represents a callback query from an inline keyboard
+type CallbackQuery struct {
+	ID      string   `json:"id"`
+	From    *User    `json:"from"`
+	Message *Message `json:"message,omitempty"`
+	Data    string   `json:"data,omitempty"`
 }
 
 // Message represents a Telegram message
@@ -240,6 +432,11 @@ func (s *BotService) fetchBotUsername() error {
 
 	s.botUsername = result.Result.Username
 	return nil
+}
+
+// GetBotUsername returns the cached bot username
+func (s *BotService) GetBotUsername() string {
+	return s.botUsername
 }
 
 // GetBotLink returns the Telegram bot link (https://t.me/username)
