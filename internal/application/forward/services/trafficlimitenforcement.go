@@ -250,19 +250,29 @@ func (s *TrafficLimitEnforcementService) getHighestTrafficLimitAndIDs(ctx contex
 	hasLimit := false
 	var forwardSubscriptionIDs []uint
 
+	// Collect plan IDs for batch query
+	planIDs := make([]uint, 0, len(subscriptions))
+	for _, sub := range subscriptions {
+		planIDs = append(planIDs, sub.PlanID())
+	}
+
+	// Batch fetch all plans
+	plansList, err := s.planRepo.GetByIDs(ctx, planIDs)
+	if err != nil {
+		s.logger.Errorw("failed to batch fetch plans", "error", err)
+		return 0, false, nil, err
+	}
+
+	// Convert to map for quick lookup
+	plans := make(map[uint]*subscription.Plan, len(plansList))
+	for _, p := range plansList {
+		plans[p.ID()] = p
+	}
+
 	// Process each subscription
 	for _, sub := range subscriptions {
-		plan, err := s.planRepo.GetByID(ctx, sub.PlanID())
-		if err != nil {
-			s.logger.Warnw("failed to get plan for subscription",
-				"subscription_id", sub.ID(),
-				"plan_id", sub.PlanID(),
-				"error", err,
-			)
-			continue
-		}
-
-		if plan == nil {
+		plan, ok := plans[sub.PlanID()]
+		if !ok || plan == nil {
 			s.logger.Warnw("plan not found",
 				"subscription_id", sub.ID(),
 				"plan_id", sub.PlanID(),

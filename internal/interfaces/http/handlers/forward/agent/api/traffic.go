@@ -2,6 +2,7 @@
 package api
 
 import (
+	"math"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -91,10 +92,10 @@ func (h *Handler) ReportTraffic(c *gin.Context) {
 		return
 	}
 
-	// ruleInfo holds rule ID, user ID, and effective multiplier for traffic recording
+	// ruleInfo holds rule ID, subscription ID, and effective multiplier for traffic recording
 	type ruleInfo struct {
 		id                  uint
-		userID              *uint
+		subscriptionID      *uint
 		effectiveMultiplier float64
 	}
 
@@ -102,15 +103,15 @@ func (h *Handler) ReportTraffic(c *gin.Context) {
 	validRuleIDs := make(map[string]ruleInfo) // Stripe-style ID -> ruleInfo
 	for _, rule := range agentRules {
 		stripeID := rule.SID()
-		validRuleIDs[stripeID] = ruleInfo{id: rule.ID(), userID: rule.UserID(), effectiveMultiplier: rule.GetEffectiveMultiplier()}
+		validRuleIDs[stripeID] = ruleInfo{id: rule.ID(), subscriptionID: rule.SubscriptionID(), effectiveMultiplier: rule.GetEffectiveMultiplier()}
 	}
 	for _, rule := range exitRules {
 		stripeID := rule.SID()
-		validRuleIDs[stripeID] = ruleInfo{id: rule.ID(), userID: rule.UserID(), effectiveMultiplier: rule.GetEffectiveMultiplier()}
+		validRuleIDs[stripeID] = ruleInfo{id: rule.ID(), subscriptionID: rule.SubscriptionID(), effectiveMultiplier: rule.GetEffectiveMultiplier()}
 	}
 	for _, rule := range chainRules {
 		stripeID := rule.SID()
-		validRuleIDs[stripeID] = ruleInfo{id: rule.ID(), userID: rule.UserID(), effectiveMultiplier: rule.GetEffectiveMultiplier()}
+		validRuleIDs[stripeID] = ruleInfo{id: rule.ID(), subscriptionID: rule.SubscriptionID(), effectiveMultiplier: rule.GetEffectiveMultiplier()}
 	}
 
 	h.logger.Debugw("validated rule sources for traffic report",
@@ -192,16 +193,18 @@ func (h *Handler) ReportTraffic(c *gin.Context) {
 
 		// Also record traffic to subscription_usages table (for unified traffic tracking)
 		// Apply traffic multiplier before recording to subscription_usages
-		if h.trafficRecorder != nil && info.userID != nil {
+		// Only record if rule has a subscription (user rule); skip admin rules
+		if h.trafficRecorder != nil && info.subscriptionID != nil {
 			// Apply multiplier to get the effective traffic for billing/usage tracking
-			effectiveUpload := int64(float64(item.UploadBytes) * info.effectiveMultiplier)
-			effectiveDownload := int64(float64(item.DownloadBytes) * info.effectiveMultiplier)
-			if err := h.trafficRecorder.RecordForwardTraffic(ctx, info.id, *info.userID, effectiveUpload, effectiveDownload); err != nil {
+			// Use safe multiplication to prevent integer overflow
+			effectiveUpload := safeMultiplyTraffic(item.UploadBytes, info.effectiveMultiplier)
+			effectiveDownload := safeMultiplyTraffic(item.DownloadBytes, info.effectiveMultiplier)
+			if err := h.trafficRecorder.RecordForwardTraffic(ctx, info.id, info.subscriptionID, effectiveUpload, effectiveDownload); err != nil {
 				// Log warning but don't fail the request - forward_rules update already succeeded
 				h.logger.Warnw("failed to record forward traffic to subscription_usages",
 					"rule_id", item.RuleID,
 					"internal_id", info.id,
-					"user_id", *info.userID,
+					"subscription_id", *info.subscriptionID,
 					"error", err,
 				)
 			}
@@ -224,4 +227,21 @@ func (h *Handler) ReportTraffic(c *gin.Context) {
 		"rules_failed":  errorCount,
 		"rules_denied":  deniedCount,
 	})
+}
+
+// safeMultiplyTraffic safely multiplies traffic bytes by a multiplier,
+// capping at math.MaxInt64 to prevent integer overflow.
+func safeMultiplyTraffic(bytes int64, multiplier float64) int64 {
+	if bytes <= 0 || multiplier <= 0 {
+		return 0
+	}
+
+	result := float64(bytes) * multiplier
+
+	// Cap at MaxInt64 to prevent overflow when converting back to int64
+	if result > float64(math.MaxInt64) {
+		return math.MaxInt64
+	}
+
+	return int64(result)
 }

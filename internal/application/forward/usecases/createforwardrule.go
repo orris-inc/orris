@@ -245,6 +245,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	rule, err := forward.NewForwardRule(
 		agentID,
 		cmd.UserID,
+		nil, // subscriptionID is nil for admin-created rules
 		ruleType,
 		exitAgentID,
 		chainAgentIDs,

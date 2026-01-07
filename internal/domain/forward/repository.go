@@ -21,6 +21,10 @@ type Repository interface {
 	// Returns a map from SID to ForwardRule.
 	GetBySIDs(ctx context.Context, sids []string) (map[string]*ForwardRule, error)
 
+	// GetByIDs retrieves multiple forward rules by their internal IDs.
+	// Returns a map from internal ID to ForwardRule.
+	GetByIDs(ctx context.Context, ids []uint) (map[uint]*ForwardRule, error)
+
 	// GetByListenPort retrieves a forward rule by listen port.
 	GetByListenPort(ctx context.Context, port uint16) (*ForwardRule, error)
 
@@ -74,6 +78,12 @@ type Repository interface {
 
 	// CountByUserID returns the total count of forward rules for a specific user.
 	CountByUserID(ctx context.Context, userID uint) (int64, error)
+
+	// ListBySubscriptionID returns all forward rules for a specific subscription.
+	ListBySubscriptionID(ctx context.Context, subscriptionID uint) ([]*ForwardRule, error)
+
+	// CountBySubscriptionID returns the total count of forward rules for a specific subscription.
+	CountBySubscriptionID(ctx context.Context, subscriptionID uint) (int64, error)
 
 	// GetTotalTrafficByUserID returns the total traffic (upload + download) for all rules owned by a user.
 	GetTotalTrafficByUserID(ctx context.Context, userID uint) (int64, error)

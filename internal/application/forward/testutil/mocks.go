@@ -474,6 +474,44 @@ func (m *MockForwardRuleRepository) CountByUserID(ctx context.Context, userID ui
 	return count, nil
 }
 
+// ListBySubscriptionID returns all forward rules for a specific subscription.
+func (m *MockForwardRuleRepository) ListBySubscriptionID(ctx context.Context, subscriptionID uint) ([]*forward.ForwardRule, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.listError != nil {
+		return nil, m.listError
+	}
+
+	var rules []*forward.ForwardRule
+	for _, rule := range m.rules {
+		if rule.SubscriptionID() != nil && *rule.SubscriptionID() == subscriptionID {
+			rules = append(rules, rule)
+		}
+	}
+
+	return rules, nil
+}
+
+// CountBySubscriptionID returns the total count of forward rules for a specific subscription.
+func (m *MockForwardRuleRepository) CountBySubscriptionID(ctx context.Context, subscriptionID uint) (int64, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.listError != nil {
+		return 0, m.listError
+	}
+
+	count := int64(0)
+	for _, rule := range m.rules {
+		if rule.SubscriptionID() != nil && *rule.SubscriptionID() == subscriptionID {
+			count++
+		}
+	}
+
+	return count, nil
+}
+
 // GetTotalTrafficByUserID returns the total traffic (upload + download) for all rules owned by a user.
 func (m *MockForwardRuleRepository) GetTotalTrafficByUserID(ctx context.Context, userID uint) (int64, error) {
 	m.mu.RLock()

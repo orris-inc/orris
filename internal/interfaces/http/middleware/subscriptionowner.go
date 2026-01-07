@@ -30,7 +30,8 @@ func NewSubscriptionOwnerMiddleware(
 	}
 }
 
-// RequireOwnership ensures the authenticated user owns the subscription
+// RequireOwnership ensures the authenticated user owns the subscription.
+// Gets subscription SID from :sid URL parameter.
 func (m *SubscriptionOwnerMiddleware) RequireOwnership() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID, exists := c.Get("user_id")
@@ -40,37 +41,34 @@ func (m *SubscriptionOwnerMiddleware) RequireOwnership() gin.HandlerFunc {
 			return
 		}
 
-		subscriptionIDStr := c.Param("id")
-		if subscriptionIDStr == "" {
-			utils.ErrorResponse(c, http.StatusBadRequest, "subscription ID is required")
+		subscriptionSID := c.Param("sid")
+		if subscriptionSID == "" {
+			utils.ErrorResponse(c, http.StatusBadRequest, "subscription SID is required")
 			c.Abort()
 			return
 		}
 
-		var sub *subscription.Subscription
-		var err error
+		// Validate Stripe-style ID format (sub_xxx)
+		if !strings.HasPrefix(subscriptionSID, id.PrefixSubscription+"_") {
+			utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription SID format, expected sub_xxxxx")
+			c.Abort()
+			return
+		}
 
-		// Check if ID is Stripe-style (sub_xxx) or numeric
-		if strings.HasPrefix(subscriptionIDStr, id.PrefixSubscription+"_") {
-			// Parse Stripe-style ID to extract SID
-			sid, parseErr := id.ParseSubscriptionID(subscriptionIDStr)
-			if parseErr != nil {
-				utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID format")
-				c.Abort()
-				return
-			}
-			sub, err = m.subscriptionRepo.GetBySID(c.Request.Context(), subscriptionIDStr)
-			if err != nil {
-				m.logger.Warnw("failed to get subscription by SID for ownership check",
-					"sid", sid,
-					"error", err,
-				)
-				utils.ErrorResponse(c, http.StatusNotFound, "subscription not found")
-				c.Abort()
-				return
-			}
-		} else {
-			utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID format, expected sub_xxxxx")
+		// Parse Stripe-style ID to validate format
+		if _, parseErr := id.ParseSubscriptionID(subscriptionSID); parseErr != nil {
+			utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription SID format")
+			c.Abort()
+			return
+		}
+
+		sub, err := m.subscriptionRepo.GetBySID(c.Request.Context(), subscriptionSID)
+		if err != nil {
+			m.logger.Warnw("failed to get subscription by SID for ownership check",
+				"sid", subscriptionSID,
+				"error", err,
+			)
+			utils.ErrorResponse(c, http.StatusNotFound, "subscription not found")
 			c.Abort()
 			return
 		}
@@ -106,3 +104,4 @@ func (m *SubscriptionOwnerMiddleware) RequireOwnership() gin.HandlerFunc {
 		c.Next()
 	}
 }
+

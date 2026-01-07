@@ -339,3 +339,322 @@ func (m *ForwardQuotaMiddleware) CheckRuleTypeAllowed() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// =====================================================
+// Subscription-based quota check methods
+// These methods check quotas for a specific subscription
+// (requires subscription_id in context, set by SubscriptionOwnerMiddleware)
+// =====================================================
+
+// CheckSubscriptionRuleLimit verifies that the subscription hasn't exceeded its forward rule count limit.
+// Requires subscription_id to be set in context by SubscriptionOwnerMiddleware.
+//
+// NOTE: This is a soft limit check (first line of defense). Due to the time gap between
+// checking the count here and actually creating the rule in the handler, there's a small
+// race window under high concurrency. The use case layer should perform a secondary check
+// within a database transaction for strict enforcement.
+func (m *ForwardQuotaMiddleware) CheckSubscriptionRuleLimit() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Get user role for admin check
+		userRole := c.GetString(constants.ContextKeyUserRole)
+		if userRole == constants.RoleAdmin {
+			c.Next()
+			return
+		}
+
+		// Get subscription from context (set by SubscriptionOwnerMiddleware)
+		subValue, exists := c.Get("subscription")
+		if !exists {
+			m.logger.Errorw("subscription not found in context for rule limit check")
+			utils.ErrorResponse(c, http.StatusInternalServerError, "subscription context not available")
+			c.Abort()
+			return
+		}
+
+		sub, ok := subValue.(*subscription.Subscription)
+		if !ok {
+			m.logger.Errorw("invalid subscription type in context")
+			utils.ErrorResponse(c, http.StatusInternalServerError, "invalid subscription context")
+			c.Abort()
+			return
+		}
+
+		// Get the subscription's plan
+		plan, err := m.planRepo.GetByID(c.Request.Context(), sub.PlanID())
+		if err != nil {
+			m.logger.Errorw("failed to get plan for subscription rule limit check",
+				"subscription_id", sub.ID(),
+				"plan_id", sub.PlanID(),
+				"error", err,
+			)
+			utils.ErrorResponse(c, http.StatusInternalServerError, "failed to check quota")
+			c.Abort()
+			return
+		}
+
+		if plan == nil {
+			m.logger.Warnw("plan not found for subscription",
+				"subscription_id", sub.ID(),
+				"plan_id", sub.PlanID(),
+			)
+			utils.ErrorResponse(c, http.StatusForbidden, "subscription plan not found")
+			c.Abort()
+			return
+		}
+
+		// Check if plan is forward-type
+		if !plan.PlanType().IsForward() {
+			m.logger.Warnw("subscription plan does not support forward rules",
+				"subscription_id", sub.ID(),
+				"plan_type", plan.PlanType().String(),
+			)
+			utils.ErrorResponse(c, http.StatusForbidden, "subscription plan does not support forward rules")
+			c.Abort()
+			return
+		}
+
+		planFeatures := plan.Features()
+		if planFeatures == nil {
+			m.logger.Warnw("plan has no features configured",
+				"subscription_id", sub.ID(),
+				"plan_id", plan.ID(),
+			)
+			utils.ErrorResponse(c, http.StatusForbidden, "plan features not configured")
+			c.Abort()
+			return
+		}
+
+		// Get rule limit from plan
+		ruleLimit, err := planFeatures.GetRuleLimit()
+		if err != nil {
+			m.logger.Warnw("failed to get rule limit from plan",
+				"subscription_id", sub.ID(),
+				"plan_id", plan.ID(),
+				"error", err,
+			)
+			utils.ErrorResponse(c, http.StatusInternalServerError, "failed to get rule limit")
+			c.Abort()
+			return
+		}
+
+		// Store rule limit in context for secondary check in use case
+		c.Set("subscription_rule_limit", ruleLimit)
+
+		// 0 means unlimited
+		if ruleLimit == 0 {
+			c.Next()
+			return
+		}
+
+		// Count current rules for this subscription
+		currentCount, err := m.forwardRuleRepo.CountBySubscriptionID(c.Request.Context(), sub.ID())
+		if err != nil {
+			m.logger.Errorw("failed to count subscription's forward rules",
+				"subscription_id", sub.ID(),
+				"error", err,
+			)
+			utils.ErrorResponse(c, http.StatusInternalServerError, "failed to check quota")
+			c.Abort()
+			return
+		}
+
+		// Check if limit exceeded
+		if currentCount >= int64(ruleLimit) {
+			m.logger.Warnw("subscription exceeded forward rule limit",
+				"subscription_id", sub.ID(),
+				"subscription_sid", sub.SID(),
+				"current_count", currentCount,
+				"rule_limit", ruleLimit,
+			)
+			utils.ErrorResponse(c, http.StatusForbidden, "forward rule limit exceeded for this subscription")
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
+
+// CheckSubscriptionTrafficLimit verifies that the subscription hasn't exceeded its forward traffic limit.
+// Uses QuotaService for unified quota calculation.
+// Requires subscription_id to be set in context by SubscriptionOwnerMiddleware.
+func (m *ForwardQuotaMiddleware) CheckSubscriptionTrafficLimit() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Get user role for admin check
+		userRole := c.GetString(constants.ContextKeyUserRole)
+		if userRole == constants.RoleAdmin {
+			c.Next()
+			return
+		}
+
+		// Get subscription_id from context (set by SubscriptionOwnerMiddleware)
+		subscriptionIDValue, exists := c.Get("subscription_id")
+		if !exists {
+			m.logger.Errorw("subscription_id not found in context for traffic limit check")
+			utils.ErrorResponse(c, http.StatusInternalServerError, "subscription context not available")
+			c.Abort()
+			return
+		}
+
+		subscriptionID, ok := subscriptionIDValue.(uint)
+		if !ok {
+			m.logger.Errorw("invalid subscription_id type in context")
+			utils.ErrorResponse(c, http.StatusInternalServerError, "invalid subscription context")
+			c.Abort()
+			return
+		}
+
+		// Use QuotaService to check subscription's forward quota
+		quotaResult, err := m.quotaService.GetSubscriptionQuota(c.Request.Context(), subscriptionID)
+		if err != nil {
+			m.logger.Errorw("failed to get subscription quota",
+				"subscription_id", subscriptionID,
+				"error", err,
+			)
+			utils.ErrorResponse(c, http.StatusInternalServerError, "failed to check traffic quota")
+			c.Abort()
+			return
+		}
+
+		if quotaResult == nil {
+			m.logger.Warnw("quota result is nil for subscription",
+				"subscription_id", subscriptionID,
+			)
+			utils.ErrorResponse(c, http.StatusForbidden, "subscription quota not available")
+			c.Abort()
+			return
+		}
+
+		if quotaResult.IsExceeded {
+			m.logger.Warnw("subscription exceeded forward traffic limit",
+				"subscription_id", subscriptionID,
+				"subscription_sid", quotaResult.SubscriptionSID,
+				"used_bytes", quotaResult.UsedBytes,
+				"limit_bytes", quotaResult.LimitBytes,
+			)
+			utils.ErrorResponse(c, http.StatusForbidden, "forward traffic limit exceeded for this subscription")
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
+
+// CheckSubscriptionRuleTypeAllowed verifies that the requested rule type is allowed by the subscription's plan.
+// Requires subscription to be set in context by SubscriptionOwnerMiddleware.
+func (m *ForwardQuotaMiddleware) CheckSubscriptionRuleTypeAllowed() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Get user role for admin check
+		userRole := c.GetString(constants.ContextKeyUserRole)
+		if userRole == constants.RoleAdmin {
+			c.Next()
+			return
+		}
+
+		// Get rule type from request body using ShouldBindBodyWith to preserve body for handler
+		var requestBody struct {
+			RuleType string `json:"rule_type"`
+		}
+
+		if err := c.ShouldBindBodyWith(&requestBody, binding.JSON); err != nil {
+			// If we can't parse the body, let the handler deal with it
+			c.Next()
+			return
+		}
+
+		// If no rule type specified, skip check (handler will validate)
+		if requestBody.RuleType == "" {
+			c.Next()
+			return
+		}
+
+		// Get subscription from context (set by SubscriptionOwnerMiddleware)
+		subValue, exists := c.Get("subscription")
+		if !exists {
+			m.logger.Errorw("subscription not found in context for rule type check")
+			utils.ErrorResponse(c, http.StatusInternalServerError, "subscription context not available")
+			c.Abort()
+			return
+		}
+
+		sub, ok := subValue.(*subscription.Subscription)
+		if !ok {
+			m.logger.Errorw("invalid subscription type in context")
+			utils.ErrorResponse(c, http.StatusInternalServerError, "invalid subscription context")
+			c.Abort()
+			return
+		}
+
+		// Get the subscription's plan
+		plan, err := m.planRepo.GetByID(c.Request.Context(), sub.PlanID())
+		if err != nil {
+			m.logger.Errorw("failed to get plan for subscription rule type check",
+				"subscription_id", sub.ID(),
+				"plan_id", sub.PlanID(),
+				"error", err,
+			)
+			utils.ErrorResponse(c, http.StatusInternalServerError, "failed to check rule type permission")
+			c.Abort()
+			return
+		}
+
+		if plan == nil {
+			m.logger.Warnw("plan not found for subscription",
+				"subscription_id", sub.ID(),
+				"plan_id", sub.PlanID(),
+			)
+			utils.ErrorResponse(c, http.StatusForbidden, "subscription plan not found")
+			c.Abort()
+			return
+		}
+
+		// Check if plan is forward-type
+		if !plan.PlanType().IsForward() {
+			m.logger.Warnw("subscription plan does not support forward rules",
+				"subscription_id", sub.ID(),
+				"plan_type", plan.PlanType().String(),
+			)
+			utils.ErrorResponse(c, http.StatusForbidden, "subscription plan does not support forward rules")
+			c.Abort()
+			return
+		}
+
+		planFeatures := plan.Features()
+		if planFeatures == nil {
+			m.logger.Warnw("plan has no features configured",
+				"subscription_id", sub.ID(),
+				"plan_id", plan.ID(),
+			)
+			utils.ErrorResponse(c, http.StatusForbidden, "plan features not configured")
+			c.Abort()
+			return
+		}
+
+		// Check if rule type is allowed by the plan
+		allowed, err := planFeatures.IsRuleTypeAllowed(requestBody.RuleType)
+		if err != nil {
+			m.logger.Warnw("failed to check if rule type is allowed",
+				"subscription_id", sub.ID(),
+				"rule_type", requestBody.RuleType,
+				"error", err,
+			)
+			utils.ErrorResponse(c, http.StatusInternalServerError, "failed to check rule type permission")
+			c.Abort()
+			return
+		}
+
+		if !allowed {
+			m.logger.Warnw("subscription plan does not allow rule type",
+				"subscription_id", sub.ID(),
+				"subscription_sid", sub.SID(),
+				"rule_type", requestBody.RuleType,
+			)
+			utils.ErrorResponse(c, http.StatusForbidden, "rule type not allowed by subscription plan")
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}

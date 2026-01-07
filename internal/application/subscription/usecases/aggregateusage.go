@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/infrastructure/cache"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -24,10 +25,11 @@ type aggregationKey struct {
 }
 
 // AggregateUsageUseCase handles aggregating subscription usage data from
-// raw hourly data (subscription_usages) to aggregated stats (subscription_usage_stats).
+// raw hourly data (Redis hourly buckets or subscription_usages fallback) to aggregated stats (subscription_usage_stats).
 type AggregateUsageUseCase struct {
 	usageRepo      subscription.SubscriptionUsageRepository
 	usageStatsRepo subscription.SubscriptionUsageStatsRepository
+	hourlyCache    cache.HourlyTrafficCache
 	logger         logger.Interface
 }
 
@@ -35,76 +37,69 @@ type AggregateUsageUseCase struct {
 func NewAggregateUsageUseCase(
 	usageRepo subscription.SubscriptionUsageRepository,
 	usageStatsRepo subscription.SubscriptionUsageStatsRepository,
+	hourlyCache cache.HourlyTrafficCache,
 	logger logger.Interface,
 ) *AggregateUsageUseCase {
 	return &AggregateUsageUseCase{
 		usageRepo:      usageRepo,
 		usageStatsRepo: usageStatsRepo,
+		hourlyCache:    hourlyCache,
 		logger:         logger,
 	}
 }
 
 // AggregateDailyUsage aggregates hourly data from yesterday into daily stats.
-// It reads from subscription_usages table and writes to subscription_usage_stats table.
+// It reads from Redis hourly buckets and writes to subscription_usage_stats table.
+// After successful aggregation, it cleans up the Redis data for processed hours.
 func (uc *AggregateUsageUseCase) AggregateDailyUsage(ctx context.Context) error {
 	// Calculate yesterday in business timezone
 	now := biztime.NowUTC()
 	bizNow := biztime.ToBizTimezone(now)
 	yesterday := bizNow.AddDate(0, 0, -1)
 
-	// Get UTC time range for yesterday in business timezone
-	startUTC := biztime.StartOfDayUTC(yesterday)
-	endUTC := startUTC.Add(24 * time.Hour)
+	// Get start of yesterday in business timezone (00:00)
+	startOfDay := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, biztime.Location())
+	startUTC := startOfDay.UTC()
 
-	uc.logger.Infow("starting daily usage aggregation",
+	uc.logger.Infow("starting daily usage aggregation from Redis hourly buckets",
 		"date", yesterday.Format("2006-01-02"),
 		"start_utc", startUTC,
-		"end_utc", endUTC,
 	)
 
-	// Paginated iteration to fetch all records
+	// Aggregate traffic from all 24 hours of yesterday
 	aggregated := make(map[aggregationKey]*subscription.SubscriptionUsageStats)
-	page := 1
-	pageSize := maxAggregationPageSize
 	totalRecords := 0
+	hoursProcessed := 0
+	var processedHours []time.Time
 
-	for {
-		filter := subscription.UsageStatsFilter{
-			From: startUTC,
-			To:   endUTC,
-		}
-		filter.PageFilter.Page = page
-		filter.PageFilter.PageSize = pageSize
+	for hour := 0; hour < 24; hour++ {
+		// Calculate hour time in business timezone, then convert to UTC for Redis lookup
+		hourTime := startOfDay.Add(time.Duration(hour) * time.Hour)
 
-		records, err := uc.usageRepo.GetUsageStats(ctx, filter)
+		// Get all traffic data for this hour from Redis
+		hourlyData, err := uc.hourlyCache.GetAllHourlyTraffic(ctx, hourTime)
 		if err != nil {
-			uc.logger.Errorw("failed to fetch hourly usage records",
+			uc.logger.Warnw("failed to get hourly traffic from Redis, skipping hour",
+				"hour", hourTime.Format("2006-01-02 15:04"),
 				"error", err,
-				"page", page,
 			)
-			return fmt.Errorf("failed to fetch hourly usage records (page %d): %w", page, err)
+			continue
 		}
 
-		// No more data
-		if len(records) == 0 {
-			break
+		if len(hourlyData) == 0 {
+			continue
 		}
 
-		totalRecords += len(records)
+		hoursProcessed++
+		totalRecords += len(hourlyData)
+		processedHours = append(processedHours, hourTime)
 
-		// Aggregate current page records
-		uc.aggregateRecords(records, aggregated, subscription.GranularityDaily, startUTC)
-
-		// If returned records less than pageSize, it's the last page
-		if len(records) < pageSize {
-			break
-		}
-
-		page++
+		// Aggregate hourly data into daily stats
+		uc.aggregateHourlyData(hourlyData, aggregated, startUTC)
 	}
 
 	if totalRecords == 0 {
-		uc.logger.Infow("no hourly usage records found for aggregation",
+		uc.logger.Infow("no hourly traffic data found in Redis for aggregation",
 			"date", yesterday.Format("2006-01-02"),
 		)
 		return nil
@@ -115,18 +110,91 @@ func (uc *AggregateUsageUseCase) AggregateDailyUsage(ctx context.Context) error 
 
 	uc.logger.Infow("daily usage aggregation completed",
 		"date", yesterday.Format("2006-01-02"),
+		"hours_processed", hoursProcessed,
 		"total_records", totalRecords,
-		"pages_processed", page,
 		"aggregated_groups", len(aggregated),
 		"success_count", successCount,
 		"error_count", errorCount,
 	)
+
+	// Clean up Redis data for processed hours after successful aggregation
+	if errorCount == 0 {
+		uc.cleanupProcessedHours(ctx, processedHours)
+	}
 
 	if errorCount > 0 {
 		return fmt.Errorf("daily aggregation completed with %d errors", errorCount)
 	}
 
 	return nil
+}
+
+// aggregateHourlyData aggregates HourlyTrafficData from Redis into the aggregated map.
+func (uc *AggregateUsageUseCase) aggregateHourlyData(
+	data []cache.HourlyTrafficData,
+	aggregated map[aggregationKey]*subscription.SubscriptionUsageStats,
+	period time.Time,
+) {
+	for _, d := range data {
+		key := aggregationKey{
+			subscriptionID: d.SubscriptionID,
+			resourceType:   d.ResourceType,
+			resourceID:     d.ResourceID,
+		}
+
+		if _, exists := aggregated[key]; !exists {
+			var subscriptionIDPtr *uint
+			if d.SubscriptionID != 0 {
+				subscriptionIDPtr = &d.SubscriptionID
+			}
+
+			stats, err := subscription.NewSubscriptionUsageStats(
+				d.ResourceType,
+				d.ResourceID,
+				subscriptionIDPtr,
+				subscription.GranularityDaily,
+				period,
+			)
+			if err != nil {
+				uc.logger.Errorw("failed to create usage stats entity",
+					"error", err,
+					"resource_type", d.ResourceType,
+					"resource_id", d.ResourceID,
+				)
+				continue
+			}
+			aggregated[key] = stats
+		}
+
+		// Accumulate traffic (convert int64 to uint64, negative values become 0)
+		var upload, download uint64
+		if d.Upload > 0 {
+			upload = uint64(d.Upload)
+		}
+		if d.Download > 0 {
+			download = uint64(d.Download)
+		}
+		if err := aggregated[key].Accumulate(upload, download); err != nil {
+			uc.logger.Warnw("failed to accumulate traffic",
+				"error", err,
+				"resource_type", d.ResourceType,
+				"resource_id", d.ResourceID,
+			)
+		}
+	}
+}
+
+// cleanupProcessedHours removes Redis data for hours that have been successfully aggregated.
+func (uc *AggregateUsageUseCase) cleanupProcessedHours(ctx context.Context, hours []time.Time) {
+	for _, hour := range hours {
+		if err := uc.hourlyCache.CleanupHour(ctx, hour); err != nil {
+			uc.logger.Warnw("failed to cleanup Redis hourly data",
+				"hour", hour.Format("2006-01-02 15:04"),
+				"error", err,
+			)
+		}
+	}
+	uc.logger.Infow("cleaned up Redis hourly data", "hours_cleaned", len(hours))
 }
 
 // CleanupOldUsageData deletes raw usage records older than the specified retention days.

@@ -92,45 +92,39 @@ func (uc *GetTrafficRankingUseCase) ExecuteUserRanking(
 
 	// Aggregate by user
 	userUsageMap := make(map[uint]*userRankingData)
-	subscriptionIDs := make([]uint, len(topSubscriptions))
+	subscriptionIDs := make([]uint, 0, len(topSubscriptions))
 
-	for i, subUsage := range topSubscriptions {
-		subscriptionIDs[i] = subUsage.SubscriptionID
+	for _, subUsage := range topSubscriptions {
+		if subUsage.SubscriptionID != 0 {
+			subscriptionIDs = append(subscriptionIDs, subUsage.SubscriptionID)
+		}
 	}
 
-	// Fetch subscriptions to get user IDs
-	for _, subID := range subscriptionIDs {
-		// Skip invalid subscription IDs
-		if subID == 0 {
-			continue
-		}
+	// Fetch subscriptions using batch query to get user IDs
+	subscriptions, err := uc.subscriptionRepo.GetByIDs(ctx, subscriptionIDs)
+	if err != nil {
+		uc.logger.Errorw("failed to fetch subscriptions", "error", err)
+		return nil, errors.NewInternalError("failed to fetch subscription information")
+	}
 
-		sub, err := uc.subscriptionRepo.GetByID(ctx, subID)
-		if err != nil {
-			uc.logger.Warnw("failed to fetch subscription", "subscription_id", subID, "error", err)
-			continue
-		}
-		if sub == nil {
-			uc.logger.Warnw("subscription not found", "subscription_id", subID)
+	// Aggregate usage by user
+	for _, subUsage := range topSubscriptions {
+		sub, ok := subscriptions[subUsage.SubscriptionID]
+		if !ok {
 			continue
 		}
 
 		userID := sub.UserID()
-		for _, subUsage := range topSubscriptions {
-			if subUsage.SubscriptionID == subID {
-				if existing, exists := userUsageMap[userID]; exists {
-					existing.upload += subUsage.Upload
-					existing.download += subUsage.Download
-					existing.total += subUsage.Total
-				} else {
-					userUsageMap[userID] = &userRankingData{
-						userID:   userID,
-						upload:   subUsage.Upload,
-						download: subUsage.Download,
-						total:    subUsage.Total,
-					}
-				}
-				break
+		if existing, exists := userUsageMap[userID]; exists {
+			existing.upload += subUsage.Upload
+			existing.download += subUsage.Download
+			existing.total += subUsage.Total
+		} else {
+			userUsageMap[userID] = &userRankingData{
+				userID:   userID,
+				upload:   subUsage.Upload,
+				download: subUsage.Download,
+				total:    subUsage.Total,
 			}
 		}
 	}
@@ -236,29 +230,18 @@ func (uc *GetTrafficRankingUseCase) ExecuteSubscriptionRanking(
 		}, nil
 	}
 
-	// Fetch subscription details
-	subscriptionIDs := make([]uint, len(topSubscriptions))
-	for i, subUsage := range topSubscriptions {
-		subscriptionIDs[i] = subUsage.SubscriptionID
+	// Fetch subscription details using batch query
+	subscriptionIDs := make([]uint, 0, len(topSubscriptions))
+	for _, subUsage := range topSubscriptions {
+		if subUsage.SubscriptionID != 0 {
+			subscriptionIDs = append(subscriptionIDs, subUsage.SubscriptionID)
+		}
 	}
 
-	subscriptionsMap := make(map[uint]*subscription.Subscription)
-	for _, subID := range subscriptionIDs {
-		// Skip invalid subscription IDs
-		if subID == 0 {
-			continue
-		}
-
-		sub, err := uc.subscriptionRepo.GetByID(ctx, subID)
-		if err != nil {
-			uc.logger.Warnw("failed to fetch subscription", "subscription_id", subID, "error", err)
-			continue
-		}
-		if sub == nil {
-			uc.logger.Warnw("subscription not found", "subscription_id", subID)
-			continue
-		}
-		subscriptionsMap[subID] = sub
+	subscriptionsMap, err := uc.subscriptionRepo.GetByIDs(ctx, subscriptionIDs)
+	if err != nil {
+		uc.logger.Errorw("failed to fetch subscriptions", "error", err)
+		return nil, errors.NewInternalError("failed to fetch subscription information")
 	}
 
 	// Build response

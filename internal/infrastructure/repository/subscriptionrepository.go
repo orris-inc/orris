@@ -89,6 +89,30 @@ func (r *SubscriptionRepositoryImpl) GetByID(ctx context.Context, id uint) (*sub
 	return entity, nil
 }
 
+func (r *SubscriptionRepositoryImpl) GetByIDs(ctx context.Context, ids []uint) (map[uint]*subscription.Subscription, error) {
+	if len(ids) == 0 {
+		return make(map[uint]*subscription.Subscription), nil
+	}
+
+	var subModels []*models.SubscriptionModel
+	if err := r.db.WithContext(ctx).Where("id IN ?", ids).Find(&subModels).Error; err != nil {
+		r.logger.Errorw("failed to get subscriptions by IDs", "count", len(ids), "error", err)
+		return nil, fmt.Errorf("failed to get subscriptions by IDs: %w", err)
+	}
+
+	result := make(map[uint]*subscription.Subscription, len(subModels))
+	for _, model := range subModels {
+		entity, err := r.mapper.ToEntity(model)
+		if err != nil {
+			r.logger.Errorw("failed to map subscription model to entity", "id", model.ID, "error", err)
+			return nil, fmt.Errorf("failed to map subscription: %w", err)
+		}
+		result[model.ID] = entity
+	}
+
+	return result, nil
+}
+
 func (r *SubscriptionRepositoryImpl) GetBySID(ctx context.Context, sid string) (*subscription.Subscription, error) {
 	var model models.SubscriptionModel
 

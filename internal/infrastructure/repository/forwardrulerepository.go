@@ -152,6 +152,33 @@ func (r *ForwardRuleRepositoryImpl) GetBySIDs(ctx context.Context, sids []string
 	return result, nil
 }
 
+// GetByIDs retrieves multiple forward rules by their internal IDs.
+func (r *ForwardRuleRepositoryImpl) GetByIDs(ctx context.Context, ids []uint) (map[uint]*forward.ForwardRule, error) {
+	if len(ids) == 0 {
+		return make(map[uint]*forward.ForwardRule), nil
+	}
+
+	var ruleModels []*models.ForwardRuleModel
+
+	tx := db.GetTxFromContext(ctx, r.db)
+	if err := tx.Where("id IN ?", ids).Find(&ruleModels).Error; err != nil {
+		r.logger.Errorw("failed to get forward rules by IDs", "count", len(ids), "error", err)
+		return nil, fmt.Errorf("failed to get forward rules by IDs: %w", err)
+	}
+
+	result := make(map[uint]*forward.ForwardRule, len(ruleModels))
+	for _, model := range ruleModels {
+		entity, err := r.mapper.ToEntity(model)
+		if err != nil {
+			r.logger.Errorw("failed to map forward rule model to entity", "id", model.ID, "error", err)
+			return nil, fmt.Errorf("failed to map forward rule: %w", err)
+		}
+		result[model.ID] = entity
+	}
+
+	return result, nil
+}
+
 // GetByListenPort retrieves a forward rule by listen port.
 func (r *ForwardRuleRepositoryImpl) GetByListenPort(ctx context.Context, port uint16) (*forward.ForwardRule, error) {
 	var model models.ForwardRuleModel
@@ -188,6 +215,7 @@ func (r *ForwardRuleRepositoryImpl) Update(ctx context.Context, rule *forward.Fo
 		Updates(map[string]any{
 			"name":               model.Name,
 			"agent_id":           model.AgentID,
+			"subscription_id":    model.SubscriptionID,
 			"listen_port":        model.ListenPort,
 			"target_address":     model.TargetAddress,
 			"target_port":        model.TargetPort,
@@ -602,6 +630,44 @@ func (r *ForwardRuleRepositoryImpl) CountByUserID(ctx context.Context, userID ui
 	if err != nil {
 		r.logger.Errorw("failed to count forward rules by user ID", "user_id", userID, "error", err)
 		return 0, fmt.Errorf("failed to count forward rules by user ID: %w", err)
+	}
+	return count, nil
+}
+
+// ListBySubscriptionID returns all forward rules for a specific subscription (excluding soft-deleted records).
+func (r *ForwardRuleRepositoryImpl) ListBySubscriptionID(ctx context.Context, subscriptionID uint) ([]*forward.ForwardRule, error) {
+	var ruleModels []*models.ForwardRuleModel
+
+	tx := db.GetTxFromContext(ctx, r.db)
+	if err := tx.
+		Scopes(db.NotDeleted()).
+		Where("subscription_id = ?", subscriptionID).
+		Order("sort_order ASC, created_at DESC").
+		Find(&ruleModels).Error; err != nil {
+		r.logger.Errorw("failed to list forward rules by subscription ID", "subscription_id", subscriptionID, "error", err)
+		return nil, fmt.Errorf("failed to list forward rules by subscription ID: %w", err)
+	}
+
+	entities, err := r.mapper.ToEntities(ruleModels)
+	if err != nil {
+		r.logger.Errorw("failed to map forward rule models to entities", "error", err)
+		return nil, fmt.Errorf("failed to map forward rules: %w", err)
+	}
+
+	return entities, nil
+}
+
+// CountBySubscriptionID returns the total count of forward rules for a specific subscription (excluding soft-deleted records).
+func (r *ForwardRuleRepositoryImpl) CountBySubscriptionID(ctx context.Context, subscriptionID uint) (int64, error) {
+	var count int64
+	tx := db.GetTxFromContext(ctx, r.db)
+	err := tx.Model(&models.ForwardRuleModel{}).
+		Scopes(db.NotDeleted()).
+		Where("subscription_id = ?", subscriptionID).
+		Count(&count).Error
+	if err != nil {
+		r.logger.Errorw("failed to count forward rules by subscription ID", "subscription_id", subscriptionID, "error", err)
+		return 0, fmt.Errorf("failed to count forward rules by subscription ID: %w", err)
 	}
 	return count, nil
 }

@@ -15,11 +15,12 @@ type ForwardRuleModel struct {
 	SID               string         `gorm:"column:sid;not null;size:20;uniqueIndex:idx_forward_rule_sid"` // Stripe-style prefixed ID (fr_xxx)
 	AgentID           uint           `gorm:"not null;index:idx_forward_agent_id;uniqueIndex:idx_listen_port_agent"`
 	UserID            *uint          `gorm:"index:idx_forward_rules_user_id;index:idx_forward_rules_user_status"` // user ID for user-owned rules (nullable)
+	SubscriptionID    *uint          `gorm:"column:subscription_id;index:idx_forward_rules_subscription_id"`      // subscription ID for subscription-bound rules (nullable)
 	RuleType          string         `gorm:"not null;default:direct;size:20"`                                     // direct, chain, direct_chain, websocket
 	ExitAgentID       *uint          `gorm:"index:idx_forward_exit_agent_id"`                                     // exit agent ID for chain/websocket forward (nullable)
-	ChainAgentIDs   datatypes.JSON `gorm:"type:json;default:null"` // ordered array of intermediate agent IDs for chain forwarding
-	ChainPortConfig datatypes.JSON `gorm:"type:json;default:null"` // map of agent_id -> listen_port for direct_chain type or hybrid chain direct hops
-	TunnelHops      *int           `gorm:"column:tunnel_hops"`     // number of hops using tunnel (nil=full tunnel, N=first N hops use tunnel)
+	ChainAgentIDs     datatypes.JSON `gorm:"type:json;default:null"`                                              // ordered array of intermediate agent IDs for chain forwarding
+	ChainPortConfig   datatypes.JSON `gorm:"type:json;default:null"`                                              // map of agent_id -> listen_port for direct_chain type or hybrid chain direct hops
+	TunnelHops        *int           `gorm:"column:tunnel_hops"`                                                  // number of hops using tunnel (nil=full tunnel, N=first N hops use tunnel)
 	TunnelType        string         `gorm:"not null;default:ws;size:10"`                                         // tunnel type: ws or tls
 	Name              string         `gorm:"not null;size:100;index:idx_forward_name"`
 	ListenPort        uint16         `gorm:"not null;uniqueIndex:idx_listen_port_agent"`

@@ -9,7 +9,6 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/orris-inc/orris/internal/domain/subscription"
-	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -91,27 +90,31 @@ type SubscriptionTrafficCache interface {
 	// This is used for quota checking where we need to combine Redis real-time values with MySQL persisted values.
 	GetTotalTrafficBySubscriptionIDs(ctx context.Context, subscriptionIDs []uint) (map[uint]uint64, error)
 
-	// FlushToDatabase flushes all pending traffic to MySQL subscription_usages table.
+	// FlushToDatabase flushes all pending traffic to Redis HourlyTrafficCache.
+	// Note: Previously flushed to MySQL subscription_usages table, now writes to Redis hourly buckets.
 	FlushToDatabase(ctx context.Context) error
 }
 
 // RedisSubscriptionTrafficCache implements SubscriptionTrafficCache using Redis.
 type RedisSubscriptionTrafficCache struct {
-	client                *redis.Client
-	subscriptionUsageRepo subscription.SubscriptionUsageRepository
-	logger                logger.Interface
+	client             *redis.Client
+	hourlyTrafficCache HourlyTrafficCache
+	logger             logger.Interface
 }
 
 // NewRedisSubscriptionTrafficCache creates a new RedisSubscriptionTrafficCache instance.
+// Note: subscriptionUsageRepo is retained for backward compatibility but no longer used.
+// Traffic data is now flushed to HourlyTrafficCache (Redis) instead of MySQL.
 func NewRedisSubscriptionTrafficCache(
 	client *redis.Client,
-	subscriptionUsageRepo subscription.SubscriptionUsageRepository,
+	hourlyTrafficCache HourlyTrafficCache,
+	subscriptionUsageRepo subscription.SubscriptionUsageRepository, // Deprecated: retained for backward compatibility
 	logger logger.Interface,
 ) SubscriptionTrafficCache {
 	return &RedisSubscriptionTrafficCache{
-		client:                client,
-		subscriptionUsageRepo: subscriptionUsageRepo,
-		logger:                logger,
+		client:             client,
+		hourlyTrafficCache: hourlyTrafficCache,
+		logger:             logger,
 	}
 }
 
@@ -200,9 +203,11 @@ func (c *RedisSubscriptionTrafficCache) GetSubscriptionTraffic(ctx context.Conte
 	return upload, download, true
 }
 
-// FlushToDatabase synchronizes all Redis traffic to MySQL subscription_usages table.
+// FlushToDatabase synchronizes all Redis traffic from sub_traffic keys to Redis HourlyTrafficCache.
+// Note: This method name is kept for backward compatibility, but it now writes to Redis hourly buckets
+// instead of MySQL subscription_usages table.
 func (c *RedisSubscriptionTrafficCache) FlushToDatabase(ctx context.Context) error {
-	c.logger.Infow("starting subscription traffic flush to database")
+	c.logger.Infow("starting subscription traffic flush to hourly cache")
 
 	flushedCount := 0
 	errorCount := 0
@@ -219,9 +224,6 @@ func (c *RedisSubscriptionTrafficCache) FlushToDatabase(ctx context.Context) err
 		c.logger.Infow("subscription traffic flush completed, no active entries")
 		return nil
 	}
-
-	// Use current hour as period for aggregation
-	period := biztime.TruncateToHourInBiz(biztime.NowUTC())
 
 	for _, key := range keys {
 		nodeID, subscriptionID, err := parseSubscriptionTrafficKey(key)
@@ -272,35 +274,10 @@ func (c *RedisSubscriptionTrafficCache) FlushToDatabase(ctx context.Context) err
 			downloadDelta = 0
 		}
 
-		// Create subscription usage entity and record to MySQL
-		usage, err := subscription.NewSubscriptionUsage(
-			subscription.ResourceTypeNode.String(),
-			nodeID,
-			&subscriptionID,
-			period,
-		)
-		if err != nil {
-			c.logger.Errorw("failed to create subscription usage entity",
-				"node_id", nodeID,
-				"subscription_id", subscriptionID,
-				"error", err,
-			)
-			errorCount++
-			continue
-		}
-
-		if err := usage.Accumulate(uint64(uploadDelta), uint64(downloadDelta)); err != nil {
-			c.logger.Errorw("failed to accumulate usage",
-				"node_id", nodeID,
-				"subscription_id", subscriptionID,
-				"error", err,
-			)
-			errorCount++
-			continue
-		}
-
-		if err := c.subscriptionUsageRepo.RecordUsage(ctx, usage); err != nil {
-			c.logger.Errorw("failed to flush subscription traffic to database",
+		// Write to Redis HourlyTrafficCache instead of MySQL
+		// resourceType is "node" since traffic is collected per node
+		if err := c.hourlyTrafficCache.IncrementHourlyTraffic(ctx, subscriptionID, subscription.ResourceTypeNode.String(), nodeID, uploadDelta, downloadDelta); err != nil {
+			c.logger.Errorw("failed to flush subscription traffic to hourly cache",
 				"node_id", nodeID,
 				"subscription_id", subscriptionID,
 				"upload_delta", uploadDelta,
@@ -324,7 +301,7 @@ func (c *RedisSubscriptionTrafficCache) FlushToDatabase(ctx context.Context) err
 
 		flushedCount++
 
-		c.logger.Debugw("flushed subscription traffic to database",
+		c.logger.Debugw("flushed subscription traffic to hourly cache",
 			"node_id", nodeID,
 			"subscription_id", subscriptionID,
 			"upload_delta", uploadDelta,

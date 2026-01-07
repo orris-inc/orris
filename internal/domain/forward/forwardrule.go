@@ -17,6 +17,7 @@ type ForwardRule struct {
 	sid               string // Stripe-style prefixed ID (fr_xxx)
 	agentID           uint
 	userID            *uint // user ID for user-owned rules (nil for admin-created rules)
+	subscriptionID    *uint // subscription ID for subscription-bound rules (nil for admin-created rules)
 	ruleType          vo.ForwardRuleType
 	exitAgentID       uint            // exit agent ID (required for entry type)
 	chainAgentIDs     []uint          // ordered array of intermediate agent IDs for chain forwarding
@@ -35,9 +36,9 @@ type ForwardRule struct {
 	remark            string
 	uploadBytes       int64
 	downloadBytes     int64
-	trafficMultiplier *float64             // traffic multiplier for display. nil means auto-calculate based on node count
-	sortOrder int
-	createdAt time.Time
+	trafficMultiplier *float64 // traffic multiplier for display. nil means auto-calculate based on node count
+	sortOrder         int
+	createdAt         time.Time
 	updatedAt         time.Time
 }
 
@@ -53,6 +54,7 @@ type ForwardRule struct {
 func NewForwardRule(
 	agentID uint,
 	userID *uint,
+	subscriptionID *uint,
 	ruleType vo.ForwardRuleType,
 	exitAgentID uint,
 	chainAgentIDs []uint,
@@ -287,6 +289,7 @@ func NewForwardRule(
 		sid:               sid,
 		agentID:           agentID,
 		userID:            userID,
+		subscriptionID:    subscriptionID,
 		ruleType:          ruleType,
 		exitAgentID:       exitAgentID,
 		chainAgentIDs:     chainAgentIDs,
@@ -319,6 +322,7 @@ func ReconstructForwardRule(
 	sid string,
 	agentID uint,
 	userID *uint,
+	subscriptionID *uint,
 	ruleType vo.ForwardRuleType,
 	exitAgentID uint,
 	chainAgentIDs []uint,
@@ -383,6 +387,7 @@ func ReconstructForwardRule(
 		sid:               sid,
 		agentID:           agentID,
 		userID:            userID,
+		subscriptionID:    subscriptionID,
 		ruleType:          ruleType,
 		exitAgentID:       exitAgentID,
 		chainAgentIDs:     chainAgentIDs,
@@ -462,6 +467,16 @@ func (r *ForwardRule) AgentID() uint {
 // UserID returns the user ID.
 func (r *ForwardRule) UserID() *uint {
 	return r.userID
+}
+
+// SubscriptionID returns the subscription ID.
+func (r *ForwardRule) SubscriptionID() *uint {
+	return r.subscriptionID
+}
+
+// IsSubscriptionBound returns true if the rule is bound to a subscription.
+func (r *ForwardRule) IsSubscriptionBound() bool {
+	return r.subscriptionID != nil && *r.subscriptionID != 0
 }
 
 // IsUserOwned returns true if the rule is owned by a user.

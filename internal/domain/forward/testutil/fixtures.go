@@ -28,6 +28,7 @@ func MockTokenGenerator(shortID string) (string, string) {
 type RuleParams struct {
 	AgentID           uint
 	UserID            *uint
+	SubscriptionID    *uint
 	RuleType          vo.ForwardRuleType
 	ExitAgentID       uint
 	ChainAgentIDs     []uint
@@ -228,6 +229,7 @@ func NewTestForwardRule(params RuleParams) (*forward.ForwardRule, error) {
 	return forward.NewForwardRule(
 		params.AgentID,
 		params.UserID,
+		params.SubscriptionID,
 		params.RuleType,
 		params.ExitAgentID,
 		params.ChainAgentIDs,

@@ -12,6 +12,15 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            suffix: linux-amd64
+          - goos: linux
+            goarch: arm64
+            suffix: linux-arm64
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -27,14 +36,24 @@ jobs:
 
       - name: Build binary
         run: |
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o orris-linux-amd64 ./cmd/orris
-          upx --best --lzma orris-linux-amd64
+          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -ldflags="-w -s" -o orris-${{ matrix.suffix }} ./cmd/orris
+
+      - name: Compress binary (AMD64 only)
+        if: matrix.goarch == 'amd64'
+        run: |
+          upx --best --lzma orris-${{ matrix.suffix }}
+
+      - name: Compress binary (ARM64)
+        if: matrix.goarch == 'arm64'
+        run: |
+          # UPX on x86 host may have issues with ARM64, try with fallback
+          upx --best --lzma orris-${{ matrix.suffix }} || upx --best orris-${{ matrix.suffix }} || echo "UPX compression skipped for ARM64"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: orris-binary
-          path: orris-linux-amd64
+          name: orris-${{ matrix.suffix }}
+          path: orris-${{ matrix.suffix }}
 
   release:
     needs: build
@@ -42,15 +61,22 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Download artifact
+      - name: Download AMD64 artifact
         uses: actions/download-artifact@v4
         with:
-          name: orris-binary
+          name: orris-linux-amd64
+
+      - name: Download ARM64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: orris-linux-arm64
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: orris-linux-amd64
+          files: |
+            orris-linux-amd64
+            orris-linux-arm64
           generate_release_notes: true
 
   docker:
@@ -63,15 +89,26 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Download artifact
+      - name: Download AMD64 artifact
         uses: actions/download-artifact@v4
         with:
-          name: orris-binary
+          name: orris-linux-amd64
+          path: build/linux/amd64
 
-      - name: Prepare binary
+      - name: Download ARM64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: orris-linux-arm64
+          path: build/linux/arm64
+
+      - name: Prepare binaries
         run: |
-          mv orris-linux-amd64 orris
-          chmod +x orris
+          mv build/linux/amd64/orris-linux-amd64 build/linux/amd64/orris
+          mv build/linux/arm64/orris-linux-arm64 build/linux/arm64/orris
+          chmod +x build/linux/amd64/orris build/linux/arm64/orris
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -98,7 +135,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

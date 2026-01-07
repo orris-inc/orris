@@ -62,15 +62,30 @@ compress: ## Compress binaries with UPX
 	@echo "✅ Compression completed"
 
 .PHONY: compress-linux
-compress-linux: build-linux ## Build and compress Linux binary
-	@echo "Compressing Linux binary with UPX..."
+compress-linux: build-linux ## Build and compress Linux AMD64 binary
+	@echo "Compressing Linux AMD64 binary with UPX..."
 	@if ! command -v upx >/dev/null 2>&1; then \
 		echo "❌ Error: UPX is not installed"; \
 		echo "Install with: brew install upx (macOS) or apt-get install upx (Linux)"; \
 		exit 1; \
 	fi
 	@upx --best --lzma $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 2>/dev/null || upx --best $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64
-	@echo "✅ Linux binary compressed"
+	@echo "✅ Linux AMD64 binary compressed"
+
+.PHONY: compress-linux-arm64
+compress-linux-arm64: build-linux-arm64 ## Build and compress Linux ARM64 binary
+	@echo "Compressing Linux ARM64 binary with UPX..."
+	@if ! command -v upx >/dev/null 2>&1; then \
+		echo "❌ Error: UPX is not installed"; \
+		echo "Install with: brew install upx (macOS) or apt-get install upx (Linux)"; \
+		exit 1; \
+	fi
+	@upx --best --lzma $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64 2>/dev/null || upx --best $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64
+	@echo "✅ Linux ARM64 binary compressed"
+
+.PHONY: compress-linux-all
+compress-linux-all: compress-linux compress-linux-arm64 ## Build and compress all Linux binaries
+	@echo "✅ All Linux binaries compressed"
 
 .PHONY: release
 release: build-all compress ## Build all platforms and compress with UPX
@@ -125,7 +140,7 @@ test-coverage: ## Run tests with coverage
 .PHONY: clean
 clean: ## Clean build artifacts
 	@echo "Cleaning..."
-	@rm -rf bin/ release/ coverage.out coverage.html
+	@rm -rf bin/ build/ release/ coverage.out coverage.html
 	@echo "✅ Clean completed"
 
 .PHONY: deps
@@ -162,14 +177,19 @@ dev: ## Run server in development mode with auto-reload (requires air)
 	fi
 
 .PHONY: docker-build
-docker-build: ## Build Docker image
+docker-build: build-linux ## Build Docker image (AMD64)
 	@echo "Building Docker image..."
+	@mkdir -p build/linux/amd64
+	@cp $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 build/linux/amd64/orris
 	@docker build -t ghcr.io/orris-inc/orris:latest .
 	@echo "✅ Docker image built: ghcr.io/orris-inc/orris:latest"
 
 .PHONY: docker-build-multi
-docker-build-multi: ## Build Docker image for multiple platforms
+docker-build-multi: build-linux build-linux-arm64 ## Build Docker image for multiple platforms
 	@echo "Building Docker image for multiple platforms..."
+	@mkdir -p build/linux/amd64 build/linux/arm64
+	@cp $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64 build/linux/amd64/orris
+	@cp $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64 build/linux/arm64/orris
 	@docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/orris-inc/orris:latest .
 	@echo "✅ Multi-platform Docker image built"
 

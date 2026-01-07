@@ -63,6 +63,11 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 		userID = model.UserID
 	}
 
+	var subscriptionID *uint
+	if model.SubscriptionID != nil {
+		subscriptionID = model.SubscriptionID
+	}
+
 	var targetNodeID *uint
 	if model.TargetNodeID != nil {
 		targetNodeID = model.TargetNodeID
@@ -103,6 +108,7 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 		model.SID,
 		model.AgentID,
 		userID,
+		subscriptionID,
 		ruleType,
 		exitAgentID,
 		chainAgentIDs,
@@ -151,6 +157,11 @@ func (m *ForwardRuleMapperImpl) ToModel(entity *forward.ForwardRule) (*models.Fo
 		userID = entity.UserID()
 	}
 
+	var subscriptionID *uint
+	if entity.SubscriptionID() != nil {
+		subscriptionID = entity.SubscriptionID()
+	}
+
 	var targetNodeID *uint
 	if entity.TargetNodeID() != nil {
 		targetNodeID = entity.TargetNodeID()
@@ -186,11 +197,12 @@ func (m *ForwardRuleMapperImpl) ToModel(entity *forward.ForwardRule) (*models.Fo
 		SID:               entity.SID(),
 		AgentID:           entity.AgentID(),
 		UserID:            userID,
+		SubscriptionID:    subscriptionID,
 		RuleType:          entity.RuleType().String(),
-		ExitAgentID:     exitAgentID,
-		ChainAgentIDs:   chainAgentIDsJSON,
-		ChainPortConfig: chainPortConfigJSON,
-		TunnelHops:      entity.TunnelHops(),
+		ExitAgentID:       exitAgentID,
+		ChainAgentIDs:     chainAgentIDsJSON,
+		ChainPortConfig:   chainPortConfigJSON,
+		TunnelHops:        entity.TunnelHops(),
 		TunnelType:        entity.TunnelType().String(),
 		Name:              entity.Name(),
 		ListenPort:        entity.ListenPort(),

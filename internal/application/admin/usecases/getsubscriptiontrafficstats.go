@@ -100,18 +100,17 @@ func (uc *GetSubscriptionTrafficStatsUseCase) Execute(
 		subscriptionIDs[i] = usage.SubscriptionID
 	}
 
-	// Fetch subscriptions
-	subscriptions := make(map[uint]*subscription.Subscription)
-	userIDs := make([]uint, 0, len(subscriptionUsages))
-	planIDs := make([]uint, 0, len(subscriptionUsages))
+	// Fetch subscriptions using batch query
+	subscriptions, err := uc.subscriptionRepo.GetByIDs(ctx, subscriptionIDs)
+	if err != nil {
+		uc.logger.Errorw("failed to fetch subscriptions", "error", err)
+		return nil, errors.NewInternalError("failed to fetch subscription information")
+	}
 
-	for _, subID := range subscriptionIDs {
-		sub, err := uc.subscriptionRepo.GetByID(ctx, subID)
-		if err != nil {
-			uc.logger.Warnw("failed to fetch subscription", "subscription_id", subID, "error", err)
-			continue
-		}
-		subscriptions[subID] = sub
+	// Extract user IDs and plan IDs
+	userIDs := make([]uint, 0, len(subscriptions))
+	planIDs := make([]uint, 0, len(subscriptions))
+	for _, sub := range subscriptions {
 		userIDs = append(userIDs, sub.UserID())
 		planIDs = append(planIDs, sub.PlanID())
 	}

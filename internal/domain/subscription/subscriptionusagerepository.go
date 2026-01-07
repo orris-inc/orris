@@ -32,6 +32,8 @@ type SubscriptionUsageRepository interface {
 	GetTopSubscriptionsByUsage(ctx context.Context, resourceType *string, from, to time.Time, limit int) ([]SubscriptionUsageSummary, error)
 	// GetUsageTrend retrieves usage trend data with specified granularity (hour/day/month)
 	GetUsageTrend(ctx context.Context, resourceType *string, from, to time.Time, granularity string) ([]UsageTrendPoint, error)
+	// GetSubscriptionUsageTrend retrieves usage trend data for a specific subscription with specified granularity
+	GetSubscriptionUsageTrend(ctx context.Context, subscriptionID uint, from, to time.Time, granularity string) ([]SubscriptionUsageTrendPoint, error)
 }
 
 type UsageStatsFilter struct {
@@ -77,4 +79,14 @@ type UsageTrendPoint struct {
 	Upload   uint64
 	Download uint64
 	Total    uint64
+}
+
+// SubscriptionUsageTrendPoint represents usage data for a subscription at a specific time period
+type SubscriptionUsageTrendPoint struct {
+	ResourceType string
+	ResourceID   uint
+	Period       time.Time
+	Upload       uint64
+	Download     uint64
+	Total        uint64
 }

@@ -9,6 +9,9 @@ import (
 type SubscriptionRepository interface {
 	Create(ctx context.Context, subscription *Subscription) error
 	GetByID(ctx context.Context, id uint) (*Subscription, error)
+	// GetByIDs retrieves multiple subscriptions by their internal IDs.
+	// Returns a map from internal ID to Subscription.
+	GetByIDs(ctx context.Context, ids []uint) (map[uint]*Subscription, error)
 	GetBySID(ctx context.Context, sid string) (*Subscription, error)
 	GetByUserID(ctx context.Context, userID uint) ([]*Subscription, error)
 	GetActiveByUserID(ctx context.Context, userID uint) ([]*Subscription, error)

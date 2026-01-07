@@ -323,13 +323,13 @@ func (h *SubscriptionHandler) ChangePlan(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "Plan changed successfully", nil)
 }
 
-// GetTrafficStats handles GET /subscriptions/:id/traffic-stats
+// GetTrafficStats handles GET /subscriptions/:sid/traffic-stats
 func (h *SubscriptionHandler) GetTrafficStats(c *gin.Context) {
 	// Ownership already verified by middleware
 	subscriptionID, exists := c.Get("subscription_id")
 	if !exists {
 		// Fallback: parse SID from URL parameter
-		sidStr := c.Param("id")
+		sidStr := c.Param("sid")
 		if err := id.ValidatePrefix(sidStr, id.PrefixSubscription); err != nil {
 			utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID format, expected sub_xxxxx")
 			return
@@ -395,14 +395,14 @@ func (h *SubscriptionHandler) GetTrafficStats(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "", result)
 }
 
-// ResetLink handles PUT /subscriptions/:id/link
+// ResetLink handles PUT /subscriptions/:sid/link
 // Resets the subscription link by generating a new UUID
 func (h *SubscriptionHandler) ResetLink(c *gin.Context) {
 	// Ownership already verified by middleware
 	subscriptionID, exists := c.Get("subscription_id")
 	if !exists {
 		// Fallback: parse SID from URL parameter
-		sidStr := c.Param("id")
+		sidStr := c.Param("sid")
 		if err := id.ValidatePrefix(sidStr, id.PrefixSubscription); err != nil {
 			utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID format, expected sub_xxxxx")
 			return
@@ -426,12 +426,12 @@ func (h *SubscriptionHandler) ResetLink(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "Subscription link reset successfully", result)
 }
 
-// DeleteSubscription handles DELETE /subscriptions/:id
+// DeleteSubscription handles DELETE /subscriptions/:sid
 func (h *SubscriptionHandler) DeleteSubscription(c *gin.Context) {
 	// Ownership already verified by middleware
 	subscriptionID, exists := c.Get("subscription_id")
 	if !exists {
-		sidStr := c.Param("id")
+		sidStr := c.Param("sid")
 		if err := id.ValidatePrefix(sidStr, id.PrefixSubscription); err != nil {
 			utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID format, expected sub_xxxxx")
 			return

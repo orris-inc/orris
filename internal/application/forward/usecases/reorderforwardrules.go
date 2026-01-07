@@ -18,8 +18,9 @@ type RuleOrder struct {
 
 // ReorderForwardRulesCommand represents the input for reordering forward rules.
 type ReorderForwardRulesCommand struct {
-	RuleOrders []RuleOrder
-	UserID     *uint // optional: if set, only reorder rules owned by this user
+	RuleOrders     []RuleOrder
+	UserID         *uint // optional: if set, only reorder rules owned by this user
+	SubscriptionID *uint // optional: if set, only reorder rules belonging to this subscription
 }
 
 // ReorderForwardRulesUseCase handles batch reordering of forward rules.
@@ -84,6 +85,19 @@ func (uc *ReorderForwardRulesUseCase) Execute(ctx context.Context, cmd ReorderFo
 						"user_id", *cmd.UserID,
 						"rule_sid", order.RuleSID,
 						"rule_owner", ruleUserID,
+					)
+					return errors.NewForbiddenError("cannot reorder this rule")
+				}
+			}
+
+			// If subscription ID is specified, verify rule belongs to this subscription
+			if cmd.SubscriptionID != nil {
+				ruleSubscriptionID := rule.SubscriptionID()
+				if ruleSubscriptionID == nil || *ruleSubscriptionID != *cmd.SubscriptionID {
+					uc.logger.Warnw("user attempted to reorder rule from another subscription",
+						"subscription_id", *cmd.SubscriptionID,
+						"rule_sid", order.RuleSID,
+						"rule_subscription", ruleSubscriptionID,
 					)
 					return errors.NewForbiddenError("cannot reorder this rule")
 				}

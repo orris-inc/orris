@@ -744,3 +744,94 @@ func (r *SubscriptionUsageRepositoryImpl) GetUsageTrend(ctx context.Context, res
 	r.logger.Infow("usage trend retrieved successfully", "granularity", granularity, "count", len(trendPoints))
 	return trendPoints, nil
 }
+
+// GetSubscriptionUsageTrend retrieves usage trend data for a specific subscription with specified granularity
+func (r *SubscriptionUsageRepositoryImpl) GetSubscriptionUsageTrend(ctx context.Context, subscriptionID uint, from, to time.Time, granularity string) ([]subscription.SubscriptionUsageTrendPoint, error) {
+	// Build base query
+	query := r.db.WithContext(ctx).Model(&models.SubscriptionUsageModel{}).
+		Where("subscription_id = ?", subscriptionID)
+
+	// Apply time range filters
+	if !from.IsZero() {
+		query = query.Where("period >= ?", from)
+	}
+	if !to.IsZero() {
+		query = query.Where("period <= ?", to)
+	}
+
+	// Determine date truncation based on granularity
+	// Use CONVERT_TZ to convert UTC to business timezone before formatting
+	tzOffset := biztime.MySQLTimezoneOffset()
+	var dateFormat string
+	switch granularity {
+	case "hour":
+		dateFormat = fmt.Sprintf("DATE_FORMAT(CONVERT_TZ(period, '+00:00', '%s'), '%%Y-%%m-%%d %%H:00:00')", tzOffset)
+	case "day":
+		dateFormat = fmt.Sprintf("DATE_FORMAT(CONVERT_TZ(period, '+00:00', '%s'), '%%Y-%%m-%%d')", tzOffset)
+	case "month":
+		dateFormat = fmt.Sprintf("DATE_FORMAT(CONVERT_TZ(period, '+00:00', '%s'), '%%Y-%%m-01')", tzOffset)
+	default:
+		r.logger.Errorw("invalid granularity for subscription usage trend", "granularity", granularity)
+		return nil, fmt.Errorf("invalid granularity: %s, must be one of: hour, day, month", granularity)
+	}
+
+	// Execute aggregation query grouped by resource_type, resource_id, and period
+	var results []struct {
+		ResourceType  string
+		ResourceID    uint
+		Period        string
+		TotalUpload   uint64
+		TotalDownload uint64
+		TotalUsage    uint64
+	}
+
+	// Limit results to prevent excessive data transfer
+	const maxTrendRecords = 1000
+
+	err := query.
+		Select(fmt.Sprintf("resource_type, resource_id, %s as period, COALESCE(SUM(upload), 0) as total_upload, COALESCE(SUM(download), 0) as total_download, COALESCE(SUM(total), 0) as total_usage", dateFormat)).
+		Group(fmt.Sprintf("resource_type, resource_id, %s", dateFormat)).
+		Order("period ASC, resource_type ASC, resource_id ASC").
+		Limit(maxTrendRecords).
+		Scan(&results).Error
+
+	if err != nil {
+		r.logger.Errorw("failed to get subscription usage trend", "subscription_id", subscriptionID, "granularity", granularity, "error", err)
+		return nil, fmt.Errorf("failed to get subscription usage trend: %w", err)
+	}
+
+	// Determine time format for parsing based on granularity
+	var timeLayout string
+	switch granularity {
+	case "hour":
+		timeLayout = "2006-01-02 15:00:00"
+	case "day":
+		timeLayout = "2006-01-02"
+	case "month":
+		timeLayout = "2006-01-02"
+	}
+
+	// Convert to domain type
+	trendPoints := make([]subscription.SubscriptionUsageTrendPoint, len(results))
+	for i, result := range results {
+		parsedTime, parseErr := time.ParseInLocation(timeLayout, result.Period, biztime.Location())
+		if parseErr != nil {
+			r.logger.Warnw("failed to parse period", "period", result.Period, "layout", timeLayout, "error", parseErr)
+			parsedTime = time.Time{}
+		} else {
+			// Convert to UTC for consistent storage/transport
+			parsedTime = parsedTime.UTC()
+		}
+		trendPoints[i] = subscription.SubscriptionUsageTrendPoint{
+			ResourceType: result.ResourceType,
+			ResourceID:   result.ResourceID,
+			Period:       parsedTime,
+			Upload:       result.TotalUpload,
+			Download:     result.TotalDownload,
+			Total:        result.TotalUsage,
+		}
+	}
+
+	r.logger.Infow("subscription usage trend retrieved successfully", "subscription_id", subscriptionID, "granularity", granularity, "count", len(trendPoints))
+	return trendPoints, nil
+}
