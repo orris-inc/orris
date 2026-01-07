@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/orris-inc/orris/internal/domain/subscription"
-	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -32,17 +31,17 @@ type NodeTrafficStatsResult struct {
 }
 
 type GetNodeTrafficStatsUseCase struct {
-	usageRepo subscription.SubscriptionUsageRepository
-	logger    logger.Interface
+	usageStatsRepo subscription.SubscriptionUsageStatsRepository
+	logger         logger.Interface
 }
 
 func NewGetNodeTrafficStatsUseCase(
-	usageRepo subscription.SubscriptionUsageRepository,
+	usageStatsRepo subscription.SubscriptionUsageStatsRepository,
 	logger logger.Interface,
 ) *GetNodeTrafficStatsUseCase {
 	return &GetNodeTrafficStatsUseCase{
-		usageRepo: usageRepo,
-		logger:    logger,
+		usageStatsRepo: usageStatsRepo,
+		logger:         logger,
 	}
 }
 
@@ -62,9 +61,32 @@ func (uc *GetNodeTrafficStatsUseCase) Execute(
 		return nil, err
 	}
 
-	filter := uc.buildFilter(query)
+	// Determine granularity for query
+	granularity := subscription.GranularityDaily
+	if query.Granularity == "month" {
+		granularity = subscription.GranularityMonthly
+	}
 
-	usageRecords, err := uc.usageRepo.GetUsageStats(ctx, filter)
+	// Get usage stats from subscription_usage_stats table
+	resourceType := subscription.ResourceTypeNode.String()
+	var usageRecords []*subscription.SubscriptionUsageStats
+	var err error
+
+	if query.NodeID != nil {
+		usageRecords, err = uc.usageStatsRepo.GetByResourceID(
+			ctx,
+			resourceType,
+			*query.NodeID,
+			granularity,
+			query.From,
+			query.To,
+		)
+	} else {
+		// If no specific node is requested, return empty result
+		// Admin stats use cases should be used for platform-wide queries
+		return []*NodeTrafficStatsResult{}, nil
+	}
+
 	if err != nil {
 		uc.logger.Errorw("failed to fetch traffic stats", "error", err)
 		return nil, errors.NewInternalError("failed to fetch traffic statistics")
@@ -120,33 +142,4 @@ func (uc *GetNodeTrafficStatsUseCase) validateQuery(query GetNodeTrafficStatsQue
 	}
 
 	return nil
-}
-
-func (uc *GetNodeTrafficStatsUseCase) buildFilter(query GetNodeTrafficStatsQuery) subscription.UsageStatsFilter {
-	page := query.Page
-	if page == 0 {
-		page = constants.DefaultPage
-	}
-
-	pageSize := query.PageSize
-	if pageSize == 0 {
-		pageSize = constants.MaxPageSize
-	}
-
-	resourceType := subscription.ResourceTypeNode.String()
-	filter := subscription.UsageStatsFilter{
-		ResourceType:   &resourceType,
-		ResourceID:     query.NodeID,
-		SubscriptionID: query.SubscriptionID,
-		From:           query.From,
-		To:             query.To,
-	}
-	filter.Page = page
-	filter.PageSize = pageSize
-
-	if query.Granularity != "" {
-		filter.Period = &query.Granularity
-	}
-
-	return filter
 }

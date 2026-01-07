@@ -10,6 +10,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/domain/telegram/admin"
 	"github.com/orris-inc/orris/internal/domain/user"
+	"github.com/orris-inc/orris/internal/infrastructure/cache"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -19,7 +20,8 @@ type SendWeeklySummaryUseCase struct {
 	bindingRepo      admin.AdminTelegramBindingRepository
 	userRepo         user.Repository
 	subscriptionRepo subscription.SubscriptionRepository
-	usageRepo        subscription.SubscriptionUsageRepository
+	usageStatsRepo   subscription.SubscriptionUsageStatsRepository
+	hourlyCache      cache.HourlyTrafficCache
 	nodeRepo         node.NodeRepository
 	agentRepo        forward.AgentRepository
 	botService       TelegramMessageSender
@@ -31,7 +33,8 @@ func NewSendWeeklySummaryUseCase(
 	bindingRepo admin.AdminTelegramBindingRepository,
 	userRepo user.Repository,
 	subscriptionRepo subscription.SubscriptionRepository,
-	usageRepo subscription.SubscriptionUsageRepository,
+	usageStatsRepo subscription.SubscriptionUsageStatsRepository,
+	hourlyCache cache.HourlyTrafficCache,
 	nodeRepo node.NodeRepository,
 	agentRepo forward.AgentRepository,
 	botService TelegramMessageSender,
@@ -41,7 +44,8 @@ func NewSendWeeklySummaryUseCase(
 		bindingRepo:      bindingRepo,
 		userRepo:         userRepo,
 		subscriptionRepo: subscriptionRepo,
-		usageRepo:        usageRepo,
+		usageStatsRepo:   usageStatsRepo,
+		hourlyCache:      hourlyCache,
 		nodeRepo:         nodeRepo,
 		agentRepo:        agentRepo,
 		botService:       botService,
@@ -292,21 +296,92 @@ func (uc *SendWeeklySummaryUseCase) gatherWeeklyStats(ctx context.Context, lastS
 		summary.OfflineAgents = summary.TotalAgents - summary.OnlineAgents
 	}
 
-	// Get traffic for last week
-	lastUsage, err := uc.usageRepo.GetPlatformTotalUsage(ctx, nil, lastStart, lastEnd)
-	if err == nil && lastUsage != nil {
-		summary.TotalTrafficBytes = lastUsage.Total
-	}
+	// Get traffic for last week from MySQL subscription_usage_stats (daily granularity)
+	summary.TotalTrafficBytes = uc.getPlatformTrafficForPeriod(ctx, lastStart, lastEnd)
 
 	// Get traffic for previous week
-	prevUsage, err := uc.usageRepo.GetPlatformTotalUsage(ctx, nil, prevStart, prevEnd)
-	if err == nil && prevUsage != nil {
-		summary.PrevTotalTrafficBytes = prevUsage.Total
-	}
+	summary.PrevTotalTrafficBytes = uc.getPlatformTrafficForPeriod(ctx, prevStart, prevEnd)
 
 	summary.TrafficChangePercent = calculateChangePercentUint64(summary.TotalTrafficBytes, summary.PrevTotalTrafficBytes)
 
 	return summary, nil
+}
+
+// getPlatformTrafficForPeriod retrieves platform-wide traffic for a time period.
+// Uses MySQL subscription_usage_stats with daily granularity as primary data source.
+// Falls back to Redis hourly cache only if MySQL has no data AND the time range
+// is within Redis TTL (25 hours). For weekly summary, Redis fallback is typically
+// not useful since weekly data is older than Redis TTL.
+func (uc *SendWeeklySummaryUseCase) getPlatformTrafficForPeriod(ctx context.Context, start, end time.Time) uint64 {
+	var totalTraffic uint64
+
+	// Weekly summary uses historical data, so query MySQL subscription_usage_stats with daily granularity
+	usageSummary, err := uc.usageStatsRepo.GetPlatformTotalUsage(ctx, subscription.GranularityDaily, start, end)
+	if err != nil {
+		uc.logger.Warnw("failed to get platform usage from stats repo",
+			"error", err,
+			"start", start,
+			"end", end,
+		)
+	} else if usageSummary != nil {
+		totalTraffic += usageSummary.Total
+	}
+
+	// Fallback to Redis hourly cache only if:
+	// 1. MySQL returned no data
+	// 2. The time range overlaps with Redis TTL (25 hours)
+	// Note: For weekly summary, this fallback rarely applies since data is typically > 25h old
+	if totalTraffic == 0 && uc.hourlyCache != nil {
+		now := biztime.NowUTC()
+		redisTTLBoundary := now.Add(-25 * time.Hour)
+
+		// Only attempt Redis fallback if end time is within Redis TTL
+		if end.After(redisTTLBoundary) {
+			effectiveStart := start
+			if effectiveStart.Before(redisTTLBoundary) {
+				effectiveStart = redisTTLBoundary
+			}
+			redisTraffic := uc.getTrafficFromHourlyCache(ctx, effectiveStart, end)
+			totalTraffic += redisTraffic
+		}
+	}
+
+	return totalTraffic
+}
+
+// getTrafficFromHourlyCache retrieves platform-wide traffic from Redis hourly cache.
+func (uc *SendWeeklySummaryUseCase) getTrafficFromHourlyCache(ctx context.Context, start, end time.Time) uint64 {
+	var total uint64
+
+	// Iterate through each hour in the time range
+	current := biztime.TruncateToHourInBiz(start)
+	endHour := biztime.TruncateToHourInBiz(end)
+
+	for !current.After(endHour) {
+		hourlyData, err := uc.hourlyCache.GetAllHourlyTraffic(ctx, current)
+		if err != nil {
+			uc.logger.Warnw("failed to get hourly traffic from cache",
+				"hour", current.Format("2006-01-02 15:04"),
+				"error", err,
+			)
+			current = current.Add(time.Hour)
+			continue
+		}
+
+		for _, data := range hourlyData {
+			// Safe conversion: only add positive values to prevent uint64 overflow
+			if data.Upload > 0 {
+				total += uint64(data.Upload)
+			}
+			if data.Download > 0 {
+				total += uint64(data.Download)
+			}
+		}
+
+		current = current.Add(time.Hour)
+	}
+
+	return total
 }
 
 func (uc *SendWeeklySummaryUseCase) buildWeeklySummaryMessage(summary *WeeklySummaryData) string {

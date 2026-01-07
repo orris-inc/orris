@@ -6,6 +6,7 @@ import (
 
 	dto "github.com/orris-inc/orris/internal/application/admin/dto"
 	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/infrastructure/cache"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -21,18 +22,21 @@ type GetTrafficTrendQuery struct {
 
 // GetTrafficTrendUseCase handles retrieving traffic trend data
 type GetTrafficTrendUseCase struct {
-	usageRepo subscription.SubscriptionUsageRepository
-	logger    logger.Interface
+	usageStatsRepo     subscription.SubscriptionUsageStatsRepository
+	hourlyTrafficCache cache.HourlyTrafficCache
+	logger             logger.Interface
 }
 
 // NewGetTrafficTrendUseCase creates a new GetTrafficTrendUseCase
 func NewGetTrafficTrendUseCase(
-	usageRepo subscription.SubscriptionUsageRepository,
+	usageStatsRepo subscription.SubscriptionUsageStatsRepository,
+	hourlyTrafficCache cache.HourlyTrafficCache,
 	logger logger.Interface,
 ) *GetTrafficTrendUseCase {
 	return &GetTrafficTrendUseCase{
-		usageRepo: usageRepo,
-		logger:    logger,
+		usageStatsRepo:     usageStatsRepo,
+		hourlyTrafficCache: hourlyTrafficCache,
+		logger:             logger,
 	}
 }
 
@@ -53,31 +57,43 @@ func (uc *GetTrafficTrendUseCase) Execute(
 		return nil, err
 	}
 
-	// Adjust 'to' time to end of day to include all records from that day
-	adjustedTo := biztime.EndOfDayUTC(query.To)
+	var points []dto.TrafficTrendPoint
 
-	// Get usage trend data
-	trendPoints, err := uc.usageRepo.GetUsageTrend(
-		ctx,
-		query.ResourceType,
-		query.From,
-		adjustedTo,
-		query.Granularity,
-	)
-	if err != nil {
-		uc.logger.Errorw("failed to fetch traffic trend", "error", err)
-		return nil, errors.NewInternalError("failed to fetch traffic trend")
-	}
+	if query.Granularity == "hour" {
+		// Get hourly data from Redis
+		hourlyPoints, err := uc.getHourlyTrendFromRedis(ctx, query)
+		if err != nil {
+			uc.logger.Errorw("failed to fetch hourly traffic trend from Redis", "error", err)
+			return nil, errors.NewInternalError("failed to fetch traffic trend")
+		}
+		points = hourlyPoints
+	} else {
+		// Adjust 'to' time to end of day to include all records from that day
+		adjustedTo := biztime.EndOfDayUTC(query.To)
 
-	// Convert to DTO
-	points := make([]dto.TrafficTrendPoint, 0, len(trendPoints))
-	for _, point := range trendPoints {
-		points = append(points, dto.TrafficTrendPoint{
-			Period:   uc.formatPeriod(point.Period, query.Granularity),
-			Upload:   point.Upload,
-			Download: point.Download,
-			Total:    point.Total,
-		})
+		// Get usage trend data from subscription_usage_stats table
+		trendPoints, err := uc.usageStatsRepo.GetUsageTrend(
+			ctx,
+			query.ResourceType,
+			query.From,
+			adjustedTo,
+			query.Granularity,
+		)
+		if err != nil {
+			uc.logger.Errorw("failed to fetch traffic trend", "error", err)
+			return nil, errors.NewInternalError("failed to fetch traffic trend")
+		}
+
+		// Convert to DTO
+		points = make([]dto.TrafficTrendPoint, 0, len(trendPoints))
+		for _, point := range trendPoints {
+			points = append(points, dto.TrafficTrendPoint{
+				Period:   uc.formatPeriod(point.Period, query.Granularity),
+				Upload:   point.Upload,
+				Download: point.Download,
+				Total:    point.Total,
+			})
+		}
 	}
 
 	response := &dto.TrafficTrendResponse{
@@ -91,6 +107,85 @@ func (uc *GetTrafficTrendUseCase) Execute(
 	)
 
 	return response, nil
+}
+
+// getHourlyTrendFromRedis retrieves hourly traffic data from Redis HourlyTrafficCache.
+// It aggregates all subscriptions' hourly data within the specified time range.
+func (uc *GetTrafficTrendUseCase) getHourlyTrendFromRedis(
+	ctx context.Context,
+	query GetTrafficTrendQuery,
+) ([]dto.TrafficTrendPoint, error) {
+	// Adjust 'to' time to end of day to include all hours from that day
+	adjustedTo := biztime.EndOfDayUTC(query.To)
+
+	// Truncate to hour boundaries in business timezone
+	fromHour := biztime.TruncateToHourInBiz(query.From)
+	toHour := biztime.TruncateToHourInBiz(adjustedTo)
+
+	// Cap time range to last 48 hours (Redis TTL constraint)
+	now := biztime.NowUTC()
+	maxFrom := now.Add(-48 * time.Hour)
+	if fromHour.Before(maxFrom) {
+		fromHour = maxFrom
+	}
+	if toHour.After(now) {
+		toHour = now
+	}
+
+	// Build a map to aggregate traffic by hour
+	hourlyAggregates := make(map[string]*dto.TrafficTrendPoint)
+
+	// Iterate through each hour
+	current := fromHour
+	for !current.After(toHour) {
+		// Get all traffic data for this hour
+		hourlyData, err := uc.hourlyTrafficCache.GetAllHourlyTraffic(ctx, current)
+		if err != nil {
+			uc.logger.Warnw("failed to get hourly traffic data",
+				"hour", current,
+				"error", err,
+			)
+			current = current.Add(time.Hour)
+			continue
+		}
+
+		// Filter by resource type and aggregate
+		var upload, download uint64
+		for _, data := range hourlyData {
+			// Filter by resource type if specified
+			if query.ResourceType != nil && data.ResourceType != *query.ResourceType {
+				continue
+			}
+			upload += uint64(data.Upload)
+			download += uint64(data.Download)
+		}
+
+		// Only add if there's data
+		if upload > 0 || download > 0 {
+			hourKey := uc.formatPeriod(current, "hour")
+			hourlyAggregates[hourKey] = &dto.TrafficTrendPoint{
+				Period:   hourKey,
+				Upload:   upload,
+				Download: download,
+				Total:    upload + download,
+			}
+		}
+
+		current = current.Add(time.Hour)
+	}
+
+	// Convert map to sorted slice
+	points := make([]dto.TrafficTrendPoint, 0, len(hourlyAggregates))
+	current = fromHour
+	for !current.After(toHour) {
+		hourKey := uc.formatPeriod(current, "hour")
+		if point, exists := hourlyAggregates[hourKey]; exists {
+			points = append(points, *point)
+		}
+		current = current.Add(time.Hour)
+	}
+
+	return points, nil
 }
 
 func (uc *GetTrafficTrendUseCase) validateQuery(query GetTrafficTrendQuery) error {

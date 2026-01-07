@@ -8,6 +8,7 @@ import (
 	"github.com/orris-inc/orris/internal/application/telegram/usecases"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/domain/telegram"
+	"github.com/orris-inc/orris/internal/infrastructure/cache"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -43,6 +44,8 @@ func NewServiceDDD(
 	bindingRepo telegram.TelegramBindingRepository,
 	subscriptionRepo subscription.SubscriptionRepository,
 	usageRepo subscription.SubscriptionUsageRepository,
+	usageStatsRepo subscription.SubscriptionUsageStatsRepository,
+	hourlyCache cache.HourlyTrafficCache,
 	planRepo subscription.PlanRepository,
 	verifyCodeStore VerifyCodeStore,
 	botService BotService,
@@ -54,7 +57,7 @@ func NewServiceDDD(
 		unbindUC:            usecases.NewUnbindTelegramUseCase(bindingRepo, logger),
 		updatePreferencesUC: usecases.NewUpdatePreferencesUseCase(bindingRepo, logger),
 		processReminderUC: usecases.NewProcessReminderUseCase(
-			bindingRepo, subscriptionRepo, usageRepo, planRepo, botService, logger,
+			bindingRepo, subscriptionRepo, usageRepo, usageStatsRepo, hourlyCache, planRepo, botService, logger,
 		),
 		botService:  botService,
 		bindingRepo: bindingRepo,

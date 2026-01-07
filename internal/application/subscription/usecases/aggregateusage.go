@@ -317,62 +317,6 @@ func (uc *AggregateUsageUseCase) AggregateMonthlyUsage(ctx context.Context) erro
 	return nil
 }
 
-// aggregateRecords aggregates usage records into the aggregated map.
-// This is a helper function to reduce code duplication between daily and monthly aggregation.
-func (uc *AggregateUsageUseCase) aggregateRecords(
-	records []*subscription.SubscriptionUsage,
-	aggregated map[aggregationKey]*subscription.SubscriptionUsageStats,
-	granularity subscription.Granularity,
-	period time.Time,
-) {
-	for _, record := range records {
-		var subID uint
-		if record.SubscriptionID() != nil {
-			subID = *record.SubscriptionID()
-		}
-
-		key := aggregationKey{
-			subscriptionID: subID,
-			resourceType:   record.ResourceType(),
-			resourceID:     record.ResourceID(),
-		}
-
-		if _, exists := aggregated[key]; !exists {
-			// Create new aggregated stats record
-			var subscriptionIDPtr *uint
-			if subID != 0 {
-				subscriptionIDPtr = &subID
-			}
-
-			stats, err := subscription.NewSubscriptionUsageStats(
-				record.ResourceType(),
-				record.ResourceID(),
-				subscriptionIDPtr,
-				granularity,
-				period,
-			)
-			if err != nil {
-				uc.logger.Errorw("failed to create usage stats entity",
-					"error", err,
-					"resource_type", record.ResourceType(),
-					"resource_id", record.ResourceID(),
-				)
-				continue
-			}
-			aggregated[key] = stats
-		}
-
-		// Accumulate traffic
-		if err := aggregated[key].Accumulate(record.Upload(), record.Download()); err != nil {
-			uc.logger.Warnw("failed to accumulate traffic",
-				"error", err,
-				"resource_type", record.ResourceType(),
-				"resource_id", record.ResourceID(),
-			)
-		}
-	}
-}
-
 // upsertAggregatedStats upserts all aggregated stats records to the repository.
 // Returns the count of successful and failed upserts.
 func (uc *AggregateUsageUseCase) upsertAggregatedStats(

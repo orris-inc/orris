@@ -2,9 +2,11 @@ package usecases
 
 import (
 	"context"
+	"time"
 
 	"github.com/orris-inc/orris/internal/application/user/dto"
 	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/infrastructure/cache"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -18,7 +20,8 @@ type GetDashboardQuery struct {
 // GetDashboardUseCase handles retrieving user dashboard data
 type GetDashboardUseCase struct {
 	subscriptionRepo subscription.SubscriptionRepository
-	usageRepo        subscription.SubscriptionUsageRepository
+	usageStatsRepo   subscription.SubscriptionUsageStatsRepository
+	hourlyCache      cache.HourlyTrafficCache
 	planRepo         subscription.PlanRepository
 	logger           logger.Interface
 }
@@ -26,13 +29,15 @@ type GetDashboardUseCase struct {
 // NewGetDashboardUseCase creates a new GetDashboardUseCase
 func NewGetDashboardUseCase(
 	subscriptionRepo subscription.SubscriptionRepository,
-	usageRepo subscription.SubscriptionUsageRepository,
+	usageStatsRepo subscription.SubscriptionUsageStatsRepository,
+	hourlyCache cache.HourlyTrafficCache,
 	planRepo subscription.PlanRepository,
 	logger logger.Interface,
 ) *GetDashboardUseCase {
 	return &GetDashboardUseCase{
 		subscriptionRepo: subscriptionRepo,
-		usageRepo:        usageRepo,
+		usageStatsRepo:   usageStatsRepo,
+		hourlyCache:      hourlyCache,
 		planRepo:         planRepo,
 		logger:           logger,
 	}
@@ -91,28 +96,17 @@ func (uc *GetDashboardUseCase) Execute(
 
 	// Process each subscription
 	for _, sub := range subscriptions {
-		// Get usage for current period using aggregation
+		// Get usage for current period combining Redis (recent 24h) and MySQL stats (historical)
 		periodStart := sub.CurrentPeriodStart()
 		periodEnd := biztime.EndOfDayUTC(sub.CurrentPeriodEnd())
 
-		usageSummary, err := uc.usageRepo.GetTotalUsageBySubscriptionID(ctx, sub.ID(), periodStart, periodEnd)
-		if err != nil {
-			uc.logger.Warnw("failed to fetch subscription usage",
-				"subscription_id", sub.ID(),
-				"error", err,
-			)
-		}
+		usageSummary := uc.getTotalUsageBySubscriptionID(ctx, sub.ID(), periodStart, periodEnd)
 
 		// Calculate subscription usage summary
 		subUsage := &dto.UsageSummary{
-			Upload:   0,
-			Download: 0,
-			Total:    0,
-		}
-		if usageSummary != nil {
-			subUsage.Upload = usageSummary.Upload
-			subUsage.Download = usageSummary.Download
-			subUsage.Total = usageSummary.Total
+			Upload:   usageSummary.Upload,
+			Download: usageSummary.Download,
+			Total:    usageSummary.Total,
 		}
 
 		// Add to total usage
@@ -153,4 +147,73 @@ func (uc *GetDashboardUseCase) Execute(
 	)
 
 	return response, nil
+}
+
+// getTotalUsageBySubscriptionID retrieves total usage by combining Redis (recent 24h) and MySQL stats (historical).
+// This method uses a graceful degradation strategy: if any data source fails, it logs a warning
+// and continues with available data rather than failing the entire request.
+func (uc *GetDashboardUseCase) getTotalUsageBySubscriptionID(
+	ctx context.Context,
+	subscriptionID uint,
+	from, to time.Time,
+) *cache.TrafficSummary {
+	now := biztime.NowUTC()
+	dayAgo := now.Add(-24 * time.Hour)
+
+	result := &cache.TrafficSummary{}
+	subscriptionIDs := []uint{subscriptionID}
+
+	// Determine time boundaries for recent data (last 24h from Redis)
+	recentFrom := from
+	if recentFrom.Before(dayAgo) {
+		recentFrom = dayAgo
+	}
+
+	// Get recent traffic from Redis (last 24h)
+	if recentFrom.Before(to) && recentFrom.Before(now) {
+		recentTo := to
+		if recentTo.After(now) {
+			recentTo = now
+		}
+		recentTraffic, err := uc.hourlyCache.GetTotalTrafficBySubscriptionIDs(
+			ctx, subscriptionIDs, "", recentFrom, recentTo,
+		)
+		if err != nil {
+			uc.logger.Warnw("failed to get recent traffic from Redis",
+				"subscription_id", subscriptionID,
+				"from", recentFrom,
+				"to", recentTo,
+				"error", err,
+			)
+		} else if t, ok := recentTraffic[subscriptionID]; ok {
+			result.Upload += t.Upload
+			result.Download += t.Download
+			result.Total += t.Total
+		}
+	}
+
+	// Get historical traffic from MySQL stats (before 24h ago)
+	if from.Before(dayAgo) {
+		historicalTo := dayAgo
+		if historicalTo.After(to) {
+			historicalTo = to
+		}
+		historicalTraffic, err := uc.usageStatsRepo.GetTotalBySubscriptionIDs(
+			ctx, subscriptionIDs, nil, subscription.GranularityDaily, from, historicalTo,
+		)
+		if err != nil {
+			uc.logger.Warnw("failed to get historical traffic from stats",
+				"subscription_id", subscriptionID,
+				"from", from,
+				"to", historicalTo,
+				"error", err,
+			)
+		} else if historicalTraffic != nil {
+			result.Upload += historicalTraffic.Upload
+			result.Download += historicalTraffic.Download
+			result.Total += historicalTraffic.Total
+		}
+	}
+
+	return result
 }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru/v2"
@@ -55,18 +56,30 @@ type RuleTrafficBufferWriter interface {
 	AddTraffic(ruleID uint, upload, download int64)
 }
 
+// ForwardTrafficRecorder defines the interface for recording forward rule traffic to hourly cache.
+// This interface is defined locally to avoid import cycle with adapters package.
+type ForwardTrafficRecorder interface {
+	// RecordForwardTraffic records forward rule traffic to Redis HourlyTrafficCache.
+	// If subscriptionID is provided, records to that subscription's hourly bucket.
+	// If subscriptionID is nil (admin rule), skip recording.
+	RecordForwardTraffic(ctx context.Context, ruleID uint, subscriptionID *uint, upload, download int64) error
+}
+
 // cachedRuleInfo holds cached rule information to avoid frequent database queries.
 type cachedRuleInfo struct {
-	internalID uint
-	cachedAt   time.Time
+	internalID          uint
+	subscriptionID      *uint
+	effectiveMultiplier float64
+	cachedAt            time.Time
 }
 
 // TrafficMessageHandler handles traffic messages from forward agents.
 // It implements the MessageHandler interface.
 type TrafficMessageHandler struct {
-	buffer   RuleTrafficBufferWriter
-	ruleRepo forward.Repository
-	logger   logger.Interface
+	buffer          RuleTrafficBufferWriter
+	ruleRepo        forward.Repository
+	trafficRecorder ForwardTrafficRecorder
+	logger          logger.Interface
 
 	// Rule info cache with LRU eviction (avoids database queries for each traffic update)
 	// Using LRU cache with size limit to prevent memory exhaustion attacks
@@ -78,6 +91,7 @@ type TrafficMessageHandler struct {
 func NewTrafficMessageHandler(
 	buffer RuleTrafficBufferWriter,
 	ruleRepo forward.Repository,
+	trafficRecorder ForwardTrafficRecorder,
 	log logger.Interface,
 ) *TrafficMessageHandler {
 	// Initialize LRU cache with size limit to prevent memory exhaustion
@@ -89,11 +103,12 @@ func NewTrafficMessageHandler(
 	}
 
 	return &TrafficMessageHandler{
-		buffer:    buffer,
-		ruleRepo:  ruleRepo,
-		logger:    log,
-		ruleCache: cache,
-		cacheTTL:  5 * time.Minute,
+		buffer:          buffer,
+		ruleRepo:        ruleRepo,
+		trafficRecorder: trafficRecorder,
+		logger:          log,
+		ruleCache:       cache,
+		cacheTTL:        5 * time.Minute,
 	}
 }
 
@@ -210,8 +225,27 @@ func (h *TrafficMessageHandler) processTrafficItem(ctx context.Context, agentID 
 		return
 	}
 
-	// Add to buffer
+	// Add to buffer (writes to forward_rules table)
 	h.buffer.AddTraffic(ruleInfo.internalID, item.UploadBytes, item.DownloadBytes)
+
+	// Also record traffic to HourlyTrafficCache for subscription usage tracking.
+	// Apply traffic multiplier before recording.
+	// Only record if rule has a subscription (user rule); skip admin rules.
+	if h.trafficRecorder != nil && ruleInfo.subscriptionID != nil {
+		// Apply multiplier to get the effective traffic for billing/usage tracking
+		// Use safe multiplication to prevent integer overflow
+		effectiveUpload := safeMultiplyTraffic(item.UploadBytes, ruleInfo.effectiveMultiplier)
+		effectiveDownload := safeMultiplyTraffic(item.DownloadBytes, ruleInfo.effectiveMultiplier)
+		if err := h.trafficRecorder.RecordForwardTraffic(ctx, ruleInfo.internalID, ruleInfo.subscriptionID, effectiveUpload, effectiveDownload); err != nil {
+			// Log warning but don't fail - buffer update already succeeded
+			h.logger.Warnw("failed to record forward traffic to hourly cache",
+				"rule_id", item.RuleID,
+				"internal_id", ruleInfo.internalID,
+				"subscription_id", *ruleInfo.subscriptionID,
+				"error", err,
+			)
+		}
+	}
 }
 
 // getRuleInfo retrieves rule information with caching.
@@ -235,8 +269,10 @@ func (h *TrafficMessageHandler) getRuleInfo(ctx context.Context, ruleSID string)
 
 	// Cache the result (LRU will automatically evict oldest entries if full)
 	info := &cachedRuleInfo{
-		internalID: rule.ID(),
-		cachedAt:   time.Now(),
+		internalID:          rule.ID(),
+		subscriptionID:      rule.SubscriptionID(),
+		effectiveMultiplier: rule.GetEffectiveMultiplier(),
+		cachedAt:            time.Now(),
 	}
 	h.ruleCache.Add(ruleSID, info)
 
@@ -252,4 +288,21 @@ func (h *TrafficMessageHandler) InvalidateCache(ruleSID string) {
 // ClearCache clears all cached rule information.
 func (h *TrafficMessageHandler) ClearCache() {
 	h.ruleCache.Purge()
+}
+
+// safeMultiplyTraffic safely multiplies traffic bytes by a multiplier,
+// capping at math.MaxInt64 to prevent integer overflow.
+func safeMultiplyTraffic(bytes int64, multiplier float64) int64 {
+	if bytes <= 0 || multiplier <= 0 {
+		return 0
+	}
+
+	result := float64(bytes) * multiplier
+
+	// Cap at MaxInt64 to prevent overflow when converting back to int64
+	if result > float64(math.MaxInt64) {
+		return math.MaxInt64
+	}
+
+	return int64(result)
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/domain/telegram/admin"
 	"github.com/orris-inc/orris/internal/domain/user"
+	"github.com/orris-inc/orris/internal/infrastructure/cache"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -19,7 +20,8 @@ type SendDailySummaryUseCase struct {
 	bindingRepo      admin.AdminTelegramBindingRepository
 	userRepo         user.Repository
 	subscriptionRepo subscription.SubscriptionRepository
-	usageRepo        subscription.SubscriptionUsageRepository
+	usageStatsRepo   subscription.SubscriptionUsageStatsRepository
+	hourlyCache      cache.HourlyTrafficCache
 	nodeRepo         node.NodeRepository
 	agentRepo        forward.AgentRepository
 	botService       TelegramMessageSender
@@ -31,7 +33,8 @@ func NewSendDailySummaryUseCase(
 	bindingRepo admin.AdminTelegramBindingRepository,
 	userRepo user.Repository,
 	subscriptionRepo subscription.SubscriptionRepository,
-	usageRepo subscription.SubscriptionUsageRepository,
+	usageStatsRepo subscription.SubscriptionUsageStatsRepository,
+	hourlyCache cache.HourlyTrafficCache,
 	nodeRepo node.NodeRepository,
 	agentRepo forward.AgentRepository,
 	botService TelegramMessageSender,
@@ -41,7 +44,8 @@ func NewSendDailySummaryUseCase(
 		bindingRepo:      bindingRepo,
 		userRepo:         userRepo,
 		subscriptionRepo: subscriptionRepo,
-		usageRepo:        usageRepo,
+		usageStatsRepo:   usageStatsRepo,
+		hourlyCache:      hourlyCache,
 		nodeRepo:         nodeRepo,
 		agentRepo:        agentRepo,
 		botService:       botService,
@@ -243,13 +247,90 @@ func (uc *SendDailySummaryUseCase) gatherDailyStats(ctx context.Context, start, 
 		summary.OfflineAgents = summary.TotalAgents - summary.OnlineAgents
 	}
 
-	// Get traffic usage
-	usageSummary, err := uc.usageRepo.GetPlatformTotalUsage(ctx, nil, start, end)
-	if err == nil && usageSummary != nil {
-		summary.TotalTrafficBytes = usageSummary.Total
-	}
+	// Get traffic usage from combined sources:
+	// 1. MySQL subscription_usage_stats for historical data (daily granularity)
+	// 2. Redis hourly cache for recent data (last 24h)
+	summary.TotalTrafficBytes = uc.getPlatformTrafficForPeriod(ctx, start, end)
 
 	return summary, nil
+}
+
+// getPlatformTrafficForPeriod retrieves platform-wide traffic for a time period.
+// Uses MySQL subscription_usage_stats with daily granularity as primary data source.
+// Falls back to Redis hourly cache only if MySQL has no data AND the time range
+// is within Redis TTL (25 hours).
+func (uc *SendDailySummaryUseCase) getPlatformTrafficForPeriod(ctx context.Context, start, end time.Time) uint64 {
+	var totalTraffic uint64
+
+	// Daily summary is for yesterday, so all data should be in MySQL daily stats
+	// Query MySQL subscription_usage_stats with daily granularity
+	usageSummary, err := uc.usageStatsRepo.GetPlatformTotalUsage(ctx, subscription.GranularityDaily, start, end)
+	if err != nil {
+		uc.logger.Warnw("failed to get platform usage from stats repo",
+			"error", err,
+			"start", start,
+			"end", end,
+		)
+	} else if usageSummary != nil {
+		totalTraffic += usageSummary.Total
+	}
+
+	// Fallback to Redis hourly cache only if:
+	// 1. MySQL returned no data (possibly daily aggregation hasn't run yet)
+	// 2. The time range overlaps with Redis TTL (25 hours)
+	// 3. hourlyCache is available
+	if totalTraffic == 0 && uc.hourlyCache != nil {
+		now := biztime.NowUTC()
+		redisTTLBoundary := now.Add(-25 * time.Hour)
+
+		// Only attempt Redis fallback if end time is within Redis TTL
+		if end.After(redisTTLBoundary) {
+			// Adjust start time to Redis TTL boundary if needed
+			effectiveStart := start
+			if effectiveStart.Before(redisTTLBoundary) {
+				effectiveStart = redisTTLBoundary
+			}
+			redisTraffic := uc.getTrafficFromHourlyCache(ctx, effectiveStart, end)
+			totalTraffic += redisTraffic
+		}
+	}
+
+	return totalTraffic
+}
+
+// getTrafficFromHourlyCache retrieves platform-wide traffic from Redis hourly cache.
+func (uc *SendDailySummaryUseCase) getTrafficFromHourlyCache(ctx context.Context, start, end time.Time) uint64 {
+	var total uint64
+
+	// Iterate through each hour in the time range
+	current := biztime.TruncateToHourInBiz(start)
+	endHour := biztime.TruncateToHourInBiz(end)
+
+	for !current.After(endHour) {
+		hourlyData, err := uc.hourlyCache.GetAllHourlyTraffic(ctx, current)
+		if err != nil {
+			uc.logger.Warnw("failed to get hourly traffic from cache",
+				"hour", current.Format("2006-01-02 15:04"),
+				"error", err,
+			)
+			current = current.Add(time.Hour)
+			continue
+		}
+
+		for _, data := range hourlyData {
+			// Safe conversion: only add positive values to prevent uint64 overflow
+			if data.Upload > 0 {
+				total += uint64(data.Upload)
+			}
+			if data.Download > 0 {
+				total += uint64(data.Download)
+			}
+		}
+
+		current = current.Add(time.Hour)
+	}
+
+	return total
 }
 
 func (uc *SendDailySummaryUseCase) buildDailySummaryMessage(summary *DailySummaryData) string {

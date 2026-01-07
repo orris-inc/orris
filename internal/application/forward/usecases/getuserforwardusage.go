@@ -7,6 +7,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/infrastructure/cache"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -32,6 +33,8 @@ type GetUserForwardUsageUseCase struct {
 	subscriptionRepo subscription.SubscriptionRepository
 	planRepo         subscription.PlanRepository
 	usageRepo        subscription.SubscriptionUsageRepository
+	usageStatsRepo   subscription.SubscriptionUsageStatsRepository
+	hourlyCache      cache.HourlyTrafficCache
 	logger           logger.Interface
 }
 
@@ -41,6 +44,8 @@ func NewGetUserForwardUsageUseCase(
 	subscriptionRepo subscription.SubscriptionRepository,
 	planRepo subscription.PlanRepository,
 	usageRepo subscription.SubscriptionUsageRepository,
+	usageStatsRepo subscription.SubscriptionUsageStatsRepository,
+	hourlyCache cache.HourlyTrafficCache,
 	logger logger.Interface,
 ) *GetUserForwardUsageUseCase {
 	return &GetUserForwardUsageUseCase{
@@ -48,6 +53,8 @@ func NewGetUserForwardUsageUseCase(
 		subscriptionRepo: subscriptionRepo,
 		planRepo:         planRepo,
 		usageRepo:        usageRepo,
+		usageStatsRepo:   usageStatsRepo,
+		hourlyCache:      hourlyCache,
 		logger:           logger,
 	}
 }
@@ -184,20 +191,50 @@ func (uc *GetUserForwardUsageUseCase) Execute(ctx context.Context, query GetUser
 		return nil, fmt.Errorf("failed to get user rules count: %w", err)
 	}
 
-	// Query traffic usage from subscription_usages table
+	// Query traffic usage from Redis (last 24h) + MySQL stats (historical)
 	var trafficUsed uint64
 	if len(forwardSubscriptionIDs) > 0 {
 		// Adjust latestTo to end of day
 		latestTo = biztime.EndOfDayUTC(latestTo)
-
 		resourceType := string(subscription.ResourceTypeForwardRule)
-		usageSummary, err := uc.usageRepo.GetTotalUsageBySubscriptionIDs(
-			ctx, resourceType, forwardSubscriptionIDs, earliestFrom, latestTo,
-		)
-		if err != nil {
-			uc.logger.Warnw("failed to get forward traffic usage", "error", err)
-		} else if usageSummary != nil {
-			trafficUsed = usageSummary.Total
+
+		now := biztime.NowUTC()
+		dayAgo := now.Add(-24 * time.Hour)
+
+		// Determine time boundary for recent data (last 24 hours)
+		recentFrom := earliestFrom
+		if recentFrom.Before(dayAgo) {
+			recentFrom = dayAgo
+		}
+
+		// Get recent traffic from Redis (last 24h)
+		if recentFrom.Before(latestTo) {
+			recentTraffic, err := uc.hourlyCache.GetTotalTrafficBySubscriptionIDs(
+				ctx, forwardSubscriptionIDs, resourceType, recentFrom, latestTo,
+			)
+			if err != nil {
+				uc.logger.Warnw("failed to get recent traffic from Redis", "error", err)
+			} else {
+				for _, t := range recentTraffic {
+					trafficUsed += t.Total
+				}
+			}
+		}
+
+		// Get historical traffic from MySQL stats (before 24h ago)
+		if earliestFrom.Before(dayAgo) {
+			historicalTo := dayAgo
+			if historicalTo.After(latestTo) {
+				historicalTo = latestTo
+			}
+			historicalTraffic, err := uc.usageStatsRepo.GetTotalBySubscriptionIDs(
+				ctx, forwardSubscriptionIDs, &resourceType, subscription.GranularityDaily, earliestFrom, historicalTo,
+			)
+			if err != nil {
+				uc.logger.Warnw("failed to get historical traffic from stats", "error", err)
+			} else if historicalTraffic != nil {
+				trafficUsed += historicalTraffic.Total
+			}
 		}
 	}
 

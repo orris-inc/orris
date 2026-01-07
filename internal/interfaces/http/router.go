@@ -511,6 +511,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		telegramBindingRepo,
 		subscriptionRepo,
 		subscriptionUsageRepo,
+		subscriptionUsageStatsRepo,
+		hourlyTrafficCache,
 		subscriptionPlanRepo,
 		telegramVerifyStore,
 		nil, // BotService will be managed by BotServiceManager
@@ -599,7 +601,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Create dashboard handler
 	getDashboardUC := usecases.NewGetDashboardUseCase(
 		subscriptionRepo,
-		subscriptionUsageRepo,
+		subscriptionUsageStatsRepo,
+		hourlyTrafficCache,
 		subscriptionPlanRepo,
 		log,
 	)
@@ -675,7 +678,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		adminBindingRepo,
 		userRepo,
 		subscriptionRepo,
-		subscriptionUsageRepo,
+		subscriptionUsageStatsRepo,
+		hourlyTrafficCache,
 		nodeRepoImpl,
 		forwardAgentRepo,
 		alertDeduplicator,
@@ -705,24 +709,24 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		subscriptionPlanRepo, log,
 	)
 
-	// Initialize admin traffic stats use cases
+	// Initialize admin traffic stats use cases (uses subscription_usage_stats table)
 	getTrafficOverviewUC := adminUsecases.NewGetTrafficOverviewUseCase(
-		subscriptionUsageRepo, subscriptionRepo, userRepo, nodeRepoImpl, forwardRuleRepo, log,
+		subscriptionUsageStatsRepo, subscriptionRepo, userRepo, nodeRepoImpl, forwardRuleRepo, log,
 	)
 	getUserTrafficStatsUC := adminUsecases.NewGetUserTrafficStatsUseCase(
-		subscriptionUsageRepo, subscriptionRepo, userRepo, log,
+		subscriptionUsageStatsRepo, subscriptionRepo, userRepo, log,
 	)
 	getSubscriptionTrafficStatsUC := adminUsecases.NewGetSubscriptionTrafficStatsUseCase(
-		subscriptionUsageRepo, subscriptionRepo, userRepo, subscriptionPlanRepo, log,
+		subscriptionUsageStatsRepo, subscriptionRepo, userRepo, subscriptionPlanRepo, log,
 	)
 	getAdminNodeTrafficStatsUC := adminUsecases.NewGetAdminNodeTrafficStatsUseCase(
-		subscriptionUsageRepo, nodeRepoImpl, log,
+		subscriptionUsageStatsRepo, nodeRepoImpl, log,
 	)
 	getTrafficRankingUC := adminUsecases.NewGetTrafficRankingUseCase(
-		subscriptionUsageRepo, subscriptionRepo, userRepo, log,
+		subscriptionUsageStatsRepo, subscriptionRepo, userRepo, log,
 	)
 	getTrafficTrendUC := adminUsecases.NewGetTrafficTrendUseCase(
-		subscriptionUsageRepo, log,
+		subscriptionUsageStatsRepo, hourlyTrafficCache, log,
 	)
 
 	// Initialize admin traffic stats handler
@@ -793,9 +797,9 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		log,
 	)
 
-	// Initialize forward traffic recorder adapter for writing forward traffic to subscription_usages table
+	// Initialize forward traffic recorder adapter for writing forward traffic to Redis HourlyTrafficCache
 	forwardTrafficRecorder := adapters.NewForwardTrafficRecorderAdapter(
-		subscriptionUsageRepo,
+		hourlyTrafficCache,
 		log,
 	)
 
@@ -840,6 +844,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	trafficMessageHandler := services.NewTrafficMessageHandler(
 		ruleTrafficBuffer,
 		forwardRuleRepo,
+		forwardTrafficRecorder,
 		log,
 	)
 	agentHub.RegisterMessageHandler(trafficMessageHandler)
@@ -943,6 +948,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		subscriptionRepo,
 		subscriptionPlanRepo,
 		subscriptionUsageRepo,
+		subscriptionUsageStatsRepo,
+		hourlyTrafficCache,
 		log,
 	)
 
@@ -951,6 +958,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		forwardRuleRepo,
 		subscriptionRepo,
 		subscriptionUsageRepo,
+		subscriptionUsageStatsRepo,
+		hourlyTrafficCache,
 		subscriptionPlanRepo,
 		log,
 	)
@@ -998,6 +1007,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		subscriptionRepo,
 		subscriptionPlanRepo,
 		subscriptionUsageRepo,
+		subscriptionUsageStatsRepo,
+		hourlyTrafficCache,
 		log,
 	)
 
@@ -1240,8 +1251,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Initialize QuotaService for unified quota calculation
 	quotaService := subscriptionUsecases.NewQuotaService(
 		subscriptionRepo,
-		subscriptionUsageRepo,
 		subscriptionUsageStatsRepo,
+		hourlyTrafficCache,
 		subscriptionPlanRepo,
 		log,
 	)

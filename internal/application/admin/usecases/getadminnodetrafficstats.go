@@ -23,21 +23,21 @@ type GetAdminNodeTrafficStatsQuery struct {
 
 // GetAdminNodeTrafficStatsUseCase handles retrieving traffic statistics grouped by node
 type GetAdminNodeTrafficStatsUseCase struct {
-	usageRepo subscription.SubscriptionUsageRepository
-	nodeRepo  node.NodeRepository
-	logger    logger.Interface
+	usageStatsRepo subscription.SubscriptionUsageStatsRepository
+	nodeRepo       node.NodeRepository
+	logger         logger.Interface
 }
 
 // NewGetAdminNodeTrafficStatsUseCase creates a new GetAdminNodeTrafficStatsUseCase
 func NewGetAdminNodeTrafficStatsUseCase(
-	usageRepo subscription.SubscriptionUsageRepository,
+	usageStatsRepo subscription.SubscriptionUsageStatsRepository,
 	nodeRepo node.NodeRepository,
 	logger logger.Interface,
 ) *GetAdminNodeTrafficStatsUseCase {
 	return &GetAdminNodeTrafficStatsUseCase{
-		usageRepo: usageRepo,
-		nodeRepo:  nodeRepo,
-		logger:    logger,
+		usageStatsRepo: usageStatsRepo,
+		nodeRepo:       nodeRepo,
+		logger:         logger,
 	}
 }
 
@@ -63,9 +63,9 @@ func (uc *GetAdminNodeTrafficStatsUseCase) Execute(
 	// Adjust 'to' time to end of day to include all records from that day
 	adjustedTo := biztime.EndOfDayUTC(query.To)
 
-	// Get usage data grouped by node (resource_type = "node")
+	// Get usage data grouped by node (resource_type = "node") from subscription_usage_stats table
 	resourceType := subscription.ResourceTypeNode.String()
-	resourceUsages, total, err := uc.usageRepo.GetUsageGroupedByResourceID(
+	resourceUsages, total, err := uc.usageStatsRepo.GetUsageGroupedByResourceID(
 		ctx,
 		resourceType,
 		query.From,

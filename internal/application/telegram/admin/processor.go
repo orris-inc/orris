@@ -9,7 +9,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	telegramAdmin "github.com/orris-inc/orris/internal/domain/telegram/admin"
 	"github.com/orris-inc/orris/internal/domain/user"
-	"github.com/orris-inc/orris/internal/infrastructure/cache"
+	infraCache "github.com/orris-inc/orris/internal/infrastructure/cache"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -31,10 +31,11 @@ func NewAdminNotificationProcessor(
 	bindingRepo telegramAdmin.AdminTelegramBindingRepository,
 	userRepo user.Repository,
 	subscriptionRepo subscription.SubscriptionRepository,
-	usageRepo subscription.SubscriptionUsageRepository,
+	usageStatsRepo subscription.SubscriptionUsageStatsRepository,
+	hourlyCache infraCache.HourlyTrafficCache,
 	nodeRepo node.NodeRepository,
 	agentRepo forward.AgentRepository,
-	alertDeduplicator *cache.AlertDeduplicator,
+	alertDeduplicator *infraCache.AlertDeduplicator,
 	botServiceProvider BotServiceProvider,
 	log logger.Interface,
 ) *AdminNotificationProcessor {
@@ -54,7 +55,8 @@ func NewAdminNotificationProcessor(
 		bindingRepo,
 		userRepo,
 		subscriptionRepo,
-		usageRepo,
+		usageStatsRepo,
+		hourlyCache,
 		nodeRepo,
 		agentRepo,
 		botServiceWrapper,
@@ -65,7 +67,8 @@ func NewAdminNotificationProcessor(
 		bindingRepo,
 		userRepo,
 		subscriptionRepo,
-		usageRepo,
+		usageStatsRepo,
+		hourlyCache,
 		nodeRepo,
 		agentRepo,
 		botServiceWrapper,

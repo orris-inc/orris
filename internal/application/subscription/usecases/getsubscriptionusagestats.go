@@ -100,18 +100,11 @@ func (uc *GetSubscriptionUsageStatsUseCase) Execute(
 		return nil, err
 	}
 
-	// Get total usage summary using aggregation query (not affected by pagination)
-	usageSummary, err := uc.usageRepo.GetTotalUsageBySubscriptionID(ctx, query.SubscriptionID, query.From, query.To)
+	// Get total usage summary from Redis (recent 24h) + MySQL stats (historical)
+	summary, err := uc.getTotalUsageBySubscriptionID(ctx, query.SubscriptionID, query.From, query.To)
 	if err != nil {
 		uc.logger.Errorw("failed to fetch subscription usage summary", "error", err)
 		return nil, errors.NewInternalError("failed to fetch usage summary")
-	}
-
-	// Use pre-fetched summary from aggregation query
-	summary := &SubscriptionUsageSummary{
-		TotalUpload:   usageSummary.Upload,
-		TotalDownload: usageSummary.Download,
-		Total:         usageSummary.Total,
 	}
 
 	// If granularity is specified, use trend aggregation
@@ -387,12 +380,95 @@ func (uc *GetSubscriptionUsageStatsUseCase) getMonthlyTrendFromStats(
 	return uc.convertStatsToRecords(ctx, stats)
 }
 
+// getTotalUsageBySubscriptionID combines recent traffic from Redis with historical from MySQL stats.
+// For data within the last 24 hours, it queries Redis HourlyTrafficCache.
+// For data older than 24 hours, it queries MySQL subscription_usage_stats table.
+func (uc *GetSubscriptionUsageStatsUseCase) getTotalUsageBySubscriptionID(
+	ctx context.Context,
+	subscriptionID uint,
+	from, to time.Time,
+) (*SubscriptionUsageSummary, error) {
+	now := biztime.NowUTC()
+	dayAgo := now.Add(-24 * time.Hour)
+
+	var totalUpload, totalDownload, total uint64
+
+	// Determine time boundaries for recent data (Redis)
+	recentFrom := from
+	if recentFrom.Before(dayAgo) {
+		recentFrom = dayAgo
+	}
+
+	// Get recent traffic from Redis (last 24h)
+	if recentFrom.Before(to) && recentFrom.Before(now) {
+		recentTo := to
+		if recentTo.After(now) {
+			recentTo = now
+		}
+		// Use hourlyCache to get subscription traffic
+		recentTraffic, err := uc.hourlyCache.GetTotalTrafficBySubscriptionIDs(
+			ctx, []uint{subscriptionID}, "", recentFrom, recentTo,
+		)
+		if err != nil {
+			uc.logger.Warnw("failed to get recent traffic from Redis",
+				"subscription_id", subscriptionID,
+				"from", recentFrom,
+				"to", recentTo,
+				"error", err,
+			)
+			// Continue with historical data even if Redis fails
+		} else if t, ok := recentTraffic[subscriptionID]; ok {
+			totalUpload += t.Upload
+			totalDownload += t.Download
+			total += t.Total
+		}
+	}
+
+	// Get historical traffic from MySQL stats (before 24h ago)
+	if from.Before(dayAgo) {
+		historicalTo := dayAgo
+		if historicalTo.After(to) {
+			historicalTo = to
+		}
+		// Use daily granularity for historical aggregation
+		historicalStats, err := uc.usageStatsRepo.GetTotalBySubscriptionIDs(
+			ctx, []uint{subscriptionID}, nil, subscription.GranularityDaily, from, historicalTo,
+		)
+		if err != nil {
+			uc.logger.Warnw("failed to get historical traffic from stats",
+				"subscription_id", subscriptionID,
+				"from", from,
+				"to", historicalTo,
+				"error", err,
+			)
+			// Continue with whatever data we have
+		} else if historicalStats != nil {
+			totalUpload += historicalStats.Upload
+			totalDownload += historicalStats.Download
+			total += historicalStats.Total
+		}
+	}
+
+	return &SubscriptionUsageSummary{
+		TotalUpload:   totalUpload,
+		TotalDownload: totalDownload,
+		Total:         total,
+	}, nil
+}
+
 // getLegacyTrend retrieves trend data from legacy subscription_usages table.
-// This is used as a fallback for backward compatibility.
+// DEPRECATED: This method queries the old subscription_usages table and is only used
+// as a fallback when active resource discovery fails. Prefer using the stats-based methods.
 func (uc *GetSubscriptionUsageStatsUseCase) getLegacyTrend(
 	ctx context.Context,
 	query GetSubscriptionUsageStatsQuery,
 ) ([]*SubscriptionUsageStatsRecord, error) {
+	uc.logger.Warnw("using deprecated legacy trend query on subscription_usages table",
+		"subscription_id", query.SubscriptionID,
+		"from", query.From,
+		"to", query.To,
+		"granularity", query.Granularity,
+	)
 	trendPoints, err := uc.usageRepo.GetSubscriptionUsageTrend(ctx, query.SubscriptionID, query.From, query.To, query.Granularity)
 	if err != nil {
 		uc.logger.Errorw("failed to fetch subscription usage trend from legacy table", "error", err)
@@ -482,12 +558,19 @@ func (uc *GetSubscriptionUsageStatsUseCase) convertStatsToRecords(
 	return records, nil
 }
 
-// executeWithRawRecords fetches raw usage records without aggregation
+// executeWithRawRecords fetches raw usage records without aggregation.
+// DEPRECATED: This method queries the old subscription_usages table for raw records.
+// Raw record queries are being phased out in favor of aggregated stats from Redis + MySQL stats table.
 func (uc *GetSubscriptionUsageStatsUseCase) executeWithRawRecords(
 	ctx context.Context,
 	query GetSubscriptionUsageStatsQuery,
 	summary *SubscriptionUsageSummary,
 ) (*GetSubscriptionUsageStatsResponse, error) {
+	uc.logger.Warnw("using deprecated raw records query on subscription_usages table",
+		"subscription_id", query.SubscriptionID,
+		"from", query.From,
+		"to", query.To,
+	)
 	filter := uc.buildFilter(query)
 
 	usageRecords, err := uc.usageRepo.GetUsageStats(ctx, filter)

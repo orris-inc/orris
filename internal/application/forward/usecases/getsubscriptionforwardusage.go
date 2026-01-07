@@ -3,9 +3,11 @@ package usecases
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/infrastructure/cache"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -30,7 +32,9 @@ type GetSubscriptionForwardUsageUseCase struct {
 	repo             forward.Repository
 	subscriptionRepo subscription.SubscriptionRepository
 	planRepo         subscription.PlanRepository
-	usageRepo        subscription.SubscriptionUsageRepository
+	usageRepo        subscription.SubscriptionUsageRepository       // Legacy, kept for compatibility
+	usageStatsRepo   subscription.SubscriptionUsageStatsRepository // For historical traffic data (>24h ago)
+	hourlyCache      cache.HourlyTrafficCache                      // For recent traffic data (last 24h)
 	logger           logger.Interface
 }
 
@@ -40,6 +44,8 @@ func NewGetSubscriptionForwardUsageUseCase(
 	subscriptionRepo subscription.SubscriptionRepository,
 	planRepo subscription.PlanRepository,
 	usageRepo subscription.SubscriptionUsageRepository,
+	usageStatsRepo subscription.SubscriptionUsageStatsRepository,
+	hourlyCache cache.HourlyTrafficCache,
 	logger logger.Interface,
 ) *GetSubscriptionForwardUsageUseCase {
 	return &GetSubscriptionForwardUsageUseCase{
@@ -47,6 +53,8 @@ func NewGetSubscriptionForwardUsageUseCase(
 		subscriptionRepo: subscriptionRepo,
 		planRepo:         planRepo,
 		usageRepo:        usageRepo,
+		usageStatsRepo:   usageStatsRepo,
+		hourlyCache:      hourlyCache,
 		logger:           logger,
 	}
 }
@@ -126,19 +134,54 @@ func (uc *GetSubscriptionForwardUsageUseCase) Execute(ctx context.Context, query
 		return nil, fmt.Errorf("failed to get rule count: %w", err)
 	}
 
-	// Query traffic usage from subscription_usages table
+	// Query traffic usage from Redis (recent) and MySQL stats (historical)
 	var trafficUsed uint64
 	periodStart := sub.CurrentPeriodStart()
 	periodEnd := biztime.EndOfDayUTC(sub.CurrentPeriodEnd())
+	now := biztime.NowUTC()
+	dayAgo := now.Add(-24 * time.Hour)
 
+	subscriptionIDs := []uint{query.SubscriptionID}
 	resourceType := string(subscription.ResourceTypeForwardRule)
-	usageSummary, err := uc.usageRepo.GetTotalUsageBySubscriptionIDs(
-		ctx, resourceType, []uint{query.SubscriptionID}, periodStart, periodEnd,
-	)
-	if err != nil {
-		uc.logger.Warnw("failed to get forward traffic usage", "subscription_id", query.SubscriptionID, "error", err)
-	} else if usageSummary != nil {
-		trafficUsed = usageSummary.Total
+
+	// Determine time boundaries for recent data (last 24h from Redis)
+	recentFrom := periodStart
+	if recentFrom.Before(dayAgo) {
+		recentFrom = dayAgo
+	}
+
+	// Get recent traffic from Redis (last 24h)
+	if recentFrom.Before(periodEnd) && recentFrom.Before(now) {
+		recentTo := periodEnd
+		if recentTo.After(now) {
+			recentTo = now
+		}
+		recentTraffic, err := uc.hourlyCache.GetTotalTrafficBySubscriptionIDs(
+			ctx, subscriptionIDs, resourceType, recentFrom, recentTo,
+		)
+		if err != nil {
+			uc.logger.Warnw("failed to get recent traffic from Redis", "subscription_id", query.SubscriptionID, "error", err)
+		} else {
+			for _, t := range recentTraffic {
+				trafficUsed += t.Total
+			}
+		}
+	}
+
+	// Get historical traffic from MySQL stats (before 24h ago)
+	if periodStart.Before(dayAgo) {
+		historicalTo := dayAgo
+		if historicalTo.After(periodEnd) {
+			historicalTo = periodEnd
+		}
+		historicalTraffic, err := uc.usageStatsRepo.GetTotalBySubscriptionIDs(
+			ctx, subscriptionIDs, &resourceType, subscription.GranularityDaily, periodStart, historicalTo,
+		)
+		if err != nil {
+			uc.logger.Warnw("failed to get historical traffic from stats", "subscription_id", query.SubscriptionID, "error", err)
+		} else if historicalTraffic != nil {
+			trafficUsed += historicalTraffic.Total
+		}
 	}
 
 	result := &GetSubscriptionForwardUsageResult{

@@ -23,7 +23,7 @@ type GetTrafficOverviewQuery struct {
 
 // GetTrafficOverviewUseCase handles retrieving global traffic overview
 type GetTrafficOverviewUseCase struct {
-	usageRepo        subscription.SubscriptionUsageRepository
+	usageStatsRepo   subscription.SubscriptionUsageStatsRepository
 	subscriptionRepo subscription.SubscriptionRepository
 	userRepo         user.Repository
 	nodeRepo         node.NodeRepository
@@ -33,7 +33,7 @@ type GetTrafficOverviewUseCase struct {
 
 // NewGetTrafficOverviewUseCase creates a new GetTrafficOverviewUseCase
 func NewGetTrafficOverviewUseCase(
-	usageRepo subscription.SubscriptionUsageRepository,
+	usageStatsRepo subscription.SubscriptionUsageStatsRepository,
 	subscriptionRepo subscription.SubscriptionRepository,
 	userRepo user.Repository,
 	nodeRepo node.NodeRepository,
@@ -41,7 +41,7 @@ func NewGetTrafficOverviewUseCase(
 	logger logger.Interface,
 ) *GetTrafficOverviewUseCase {
 	return &GetTrafficOverviewUseCase{
-		usageRepo:        usageRepo,
+		usageStatsRepo:   usageStatsRepo,
 		subscriptionRepo: subscriptionRepo,
 		userRepo:         userRepo,
 		nodeRepo:         nodeRepo,
@@ -69,8 +69,8 @@ func (uc *GetTrafficOverviewUseCase) Execute(
 	// Adjust 'to' time to end of day to include all records from that day
 	adjustedTo := biztime.EndOfDayUTC(query.To)
 
-	// Get platform total usage
-	totalUsage, err := uc.usageRepo.GetPlatformTotalUsage(ctx, query.ResourceType, query.From, adjustedTo)
+	// Get platform total usage from subscription_usage_stats table
+	totalUsage, err := uc.usageStatsRepo.GetPlatformTotalUsageByResourceType(ctx, query.ResourceType, query.From, adjustedTo)
 	if err != nil {
 		uc.logger.Errorw("failed to fetch platform total usage", "error", err)
 		return nil, errors.NewInternalError("failed to fetch platform usage")

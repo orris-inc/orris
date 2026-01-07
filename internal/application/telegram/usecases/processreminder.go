@@ -9,6 +9,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/domain/telegram"
+	"github.com/orris-inc/orris/internal/infrastructure/cache"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -31,7 +32,9 @@ type highUsageInfo struct {
 type ProcessReminderUseCase struct {
 	bindingRepo      telegram.TelegramBindingRepository
 	subscriptionRepo subscription.SubscriptionRepository
-	usageRepo        subscription.SubscriptionUsageRepository
+	usageRepo        subscription.SubscriptionUsageRepository // Kept for backward compatibility but not used
+	usageStatsRepo   subscription.SubscriptionUsageStatsRepository
+	hourlyCache      cache.HourlyTrafficCache
 	planRepo         subscription.PlanRepository
 	botService       TelegramMessageSender
 	logger           logger.Interface
@@ -42,6 +45,8 @@ func NewProcessReminderUseCase(
 	bindingRepo telegram.TelegramBindingRepository,
 	subscriptionRepo subscription.SubscriptionRepository,
 	usageRepo subscription.SubscriptionUsageRepository,
+	usageStatsRepo subscription.SubscriptionUsageStatsRepository,
+	hourlyCache cache.HourlyTrafficCache,
 	planRepo subscription.PlanRepository,
 	botService TelegramMessageSender,
 	logger logger.Interface,
@@ -50,6 +55,8 @@ func NewProcessReminderUseCase(
 		bindingRepo:      bindingRepo,
 		subscriptionRepo: subscriptionRepo,
 		usageRepo:        usageRepo,
+		usageStatsRepo:   usageStatsRepo,
+		hourlyCache:      hourlyCache,
 		planRepo:         planRepo,
 		botService:       botService,
 		logger:           logger,
@@ -210,7 +217,7 @@ func (uc *ProcessReminderUseCase) processTrafficUsage(ctx context.Context) (int,
 				}
 			}
 
-			summary, err := uc.usageRepo.GetTotalUsageBySubscriptionIDs(
+			summary, err := uc.getTotalUsageBySubscriptionIDs(
 				ctx,
 				resourceType,
 				subIDs,
@@ -337,4 +344,84 @@ func formatBytes(bytes uint64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// getTotalUsageBySubscriptionIDs retrieves total traffic combining Redis (recent 24h) and MySQL stats (historical).
+// This method aggregates traffic from two sources:
+// - Last 24 hours: Redis HourlyTrafficCache (real-time data)
+// - Before 24 hours: MySQL subscription_usage_stats table (aggregated historical data)
+func (uc *ProcessReminderUseCase) getTotalUsageBySubscriptionIDs(
+	ctx context.Context,
+	resourceType string,
+	subscriptionIDs []uint,
+	from, to time.Time,
+) (*subscription.UsageSummary, error) {
+	if len(subscriptionIDs) == 0 {
+		return &subscription.UsageSummary{Total: 0}, nil
+	}
+
+	now := biztime.NowUTC()
+	dayAgo := now.Add(-24 * time.Hour)
+
+	var total uint64
+
+	// Determine time boundaries for recent data (last 24h from Redis)
+	recentFrom := from
+	if recentFrom.Before(dayAgo) {
+		recentFrom = dayAgo
+	}
+
+	// Get recent traffic from Redis (last 24h)
+	if recentFrom.Before(to) && recentFrom.Before(now) {
+		recentTo := to
+		if recentTo.After(now) {
+			recentTo = now
+		}
+		recentTraffic, err := uc.hourlyCache.GetTotalTrafficBySubscriptionIDs(
+			ctx, subscriptionIDs, resourceType, recentFrom, recentTo,
+		)
+		if err != nil {
+			uc.logger.Warnw("failed to get recent traffic from Redis",
+				"subscription_ids_count", len(subscriptionIDs),
+				"resource_type", resourceType,
+				"error", err,
+			)
+			// Continue with historical data only
+		} else {
+			for _, t := range recentTraffic {
+				total += t.Total
+			}
+			uc.logger.Debugw("got recent 24h traffic from Redis",
+				"subscription_ids_count", len(subscriptionIDs),
+				"recent_total", total,
+			)
+		}
+	}
+
+	// Get historical traffic from MySQL stats (before 24 hours ago)
+	if from.Before(dayAgo) {
+		historicalTo := dayAgo
+		if historicalTo.After(to) {
+			historicalTo = to
+		}
+		historicalTraffic, err := uc.usageStatsRepo.GetTotalBySubscriptionIDs(
+			ctx, subscriptionIDs, nil, subscription.GranularityDaily, from, historicalTo,
+		)
+		if err != nil {
+			uc.logger.Warnw("failed to get historical traffic from stats",
+				"subscription_ids_count", len(subscriptionIDs),
+				"error", err,
+			)
+			// Continue with Redis data only if available
+		} else if historicalTraffic != nil {
+			total += historicalTraffic.Total
+			uc.logger.Debugw("got historical traffic from MySQL stats",
+				"subscription_ids_count", len(subscriptionIDs),
+				"historical_total", historicalTraffic.Total,
+				"combined_total", total,
+			)
+		}
+	}
+
+	return &subscription.UsageSummary{Total: total}, nil
 }

@@ -522,3 +522,216 @@ func TestRedisHourlyTrafficCache_InvalidResourceType(t *testing.T) {
 	err = cache.IncrementHourlyTraffic(ctx, 1, "forward_rule", 100, 1000, 2000)
 	assert.NoError(t, err)
 }
+
+func TestRedisHourlyTrafficCache_GetTotalTrafficBySubscriptionIDs(t *testing.T) {
+	// Initialize biztime
+	biztime.MustInit("Asia/Shanghai")
+
+	client, cleanup := setupTestRedis(t)
+	defer cleanup()
+
+	log := newNopLogger()
+	cache := NewRedisHourlyTrafficCache(client, log)
+	ctx := context.Background()
+
+	// Add traffic for multiple subscriptions and resource types
+	err := cache.IncrementHourlyTraffic(ctx, 1, "node", 100, 1000, 2000)
+	require.NoError(t, err)
+
+	err = cache.IncrementHourlyTraffic(ctx, 1, "forward", 200, 500, 600)
+	require.NoError(t, err)
+
+	err = cache.IncrementHourlyTraffic(ctx, 2, "node", 101, 300, 400)
+	require.NoError(t, err)
+
+	err = cache.IncrementHourlyTraffic(ctx, 3, "node", 102, 100, 100)
+	require.NoError(t, err)
+
+	// Test: Get total traffic for specific subscription IDs
+	now := biztime.NowUTC()
+	from := now.Add(-1 * time.Hour)
+	to := now
+
+	result, err := cache.GetTotalTrafficBySubscriptionIDs(ctx, []uint{1, 2}, "", from, to)
+	require.NoError(t, err)
+
+	// Subscription 1: 1000+2000 (node) + 500+600 (forward) = 4100
+	require.NotNil(t, result[1])
+	assert.Equal(t, uint64(1500), result[1].Upload)   // 1000 + 500
+	assert.Equal(t, uint64(2600), result[1].Download) // 2000 + 600
+	assert.Equal(t, uint64(4100), result[1].Total)
+	// Subscription 2: 300+400 (node) = 700
+	require.NotNil(t, result[2])
+	assert.Equal(t, uint64(300), result[2].Upload)
+	assert.Equal(t, uint64(400), result[2].Download)
+	assert.Equal(t, uint64(700), result[2].Total)
+	// Subscription 3 should not be in result (not requested)
+	_, exists := result[3]
+	assert.False(t, exists)
+}
+
+func TestRedisHourlyTrafficCache_GetTotalTrafficBySubscriptionIDs_WithResourceType(t *testing.T) {
+	// Initialize biztime
+	biztime.MustInit("Asia/Shanghai")
+
+	client, cleanup := setupTestRedis(t)
+	defer cleanup()
+
+	log := newNopLogger()
+	cache := NewRedisHourlyTrafficCache(client, log)
+	ctx := context.Background()
+
+	// Add traffic for multiple subscriptions and resource types
+	err := cache.IncrementHourlyTraffic(ctx, 1, "node", 100, 1000, 2000)
+	require.NoError(t, err)
+
+	err = cache.IncrementHourlyTraffic(ctx, 1, "forward", 200, 500, 600)
+	require.NoError(t, err)
+
+	err = cache.IncrementHourlyTraffic(ctx, 2, "node", 101, 300, 400)
+	require.NoError(t, err)
+
+	// Test: Get total traffic filtered by resource type
+	now := biztime.NowUTC()
+	from := now.Add(-1 * time.Hour)
+	to := now
+
+	result, err := cache.GetTotalTrafficBySubscriptionIDs(ctx, []uint{1, 2}, "node", from, to)
+	require.NoError(t, err)
+
+	// Subscription 1: only node traffic 1000+2000 = 3000 (forward excluded)
+	require.NotNil(t, result[1])
+	assert.Equal(t, uint64(1000), result[1].Upload)
+	assert.Equal(t, uint64(2000), result[1].Download)
+	assert.Equal(t, uint64(3000), result[1].Total)
+	// Subscription 2: node traffic 300+400 = 700
+	require.NotNil(t, result[2])
+	assert.Equal(t, uint64(300), result[2].Upload)
+	assert.Equal(t, uint64(400), result[2].Download)
+	assert.Equal(t, uint64(700), result[2].Total)
+}
+
+func TestRedisHourlyTrafficCache_GetTotalTrafficBySubscriptionIDs_EmptySubscriptionIDs(t *testing.T) {
+	// Initialize biztime
+	biztime.MustInit("Asia/Shanghai")
+
+	client, cleanup := setupTestRedis(t)
+	defer cleanup()
+
+	log := newNopLogger()
+	cache := NewRedisHourlyTrafficCache(client, log)
+	ctx := context.Background()
+
+	// Test: Empty subscription IDs should return empty map
+	now := biztime.NowUTC()
+	from := now.Add(-1 * time.Hour)
+	to := now
+
+	result, err := cache.GetTotalTrafficBySubscriptionIDs(ctx, []uint{}, "", from, to)
+	require.NoError(t, err)
+	assert.Empty(t, result)
+}
+
+func TestRedisHourlyTrafficCache_GetTotalTrafficBySubscriptionIDs_NoData(t *testing.T) {
+	// Initialize biztime
+	biztime.MustInit("Asia/Shanghai")
+
+	client, cleanup := setupTestRedis(t)
+	defer cleanup()
+
+	log := newNopLogger()
+	cache := NewRedisHourlyTrafficCache(client, log)
+	ctx := context.Background()
+
+	// Test: No data for requested subscriptions
+	now := biztime.NowUTC()
+	from := now.Add(-1 * time.Hour)
+	to := now
+
+	result, err := cache.GetTotalTrafficBySubscriptionIDs(ctx, []uint{999, 998}, "", from, to)
+	require.NoError(t, err)
+	assert.Empty(t, result)
+}
+
+func TestRedisHourlyTrafficCache_GetTotalTrafficBySubscriptionIDs_InvalidResourceType(t *testing.T) {
+	// Initialize biztime
+	biztime.MustInit("Asia/Shanghai")
+
+	client, cleanup := setupTestRedis(t)
+	defer cleanup()
+
+	log := newNopLogger()
+	cache := NewRedisHourlyTrafficCache(client, log)
+	ctx := context.Background()
+
+	// Test: Invalid resource type should return error
+	now := biztime.NowUTC()
+	from := now.Add(-1 * time.Hour)
+	to := now
+
+	_, err := cache.GetTotalTrafficBySubscriptionIDs(ctx, []uint{1}, "type:with:colons", from, to)
+	assert.ErrorIs(t, err, ErrInvalidResourceType)
+}
+
+func TestRedisHourlyTrafficCache_GetTotalTrafficBySubscriptionIDs_MultipleHours(t *testing.T) {
+	// Initialize biztime
+	biztime.MustInit("Asia/Shanghai")
+
+	client, cleanup := setupTestRedis(t)
+	defer cleanup()
+
+	log := newNopLogger()
+
+	// Create a custom cache to directly manipulate Redis keys
+	realCache := &RedisHourlyTrafficCache{
+		client: client,
+		logger: log,
+	}
+	ctx := context.Background()
+
+	// Use current time as base to ensure we're within 24-hour window
+	now := biztime.NowUTC()
+	baseTime := biztime.TruncateToHourInBiz(now).Add(-3 * time.Hour) // Start 3 hours ago
+
+	// Set data for 3 consecutive hours for subscription 1
+	for i := 0; i < 3; i++ {
+		hourTime := baseTime.Add(time.Duration(i) * time.Hour)
+		hourKey := formatHourKey(hourTime)
+		trafficKey := hourlyTrafficKey(hourKey, 1, "node", 100)
+		activeKey := hourlyActiveSetKey(hourKey)
+
+		client.HSet(ctx, trafficKey, hourlyFieldUpload, int64(100))
+		client.HSet(ctx, trafficKey, hourlyFieldDownload, int64(200))
+		client.SAdd(ctx, activeKey, trafficKey)
+	}
+
+	// Set data for 2 hours for subscription 2
+	for i := 0; i < 2; i++ {
+		hourTime := baseTime.Add(time.Duration(i) * time.Hour)
+		hourKey := formatHourKey(hourTime)
+		trafficKey := hourlyTrafficKey(hourKey, 2, "node", 101)
+		activeKey := hourlyActiveSetKey(hourKey)
+
+		client.HSet(ctx, trafficKey, hourlyFieldUpload, int64(50))
+		client.HSet(ctx, trafficKey, hourlyFieldDownload, int64(50))
+		client.SAdd(ctx, activeKey, trafficKey)
+	}
+
+	// Query range covering all hours
+	from := baseTime
+	to := baseTime.Add(2 * time.Hour)
+
+	result, err := realCache.GetTotalTrafficBySubscriptionIDs(ctx, []uint{1, 2}, "", from, to)
+	require.NoError(t, err)
+
+	// Subscription 1: 3 hours * (100+200) = 900
+	require.NotNil(t, result[1])
+	assert.Equal(t, uint64(300), result[1].Upload)   // 3 * 100
+	assert.Equal(t, uint64(600), result[1].Download) // 3 * 200
+	assert.Equal(t, uint64(900), result[1].Total)
+	// Subscription 2: 2 hours * (50+50) = 200
+	require.NotNil(t, result[2])
+	assert.Equal(t, uint64(100), result[2].Upload)   // 2 * 50
+	assert.Equal(t, uint64(100), result[2].Download) // 2 * 50
+	assert.Equal(t, uint64(200), result[2].Total)
+}

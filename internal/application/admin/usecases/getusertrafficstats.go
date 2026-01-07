@@ -24,7 +24,7 @@ type GetUserTrafficStatsQuery struct {
 
 // GetUserTrafficStatsUseCase handles retrieving traffic statistics grouped by user
 type GetUserTrafficStatsUseCase struct {
-	usageRepo        subscription.SubscriptionUsageRepository
+	usageStatsRepo   subscription.SubscriptionUsageStatsRepository
 	subscriptionRepo subscription.SubscriptionRepository
 	userRepo         user.Repository
 	logger           logger.Interface
@@ -32,13 +32,13 @@ type GetUserTrafficStatsUseCase struct {
 
 // NewGetUserTrafficStatsUseCase creates a new GetUserTrafficStatsUseCase
 func NewGetUserTrafficStatsUseCase(
-	usageRepo subscription.SubscriptionUsageRepository,
+	usageStatsRepo subscription.SubscriptionUsageStatsRepository,
 	subscriptionRepo subscription.SubscriptionRepository,
 	userRepo user.Repository,
 	logger logger.Interface,
 ) *GetUserTrafficStatsUseCase {
 	return &GetUserTrafficStatsUseCase{
-		usageRepo:        usageRepo,
+		usageStatsRepo:   usageStatsRepo,
 		subscriptionRepo: subscriptionRepo,
 		userRepo:         userRepo,
 		logger:           logger,
@@ -68,8 +68,8 @@ func (uc *GetUserTrafficStatsUseCase) Execute(
 	// Adjust 'to' time to end of day to include all records from that day
 	adjustedTo := biztime.EndOfDayUTC(query.To)
 
-	// Get usage data grouped by subscription
-	subscriptionUsages, total, err := uc.usageRepo.GetUsageGroupedBySubscription(
+	// Get usage data grouped by subscription from subscription_usage_stats table
+	subscriptionUsages, total, err := uc.usageStatsRepo.GetUsageGroupedBySubscription(
 		ctx,
 		query.ResourceType,
 		query.From,

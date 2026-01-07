@@ -28,7 +28,7 @@ type GetTrafficRankingQuery struct {
 
 // GetTrafficRankingUseCase handles retrieving traffic rankings
 type GetTrafficRankingUseCase struct {
-	usageRepo        subscription.SubscriptionUsageRepository
+	usageStatsRepo   subscription.SubscriptionUsageStatsRepository
 	subscriptionRepo subscription.SubscriptionRepository
 	userRepo         user.Repository
 	logger           logger.Interface
@@ -36,13 +36,13 @@ type GetTrafficRankingUseCase struct {
 
 // NewGetTrafficRankingUseCase creates a new GetTrafficRankingUseCase
 func NewGetTrafficRankingUseCase(
-	usageRepo subscription.SubscriptionUsageRepository,
+	usageStatsRepo subscription.SubscriptionUsageStatsRepository,
 	subscriptionRepo subscription.SubscriptionRepository,
 	userRepo user.Repository,
 	logger logger.Interface,
 ) *GetTrafficRankingUseCase {
 	return &GetTrafficRankingUseCase{
-		usageRepo:        usageRepo,
+		usageStatsRepo:   usageStatsRepo,
 		subscriptionRepo: subscriptionRepo,
 		userRepo:         userRepo,
 		logger:           logger,
@@ -71,8 +71,8 @@ func (uc *GetTrafficRankingUseCase) ExecuteUserRanking(
 	// Adjust 'to' time to end of day to include all records from that day
 	adjustedTo := biztime.EndOfDayUTC(query.To)
 
-	// Get top subscriptions by usage
-	topSubscriptions, err := uc.usageRepo.GetTopSubscriptionsByUsage(
+	// Get top subscriptions by usage from subscription_usage_stats table
+	topSubscriptions, err := uc.usageStatsRepo.GetTopSubscriptionsByUsage(
 		ctx,
 		query.ResourceType,
 		query.From,
@@ -211,8 +211,8 @@ func (uc *GetTrafficRankingUseCase) ExecuteSubscriptionRanking(
 	// Adjust 'to' time to end of day to include all records from that day
 	adjustedTo := biztime.EndOfDayUTC(query.To)
 
-	// Get top subscriptions by usage
-	topSubscriptions, err := uc.usageRepo.GetTopSubscriptionsByUsage(
+	// Get top subscriptions by usage from subscription_usage_stats table
+	topSubscriptions, err := uc.usageStatsRepo.GetTopSubscriptionsByUsage(
 		ctx,
 		query.ResourceType,
 		query.From,

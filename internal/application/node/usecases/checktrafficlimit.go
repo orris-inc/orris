@@ -2,8 +2,10 @@ package usecases
 
 import (
 	"context"
+	"time"
 
 	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/infrastructure/cache"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -24,20 +26,23 @@ type TrafficLimitResult struct {
 }
 
 type CheckTrafficLimitUseCase struct {
-	usageRepo        subscription.SubscriptionUsageRepository
+	usageStatsRepo   subscription.SubscriptionUsageStatsRepository
+	hourlyCache      cache.HourlyTrafficCache
 	subscriptionRepo subscription.SubscriptionRepository
 	planRepo         subscription.PlanRepository
 	logger           logger.Interface
 }
 
 func NewCheckTrafficLimitUseCase(
-	usageRepo subscription.SubscriptionUsageRepository,
+	usageStatsRepo subscription.SubscriptionUsageStatsRepository,
+	hourlyCache cache.HourlyTrafficCache,
 	subscriptionRepo subscription.SubscriptionRepository,
 	planRepo subscription.PlanRepository,
 	logger logger.Interface,
 ) *CheckTrafficLimitUseCase {
 	return &CheckTrafficLimitUseCase{
-		usageRepo:        usageRepo,
+		usageStatsRepo:   usageStatsRepo,
+		hourlyCache:      hourlyCache,
 		subscriptionRepo: subscriptionRepo,
 		planRepo:         planRepo,
 		logger:           logger,
@@ -93,15 +98,18 @@ func (uc *CheckTrafficLimitUseCase) Execute(
 	startOfMonth := biztime.StartOfMonthUTC(bizNow.Year(), bizNow.Month())
 	endOfMonth := biztime.EndOfMonthUTC(bizNow.Year(), bizNow.Month())
 
-	summary, err := uc.usageRepo.GetTotalUsage(ctx, subscription.ResourceTypeNode.String(), query.NodeID, startOfMonth, endOfMonth)
+	// Get traffic combining Redis (recent 24h) and MySQL stats (historical)
+	totalTraffic, err := uc.getTotalUsageByResource(
+		ctx,
+		subscription.ResourceTypeNode.String(),
+		query.NodeID,
+		query.SubscriptionID,
+		startOfMonth,
+		endOfMonth,
+	)
 	if err != nil {
 		uc.logger.Errorw("failed to get total traffic", "error", err)
 		return nil, errors.NewInternalError("failed to get traffic statistics")
-	}
-
-	totalTraffic := uint64(0)
-	if summary != nil {
-		totalTraffic = summary.Total
 	}
 
 	exceeded := totalTraffic >= trafficLimit
@@ -150,4 +158,93 @@ func (uc *CheckTrafficLimitUseCase) validateQuery(query CheckTrafficLimitQuery) 
 	}
 
 	return nil
+}
+
+// getTotalUsageByResource calculates total traffic for a resource by combining:
+// - Last 24 hours: from Redis HourlyTrafficCache
+// - Before 24 hours: from MySQL subscription_usage_stats table
+func (uc *CheckTrafficLimitUseCase) getTotalUsageByResource(
+	ctx context.Context,
+	resourceType string,
+	resourceID uint,
+	subscriptionID uint,
+	from, to time.Time,
+) (uint64, error) {
+	now := biztime.NowUTC()
+	dayAgo := now.Add(-24 * time.Hour)
+
+	var total uint64
+
+	// Determine time boundaries for Redis query (only last 24 hours)
+	recentFrom := from
+	if recentFrom.Before(dayAgo) {
+		recentFrom = dayAgo
+	}
+	recentTo := to
+	if recentTo.After(now) {
+		recentTo = now
+	}
+
+	// Get recent traffic from Redis (last 24h)
+	if recentFrom.Before(recentTo) {
+		hourlyPoints, err := uc.hourlyCache.GetHourlyTrafficRange(
+			ctx, subscriptionID, resourceType, resourceID, recentFrom, recentTo,
+		)
+		if err != nil {
+			// Log warning but don't fail - Redis unavailability shouldn't block limit checks
+			uc.logger.Warnw("failed to get recent traffic from Redis, using stats only",
+				"subscription_id", subscriptionID,
+				"resource_type", resourceType,
+				"resource_id", resourceID,
+				"error", err,
+			)
+		} else {
+			for _, point := range hourlyPoints {
+				// Safe conversion: only add positive values to prevent uint64 overflow
+				if point.Upload > 0 {
+					total += uint64(point.Upload)
+				}
+				if point.Download > 0 {
+					total += uint64(point.Download)
+				}
+			}
+			uc.logger.Debugw("got recent traffic from Redis",
+				"resource_type", resourceType,
+				"resource_id", resourceID,
+				"recent_total", total,
+				"points_count", len(hourlyPoints),
+			)
+		}
+	}
+
+	// Get historical traffic from MySQL stats (before 24 hours ago)
+	if from.Before(dayAgo) {
+		historicalTo := dayAgo
+		if historicalTo.After(to) {
+			historicalTo = to
+		}
+
+		historicalTraffic, err := uc.usageStatsRepo.GetTotalByResourceID(
+			ctx, resourceType, resourceID, subscription.GranularityDaily, from, historicalTo,
+		)
+		if err != nil {
+			uc.logger.Warnw("failed to get historical traffic from stats, using Redis data only",
+				"resource_type", resourceType,
+				"resource_id", resourceID,
+				"error", err,
+			)
+			// If we already have Redis data, return what we have
+			// If we don't have any data from either source, that's ok - it means zero traffic
+		} else if historicalTraffic != nil {
+			total += historicalTraffic.Total
+			uc.logger.Debugw("got historical traffic from MySQL stats",
+				"resource_type", resourceType,
+				"resource_id", resourceID,
+				"historical_total", historicalTraffic.Total,
+				"combined_total", total,
+			)
+		}
+	}
+
+	return total, nil
 }
