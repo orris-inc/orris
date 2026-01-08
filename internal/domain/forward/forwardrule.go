@@ -38,6 +38,7 @@ type ForwardRule struct {
 	downloadBytes     int64
 	trafficMultiplier *float64 // traffic multiplier for display. nil means auto-calculate based on node count
 	sortOrder         int
+	groupIDs          []uint // resource group IDs for access control
 	createdAt         time.Time
 	updatedAt         time.Time
 }
@@ -343,6 +344,7 @@ func ReconstructForwardRule(
 	downloadBytes int64,
 	trafficMultiplier *float64,
 	sortOrder int,
+	groupIDs []uint,
 	createdAt, updatedAt time.Time,
 ) (*ForwardRule, error) {
 	if id == 0 {
@@ -408,6 +410,7 @@ func ReconstructForwardRule(
 		downloadBytes:     downloadBytes,
 		trafficMultiplier: trafficMultiplier,
 		sortOrder:         sortOrder,
+		groupIDs:          groupIDs,
 		createdAt:         createdAt,
 		updatedAt:         updatedAt,
 	}
@@ -792,6 +795,53 @@ func (r *ForwardRule) GetTrafficMultiplier() *float64 {
 // SortOrder returns the sort order.
 func (r *ForwardRule) SortOrder() int {
 	return r.sortOrder
+}
+
+// GroupIDs returns the resource group IDs.
+func (r *ForwardRule) GroupIDs() []uint {
+	return r.groupIDs
+}
+
+// SetGroupIDs sets the resource group IDs.
+func (r *ForwardRule) SetGroupIDs(groupIDs []uint) {
+	r.groupIDs = groupIDs
+	r.updatedAt = biztime.NowUTC()
+}
+
+// AddGroupID adds a resource group ID if not already present.
+// Returns true if the group ID was added, false if it already exists.
+func (r *ForwardRule) AddGroupID(groupID uint) bool {
+	for _, id := range r.groupIDs {
+		if id == groupID {
+			return false // already exists
+		}
+	}
+	r.groupIDs = append(r.groupIDs, groupID)
+	r.updatedAt = biztime.NowUTC()
+	return true
+}
+
+// RemoveGroupID removes a resource group ID.
+// Returns true if the group ID was removed, false if not found.
+func (r *ForwardRule) RemoveGroupID(groupID uint) bool {
+	for i, id := range r.groupIDs {
+		if id == groupID {
+			r.groupIDs = append(r.groupIDs[:i], r.groupIDs[i+1:]...)
+			r.updatedAt = biztime.NowUTC()
+			return true
+		}
+	}
+	return false // not found
+}
+
+// HasGroupID checks if the rule belongs to a specific resource group.
+func (r *ForwardRule) HasGroupID(groupID uint) bool {
+	for _, id := range r.groupIDs {
+		if id == groupID {
+			return true
+		}
+	}
+	return false
 }
 
 // CalculateNodeCount calculates the total number of nodes in the forward chain.

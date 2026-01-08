@@ -2,15 +2,23 @@ package usecases
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	dto "github.com/orris-inc/orris/internal/application/admin/dto"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/domain/user"
+	"github.com/orris-inc/orris/internal/infrastructure/cache"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
+)
+
+const (
+	// maxSubscriptionAggregationLimit is the maximum number of records to fetch
+	// from MySQL when aggregating subscription data with Redis.
+	maxSubscriptionAggregationLimit = 10000
 )
 
 // GetSubscriptionTrafficStatsQuery represents the query parameters for subscription traffic statistics
@@ -24,27 +32,30 @@ type GetSubscriptionTrafficStatsQuery struct {
 
 // GetSubscriptionTrafficStatsUseCase handles retrieving traffic statistics grouped by subscription
 type GetSubscriptionTrafficStatsUseCase struct {
-	usageStatsRepo   subscription.SubscriptionUsageStatsRepository
-	subscriptionRepo subscription.SubscriptionRepository
-	userRepo         user.Repository
-	planRepo         subscription.PlanRepository
-	logger           logger.Interface
+	usageStatsRepo     subscription.SubscriptionUsageStatsRepository
+	hourlyTrafficCache cache.HourlyTrafficCache
+	subscriptionRepo   subscription.SubscriptionRepository
+	userRepo           user.Repository
+	planRepo           subscription.PlanRepository
+	logger             logger.Interface
 }
 
 // NewGetSubscriptionTrafficStatsUseCase creates a new GetSubscriptionTrafficStatsUseCase
 func NewGetSubscriptionTrafficStatsUseCase(
 	usageStatsRepo subscription.SubscriptionUsageStatsRepository,
+	hourlyTrafficCache cache.HourlyTrafficCache,
 	subscriptionRepo subscription.SubscriptionRepository,
 	userRepo user.Repository,
 	planRepo subscription.PlanRepository,
 	logger logger.Interface,
 ) *GetSubscriptionTrafficStatsUseCase {
 	return &GetSubscriptionTrafficStatsUseCase{
-		usageStatsRepo:   usageStatsRepo,
-		subscriptionRepo: subscriptionRepo,
-		userRepo:         userRepo,
-		planRepo:         planRepo,
-		logger:           logger,
+		usageStatsRepo:     usageStatsRepo,
+		hourlyTrafficCache: hourlyTrafficCache,
+		subscriptionRepo:   subscriptionRepo,
+		userRepo:           userRepo,
+		planRepo:           planRepo,
+		logger:             logger,
 	}
 }
 
@@ -71,21 +82,105 @@ func (uc *GetSubscriptionTrafficStatsUseCase) Execute(
 	// Adjust 'to' time to end of day to include all records from that day
 	adjustedTo := biztime.EndOfDayUTC(query.To)
 
-	// Get usage data grouped by subscription from subscription_usage_stats table
-	subscriptionUsages, total, err := uc.usageStatsRepo.GetUsageGroupedBySubscription(
-		ctx,
-		query.ResourceType,
-		query.From,
-		adjustedTo,
-		page,
-		pageSize,
-	)
-	if err != nil {
-		uc.logger.Errorw("failed to fetch subscription usage", "error", err)
-		return nil, errors.NewInternalError("failed to fetch subscription usage")
+	// Calculate today's boundary in business timezone
+	now := biztime.NowUTC()
+	todayStart := biztime.StartOfDayUTC(now)
+
+	// Determine if query includes today (unaggregated data)
+	includesToday := !adjustedTo.Before(todayStart)
+	includesHistory := query.From.Before(todayStart)
+
+	// Prepare to merge data from MySQL and Redis
+	subscriptionUsageMap := make(map[uint]*subscription.SubscriptionUsageSummary)
+	var total int64
+
+	// If query includes today, get Redis data first
+	if includesToday {
+		redisFrom := todayStart
+		if query.From.After(todayStart) {
+			redisFrom = query.From
+		}
+
+		resourceType := ""
+		if query.ResourceType != nil {
+			resourceType = *query.ResourceType
+		}
+
+		redisTraffic, err := uc.hourlyTrafficCache.GetTrafficGroupedBySubscription(ctx, resourceType, redisFrom, adjustedTo)
+		if err != nil {
+			uc.logger.Warnw("failed to get today's traffic from Redis",
+				"error", err,
+			)
+		} else {
+			for subID, traffic := range redisTraffic {
+				subscriptionUsageMap[subID] = &subscription.SubscriptionUsageSummary{
+					SubscriptionID: subID,
+					Upload:         traffic.Upload,
+					Download:       traffic.Download,
+					Total:          traffic.Total,
+				}
+			}
+			uc.logger.Debugw("got today's subscription traffic from Redis",
+				"subscriptions_count", len(redisTraffic),
+			)
+		}
 	}
 
-	if len(subscriptionUsages) == 0 {
+	// If query includes historical data, get MySQL data
+	if includesHistory {
+		mysqlTo := adjustedTo
+		if includesToday {
+			// Exclude today from MySQL query
+			mysqlTo = todayStart.Add(-time.Nanosecond)
+		}
+
+		subscriptionUsages, mysqlTotal, err := uc.usageStatsRepo.GetUsageGroupedBySubscription(
+			ctx,
+			query.ResourceType,
+			query.From,
+			mysqlTo,
+			1,                                // Get all data without pagination for merging
+			maxSubscriptionAggregationLimit,  // Safety limit to prevent OOM
+		)
+		if err != nil {
+			uc.logger.Errorw("failed to fetch subscription usage", "error", err)
+			return nil, errors.NewInternalError("failed to fetch subscription usage")
+		}
+
+		// Warn if data may be truncated
+		if mysqlTotal > int64(maxSubscriptionAggregationLimit) {
+			uc.logger.Warnw("subscription traffic data may be incomplete due to aggregation limit",
+				"total_records", mysqlTotal,
+				"limit", maxSubscriptionAggregationLimit,
+				"from", query.From,
+				"to", mysqlTo,
+			)
+		}
+
+		// Merge MySQL data with Redis data
+		for _, usage := range subscriptionUsages {
+			if existing, ok := subscriptionUsageMap[usage.SubscriptionID]; ok {
+				existing.Upload += usage.Upload
+				existing.Download += usage.Download
+				existing.Total += usage.Total
+			} else {
+				subscriptionUsageMap[usage.SubscriptionID] = &subscription.SubscriptionUsageSummary{
+					SubscriptionID: usage.SubscriptionID,
+					Upload:         usage.Upload,
+					Download:       usage.Download,
+					Total:          usage.Total,
+				}
+			}
+		}
+
+		// Use MySQL total as a baseline (may not be accurate when today has new subscriptions)
+		if !includesToday {
+			total = mysqlTotal
+		}
+	}
+
+	// If no data found
+	if len(subscriptionUsageMap) == 0 {
 		return &dto.SubscriptionTrafficStatsResponse{
 			Items:    []dto.SubscriptionTrafficStatsItem{},
 			Total:    0,
@@ -94,9 +189,30 @@ func (uc *GetSubscriptionTrafficStatsUseCase) Execute(
 		}, nil
 	}
 
+	// Convert map to slice and sort by total descending
+	subscriptionUsages := make([]subscription.SubscriptionUsageSummary, 0, len(subscriptionUsageMap))
+	for _, usage := range subscriptionUsageMap {
+		subscriptionUsages = append(subscriptionUsages, *usage)
+	}
+	sort.Slice(subscriptionUsages, func(i, j int) bool {
+		return subscriptionUsages[i].Total > subscriptionUsages[j].Total
+	})
+
+	// Apply pagination
+	total = int64(len(subscriptionUsages))
+	start := (page - 1) * pageSize
+	end := start + pageSize
+	if start > len(subscriptionUsages) {
+		start = len(subscriptionUsages)
+	}
+	if end > len(subscriptionUsages) {
+		end = len(subscriptionUsages)
+	}
+	pagedUsages := subscriptionUsages[start:end]
+
 	// Extract subscription IDs
-	subscriptionIDs := make([]uint, len(subscriptionUsages))
-	for i, usage := range subscriptionUsages {
+	subscriptionIDs := make([]uint, len(pagedUsages))
+	for i, usage := range pagedUsages {
 		subscriptionIDs[i] = usage.SubscriptionID
 	}
 
@@ -138,8 +254,8 @@ func (uc *GetSubscriptionTrafficStatsUseCase) Execute(
 	}
 
 	// Build response items
-	items := make([]dto.SubscriptionTrafficStatsItem, 0, len(subscriptionUsages))
-	for _, usage := range subscriptionUsages {
+	items := make([]dto.SubscriptionTrafficStatsItem, 0, len(pagedUsages))
+	for _, usage := range pagedUsages {
 		sub, ok := subscriptions[usage.SubscriptionID]
 		if !ok {
 			continue
@@ -209,12 +325,12 @@ func (uc *GetSubscriptionTrafficStatsUseCase) validateQuery(query GetSubscriptio
 
 func (uc *GetSubscriptionTrafficStatsUseCase) getPaginationParams(query GetSubscriptionTrafficStatsQuery) (int, int) {
 	page := query.Page
-	if page == 0 {
+	if page < 1 {
 		page = constants.DefaultPage
 	}
 
 	pageSize := query.PageSize
-	if pageSize == 0 {
+	if pageSize < 1 {
 		pageSize = constants.DefaultPageSize
 	}
 	if pageSize > constants.MaxPageSize {

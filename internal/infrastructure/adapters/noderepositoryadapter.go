@@ -163,6 +163,8 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, link
 	}
 
 	// Convert to use case Node structure
+	// Keep both a slice (for preserving sort order) and a map (for quick lookup by forwarded nodes)
+	originNodes := make([]*usecases.Node, 0, len(nodeModels))
 	nodeMap := make(map[uint]*usecases.Node)
 	for _, nodeModel := range nodeModels {
 		// Default protocol to shadowsocks if not specified
@@ -224,21 +226,20 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, link
 			}
 		}
 
+		// Append to slice (preserves sort_order from database query)
+		originNodes = append(originNodes, ucNode)
+		// Also store in map for quick lookup by getForwardedNodes
 		nodeMap[nodeModel.ID] = ucNode
 	}
 
-	// Convert map to slice (origin nodes)
-	originNodes := make([]*usecases.Node, 0, len(nodeMap))
-	for _, node := range nodeMap {
-		originNodes = append(originNodes, node)
-	}
-
 	// Query forward rules that target these nodes to generate additional subscription entries
-	forwardedNodes := r.getForwardedNodes(ctx, nodeIDs, nodeMap)
+	// Only include rules that belong to the same resource groups
+	forwardedNodes := r.getForwardedNodes(ctx, nodeIDs, groupIDs, nodeMap)
 
 	r.logger.Infow("retrieved nodes for subscription token",
 		"subscription_id", subscriptionModel.ID,
 		"plan_id", subscriptionModel.PlanID,
+		"group_count", len(groupIDs),
 		"node_count", len(originNodes),
 		"forwarded_count", len(forwardedNodes),
 		"mode", mode,
@@ -278,7 +279,8 @@ func (r *NodeRepositoryAdapter) GetByTokenHash(ctx context.Context, tokenHash st
 // getForwardedNodes queries forward rules that target the given nodes and generates
 // additional subscription entries using the forward agent's public address.
 // Uses Repository method to ensure proper scope isolation (system rules only).
-func (r *NodeRepositoryAdapter) getForwardedNodes(ctx context.Context, nodeIDs []uint, nodeMap map[uint]*usecases.Node) []*usecases.Node {
+// If groupIDs is not empty, only includes rules that belong to at least one of the specified resource groups.
+func (r *NodeRepositoryAdapter) getForwardedNodes(ctx context.Context, nodeIDs []uint, groupIDs []uint, nodeMap map[uint]*usecases.Node) []*usecases.Node {
 	if len(nodeIDs) == 0 {
 		return nil
 	}
@@ -286,9 +288,10 @@ func (r *NodeRepositoryAdapter) getForwardedNodes(ctx context.Context, nodeIDs [
 	// Use Repository method with encapsulated scope isolation logic
 	// Only includes system/admin-created rules (user_id IS NULL or 0)
 	// User-created rules are excluded to prevent cross-user data leakage
-	forwardRules, err := r.forwardRuleRepo.ListSystemRulesByTargetNodes(ctx, nodeIDs)
+	// If groupIDs is provided, further filters by resource group membership
+	forwardRules, err := r.forwardRuleRepo.ListSystemRulesByTargetNodes(ctx, nodeIDs, groupIDs)
 	if err != nil {
-		r.logger.Warnw("failed to query system rules for nodes", "error", err)
+		r.logger.Warnw("failed to query system rules for nodes", "error", err, "group_ids", groupIDs)
 		return nil
 	}
 
@@ -615,12 +618,13 @@ func (r *NodeRepositoryAdapter) getHybridPlanNodes(ctx context.Context, userID u
 			resourceGroupNodes = r.buildNodesWithConfigs(ctx, nodeModels)
 
 			// Generate forwarded nodes for resource group nodes if needed
+			// Only include rules that belong to the same resource groups
 			if mode == usecases.NodeModeForward || mode == usecases.NodeModeAll {
 				nodeMap := make(map[uint]*usecases.Node)
 				for _, node := range resourceGroupNodes {
 					nodeMap[node.ID] = node
 				}
-				forwardedResourceGroupNodes := r.getForwardedNodes(ctx, nodeIDs, nodeMap)
+				forwardedResourceGroupNodes := r.getForwardedNodes(ctx, nodeIDs, groupIDs, nodeMap)
 				if mode == usecases.NodeModeForward {
 					resourceGroupNodes = forwardedResourceGroupNodes
 				} else {

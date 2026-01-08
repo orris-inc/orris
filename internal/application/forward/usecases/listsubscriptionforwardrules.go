@@ -9,6 +9,8 @@ import (
 	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/domain/resource"
+	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -34,12 +36,16 @@ type ListSubscriptionForwardRulesResult struct {
 }
 
 // ListSubscriptionForwardRulesUseCase handles listing forward rules for a specific subscription.
+// It supports resource group priority mode: if the subscription's plan has active resource groups
+// with forward rules, those rules are returned; otherwise, direct subscription-bound rules are returned.
 type ListSubscriptionForwardRulesUseCase struct {
-	repo          forward.Repository
-	agentRepo     forward.AgentRepository
-	nodeRepo      node.NodeRepository
-	statusQuerier RuleSyncStatusBatchQuerier
-	logger        logger.Interface
+	repo              forward.Repository
+	agentRepo         forward.AgentRepository
+	nodeRepo          node.NodeRepository
+	subscriptionRepo  subscription.SubscriptionRepository
+	resourceGroupRepo resource.Repository
+	statusQuerier     RuleSyncStatusBatchQuerier
+	logger            logger.Interface
 }
 
 // NewListSubscriptionForwardRulesUseCase creates a new ListSubscriptionForwardRulesUseCase.
@@ -47,19 +53,25 @@ func NewListSubscriptionForwardRulesUseCase(
 	repo forward.Repository,
 	agentRepo forward.AgentRepository,
 	nodeRepo node.NodeRepository,
+	subscriptionRepo subscription.SubscriptionRepository,
+	resourceGroupRepo resource.Repository,
 	statusQuerier RuleSyncStatusBatchQuerier,
 	logger logger.Interface,
 ) *ListSubscriptionForwardRulesUseCase {
 	return &ListSubscriptionForwardRulesUseCase{
-		repo:          repo,
-		agentRepo:     agentRepo,
-		nodeRepo:      nodeRepo,
-		statusQuerier: statusQuerier,
-		logger:        logger,
+		repo:              repo,
+		agentRepo:         agentRepo,
+		nodeRepo:          nodeRepo,
+		subscriptionRepo:  subscriptionRepo,
+		resourceGroupRepo: resourceGroupRepo,
+		statusQuerier:     statusQuerier,
+		logger:            logger,
 	}
 }
 
 // Execute retrieves a list of forward rules for a specific subscription.
+// Resource group priority mode: if the plan has active resource groups with rules, return those;
+// otherwise, return direct subscription-bound rules.
 func (uc *ListSubscriptionForwardRulesUseCase) Execute(ctx context.Context, query ListSubscriptionForwardRulesQuery) (*ListSubscriptionForwardRulesResult, error) {
 	uc.logger.Infow("executing list subscription forward rules use case",
 		"subscription_id", query.SubscriptionID,
@@ -83,8 +95,8 @@ func (uc *ListSubscriptionForwardRulesUseCase) Execute(ctx context.Context, quer
 		query.PageSize = 100
 	}
 
-	// Get rules by subscription ID
-	rules, err := uc.repo.ListBySubscriptionID(ctx, query.SubscriptionID)
+	// Try to get rules from resource groups first (resource group priority mode)
+	rules, err := uc.getRulesWithResourceGroupPriority(ctx, query.SubscriptionID)
 	if err != nil {
 		uc.logger.Errorw("failed to list subscription forward rules", "subscription_id", query.SubscriptionID, "error", err)
 		return nil, fmt.Errorf("failed to list subscription forward rules: %w", err)
@@ -296,4 +308,84 @@ func (uc *ListSubscriptionForwardRulesUseCase) aggregateRuleStatus(
 		HealthyAgents: healthyCount,
 		UpdatedAt:     latestUpdate,
 	}
+}
+
+// getRulesWithResourceGroupPriority implements resource group priority mode:
+// 1. Get subscription's planID
+// 2. Get active resource groups for the plan
+// 3. If resource groups have rules, return those rules
+// 4. Otherwise, return direct subscription-bound rules
+func (uc *ListSubscriptionForwardRulesUseCase) getRulesWithResourceGroupPriority(ctx context.Context, subscriptionID uint) ([]*forward.ForwardRule, error) {
+	// Get subscription to find planID
+	sub, err := uc.subscriptionRepo.GetByID(ctx, subscriptionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get subscription: %w", err)
+	}
+
+	// Get active resource groups for the plan
+	groups, err := uc.resourceGroupRepo.GetByPlanID(ctx, sub.PlanID())
+	if err != nil {
+		uc.logger.Warnw("failed to get resource groups, falling back to subscription rules",
+			"subscription_id", subscriptionID,
+			"plan_id", sub.PlanID(),
+			"error", err)
+		// Fall back to subscription-bound rules
+		return uc.repo.ListBySubscriptionID(ctx, subscriptionID)
+	}
+
+	// Collect active group IDs
+	var activeGroupIDs []uint
+	for _, g := range groups {
+		if g.Status() == resource.GroupStatusActive {
+			activeGroupIDs = append(activeGroupIDs, g.ID())
+		}
+	}
+
+	// If no active resource groups, return subscription-bound rules
+	if len(activeGroupIDs) == 0 {
+		uc.logger.Debugw("no active resource groups, using subscription rules",
+			"subscription_id", subscriptionID,
+			"plan_id", sub.PlanID())
+		return uc.repo.ListBySubscriptionID(ctx, subscriptionID)
+	}
+
+	// Get rules from all active resource groups
+	var allRules []*forward.ForwardRule
+	seenRuleIDs := make(map[uint]bool)
+
+	for _, groupID := range activeGroupIDs {
+		// Use page=0 and pageSize=0 to get all rules without pagination
+		rules, _, err := uc.repo.ListByGroupID(ctx, groupID, 0, 0)
+		if err != nil {
+			uc.logger.Warnw("failed to get rules for resource group",
+				"group_id", groupID,
+				"error", err)
+			continue
+		}
+
+		// Deduplicate rules (a rule can belong to multiple groups)
+		for _, rule := range rules {
+			if !seenRuleIDs[rule.ID()] {
+				seenRuleIDs[rule.ID()] = true
+				allRules = append(allRules, rule)
+			}
+		}
+	}
+
+	// If resource groups have rules, return them
+	if len(allRules) > 0 {
+		uc.logger.Debugw("returning rules from resource groups",
+			"subscription_id", subscriptionID,
+			"plan_id", sub.PlanID(),
+			"group_count", len(activeGroupIDs),
+			"rule_count", len(allRules))
+		return allRules, nil
+	}
+
+	// No rules in resource groups, fall back to subscription-bound rules
+	uc.logger.Debugw("no rules in resource groups, using subscription rules",
+		"subscription_id", subscriptionID,
+		"plan_id", sub.PlanID(),
+		"group_count", len(activeGroupIDs))
+	return uc.repo.ListBySubscriptionID(ctx, subscriptionID)
 }

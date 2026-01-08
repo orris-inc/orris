@@ -29,9 +29,9 @@ var allowedRuleOrderByFields = map[string]bool{
 	"target_port":    true,
 	"protocol":       true,
 	"status":         true,
+	"sort_order":     true,
 	"upload_bytes":   true,
 	"download_bytes": true,
-	"sort_order":     true,
 	"created_at":     true,
 	"updated_at":     true,
 }
@@ -235,6 +235,7 @@ func (r *ForwardRuleRepositoryImpl) Update(ctx context.Context, rule *forward.Fo
 			"tunnel_hops":        model.TunnelHops,
 			"traffic_multiplier": model.TrafficMultiplier,
 			"sort_order":         model.SortOrder,
+			"group_ids":          model.GroupIDs,
 			"updated_at":         model.UpdatedAt,
 		})
 
@@ -302,6 +303,11 @@ func (r *ForwardRuleRepositoryImpl) List(ctx context.Context, filter forward.Lis
 	}
 	if filter.Status != "" {
 		query = query.Where("status = ?", filter.Status)
+	}
+	if len(filter.GroupIDs) > 0 {
+		// Use JSON_OVERLAPS to check if group_ids array contains any of the filter group IDs
+		// JSON_OVERLAPS returns true if two JSON arrays have at least one element in common
+		query = query.Where("JSON_OVERLAPS(group_ids, ?)", fmt.Sprintf("[%s]", uintSliceToString(filter.GroupIDs)))
 	}
 
 	// Count total records
@@ -721,8 +727,9 @@ func (r *ForwardRuleRepositoryImpl) UpdateSortOrders(ctx context.Context, ruleOr
 
 // ListSystemRulesByTargetNodes returns enabled system rules targeting the specified nodes.
 // Only includes rules with system scope (user_id IS NULL or 0).
+// If groupIDs is not empty, only returns rules that belong to at least one of the specified resource groups.
 // This is used for Node Plan subscription delivery where user rules should be excluded.
-func (r *ForwardRuleRepositoryImpl) ListSystemRulesByTargetNodes(ctx context.Context, nodeIDs []uint) ([]*forward.ForwardRule, error) {
+func (r *ForwardRuleRepositoryImpl) ListSystemRulesByTargetNodes(ctx context.Context, nodeIDs []uint, groupIDs []uint) ([]*forward.ForwardRule, error) {
 	if len(nodeIDs) == 0 {
 		return []*forward.ForwardRule{}, nil
 	}
@@ -732,14 +739,20 @@ func (r *ForwardRuleRepositoryImpl) ListSystemRulesByTargetNodes(ctx context.Con
 	tx := db.GetTxFromContext(ctx, r.db)
 	// Query enabled system rules (user_id IS NULL or 0) targeting the specified nodes
 	// This encapsulates the isolation logic that was previously scattered in SQL queries
-	if err := tx.
+	query := tx.
 		Where("target_node_id IN ?", nodeIDs).
 		Where("status = ?", "enabled").
 		Where("rule_type IN ?", []string{"direct", "entry", "chain", "direct_chain"}).
-		Where("user_id IS NULL OR user_id = 0").
-		Order("sort_order ASC").
-		Find(&ruleModels).Error; err != nil {
-		r.logger.Errorw("failed to list system rules by target nodes", "node_count", len(nodeIDs), "error", err)
+		Where("user_id IS NULL OR user_id = 0")
+
+	// If groupIDs is specified, filter by resource group membership
+	if len(groupIDs) > 0 {
+		groupIDsJSON := uintSliceToJSONArray(groupIDs)
+		query = query.Where("JSON_OVERLAPS(group_ids, ?)", groupIDsJSON)
+	}
+
+	if err := query.Order("sort_order ASC").Find(&ruleModels).Error; err != nil {
+		r.logger.Errorw("failed to list system rules by target nodes", "node_count", len(nodeIDs), "group_count", len(groupIDs), "error", err)
 		return nil, fmt.Errorf("failed to list system rules by target nodes: %w", err)
 	}
 
@@ -802,4 +815,169 @@ func (r *ForwardRuleRepositoryImpl) ListEnabledByTargetNodeID(ctx context.Contex
 	}
 
 	return entities, nil
+}
+
+// ListByGroupID returns all forward rules that belong to the specified resource group.
+// Uses JSON_CONTAINS to check if group_ids array contains the given group ID.
+// Supports pagination when page > 0 and pageSize > 0.
+func (r *ForwardRuleRepositoryImpl) ListByGroupID(ctx context.Context, groupID uint, page, pageSize int) ([]*forward.ForwardRule, int64, error) {
+	tx := db.GetTxFromContext(ctx, r.db)
+
+	// Build base query using CAST(? AS JSON) for proper numeric comparison
+	baseQuery := tx.Model(&models.ForwardRuleModel{}).
+		Scopes(db.NotDeleted()).
+		Where("JSON_CONTAINS(group_ids, CAST(? AS JSON))", groupID)
+
+	// Count total records
+	var total int64
+	if err := baseQuery.Count(&total).Error; err != nil {
+		r.logger.Errorw("failed to count forward rules by group ID", "group_id", groupID, "error", err)
+		return nil, 0, fmt.Errorf("failed to count forward rules by group ID: %w", err)
+	}
+
+	// Build paginated query with same sorting as List: sort_order ASC, created_at DESC
+	var ruleModels []*models.ForwardRuleModel
+	query := tx.
+		Scopes(db.NotDeleted()).
+		Where("JSON_CONTAINS(group_ids, CAST(? AS JSON))", groupID).
+		Order("sort_order ASC, created_at DESC")
+
+	// Apply pagination if specified
+	if page > 0 && pageSize > 0 {
+		offset := (page - 1) * pageSize
+		query = query.Offset(offset).Limit(pageSize)
+	}
+
+	if err := query.Find(&ruleModels).Error; err != nil {
+		r.logger.Errorw("failed to list forward rules by group ID", "group_id", groupID, "error", err)
+		return nil, 0, fmt.Errorf("failed to list forward rules by group ID: %w", err)
+	}
+
+	entities, err := r.mapper.ToEntities(ruleModels)
+	if err != nil {
+		r.logger.Errorw("failed to map forward rule models to entities", "error", err)
+		return nil, 0, fmt.Errorf("failed to map forward rules: %w", err)
+	}
+
+	return entities, total, nil
+}
+
+// AddGroupIDAtomically adds a group ID to a rule's group_ids array atomically.
+// Returns true if the group ID was added, false if it already exists.
+// Uses a single UPDATE statement with conditional logic to avoid TOCTOU race conditions.
+func (r *ForwardRuleRepositoryImpl) AddGroupIDAtomically(ctx context.Context, ruleID uint, groupID uint) (bool, error) {
+	tx := db.GetTxFromContext(ctx, r.db)
+
+	// Single atomic UPDATE that:
+	// 1. Only updates if the group ID doesn't already exist (via WHERE clause)
+	// 2. Creates new array if NULL, otherwise appends
+	// This avoids TOCTOU race conditions by combining check and update in one statement
+	updateQuery := `
+		UPDATE forward_rules
+		SET group_ids = CASE
+			WHEN group_ids IS NULL THEN JSON_ARRAY(?)
+			ELSE JSON_ARRAY_APPEND(group_ids, '$', CAST(? AS UNSIGNED))
+		END,
+		updated_at = NOW()
+		WHERE id = ? AND deleted_at IS NULL
+		AND (group_ids IS NULL OR NOT JSON_CONTAINS(group_ids, CAST(? AS JSON)))
+	`
+	result := tx.Exec(updateQuery, groupID, groupID, ruleID, groupID)
+	if result.Error != nil {
+		r.logger.Errorw("failed to add group ID to rule atomically", "rule_id", ruleID, "group_id", groupID, "error", result.Error)
+		return false, fmt.Errorf("failed to add group ID atomically: %w", result.Error)
+	}
+
+	// RowsAffected == 0 means either:
+	// 1. Rule not found / deleted
+	// 2. Group ID already exists in the array
+	// We need to distinguish these cases
+	if result.RowsAffected == 0 {
+		// Check if rule exists
+		var exists bool
+		if err := tx.Raw("SELECT EXISTS(SELECT 1 FROM forward_rules WHERE id = ? AND deleted_at IS NULL)", ruleID).Scan(&exists).Error; err != nil {
+			return false, fmt.Errorf("failed to check rule existence: %w", err)
+		}
+		if !exists {
+			return false, fmt.Errorf("rule not found or already deleted")
+		}
+		// Rule exists but group ID already in array
+		return false, nil
+	}
+
+	return true, nil
+}
+
+// RemoveGroupIDAtomically removes a group ID from a rule's group_ids array atomically.
+// Returns true if the group ID was removed, false if it was not found.
+// Uses JSON_TABLE (MySQL 8.0+) to rebuild the array excluding the target element,
+// which correctly handles numeric values unlike JSON_SEARCH.
+func (r *ForwardRuleRepositoryImpl) RemoveGroupIDAtomically(ctx context.Context, ruleID uint, groupID uint) (bool, error) {
+	tx := db.GetTxFromContext(ctx, r.db)
+
+	// Single atomic UPDATE that rebuilds the array excluding the target group ID
+	// JSON_TABLE extracts array elements, we filter out the target and rebuild with JSON_ARRAYAGG
+	// The WHERE clause ensures we only update if the group ID exists
+	updateQuery := `
+		UPDATE forward_rules fr
+		SET fr.group_ids = (
+			SELECT JSON_ARRAYAGG(jt.gid)
+			FROM JSON_TABLE(fr.group_ids, '$[*]' COLUMNS(gid INT PATH '$')) AS jt
+			WHERE jt.gid != ?
+		),
+		fr.updated_at = NOW()
+		WHERE fr.id = ? AND fr.deleted_at IS NULL
+		AND fr.group_ids IS NOT NULL
+		AND JSON_CONTAINS(fr.group_ids, CAST(? AS JSON))
+	`
+	result := tx.Exec(updateQuery, groupID, ruleID, groupID)
+	if result.Error != nil {
+		r.logger.Errorw("failed to remove group ID from rule atomically", "rule_id", ruleID, "group_id", groupID, "error", result.Error)
+		return false, fmt.Errorf("failed to remove group ID atomically: %w", result.Error)
+	}
+
+	return result.RowsAffected > 0, nil
+}
+
+// RemoveGroupIDFromAllRules removes a group ID from all rules that contain it.
+// This is used when deleting a resource group to clean up orphaned references.
+// Uses JSON_TABLE (MySQL 8.0+) to correctly handle numeric array values.
+func (r *ForwardRuleRepositoryImpl) RemoveGroupIDFromAllRules(ctx context.Context, groupID uint) (int64, error) {
+	tx := db.GetTxFromContext(ctx, r.db)
+
+	// Use a subquery with JSON_TABLE to rebuild arrays excluding the target group ID
+	// This correctly handles numeric values in JSON arrays
+	updateQuery := `
+		UPDATE forward_rules fr
+		SET fr.group_ids = (
+			SELECT JSON_ARRAYAGG(jt.gid)
+			FROM JSON_TABLE(fr.group_ids, '$[*]' COLUMNS(gid INT PATH '$')) AS jt
+			WHERE jt.gid != ?
+		),
+		fr.updated_at = NOW()
+		WHERE fr.deleted_at IS NULL
+		AND fr.group_ids IS NOT NULL
+		AND JSON_CONTAINS(fr.group_ids, CAST(? AS JSON))
+	`
+	result := tx.Exec(updateQuery, groupID, groupID)
+	if result.Error != nil {
+		r.logger.Errorw("failed to remove group ID from all rules", "group_id", groupID, "error", result.Error)
+		return 0, fmt.Errorf("failed to remove group ID from all rules: %w", result.Error)
+	}
+
+	r.logger.Infow("removed group ID from rules", "group_id", groupID, "affected_rows", result.RowsAffected)
+	return result.RowsAffected, nil
+}
+
+// uintSliceToJSONArray converts a slice of uint to a JSON array string.
+// Used for JSON_OVERLAPS query parameter.
+func uintSliceToJSONArray(ids []uint) string {
+	if len(ids) == 0 {
+		return "[]"
+	}
+	parts := make([]string, len(ids))
+	for i, id := range ids {
+		parts[i] = fmt.Sprintf("%d", id)
+	}
+	return "[" + strings.Join(parts, ",") + "]"
 }

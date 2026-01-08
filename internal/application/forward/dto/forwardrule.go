@@ -76,12 +76,16 @@ type ForwardRuleDTO struct {
 	NextHopPort            uint16 `json:"next_hop_port,omitempty"`             // next agent's listen port (for direct_chain type)
 	NextHopConnectionToken string `json:"next_hop_connection_token,omitempty"` // short-term JWT for next hop authentication
 
+	// Resource group IDs (admin only)
+	GroupSIDs []string `json:"group_sids,omitempty"` // resource group SIDs
+
 	// Internal fields for mapping (not exposed in JSON)
 	internalAgentID         uint            `json:"-"`
 	internalExitAgentID     uint            `json:"-"`
 	internalChainAgents     []uint          `json:"-"` // internal chain agent IDs for lookup
 	internalChainPortConfig map[uint]uint16 `json:"-"` // internal chain port config for lookup
 	internalTargetNode      *uint           `json:"-"` // internal node ID for lookup
+	internalGroupIDs        []uint          `json:"-"` // internal resource group IDs for lookup
 }
 
 // ToForwardRuleDTO converts a domain forward rule to DTO.
@@ -138,6 +142,7 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 		internalChainAgents:        rule.ChainAgentIDs(),
 		internalChainPortConfig:    rule.ChainPortConfig(),
 		internalTargetNode:         rule.TargetNodeID(),
+		internalGroupIDs:           rule.GroupIDs(),
 	}
 }
 
@@ -326,4 +331,43 @@ func CollectAllAgentIDsForRules(dtos []*ForwardRuleDTO) map[string][]uint {
 		result[dto.ID] = agentIDs
 	}
 	return result
+}
+
+// GroupSIDMap maps internal resource group ID to SID.
+type GroupSIDMap map[uint]string
+
+// PopulateGroupSIDs fills in the group SIDs field using the SID map.
+func (d *ForwardRuleDTO) PopulateGroupSIDs(groupMap GroupSIDMap) {
+	if len(d.internalGroupIDs) == 0 {
+		return
+	}
+	d.GroupSIDs = make([]string, 0, len(d.internalGroupIDs))
+	for _, groupID := range d.internalGroupIDs {
+		if sid, ok := groupMap[groupID]; ok && sid != "" {
+			d.GroupSIDs = append(d.GroupSIDs, sid)
+		}
+	}
+}
+
+// InternalGroupIDs returns the internal resource group IDs for repository lookups.
+func (d *ForwardRuleDTO) InternalGroupIDs() []uint {
+	return d.internalGroupIDs
+}
+
+// CollectGroupIDs collects unique resource group IDs from DTOs for batch lookup.
+func CollectGroupIDs(dtos []*ForwardRuleDTO) []uint {
+	idSet := make(map[uint]struct{})
+	for _, dto := range dtos {
+		for _, groupID := range dto.internalGroupIDs {
+			if groupID != 0 {
+				idSet[groupID] = struct{}{}
+			}
+		}
+	}
+
+	ids := make([]uint, 0, len(idSet))
+	for id := range idSet {
+		ids = append(ids, id)
+	}
+	return ids
 }

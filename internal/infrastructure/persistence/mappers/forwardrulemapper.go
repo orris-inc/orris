@@ -100,6 +100,14 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 		}
 	}
 
+	// Parse group_ids JSON
+	var groupIDs []uint
+	if len(model.GroupIDs) > 0 {
+		if err := json.Unmarshal(model.GroupIDs, &groupIDs); err != nil {
+			return nil, fmt.Errorf("failed to parse group_ids: %w", err)
+		}
+	}
+
 	ipVersion := vo.IPVersion(model.IPVersion)
 	tunnelType := vo.TunnelType(model.TunnelType)
 
@@ -129,6 +137,7 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 		model.DownloadBytes,
 		model.TrafficMultiplier,
 		model.SortOrder,
+		groupIDs,
 		model.CreatedAt,
 		model.UpdatedAt,
 	)
@@ -192,6 +201,16 @@ func (m *ForwardRuleMapperImpl) ToModel(entity *forward.ForwardRule) (*models.Fo
 		chainPortConfigJSON = jsonBytes
 	}
 
+	// Serialize group_ids to JSON
+	var groupIDsJSON datatypes.JSON
+	if len(entity.GroupIDs()) > 0 {
+		jsonBytes, err := json.Marshal(entity.GroupIDs())
+		if err != nil {
+			return nil, fmt.Errorf("failed to serialize group_ids: %w", err)
+		}
+		groupIDsJSON = jsonBytes
+	}
+
 	return &models.ForwardRuleModel{
 		ID:                entity.ID(),
 		SID:               entity.SID(),
@@ -218,6 +237,7 @@ func (m *ForwardRuleMapperImpl) ToModel(entity *forward.ForwardRule) (*models.Fo
 		DownloadBytes:     entity.GetRawDownloadBytes(),
 		TrafficMultiplier: entity.GetTrafficMultiplier(),
 		SortOrder:         entity.SortOrder(),
+		GroupIDs:          groupIDsJSON,
 		CreatedAt:         entity.CreatedAt(),
 		UpdatedAt:         entity.UpdatedAt(),
 	}, nil

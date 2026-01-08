@@ -13,8 +13,9 @@ import (
 
 // CreateUserRequest represents HTTP request to create a user
 type CreateUserRequest struct {
-	Email string `json:"email" binding:"required" validate:"required,email"`
-	Name  string `json:"name" binding:"required" validate:"required,min=2,max=100"`
+	Email    string `json:"email" binding:"required" validate:"required,email"`
+	Name     string `json:"name" binding:"required" validate:"required,min=2,max=100"`
+	Password string `json:"password" binding:"required,min=8,max=128"`
 }
 
 // UpdateUserRequest represents HTTP request to update a user (PATCH)
@@ -34,8 +35,9 @@ type AdminResetPasswordRequest struct {
 // ToApplicationRequest converts HTTP DTO to application layer DTO
 func (r *CreateUserRequest) ToApplicationRequest() *dto.CreateUserRequest {
 	return &dto.CreateUserRequest{
-		Email: r.Email,
-		Name:  r.Name,
+		Email:    r.Email,
+		Name:     r.Name,
+		Password: r.Password,
 	}
 }
 

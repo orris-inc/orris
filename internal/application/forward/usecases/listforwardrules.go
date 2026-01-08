@@ -8,6 +8,7 @@ import (
 	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/domain/resource"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -33,11 +34,12 @@ type ListForwardRulesResult struct {
 
 // ListForwardRulesUseCase handles listing forward rules.
 type ListForwardRulesUseCase struct {
-	repo          forward.Repository
-	agentRepo     forward.AgentRepository
-	nodeRepo      node.NodeRepository
-	statusQuerier RuleSyncStatusBatchQuerier
-	logger        logger.Interface
+	repo              forward.Repository
+	agentRepo         forward.AgentRepository
+	nodeRepo          node.NodeRepository
+	resourceGroupRepo resource.Repository
+	statusQuerier     RuleSyncStatusBatchQuerier
+	logger            logger.Interface
 }
 
 // NewListForwardRulesUseCase creates a new ListForwardRulesUseCase.
@@ -45,15 +47,17 @@ func NewListForwardRulesUseCase(
 	repo forward.Repository,
 	agentRepo forward.AgentRepository,
 	nodeRepo node.NodeRepository,
+	resourceGroupRepo resource.Repository,
 	statusQuerier RuleSyncStatusBatchQuerier,
 	logger logger.Interface,
 ) *ListForwardRulesUseCase {
 	return &ListForwardRulesUseCase{
-		repo:          repo,
-		agentRepo:     agentRepo,
-		nodeRepo:      nodeRepo,
-		statusQuerier: statusQuerier,
-		logger:        logger,
+		repo:              repo,
+		agentRepo:         agentRepo,
+		nodeRepo:          nodeRepo,
+		resourceGroupRepo: resourceGroupRepo,
+		statusQuerier:     statusQuerier,
+		logger:            logger,
 	}
 }
 
@@ -141,6 +145,20 @@ func (uc *ListForwardRulesUseCase) Execute(ctx context.Context, query ListForwar
 						})
 					}
 				}
+			}
+		}
+	}
+
+	// Populate group SIDs
+	groupIDs := dto.CollectGroupIDs(dtos)
+	if len(groupIDs) > 0 && uc.resourceGroupRepo != nil {
+		groupSIDMap, err := uc.resourceGroupRepo.GetSIDsByIDs(ctx, groupIDs)
+		if err != nil {
+			uc.logger.Warnw("failed to fetch resource group SIDs", "error", err)
+			// Continue without group info
+		} else {
+			for _, ruleDTO := range dtos {
+				ruleDTO.PopulateGroupSIDs(dto.GroupSIDMap(groupSIDMap))
 			}
 		}
 	}

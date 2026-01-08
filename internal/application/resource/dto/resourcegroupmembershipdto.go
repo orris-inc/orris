@@ -72,6 +72,39 @@ type BatchOperationErr struct {
 
 // ListGroupMembersRequest represents a request to list members in a group
 type ListGroupMembersRequest struct {
-	Page     int `form:"page,default=1" binding:"min=1"`
-	PageSize int `form:"page_size,default=20" binding:"min=1,max=100"`
+	Page     int    `form:"page,default=1" binding:"min=1"`
+	PageSize int    `form:"page_size,default=20" binding:"min=1,max=100"`
+	OrderBy  string `form:"order_by"`
+	Order    string `form:"order"`
+}
+
+// AddForwardRulesToGroupRequest represents a request to add forward rules to a resource group
+type AddForwardRulesToGroupRequest struct {
+	RuleSIDs []string `json:"rule_ids" binding:"required,min=1,dive,required"`
+}
+
+// RemoveForwardRulesFromGroupRequest represents a request to remove forward rules from a resource group
+type RemoveForwardRulesFromGroupRequest struct {
+	RuleSIDs []string `json:"rule_ids" binding:"required,min=1,dive,required"`
+}
+
+// ForwardRuleSummaryResponse represents a forward rule in group member list (simplified)
+type ForwardRuleSummaryResponse struct {
+	ID         string    `json:"id"`
+	Name       string    `json:"name"`
+	Status     string    `json:"status"`
+	Protocol   string    `json:"protocol"`
+	ListenPort uint16    `json:"listen_port"`
+	SortOrder  int       `json:"sort_order"`
+	GroupSIDs  []string  `json:"group_ids,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+// ListGroupForwardRulesResponse represents the response for listing forward rules in a group
+type ListGroupForwardRulesResponse struct {
+	Items      []ForwardRuleSummaryResponse `json:"items"`
+	Total      int64                        `json:"total"`
+	Page       int                          `json:"page"`
+	PageSize   int                          `json:"page_size"`
+	TotalPages int                          `json:"total_pages"`
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/domain/resource"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -18,10 +19,11 @@ type GetForwardRuleQuery struct {
 
 // GetForwardRuleUseCase handles getting a single forward rule.
 type GetForwardRuleUseCase struct {
-	repo      forward.Repository
-	agentRepo forward.AgentRepository
-	nodeRepo  node.NodeRepository
-	logger    logger.Interface
+	repo              forward.Repository
+	agentRepo         forward.AgentRepository
+	nodeRepo          node.NodeRepository
+	resourceGroupRepo resource.Repository
+	logger            logger.Interface
 }
 
 // NewGetForwardRuleUseCase creates a new GetForwardRuleUseCase.
@@ -29,13 +31,15 @@ func NewGetForwardRuleUseCase(
 	repo forward.Repository,
 	agentRepo forward.AgentRepository,
 	nodeRepo node.NodeRepository,
+	resourceGroupRepo resource.Repository,
 	logger logger.Interface,
 ) *GetForwardRuleUseCase {
 	return &GetForwardRuleUseCase{
-		repo:      repo,
-		agentRepo: agentRepo,
-		nodeRepo:  nodeRepo,
-		logger:    logger,
+		repo:              repo,
+		agentRepo:         agentRepo,
+		nodeRepo:          nodeRepo,
+		resourceGroupRepo: resourceGroupRepo,
+		logger:            logger,
 	}
 }
 
@@ -86,6 +90,18 @@ func (uc *GetForwardRuleUseCase) Execute(ctx context.Context, query GetForwardRu
 				PublicIPv4:    n.PublicIPv4(),
 				PublicIPv6:    n.PublicIPv6(),
 			})
+		}
+	}
+
+	// Populate group SIDs
+	groupIDs := dto.CollectGroupIDs([]*dto.ForwardRuleDTO{ruleDTO})
+	if len(groupIDs) > 0 && uc.resourceGroupRepo != nil {
+		groupSIDMap, err := uc.resourceGroupRepo.GetSIDsByIDs(ctx, groupIDs)
+		if err != nil {
+			uc.logger.Warnw("failed to fetch resource group SIDs", "error", err)
+			// Continue without group info
+		} else {
+			ruleDTO.PopulateGroupSIDs(dto.GroupSIDMap(groupSIDMap))
 		}
 	}
 

@@ -70,7 +70,6 @@ func (uc *AggregateUsageUseCase) AggregateDailyUsage(ctx context.Context) error 
 	aggregated := make(map[aggregationKey]*subscription.SubscriptionUsageStats)
 	totalRecords := 0
 	hoursProcessed := 0
-	var processedHours []time.Time
 
 	for hour := 0; hour < 24; hour++ {
 		// Calculate hour time in business timezone, then convert to UTC for Redis lookup
@@ -92,7 +91,6 @@ func (uc *AggregateUsageUseCase) AggregateDailyUsage(ctx context.Context) error 
 
 		hoursProcessed++
 		totalRecords += len(hourlyData)
-		processedHours = append(processedHours, hourTime)
 
 		// Aggregate hourly data into daily stats
 		uc.aggregateHourlyData(hourlyData, aggregated, startUTC)
@@ -117,10 +115,11 @@ func (uc *AggregateUsageUseCase) AggregateDailyUsage(ctx context.Context) error 
 		"error_count", errorCount,
 	)
 
-	// Clean up Redis data for processed hours after successful aggregation
-	if errorCount == 0 {
-		uc.cleanupProcessedHours(ctx, processedHours)
-	}
+	// NOTE: Do NOT clean up Redis data immediately after aggregation.
+	// Redis hourly data has 49-hour TTL and will expire naturally.
+	// This allows users to query hourly data for the past 48 hours.
+	// Previously we called cleanupProcessedHours() here, which caused
+	// hourly data to be unavailable before the 48-hour window expired.
 
 	if errorCount > 0 {
 		return fmt.Errorf("daily aggregation completed with %d errors", errorCount)
@@ -182,19 +181,6 @@ func (uc *AggregateUsageUseCase) aggregateHourlyData(
 			)
 		}
 	}
-}
-
-// cleanupProcessedHours removes Redis data for hours that have been successfully aggregated.
-func (uc *AggregateUsageUseCase) cleanupProcessedHours(ctx context.Context, hours []time.Time) {
-	for _, hour := range hours {
-		if err := uc.hourlyCache.CleanupHour(ctx, hour); err != nil {
-			uc.logger.Warnw("failed to cleanup Redis hourly data",
-				"hour", hour.Format("2006-01-02 15:04"),
-				"error", err,
-			)
-		}
-	}
-	uc.logger.Infow("cleaned up Redis hourly data", "hours_cleaned", len(hours))
 }
 
 // CleanupOldUsageData deletes raw usage records older than the specified retention days.

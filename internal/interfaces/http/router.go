@@ -373,7 +373,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	getResourceGroupUC := resourceUsecases.NewGetResourceGroupUseCase(resourceGroupRepo, subscriptionPlanRepo, log)
 	listResourceGroupsUC := resourceUsecases.NewListResourceGroupsUseCase(resourceGroupRepo, subscriptionPlanRepo, log)
 	updateResourceGroupUC := resourceUsecases.NewUpdateResourceGroupUseCase(resourceGroupRepo, subscriptionPlanRepo, log)
-	deleteResourceGroupUC := resourceUsecases.NewDeleteResourceGroupUseCase(resourceGroupRepo, log)
+	deleteResourceGroupUC := resourceUsecases.NewDeleteResourceGroupUseCase(resourceGroupRepo, forwardRuleRepo, log)
 	updateResourceGroupStatusUC := resourceUsecases.NewUpdateResourceGroupStatusUseCase(resourceGroupRepo, subscriptionPlanRepo, log)
 
 	planHandler := handlers.NewPlanHandler(
@@ -700,30 +700,31 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Initialize resource group membership use cases (need node and agent repos)
 	manageNodesUC := resourceUsecases.NewManageResourceGroupNodesUseCase(resourceGroupRepo, nodeRepoImpl, subscriptionPlanRepo, log)
 	manageAgentsUC := resourceUsecases.NewManageResourceGroupForwardAgentsUseCase(resourceGroupRepo, forwardAgentRepo, subscriptionPlanRepo, log)
+	manageRulesUC := resourceUsecases.NewManageResourceGroupForwardRulesUseCase(resourceGroupRepo, forwardRuleRepo, subscriptionPlanRepo, log)
 
 	// Initialize admin resource group handler
 	adminResourceGroupHandler := adminHandlers.NewResourceGroupHandler(
 		createResourceGroupUC, getResourceGroupUC, listResourceGroupsUC,
 		updateResourceGroupUC, deleteResourceGroupUC, updateResourceGroupStatusUC,
-		manageNodesUC, manageAgentsUC,
+		manageNodesUC, manageAgentsUC, manageRulesUC,
 		subscriptionPlanRepo, log,
 	)
 
-	// Initialize admin traffic stats use cases (uses subscription_usage_stats table)
+	// Initialize admin traffic stats use cases (uses subscription_usage_stats table + Redis hourly buckets)
 	getTrafficOverviewUC := adminUsecases.NewGetTrafficOverviewUseCase(
-		subscriptionUsageStatsRepo, subscriptionRepo, userRepo, nodeRepoImpl, forwardRuleRepo, log,
+		subscriptionUsageStatsRepo, hourlyTrafficCache, subscriptionRepo, userRepo, nodeRepoImpl, forwardRuleRepo, log,
 	)
 	getUserTrafficStatsUC := adminUsecases.NewGetUserTrafficStatsUseCase(
-		subscriptionUsageStatsRepo, subscriptionRepo, userRepo, log,
+		subscriptionUsageStatsRepo, hourlyTrafficCache, subscriptionRepo, userRepo, log,
 	)
 	getSubscriptionTrafficStatsUC := adminUsecases.NewGetSubscriptionTrafficStatsUseCase(
-		subscriptionUsageStatsRepo, subscriptionRepo, userRepo, subscriptionPlanRepo, log,
+		subscriptionUsageStatsRepo, hourlyTrafficCache, subscriptionRepo, userRepo, subscriptionPlanRepo, log,
 	)
 	getAdminNodeTrafficStatsUC := adminUsecases.NewGetAdminNodeTrafficStatsUseCase(
-		subscriptionUsageStatsRepo, nodeRepoImpl, log,
+		subscriptionUsageStatsRepo, hourlyTrafficCache, nodeRepoImpl, log,
 	)
 	getTrafficRankingUC := adminUsecases.NewGetTrafficRankingUseCase(
-		subscriptionUsageStatsRepo, subscriptionRepo, userRepo, log,
+		subscriptionUsageStatsRepo, hourlyTrafficCache, subscriptionRepo, userRepo, log,
 	)
 	getTrafficTrendUC := adminUsecases.NewGetTrafficTrendUseCase(
 		subscriptionUsageStatsRepo, hourlyTrafficCache, log,
@@ -913,11 +914,11 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	)
 
 	// Now initialize forward rule use cases with configSyncService
-	createForwardRuleUC = forwardUsecases.NewCreateForwardRuleUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, configSyncService, log)
-	getForwardRuleUC = forwardUsecases.NewGetForwardRuleUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, log)
-	updateForwardRuleUC = forwardUsecases.NewUpdateForwardRuleUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, configSyncService, log)
+	createForwardRuleUC = forwardUsecases.NewCreateForwardRuleUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, resourceGroupRepo, subscriptionPlanRepo, configSyncService, log)
+	getForwardRuleUC = forwardUsecases.NewGetForwardRuleUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, resourceGroupRepo, log)
+	updateForwardRuleUC = forwardUsecases.NewUpdateForwardRuleUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, resourceGroupRepo, subscriptionPlanRepo, configSyncService, log)
 	deleteForwardRuleUC = forwardUsecases.NewDeleteForwardRuleUseCase(forwardRuleRepo, configSyncService, log)
-	listForwardRulesUC = forwardUsecases.NewListForwardRulesUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, ruleSyncStatusAdapter, log)
+	listForwardRulesUC = forwardUsecases.NewListForwardRulesUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, resourceGroupRepo, ruleSyncStatusAdapter, log)
 	enableForwardRuleUC = forwardUsecases.NewEnableForwardRuleUseCase(forwardRuleRepo, configSyncService, log)
 	disableForwardRuleUC = forwardUsecases.NewDisableForwardRuleUseCase(forwardRuleRepo, configSyncService, log)
 	resetForwardTrafficUC = forwardUsecases.NewResetForwardRuleTrafficUseCase(forwardRuleRepo, log)
@@ -999,6 +1000,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		forwardRuleRepo,
 		forwardAgentRepo,
 		nodeRepoImpl,
+		subscriptionRepo,
+		resourceGroupRepo,
 		ruleSyncStatusAdapter,
 		log,
 	)
@@ -1437,6 +1440,11 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		adminResourceGroups.POST("/:id/forward-agents", r.adminResourceGroupHandler.AddForwardAgents)
 		adminResourceGroups.DELETE("/:id/forward-agents", r.adminResourceGroupHandler.RemoveForwardAgents)
 		adminResourceGroups.GET("/:id/forward-agents", r.adminResourceGroupHandler.ListForwardAgents)
+
+		// Forward rule membership management
+		adminResourceGroups.POST("/:id/forward-rules", r.adminResourceGroupHandler.AddForwardRules)
+		adminResourceGroups.DELETE("/:id/forward-rules", r.adminResourceGroupHandler.RemoveForwardRules)
+		adminResourceGroups.GET("/:id/forward-rules", r.adminResourceGroupHandler.ListForwardRules)
 	}
 
 	// Admin traffic stats routes

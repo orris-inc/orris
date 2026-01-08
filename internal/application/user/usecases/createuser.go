@@ -13,6 +13,9 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
+// PasswordHasher is the interface for hashing passwords (re-exported from domain)
+type PasswordHasher = domainUser.PasswordHasher
+
 // AdminNewUserNotifier is the interface for notifying admins about new users
 type AdminNewUserNotifier interface {
 	NotifyNewUser(ctx context.Context, cmd AdminNewUserCommand) error
@@ -30,19 +33,22 @@ type AdminNewUserCommand struct {
 
 // CreateUserUseCase handles the business logic for creating a user
 type CreateUserUseCase struct {
-	userRepo      domainUser.Repository
-	adminNotifier AdminNewUserNotifier // Optional, can be nil
-	logger        logger.Interface
+	userRepo       domainUser.Repository
+	passwordHasher PasswordHasher
+	adminNotifier  AdminNewUserNotifier // Optional, can be nil
+	logger         logger.Interface
 }
 
 // NewCreateUserUseCase creates a new create user use case
 func NewCreateUserUseCase(
 	userRepo domainUser.Repository,
+	passwordHasher PasswordHasher,
 	logger logger.Interface,
 ) *CreateUserUseCase {
 	return &CreateUserUseCase{
-		userRepo: userRepo,
-		logger:   logger,
+		userRepo:       userRepo,
+		passwordHasher: passwordHasher,
+		logger:         logger,
 	}
 }
 
@@ -81,11 +87,23 @@ func (uc *CreateUserUseCase) Execute(ctx context.Context, request dto.CreateUser
 		return nil, errors.NewValidationError("invalid name", err.Error())
 	}
 
+	password, err := vo.NewPassword(request.Password)
+	if err != nil {
+		uc.logger.Errorw("invalid password", "error", err)
+		return nil, errors.NewValidationError("invalid password", err.Error())
+	}
+
 	// Create user using constructor with SID generator
 	userEntity, err := domainUser.NewUser(email, name, id.NewUserID)
 	if err != nil {
 		uc.logger.Errorw("failed to create user entity", "error", err)
 		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+
+	// Set password for the user
+	if err := userEntity.SetPassword(password, uc.passwordHasher); err != nil {
+		uc.logger.Errorw("failed to set password", "error", err)
+		return nil, fmt.Errorf("failed to set password: %w", err)
 	}
 
 	// Persist the user
@@ -135,6 +153,9 @@ func (uc *CreateUserUseCase) ValidateRequest(request dto.CreateUserRequest) erro
 	}
 	if request.Name == "" {
 		return errors.NewValidationError("name is required")
+	}
+	if request.Password == "" {
+		return errors.NewValidationError("password is required")
 	}
 	return nil
 }

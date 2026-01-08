@@ -2,11 +2,13 @@ package usecases
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	dto "github.com/orris-inc/orris/internal/application/admin/dto"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/domain/user"
+	"github.com/orris-inc/orris/internal/infrastructure/cache"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -28,24 +30,27 @@ type GetTrafficRankingQuery struct {
 
 // GetTrafficRankingUseCase handles retrieving traffic rankings
 type GetTrafficRankingUseCase struct {
-	usageStatsRepo   subscription.SubscriptionUsageStatsRepository
-	subscriptionRepo subscription.SubscriptionRepository
-	userRepo         user.Repository
-	logger           logger.Interface
+	usageStatsRepo     subscription.SubscriptionUsageStatsRepository
+	hourlyTrafficCache cache.HourlyTrafficCache
+	subscriptionRepo   subscription.SubscriptionRepository
+	userRepo           user.Repository
+	logger             logger.Interface
 }
 
 // NewGetTrafficRankingUseCase creates a new GetTrafficRankingUseCase
 func NewGetTrafficRankingUseCase(
 	usageStatsRepo subscription.SubscriptionUsageStatsRepository,
+	hourlyTrafficCache cache.HourlyTrafficCache,
 	subscriptionRepo subscription.SubscriptionRepository,
 	userRepo user.Repository,
 	logger logger.Interface,
 ) *GetTrafficRankingUseCase {
 	return &GetTrafficRankingUseCase{
-		usageStatsRepo:   usageStatsRepo,
-		subscriptionRepo: subscriptionRepo,
-		userRepo:         userRepo,
-		logger:           logger,
+		usageStatsRepo:     usageStatsRepo,
+		hourlyTrafficCache: hourlyTrafficCache,
+		subscriptionRepo:   subscriptionRepo,
+		userRepo:           userRepo,
+		logger:             logger,
 	}
 }
 
@@ -71,32 +76,93 @@ func (uc *GetTrafficRankingUseCase) ExecuteUserRanking(
 	// Adjust 'to' time to end of day to include all records from that day
 	adjustedTo := biztime.EndOfDayUTC(query.To)
 
-	// Get top subscriptions by usage from subscription_usage_stats table
-	topSubscriptions, err := uc.usageStatsRepo.GetTopSubscriptionsByUsage(
-		ctx,
-		query.ResourceType,
-		query.From,
-		adjustedTo,
-		limit*2, // Fetch more to account for aggregation
-	)
-	if err != nil {
-		uc.logger.Errorw("failed to fetch top subscriptions", "error", err)
-		return nil, errors.NewInternalError("failed to fetch traffic ranking")
+	// Calculate today's boundary in business timezone
+	now := biztime.NowUTC()
+	todayStart := biztime.StartOfDayUTC(now)
+
+	// Determine if query includes today (unaggregated data)
+	includesToday := !adjustedTo.Before(todayStart)
+	includesHistory := query.From.Before(todayStart)
+
+	// Prepare to merge subscription usage data from MySQL and Redis
+	subscriptionUsageMap := make(map[uint]*subscription.SubscriptionUsageSummary)
+
+	// If query includes today, get Redis data first
+	if includesToday {
+		redisFrom := todayStart
+		if query.From.After(todayStart) {
+			redisFrom = query.From
+		}
+
+		resourceType := ""
+		if query.ResourceType != nil {
+			resourceType = *query.ResourceType
+		}
+
+		redisTraffic, err := uc.hourlyTrafficCache.GetTrafficGroupedBySubscription(ctx, resourceType, redisFrom, adjustedTo)
+		if err != nil {
+			uc.logger.Warnw("failed to get today's traffic from Redis",
+				"error", err,
+			)
+		} else {
+			for subID, traffic := range redisTraffic {
+				subscriptionUsageMap[subID] = &subscription.SubscriptionUsageSummary{
+					SubscriptionID: subID,
+					Upload:         traffic.Upload,
+					Download:       traffic.Download,
+					Total:          traffic.Total,
+				}
+			}
+		}
 	}
 
-	if len(topSubscriptions) == 0 {
+	// If query includes historical data, get MySQL data
+	if includesHistory {
+		mysqlTo := adjustedTo
+		if includesToday {
+			mysqlTo = todayStart.Add(-time.Nanosecond)
+		}
+
+		topSubscriptions, err := uc.usageStatsRepo.GetTopSubscriptionsByUsage(
+			ctx,
+			query.ResourceType,
+			query.From,
+			mysqlTo,
+			limit*10, // Fetch more to account for aggregation by user
+		)
+		if err != nil {
+			uc.logger.Errorw("failed to fetch top subscriptions", "error", err)
+			return nil, errors.NewInternalError("failed to fetch traffic ranking")
+		}
+
+		// Merge MySQL data with Redis data
+		for _, subUsage := range topSubscriptions {
+			if existing, ok := subscriptionUsageMap[subUsage.SubscriptionID]; ok {
+				existing.Upload += subUsage.Upload
+				existing.Download += subUsage.Download
+				existing.Total += subUsage.Total
+			} else {
+				subscriptionUsageMap[subUsage.SubscriptionID] = &subscription.SubscriptionUsageSummary{
+					SubscriptionID: subUsage.SubscriptionID,
+					Upload:         subUsage.Upload,
+					Download:       subUsage.Download,
+					Total:          subUsage.Total,
+				}
+			}
+		}
+	}
+
+	if len(subscriptionUsageMap) == 0 {
 		return &dto.TrafficRankingResponse{
 			Items: []dto.TrafficRankingItem{},
 		}, nil
 	}
 
-	// Aggregate by user
-	userUsageMap := make(map[uint]*userRankingData)
-	subscriptionIDs := make([]uint, 0, len(topSubscriptions))
-
-	for _, subUsage := range topSubscriptions {
-		if subUsage.SubscriptionID != 0 {
-			subscriptionIDs = append(subscriptionIDs, subUsage.SubscriptionID)
+	// Extract subscription IDs
+	subscriptionIDs := make([]uint, 0, len(subscriptionUsageMap))
+	for subID := range subscriptionUsageMap {
+		if subID != 0 {
+			subscriptionIDs = append(subscriptionIDs, subID)
 		}
 	}
 
@@ -108,8 +174,9 @@ func (uc *GetTrafficRankingUseCase) ExecuteUserRanking(
 	}
 
 	// Aggregate usage by user
-	for _, subUsage := range topSubscriptions {
-		sub, ok := subscriptions[subUsage.SubscriptionID]
+	userUsageMap := make(map[uint]*userRankingData)
+	for subID, subUsage := range subscriptionUsageMap {
+		sub, ok := subscriptions[subID]
 		if !ok {
 			continue
 		}
@@ -129,20 +196,14 @@ func (uc *GetTrafficRankingUseCase) ExecuteUserRanking(
 		}
 	}
 
-	// Convert to slice and sort by total
+	// Convert to slice and sort by total descending
 	userRankings := make([]*userRankingData, 0, len(userUsageMap))
 	for _, data := range userUsageMap {
 		userRankings = append(userRankings, data)
 	}
-
-	// Sort by total descending
-	for i := 0; i < len(userRankings)-1; i++ {
-		for j := i + 1; j < len(userRankings); j++ {
-			if userRankings[j].total > userRankings[i].total {
-				userRankings[i], userRankings[j] = userRankings[j], userRankings[i]
-			}
-		}
-	}
+	sort.Slice(userRankings, func(i, j int) bool {
+		return userRankings[i].total > userRankings[j].total
+	})
 
 	// Apply limit
 	if len(userRankings) > limit {
@@ -211,23 +272,100 @@ func (uc *GetTrafficRankingUseCase) ExecuteSubscriptionRanking(
 	// Adjust 'to' time to end of day to include all records from that day
 	adjustedTo := biztime.EndOfDayUTC(query.To)
 
-	// Get top subscriptions by usage from subscription_usage_stats table
-	topSubscriptions, err := uc.usageStatsRepo.GetTopSubscriptionsByUsage(
-		ctx,
-		query.ResourceType,
-		query.From,
-		adjustedTo,
-		limit,
-	)
-	if err != nil {
-		uc.logger.Errorw("failed to fetch top subscriptions", "error", err)
-		return nil, errors.NewInternalError("failed to fetch traffic ranking")
+	// Calculate today's boundary in business timezone
+	now := biztime.NowUTC()
+	todayStart := biztime.StartOfDayUTC(now)
+
+	// Determine if query includes today (unaggregated data)
+	includesToday := !adjustedTo.Before(todayStart)
+	includesHistory := query.From.Before(todayStart)
+
+	// Prepare to merge subscription usage data from MySQL and Redis
+	subscriptionUsageMap := make(map[uint]*subscription.SubscriptionUsageSummary)
+
+	// If query includes today, get Redis data first
+	if includesToday {
+		redisFrom := todayStart
+		if query.From.After(todayStart) {
+			redisFrom = query.From
+		}
+
+		resourceType := ""
+		if query.ResourceType != nil {
+			resourceType = *query.ResourceType
+		}
+
+		redisTraffic, err := uc.hourlyTrafficCache.GetTrafficGroupedBySubscription(ctx, resourceType, redisFrom, adjustedTo)
+		if err != nil {
+			uc.logger.Warnw("failed to get today's traffic from Redis",
+				"error", err,
+			)
+		} else {
+			for subID, traffic := range redisTraffic {
+				subscriptionUsageMap[subID] = &subscription.SubscriptionUsageSummary{
+					SubscriptionID: subID,
+					Upload:         traffic.Upload,
+					Download:       traffic.Download,
+					Total:          traffic.Total,
+				}
+			}
+		}
 	}
 
-	if len(topSubscriptions) == 0 {
+	// If query includes historical data, get MySQL data
+	if includesHistory {
+		mysqlTo := adjustedTo
+		if includesToday {
+			mysqlTo = todayStart.Add(-time.Nanosecond)
+		}
+
+		topSubscriptions, err := uc.usageStatsRepo.GetTopSubscriptionsByUsage(
+			ctx,
+			query.ResourceType,
+			query.From,
+			mysqlTo,
+			limit*2, // Fetch more to account for merging
+		)
+		if err != nil {
+			uc.logger.Errorw("failed to fetch top subscriptions", "error", err)
+			return nil, errors.NewInternalError("failed to fetch traffic ranking")
+		}
+
+		// Merge MySQL data with Redis data
+		for _, subUsage := range topSubscriptions {
+			if existing, ok := subscriptionUsageMap[subUsage.SubscriptionID]; ok {
+				existing.Upload += subUsage.Upload
+				existing.Download += subUsage.Download
+				existing.Total += subUsage.Total
+			} else {
+				subscriptionUsageMap[subUsage.SubscriptionID] = &subscription.SubscriptionUsageSummary{
+					SubscriptionID: subUsage.SubscriptionID,
+					Upload:         subUsage.Upload,
+					Download:       subUsage.Download,
+					Total:          subUsage.Total,
+				}
+			}
+		}
+	}
+
+	if len(subscriptionUsageMap) == 0 {
 		return &dto.TrafficRankingResponse{
 			Items: []dto.TrafficRankingItem{},
 		}, nil
+	}
+
+	// Convert to slice and sort by total descending
+	topSubscriptions := make([]subscription.SubscriptionUsageSummary, 0, len(subscriptionUsageMap))
+	for _, usage := range subscriptionUsageMap {
+		topSubscriptions = append(topSubscriptions, *usage)
+	}
+	sort.Slice(topSubscriptions, func(i, j int) bool {
+		return topSubscriptions[i].Total > topSubscriptions[j].Total
+	})
+
+	// Apply limit
+	if len(topSubscriptions) > limit {
+		topSubscriptions = topSubscriptions[:limit]
 	}
 
 	// Fetch subscription details using batch query

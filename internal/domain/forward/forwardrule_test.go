@@ -1717,7 +1717,8 @@ func TestForwardRule_Validate_RejectsInvalidRuleType(t *testing.T) {
 		"", vo.IPVersionAuto, vo.ForwardProtocolTCP,
 		vo.ForwardStatusDisabled,
 		"", 0, 0, nil,
-		0, // sortOrder
+		0,   // sortOrder
+		nil, // groupIDs
 		time.Now(), time.Now(),
 	)
 

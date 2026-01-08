@@ -23,4 +23,10 @@ var (
 
 	// ErrGroupPlanTypeMismatchForward indicates the resource group's plan is not forward type
 	ErrGroupPlanTypeMismatchForward = errors.New("resource group's plan type is not forward, cannot add forward agent resources")
+
+	// ErrForwardPlanCannotBindRules indicates forward plan resource groups cannot bind forward rules
+	ErrForwardPlanCannotBindRules = errors.New("forward plan resource groups cannot bind forward rules, only node and hybrid plans support this")
+
+	// ErrForwardPlanCannotBindNodes indicates forward plan resource groups cannot bind node agents
+	ErrForwardPlanCannotBindNodes = errors.New("forward plan resource groups cannot bind node agents, only node and hybrid plans support this")
 )

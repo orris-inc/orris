@@ -112,8 +112,10 @@ func (uc *GetSubscriptionUsageStatsUseCase) Execute(
 		return uc.executeWithTrendAggregation(ctx, query, summary)
 	}
 
-	// No granularity - return raw records
-	return uc.executeWithRawRecords(ctx, query, summary)
+	// No granularity - default to daily granularity from stats table
+	// (Legacy raw records query from subscription_usages is deprecated)
+	query.Granularity = "day"
+	return uc.executeWithTrendAggregation(ctx, query, summary)
 }
 
 // executeWithTrendAggregation fetches usage stats with time-based aggregation.
@@ -136,8 +138,8 @@ func (uc *GetSubscriptionUsageStatsUseCase) executeWithTrendAggregation(
 	case "month":
 		records, err = uc.getMonthlyTrendFromStats(ctx, query)
 	default:
-		// Fallback to legacy MySQL query for backward compatibility
-		records, err = uc.getLegacyTrend(ctx, query)
+		// Unknown granularity - return validation error instead of falling back to legacy table
+		return nil, errors.NewValidationError("granularity must be one of: hour, day, month")
 	}
 
 	if err != nil {
@@ -201,11 +203,12 @@ func (uc *GetSubscriptionUsageStatsUseCase) getHourlyTrendFromRedis(
 	// Discover active resources for this subscription from recent daily stats
 	resourceSet, err := uc.discoverActiveResources(ctx, query.SubscriptionID)
 	if err != nil {
-		uc.logger.Warnw("failed to discover active resources, falling back to legacy query",
+		uc.logger.Warnw("failed to discover active resources, returning empty result",
 			"subscription_id", query.SubscriptionID,
 			"error", err,
 		)
-		return uc.getLegacyTrend(ctx, query)
+		// Return empty result instead of falling back to legacy table
+		return []*SubscriptionUsageStatsRecord{}, nil
 	}
 
 	// Fetch hourly data from Redis for each resource

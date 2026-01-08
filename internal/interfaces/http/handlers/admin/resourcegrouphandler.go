@@ -27,6 +27,7 @@ type ResourceGroupHandler struct {
 	updateStatusUseCase *usecases.UpdateResourceGroupStatusUseCase
 	manageNodesUseCase  *usecases.ManageResourceGroupNodesUseCase
 	manageAgentsUseCase *usecases.ManageResourceGroupForwardAgentsUseCase
+	manageRulesUseCase  *usecases.ManageResourceGroupForwardRulesUseCase
 	planRepo            subscription.PlanRepository
 	logger              logger.Interface
 }
@@ -41,6 +42,7 @@ func NewResourceGroupHandler(
 	updateStatusUC *usecases.UpdateResourceGroupStatusUseCase,
 	manageNodesUC *usecases.ManageResourceGroupNodesUseCase,
 	manageAgentsUC *usecases.ManageResourceGroupForwardAgentsUseCase,
+	manageRulesUC *usecases.ManageResourceGroupForwardRulesUseCase,
 	planRepo subscription.PlanRepository,
 	logger logger.Interface,
 ) *ResourceGroupHandler {
@@ -53,6 +55,7 @@ func NewResourceGroupHandler(
 		updateStatusUseCase: updateStatusUC,
 		manageNodesUseCase:  manageNodesUC,
 		manageAgentsUseCase: manageAgentsUC,
+		manageRulesUseCase:  manageRulesUC,
 		planRepo:            planRepo,
 		logger:              logger,
 	}
@@ -461,6 +464,107 @@ func (h *ResourceGroupHandler) ListForwardAgents(c *gin.Context) {
 			return
 		}
 		h.logger.Errorw("failed to list forward agents in resource group", "error", err, "sid", sid)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.ListSuccessResponse(c, result.Items, result.Total, result.Page, result.PageSize)
+}
+
+// AddForwardRules adds forward rules to a resource group by SID (Stripe-style ID: rg_xxx)
+func (h *ResourceGroupHandler) AddForwardRules(c *gin.Context) {
+	sid := c.Param("id")
+	if err := id.ValidatePrefix(sid, id.PrefixResourceGroup); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID format, expected rg_xxxxx")
+		return
+	}
+
+	var req dto.AddForwardRulesToGroupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid request body for add forward rules", "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	result, err := h.manageRulesUseCase.AddRulesBySID(c.Request.Context(), sid, req.RuleSIDs)
+	if err != nil {
+		if err == resource.ErrGroupNotFound {
+			utils.ErrorResponse(c, http.StatusNotFound, "resource group not found")
+			return
+		}
+		if err == resource.ErrGroupPlanTypeMismatchForward {
+			utils.ErrorResponse(c, http.StatusBadRequest, "resource group's plan type is not forward, cannot add forward rule resources")
+			return
+		}
+		h.logger.Errorw("failed to add forward rules to resource group", "error", err, "sid", sid)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Forward rules added to resource group", result)
+}
+
+// RemoveForwardRules removes forward rules from a resource group by SID (Stripe-style ID: rg_xxx)
+func (h *ResourceGroupHandler) RemoveForwardRules(c *gin.Context) {
+	sid := c.Param("id")
+	if err := id.ValidatePrefix(sid, id.PrefixResourceGroup); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID format, expected rg_xxxxx")
+		return
+	}
+
+	var req dto.RemoveForwardRulesFromGroupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid request body for remove forward rules", "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	result, err := h.manageRulesUseCase.RemoveRulesBySID(c.Request.Context(), sid, req.RuleSIDs)
+	if err != nil {
+		if err == resource.ErrGroupNotFound {
+			utils.ErrorResponse(c, http.StatusNotFound, "resource group not found")
+			return
+		}
+		h.logger.Errorw("failed to remove forward rules from resource group", "error", err, "sid", sid)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Forward rules removed from resource group", result)
+}
+
+// ListForwardRules lists all forward rules in a resource group by SID (Stripe-style ID: rg_xxx)
+func (h *ResourceGroupHandler) ListForwardRules(c *gin.Context) {
+	sid := c.Param("id")
+	if err := id.ValidatePrefix(sid, id.PrefixResourceGroup); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid resource group ID format, expected rg_xxxxx")
+		return
+	}
+
+	page := 1
+	if pageStr := c.Query("page"); pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+
+	pageSize := constants.DefaultPageSize
+	if pageSizeStr := c.Query("page_size"); pageSizeStr != "" {
+		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 && ps <= constants.MaxPageSize {
+			pageSize = ps
+		}
+	}
+
+	orderBy := c.Query("order_by")
+	order := c.Query("order")
+
+	result, err := h.manageRulesUseCase.ListRulesBySID(c.Request.Context(), sid, page, pageSize, orderBy, order)
+	if err != nil {
+		if err == resource.ErrGroupNotFound {
+			utils.ErrorResponse(c, http.StatusNotFound, "resource group not found")
+			return
+		}
+		h.logger.Errorw("failed to list forward rules in resource group", "error", err, "sid", sid)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}

@@ -31,39 +31,25 @@ func validatePassword(password string) error {
 	}
 
 	var (
-		hasUpper   bool
-		hasLower   bool
-		hasNumber  bool
-		hasSpecial bool
+		hasLetter bool
+		hasNumber bool
 	)
 
 	for _, char := range password {
 		switch {
-		case unicode.IsUpper(char):
-			hasUpper = true
-		case unicode.IsLower(char):
-			hasLower = true
+		case unicode.IsLetter(char):
+			hasLetter = true
 		case unicode.IsNumber(char):
 			hasNumber = true
-		case unicode.IsPunct(char) || unicode.IsSymbol(char):
-			hasSpecial = true
 		}
 	}
 
-	if !hasUpper {
-		return fmt.Errorf("password must contain at least one uppercase letter")
-	}
-
-	if !hasLower {
-		return fmt.Errorf("password must contain at least one lowercase letter")
+	if !hasLetter {
+		return fmt.Errorf("password must contain at least one letter")
 	}
 
 	if !hasNumber {
 		return fmt.Errorf("password must contain at least one number")
-	}
-
-	if !hasSpecial {
-		return fmt.Errorf("password must contain at least one special character")
 	}
 
 	return nil

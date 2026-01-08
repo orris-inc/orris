@@ -9,6 +9,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/domain/user"
+	"github.com/orris-inc/orris/internal/infrastructure/cache"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -23,17 +24,19 @@ type GetTrafficOverviewQuery struct {
 
 // GetTrafficOverviewUseCase handles retrieving global traffic overview
 type GetTrafficOverviewUseCase struct {
-	usageStatsRepo   subscription.SubscriptionUsageStatsRepository
-	subscriptionRepo subscription.SubscriptionRepository
-	userRepo         user.Repository
-	nodeRepo         node.NodeRepository
-	forwardRuleRepo  forward.Repository
-	logger           logger.Interface
+	usageStatsRepo     subscription.SubscriptionUsageStatsRepository
+	hourlyTrafficCache cache.HourlyTrafficCache
+	subscriptionRepo   subscription.SubscriptionRepository
+	userRepo           user.Repository
+	nodeRepo           node.NodeRepository
+	forwardRuleRepo    forward.Repository
+	logger             logger.Interface
 }
 
 // NewGetTrafficOverviewUseCase creates a new GetTrafficOverviewUseCase
 func NewGetTrafficOverviewUseCase(
 	usageStatsRepo subscription.SubscriptionUsageStatsRepository,
+	hourlyTrafficCache cache.HourlyTrafficCache,
 	subscriptionRepo subscription.SubscriptionRepository,
 	userRepo user.Repository,
 	nodeRepo node.NodeRepository,
@@ -41,12 +44,13 @@ func NewGetTrafficOverviewUseCase(
 	logger logger.Interface,
 ) *GetTrafficOverviewUseCase {
 	return &GetTrafficOverviewUseCase{
-		usageStatsRepo:   usageStatsRepo,
-		subscriptionRepo: subscriptionRepo,
-		userRepo:         userRepo,
-		nodeRepo:         nodeRepo,
-		forwardRuleRepo:  forwardRuleRepo,
-		logger:           logger,
+		usageStatsRepo:     usageStatsRepo,
+		hourlyTrafficCache: hourlyTrafficCache,
+		subscriptionRepo:   subscriptionRepo,
+		userRepo:           userRepo,
+		nodeRepo:           nodeRepo,
+		forwardRuleRepo:    forwardRuleRepo,
+		logger:             logger,
 	}
 }
 
@@ -69,11 +73,60 @@ func (uc *GetTrafficOverviewUseCase) Execute(
 	// Adjust 'to' time to end of day to include all records from that day
 	adjustedTo := biztime.EndOfDayUTC(query.To)
 
-	// Get platform total usage from subscription_usage_stats table
-	totalUsage, err := uc.usageStatsRepo.GetPlatformTotalUsageByResourceType(ctx, query.ResourceType, query.From, adjustedTo)
-	if err != nil {
-		uc.logger.Errorw("failed to fetch platform total usage", "error", err)
-		return nil, errors.NewInternalError("failed to fetch platform usage")
+	// Calculate today's boundary in business timezone
+	now := biztime.NowUTC()
+	todayStart := biztime.StartOfDayUTC(now)
+
+	var totalUpload, totalDownload, totalTraffic uint64
+
+	// Check if query range includes today (unaggregated data)
+	if !adjustedTo.Before(todayStart) {
+		// Query includes today - need to get Redis data for today
+		redisFrom := todayStart
+		if query.From.After(todayStart) {
+			redisFrom = query.From
+		}
+
+		resourceType := ""
+		if query.ResourceType != nil {
+			resourceType = *query.ResourceType
+		}
+
+		redisTraffic, err := uc.hourlyTrafficCache.GetPlatformTotalTraffic(ctx, resourceType, redisFrom, adjustedTo)
+		if err != nil {
+			uc.logger.Warnw("failed to get today's traffic from Redis, continuing with MySQL only",
+				"error", err,
+			)
+		} else {
+			totalUpload += redisTraffic.Upload
+			totalDownload += redisTraffic.Download
+			totalTraffic += redisTraffic.Total
+			uc.logger.Debugw("got today's traffic from Redis",
+				"redis_from", redisFrom,
+				"redis_to", adjustedTo,
+				"upload", redisTraffic.Upload,
+				"download", redisTraffic.Download,
+			)
+		}
+	}
+
+	// Get historical data from MySQL (exclude today if query includes today)
+	mysqlTo := adjustedTo
+	if !adjustedTo.Before(todayStart) && !query.From.After(todayStart) {
+		// Query spans both historical and today - only query MySQL for historical data
+		mysqlTo = todayStart.Add(-time.Nanosecond)
+	}
+
+	// Only query MySQL if there's a valid historical range
+	if query.From.Before(todayStart) && mysqlTo.After(query.From) {
+		totalUsage, err := uc.usageStatsRepo.GetPlatformTotalUsageByResourceType(ctx, query.ResourceType, query.From, mysqlTo)
+		if err != nil {
+			uc.logger.Errorw("failed to fetch platform total usage", "error", err)
+			return nil, errors.NewInternalError("failed to fetch platform usage")
+		}
+		totalUpload += totalUsage.Upload
+		totalDownload += totalUsage.Download
+		totalTraffic += totalUsage.Total
 	}
 
 	// Get active subscriptions count
@@ -111,9 +164,9 @@ func (uc *GetTrafficOverviewUseCase) Execute(
 	}
 
 	response := &dto.TrafficOverviewResponse{
-		TotalUpload:         totalUsage.Upload,
-		TotalDownload:       totalUsage.Download,
-		TotalTraffic:        totalUsage.Total,
+		TotalUpload:         totalUpload,
+		TotalDownload:       totalDownload,
+		TotalTraffic:        totalTraffic,
 		ActiveSubscriptions: activeSubscriptions,
 		ActiveUsers:         totalUsers,
 		TotalNodes:          totalNodes,

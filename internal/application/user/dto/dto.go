@@ -6,8 +6,9 @@ import (
 
 // CreateUserRequest represents the request to create a user
 type CreateUserRequest struct {
-	Email string `json:"email" binding:"required,email"`
-	Name  string `json:"name" binding:"required,min=2,max=100"`
+	Email    string `json:"email" binding:"required,email"`
+	Name     string `json:"name" binding:"required,min=2,max=100"`
+	Password string `json:"password" binding:"required,min=8"`
 }
 
 // UpdateUserRequest represents the request to update a user

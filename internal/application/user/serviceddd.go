@@ -31,7 +31,7 @@ func NewServiceDDD(
 ) *ServiceDDD {
 	return &ServiceDDD{
 		userRepo:         userRepo,
-		createUserUC:     usecases.NewCreateUserUseCase(userRepo, logger),
+		createUserUC:     usecases.NewCreateUserUseCase(userRepo, passwordHasher, logger),
 		updateUserUC:     usecases.NewUpdateUserUseCase(userRepo, logger),
 		getUserUC:        usecases.NewGetUserUseCase(userRepo, logger),
 		updateProfileUC:  usecases.NewUpdateProfileUseCase(userRepo, logger),

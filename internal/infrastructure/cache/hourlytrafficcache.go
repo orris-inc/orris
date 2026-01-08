@@ -100,6 +100,40 @@ type HourlyTrafficCache interface {
 	// If resourceType is empty, aggregates all resource types.
 	// Only returns data within the last 48 hours (Redis hourly data TTL).
 	GetTotalTrafficBySubscriptionIDs(ctx context.Context, subscriptionIDs []uint, resourceType string, from, to time.Time) (map[uint]*TrafficSummary, error)
+
+	// ========== Admin Analytics Methods ==========
+
+	// GetPlatformTotalTraffic returns total platform-wide traffic within a time range.
+	// If resourceType is empty, aggregates all resource types.
+	// Only returns data within the last 48 hours (Redis hourly data TTL).
+	GetPlatformTotalTraffic(ctx context.Context, resourceType string, from, to time.Time) (*TrafficSummary, error)
+
+	// GetTrafficGroupedBySubscription returns traffic grouped by subscription within a time range.
+	// If resourceType is empty, aggregates all resource types.
+	// Only returns data within the last 48 hours (Redis hourly data TTL).
+	GetTrafficGroupedBySubscription(ctx context.Context, resourceType string, from, to time.Time) (map[uint]*TrafficSummary, error)
+
+	// GetTrafficGroupedByResourceID returns traffic grouped by resource ID within a time range.
+	// Only returns data within the last 48 hours (Redis hourly data TTL).
+	GetTrafficGroupedByResourceID(ctx context.Context, resourceType string, from, to time.Time) (map[uint]*TrafficSummary, error)
+
+	// GetTopSubscriptionsByTraffic returns top N subscriptions by total traffic within a time range.
+	// If resourceType is empty, aggregates all resource types.
+	// Only returns data within the last 48 hours (Redis hourly data TTL).
+	GetTopSubscriptionsByTraffic(ctx context.Context, resourceType string, from, to time.Time, limit int) ([]SubscriptionTrafficSummary, error)
+
+	// GetAllHourlyTrafficBatch returns all traffic data for a time range in a single batch operation.
+	// This is more efficient than calling GetAllHourlyTraffic for each hour.
+	// Only returns data within the last 48 hours (Redis hourly data TTL).
+	GetAllHourlyTrafficBatch(ctx context.Context, from, to time.Time) ([]HourlyTrafficData, error)
+}
+
+// SubscriptionTrafficSummary represents aggregated traffic for a subscription.
+type SubscriptionTrafficSummary struct {
+	SubscriptionID uint
+	Upload         uint64
+	Download       uint64
+	Total          uint64
 }
 
 // RedisHourlyTrafficCache implements HourlyTrafficCache using Redis.
@@ -427,7 +461,7 @@ func (c *RedisHourlyTrafficCache) GetAllHourlyTraffic(ctx context.Context, hour 
 		}
 	}
 
-	c.logger.Infow("got all hourly traffic data",
+	c.logger.Debugw("got all hourly traffic data",
 		"hour_key", hourKey,
 		"active_keys_count", len(keys),
 		"data_count", len(result),
@@ -566,163 +600,4 @@ func (c *RedisHourlyTrafficCache) CleanupHour(ctx context.Context, hour time.Tim
 	}
 
 	return nil
-}
-
-// GetTotalTrafficBySubscriptionIDs returns total traffic for subscription IDs within a time range.
-// Aggregates hourly data from Redis for the given subscription IDs and resource type.
-// If resourceType is empty, aggregates all resource types.
-// Only returns data within the last 24 hours (Redis hourly data TTL).
-func (c *RedisHourlyTrafficCache) GetTotalTrafficBySubscriptionIDs(ctx context.Context, subscriptionIDs []uint, resourceType string, from, to time.Time) (map[uint]*TrafficSummary, error) {
-	// Handle empty subscriptionIDs
-	if len(subscriptionIDs) == 0 {
-		return make(map[uint]*TrafficSummary), nil
-	}
-
-	// Validate resourceType if provided
-	if resourceType != "" {
-		if err := validateResourceType(resourceType); err != nil {
-			return nil, err
-		}
-	}
-
-	// Cap time range to last 48 hours (Redis TTL constraint)
-	now := biztime.NowUTC()
-	maxFrom := now.Add(-48 * time.Hour)
-	if from.Before(maxFrom) {
-		from = maxFrom
-	}
-	if to.After(now) {
-		to = now
-	}
-
-	// Truncate to hour boundaries in business timezone
-	fromHour := biztime.TruncateToHourInBiz(from)
-	toHour := biztime.TruncateToHourInBiz(to)
-
-	// Validate time range
-	if fromHour.After(toHour) {
-		return make(map[uint]*TrafficSummary), nil
-	}
-
-	// Build set of subscription IDs for quick lookup
-	subIDSet := make(map[uint]struct{}, len(subscriptionIDs))
-	for _, id := range subscriptionIDs {
-		subIDSet[id] = struct{}{}
-	}
-
-	// Initialize result map
-	result := make(map[uint]*TrafficSummary, len(subscriptionIDs))
-
-	// Collect all active keys from each hour
-	var allKeys []string
-	current := fromHour
-	for !current.After(toHour) {
-		hourKey := formatHourKey(current)
-		activeKey := hourlyActiveSetKey(hourKey)
-
-		keys, err := c.client.SMembers(ctx, activeKey).Result()
-		if err != nil && err != redis.Nil {
-			c.logger.Warnw("failed to get active set for hour",
-				"hour_key", hourKey,
-				"error", err,
-			)
-			current = current.Add(time.Hour)
-			continue
-		}
-
-		// Filter keys by subscription ID and resource type
-		for _, key := range keys {
-			_, subID, resType, _, err := parseHourlyTrafficKey(key)
-			if err != nil {
-				continue
-			}
-
-			// Check if subscription ID matches
-			if _, ok := subIDSet[subID]; !ok {
-				continue
-			}
-
-			// Check if resource type matches (if specified)
-			if resourceType != "" && resType != resourceType {
-				continue
-			}
-
-			allKeys = append(allKeys, key)
-		}
-
-		current = current.Add(time.Hour)
-	}
-
-	if len(allKeys) == 0 {
-		c.logger.Debugw("no traffic data found for subscription IDs",
-			"subscription_ids_count", len(subscriptionIDs),
-			"resource_type", resourceType,
-			"from", from,
-			"to", to,
-		)
-		return result, nil
-	}
-
-	// Use pipeline to get all traffic data
-	pipe := c.client.Pipeline()
-	cmds := make([]*redis.MapStringStringCmd, len(allKeys))
-
-	for i, key := range allKeys {
-		cmds[i] = pipe.HGetAll(ctx, key)
-	}
-
-	_, err := pipe.Exec(ctx)
-	if err != nil && err != redis.Nil {
-		c.logger.Errorw("failed to execute pipeline for subscription traffic aggregation",
-			"keys_count", len(allKeys),
-			"error", err,
-		)
-		return nil, fmt.Errorf("failed to get subscription traffic: %w", err)
-	}
-
-	// Process results and aggregate by subscription ID
-	for i, cmd := range cmds {
-		values, err := cmd.Result()
-		if err != nil && err != redis.Nil {
-			c.logger.Warnw("failed to get traffic from pipeline result",
-				"key", allKeys[i],
-				"error", err,
-			)
-			continue
-		}
-
-		if len(values) == 0 {
-			continue
-		}
-
-		// Parse key to get subscription ID
-		_, subID, _, _, err := parseHourlyTrafficKey(allKeys[i])
-		if err != nil {
-			continue
-		}
-
-		upload, _ := strconv.ParseInt(values[hourlyFieldUpload], 10, 64)
-		download, _ := strconv.ParseInt(values[hourlyFieldDownload], 10, 64)
-
-		// Aggregate traffic for this subscription
-		if upload > 0 || download > 0 {
-			if result[subID] == nil {
-				result[subID] = &TrafficSummary{}
-			}
-			result[subID].Upload += uint64(upload)
-			result[subID].Download += uint64(download)
-			result[subID].Total += uint64(upload + download)
-		}
-	}
-
-	c.logger.Debugw("got total traffic by subscription IDs",
-		"subscription_ids_count", len(subscriptionIDs),
-		"resource_type", resourceType,
-		"from", from,
-		"to", to,
-		"keys_processed", len(allKeys),
-		"subscriptions_with_data", len(result),
-	)
-
-	return result, nil
 }

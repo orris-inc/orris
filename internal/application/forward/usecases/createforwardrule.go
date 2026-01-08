@@ -8,6 +8,8 @@ import (
 	"github.com/orris-inc/orris/internal/domain/forward"
 	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/domain/resource"
+	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -30,10 +32,11 @@ type CreateForwardRuleCommand struct {
 	TargetNodeSID      string // optional for all types (Stripe-style short ID without prefix)
 	BindIP             string // optional bind IP address for outbound connections
 	IPVersion          string // auto, ipv4, ipv6 (default: auto)
-	Protocol          string
-	TrafficMultiplier *float64 // optional traffic multiplier (nil for auto-calculation, 0-1000000)
-	SortOrder         *int     // optional sort order (nil defaults to 0)
-	Remark            string
+	Protocol           string
+	TrafficMultiplier  *float64 // optional traffic multiplier (nil for auto-calculation, 0-1000000)
+	SortOrder          *int     // optional sort order (nil defaults to 0)
+	Remark             string
+	GroupSIDs          []string // optional resource group SIDs (admin only)
 }
 
 // CreateForwardRuleResult represents the output of creating a forward rule.
@@ -55,11 +58,13 @@ type CreateForwardRuleResult struct {
 
 // CreateForwardRuleUseCase handles forward rule creation.
 type CreateForwardRuleUseCase struct {
-	repo          forward.Repository
-	agentRepo     forward.AgentRepository
-	nodeRepo      node.NodeRepository
-	configSyncSvc ConfigSyncNotifier
-	logger        logger.Interface
+	repo              forward.Repository
+	agentRepo         forward.AgentRepository
+	nodeRepo          node.NodeRepository
+	resourceGroupRepo resource.Repository
+	planRepo          subscription.PlanRepository
+	configSyncSvc     ConfigSyncNotifier
+	logger            logger.Interface
 }
 
 // NewCreateForwardRuleUseCase creates a new CreateForwardRuleUseCase.
@@ -67,15 +72,19 @@ func NewCreateForwardRuleUseCase(
 	repo forward.Repository,
 	agentRepo forward.AgentRepository,
 	nodeRepo node.NodeRepository,
+	resourceGroupRepo resource.Repository,
+	planRepo subscription.PlanRepository,
 	configSyncSvc ConfigSyncNotifier,
 	logger logger.Interface,
 ) *CreateForwardRuleUseCase {
 	return &CreateForwardRuleUseCase{
-		repo:          repo,
-		agentRepo:     agentRepo,
-		nodeRepo:      nodeRepo,
-		configSyncSvc: configSyncSvc,
-		logger:        logger,
+		repo:              repo,
+		agentRepo:         agentRepo,
+		nodeRepo:          nodeRepo,
+		resourceGroupRepo: resourceGroupRepo,
+		planRepo:          planRepo,
+		configSyncSvc:     configSyncSvc,
+		logger:            logger,
 	}
 }
 
@@ -237,6 +246,47 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		return nil, errors.NewConflictError("listen port is already in use on this agent", fmt.Sprintf("%d", cmd.ListenPort))
 	}
 
+	// Resolve GroupSIDs to internal IDs and validate plan types (if provided)
+	var groupIDs []uint
+	if len(cmd.GroupSIDs) > 0 {
+		groupIDs = make([]uint, 0, len(cmd.GroupSIDs))
+		for _, groupSID := range cmd.GroupSIDs {
+			// Validate the SID format (rg_xxx)
+			if err := id.ValidatePrefix(groupSID, id.PrefixResourceGroup); err != nil {
+				return nil, errors.NewValidationError(fmt.Sprintf("invalid resource group ID format: %s", groupSID))
+			}
+
+			group, err := uc.resourceGroupRepo.GetBySID(ctx, groupSID)
+			if err != nil {
+				uc.logger.Errorw("failed to get resource group", "group_sid", groupSID, "error", err)
+				return nil, fmt.Errorf("failed to validate resource group: %w", err)
+			}
+			if group == nil {
+				return nil, errors.NewNotFoundError("resource group", groupSID)
+			}
+
+			// Verify the plan type supports forward rules binding (node and hybrid only, not forward)
+			plan, err := uc.planRepo.GetByID(ctx, group.PlanID())
+			if err != nil {
+				uc.logger.Errorw("failed to get plan for resource group", "plan_id", group.PlanID(), "error", err)
+				return nil, fmt.Errorf("failed to validate resource group plan: %w", err)
+			}
+			if plan == nil {
+				return nil, fmt.Errorf("plan not found for resource group %s", groupSID)
+			}
+			if plan.PlanType().IsForward() {
+				uc.logger.Warnw("attempted to bind forward rule to forward plan resource group",
+					"group_sid", groupSID,
+					"plan_id", group.PlanID(),
+					"plan_type", plan.PlanType().String())
+				return nil, errors.NewValidationError(
+					fmt.Sprintf("resource group %s belongs to a forward plan and cannot bind forward rules", groupSID))
+			}
+
+			groupIDs = append(groupIDs, group.ID())
+		}
+	}
+
 	// Create domain entity
 	protocol := vo.ForwardProtocol(cmd.Protocol)
 	ruleType := vo.ForwardRuleType(cmd.RuleType)
@@ -268,6 +318,11 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	if err != nil {
 		uc.logger.Errorw("failed to create forward rule entity", "error", err)
 		return nil, errors.NewValidationError(err.Error())
+	}
+
+	// Set group IDs if provided
+	if len(groupIDs) > 0 {
+		rule.SetGroupIDs(groupIDs)
 	}
 
 	// Persist

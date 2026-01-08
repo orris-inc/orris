@@ -2,15 +2,23 @@ package usecases
 
 import (
 	"context"
+	"sort"
 	"time"
 
 	dto "github.com/orris-inc/orris/internal/application/admin/dto"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/domain/user"
+	"github.com/orris-inc/orris/internal/infrastructure/cache"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
+)
+
+const (
+	// maxUserAggregationLimit is the maximum number of records to fetch
+	// from MySQL when aggregating user traffic data with Redis.
+	maxUserAggregationLimit = 10000
 )
 
 // GetUserTrafficStatsQuery represents the query parameters for user traffic statistics
@@ -24,24 +32,27 @@ type GetUserTrafficStatsQuery struct {
 
 // GetUserTrafficStatsUseCase handles retrieving traffic statistics grouped by user
 type GetUserTrafficStatsUseCase struct {
-	usageStatsRepo   subscription.SubscriptionUsageStatsRepository
-	subscriptionRepo subscription.SubscriptionRepository
-	userRepo         user.Repository
-	logger           logger.Interface
+	usageStatsRepo     subscription.SubscriptionUsageStatsRepository
+	hourlyTrafficCache cache.HourlyTrafficCache
+	subscriptionRepo   subscription.SubscriptionRepository
+	userRepo           user.Repository
+	logger             logger.Interface
 }
 
 // NewGetUserTrafficStatsUseCase creates a new GetUserTrafficStatsUseCase
 func NewGetUserTrafficStatsUseCase(
 	usageStatsRepo subscription.SubscriptionUsageStatsRepository,
+	hourlyTrafficCache cache.HourlyTrafficCache,
 	subscriptionRepo subscription.SubscriptionRepository,
 	userRepo user.Repository,
 	logger logger.Interface,
 ) *GetUserTrafficStatsUseCase {
 	return &GetUserTrafficStatsUseCase{
-		usageStatsRepo:   usageStatsRepo,
-		subscriptionRepo: subscriptionRepo,
-		userRepo:         userRepo,
-		logger:           logger,
+		usageStatsRepo:     usageStatsRepo,
+		hourlyTrafficCache: hourlyTrafficCache,
+		subscriptionRepo:   subscriptionRepo,
+		userRepo:           userRepo,
+		logger:             logger,
 	}
 }
 
@@ -68,21 +79,99 @@ func (uc *GetUserTrafficStatsUseCase) Execute(
 	// Adjust 'to' time to end of day to include all records from that day
 	adjustedTo := biztime.EndOfDayUTC(query.To)
 
-	// Get usage data grouped by subscription from subscription_usage_stats table
-	subscriptionUsages, total, err := uc.usageStatsRepo.GetUsageGroupedBySubscription(
-		ctx,
-		query.ResourceType,
-		query.From,
-		adjustedTo,
-		page,
-		pageSize,
-	)
-	if err != nil {
-		uc.logger.Errorw("failed to fetch subscription usage", "error", err)
-		return nil, errors.NewInternalError("failed to fetch subscription usage")
+	// Calculate today's boundary in business timezone
+	now := biztime.NowUTC()
+	todayStart := biztime.StartOfDayUTC(now)
+
+	// Determine if query includes today (unaggregated data)
+	includesToday := !adjustedTo.Before(todayStart)
+	includesHistory := query.From.Before(todayStart)
+
+	// Prepare to merge subscription usage data from MySQL and Redis
+	subscriptionUsageMap := make(map[uint]*subscription.SubscriptionUsageSummary)
+
+	// If query includes today, get Redis data first
+	if includesToday {
+		redisFrom := todayStart
+		if query.From.After(todayStart) {
+			redisFrom = query.From
+		}
+
+		resourceType := ""
+		if query.ResourceType != nil {
+			resourceType = *query.ResourceType
+		}
+
+		redisTraffic, err := uc.hourlyTrafficCache.GetTrafficGroupedBySubscription(ctx, resourceType, redisFrom, adjustedTo)
+		if err != nil {
+			uc.logger.Warnw("failed to get today's traffic from Redis",
+				"error", err,
+			)
+		} else {
+			for subID, traffic := range redisTraffic {
+				subscriptionUsageMap[subID] = &subscription.SubscriptionUsageSummary{
+					SubscriptionID: subID,
+					Upload:         traffic.Upload,
+					Download:       traffic.Download,
+					Total:          traffic.Total,
+				}
+			}
+			uc.logger.Debugw("got today's subscription traffic from Redis",
+				"subscriptions_count", len(redisTraffic),
+			)
+		}
 	}
 
-	if len(subscriptionUsages) == 0 {
+	// If query includes historical data, get MySQL data
+	if includesHistory {
+		mysqlTo := adjustedTo
+		if includesToday {
+			// Exclude today from MySQL query
+			mysqlTo = todayStart.Add(-time.Nanosecond)
+		}
+
+		subscriptionUsages, mysqlTotal, err := uc.usageStatsRepo.GetUsageGroupedBySubscription(
+			ctx,
+			query.ResourceType,
+			query.From,
+			mysqlTo,
+			1,                        // Get all data without pagination for merging
+			maxUserAggregationLimit,  // Safety limit to prevent OOM
+		)
+		if err != nil {
+			uc.logger.Errorw("failed to fetch subscription usage", "error", err)
+			return nil, errors.NewInternalError("failed to fetch subscription usage")
+		}
+
+		// Warn if data may be truncated
+		if mysqlTotal > int64(maxUserAggregationLimit) {
+			uc.logger.Warnw("user traffic data may be incomplete due to aggregation limit",
+				"total_records", mysqlTotal,
+				"limit", maxUserAggregationLimit,
+				"from", query.From,
+				"to", mysqlTo,
+			)
+		}
+
+		// Merge MySQL data with Redis data
+		for _, usage := range subscriptionUsages {
+			if existing, ok := subscriptionUsageMap[usage.SubscriptionID]; ok {
+				existing.Upload += usage.Upload
+				existing.Download += usage.Download
+				existing.Total += usage.Total
+			} else {
+				subscriptionUsageMap[usage.SubscriptionID] = &subscription.SubscriptionUsageSummary{
+					SubscriptionID: usage.SubscriptionID,
+					Upload:         usage.Upload,
+					Download:       usage.Download,
+					Total:          usage.Total,
+				}
+			}
+		}
+	}
+
+	// If no data found
+	if len(subscriptionUsageMap) == 0 {
 		return &dto.UserTrafficStatsResponse{
 			Items:    []dto.UserTrafficStatsItem{},
 			Total:    0,
@@ -92,9 +181,9 @@ func (uc *GetUserTrafficStatsUseCase) Execute(
 	}
 
 	// Extract subscription IDs
-	subscriptionIDs := make([]uint, len(subscriptionUsages))
-	for i, usage := range subscriptionUsages {
-		subscriptionIDs[i] = usage.SubscriptionID
+	subscriptionIDs := make([]uint, 0, len(subscriptionUsageMap))
+	for subID := range subscriptionUsageMap {
+		subscriptionIDs = append(subscriptionIDs, subID)
 	}
 
 	// Fetch subscriptions using batch query
@@ -104,10 +193,10 @@ func (uc *GetUserTrafficStatsUseCase) Execute(
 		return nil, errors.NewInternalError("failed to fetch subscription information")
 	}
 
-	// Extract user IDs and aggregate usage by user
+	// Aggregate usage by user
 	userUsageMap := make(map[uint]*userUsageData)
-	for _, usage := range subscriptionUsages {
-		sub, ok := subscriptions[usage.SubscriptionID]
+	for subID, usage := range subscriptionUsageMap {
+		sub, ok := subscriptions[subID]
 		if !ok {
 			continue
 		}
@@ -129,10 +218,31 @@ func (uc *GetUserTrafficStatsUseCase) Execute(
 		}
 	}
 
+	// Convert to slice and sort by total descending
+	userUsages := make([]*userUsageData, 0, len(userUsageMap))
+	for _, data := range userUsageMap {
+		userUsages = append(userUsages, data)
+	}
+	sort.Slice(userUsages, func(i, j int) bool {
+		return userUsages[i].total > userUsages[j].total
+	})
+
+	// Apply pagination
+	total := int64(len(userUsages))
+	start := (page - 1) * pageSize
+	end := start + pageSize
+	if start > len(userUsages) {
+		start = len(userUsages)
+	}
+	if end > len(userUsages) {
+		end = len(userUsages)
+	}
+	pagedUsages := userUsages[start:end]
+
 	// Fetch user details
-	userIDs := make([]uint, 0, len(userUsageMap))
-	for userID := range userUsageMap {
-		userIDs = append(userIDs, userID)
+	userIDs := make([]uint, len(pagedUsages))
+	for i, data := range pagedUsages {
+		userIDs[i] = data.userID
 	}
 
 	users, err := uc.userRepo.GetByIDs(ctx, userIDs)
@@ -141,10 +251,16 @@ func (uc *GetUserTrafficStatsUseCase) Execute(
 		return nil, errors.NewInternalError("failed to fetch user information")
 	}
 
-	// Build response
-	items := make([]dto.UserTrafficStatsItem, 0, len(users))
+	// Create users map for quick lookup
+	usersMap := make(map[uint]*user.User)
 	for _, u := range users {
-		usageData, ok := userUsageMap[u.ID()]
+		usersMap[u.ID()] = u
+	}
+
+	// Build response
+	items := make([]dto.UserTrafficStatsItem, 0, len(pagedUsages))
+	for _, usageData := range pagedUsages {
+		u, ok := usersMap[usageData.userID]
 		if !ok {
 			continue
 		}
@@ -201,12 +317,12 @@ func (uc *GetUserTrafficStatsUseCase) validateQuery(query GetUserTrafficStatsQue
 
 func (uc *GetUserTrafficStatsUseCase) getPaginationParams(query GetUserTrafficStatsQuery) (int, int) {
 	page := query.Page
-	if page == 0 {
+	if page < 1 {
 		page = constants.DefaultPage
 	}
 
 	pageSize := query.PageSize
-	if pageSize == 0 {
+	if pageSize < 1 {
 		pageSize = constants.DefaultPageSize
 	}
 	if pageSize > constants.MaxPageSize {

@@ -93,8 +93,9 @@ type Repository interface {
 
 	// ListSystemRulesByTargetNodes returns enabled system rules targeting the specified nodes.
 	// Only includes rules with system scope (user_id IS NULL or 0).
+	// If groupIDs is not empty, only returns rules that belong to at least one of the specified resource groups.
 	// This is used for Node Plan subscription delivery where user rules should be excluded.
-	ListSystemRulesByTargetNodes(ctx context.Context, nodeIDs []uint) ([]*ForwardRule, error)
+	ListSystemRulesByTargetNodes(ctx context.Context, nodeIDs []uint, groupIDs []uint) ([]*ForwardRule, error)
 
 	// ListUserRulesForDelivery returns enabled user rules for subscription delivery.
 	// Only includes rules with user scope (user_id = userID) and target_node_id set.
@@ -104,6 +105,25 @@ type Repository interface {
 	// ListEnabledByTargetNodeID returns all enabled forward rules targeting a specific node.
 	// This is used for notifying agents when a node's address changes.
 	ListEnabledByTargetNodeID(ctx context.Context, nodeID uint) ([]*ForwardRule, error)
+
+	// ListByGroupID returns all forward rules that belong to the specified resource group.
+	// Uses JSON_CONTAINS to check if group_ids array contains the given group ID.
+	// Supports pagination when page > 0 and pageSize > 0.
+	ListByGroupID(ctx context.Context, groupID uint, page, pageSize int) ([]*ForwardRule, int64, error)
+
+	// AddGroupIDAtomically adds a group ID to a rule's group_ids array atomically using JSON_ARRAY_APPEND.
+	// Returns true if the group ID was added, false if it already exists.
+	// This avoids read-modify-write race conditions.
+	AddGroupIDAtomically(ctx context.Context, ruleID uint, groupID uint) (bool, error)
+
+	// RemoveGroupIDAtomically removes a group ID from a rule's group_ids array atomically using JSON_REMOVE.
+	// Returns true if the group ID was removed, false if it was not found.
+	// This avoids read-modify-write race conditions.
+	RemoveGroupIDAtomically(ctx context.Context, ruleID uint, groupID uint) (bool, error)
+
+	// RemoveGroupIDFromAllRules removes a group ID from all rules that contain it.
+	// This is used when deleting a resource group to clean up orphaned references.
+	RemoveGroupIDFromAllRules(ctx context.Context, groupID uint) (int64, error)
 }
 
 // ListFilter defines the filtering options for listing forward rules.
@@ -119,6 +139,7 @@ type ListFilter struct {
 	Status           string
 	OrderBy          string
 	Order            string
+	GroupIDs         []uint // Filter by resource group IDs (uses JSON_OVERLAPS on group_ids column)
 }
 
 // AgentRepository defines the interface for forward agent persistence.

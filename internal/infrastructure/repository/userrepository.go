@@ -202,16 +202,12 @@ func (r *UserRepository) Update(ctx context.Context, userEntity *user.User) erro
 	return nil
 }
 
-// Delete soft deletes a user by internal ID
+// Delete hard deletes a user by internal ID
 func (r *UserRepository) Delete(ctx context.Context, id uint) error {
-	// Soft delete in database - updates both status and deleted_at
+	// Hard delete - permanently remove user record for privacy compliance
 	result := r.db.WithContext(ctx).
-		Model(&models.UserModel{}).
-		Where("id = ?", id).
-		Updates(map[string]interface{}{
-			"status":     "deleted",
-			"deleted_at": r.db.NowFunc(),
-		})
+		Unscoped().
+		Delete(&models.UserModel{}, "id = ?", id)
 
 	if result.Error != nil {
 		r.logger.Errorw("failed to delete user", "id", id, "error", result.Error)
@@ -226,16 +222,12 @@ func (r *UserRepository) Delete(ctx context.Context, id uint) error {
 	return nil
 }
 
-// DeleteBySID soft deletes a user by external SID
+// DeleteBySID hard deletes a user by external SID
 func (r *UserRepository) DeleteBySID(ctx context.Context, sid string) error {
-	// Soft delete in database - updates both status and deleted_at
+	// Hard delete - permanently remove user record for privacy compliance
 	result := r.db.WithContext(ctx).
-		Model(&models.UserModel{}).
-		Where("sid = ?", sid).
-		Updates(map[string]interface{}{
-			"status":     "deleted",
-			"deleted_at": r.db.NowFunc(),
-		})
+		Unscoped().
+		Delete(&models.UserModel{}, "sid = ?", sid)
 
 	if result.Error != nil {
 		r.logger.Errorw("failed to delete user", "sid", sid, "error", result.Error)

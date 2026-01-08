@@ -7,7 +7,10 @@ import (
 	"github.com/orris-inc/orris/internal/domain/forward"
 	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/domain/resource"
+	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -27,19 +30,22 @@ type UpdateForwardRuleCommand struct {
 	TargetNodeSID      *string // nil means no update, empty string means clear, non-empty means set to this node
 	BindIP             *string // nil means no update, empty string means clear
 	IPVersion          *string // auto, ipv4, ipv6
-	Protocol          *string
-	TrafficMultiplier *float64 // nil means no update (0-1000000)
-	SortOrder         *int     // nil means no update
-	Remark            *string
+	Protocol           *string
+	TrafficMultiplier  *float64 // nil means no update (0-1000000)
+	SortOrder          *int     // nil means no update
+	Remark             *string
+	GroupSIDs          *[]string // nil means no update, empty slice means clear, non-nil means set
 }
 
 // UpdateForwardRuleUseCase handles forward rule updates.
 type UpdateForwardRuleUseCase struct {
-	repo          forward.Repository
-	agentRepo     forward.AgentRepository
-	nodeRepo      node.NodeRepository
-	configSyncSvc ConfigSyncNotifier
-	logger        logger.Interface
+	repo              forward.Repository
+	agentRepo         forward.AgentRepository
+	nodeRepo          node.NodeRepository
+	resourceGroupRepo resource.Repository
+	planRepo          subscription.PlanRepository
+	configSyncSvc     ConfigSyncNotifier
+	logger            logger.Interface
 }
 
 // NewUpdateForwardRuleUseCase creates a new UpdateForwardRuleUseCase.
@@ -47,15 +53,19 @@ func NewUpdateForwardRuleUseCase(
 	repo forward.Repository,
 	agentRepo forward.AgentRepository,
 	nodeRepo node.NodeRepository,
+	resourceGroupRepo resource.Repository,
+	planRepo subscription.PlanRepository,
 	configSyncSvc ConfigSyncNotifier,
 	logger logger.Interface,
 ) *UpdateForwardRuleUseCase {
 	return &UpdateForwardRuleUseCase{
-		repo:          repo,
-		agentRepo:     agentRepo,
-		nodeRepo:      nodeRepo,
-		configSyncSvc: configSyncSvc,
-		logger:        logger,
+		repo:              repo,
+		agentRepo:         agentRepo,
+		nodeRepo:          nodeRepo,
+		resourceGroupRepo: resourceGroupRepo,
+		planRepo:          planRepo,
+		configSyncSvc:     configSyncSvc,
+		logger:            logger,
 	}
 }
 
@@ -358,6 +368,51 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 		if err := rule.UpdateRemark(*cmd.Remark); err != nil {
 			return errors.NewValidationError(err.Error())
 		}
+	}
+
+	// Update group IDs if provided
+	if cmd.GroupSIDs != nil {
+		var groupIDs []uint
+		if len(*cmd.GroupSIDs) > 0 {
+			groupIDs = make([]uint, 0, len(*cmd.GroupSIDs))
+			for _, groupSID := range *cmd.GroupSIDs {
+				// Validate the SID format (rg_xxx)
+				if err := id.ValidatePrefix(groupSID, id.PrefixResourceGroup); err != nil {
+					return errors.NewValidationError(fmt.Sprintf("invalid resource group ID format: %s", groupSID))
+				}
+
+				group, err := uc.resourceGroupRepo.GetBySID(ctx, groupSID)
+				if err != nil {
+					uc.logger.Errorw("failed to get resource group", "group_sid", groupSID, "error", err)
+					return fmt.Errorf("failed to validate resource group: %w", err)
+				}
+				if group == nil {
+					return errors.NewNotFoundError("resource group", groupSID)
+				}
+
+				// Verify the plan type supports forward rules binding (node and hybrid only, not forward)
+				plan, err := uc.planRepo.GetByID(ctx, group.PlanID())
+				if err != nil {
+					uc.logger.Errorw("failed to get plan for resource group", "plan_id", group.PlanID(), "error", err)
+					return fmt.Errorf("failed to validate resource group plan: %w", err)
+				}
+				if plan == nil {
+					return fmt.Errorf("plan not found for resource group %s", groupSID)
+				}
+				if plan.PlanType().IsForward() {
+					uc.logger.Warnw("attempted to bind forward rule to forward plan resource group",
+						"group_sid", groupSID,
+						"plan_id", group.PlanID(),
+						"plan_type", plan.PlanType().String())
+					return errors.NewValidationError(
+						fmt.Sprintf("resource group %s belongs to a forward plan and cannot bind forward rules", groupSID))
+				}
+
+				groupIDs = append(groupIDs, group.ID())
+			}
+		}
+		// Set group IDs (empty slice will clear all groups)
+		rule.SetGroupIDs(groupIDs)
 	}
 
 	// Persist changes

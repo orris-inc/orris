@@ -62,7 +62,7 @@ func (uc *ManageResourceGroupNodesUseCase) executeAddNodes(ctx context.Context, 
 
 	groupID := group.ID()
 
-	// Verify the plan type is node
+	// Verify the plan type supports node binding (node and hybrid only, not forward)
 	plan, err := uc.planRepo.GetByID(ctx, group.PlanID())
 	if err != nil {
 		uc.logger.Errorw("failed to get plan", "error", err, "plan_id", group.PlanID())
@@ -71,12 +71,12 @@ func (uc *ManageResourceGroupNodesUseCase) executeAddNodes(ctx context.Context, 
 	if plan == nil {
 		return nil, fmt.Errorf("plan not found for resource group")
 	}
-	if !plan.PlanType().IsNode() {
-		uc.logger.Warnw("attempted to add nodes to non-node plan resource group",
+	if plan.PlanType().IsForward() {
+		uc.logger.Warnw("attempted to add nodes to forward plan resource group",
 			"group_id", groupID,
 			"plan_id", group.PlanID(),
 			"plan_type", plan.PlanType().String())
-		return nil, resource.ErrGroupPlanTypeMismatchNode
+		return nil, resource.ErrForwardPlanCannotBindNodes
 	}
 
 	result := &dto.BatchOperationResult{
