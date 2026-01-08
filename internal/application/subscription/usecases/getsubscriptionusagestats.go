@@ -298,12 +298,20 @@ func (uc *GetSubscriptionUsageStatsUseCase) fetchHourlyDataFromRedis(
 				resourceID:   rk.resourceID,
 				hour:         point.Hour,
 			}
+			// Safe conversion: treat negative int64 values as 0 to prevent uint64 underflow
+			var upload, download uint64
+			if point.Upload > 0 {
+				upload = uint64(point.Upload)
+			}
+			if point.Download > 0 {
+				download = uint64(point.Download)
+			}
 			hourlyRecords[hk] = &SubscriptionUsageStatsRecord{
 				ResourceType: rk.resourceType,
 				ResourceSID:  "", // Will be filled by populateSIDsForHourlyRecords
-				Upload:       uint64(point.Upload),
-				Download:     uint64(point.Download),
-				Total:        uint64(point.Upload + point.Download),
+				Upload:       upload,
+				Download:     download,
+				Total:        upload + download,
 				Period:       point.Hour,
 			}
 		}

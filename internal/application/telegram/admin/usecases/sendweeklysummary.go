@@ -455,6 +455,7 @@ func calculateChangePercent(current, previous int64) float64 {
 }
 
 // calculateChangePercentUint64 calculates the percentage change for uint64 values
+// Uses safe conversion to prevent integer overflow when values exceed math.MaxInt64
 func calculateChangePercentUint64(current, previous uint64) float64 {
 	if previous == 0 {
 		if current == 0 {
@@ -462,7 +463,9 @@ func calculateChangePercentUint64(current, previous uint64) float64 {
 		}
 		return 100
 	}
-	return float64(int64(current)-int64(previous)) / float64(previous) * 100
+	// Safe conversion: use float64 directly to avoid int64 overflow
+	// when current or previous exceeds math.MaxInt64
+	return (float64(current) - float64(previous)) / float64(previous) * 100
 }
 
 // formatChangeIndicator formats the change percentage with trend indicator

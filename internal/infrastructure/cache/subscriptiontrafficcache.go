@@ -10,6 +10,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 const (
@@ -440,8 +441,8 @@ func (c *RedisSubscriptionTrafficCache) GetTotalTrafficBySubscriptionIDs(ctx con
 			downloadDelta = 0
 		}
 
-		// Add to result
-		result[matchingKeys[i].subscriptionID] += uint64(uploadDelta + downloadDelta)
+		// Add to result with safe conversion to prevent overflow
+		result[matchingKeys[i].subscriptionID] += utils.SafeInt64ToUint64(uploadDelta) + utils.SafeInt64ToUint64(downloadDelta)
 	}
 
 	return result, nil

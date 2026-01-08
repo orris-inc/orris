@@ -10,6 +10,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	subscriptionVO "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
 	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 type CreatePaymentCommand struct {
@@ -111,7 +112,8 @@ func (uc *CreatePaymentUseCase) Execute(ctx context.Context, cmd CreatePaymentCo
 		return nil, fmt.Errorf("pricing not found for selected billing cycle")
 	}
 
-	amount := vo.NewMoney(int64(pricing.Price()), pricing.Currency())
+	// Safe conversion: cap uint64 price to math.MaxInt64 to prevent overflow
+	amount := vo.NewMoney(utils.SafeUint64ToInt64(pricing.Price()), pricing.Currency())
 	method, err := vo.NewPaymentMethod(cmd.PaymentMethod)
 	if err != nil {
 		return nil, fmt.Errorf("invalid payment method: %w", err)

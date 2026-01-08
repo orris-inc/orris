@@ -156,8 +156,13 @@ func (uc *GetTrafficTrendUseCase) getHourlyTrendFromRedis(
 			if query.ResourceType != nil && data.ResourceType != *query.ResourceType {
 				continue
 			}
-			upload += uint64(data.Upload)
-			download += uint64(data.Download)
+			// Safe conversion: treat negative int64 values as 0 to prevent uint64 underflow
+			if data.Upload > 0 {
+				upload += uint64(data.Upload)
+			}
+			if data.Download > 0 {
+				download += uint64(data.Download)
+			}
 		}
 
 		// Only add if there's data

@@ -489,8 +489,11 @@ func (uc *CreateForwardRuleUseCase) assignAvailablePort(ctx context.Context, age
 			// Use agent's allowed port range
 			port = portRange.RandomPort()
 		} else {
-			// Use default range
-			port = uint16(defaultPortRangeStart + rand.Intn(defaultPortRangeEnd-defaultPortRangeStart+1))
+			// Use default range: port range is 10000-65000, so result always fits in uint16
+			randomOffset := rand.Intn(defaultPortRangeEnd - defaultPortRangeStart + 1)
+			portVal := defaultPortRangeStart + randomOffset
+			// #nosec G115 -- portVal is bounded by defaultPortRangeStart(10000) to defaultPortRangeEnd(65000)
+			port = uint16(portVal)
 		}
 
 		// Defensive check: ensure port is within agent's allowed range

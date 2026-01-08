@@ -520,7 +520,11 @@ func (uc *CreateSubscriptionForwardRuleUseCase) assignAvailablePort(ctx context.
 		if portRange != nil && !portRange.IsEmpty() {
 			port = portRange.RandomPort()
 		} else {
-			port = uint16(subscriptionDefaultPortRangeStart + rand.Intn(subscriptionDefaultPortRangeEnd-subscriptionDefaultPortRangeStart+1))
+			// Use default range: port range is 10000-65000, so result always fits in uint16
+			randomOffset := rand.Intn(subscriptionDefaultPortRangeEnd - subscriptionDefaultPortRangeStart + 1)
+			portVal := subscriptionDefaultPortRangeStart + randomOffset
+			// #nosec G115 -- portVal is bounded by subscriptionDefaultPortRangeStart(10000) to subscriptionDefaultPortRangeEnd(65000)
+			port = uint16(portVal)
 		}
 
 		if !agent.IsPortAllowed(port) {

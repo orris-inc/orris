@@ -10,6 +10,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 type RedisTrafficCache struct {
@@ -36,12 +37,12 @@ func (c *RedisTrafficCache) IncrementTraffic(ctx context.Context, nodeID uint, u
 
 	pipe := c.client.Pipeline()
 
-	// Atomic increment
+	// Atomic increment with safe conversion to prevent overflow
 	if upload > 0 {
-		pipe.HIncrBy(ctx, key, "upload", int64(upload))
+		pipe.HIncrBy(ctx, key, "upload", utils.SafeUint64ToInt64(upload))
 	}
 	if download > 0 {
-		pipe.HIncrBy(ctx, key, "download", int64(download))
+		pipe.HIncrBy(ctx, key, "download", utils.SafeUint64ToInt64(download))
 	}
 
 	// Set expiration to prevent memory leak (24 hours)

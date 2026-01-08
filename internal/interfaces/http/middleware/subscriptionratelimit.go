@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"time"
@@ -69,11 +70,18 @@ func (m *SubscriptionRateLimitMiddleware) LimitBySubscription() gin.HandlerFunc 
 		}
 
 		key := fmt.Sprintf("subscription:%d", subscriptionID)
+
+		// Safe uint to int conversion to prevent overflow
+		rateLimitInt := int(rateLimit)
+		if rateLimit > uint(math.MaxInt) {
+			rateLimitInt = math.MaxInt
+		}
+
 		config := ratelimit.RateLimitConfig{
-			RequestsPerMinute: int(rateLimit),
-			RequestsPerHour:   int(rateLimit) * 60,
-			RequestsPerDay:    int(rateLimit) * 60 * 24,
-			BurstSize:         int(rateLimit),
+			RequestsPerMinute: rateLimitInt,
+			RequestsPerHour:   rateLimitInt * 60,
+			RequestsPerDay:    rateLimitInt * 60 * 24,
+			BurstSize:         rateLimitInt,
 		}
 
 		allowed, err := m.limiter.Allow(key, config)
@@ -96,7 +104,12 @@ func (m *SubscriptionRateLimitMiddleware) LimitBySubscription() gin.HandlerFunc 
 			remaining = 0
 		}
 
+		// Safe uint to int64 conversion to prevent overflow
 		limit := int64(rateLimit)
+		if rateLimit > uint(math.MaxInt64) {
+			limit = math.MaxInt64
+		}
+
 		used := limit - remaining
 		if used < 0 {
 			used = 0

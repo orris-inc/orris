@@ -75,6 +75,9 @@ func (p *PortRange) RandomPort() uint16 {
 	for _, r := range p.Ranges {
 		rangeSize := int(r.End-r.Start) + 1
 		if idx < rangeSize {
+			// Safe conversion: idx is guaranteed to be non-negative (from rand.Intn) and
+			// bounded by rangeSize which is <= 65535, so uint16 conversion is safe
+			// #nosec G115 -- idx is bounded by port range size (max 65535)
 			return r.Start + uint16(idx)
 		}
 		idx -= rangeSize

@@ -9,6 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/orris-inc/orris/internal/shared/biztime"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 // GetTotalTrafficBySubscriptionIDs returns total traffic for subscription IDs within a time range.
@@ -147,14 +148,14 @@ func (c *RedisHourlyTrafficCache) GetTotalTrafficBySubscriptionIDs(ctx context.C
 		upload, _ := strconv.ParseInt(values[hourlyFieldUpload], 10, 64)
 		download, _ := strconv.ParseInt(values[hourlyFieldDownload], 10, 64)
 
-		// Aggregate traffic for this subscription
+		// Aggregate traffic for this subscription with safe conversion to prevent overflow
 		if upload > 0 || download > 0 {
 			if result[subID] == nil {
 				result[subID] = &TrafficSummary{}
 			}
-			result[subID].Upload += uint64(upload)
-			result[subID].Download += uint64(download)
-			result[subID].Total += uint64(upload + download)
+			result[subID].Upload += utils.SafeInt64ToUint64(upload)
+			result[subID].Download += utils.SafeInt64ToUint64(download)
+			result[subID].Total += utils.SafeInt64ToUint64(upload) + utils.SafeInt64ToUint64(download)
 		}
 	}
 
@@ -187,13 +188,13 @@ func (c *RedisHourlyTrafficCache) GetPlatformTotalTraffic(ctx context.Context, r
 
 	result := &TrafficSummary{}
 
-	// Filter by resource type and aggregate
+	// Filter by resource type and aggregate with safe conversion to prevent overflow
 	for _, data := range allData {
 		if resourceType != "" && data.ResourceType != resourceType {
 			continue
 		}
-		result.Upload += uint64(data.Upload)
-		result.Download += uint64(data.Download)
+		result.Upload += utils.SafeInt64ToUint64(data.Upload)
+		result.Download += utils.SafeInt64ToUint64(data.Download)
 	}
 
 	result.Total = result.Upload + result.Download
@@ -227,7 +228,7 @@ func (c *RedisHourlyTrafficCache) GetTrafficGroupedBySubscription(ctx context.Co
 
 	result := make(map[uint]*TrafficSummary)
 
-	// Filter by resource type and aggregate by subscription
+	// Filter by resource type and aggregate by subscription with safe conversion to prevent overflow
 	for _, data := range allData {
 		if resourceType != "" && data.ResourceType != resourceType {
 			continue
@@ -235,9 +236,9 @@ func (c *RedisHourlyTrafficCache) GetTrafficGroupedBySubscription(ctx context.Co
 		if result[data.SubscriptionID] == nil {
 			result[data.SubscriptionID] = &TrafficSummary{}
 		}
-		result[data.SubscriptionID].Upload += uint64(data.Upload)
-		result[data.SubscriptionID].Download += uint64(data.Download)
-		result[data.SubscriptionID].Total += uint64(data.Upload + data.Download)
+		result[data.SubscriptionID].Upload += utils.SafeInt64ToUint64(data.Upload)
+		result[data.SubscriptionID].Download += utils.SafeInt64ToUint64(data.Download)
+		result[data.SubscriptionID].Total += utils.SafeInt64ToUint64(data.Upload) + utils.SafeInt64ToUint64(data.Download)
 	}
 
 	c.logger.Debugw("got traffic grouped by subscription",
@@ -268,7 +269,7 @@ func (c *RedisHourlyTrafficCache) GetTrafficGroupedByResourceID(ctx context.Cont
 
 	result := make(map[uint]*TrafficSummary)
 
-	// Filter by resource type and aggregate by resource ID
+	// Filter by resource type and aggregate by resource ID with safe conversion to prevent overflow
 	for _, data := range allData {
 		if data.ResourceType != resourceType {
 			continue
@@ -276,9 +277,9 @@ func (c *RedisHourlyTrafficCache) GetTrafficGroupedByResourceID(ctx context.Cont
 		if result[data.ResourceID] == nil {
 			result[data.ResourceID] = &TrafficSummary{}
 		}
-		result[data.ResourceID].Upload += uint64(data.Upload)
-		result[data.ResourceID].Download += uint64(data.Download)
-		result[data.ResourceID].Total += uint64(data.Upload + data.Download)
+		result[data.ResourceID].Upload += utils.SafeInt64ToUint64(data.Upload)
+		result[data.ResourceID].Download += utils.SafeInt64ToUint64(data.Download)
+		result[data.ResourceID].Total += utils.SafeInt64ToUint64(data.Upload) + utils.SafeInt64ToUint64(data.Download)
 	}
 
 	c.logger.Debugw("got traffic grouped by resource ID",
