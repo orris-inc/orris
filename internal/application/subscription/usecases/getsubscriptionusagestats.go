@@ -51,8 +51,8 @@ type GetSubscriptionUsageStatsResponse struct {
 }
 
 // maxHourlyDataHours is the maximum hours of hourly data available in Redis cache.
-// Hourly data is only retained for approximately 24 hours before being aggregated.
-const maxHourlyDataHours = 24
+// Hourly data is retained for approximately 48 hours before being aggregated.
+const maxHourlyDataHours = 48
 
 // GetSubscriptionUsageStatsUseCase handles retrieving usage statistics for a subscription
 type GetSubscriptionUsageStatsUseCase struct {
@@ -100,7 +100,7 @@ func (uc *GetSubscriptionUsageStatsUseCase) Execute(
 		return nil, err
 	}
 
-	// Get total usage summary from Redis (recent 24h) + MySQL stats (historical)
+	// Get total usage summary from Redis (recent 48h) + MySQL stats (historical)
 	summary, err := uc.getTotalUsageBySubscriptionID(ctx, query.SubscriptionID, query.From, query.To)
 	if err != nil {
 		uc.logger.Errorw("failed to fetch subscription usage summary", "error", err)
@@ -120,7 +120,7 @@ func (uc *GetSubscriptionUsageStatsUseCase) Execute(
 
 // executeWithTrendAggregation fetches usage stats with time-based aggregation.
 // Routes to different data sources based on granularity:
-// - hour: Redis HourlyTrafficCache (last 24 hours only)
+// - hour: Redis HourlyTrafficCache (last 48 hours only)
 // - day/month: MySQL subscription_usage_stats table
 func (uc *GetSubscriptionUsageStatsUseCase) executeWithTrendAggregation(
 	ctx context.Context,
@@ -172,8 +172,8 @@ func (uc *GetSubscriptionUsageStatsUseCase) executeWithTrendAggregation(
 	return response, nil
 }
 
-// isWithin24Hours checks if the given time is within the last 24 hours.
-func isWithin24Hours(t time.Time) bool {
+// isWithinHourlyDataWindow checks if the given time is within the hourly data retention window.
+func isWithinHourlyDataWindow(t time.Time) bool {
 	return time.Since(t) <= maxHourlyDataHours*time.Hour
 }
 
@@ -185,19 +185,20 @@ type hourlyRecordKey struct {
 }
 
 // getHourlyTrendFromRedis retrieves hourly trend data from Redis HourlyTrafficCache.
-// Only the last 24 hours of data is available.
+// Only the last 48 hours of data is available.
 func (uc *GetSubscriptionUsageStatsUseCase) getHourlyTrendFromRedis(
 	ctx context.Context,
 	query GetSubscriptionUsageStatsQuery,
 ) ([]*SubscriptionUsageStatsRecord, error) {
-	// Validate time range - hourly data only available for last 24 hours
-	if !isWithin24Hours(query.From) {
-		uc.logger.Warnw("hourly data requested beyond 24-hour window",
+	// Validate time range - hourly data only available for last 48 hours
+	if !isWithinHourlyDataWindow(query.From) {
+		uc.logger.Warnw("hourly data requested beyond retention window",
 			"subscription_id", query.SubscriptionID,
 			"from", query.From,
 			"hours_ago", time.Since(query.From).Hours(),
+			"max_hours", maxHourlyDataHours,
 		)
-		return nil, errors.NewValidationError("hourly data only available for the last 24 hours")
+		return nil, errors.NewValidationError("hourly data only available for the last 48 hours")
 	}
 
 	// Discover active resources for this subscription from recent daily stats
@@ -384,25 +385,25 @@ func (uc *GetSubscriptionUsageStatsUseCase) getMonthlyTrendFromStats(
 }
 
 // getTotalUsageBySubscriptionID combines recent traffic from Redis with historical from MySQL stats.
-// For data within the last 24 hours, it queries Redis HourlyTrafficCache.
-// For data older than 24 hours, it queries MySQL subscription_usage_stats table.
+// For data within the last 48 hours, it queries Redis HourlyTrafficCache.
+// For data older than 48 hours, it queries MySQL subscription_usage_stats table.
 func (uc *GetSubscriptionUsageStatsUseCase) getTotalUsageBySubscriptionID(
 	ctx context.Context,
 	subscriptionID uint,
 	from, to time.Time,
 ) (*SubscriptionUsageSummary, error) {
 	now := biztime.NowUTC()
-	dayAgo := now.Add(-24 * time.Hour)
+	retentionBoundary := now.Add(-maxHourlyDataHours * time.Hour)
 
 	var totalUpload, totalDownload, total uint64
 
 	// Determine time boundaries for recent data (Redis)
 	recentFrom := from
-	if recentFrom.Before(dayAgo) {
-		recentFrom = dayAgo
+	if recentFrom.Before(retentionBoundary) {
+		recentFrom = retentionBoundary
 	}
 
-	// Get recent traffic from Redis (last 24h)
+	// Get recent traffic from Redis (within retention window)
 	if recentFrom.Before(to) && recentFrom.Before(now) {
 		recentTo := to
 		if recentTo.After(now) {
@@ -427,9 +428,9 @@ func (uc *GetSubscriptionUsageStatsUseCase) getTotalUsageBySubscriptionID(
 		}
 	}
 
-	// Get historical traffic from MySQL stats (before 24h ago)
-	if from.Before(dayAgo) {
-		historicalTo := dayAgo
+	// Get historical traffic from MySQL stats (before retention window)
+	if from.Before(retentionBoundary) {
+		historicalTo := retentionBoundary
 		if historicalTo.After(to) {
 			historicalTo = to
 		}
