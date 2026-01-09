@@ -258,7 +258,7 @@ type CreateNodeRequest struct {
 	ServerAddress    string            `json:"server_address,omitempty" example:"1.2.3.4"`
 	AgentPort        uint16            `json:"agent_port" binding:"required" example:"8388" comment:"Port for agent connections"`
 	SubscriptionPort *uint16           `json:"subscription_port,omitempty" example:"8389" comment:"Port for client subscriptions (if null, uses agent_port)"`
-	Protocol         string            `json:"protocol" binding:"required,oneof=shadowsocks trojan" example:"shadowsocks" comment:"Protocol type: shadowsocks or trojan"`
+	Protocol         string            `json:"protocol" binding:"required,oneof=shadowsocks trojan vless vmess hysteria2 tuic" example:"shadowsocks" comment:"Protocol type"`
 	EncryptionMethod string            `json:"encryption_method,omitempty" example:"aes-256-gcm" comment:"Encryption method (for Shadowsocks)"`
 	Plugin           *string           `json:"plugin,omitempty" example:"obfs-local"`
 	PluginOpts       map[string]string `json:"plugin_opts,omitempty"`
@@ -274,6 +274,49 @@ type CreateNodeRequest struct {
 	AllowInsecure     bool   `json:"allow_insecure,omitempty" example:"true" comment:"Allow insecure TLS connection (for self-signed certs)"`
 	// Route configuration for traffic splitting (sing-box compatible)
 	Route *dto.RouteConfigDTO `json:"route,omitempty" comment:"Route configuration for traffic splitting"`
+
+	// VLESS specific fields
+	VLESSTransportType    string `json:"vless_transport_type,omitempty" binding:"omitempty,oneof=tcp ws grpc h2" example:"tcp" comment:"VLESS transport type"`
+	VLESSFlow             string `json:"vless_flow,omitempty" example:"xtls-rprx-vision" comment:"VLESS flow control"`
+	VLESSSecurity         string `json:"vless_security,omitempty" binding:"omitempty,oneof=none tls reality" example:"tls" comment:"VLESS security type"`
+	VLESSSni              string `json:"vless_sni,omitempty" example:"example.com" comment:"VLESS TLS SNI"`
+	VLESSFingerprint      string `json:"vless_fingerprint,omitempty" example:"chrome" comment:"VLESS TLS fingerprint"`
+	VLESSAllowInsecure    bool   `json:"vless_allow_insecure,omitempty" comment:"VLESS allow insecure TLS"`
+	VLESSHost             string `json:"vless_host,omitempty" comment:"VLESS WS/H2 host header"`
+	VLESSPath             string `json:"vless_path,omitempty" comment:"VLESS WS/H2 path"`
+	VLESSServiceName      string `json:"vless_service_name,omitempty" comment:"VLESS gRPC service name"`
+	VLESSRealityPublicKey string `json:"vless_reality_public_key,omitempty" comment:"VLESS Reality public key"`
+	VLESSRealityShortID   string `json:"vless_reality_short_id,omitempty" comment:"VLESS Reality short ID"`
+	VLESSRealitySpiderX   string `json:"vless_reality_spider_x,omitempty" comment:"VLESS Reality spider X"`
+
+	// VMess specific fields
+	VMessAlterID       int    `json:"vmess_alter_id,omitempty" example:"0" comment:"VMess alter ID"`
+	VMessSecurity      string `json:"vmess_security,omitempty" binding:"omitempty,oneof=auto aes-128-gcm chacha20-poly1305 none zero" example:"auto" comment:"VMess security"`
+	VMessTransportType string `json:"vmess_transport_type,omitempty" binding:"omitempty,oneof=tcp ws grpc http quic" example:"tcp" comment:"VMess transport type"`
+	VMessHost          string `json:"vmess_host,omitempty" comment:"VMess WS/HTTP host header"`
+	VMessPath          string `json:"vmess_path,omitempty" comment:"VMess WS/HTTP path"`
+	VMessServiceName   string `json:"vmess_service_name,omitempty" comment:"VMess gRPC service name"`
+	VMessTLS           bool   `json:"vmess_tls,omitempty" comment:"VMess TLS enabled"`
+	VMessSni           string `json:"vmess_sni,omitempty" comment:"VMess TLS SNI"`
+	VMessAllowInsecure bool   `json:"vmess_allow_insecure,omitempty" comment:"VMess allow insecure TLS"`
+
+	// Hysteria2 specific fields
+	Hysteria2CongestionControl string `json:"hysteria2_congestion_control,omitempty" binding:"omitempty,oneof=cubic bbr new_reno" example:"bbr" comment:"Hysteria2 congestion control"`
+	Hysteria2Obfs              string `json:"hysteria2_obfs,omitempty" binding:"omitempty,oneof=salamander" example:"salamander" comment:"Hysteria2 obfuscation type"`
+	Hysteria2ObfsPassword      string `json:"hysteria2_obfs_password,omitempty" comment:"Hysteria2 obfuscation password"`
+	Hysteria2UpMbps            *int   `json:"hysteria2_up_mbps,omitempty" comment:"Hysteria2 upstream bandwidth limit"`
+	Hysteria2DownMbps          *int   `json:"hysteria2_down_mbps,omitempty" comment:"Hysteria2 downstream bandwidth limit"`
+	Hysteria2Sni               string `json:"hysteria2_sni,omitempty" comment:"Hysteria2 TLS SNI"`
+	Hysteria2AllowInsecure     bool   `json:"hysteria2_allow_insecure,omitempty" comment:"Hysteria2 allow insecure TLS"`
+	Hysteria2Fingerprint       string `json:"hysteria2_fingerprint,omitempty" comment:"Hysteria2 TLS fingerprint"`
+
+	// TUIC specific fields
+	TUICCongestionControl string `json:"tuic_congestion_control,omitempty" binding:"omitempty,oneof=cubic bbr new_reno" example:"bbr" comment:"TUIC congestion control"`
+	TUICUDPRelayMode      string `json:"tuic_udp_relay_mode,omitempty" binding:"omitempty,oneof=native quic" example:"native" comment:"TUIC UDP relay mode"`
+	TUICAlpn              string `json:"tuic_alpn,omitempty" comment:"TUIC ALPN protocols"`
+	TUICSni               string `json:"tuic_sni,omitempty" comment:"TUIC TLS SNI"`
+	TUICAllowInsecure     bool   `json:"tuic_allow_insecure,omitempty" comment:"TUIC allow insecure TLS"`
+	TUICDisableSNI        bool   `json:"tuic_disable_sni,omitempty" comment:"TUIC disable SNI"`
 }
 
 func (r *CreateNodeRequest) ToCommand() usecases.CreateNodeCommand {
@@ -296,6 +339,45 @@ func (r *CreateNodeRequest) ToCommand() usecases.CreateNodeCommand {
 		SNI:               r.SNI,
 		AllowInsecure:     r.AllowInsecure,
 		Route:             r.Route,
+		// VLESS
+		VLESSTransportType:    r.VLESSTransportType,
+		VLESSFlow:             r.VLESSFlow,
+		VLESSSecurity:         r.VLESSSecurity,
+		VLESSSni:              r.VLESSSni,
+		VLESSFingerprint:      r.VLESSFingerprint,
+		VLESSAllowInsecure:    r.VLESSAllowInsecure,
+		VLESSHost:             r.VLESSHost,
+		VLESSPath:             r.VLESSPath,
+		VLESSServiceName:      r.VLESSServiceName,
+		VLESSRealityPublicKey: r.VLESSRealityPublicKey,
+		VLESSRealityShortID:   r.VLESSRealityShortID,
+		VLESSRealitySpiderX:   r.VLESSRealitySpiderX,
+		// VMess
+		VMessAlterID:       r.VMessAlterID,
+		VMessSecurity:      r.VMessSecurity,
+		VMessTransportType: r.VMessTransportType,
+		VMessHost:          r.VMessHost,
+		VMessPath:          r.VMessPath,
+		VMessServiceName:   r.VMessServiceName,
+		VMessTLS:           r.VMessTLS,
+		VMessSni:           r.VMessSni,
+		VMessAllowInsecure: r.VMessAllowInsecure,
+		// Hysteria2
+		Hysteria2CongestionControl: r.Hysteria2CongestionControl,
+		Hysteria2Obfs:              r.Hysteria2Obfs,
+		Hysteria2ObfsPassword:      r.Hysteria2ObfsPassword,
+		Hysteria2UpMbps:            r.Hysteria2UpMbps,
+		Hysteria2DownMbps:          r.Hysteria2DownMbps,
+		Hysteria2Sni:               r.Hysteria2Sni,
+		Hysteria2AllowInsecure:     r.Hysteria2AllowInsecure,
+		Hysteria2Fingerprint:       r.Hysteria2Fingerprint,
+		// TUIC
+		TUICCongestionControl: r.TUICCongestionControl,
+		TUICUDPRelayMode:      r.TUICUDPRelayMode,
+		TUICAlpn:              r.TUICAlpn,
+		TUICSni:               r.TUICSni,
+		TUICAllowInsecure:     r.TUICAllowInsecure,
+		TUICDisableSNI:        r.TUICDisableSNI,
 	}
 }
 
@@ -323,6 +405,49 @@ type UpdateNodeRequest struct {
 	// Route configuration for traffic splitting (sing-box compatible)
 	Route      *dto.RouteConfigDTO `json:"route,omitempty" comment:"Route configuration for traffic splitting"`
 	ClearRoute bool                `json:"clear_route,omitempty" comment:"Set to true to clear route configuration"`
+
+	// VLESS specific fields
+	VLESSTransportType    *string `json:"vless_transport_type,omitempty" binding:"omitempty,oneof=tcp ws grpc h2" comment:"VLESS transport type"`
+	VLESSFlow             *string `json:"vless_flow,omitempty" comment:"VLESS flow control"`
+	VLESSSecurity         *string `json:"vless_security,omitempty" binding:"omitempty,oneof=none tls reality" comment:"VLESS security type"`
+	VLESSSni              *string `json:"vless_sni,omitempty" comment:"VLESS TLS SNI"`
+	VLESSFingerprint      *string `json:"vless_fingerprint,omitempty" comment:"VLESS TLS fingerprint"`
+	VLESSAllowInsecure    *bool   `json:"vless_allow_insecure,omitempty" comment:"VLESS allow insecure TLS"`
+	VLESSHost             *string `json:"vless_host,omitempty" comment:"VLESS WS/H2 host header"`
+	VLESSPath             *string `json:"vless_path,omitempty" comment:"VLESS WS/H2 path"`
+	VLESSServiceName      *string `json:"vless_service_name,omitempty" comment:"VLESS gRPC service name"`
+	VLESSRealityPublicKey *string `json:"vless_reality_public_key,omitempty" comment:"VLESS Reality public key"`
+	VLESSRealityShortID   *string `json:"vless_reality_short_id,omitempty" comment:"VLESS Reality short ID"`
+	VLESSRealitySpiderX   *string `json:"vless_reality_spider_x,omitempty" comment:"VLESS Reality spider X"`
+
+	// VMess specific fields
+	VMessAlterID       *int    `json:"vmess_alter_id,omitempty" comment:"VMess alter ID"`
+	VMessSecurity      *string `json:"vmess_security,omitempty" binding:"omitempty,oneof=auto aes-128-gcm chacha20-poly1305 none zero" comment:"VMess security"`
+	VMessTransportType *string `json:"vmess_transport_type,omitempty" binding:"omitempty,oneof=tcp ws grpc http quic" comment:"VMess transport type"`
+	VMessHost          *string `json:"vmess_host,omitempty" comment:"VMess WS/HTTP host header"`
+	VMessPath          *string `json:"vmess_path,omitempty" comment:"VMess WS/HTTP path"`
+	VMessServiceName   *string `json:"vmess_service_name,omitempty" comment:"VMess gRPC service name"`
+	VMessTLS           *bool   `json:"vmess_tls,omitempty" comment:"VMess TLS enabled"`
+	VMessSni           *string `json:"vmess_sni,omitempty" comment:"VMess TLS SNI"`
+	VMessAllowInsecure *bool   `json:"vmess_allow_insecure,omitempty" comment:"VMess allow insecure TLS"`
+
+	// Hysteria2 specific fields
+	Hysteria2CongestionControl *string `json:"hysteria2_congestion_control,omitempty" binding:"omitempty,oneof=cubic bbr new_reno" comment:"Hysteria2 congestion control"`
+	Hysteria2Obfs              *string `json:"hysteria2_obfs,omitempty" binding:"omitempty,oneof=salamander" comment:"Hysteria2 obfuscation type"`
+	Hysteria2ObfsPassword      *string `json:"hysteria2_obfs_password,omitempty" comment:"Hysteria2 obfuscation password"`
+	Hysteria2UpMbps            *int    `json:"hysteria2_up_mbps,omitempty" comment:"Hysteria2 upstream bandwidth limit"`
+	Hysteria2DownMbps          *int    `json:"hysteria2_down_mbps,omitempty" comment:"Hysteria2 downstream bandwidth limit"`
+	Hysteria2Sni               *string `json:"hysteria2_sni,omitempty" comment:"Hysteria2 TLS SNI"`
+	Hysteria2AllowInsecure     *bool   `json:"hysteria2_allow_insecure,omitempty" comment:"Hysteria2 allow insecure TLS"`
+	Hysteria2Fingerprint       *string `json:"hysteria2_fingerprint,omitempty" comment:"Hysteria2 TLS fingerprint"`
+
+	// TUIC specific fields
+	TUICCongestionControl *string `json:"tuic_congestion_control,omitempty" binding:"omitempty,oneof=cubic bbr new_reno" comment:"TUIC congestion control"`
+	TUICUDPRelayMode      *string `json:"tuic_udp_relay_mode,omitempty" binding:"omitempty,oneof=native quic" comment:"TUIC UDP relay mode"`
+	TUICAlpn              *string `json:"tuic_alpn,omitempty" comment:"TUIC ALPN protocols"`
+	TUICSni               *string `json:"tuic_sni,omitempty" comment:"TUIC TLS SNI"`
+	TUICAllowInsecure     *bool   `json:"tuic_allow_insecure,omitempty" comment:"TUIC allow insecure TLS"`
+	TUICDisableSNI        *bool   `json:"tuic_disable_sni,omitempty" comment:"TUIC disable SNI"`
 }
 
 func (r *UpdateNodeRequest) ToCommand(sid string) usecases.UpdateNodeCommand {
@@ -349,6 +474,45 @@ func (r *UpdateNodeRequest) ToCommand(sid string) usecases.UpdateNodeCommand {
 		TrojanAllowInsecure:     r.AllowInsecure,
 		Route:                   r.Route,
 		ClearRoute:              r.ClearRoute,
+		// VLESS
+		VLESSTransportType:    r.VLESSTransportType,
+		VLESSFlow:             r.VLESSFlow,
+		VLESSSecurity:         r.VLESSSecurity,
+		VLESSSni:              r.VLESSSni,
+		VLESSFingerprint:      r.VLESSFingerprint,
+		VLESSAllowInsecure:    r.VLESSAllowInsecure,
+		VLESSHost:             r.VLESSHost,
+		VLESSPath:             r.VLESSPath,
+		VLESSServiceName:      r.VLESSServiceName,
+		VLESSRealityPublicKey: r.VLESSRealityPublicKey,
+		VLESSRealityShortID:   r.VLESSRealityShortID,
+		VLESSRealitySpiderX:   r.VLESSRealitySpiderX,
+		// VMess
+		VMessAlterID:       r.VMessAlterID,
+		VMessSecurity:      r.VMessSecurity,
+		VMessTransportType: r.VMessTransportType,
+		VMessHost:          r.VMessHost,
+		VMessPath:          r.VMessPath,
+		VMessServiceName:   r.VMessServiceName,
+		VMessTLS:           r.VMessTLS,
+		VMessSni:           r.VMessSni,
+		VMessAllowInsecure: r.VMessAllowInsecure,
+		// Hysteria2
+		Hysteria2CongestionControl: r.Hysteria2CongestionControl,
+		Hysteria2Obfs:              r.Hysteria2Obfs,
+		Hysteria2ObfsPassword:      r.Hysteria2ObfsPassword,
+		Hysteria2UpMbps:            r.Hysteria2UpMbps,
+		Hysteria2DownMbps:          r.Hysteria2DownMbps,
+		Hysteria2Sni:               r.Hysteria2Sni,
+		Hysteria2AllowInsecure:     r.Hysteria2AllowInsecure,
+		Hysteria2Fingerprint:       r.Hysteria2Fingerprint,
+		// TUIC
+		TUICCongestionControl: r.TUICCongestionControl,
+		TUICUDPRelayMode:      r.TUICUDPRelayMode,
+		TUICAlpn:              r.TUICAlpn,
+		TUICSni:               r.TUICSni,
+		TUICAllowInsecure:     r.TUICAllowInsecure,
+		TUICDisableSNI:        r.TUICDisableSNI,
 	}
 }
 

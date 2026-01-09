@@ -43,6 +43,10 @@ type NodeRepositoryImpl struct {
 	mapper                mappers.NodeMapper
 	trojanConfigRepo      *TrojanConfigRepository
 	shadowsocksConfigRepo *ShadowsocksConfigRepository
+	vlessConfigRepo       *VLESSConfigRepository
+	vmessConfigRepo       *VMessConfigRepository
+	hysteria2ConfigRepo   *Hysteria2ConfigRepository
+	tuicConfigRepo        *TUICConfigRepository
 	logger                logger.Interface
 }
 
@@ -53,6 +57,10 @@ func NewNodeRepository(db *gorm.DB, logger logger.Interface) node.NodeRepository
 		mapper:                mappers.NewNodeMapper(),
 		trojanConfigRepo:      NewTrojanConfigRepository(db, logger),
 		shadowsocksConfigRepo: NewShadowsocksConfigRepository(db, logger),
+		vlessConfigRepo:       NewVLESSConfigRepository(db, logger),
+		vmessConfigRepo:       NewVMessConfigRepository(db, logger),
+		hysteria2ConfigRepo:   NewHysteria2ConfigRepository(db, logger),
+		tuicConfigRepo:        NewTUICConfigRepository(db, logger),
 		logger:                logger,
 	}
 }
@@ -94,6 +102,30 @@ func (r *NodeRepositoryImpl) Create(ctx context.Context, nodeEntity *node.Node) 
 					return fmt.Errorf("failed to create trojan config: %w", err)
 				}
 			}
+		case vo.ProtocolVLESS:
+			if nodeEntity.VLESSConfig() != nil {
+				if err := r.vlessConfigRepo.CreateInTx(tx, model.ID, nodeEntity.VLESSConfig()); err != nil {
+					return fmt.Errorf("failed to create vless config: %w", err)
+				}
+			}
+		case vo.ProtocolVMess:
+			if nodeEntity.VMessConfig() != nil {
+				if err := r.vmessConfigRepo.CreateInTx(tx, model.ID, nodeEntity.VMessConfig()); err != nil {
+					return fmt.Errorf("failed to create vmess config: %w", err)
+				}
+			}
+		case vo.ProtocolHysteria2:
+			if nodeEntity.Hysteria2Config() != nil {
+				if err := r.hysteria2ConfigRepo.CreateInTx(tx, model.ID, nodeEntity.Hysteria2Config()); err != nil {
+					return fmt.Errorf("failed to create hysteria2 config: %w", err)
+				}
+			}
+		case vo.ProtocolTUIC:
+			if nodeEntity.TUICConfig() != nil {
+				if err := r.tuicConfigRepo.CreateInTx(tx, model.ID, nodeEntity.TUICConfig()); err != nil {
+					return fmt.Errorf("failed to create tuic config: %w", err)
+				}
+			}
 		}
 
 		return nil
@@ -129,6 +161,10 @@ func (r *NodeRepositoryImpl) GetByID(ctx context.Context, id uint) (*node.Node, 
 	var trojanConfig *vo.TrojanConfig
 	var encryptionConfig vo.EncryptionConfig
 	var pluginConfig *vo.PluginConfig
+	var vlessConfig *vo.VLESSConfig
+	var vmessConfig *vo.VMessConfig
+	var hysteria2Config *vo.Hysteria2Config
+	var tuicConfig *vo.TUICConfig
 
 	switch model.Protocol {
 	case "shadowsocks":
@@ -145,9 +181,37 @@ func (r *NodeRepositoryImpl) GetByID(ctx context.Context, id uint) (*node.Node, 
 			r.logger.Errorw("failed to get trojan config", "node_id", id, "error", err)
 			return nil, fmt.Errorf("failed to get trojan config: %w", err)
 		}
+	case "vless":
+		var err error
+		vlessConfig, err = r.vlessConfigRepo.GetByNodeID(ctx, id)
+		if err != nil {
+			r.logger.Errorw("failed to get vless config", "node_id", id, "error", err)
+			return nil, fmt.Errorf("failed to get vless config: %w", err)
+		}
+	case "vmess":
+		var err error
+		vmessConfig, err = r.vmessConfigRepo.GetByNodeID(ctx, id)
+		if err != nil {
+			r.logger.Errorw("failed to get vmess config", "node_id", id, "error", err)
+			return nil, fmt.Errorf("failed to get vmess config: %w", err)
+		}
+	case "hysteria2":
+		var err error
+		hysteria2Config, err = r.hysteria2ConfigRepo.GetByNodeID(ctx, id)
+		if err != nil {
+			r.logger.Errorw("failed to get hysteria2 config", "node_id", id, "error", err)
+			return nil, fmt.Errorf("failed to get hysteria2 config: %w", err)
+		}
+	case "tuic":
+		var err error
+		tuicConfig, err = r.tuicConfigRepo.GetByNodeID(ctx, id)
+		if err != nil {
+			r.logger.Errorw("failed to get tuic config", "node_id", id, "error", err)
+			return nil, fmt.Errorf("failed to get tuic config: %w", err)
+		}
 	}
 
-	entity, err := r.mapper.ToEntity(&model, encryptionConfig, pluginConfig, trojanConfig)
+	entity, err := r.mapper.ToEntity(&model, encryptionConfig, pluginConfig, trojanConfig, vlessConfig, vmessConfig, hysteria2Config, tuicConfig)
 	if err != nil {
 		r.logger.Errorw("failed to map node model to entity", "id", id, "error", err)
 		return nil, fmt.Errorf("failed to map node: %w", err)
@@ -172,6 +236,10 @@ func (r *NodeRepositoryImpl) GetBySID(ctx context.Context, sid string) (*node.No
 	var trojanConfig *vo.TrojanConfig
 	var encryptionConfig vo.EncryptionConfig
 	var pluginConfig *vo.PluginConfig
+	var vlessConfig *vo.VLESSConfig
+	var vmessConfig *vo.VMessConfig
+	var hysteria2Config *vo.Hysteria2Config
+	var tuicConfig *vo.TUICConfig
 
 	switch model.Protocol {
 	case "shadowsocks":
@@ -188,9 +256,37 @@ func (r *NodeRepositoryImpl) GetBySID(ctx context.Context, sid string) (*node.No
 			r.logger.Errorw("failed to get trojan config", "node_id", model.ID, "error", err)
 			return nil, fmt.Errorf("failed to get trojan config: %w", err)
 		}
+	case "vless":
+		var err error
+		vlessConfig, err = r.vlessConfigRepo.GetByNodeID(ctx, model.ID)
+		if err != nil {
+			r.logger.Errorw("failed to get vless config", "node_id", model.ID, "error", err)
+			return nil, fmt.Errorf("failed to get vless config: %w", err)
+		}
+	case "vmess":
+		var err error
+		vmessConfig, err = r.vmessConfigRepo.GetByNodeID(ctx, model.ID)
+		if err != nil {
+			r.logger.Errorw("failed to get vmess config", "node_id", model.ID, "error", err)
+			return nil, fmt.Errorf("failed to get vmess config: %w", err)
+		}
+	case "hysteria2":
+		var err error
+		hysteria2Config, err = r.hysteria2ConfigRepo.GetByNodeID(ctx, model.ID)
+		if err != nil {
+			r.logger.Errorw("failed to get hysteria2 config", "node_id", model.ID, "error", err)
+			return nil, fmt.Errorf("failed to get hysteria2 config: %w", err)
+		}
+	case "tuic":
+		var err error
+		tuicConfig, err = r.tuicConfigRepo.GetByNodeID(ctx, model.ID)
+		if err != nil {
+			r.logger.Errorw("failed to get tuic config", "node_id", model.ID, "error", err)
+			return nil, fmt.Errorf("failed to get tuic config: %w", err)
+		}
 	}
 
-	entity, err := r.mapper.ToEntity(&model, encryptionConfig, pluginConfig, trojanConfig)
+	entity, err := r.mapper.ToEntity(&model, encryptionConfig, pluginConfig, trojanConfig, vlessConfig, vmessConfig, hysteria2Config, tuicConfig)
 	if err != nil {
 		r.logger.Errorw("failed to map node model to entity", "sid", sid, "error", err)
 		return nil, fmt.Errorf("failed to map node: %w", err)
@@ -240,8 +336,36 @@ func (r *NodeRepositoryImpl) GetBySIDs(ctx context.Context, sids []string) ([]*n
 		trojanConfigs = make(map[uint]*vo.TrojanConfig)
 	}
 
+	// Load vless configs
+	vlessConfigs, err := r.vlessConfigRepo.GetByNodeIDs(ctx, nodeIDs)
+	if err != nil {
+		r.logger.Warnw("failed to load vless configs", "error", err)
+		vlessConfigs = make(map[uint]*vo.VLESSConfig)
+	}
+
+	// Load vmess configs
+	vmessConfigs, err := r.vmessConfigRepo.GetByNodeIDs(ctx, nodeIDs)
+	if err != nil {
+		r.logger.Warnw("failed to load vmess configs", "error", err)
+		vmessConfigs = make(map[uint]*vo.VMessConfig)
+	}
+
+	// Load hysteria2 configs
+	hysteria2Configs, err := r.hysteria2ConfigRepo.GetByNodeIDs(ctx, nodeIDs)
+	if err != nil {
+		r.logger.Warnw("failed to load hysteria2 configs", "error", err)
+		hysteria2Configs = make(map[uint]*vo.Hysteria2Config)
+	}
+
+	// Load tuic configs
+	tuicConfigs, err := r.tuicConfigRepo.GetByNodeIDs(ctx, nodeIDs)
+	if err != nil {
+		r.logger.Warnw("failed to load tuic configs", "error", err)
+		tuicConfigs = make(map[uint]*vo.TUICConfig)
+	}
+
 	// Convert to entities
-	entities, err := r.mapper.ToEntities(nodeModels, ssConfigs, trojanConfigs)
+	entities, err := r.mapper.ToEntities(nodeModels, ssConfigs, trojanConfigs, vlessConfigs, vmessConfigs, hysteria2Configs, tuicConfigs)
 	if err != nil {
 		r.logger.Errorw("failed to map node models to entities", "error", err)
 		return nil, fmt.Errorf("failed to map nodes: %w", err)
@@ -291,8 +415,36 @@ func (r *NodeRepositoryImpl) GetByIDs(ctx context.Context, ids []uint) ([]*node.
 		trojanConfigs = make(map[uint]*vo.TrojanConfig)
 	}
 
+	// Load vless configs
+	vlessConfigs, err := r.vlessConfigRepo.GetByNodeIDs(ctx, nodeIDs)
+	if err != nil {
+		r.logger.Warnw("failed to load vless configs", "error", err)
+		vlessConfigs = make(map[uint]*vo.VLESSConfig)
+	}
+
+	// Load vmess configs
+	vmessConfigs, err := r.vmessConfigRepo.GetByNodeIDs(ctx, nodeIDs)
+	if err != nil {
+		r.logger.Warnw("failed to load vmess configs", "error", err)
+		vmessConfigs = make(map[uint]*vo.VMessConfig)
+	}
+
+	// Load hysteria2 configs
+	hysteria2Configs, err := r.hysteria2ConfigRepo.GetByNodeIDs(ctx, nodeIDs)
+	if err != nil {
+		r.logger.Warnw("failed to load hysteria2 configs", "error", err)
+		hysteria2Configs = make(map[uint]*vo.Hysteria2Config)
+	}
+
+	// Load tuic configs
+	tuicConfigs, err := r.tuicConfigRepo.GetByNodeIDs(ctx, nodeIDs)
+	if err != nil {
+		r.logger.Warnw("failed to load tuic configs", "error", err)
+		tuicConfigs = make(map[uint]*vo.TUICConfig)
+	}
+
 	// Convert to entities
-	entities, err := r.mapper.ToEntities(nodeModels, ssConfigs, trojanConfigs)
+	entities, err := r.mapper.ToEntities(nodeModels, ssConfigs, trojanConfigs, vlessConfigs, vmessConfigs, hysteria2Configs, tuicConfigs)
 	if err != nil {
 		r.logger.Errorw("failed to map node models to entities", "error", err)
 		return nil, fmt.Errorf("failed to map nodes: %w", err)
@@ -317,6 +469,10 @@ func (r *NodeRepositoryImpl) GetByToken(ctx context.Context, tokenHash string) (
 	var trojanConfig *vo.TrojanConfig
 	var encryptionConfig vo.EncryptionConfig
 	var pluginConfig *vo.PluginConfig
+	var vlessConfig *vo.VLESSConfig
+	var vmessConfig *vo.VMessConfig
+	var hysteria2Config *vo.Hysteria2Config
+	var tuicConfig *vo.TUICConfig
 
 	switch model.Protocol {
 	case "shadowsocks":
@@ -333,9 +489,37 @@ func (r *NodeRepositoryImpl) GetByToken(ctx context.Context, tokenHash string) (
 			r.logger.Errorw("failed to get trojan config", "node_id", model.ID, "error", err)
 			return nil, fmt.Errorf("failed to get trojan config: %w", err)
 		}
+	case "vless":
+		var err error
+		vlessConfig, err = r.vlessConfigRepo.GetByNodeID(ctx, model.ID)
+		if err != nil {
+			r.logger.Errorw("failed to get vless config", "node_id", model.ID, "error", err)
+			return nil, fmt.Errorf("failed to get vless config: %w", err)
+		}
+	case "vmess":
+		var err error
+		vmessConfig, err = r.vmessConfigRepo.GetByNodeID(ctx, model.ID)
+		if err != nil {
+			r.logger.Errorw("failed to get vmess config", "node_id", model.ID, "error", err)
+			return nil, fmt.Errorf("failed to get vmess config: %w", err)
+		}
+	case "hysteria2":
+		var err error
+		hysteria2Config, err = r.hysteria2ConfigRepo.GetByNodeID(ctx, model.ID)
+		if err != nil {
+			r.logger.Errorw("failed to get hysteria2 config", "node_id", model.ID, "error", err)
+			return nil, fmt.Errorf("failed to get hysteria2 config: %w", err)
+		}
+	case "tuic":
+		var err error
+		tuicConfig, err = r.tuicConfigRepo.GetByNodeID(ctx, model.ID)
+		if err != nil {
+			r.logger.Errorw("failed to get tuic config", "node_id", model.ID, "error", err)
+			return nil, fmt.Errorf("failed to get tuic config: %w", err)
+		}
 	}
 
-	entity, err := r.mapper.ToEntity(&model, encryptionConfig, pluginConfig, trojanConfig)
+	entity, err := r.mapper.ToEntity(&model, encryptionConfig, pluginConfig, trojanConfig, vlessConfig, vmessConfig, hysteria2Config, tuicConfig)
 	if err != nil {
 		r.logger.Errorw("failed to map node model to entity", "token_hash", tokenHash, "error", err)
 		return nil, fmt.Errorf("failed to map node: %w", err)
@@ -395,22 +579,127 @@ func (r *NodeRepositoryImpl) Update(ctx context.Context, nodeEntity *node.Node) 
 		}
 
 		// Update protocol-specific config based on protocol type
+		// Delete all other protocol configs when updating (handles protocol change)
 		switch nodeEntity.Protocol() {
 		case vo.ProtocolShadowsocks:
 			if err := r.shadowsocksConfigRepo.UpdateInTx(tx, model.ID, nodeEntity.EncryptionConfig(), nodeEntity.PluginConfig()); err != nil {
 				return fmt.Errorf("failed to update shadowsocks config: %w", err)
 			}
-			// Delete trojan config if it exists (protocol changed)
+			// Delete other protocol configs if they exist (protocol changed)
 			if err := r.trojanConfigRepo.DeleteInTx(tx, model.ID); err != nil {
 				return fmt.Errorf("failed to delete trojan config: %w", err)
+			}
+			if err := r.vlessConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete vless config: %w", err)
+			}
+			if err := r.vmessConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete vmess config: %w", err)
+			}
+			if err := r.hysteria2ConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete hysteria2 config: %w", err)
+			}
+			if err := r.tuicConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete tuic config: %w", err)
 			}
 		case vo.ProtocolTrojan:
 			if err := r.trojanConfigRepo.UpdateInTx(tx, model.ID, nodeEntity.TrojanConfig()); err != nil {
 				return fmt.Errorf("failed to update trojan config: %w", err)
 			}
-			// Delete shadowsocks config if it exists (protocol changed)
+			// Delete other protocol configs if they exist (protocol changed)
 			if err := r.shadowsocksConfigRepo.DeleteInTx(tx, model.ID); err != nil {
 				return fmt.Errorf("failed to delete shadowsocks config: %w", err)
+			}
+			if err := r.vlessConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete vless config: %w", err)
+			}
+			if err := r.vmessConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete vmess config: %w", err)
+			}
+			if err := r.hysteria2ConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete hysteria2 config: %w", err)
+			}
+			if err := r.tuicConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete tuic config: %w", err)
+			}
+		case vo.ProtocolVLESS:
+			if err := r.vlessConfigRepo.UpdateInTx(tx, model.ID, nodeEntity.VLESSConfig()); err != nil {
+				return fmt.Errorf("failed to update vless config: %w", err)
+			}
+			// Delete other protocol configs if they exist (protocol changed)
+			if err := r.shadowsocksConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete shadowsocks config: %w", err)
+			}
+			if err := r.trojanConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete trojan config: %w", err)
+			}
+			if err := r.vmessConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete vmess config: %w", err)
+			}
+			if err := r.hysteria2ConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete hysteria2 config: %w", err)
+			}
+			if err := r.tuicConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete tuic config: %w", err)
+			}
+		case vo.ProtocolVMess:
+			if err := r.vmessConfigRepo.UpdateInTx(tx, model.ID, nodeEntity.VMessConfig()); err != nil {
+				return fmt.Errorf("failed to update vmess config: %w", err)
+			}
+			// Delete other protocol configs if they exist (protocol changed)
+			if err := r.shadowsocksConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete shadowsocks config: %w", err)
+			}
+			if err := r.trojanConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete trojan config: %w", err)
+			}
+			if err := r.vlessConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete vless config: %w", err)
+			}
+			if err := r.hysteria2ConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete hysteria2 config: %w", err)
+			}
+			if err := r.tuicConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete tuic config: %w", err)
+			}
+		case vo.ProtocolHysteria2:
+			if err := r.hysteria2ConfigRepo.UpdateInTx(tx, model.ID, nodeEntity.Hysteria2Config()); err != nil {
+				return fmt.Errorf("failed to update hysteria2 config: %w", err)
+			}
+			// Delete other protocol configs if they exist (protocol changed)
+			if err := r.shadowsocksConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete shadowsocks config: %w", err)
+			}
+			if err := r.trojanConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete trojan config: %w", err)
+			}
+			if err := r.vlessConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete vless config: %w", err)
+			}
+			if err := r.vmessConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete vmess config: %w", err)
+			}
+			if err := r.tuicConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete tuic config: %w", err)
+			}
+		case vo.ProtocolTUIC:
+			if err := r.tuicConfigRepo.UpdateInTx(tx, model.ID, nodeEntity.TUICConfig()); err != nil {
+				return fmt.Errorf("failed to update tuic config: %w", err)
+			}
+			// Delete other protocol configs if they exist (protocol changed)
+			if err := r.shadowsocksConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete shadowsocks config: %w", err)
+			}
+			if err := r.trojanConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete trojan config: %w", err)
+			}
+			if err := r.vlessConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete vless config: %w", err)
+			}
+			if err := r.vmessConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete vmess config: %w", err)
+			}
+			if err := r.hysteria2ConfigRepo.DeleteInTx(tx, model.ID); err != nil {
+				return fmt.Errorf("failed to delete hysteria2 config: %w", err)
 			}
 		}
 
@@ -435,6 +724,18 @@ func (r *NodeRepositoryImpl) Delete(ctx context.Context, id uint) error {
 		}
 		if err := r.trojanConfigRepo.DeleteInTx(tx, id); err != nil {
 			return fmt.Errorf("failed to delete trojan config: %w", err)
+		}
+		if err := r.vlessConfigRepo.DeleteInTx(tx, id); err != nil {
+			return fmt.Errorf("failed to delete vless config: %w", err)
+		}
+		if err := r.vmessConfigRepo.DeleteInTx(tx, id); err != nil {
+			return fmt.Errorf("failed to delete vmess config: %w", err)
+		}
+		if err := r.hysteria2ConfigRepo.DeleteInTx(tx, id); err != nil {
+			return fmt.Errorf("failed to delete hysteria2 config: %w", err)
+		}
+		if err := r.tuicConfigRepo.DeleteInTx(tx, id); err != nil {
+			return fmt.Errorf("failed to delete tuic config: %w", err)
 		}
 
 		// Delete node
@@ -518,13 +819,21 @@ func (r *NodeRepositoryImpl) List(ctx context.Context, filter node.NodeFilter) (
 	}
 
 	// Collect node IDs by protocol
-	var ssNodeIDs, trojanNodeIDs []uint
+	var ssNodeIDs, trojanNodeIDs, vlessNodeIDs, vmessNodeIDs, hysteria2NodeIDs, tuicNodeIDs []uint
 	for _, m := range nodeModels {
 		switch m.Protocol {
 		case "shadowsocks":
 			ssNodeIDs = append(ssNodeIDs, m.ID)
 		case "trojan":
 			trojanNodeIDs = append(trojanNodeIDs, m.ID)
+		case "vless":
+			vlessNodeIDs = append(vlessNodeIDs, m.ID)
+		case "vmess":
+			vmessNodeIDs = append(vmessNodeIDs, m.ID)
+		case "hysteria2":
+			hysteria2NodeIDs = append(hysteria2NodeIDs, m.ID)
+		case "tuic":
+			tuicNodeIDs = append(tuicNodeIDs, m.ID)
 		}
 	}
 
@@ -550,8 +859,32 @@ func (r *NodeRepositoryImpl) List(ctx context.Context, filter node.NodeFilter) (
 		return nil, 0, fmt.Errorf("failed to get trojan configs: %w", err)
 	}
 
+	vlessConfigs, err := r.vlessConfigRepo.GetByNodeIDs(ctx, vlessNodeIDs)
+	if err != nil {
+		r.logger.Errorw("failed to get vless configs", "error", err)
+		return nil, 0, fmt.Errorf("failed to get vless configs: %w", err)
+	}
+
+	vmessConfigs, err := r.vmessConfigRepo.GetByNodeIDs(ctx, vmessNodeIDs)
+	if err != nil {
+		r.logger.Errorw("failed to get vmess configs", "error", err)
+		return nil, 0, fmt.Errorf("failed to get vmess configs: %w", err)
+	}
+
+	hysteria2Configs, err := r.hysteria2ConfigRepo.GetByNodeIDs(ctx, hysteria2NodeIDs)
+	if err != nil {
+		r.logger.Errorw("failed to get hysteria2 configs", "error", err)
+		return nil, 0, fmt.Errorf("failed to get hysteria2 configs: %w", err)
+	}
+
+	tuicConfigs, err := r.tuicConfigRepo.GetByNodeIDs(ctx, tuicNodeIDs)
+	if err != nil {
+		r.logger.Errorw("failed to get tuic configs", "error", err)
+		return nil, 0, fmt.Errorf("failed to get tuic configs: %w", err)
+	}
+
 	// Convert models to entities
-	entities, err := r.mapper.ToEntities(nodeModels, ssConfigs, trojanConfigs)
+	entities, err := r.mapper.ToEntities(nodeModels, ssConfigs, trojanConfigs, vlessConfigs, vmessConfigs, hysteria2Configs, tuicConfigs)
 	if err != nil {
 		r.logger.Errorw("failed to map node models to entities", "error", err)
 		return nil, 0, fmt.Errorf("failed to map nodes: %w", err)
@@ -770,13 +1103,21 @@ func (r *NodeRepositoryImpl) ListByUserID(ctx context.Context, userID uint, filt
 	}
 
 	// Collect node IDs by protocol
-	var ssNodeIDs, trojanNodeIDs []uint
+	var ssNodeIDs, trojanNodeIDs, vlessNodeIDs, vmessNodeIDs, hysteria2NodeIDs, tuicNodeIDs []uint
 	for _, m := range nodeModels {
 		switch m.Protocol {
 		case "shadowsocks":
 			ssNodeIDs = append(ssNodeIDs, m.ID)
 		case "trojan":
 			trojanNodeIDs = append(trojanNodeIDs, m.ID)
+		case "vless":
+			vlessNodeIDs = append(vlessNodeIDs, m.ID)
+		case "vmess":
+			vmessNodeIDs = append(vmessNodeIDs, m.ID)
+		case "hysteria2":
+			hysteria2NodeIDs = append(hysteria2NodeIDs, m.ID)
+		case "tuic":
+			tuicNodeIDs = append(tuicNodeIDs, m.ID)
 		}
 	}
 
@@ -801,7 +1142,31 @@ func (r *NodeRepositoryImpl) ListByUserID(ctx context.Context, userID uint, filt
 		return nil, 0, fmt.Errorf("failed to get trojan configs: %w", err)
 	}
 
-	entities, err := r.mapper.ToEntities(nodeModels, ssConfigs, trojanConfigs)
+	vlessConfigs, err := r.vlessConfigRepo.GetByNodeIDs(ctx, vlessNodeIDs)
+	if err != nil {
+		r.logger.Errorw("failed to get vless configs", "error", err)
+		return nil, 0, fmt.Errorf("failed to get vless configs: %w", err)
+	}
+
+	vmessConfigs, err := r.vmessConfigRepo.GetByNodeIDs(ctx, vmessNodeIDs)
+	if err != nil {
+		r.logger.Errorw("failed to get vmess configs", "error", err)
+		return nil, 0, fmt.Errorf("failed to get vmess configs: %w", err)
+	}
+
+	hysteria2Configs, err := r.hysteria2ConfigRepo.GetByNodeIDs(ctx, hysteria2NodeIDs)
+	if err != nil {
+		r.logger.Errorw("failed to get hysteria2 configs", "error", err)
+		return nil, 0, fmt.Errorf("failed to get hysteria2 configs: %w", err)
+	}
+
+	tuicConfigs, err := r.tuicConfigRepo.GetByNodeIDs(ctx, tuicNodeIDs)
+	if err != nil {
+		r.logger.Errorw("failed to get tuic configs", "error", err)
+		return nil, 0, fmt.Errorf("failed to get tuic configs: %w", err)
+	}
+
+	entities, err := r.mapper.ToEntities(nodeModels, ssConfigs, trojanConfigs, vlessConfigs, vmessConfigs, hysteria2Configs, tuicConfigs)
 	if err != nil {
 		r.logger.Errorw("failed to map node models to entities", "error", err)
 		return nil, 0, fmt.Errorf("failed to map nodes: %w", err)

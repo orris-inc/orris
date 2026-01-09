@@ -79,22 +79,23 @@ func (uc *GetUserTrafficStatsUseCase) Execute(
 	// Adjust 'to' time to end of day to include all records from that day
 	adjustedTo := biztime.EndOfDayUTC(query.To)
 
-	// Calculate today's boundary in business timezone
+	// Calculate time boundaries
 	now := biztime.NowUTC()
-	todayStart := biztime.StartOfDayUTC(now)
+	// Redis stores data for the last 48 hours
+	redisDataStart := now.Add(-48 * time.Hour)
 
-	// Determine if query includes today (unaggregated data)
-	includesToday := !adjustedTo.Before(todayStart)
-	includesHistory := query.From.Before(todayStart)
+	// Determine if query overlaps with Redis data window (last 48 hours)
+	includesRedisWindow := !adjustedTo.Before(redisDataStart)
+	includesHistory := query.From.Before(redisDataStart)
 
 	// Prepare to merge subscription usage data from MySQL and Redis
 	subscriptionUsageMap := make(map[uint]*subscription.SubscriptionUsageSummary)
 
-	// If query includes today, get Redis data first
-	if includesToday {
-		redisFrom := todayStart
-		if query.From.After(todayStart) {
-			redisFrom = query.From
+	// If query overlaps with Redis data window, get Redis data first
+	if includesRedisWindow {
+		redisFrom := query.From
+		if redisFrom.Before(redisDataStart) {
+			redisFrom = redisDataStart
 		}
 
 		resourceType := ""
@@ -104,7 +105,7 @@ func (uc *GetUserTrafficStatsUseCase) Execute(
 
 		redisTraffic, err := uc.hourlyTrafficCache.GetTrafficGroupedBySubscription(ctx, resourceType, redisFrom, adjustedTo)
 		if err != nil {
-			uc.logger.Warnw("failed to get today's traffic from Redis",
+			uc.logger.Warnw("failed to get traffic from Redis",
 				"error", err,
 			)
 		} else {
@@ -116,18 +117,18 @@ func (uc *GetUserTrafficStatsUseCase) Execute(
 					Total:          traffic.Total,
 				}
 			}
-			uc.logger.Debugw("got today's subscription traffic from Redis",
+			uc.logger.Debugw("got subscription traffic from Redis",
 				"subscriptions_count", len(redisTraffic),
 			)
 		}
 	}
 
-	// If query includes historical data, get MySQL data
+	// If query includes historical data (before Redis window), get MySQL data
 	if includesHistory {
 		mysqlTo := adjustedTo
-		if includesToday {
-			// Exclude today from MySQL query
-			mysqlTo = todayStart.Add(-time.Nanosecond)
+		if includesRedisWindow {
+			// Exclude Redis window from MySQL query
+			mysqlTo = redisDataStart.Add(-time.Nanosecond)
 		}
 
 		subscriptionUsages, mysqlTotal, err := uc.usageStatsRepo.GetUsageGroupedBySubscription(

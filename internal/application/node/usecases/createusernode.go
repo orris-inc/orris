@@ -27,6 +27,49 @@ type CreateUserNodeCommand struct {
 	Path              string
 	SNI               string
 	AllowInsecure     bool
+
+	// VLESS specific fields
+	VLESSTransportType    string
+	VLESSFlow             string
+	VLESSSecurity         string
+	VLESSSni              string
+	VLESSFingerprint      string
+	VLESSAllowInsecure    bool
+	VLESSHost             string
+	VLESSPath             string
+	VLESSServiceName      string
+	VLESSRealityPublicKey string
+	VLESSRealityShortID   string
+	VLESSRealitySpiderX   string
+
+	// VMess specific fields
+	VMessAlterID       int
+	VMessSecurity      string
+	VMessTransportType string
+	VMessHost          string
+	VMessPath          string
+	VMessServiceName   string
+	VMessTLS           bool
+	VMessSni           string
+	VMessAllowInsecure bool
+
+	// Hysteria2 specific fields
+	Hysteria2CongestionControl string
+	Hysteria2Obfs              string
+	Hysteria2ObfsPassword      string
+	Hysteria2UpMbps            *int
+	Hysteria2DownMbps          *int
+	Hysteria2Sni               string
+	Hysteria2AllowInsecure     bool
+	Hysteria2Fingerprint       string
+
+	// TUIC specific fields
+	TUICCongestionControl string
+	TUICUDPRelayMode      string
+	TUICAlpn              string
+	TUICSni               string
+	TUICAllowInsecure     bool
+	TUICDisableSNI        bool
 }
 
 type CreateUserNodeResult struct {
@@ -116,6 +159,10 @@ func (uc *CreateUserNodeUseCase) Execute(ctx context.Context, cmd CreateUserNode
 	var encryptionConfig vo.EncryptionConfig
 	var pluginConfig *vo.PluginConfig
 	var trojanConfig *vo.TrojanConfig
+	var vlessConfig *vo.VLESSConfig
+	var vmessConfig *vo.VMessConfig
+	var hysteria2Config *vo.Hysteria2Config
+	var tuicConfig *vo.TUICConfig
 
 	if protocol.IsShadowsocks() {
 		encryptionConfig, err = vo.NewEncryptionConfig(cmd.Method)
@@ -155,6 +202,119 @@ func (uc *CreateUserNodeUseCase) Execute(ctx context.Context, cmd CreateUserNode
 			return nil, fmt.Errorf("invalid trojan config: %w", err)
 		}
 		trojanConfig = &tc
+	} else if protocol.IsVLESS() {
+		// Create VLESS config
+		// Default transport type to tcp if not specified
+		transportType := cmd.VLESSTransportType
+		if transportType == "" {
+			transportType = "tcp"
+		}
+		// Default security to tls if not specified
+		security := cmd.VLESSSecurity
+		if security == "" {
+			security = "tls"
+		}
+
+		vc, err := vo.NewVLESSConfig(
+			transportType,
+			cmd.VLESSFlow,
+			security,
+			cmd.VLESSSni,
+			cmd.VLESSFingerprint,
+			cmd.VLESSAllowInsecure,
+			cmd.VLESSHost,
+			cmd.VLESSPath,
+			cmd.VLESSServiceName,
+			cmd.VLESSRealityPublicKey,
+			cmd.VLESSRealityShortID,
+			cmd.VLESSRealitySpiderX,
+		)
+		if err != nil {
+			uc.logger.Errorw("invalid VLESS config", "error", err)
+			return nil, fmt.Errorf("invalid VLESS config: %w", err)
+		}
+		vlessConfig = &vc
+	} else if protocol.IsVMess() {
+		// Create VMess config
+		// Default transport type to tcp if not specified
+		transportType := cmd.VMessTransportType
+		if transportType == "" {
+			transportType = "tcp"
+		}
+		// Default security to auto if not specified
+		security := cmd.VMessSecurity
+		if security == "" {
+			security = "auto"
+		}
+
+		vc, err := vo.NewVMessConfig(
+			cmd.VMessAlterID,
+			security,
+			transportType,
+			cmd.VMessHost,
+			cmd.VMessPath,
+			cmd.VMessServiceName,
+			cmd.VMessTLS,
+			cmd.VMessSni,
+			cmd.VMessAllowInsecure,
+		)
+		if err != nil {
+			uc.logger.Errorw("invalid VMess config", "error", err)
+			return nil, fmt.Errorf("invalid VMess config: %w", err)
+		}
+		vmessConfig = &vc
+	} else if protocol.IsHysteria2() {
+		// Create Hysteria2 config
+		// Default congestion control to bbr if not specified
+		cc := cmd.Hysteria2CongestionControl
+		if cc == "" {
+			cc = "bbr"
+		}
+
+		hc, err := vo.NewHysteria2Config(
+			"placeholder", // Password will be replaced by subscription UUID
+			cc,
+			cmd.Hysteria2Obfs,
+			cmd.Hysteria2ObfsPassword,
+			cmd.Hysteria2UpMbps,
+			cmd.Hysteria2DownMbps,
+			cmd.Hysteria2Sni,
+			cmd.Hysteria2AllowInsecure,
+			cmd.Hysteria2Fingerprint,
+		)
+		if err != nil {
+			uc.logger.Errorw("invalid Hysteria2 config", "error", err)
+			return nil, fmt.Errorf("invalid Hysteria2 config: %w", err)
+		}
+		hysteria2Config = &hc
+	} else if protocol.IsTUIC() {
+		// Create TUIC config
+		// Default congestion control to bbr if not specified
+		cc := cmd.TUICCongestionControl
+		if cc == "" {
+			cc = "bbr"
+		}
+		// Default UDP relay mode to native if not specified
+		relayMode := cmd.TUICUDPRelayMode
+		if relayMode == "" {
+			relayMode = "native"
+		}
+
+		tc, err := vo.NewTUICConfig(
+			"placeholder", // UUID will be replaced by subscription UUID
+			"placeholder", // Password will be replaced by subscription UUID
+			cc,
+			relayMode,
+			cmd.TUICAlpn,
+			cmd.TUICSni,
+			cmd.TUICAllowInsecure,
+			cmd.TUICDisableSNI,
+		)
+		if err != nil {
+			uc.logger.Errorw("invalid TUIC config", "error", err)
+			return nil, fmt.Errorf("invalid TUIC config: %w", err)
+		}
+		tuicConfig = &tc
 	}
 
 	// Create metadata (user nodes don't have region/tags/description)
@@ -170,6 +330,10 @@ func (uc *CreateUserNodeUseCase) Execute(ctx context.Context, cmd CreateUserNode
 		encryptionConfig,
 		pluginConfig,
 		trojanConfig,
+		vlessConfig,
+		vmessConfig,
+		hysteria2Config,
+		tuicConfig,
 		metadata,
 		0,   // sortOrder not used for user nodes
 		nil, // routeConfig - can be set later via UpdateRouteConfig
@@ -260,6 +424,164 @@ func (uc *CreateUserNodeUseCase) validateCommand(cmd CreateUserNodeCommand) erro
 		if cmd.TransportProtocol == "grpc" && cmd.Host == "" {
 			return errors.NewValidationError("host (service name) is required for gRPC transport")
 		}
+	}
+
+	// Validate VLESS-specific requirements
+	if cmd.Protocol == "vless" {
+		if err := uc.validateVLESSCommand(cmd); err != nil {
+			return err
+		}
+	}
+
+	// Validate VMess-specific requirements
+	if cmd.Protocol == "vmess" {
+		if err := uc.validateVMessCommand(cmd); err != nil {
+			return err
+		}
+	}
+
+	// Validate Hysteria2-specific requirements
+	if cmd.Protocol == "hysteria2" {
+		if err := uc.validateHysteria2Command(cmd); err != nil {
+			return err
+		}
+	}
+
+	// Validate TUIC-specific requirements
+	if cmd.Protocol == "tuic" {
+		if err := uc.validateTUICCommand(cmd); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// validateVLESSCommand validates VLESS protocol specific requirements
+func (uc *CreateUserNodeUseCase) validateVLESSCommand(cmd CreateUserNodeCommand) error {
+	// Validate transport type
+	validTransports := map[string]bool{"tcp": true, "ws": true, "grpc": true, "h2": true}
+	if cmd.VLESSTransportType != "" && !validTransports[cmd.VLESSTransportType] {
+		return errors.NewValidationError("invalid VLESS transport type (must be tcp, ws, grpc, or h2)")
+	}
+
+	// Validate security type
+	validSecurity := map[string]bool{"none": true, "tls": true, "reality": true}
+	if cmd.VLESSSecurity != "" && !validSecurity[cmd.VLESSSecurity] {
+		return errors.NewValidationError("invalid VLESS security type (must be none, tls, or reality)")
+	}
+
+	// Validate flow control
+	if cmd.VLESSFlow != "" && cmd.VLESSFlow != "xtls-rprx-vision" {
+		return errors.NewValidationError("invalid VLESS flow (must be empty or xtls-rprx-vision)")
+	}
+
+	// Reality requires public key and short ID
+	if cmd.VLESSSecurity == "reality" {
+		if cmd.VLESSRealityPublicKey == "" {
+			return errors.NewValidationError("reality public key is required for VLESS Reality security")
+		}
+		if cmd.VLESSRealityShortID == "" {
+			return errors.NewValidationError("reality short ID is required for VLESS Reality security")
+		}
+	}
+
+	// WebSocket/H2 requires host and path
+	if cmd.VLESSTransportType == "ws" || cmd.VLESSTransportType == "h2" {
+		if cmd.VLESSHost == "" {
+			return errors.NewValidationError("host is required for VLESS WebSocket/H2 transport")
+		}
+		if cmd.VLESSPath == "" {
+			return errors.NewValidationError("path is required for VLESS WebSocket/H2 transport")
+		}
+	}
+
+	// gRPC requires service name
+	if cmd.VLESSTransportType == "grpc" && cmd.VLESSServiceName == "" {
+		return errors.NewValidationError("service name is required for VLESS gRPC transport")
+	}
+
+	return nil
+}
+
+// validateVMessCommand validates VMess protocol specific requirements
+func (uc *CreateUserNodeUseCase) validateVMessCommand(cmd CreateUserNodeCommand) error {
+	// Validate alter ID
+	if cmd.VMessAlterID < 0 {
+		return errors.NewValidationError("VMess alterID must be non-negative")
+	}
+
+	// Validate security type
+	validSecurity := map[string]bool{"auto": true, "aes-128-gcm": true, "chacha20-poly1305": true, "none": true, "zero": true}
+	if cmd.VMessSecurity != "" && !validSecurity[cmd.VMessSecurity] {
+		return errors.NewValidationError("invalid VMess security type (must be auto, aes-128-gcm, chacha20-poly1305, none, or zero)")
+	}
+
+	// Validate transport type
+	validTransports := map[string]bool{"tcp": true, "ws": true, "grpc": true, "http": true, "quic": true}
+	if cmd.VMessTransportType != "" && !validTransports[cmd.VMessTransportType] {
+		return errors.NewValidationError("invalid VMess transport type (must be tcp, ws, grpc, http, or quic)")
+	}
+
+	// WebSocket requires path
+	if cmd.VMessTransportType == "ws" && cmd.VMessPath == "" {
+		return errors.NewValidationError("path is required for VMess WebSocket transport")
+	}
+
+	// HTTP requires path
+	if cmd.VMessTransportType == "http" && cmd.VMessPath == "" {
+		return errors.NewValidationError("path is required for VMess HTTP transport")
+	}
+
+	// gRPC requires service name
+	if cmd.VMessTransportType == "grpc" && cmd.VMessServiceName == "" {
+		return errors.NewValidationError("service name is required for VMess gRPC transport")
+	}
+
+	return nil
+}
+
+// validateHysteria2Command validates Hysteria2 protocol specific requirements
+func (uc *CreateUserNodeUseCase) validateHysteria2Command(cmd CreateUserNodeCommand) error {
+	// Validate congestion control
+	validCC := map[string]bool{"cubic": true, "bbr": true, "new_reno": true}
+	if cmd.Hysteria2CongestionControl != "" && !validCC[cmd.Hysteria2CongestionControl] {
+		return errors.NewValidationError("invalid Hysteria2 congestion control (must be cubic, bbr, or new_reno)")
+	}
+
+	// Validate obfs type
+	if cmd.Hysteria2Obfs != "" && cmd.Hysteria2Obfs != "salamander" {
+		return errors.NewValidationError("invalid Hysteria2 obfs type (must be empty or salamander)")
+	}
+
+	// Salamander obfs requires password
+	if cmd.Hysteria2Obfs == "salamander" && cmd.Hysteria2ObfsPassword == "" {
+		return errors.NewValidationError("obfs password is required for Hysteria2 Salamander obfuscation")
+	}
+
+	// Validate bandwidth limits
+	if cmd.Hysteria2UpMbps != nil && *cmd.Hysteria2UpMbps < 0 {
+		return errors.NewValidationError("Hysteria2 up_mbps must be non-negative")
+	}
+	if cmd.Hysteria2DownMbps != nil && *cmd.Hysteria2DownMbps < 0 {
+		return errors.NewValidationError("Hysteria2 down_mbps must be non-negative")
+	}
+
+	return nil
+}
+
+// validateTUICCommand validates TUIC protocol specific requirements
+func (uc *CreateUserNodeUseCase) validateTUICCommand(cmd CreateUserNodeCommand) error {
+	// Validate congestion control
+	validCC := map[string]bool{"cubic": true, "bbr": true, "new_reno": true}
+	if cmd.TUICCongestionControl != "" && !validCC[cmd.TUICCongestionControl] {
+		return errors.NewValidationError("invalid TUIC congestion control (must be cubic, bbr, or new_reno)")
+	}
+
+	// Validate UDP relay mode
+	validRelayMode := map[string]bool{"native": true, "quic": true}
+	if cmd.TUICUDPRelayMode != "" && !validRelayMode[cmd.TUICUDPRelayMode] {
+		return errors.NewValidationError("invalid TUIC UDP relay mode (must be native or quic)")
 	}
 
 	return nil

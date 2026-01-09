@@ -5,6 +5,7 @@ package node
 import (
 	"crypto/subtle"
 	"fmt"
+	"sync"
 	"time"
 
 	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
@@ -14,6 +15,7 @@ import (
 
 // Node represents the node aggregate root
 type Node struct {
+	mu                sync.RWMutex // protects concurrent access to mutable fields
 	id                uint
 	sid               string // external API identifier (Stripe-style)
 	name              string
@@ -24,6 +26,10 @@ type Node struct {
 	encryptionConfig  vo.EncryptionConfig
 	pluginConfig      *vo.PluginConfig
 	trojanConfig      *vo.TrojanConfig
+	vlessConfig       *vo.VLESSConfig
+	vmessConfig       *vo.VMessConfig
+	hysteria2Config   *vo.Hysteria2Config
+	tuicConfig        *vo.TUICConfig
 	status            vo.NodeStatus
 	metadata          vo.NodeMetadata
 	groupIDs          []uint // resource group IDs
@@ -57,6 +63,10 @@ func NewNode(
 	encryptionConfig vo.EncryptionConfig,
 	pluginConfig *vo.PluginConfig,
 	trojanConfig *vo.TrojanConfig,
+	vlessConfig *vo.VLESSConfig,
+	vmessConfig *vo.VMessConfig,
+	hysteria2Config *vo.Hysteria2Config,
+	tuicConfig *vo.TUICConfig,
 	metadata vo.NodeMetadata,
 	sortOrder int,
 	routeConfig *vo.RouteConfig,
@@ -78,6 +88,18 @@ func NewNode(
 	}
 	if protocol.IsTrojan() && trojanConfig == nil {
 		return nil, fmt.Errorf("trojan config is required for Trojan protocol")
+	}
+	if protocol.IsVLESS() && vlessConfig == nil {
+		return nil, fmt.Errorf("vless config is required for VLESS protocol")
+	}
+	if protocol.IsVMess() && vmessConfig == nil {
+		return nil, fmt.Errorf("vmess config is required for VMess protocol")
+	}
+	if protocol.IsHysteria2() && hysteria2Config == nil {
+		return nil, fmt.Errorf("hysteria2 config is required for Hysteria2 protocol")
+	}
+	if protocol.IsTUIC() && tuicConfig == nil {
+		return nil, fmt.Errorf("tuic config is required for TUIC protocol")
 	}
 
 	// Validate route config if provided
@@ -110,6 +132,10 @@ func NewNode(
 		encryptionConfig: encryptionConfig,
 		pluginConfig:     pluginConfig,
 		trojanConfig:     trojanConfig,
+		vlessConfig:      vlessConfig,
+		vmessConfig:      vmessConfig,
+		hysteria2Config:  hysteria2Config,
+		tuicConfig:       tuicConfig,
 		status:           vo.NodeStatusInactive,
 		metadata:         metadata,
 		apiToken:         plainToken,
@@ -137,6 +163,10 @@ func ReconstructNode(
 	encryptionConfig vo.EncryptionConfig,
 	pluginConfig *vo.PluginConfig,
 	trojanConfig *vo.TrojanConfig,
+	vlessConfig *vo.VLESSConfig,
+	vmessConfig *vo.VMessConfig,
+	hysteria2Config *vo.Hysteria2Config,
+	tuicConfig *vo.TUICConfig,
 	status vo.NodeStatus,
 	metadata vo.NodeMetadata,
 	groupIDs []uint,
@@ -186,6 +216,10 @@ func ReconstructNode(
 		encryptionConfig:  encryptionConfig,
 		pluginConfig:      pluginConfig,
 		trojanConfig:      trojanConfig,
+		vlessConfig:       vlessConfig,
+		vmessConfig:       vmessConfig,
+		hysteria2Config:   hysteria2Config,
+		tuicConfig:        tuicConfig,
 		status:            status,
 		metadata:          metadata,
 		groupIDs:          groupIDs,
@@ -269,6 +303,26 @@ func (n *Node) TrojanConfig() *vo.TrojanConfig {
 	return n.trojanConfig
 }
 
+// VLESSConfig returns the VLESS configuration
+func (n *Node) VLESSConfig() *vo.VLESSConfig {
+	return n.vlessConfig
+}
+
+// VMessConfig returns the VMess configuration
+func (n *Node) VMessConfig() *vo.VMessConfig {
+	return n.vmessConfig
+}
+
+// Hysteria2Config returns the Hysteria2 configuration
+func (n *Node) Hysteria2Config() *vo.Hysteria2Config {
+	return n.hysteria2Config
+}
+
+// TUICConfig returns the TUIC configuration
+func (n *Node) TUICConfig() *vo.TUICConfig {
+	return n.tuicConfig
+}
+
 // Status returns the node status
 func (n *Node) Status() vo.NodeStatus {
 	return n.status
@@ -291,6 +345,8 @@ func (n *Node) UserID() *uint {
 
 // SetUserID sets the owner user ID
 func (n *Node) SetUserID(userID *uint) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	n.userID = userID
 	n.updatedAt = biztime.NowUTC()
 	n.version++
@@ -298,6 +354,8 @@ func (n *Node) SetUserID(userID *uint) {
 
 // SetGroupIDs sets the resource group IDs
 func (n *Node) SetGroupIDs(groupIDs []uint) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	n.groupIDs = groupIDs
 	n.updatedAt = biztime.NowUTC()
 	n.version++
@@ -305,6 +363,8 @@ func (n *Node) SetGroupIDs(groupIDs []uint) {
 
 // AddGroupID adds a resource group ID if not already present
 func (n *Node) AddGroupID(groupID uint) bool {
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	for _, id := range n.groupIDs {
 		if id == groupID {
 			return false // already exists
@@ -318,6 +378,8 @@ func (n *Node) AddGroupID(groupID uint) bool {
 
 // RemoveGroupID removes a resource group ID
 func (n *Node) RemoveGroupID(groupID uint) bool {
+	n.mu.Lock()
+	defer n.mu.Unlock()
 	for i, id := range n.groupIDs {
 		if id == groupID {
 			n.groupIDs = append(n.groupIDs[:i], n.groupIDs[i+1:]...)
@@ -331,6 +393,8 @@ func (n *Node) RemoveGroupID(groupID uint) bool {
 
 // HasGroupID checks if the node belongs to a specific resource group
 func (n *Node) HasGroupID(groupID uint) bool {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
 	for _, id := range n.groupIDs {
 		if id == groupID {
 			return true
@@ -394,6 +458,9 @@ func (n *Node) SetID(id uint) error {
 
 // Activate activates the node
 func (n *Node) Activate() error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	if n.status == vo.NodeStatusActive {
 		return nil
 	}
@@ -411,6 +478,9 @@ func (n *Node) Activate() error {
 
 // Deactivate deactivates the node
 func (n *Node) Deactivate() error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	if n.status == vo.NodeStatusInactive {
 		return nil
 	}
@@ -428,16 +498,19 @@ func (n *Node) Deactivate() error {
 
 // EnterMaintenance puts the node into maintenance mode
 func (n *Node) EnterMaintenance(reason string) error {
+	if reason == "" {
+		return fmt.Errorf("maintenance reason is required")
+	}
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	if n.status == vo.NodeStatusMaintenance {
 		return nil
 	}
 
 	if !n.status.CanTransitionTo(vo.NodeStatusMaintenance) {
 		return fmt.Errorf("cannot enter maintenance mode from status %s", n.status)
-	}
-
-	if reason == "" {
-		return fmt.Errorf("maintenance reason is required")
 	}
 
 	n.status = vo.NodeStatusMaintenance
@@ -450,6 +523,9 @@ func (n *Node) EnterMaintenance(reason string) error {
 
 // ExitMaintenance exits maintenance mode and returns to active status
 func (n *Node) ExitMaintenance() error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	if n.status != vo.NodeStatusMaintenance {
 		return fmt.Errorf("node is not in maintenance mode")
 	}
@@ -464,6 +540,9 @@ func (n *Node) ExitMaintenance() error {
 
 // UpdateServerAddress updates the server address
 func (n *Node) UpdateServerAddress(address vo.ServerAddress) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	if n.serverAddress.Value() == address.Value() {
 		return nil
 	}
@@ -480,6 +559,9 @@ func (n *Node) UpdateAgentPort(port uint16) error {
 	if port == 0 {
 		return fmt.Errorf("agent port cannot be zero")
 	}
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
 
 	if n.agentPort == port {
 		return nil
@@ -498,6 +580,9 @@ func (n *Node) UpdateSubscriptionPort(port *uint16) error {
 		return fmt.Errorf("subscription port cannot be zero")
 	}
 
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	// Check if values are equal
 	if n.subscriptionPort == nil && port == nil {
 		return nil
@@ -515,6 +600,9 @@ func (n *Node) UpdateSubscriptionPort(port *uint16) error {
 
 // UpdateEncryption updates the encryption configuration
 func (n *Node) UpdateEncryption(config vo.EncryptionConfig) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	n.encryptionConfig = config
 	n.updatedAt = biztime.NowUTC()
 	n.version++
@@ -524,6 +612,9 @@ func (n *Node) UpdateEncryption(config vo.EncryptionConfig) error {
 
 // UpdatePlugin updates the plugin configuration
 func (n *Node) UpdatePlugin(config *vo.PluginConfig) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	n.pluginConfig = config
 	n.updatedAt = biztime.NowUTC()
 	n.version++
@@ -537,7 +628,74 @@ func (n *Node) UpdateTrojanConfig(config *vo.TrojanConfig) error {
 		return fmt.Errorf("cannot update trojan config for non-trojan protocol")
 	}
 
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	n.trojanConfig = config
+	n.updatedAt = biztime.NowUTC()
+	n.version++
+
+	return nil
+}
+
+// UpdateVLESSConfig updates the VLESS configuration
+func (n *Node) UpdateVLESSConfig(config *vo.VLESSConfig) error {
+	if !n.protocol.IsVLESS() {
+		return fmt.Errorf("cannot update vless config for non-vless protocol")
+	}
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	n.vlessConfig = config
+	n.updatedAt = biztime.NowUTC()
+	n.version++
+
+	return nil
+}
+
+// UpdateVMessConfig updates the VMess configuration
+func (n *Node) UpdateVMessConfig(config *vo.VMessConfig) error {
+	if !n.protocol.IsVMess() {
+		return fmt.Errorf("cannot update vmess config for non-vmess protocol")
+	}
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	n.vmessConfig = config
+	n.updatedAt = biztime.NowUTC()
+	n.version++
+
+	return nil
+}
+
+// UpdateHysteria2Config updates the Hysteria2 configuration
+func (n *Node) UpdateHysteria2Config(config *vo.Hysteria2Config) error {
+	if !n.protocol.IsHysteria2() {
+		return fmt.Errorf("cannot update hysteria2 config for non-hysteria2 protocol")
+	}
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	n.hysteria2Config = config
+	n.updatedAt = biztime.NowUTC()
+	n.version++
+
+	return nil
+}
+
+// UpdateTUICConfig updates the TUIC configuration
+func (n *Node) UpdateTUICConfig(config *vo.TUICConfig) error {
+	if !n.protocol.IsTUIC() {
+		return fmt.Errorf("cannot update tuic config for non-tuic protocol")
+	}
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	n.tuicConfig = config
 	n.updatedAt = biztime.NowUTC()
 	n.version++
 
@@ -546,6 +704,9 @@ func (n *Node) UpdateTrojanConfig(config *vo.TrojanConfig) error {
 
 // UpdateMetadata updates the node metadata
 func (n *Node) UpdateMetadata(metadata vo.NodeMetadata) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	n.metadata = metadata
 	n.updatedAt = biztime.NowUTC()
 	n.version++
@@ -558,6 +719,9 @@ func (n *Node) UpdateName(name string) error {
 	if name == "" {
 		return fmt.Errorf("node name cannot be empty")
 	}
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
 
 	if n.name == name {
 		return nil
@@ -572,6 +736,9 @@ func (n *Node) UpdateName(name string) error {
 
 // UpdateSortOrder updates the sort order
 func (n *Node) UpdateSortOrder(order int) error {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	n.sortOrder = order
 	n.updatedAt = biztime.NowUTC()
 	n.version++
@@ -586,6 +753,9 @@ func (n *Node) MuteNotification() bool {
 
 // SetMuteNotification sets the mute notification flag
 func (n *Node) SetMuteNotification(mute bool) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	n.muteNotification = mute
 	n.updatedAt = biztime.NowUTC()
 	n.version++
@@ -599,6 +769,9 @@ func (n *Node) UpdateRouteConfig(config *vo.RouteConfig) error {
 		}
 	}
 
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	n.routeConfig = config
 	n.updatedAt = biztime.NowUTC()
 	n.version++
@@ -608,6 +781,9 @@ func (n *Node) UpdateRouteConfig(config *vo.RouteConfig) error {
 
 // ClearRouteConfig removes the routing configuration
 func (n *Node) ClearRouteConfig() {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	n.routeConfig = nil
 	n.updatedAt = biztime.NowUTC()
 	n.version++
@@ -627,6 +803,9 @@ func (n *Node) GenerateAPIToken() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to generate API token: %w", err)
 	}
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
 
 	n.apiToken = plainToken
 	n.tokenHash = tokenHash
@@ -717,6 +896,9 @@ func (n *Node) GetAPIToken() string {
 
 // ClearAPIToken clears the plain API token from memory
 func (n *Node) ClearAPIToken() {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
 	n.apiToken = ""
 }
 
@@ -739,6 +921,18 @@ func (n *Node) Validate() error {
 	}
 	if n.protocol.IsTrojan() && n.trojanConfig == nil {
 		return fmt.Errorf("trojan config is required for Trojan protocol")
+	}
+	if n.protocol.IsVLESS() && n.vlessConfig == nil {
+		return fmt.Errorf("vless config is required for VLESS protocol")
+	}
+	if n.protocol.IsVMess() && n.vmessConfig == nil {
+		return fmt.Errorf("vmess config is required for VMess protocol")
+	}
+	if n.protocol.IsHysteria2() && n.hysteria2Config == nil {
+		return fmt.Errorf("hysteria2 config is required for Hysteria2 protocol")
+	}
+	if n.protocol.IsTUIC() && n.tuicConfig == nil {
+		return fmt.Errorf("tuic config is required for TUIC protocol")
 	}
 	if n.status == vo.NodeStatusMaintenance && n.maintenanceReason == nil {
 		return fmt.Errorf("maintenance reason is required when in maintenance mode")

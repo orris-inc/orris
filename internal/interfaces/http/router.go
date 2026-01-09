@@ -1061,6 +1061,9 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Initialize node config sync service for pushing config to node agents
 	nodeConfigSyncService := nodeServices.NewNodeConfigSyncService(nodeRepoImpl, agentHub, log)
 
+	// Initialize subscription sync service for pushing subscription changes to node agents
+	subscriptionSyncService := nodeServices.NewSubscriptionSyncService(nodeRepoImpl, resourceGroupRepo, agentHub, log)
+
 	// Initialize admin hub for SSE connections to frontend (must be before callbacks)
 	adminHub := services.NewAdminHub(log, &services.AdminHubConfig{
 		StatusThrottleMs: 1000, // 1 second throttle for node status updates
@@ -1250,6 +1253,12 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	// Set config change notifier for node update use case
 	updateNodeUC.SetConfigChangeNotifier(nodeConfigSyncService)
+
+	// Set subscription change notifier for subscription use cases
+	createSubscriptionUC.SetSubscriptionNotifier(subscriptionSyncService)
+	activateSubscriptionUC.SetSubscriptionNotifier(subscriptionSyncService)
+	cancelSubscriptionUC.SetSubscriptionNotifier(subscriptionSyncService)
+	renewSubscriptionUC.SetSubscriptionNotifier(subscriptionSyncService)
 
 	// Initialize QuotaService for unified quota calculation
 	quotaService := subscriptionUsecases.NewQuotaService(

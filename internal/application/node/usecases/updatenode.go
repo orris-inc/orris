@@ -38,6 +38,49 @@ type UpdateNodeCommand struct {
 	// Route configuration for traffic splitting
 	Route      *dto.RouteConfigDTO // Route config to set (nil = no change)
 	ClearRoute bool                // If true, clear the route config
+
+	// VLESS specific fields
+	VLESSTransportType    *string
+	VLESSFlow             *string
+	VLESSSecurity         *string
+	VLESSSni              *string
+	VLESSFingerprint      *string
+	VLESSAllowInsecure    *bool
+	VLESSHost             *string
+	VLESSPath             *string
+	VLESSServiceName      *string
+	VLESSRealityPublicKey *string
+	VLESSRealityShortID   *string
+	VLESSRealitySpiderX   *string
+
+	// VMess specific fields
+	VMessAlterID       *int
+	VMessSecurity      *string
+	VMessTransportType *string
+	VMessHost          *string
+	VMessPath          *string
+	VMessServiceName   *string
+	VMessTLS           *bool
+	VMessSni           *string
+	VMessAllowInsecure *bool
+
+	// Hysteria2 specific fields
+	Hysteria2CongestionControl *string
+	Hysteria2Obfs              *string
+	Hysteria2ObfsPassword      *string
+	Hysteria2UpMbps            *int
+	Hysteria2DownMbps          *int
+	Hysteria2Sni               *string
+	Hysteria2AllowInsecure     *bool
+	Hysteria2Fingerprint       *string
+
+	// TUIC specific fields
+	TUICCongestionControl *string
+	TUICUDPRelayMode      *string
+	TUICAlpn              *string
+	TUICSni               *string
+	TUICAllowInsecure     *bool
+	TUICDisableSNI        *bool
 }
 
 type UpdateNodeResult struct {
@@ -363,6 +406,26 @@ func (uc *UpdateNodeUseCase) applyUpdates(n *node.Node, cmd UpdateNodeCommand) e
 		return err
 	}
 
+	// Update VLESS config (only for VLESS protocol nodes)
+	if err := uc.applyVLESSUpdates(n, cmd); err != nil {
+		return err
+	}
+
+	// Update VMess config (only for VMess protocol nodes)
+	if err := uc.applyVMessUpdates(n, cmd); err != nil {
+		return err
+	}
+
+	// Update Hysteria2 config (only for Hysteria2 protocol nodes)
+	if err := uc.applyHysteria2Updates(n, cmd); err != nil {
+		return err
+	}
+
+	// Update TUIC config (only for TUIC protocol nodes)
+	if err := uc.applyTUICUpdates(n, cmd); err != nil {
+		return err
+	}
+
 	// Update route config
 	if cmd.ClearRoute {
 		n.ClearRouteConfig()
@@ -384,14 +447,33 @@ func (uc *UpdateNodeUseCase) validateCommand(cmd UpdateNodeCommand) error {
 		return errors.NewValidationError("SID must be provided")
 	}
 
-	if cmd.Name == nil && cmd.ServerAddress == nil && cmd.AgentPort == nil &&
-		cmd.SubscriptionPort == nil && cmd.Method == nil && cmd.Plugin == nil &&
-		len(cmd.PluginOpts) == 0 && cmd.Region == nil && cmd.Tags == nil &&
-		cmd.Description == nil && cmd.SortOrder == nil && cmd.Status == nil &&
-		cmd.GroupSID == nil && cmd.MuteNotification == nil &&
-		cmd.TrojanTransportProtocol == nil && cmd.TrojanHost == nil &&
-		cmd.TrojanPath == nil && cmd.TrojanSNI == nil && cmd.TrojanAllowInsecure == nil &&
-		cmd.Route == nil && !cmd.ClearRoute {
+	// Check if at least one field is provided for update
+	hasUpdate := cmd.Name != nil || cmd.ServerAddress != nil || cmd.AgentPort != nil ||
+		cmd.SubscriptionPort != nil || cmd.Method != nil || cmd.Plugin != nil ||
+		len(cmd.PluginOpts) > 0 || cmd.Region != nil || cmd.Tags != nil ||
+		cmd.Description != nil || cmd.SortOrder != nil || cmd.Status != nil ||
+		cmd.GroupSID != nil || cmd.MuteNotification != nil ||
+		cmd.TrojanTransportProtocol != nil || cmd.TrojanHost != nil ||
+		cmd.TrojanPath != nil || cmd.TrojanSNI != nil || cmd.TrojanAllowInsecure != nil ||
+		cmd.Route != nil || cmd.ClearRoute ||
+		// VLESS fields
+		cmd.VLESSTransportType != nil || cmd.VLESSFlow != nil || cmd.VLESSSecurity != nil ||
+		cmd.VLESSSni != nil || cmd.VLESSFingerprint != nil || cmd.VLESSAllowInsecure != nil ||
+		cmd.VLESSHost != nil || cmd.VLESSPath != nil || cmd.VLESSServiceName != nil ||
+		cmd.VLESSRealityPublicKey != nil || cmd.VLESSRealityShortID != nil || cmd.VLESSRealitySpiderX != nil ||
+		// VMess fields
+		cmd.VMessAlterID != nil || cmd.VMessSecurity != nil || cmd.VMessTransportType != nil ||
+		cmd.VMessHost != nil || cmd.VMessPath != nil || cmd.VMessServiceName != nil ||
+		cmd.VMessTLS != nil || cmd.VMessSni != nil || cmd.VMessAllowInsecure != nil ||
+		// Hysteria2 fields
+		cmd.Hysteria2CongestionControl != nil || cmd.Hysteria2Obfs != nil || cmd.Hysteria2ObfsPassword != nil ||
+		cmd.Hysteria2UpMbps != nil || cmd.Hysteria2DownMbps != nil || cmd.Hysteria2Sni != nil ||
+		cmd.Hysteria2AllowInsecure != nil || cmd.Hysteria2Fingerprint != nil ||
+		// TUIC fields
+		cmd.TUICCongestionControl != nil || cmd.TUICUDPRelayMode != nil || cmd.TUICAlpn != nil ||
+		cmd.TUICSni != nil || cmd.TUICAllowInsecure != nil || cmd.TUICDisableSNI != nil
+
+	if !hasUpdate {
 		return errors.NewValidationError("at least one field must be provided for update")
 	}
 
@@ -488,6 +570,380 @@ func (uc *UpdateNodeUseCase) applyTrojanUpdates(n *node.Node, cmd UpdateNodeComm
 	// Update the node with new config
 	if err := n.UpdateTrojanConfig(&newConfig); err != nil {
 		return errors.NewValidationError("failed to update Trojan config: " + err.Error())
+	}
+
+	return nil
+}
+
+// applyVLESSUpdates applies VLESS-specific configuration updates
+func (uc *UpdateNodeUseCase) applyVLESSUpdates(n *node.Node, cmd UpdateNodeCommand) error {
+	// Check if any VLESS fields need updating
+	hasVLESSUpdate := cmd.VLESSTransportType != nil || cmd.VLESSFlow != nil ||
+		cmd.VLESSSecurity != nil || cmd.VLESSSni != nil || cmd.VLESSFingerprint != nil ||
+		cmd.VLESSAllowInsecure != nil || cmd.VLESSHost != nil || cmd.VLESSPath != nil ||
+		cmd.VLESSServiceName != nil || cmd.VLESSRealityPublicKey != nil ||
+		cmd.VLESSRealityShortID != nil || cmd.VLESSRealitySpiderX != nil
+
+	if !hasVLESSUpdate {
+		return nil
+	}
+
+	// Validate protocol is VLESS
+	if !n.Protocol().IsVLESS() {
+		return errors.NewValidationError("cannot update VLESS config for non-VLESS protocol node")
+	}
+
+	// Get current VLESS config or use defaults
+	currentConfig := n.VLESSConfig()
+
+	// Build new config with updated values
+	var transportType, flow, security, sni, fingerprint, host, path, serviceName string
+	var publicKey, shortID, spiderX string
+	var allowInsecure bool
+
+	if currentConfig != nil {
+		transportType = currentConfig.TransportType()
+		flow = currentConfig.Flow()
+		security = currentConfig.Security()
+		sni = currentConfig.SNI()
+		fingerprint = currentConfig.Fingerprint()
+		allowInsecure = currentConfig.AllowInsecure()
+		host = currentConfig.Host()
+		path = currentConfig.Path()
+		serviceName = currentConfig.ServiceName()
+		publicKey = currentConfig.PublicKey()
+		shortID = currentConfig.ShortID()
+		spiderX = currentConfig.SpiderX()
+	} else {
+		// Default values for VLESS nodes without config
+		transportType = "tcp"
+		security = "tls"
+	}
+
+	if cmd.VLESSTransportType != nil {
+		transportType = *cmd.VLESSTransportType
+	}
+	if cmd.VLESSFlow != nil {
+		flow = *cmd.VLESSFlow
+	}
+	if cmd.VLESSSecurity != nil {
+		security = *cmd.VLESSSecurity
+	}
+	if cmd.VLESSSni != nil {
+		sni = *cmd.VLESSSni
+	}
+	if cmd.VLESSFingerprint != nil {
+		fingerprint = *cmd.VLESSFingerprint
+	}
+	if cmd.VLESSAllowInsecure != nil {
+		allowInsecure = *cmd.VLESSAllowInsecure
+	}
+	if cmd.VLESSHost != nil {
+		host = *cmd.VLESSHost
+	}
+	if cmd.VLESSPath != nil {
+		path = *cmd.VLESSPath
+	}
+	if cmd.VLESSServiceName != nil {
+		serviceName = *cmd.VLESSServiceName
+	}
+	if cmd.VLESSRealityPublicKey != nil {
+		publicKey = *cmd.VLESSRealityPublicKey
+	}
+	if cmd.VLESSRealityShortID != nil {
+		shortID = *cmd.VLESSRealityShortID
+	}
+	if cmd.VLESSRealitySpiderX != nil {
+		spiderX = *cmd.VLESSRealitySpiderX
+	}
+
+	// Create new VLESS config
+	newConfig, err := vo.NewVLESSConfig(
+		transportType,
+		flow,
+		security,
+		sni,
+		fingerprint,
+		allowInsecure,
+		host,
+		path,
+		serviceName,
+		publicKey,
+		shortID,
+		spiderX,
+	)
+	if err != nil {
+		return errors.NewValidationError("invalid VLESS configuration: " + err.Error())
+	}
+
+	// Update the node with new config
+	if err := n.UpdateVLESSConfig(&newConfig); err != nil {
+		return errors.NewValidationError("failed to update VLESS config: " + err.Error())
+	}
+
+	return nil
+}
+
+// applyVMessUpdates applies VMess-specific configuration updates
+func (uc *UpdateNodeUseCase) applyVMessUpdates(n *node.Node, cmd UpdateNodeCommand) error {
+	// Check if any VMess fields need updating
+	hasVMessUpdate := cmd.VMessAlterID != nil || cmd.VMessSecurity != nil ||
+		cmd.VMessTransportType != nil || cmd.VMessHost != nil || cmd.VMessPath != nil ||
+		cmd.VMessServiceName != nil || cmd.VMessTLS != nil || cmd.VMessSni != nil ||
+		cmd.VMessAllowInsecure != nil
+
+	if !hasVMessUpdate {
+		return nil
+	}
+
+	// Validate protocol is VMess
+	if !n.Protocol().IsVMess() {
+		return errors.NewValidationError("cannot update VMess config for non-VMess protocol node")
+	}
+
+	// Get current VMess config or use defaults
+	currentConfig := n.VMessConfig()
+
+	// Build new config with updated values
+	var alterID int
+	var security, transportType, host, path, serviceName, sni string
+	var tls, allowInsecure bool
+
+	if currentConfig != nil {
+		alterID = currentConfig.AlterID()
+		security = currentConfig.Security()
+		transportType = currentConfig.TransportType()
+		host = currentConfig.Host()
+		path = currentConfig.Path()
+		serviceName = currentConfig.ServiceName()
+		tls = currentConfig.TLS()
+		sni = currentConfig.SNI()
+		allowInsecure = currentConfig.AllowInsecure()
+	} else {
+		// Default values for VMess nodes without config
+		security = "auto"
+		transportType = "tcp"
+	}
+
+	if cmd.VMessAlterID != nil {
+		alterID = *cmd.VMessAlterID
+	}
+	if cmd.VMessSecurity != nil {
+		security = *cmd.VMessSecurity
+	}
+	if cmd.VMessTransportType != nil {
+		transportType = *cmd.VMessTransportType
+	}
+	if cmd.VMessHost != nil {
+		host = *cmd.VMessHost
+	}
+	if cmd.VMessPath != nil {
+		path = *cmd.VMessPath
+	}
+	if cmd.VMessServiceName != nil {
+		serviceName = *cmd.VMessServiceName
+	}
+	if cmd.VMessTLS != nil {
+		tls = *cmd.VMessTLS
+	}
+	if cmd.VMessSni != nil {
+		sni = *cmd.VMessSni
+	}
+	if cmd.VMessAllowInsecure != nil {
+		allowInsecure = *cmd.VMessAllowInsecure
+	}
+
+	// Create new VMess config
+	newConfig, err := vo.NewVMessConfig(
+		alterID,
+		security,
+		transportType,
+		host,
+		path,
+		serviceName,
+		tls,
+		sni,
+		allowInsecure,
+	)
+	if err != nil {
+		return errors.NewValidationError("invalid VMess configuration: " + err.Error())
+	}
+
+	// Update the node with new config
+	if err := n.UpdateVMessConfig(&newConfig); err != nil {
+		return errors.NewValidationError("failed to update VMess config: " + err.Error())
+	}
+
+	return nil
+}
+
+// applyHysteria2Updates applies Hysteria2-specific configuration updates
+func (uc *UpdateNodeUseCase) applyHysteria2Updates(n *node.Node, cmd UpdateNodeCommand) error {
+	// Check if any Hysteria2 fields need updating
+	hasHysteria2Update := cmd.Hysteria2CongestionControl != nil || cmd.Hysteria2Obfs != nil ||
+		cmd.Hysteria2ObfsPassword != nil || cmd.Hysteria2UpMbps != nil ||
+		cmd.Hysteria2DownMbps != nil || cmd.Hysteria2Sni != nil ||
+		cmd.Hysteria2AllowInsecure != nil || cmd.Hysteria2Fingerprint != nil
+
+	if !hasHysteria2Update {
+		return nil
+	}
+
+	// Validate protocol is Hysteria2
+	if !n.Protocol().IsHysteria2() {
+		return errors.NewValidationError("cannot update Hysteria2 config for non-Hysteria2 protocol node")
+	}
+
+	// Get current Hysteria2 config or use defaults
+	currentConfig := n.Hysteria2Config()
+
+	// Build new config with updated values
+	var password, congestionControl, obfs, obfsPassword, sni, fingerprint string
+	var upMbps, downMbps *int
+	var allowInsecure bool
+
+	if currentConfig != nil {
+		password = currentConfig.Password()
+		congestionControl = currentConfig.CongestionControl()
+		obfs = currentConfig.Obfs()
+		obfsPassword = currentConfig.ObfsPassword()
+		upMbps = currentConfig.UpMbps()
+		downMbps = currentConfig.DownMbps()
+		sni = currentConfig.SNI()
+		allowInsecure = currentConfig.AllowInsecure()
+		fingerprint = currentConfig.Fingerprint()
+	} else {
+		// Default values for Hysteria2 nodes without config
+		password = "placeholder"
+		congestionControl = "bbr"
+	}
+
+	if cmd.Hysteria2CongestionControl != nil {
+		congestionControl = *cmd.Hysteria2CongestionControl
+	}
+	if cmd.Hysteria2Obfs != nil {
+		obfs = *cmd.Hysteria2Obfs
+	}
+	if cmd.Hysteria2ObfsPassword != nil {
+		obfsPassword = *cmd.Hysteria2ObfsPassword
+	}
+	if cmd.Hysteria2UpMbps != nil {
+		upMbps = cmd.Hysteria2UpMbps
+	}
+	if cmd.Hysteria2DownMbps != nil {
+		downMbps = cmd.Hysteria2DownMbps
+	}
+	if cmd.Hysteria2Sni != nil {
+		sni = *cmd.Hysteria2Sni
+	}
+	if cmd.Hysteria2AllowInsecure != nil {
+		allowInsecure = *cmd.Hysteria2AllowInsecure
+	}
+	if cmd.Hysteria2Fingerprint != nil {
+		fingerprint = *cmd.Hysteria2Fingerprint
+	}
+
+	// Create new Hysteria2 config (password remains unchanged)
+	newConfig, err := vo.NewHysteria2Config(
+		password,
+		congestionControl,
+		obfs,
+		obfsPassword,
+		upMbps,
+		downMbps,
+		sni,
+		allowInsecure,
+		fingerprint,
+	)
+	if err != nil {
+		return errors.NewValidationError("invalid Hysteria2 configuration: " + err.Error())
+	}
+
+	// Update the node with new config
+	if err := n.UpdateHysteria2Config(&newConfig); err != nil {
+		return errors.NewValidationError("failed to update Hysteria2 config: " + err.Error())
+	}
+
+	return nil
+}
+
+// applyTUICUpdates applies TUIC-specific configuration updates
+func (uc *UpdateNodeUseCase) applyTUICUpdates(n *node.Node, cmd UpdateNodeCommand) error {
+	// Check if any TUIC fields need updating
+	hasTUICUpdate := cmd.TUICCongestionControl != nil || cmd.TUICUDPRelayMode != nil ||
+		cmd.TUICAlpn != nil || cmd.TUICSni != nil ||
+		cmd.TUICAllowInsecure != nil || cmd.TUICDisableSNI != nil
+
+	if !hasTUICUpdate {
+		return nil
+	}
+
+	// Validate protocol is TUIC
+	if !n.Protocol().IsTUIC() {
+		return errors.NewValidationError("cannot update TUIC config for non-TUIC protocol node")
+	}
+
+	// Get current TUIC config or use defaults
+	currentConfig := n.TUICConfig()
+
+	// Build new config with updated values
+	var uuid, password, congestionControl, udpRelayMode, alpn, sni string
+	var allowInsecure, disableSNI bool
+
+	if currentConfig != nil {
+		uuid = currentConfig.UUID()
+		password = currentConfig.Password()
+		congestionControl = currentConfig.CongestionControl()
+		udpRelayMode = currentConfig.UDPRelayMode()
+		alpn = currentConfig.ALPN()
+		sni = currentConfig.SNI()
+		allowInsecure = currentConfig.AllowInsecure()
+		disableSNI = currentConfig.DisableSNI()
+	} else {
+		// Default values for TUIC nodes without config
+		uuid = "placeholder"
+		password = "placeholder"
+		congestionControl = "bbr"
+		udpRelayMode = "native"
+	}
+
+	if cmd.TUICCongestionControl != nil {
+		congestionControl = *cmd.TUICCongestionControl
+	}
+	if cmd.TUICUDPRelayMode != nil {
+		udpRelayMode = *cmd.TUICUDPRelayMode
+	}
+	if cmd.TUICAlpn != nil {
+		alpn = *cmd.TUICAlpn
+	}
+	if cmd.TUICSni != nil {
+		sni = *cmd.TUICSni
+	}
+	if cmd.TUICAllowInsecure != nil {
+		allowInsecure = *cmd.TUICAllowInsecure
+	}
+	if cmd.TUICDisableSNI != nil {
+		disableSNI = *cmd.TUICDisableSNI
+	}
+
+	// Create new TUIC config (uuid and password remain unchanged)
+	newConfig, err := vo.NewTUICConfig(
+		uuid,
+		password,
+		congestionControl,
+		udpRelayMode,
+		alpn,
+		sni,
+		allowInsecure,
+		disableSNI,
+	)
+	if err != nil {
+		return errors.NewValidationError("invalid TUIC configuration: " + err.Error())
+	}
+
+	// Update the node with new config
+	if err := n.UpdateTUICConfig(&newConfig); err != nil {
+		return errors.NewValidationError("failed to update TUIC config: " + err.Error())
 	}
 
 	return nil

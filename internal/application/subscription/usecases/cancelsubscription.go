@@ -15,9 +15,10 @@ type CancelSubscriptionCommand struct {
 }
 
 type CancelSubscriptionUseCase struct {
-	subscriptionRepo subscription.SubscriptionRepository
-	tokenRepo        subscription.SubscriptionTokenRepository
-	logger           logger.Interface
+	subscriptionRepo     subscription.SubscriptionRepository
+	tokenRepo            subscription.SubscriptionTokenRepository
+	subscriptionNotifier SubscriptionChangeNotifier // Optional: for notifying node agents
+	logger               logger.Interface
 }
 
 func NewCancelSubscriptionUseCase(
@@ -30,6 +31,11 @@ func NewCancelSubscriptionUseCase(
 		tokenRepo:        tokenRepo,
 		logger:           logger,
 	}
+}
+
+// SetSubscriptionNotifier sets the subscription change notifier (optional).
+func (uc *CancelSubscriptionUseCase) SetSubscriptionNotifier(notifier SubscriptionChangeNotifier) {
+	uc.subscriptionNotifier = notifier
 }
 
 func (uc *CancelSubscriptionUseCase) Execute(ctx context.Context, cmd CancelSubscriptionCommand) error {
@@ -62,6 +68,18 @@ func (uc *CancelSubscriptionUseCase) Execute(ctx context.Context, cmd CancelSubs
 		"immediate", cmd.Immediate,
 		"status", sub.Status(),
 	)
+
+	// Notify node agents about the cancelled subscription (only for immediate cancellation)
+	if cmd.Immediate && uc.subscriptionNotifier != nil {
+		notifyCtx := context.Background()
+		if err := uc.subscriptionNotifier.NotifySubscriptionDeactivation(notifyCtx, sub); err != nil {
+			// Log error but don't fail the cancellation
+			uc.logger.Warnw("failed to notify nodes of subscription cancellation",
+				"subscription_id", cmd.SubscriptionID,
+				"error", err,
+			)
+		}
+	}
 
 	return nil
 }

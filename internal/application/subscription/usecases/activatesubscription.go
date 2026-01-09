@@ -13,8 +13,9 @@ type ActivateSubscriptionCommand struct {
 }
 
 type ActivateSubscriptionUseCase struct {
-	subscriptionRepo subscription.SubscriptionRepository
-	logger           logger.Interface
+	subscriptionRepo     subscription.SubscriptionRepository
+	subscriptionNotifier SubscriptionChangeNotifier // Optional: for notifying node agents
+	logger               logger.Interface
 }
 
 func NewActivateSubscriptionUseCase(
@@ -25,6 +26,11 @@ func NewActivateSubscriptionUseCase(
 		subscriptionRepo: subscriptionRepo,
 		logger:           logger,
 	}
+}
+
+// SetSubscriptionNotifier sets the subscription change notifier (optional).
+func (uc *ActivateSubscriptionUseCase) SetSubscriptionNotifier(notifier SubscriptionChangeNotifier) {
+	uc.subscriptionNotifier = notifier
 }
 
 func (uc *ActivateSubscriptionUseCase) Execute(ctx context.Context, cmd ActivateSubscriptionCommand) error {
@@ -48,6 +54,18 @@ func (uc *ActivateSubscriptionUseCase) Execute(ctx context.Context, cmd Activate
 		"subscription_id", cmd.SubscriptionID,
 		"status", sub.Status(),
 	)
+
+	// Notify node agents about the activated subscription
+	if uc.subscriptionNotifier != nil {
+		notifyCtx := context.Background()
+		if err := uc.subscriptionNotifier.NotifySubscriptionActivation(notifyCtx, sub); err != nil {
+			// Log error but don't fail the activation
+			uc.logger.Warnw("failed to notify nodes of subscription activation",
+				"subscription_id", cmd.SubscriptionID,
+				"error", err,
+			)
+		}
+	}
 
 	return nil
 }

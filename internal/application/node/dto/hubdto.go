@@ -14,8 +14,9 @@ const (
 	NodeMsgTypeEvent     = "event"
 
 	// Server -> Agent message types.
-	NodeMsgTypeCommand    = "command"
-	NodeMsgTypeConfigSync = "config_sync"
+	NodeMsgTypeCommand          = "command"
+	NodeMsgTypeConfigSync       = "config_sync"
+	NodeMsgTypeSubscriptionSync = "subscription_sync"
 )
 
 // NodeHubMessage is the unified WebSocket message envelope for node agents.
@@ -165,4 +166,18 @@ func ToNodeConfigData(n *node.Node, referencedNodes []*node.Node, serverKeyFunc 
 	}
 
 	return config
+}
+
+// Subscription sync change type constants.
+const (
+	SubscriptionChangeAdded   = "added"   // New subscription added
+	SubscriptionChangeUpdated = "updated" // Subscription updated (status, expiry, etc.)
+	SubscriptionChangeRemoved = "removed" // Subscription removed or expired
+)
+
+// SubscriptionSyncData represents subscription sync data for node agent.
+type SubscriptionSyncData struct {
+	ChangeType    string                 `json:"change_type"`             // added, updated, removed
+	Subscriptions []NodeSubscriptionInfo `json:"subscriptions,omitempty"` // Affected subscriptions
+	Timestamp     int64                  `json:"timestamp"`               // Unix timestamp
 }
