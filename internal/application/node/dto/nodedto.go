@@ -23,12 +23,55 @@ type NodeDTO struct {
 	SortOrder        int                    `json:"sort_order" example:"100" description:"Display order for sorting nodes"`
 	MuteNotification bool                   `json:"mute_notification" example:"false" description:"Mute online/offline notifications for this node"`
 	// Trojan specific fields
-	TransportProtocol string     `json:"transport_protocol,omitempty" example:"tcp" enums:"tcp,ws,grpc" description:"Transport protocol for Trojan (tcp, ws, grpc)"`
-	Host              string     `json:"host,omitempty" example:"cdn.example.com" description:"WebSocket host header or gRPC service name"`
-	Path              string     `json:"path,omitempty" example:"/trojan" description:"WebSocket path"`
-	SNI               string     `json:"sni,omitempty" example:"example.com" description:"TLS Server Name Indication"`
-	AllowInsecure     bool       `json:"allow_insecure,omitempty" example:"true" description:"Allow insecure TLS connection"`
-	MaintenanceReason *string    `json:"maintenance_reason,omitempty" example:"Scheduled maintenance" description:"Reason for maintenance status (only when status is maintenance)"`
+	TransportProtocol string  `json:"transport_protocol,omitempty" example:"tcp" enums:"tcp,ws,grpc" description:"Transport protocol for Trojan (tcp, ws, grpc)"`
+	Host              string  `json:"host,omitempty" example:"cdn.example.com" description:"WebSocket host header or gRPC service name"`
+	Path              string  `json:"path,omitempty" example:"/trojan" description:"WebSocket path"`
+	SNI               string  `json:"sni,omitempty" example:"example.com" description:"TLS Server Name Indication"`
+	AllowInsecure     bool    `json:"allow_insecure,omitempty" example:"true" description:"Allow insecure TLS connection"`
+	MaintenanceReason *string `json:"maintenance_reason,omitempty" example:"Scheduled maintenance" description:"Reason for maintenance status (only when status is maintenance)"`
+
+	// VLESS specific fields
+	VLESSTransportType    string `json:"vless_transport_type,omitempty" example:"tcp" enums:"tcp,ws,grpc,h2" description:"VLESS transport type"`
+	VLESSFlow             string `json:"vless_flow,omitempty" example:"xtls-rprx-vision" description:"VLESS flow control"`
+	VLESSSecurity         string `json:"vless_security,omitempty" example:"tls" enums:"none,tls,reality" description:"VLESS security type"`
+	VLESSSni              string `json:"vless_sni,omitempty" example:"example.com" description:"VLESS TLS SNI"`
+	VLESSFingerprint      string `json:"vless_fingerprint,omitempty" example:"chrome" description:"VLESS TLS fingerprint"`
+	VLESSAllowInsecure    bool   `json:"vless_allow_insecure,omitempty" description:"VLESS allow insecure TLS"`
+	VLESSHost             string `json:"vless_host,omitempty" description:"VLESS WS/H2 host header"`
+	VLESSPath             string `json:"vless_path,omitempty" description:"VLESS WS/H2 path"`
+	VLESSServiceName      string `json:"vless_service_name,omitempty" description:"VLESS gRPC service name"`
+	VLESSRealityPublicKey string `json:"vless_reality_public_key,omitempty" description:"VLESS Reality public key"`
+	VLESSRealityShortID   string `json:"vless_reality_short_id,omitempty" description:"VLESS Reality short ID"`
+	VLESSRealitySpiderX   string `json:"vless_reality_spider_x,omitempty" description:"VLESS Reality spider X"`
+
+	// VMess specific fields
+	VMessAlterID       int    `json:"vmess_alter_id,omitempty" example:"0" description:"VMess alter ID"`
+	VMessSecurity      string `json:"vmess_security,omitempty" example:"auto" enums:"auto,aes-128-gcm,chacha20-poly1305,none,zero" description:"VMess security"`
+	VMessTransportType string `json:"vmess_transport_type,omitempty" example:"tcp" enums:"tcp,ws,grpc,http,quic" description:"VMess transport type"`
+	VMessHost          string `json:"vmess_host,omitempty" description:"VMess WS/HTTP host header"`
+	VMessPath          string `json:"vmess_path,omitempty" description:"VMess WS/HTTP path"`
+	VMessServiceName   string `json:"vmess_service_name,omitempty" description:"VMess gRPC service name"`
+	VMessTLS           bool   `json:"vmess_tls,omitempty" description:"VMess TLS enabled"`
+	VMessSni           string `json:"vmess_sni,omitempty" description:"VMess TLS SNI"`
+	VMessAllowInsecure bool   `json:"vmess_allow_insecure,omitempty" description:"VMess allow insecure TLS"`
+
+	// Hysteria2 specific fields
+	Hysteria2CongestionControl string `json:"hysteria2_congestion_control,omitempty" example:"bbr" enums:"cubic,bbr,new_reno" description:"Hysteria2 congestion control"`
+	Hysteria2Obfs              string `json:"hysteria2_obfs,omitempty" example:"salamander" enums:"salamander" description:"Hysteria2 obfuscation type"`
+	Hysteria2ObfsPassword      string `json:"hysteria2_obfs_password,omitempty" description:"Hysteria2 obfuscation password"`
+	Hysteria2UpMbps            *int   `json:"hysteria2_up_mbps,omitempty" description:"Hysteria2 upstream bandwidth limit"`
+	Hysteria2DownMbps          *int   `json:"hysteria2_down_mbps,omitempty" description:"Hysteria2 downstream bandwidth limit"`
+	Hysteria2Sni               string `json:"hysteria2_sni,omitempty" description:"Hysteria2 TLS SNI"`
+	Hysteria2AllowInsecure     bool   `json:"hysteria2_allow_insecure,omitempty" description:"Hysteria2 allow insecure TLS"`
+	Hysteria2Fingerprint       string `json:"hysteria2_fingerprint,omitempty" description:"Hysteria2 TLS fingerprint"`
+
+	// TUIC specific fields
+	TUICCongestionControl string `json:"tuic_congestion_control,omitempty" example:"bbr" enums:"cubic,bbr,new_reno" description:"TUIC congestion control"`
+	TUICUDPRelayMode      string `json:"tuic_udp_relay_mode,omitempty" example:"native" enums:"native,quic" description:"TUIC UDP relay mode"`
+	TUICAlpn              string `json:"tuic_alpn,omitempty" description:"TUIC ALPN protocols"`
+	TUICSni               string `json:"tuic_sni,omitempty" description:"TUIC TLS SNI"`
+	TUICAllowInsecure     bool   `json:"tuic_allow_insecure,omitempty" description:"TUIC allow insecure TLS"`
+	TUICDisableSNI        bool   `json:"tuic_disable_sni,omitempty" description:"TUIC disable SNI"`
 	IsOnline          bool       `json:"is_online" example:"true" description:"Indicates if the node agent is online (reported within 5 minutes)"`
 	LastSeenAt        *time.Time `json:"last_seen_at,omitempty" example:"2024-01-15T14:20:00Z" description:"Last time the node agent reported status"`
 	AgentVersion      string     `json:"agent_version,omitempty" example:"1.2.0" description:"Agent software version, extracted from system_status for easy display"`
@@ -266,6 +309,57 @@ func ToNodeDTO(n *node.Node) *NodeDTO {
 		dto.AllowInsecure = n.TrojanConfig().AllowInsecure()
 	}
 
+	// Map VLESS specific fields
+	if n.VLESSConfig() != nil {
+		dto.VLESSTransportType = n.VLESSConfig().TransportType()
+		dto.VLESSFlow = n.VLESSConfig().Flow()
+		dto.VLESSSecurity = n.VLESSConfig().Security()
+		dto.VLESSSni = n.VLESSConfig().SNI()
+		dto.VLESSFingerprint = n.VLESSConfig().Fingerprint()
+		dto.VLESSAllowInsecure = n.VLESSConfig().AllowInsecure()
+		dto.VLESSHost = n.VLESSConfig().Host()
+		dto.VLESSPath = n.VLESSConfig().Path()
+		dto.VLESSServiceName = n.VLESSConfig().ServiceName()
+		dto.VLESSRealityPublicKey = n.VLESSConfig().PublicKey()
+		dto.VLESSRealityShortID = n.VLESSConfig().ShortID()
+		dto.VLESSRealitySpiderX = n.VLESSConfig().SpiderX()
+	}
+
+	// Map VMess specific fields
+	if n.VMessConfig() != nil {
+		dto.VMessAlterID = n.VMessConfig().AlterID()
+		dto.VMessSecurity = n.VMessConfig().Security()
+		dto.VMessTransportType = n.VMessConfig().TransportType()
+		dto.VMessHost = n.VMessConfig().Host()
+		dto.VMessPath = n.VMessConfig().Path()
+		dto.VMessServiceName = n.VMessConfig().ServiceName()
+		dto.VMessTLS = n.VMessConfig().TLS()
+		dto.VMessSni = n.VMessConfig().SNI()
+		dto.VMessAllowInsecure = n.VMessConfig().AllowInsecure()
+	}
+
+	// Map Hysteria2 specific fields
+	if n.Hysteria2Config() != nil {
+		dto.Hysteria2CongestionControl = n.Hysteria2Config().CongestionControl()
+		dto.Hysteria2Obfs = n.Hysteria2Config().Obfs()
+		dto.Hysteria2ObfsPassword = n.Hysteria2Config().ObfsPassword()
+		dto.Hysteria2UpMbps = n.Hysteria2Config().UpMbps()
+		dto.Hysteria2DownMbps = n.Hysteria2Config().DownMbps()
+		dto.Hysteria2Sni = n.Hysteria2Config().SNI()
+		dto.Hysteria2AllowInsecure = n.Hysteria2Config().AllowInsecure()
+		dto.Hysteria2Fingerprint = n.Hysteria2Config().Fingerprint()
+	}
+
+	// Map TUIC specific fields
+	if n.TUICConfig() != nil {
+		dto.TUICCongestionControl = n.TUICConfig().CongestionControl()
+		dto.TUICUDPRelayMode = n.TUICConfig().UDPRelayMode()
+		dto.TUICAlpn = n.TUICConfig().ALPN()
+		dto.TUICSni = n.TUICConfig().SNI()
+		dto.TUICAllowInsecure = n.TUICConfig().AllowInsecure()
+		dto.TUICDisableSNI = n.TUICConfig().DisableSNI()
+	}
+
 	metadata := n.Metadata()
 	if metadata.Region() != "" {
 		dto.Region = metadata.Region()
@@ -300,23 +394,68 @@ func ToNodeDTOList(nodes []*node.Node) []*NodeDTO {
 // UserNodeDTO represents a user-owned node for API responses
 // It contains fewer fields than NodeDTO, hiding admin-specific information
 type UserNodeDTO struct {
-	ID                string     `json:"id" example:"node_xK9mP2vL3nQ" description:"Unique identifier for the node"`
-	Name              string     `json:"name" example:"My-Node-01" description:"Display name of the node"`
-	ServerAddress     string     `json:"server_address" example:"proxy.example.com" description:"Server hostname or IP address"`
-	AgentPort         uint16     `json:"agent_port" example:"8388" description:"Port for agent connections"`
-	SubscriptionPort  *uint16    `json:"subscription_port,omitempty" example:"8389" description:"Port for client subscriptions"`
-	Protocol          string     `json:"protocol" example:"shadowsocks" enums:"shadowsocks,trojan" description:"Proxy protocol type"`
-	EncryptionMethod  string     `json:"encryption_method,omitempty" example:"aes-256-gcm" description:"Encryption method (Shadowsocks only)"`
-	Status            string     `json:"status" example:"active" enums:"active,inactive,maintenance" description:"Current operational status"`
-	IsOnline          bool       `json:"is_online" example:"true" description:"Indicates if the node agent is online"`
-	LastSeenAt        *time.Time `json:"last_seen_at,omitempty" example:"2024-01-15T14:20:00Z" description:"Last time the node agent reported status"`
-	TransportProtocol string     `json:"transport_protocol,omitempty" example:"tcp" description:"Transport protocol for Trojan"`
-	Host              string     `json:"host,omitempty" example:"cdn.example.com" description:"WebSocket host or gRPC service name"`
-	Path              string     `json:"path,omitempty" example:"/trojan" description:"WebSocket path"`
-	SNI               string     `json:"sni,omitempty" example:"example.com" description:"TLS SNI"`
-	AllowInsecure     bool       `json:"allow_insecure,omitempty" example:"false" description:"Allow insecure TLS"`
-	CreatedAt         time.Time  `json:"created_at" example:"2024-01-15T10:30:00Z" description:"Timestamp when the node was created"`
-	UpdatedAt         time.Time  `json:"updated_at" example:"2024-01-15T14:20:00Z" description:"Timestamp when the node was last updated"`
+	ID               string     `json:"id" example:"node_xK9mP2vL3nQ" description:"Unique identifier for the node"`
+	Name             string     `json:"name" example:"My-Node-01" description:"Display name of the node"`
+	ServerAddress    string     `json:"server_address" example:"proxy.example.com" description:"Server hostname or IP address"`
+	AgentPort        uint16     `json:"agent_port" example:"8388" description:"Port for agent connections"`
+	SubscriptionPort *uint16    `json:"subscription_port,omitempty" example:"8389" description:"Port for client subscriptions"`
+	Protocol         string     `json:"protocol" example:"shadowsocks" enums:"shadowsocks,trojan,vless,vmess,hysteria2,tuic" description:"Proxy protocol type"`
+	EncryptionMethod string     `json:"encryption_method,omitempty" example:"aes-256-gcm" description:"Encryption method (Shadowsocks only)"`
+	Status           string     `json:"status" example:"active" enums:"active,inactive,maintenance" description:"Current operational status"`
+	IsOnline         bool       `json:"is_online" example:"true" description:"Indicates if the node agent is online"`
+	LastSeenAt       *time.Time `json:"last_seen_at,omitempty" example:"2024-01-15T14:20:00Z" description:"Last time the node agent reported status"`
+	// Trojan specific fields
+	TransportProtocol string `json:"transport_protocol,omitempty" example:"tcp" description:"Transport protocol for Trojan"`
+	Host              string `json:"host,omitempty" example:"cdn.example.com" description:"WebSocket host or gRPC service name"`
+	Path              string `json:"path,omitempty" example:"/trojan" description:"WebSocket path"`
+	SNI               string `json:"sni,omitempty" example:"example.com" description:"TLS SNI"`
+	AllowInsecure     bool   `json:"allow_insecure,omitempty" example:"false" description:"Allow insecure TLS"`
+
+	// VLESS specific fields
+	VLESSTransportType    string `json:"vless_transport_type,omitempty" description:"VLESS transport type"`
+	VLESSFlow             string `json:"vless_flow,omitempty" description:"VLESS flow control"`
+	VLESSSecurity         string `json:"vless_security,omitempty" description:"VLESS security type"`
+	VLESSSni              string `json:"vless_sni,omitempty" description:"VLESS TLS SNI"`
+	VLESSFingerprint      string `json:"vless_fingerprint,omitempty" description:"VLESS TLS fingerprint"`
+	VLESSAllowInsecure    bool   `json:"vless_allow_insecure,omitempty" description:"VLESS allow insecure TLS"`
+	VLESSHost             string `json:"vless_host,omitempty" description:"VLESS WS/H2 host header"`
+	VLESSPath             string `json:"vless_path,omitempty" description:"VLESS WS/H2 path"`
+	VLESSServiceName      string `json:"vless_service_name,omitempty" description:"VLESS gRPC service name"`
+	VLESSRealityPublicKey string `json:"vless_reality_public_key,omitempty" description:"VLESS Reality public key"`
+	VLESSRealityShortID   string `json:"vless_reality_short_id,omitempty" description:"VLESS Reality short ID"`
+	VLESSRealitySpiderX   string `json:"vless_reality_spider_x,omitempty" description:"VLESS Reality spider X"`
+
+	// VMess specific fields
+	VMessAlterID       int    `json:"vmess_alter_id,omitempty" description:"VMess alter ID"`
+	VMessSecurity      string `json:"vmess_security,omitempty" description:"VMess security"`
+	VMessTransportType string `json:"vmess_transport_type,omitempty" description:"VMess transport type"`
+	VMessHost          string `json:"vmess_host,omitempty" description:"VMess WS/HTTP host header"`
+	VMessPath          string `json:"vmess_path,omitempty" description:"VMess WS/HTTP path"`
+	VMessServiceName   string `json:"vmess_service_name,omitempty" description:"VMess gRPC service name"`
+	VMessTLS           bool   `json:"vmess_tls,omitempty" description:"VMess TLS enabled"`
+	VMessSni           string `json:"vmess_sni,omitempty" description:"VMess TLS SNI"`
+	VMessAllowInsecure bool   `json:"vmess_allow_insecure,omitempty" description:"VMess allow insecure TLS"`
+
+	// Hysteria2 specific fields
+	Hysteria2CongestionControl string `json:"hysteria2_congestion_control,omitempty" description:"Hysteria2 congestion control"`
+	Hysteria2Obfs              string `json:"hysteria2_obfs,omitempty" description:"Hysteria2 obfuscation type"`
+	Hysteria2ObfsPassword      string `json:"hysteria2_obfs_password,omitempty" description:"Hysteria2 obfuscation password"`
+	Hysteria2UpMbps            *int   `json:"hysteria2_up_mbps,omitempty" description:"Hysteria2 upstream bandwidth limit"`
+	Hysteria2DownMbps          *int   `json:"hysteria2_down_mbps,omitempty" description:"Hysteria2 downstream bandwidth limit"`
+	Hysteria2Sni               string `json:"hysteria2_sni,omitempty" description:"Hysteria2 TLS SNI"`
+	Hysteria2AllowInsecure     bool   `json:"hysteria2_allow_insecure,omitempty" description:"Hysteria2 allow insecure TLS"`
+	Hysteria2Fingerprint       string `json:"hysteria2_fingerprint,omitempty" description:"Hysteria2 TLS fingerprint"`
+
+	// TUIC specific fields
+	TUICCongestionControl string `json:"tuic_congestion_control,omitempty" description:"TUIC congestion control"`
+	TUICUDPRelayMode      string `json:"tuic_udp_relay_mode,omitempty" description:"TUIC UDP relay mode"`
+	TUICAlpn              string `json:"tuic_alpn,omitempty" description:"TUIC ALPN protocols"`
+	TUICSni               string `json:"tuic_sni,omitempty" description:"TUIC TLS SNI"`
+	TUICAllowInsecure     bool   `json:"tuic_allow_insecure,omitempty" description:"TUIC allow insecure TLS"`
+	TUICDisableSNI        bool   `json:"tuic_disable_sni,omitempty" description:"TUIC disable SNI"`
+
+	CreatedAt time.Time `json:"created_at" example:"2024-01-15T10:30:00Z" description:"Timestamp when the node was created"`
+	UpdatedAt time.Time `json:"updated_at" example:"2024-01-15T14:20:00Z" description:"Timestamp when the node was last updated"`
 }
 
 // ToUserNodeDTO converts a node entity to a user node DTO
@@ -347,6 +486,57 @@ func ToUserNodeDTO(n *node.Node) *UserNodeDTO {
 		dto.Path = n.TrojanConfig().Path()
 		dto.SNI = n.TrojanConfig().SNI()
 		dto.AllowInsecure = n.TrojanConfig().AllowInsecure()
+	}
+
+	// Map VLESS specific fields
+	if n.VLESSConfig() != nil {
+		dto.VLESSTransportType = n.VLESSConfig().TransportType()
+		dto.VLESSFlow = n.VLESSConfig().Flow()
+		dto.VLESSSecurity = n.VLESSConfig().Security()
+		dto.VLESSSni = n.VLESSConfig().SNI()
+		dto.VLESSFingerprint = n.VLESSConfig().Fingerprint()
+		dto.VLESSAllowInsecure = n.VLESSConfig().AllowInsecure()
+		dto.VLESSHost = n.VLESSConfig().Host()
+		dto.VLESSPath = n.VLESSConfig().Path()
+		dto.VLESSServiceName = n.VLESSConfig().ServiceName()
+		dto.VLESSRealityPublicKey = n.VLESSConfig().PublicKey()
+		dto.VLESSRealityShortID = n.VLESSConfig().ShortID()
+		dto.VLESSRealitySpiderX = n.VLESSConfig().SpiderX()
+	}
+
+	// Map VMess specific fields
+	if n.VMessConfig() != nil {
+		dto.VMessAlterID = n.VMessConfig().AlterID()
+		dto.VMessSecurity = n.VMessConfig().Security()
+		dto.VMessTransportType = n.VMessConfig().TransportType()
+		dto.VMessHost = n.VMessConfig().Host()
+		dto.VMessPath = n.VMessConfig().Path()
+		dto.VMessServiceName = n.VMessConfig().ServiceName()
+		dto.VMessTLS = n.VMessConfig().TLS()
+		dto.VMessSni = n.VMessConfig().SNI()
+		dto.VMessAllowInsecure = n.VMessConfig().AllowInsecure()
+	}
+
+	// Map Hysteria2 specific fields
+	if n.Hysteria2Config() != nil {
+		dto.Hysteria2CongestionControl = n.Hysteria2Config().CongestionControl()
+		dto.Hysteria2Obfs = n.Hysteria2Config().Obfs()
+		dto.Hysteria2ObfsPassword = n.Hysteria2Config().ObfsPassword()
+		dto.Hysteria2UpMbps = n.Hysteria2Config().UpMbps()
+		dto.Hysteria2DownMbps = n.Hysteria2Config().DownMbps()
+		dto.Hysteria2Sni = n.Hysteria2Config().SNI()
+		dto.Hysteria2AllowInsecure = n.Hysteria2Config().AllowInsecure()
+		dto.Hysteria2Fingerprint = n.Hysteria2Config().Fingerprint()
+	}
+
+	// Map TUIC specific fields
+	if n.TUICConfig() != nil {
+		dto.TUICCongestionControl = n.TUICConfig().CongestionControl()
+		dto.TUICUDPRelayMode = n.TUICConfig().UDPRelayMode()
+		dto.TUICAlpn = n.TUICConfig().ALPN()
+		dto.TUICSni = n.TUICConfig().SNI()
+		dto.TUICAllowInsecure = n.TUICConfig().AllowInsecure()
+		dto.TUICDisableSNI = n.TUICConfig().DisableSNI()
 	}
 
 	return dto

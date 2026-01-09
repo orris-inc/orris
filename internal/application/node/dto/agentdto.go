@@ -23,25 +23,52 @@ type AgentResponse struct {
 // NodeConfigResponse represents node configuration data for node agents
 // Compatible with sing-box inbound configuration
 type NodeConfigResponse struct {
-	NodeSID           string          `json:"node_id" binding:"required"`                              // Node SID (Stripe-style: node_xxx)
-	Protocol          string          `json:"protocol" binding:"required,oneof=shadowsocks trojan"`    // Protocol type
-	ServerHost        string          `json:"server_host" binding:"required"`                          // Server hostname or IP address
-	ServerPort        int             `json:"server_port" binding:"required,min=1,max=65535"`          // Server port number
-	EncryptionMethod  string          `json:"encryption_method,omitempty"`                             // Encryption method for Shadowsocks
-	ServerKey         string          `json:"server_key,omitempty"`                                    // Server password for SS
-	TransportProtocol string          `json:"transport_protocol" binding:"required,oneof=tcp ws grpc"` // Transport protocol (tcp, ws, grpc)
-	Host              string          `json:"host,omitempty"`                                          // WebSocket host header
-	Path              string          `json:"path,omitempty"`                                          // WebSocket path
-	ServiceName       string          `json:"service_name,omitempty"`                                  // gRPC service name
-	SNI               string          `json:"sni,omitempty"`                                           // TLS Server Name Indication
-	AllowInsecure     bool            `json:"allow_insecure"`                                          // Allow insecure TLS connection
-	EnableVless       bool            `json:"enable_vless"`                                            // Enable VLESS protocol
-	EnableXTLS        bool            `json:"enable_xtls"`                                             // Enable XTLS
-	SpeedLimit        uint64          `json:"speed_limit"`                                             // Speed limit in Mbps, 0 = unlimited
-	DeviceLimit       int             `json:"device_limit"`                                            // Device connection limit, 0 = unlimited
-	RuleListPath      string          `json:"rule_list_path,omitempty"`                                // Path to routing rule list file (deprecated, use Route)
-	Route             *RouteConfigDTO `json:"route,omitempty"`                                         // Routing configuration for traffic splitting
-	Outbounds         []OutboundDTO   `json:"outbounds,omitempty"`                                     // Outbound configs for nodes referenced in route rules
+	NodeSID           string          `json:"node_id" binding:"required"`                                                  // Node SID (Stripe-style: node_xxx)
+	Protocol          string          `json:"protocol" binding:"required,oneof=shadowsocks trojan vless vmess hysteria2 tuic"` // Protocol type
+	ServerHost        string          `json:"server_host" binding:"required"`                                              // Server hostname or IP address
+	ServerPort        int             `json:"server_port" binding:"required,min=1,max=65535"`                              // Server port number
+	EncryptionMethod  string          `json:"encryption_method,omitempty"`                                                 // Encryption method for Shadowsocks
+	ServerKey         string          `json:"server_key,omitempty"`                                                        // Server password for SS
+	TransportProtocol string          `json:"transport_protocol,omitempty"`                                                // Transport protocol (tcp, ws, grpc, h2, http, quic)
+	Host              string          `json:"host,omitempty"`                                                              // WebSocket/HTTP host header
+	Path              string          `json:"path,omitempty"`                                                              // WebSocket/HTTP path
+	ServiceName       string          `json:"service_name,omitempty"`                                                      // gRPC service name
+	SNI               string          `json:"sni,omitempty"`                                                               // TLS Server Name Indication
+	AllowInsecure     bool            `json:"allow_insecure"`                                                              // Allow insecure TLS connection
+	EnableVless       bool            `json:"enable_vless"`                                                                // Enable VLESS protocol (deprecated, use Protocol=vless)
+	EnableXTLS        bool            `json:"enable_xtls"`                                                                 // Enable XTLS (deprecated, use VLESSFlow)
+	SpeedLimit        uint64          `json:"speed_limit"`                                                                 // Speed limit in Mbps, 0 = unlimited
+	DeviceLimit       int             `json:"device_limit"`                                                                // Device connection limit, 0 = unlimited
+	RuleListPath      string          `json:"rule_list_path,omitempty"`                                                    // Path to routing rule list file (deprecated, use Route)
+	Route             *RouteConfigDTO `json:"route,omitempty"`                                                             // Routing configuration for traffic splitting
+	Outbounds         []OutboundDTO   `json:"outbounds,omitempty"`                                                         // Outbound configs for nodes referenced in route rules
+
+	// VLESS specific fields
+	VLESSFlow             string `json:"vless_flow,omitempty"`               // VLESS flow control (xtls-rprx-vision)
+	VLESSSecurity         string `json:"vless_security,omitempty"`           // VLESS security type (none, tls, reality)
+	VLESSFingerprint      string `json:"vless_fingerprint,omitempty"`        // TLS fingerprint for VLESS
+	VLESSRealityPublicKey string `json:"vless_reality_public_key,omitempty"` // Reality public key
+	VLESSRealityShortID   string `json:"vless_reality_short_id,omitempty"`   // Reality short ID
+	VLESSRealitySpiderX   string `json:"vless_reality_spider_x,omitempty"`   // Reality spider X parameter
+
+	// VMess specific fields
+	VMessAlterID  int    `json:"vmess_alter_id,omitempty"`  // VMess alter ID (usually 0)
+	VMessSecurity string `json:"vmess_security,omitempty"`  // VMess security (auto, aes-128-gcm, chacha20-poly1305, none, zero)
+	VMessTLS      bool   `json:"vmess_tls,omitempty"`       // VMess TLS enabled
+
+	// Hysteria2 specific fields
+	Hysteria2CongestionControl string `json:"hysteria2_congestion_control,omitempty"` // Congestion control (cubic, bbr, new_reno)
+	Hysteria2Obfs              string `json:"hysteria2_obfs,omitempty"`               // Obfuscation type (salamander)
+	Hysteria2ObfsPassword      string `json:"hysteria2_obfs_password,omitempty"`      // Obfuscation password
+	Hysteria2UpMbps            *int   `json:"hysteria2_up_mbps,omitempty"`            // Upstream bandwidth limit in Mbps
+	Hysteria2DownMbps          *int   `json:"hysteria2_down_mbps,omitempty"`          // Downstream bandwidth limit in Mbps
+	Hysteria2Fingerprint       string `json:"hysteria2_fingerprint,omitempty"`        // TLS fingerprint for Hysteria2
+
+	// TUIC specific fields
+	TUICCongestionControl string `json:"tuic_congestion_control,omitempty"` // Congestion control (cubic, bbr, new_reno)
+	TUICUDPRelayMode      string `json:"tuic_udp_relay_mode,omitempty"`     // UDP relay mode (native, quic)
+	TUICAlpn              string `json:"tuic_alpn,omitempty"`               // ALPN protocols
+	TUICDisableSNI        bool   `json:"tuic_disable_sni,omitempty"`        // Disable SNI
 }
 
 // RouteConfigDTO represents the routing configuration for sing-box
@@ -85,22 +112,42 @@ type RouteRuleDTO struct {
 // OutboundDTO represents a sing-box outbound configuration.
 // Used when route rules reference other nodes as outbounds.
 type OutboundDTO struct {
-	Type   string `json:"type"`   // Protocol type: shadowsocks, trojan, direct, block
+	Type   string `json:"type"`   // Protocol type: shadowsocks, trojan, vless, vmess, hysteria2, tuic, direct, block
 	Tag    string `json:"tag"`    // Unique identifier for the outbound (node SID)
 	Server string `json:"server"` // Server hostname or IP address
 	Port   int    `json:"server_port"`
 
 	// Shadowsocks specific fields
 	Method     string `json:"method,omitempty"`      // Encryption method for SS
-	Password   string `json:"password,omitempty"`    // Password for SS/Trojan
+	Password   string `json:"password,omitempty"`    // Password for SS/Trojan/Hysteria2/TUIC
 	Plugin     string `json:"plugin,omitempty"`      // SIP003 plugin name
 	PluginOpts string `json:"plugin_opts,omitempty"` // Plugin options string
 
-	// TLS fields (for Trojan)
+	// UUID field (for VLESS/VMess/TUIC)
+	UUID string `json:"uuid,omitempty"` // User UUID for VLESS/VMess/TUIC
+
+	// TLS fields (for Trojan/VLESS/VMess)
 	TLS *OutboundTLSDTO `json:"tls,omitempty"` // TLS configuration
 
-	// Transport fields (for Trojan ws/grpc)
+	// Transport fields (for Trojan/VLESS/VMess ws/grpc/h2)
 	Transport *OutboundTransportDTO `json:"transport,omitempty"` // Transport configuration
+
+	// VLESS specific fields
+	VLESSFlow string `json:"flow,omitempty"` // VLESS flow control (xtls-rprx-vision)
+
+	// VMess specific fields
+	VMessAlterID  int    `json:"alter_id,omitempty"` // VMess alter ID
+	VMessSecurity string `json:"security,omitempty"` // VMess encryption method
+
+	// Hysteria2 specific fields
+	Hysteria2Obfs         string `json:"obfs,omitempty"`          // Obfuscation type
+	Hysteria2ObfsPassword string `json:"obfs_password,omitempty"` // Obfuscation password
+	Hysteria2UpMbps       *int   `json:"up_mbps,omitempty"`       // Upstream bandwidth limit
+	Hysteria2DownMbps     *int   `json:"down_mbps,omitempty"`     // Downstream bandwidth limit
+
+	// TUIC specific fields
+	TUICCongestionControl string `json:"congestion_control,omitempty"` // Congestion control algorithm
+	TUICUDPRelayMode      string `json:"udp_relay_mode,omitempty"`     // UDP relay mode
 }
 
 // OutboundTLSDTO represents TLS configuration for outbound.
@@ -110,6 +157,16 @@ type OutboundTLSDTO struct {
 	Insecure   bool     `json:"insecure,omitempty"`    // Allow insecure TLS
 	DisableSNI bool     `json:"disable_sni,omitempty"` // Disable SNI
 	ALPN       []string `json:"alpn,omitempty"`        // ALPN protocols
+
+	// Reality specific fields (for VLESS)
+	Reality *OutboundRealityDTO `json:"reality,omitempty"` // Reality configuration
+}
+
+// OutboundRealityDTO represents Reality configuration for outbound TLS.
+type OutboundRealityDTO struct {
+	Enabled   bool   `json:"enabled"`              // Enable Reality
+	PublicKey string `json:"public_key,omitempty"` // Reality public key
+	ShortID   string `json:"short_id,omitempty"`   // Reality short ID
 }
 
 // OutboundTransportDTO represents transport configuration for outbound.
@@ -165,7 +222,7 @@ type ReportOnlineSubscriptionsRequest struct {
 }
 
 // ToNodeConfigResponse converts a domain node entity to agent node config response.
-// Supports both Shadowsocks and Trojan protocols with sing-box compatible configuration.
+// Supports Shadowsocks, Trojan, VLESS, VMess, Hysteria2, and TUIC protocols with sing-box compatible configuration.
 // referencedNodes: nodes referenced by route rules (outbound: "node_xxx"), can be nil.
 // serverKeyFunc: generates server key for each referenced node, can be nil.
 func ToNodeConfigResponse(n *node.Node, referencedNodes []*node.Node, serverKeyFunc func(*node.Node) string) *NodeConfigResponse {
@@ -187,7 +244,8 @@ func ToNodeConfigResponse(n *node.Node, referencedNodes []*node.Node, serverKeyF
 	}
 
 	// Determine protocol type from node's protocol field
-	if n.Protocol().IsShadowsocks() {
+	switch {
+	case n.Protocol().IsShadowsocks():
 		config.Protocol = "shadowsocks"
 		config.EncryptionMethod = n.EncryptionConfig().Method()
 
@@ -212,7 +270,8 @@ func ToNodeConfigResponse(n *node.Node, referencedNodes []*node.Node, serverKeyF
 				}
 			}
 		}
-	} else if n.Protocol().IsTrojan() {
+
+	case n.Protocol().IsTrojan():
 		config.Protocol = "trojan"
 
 		// Extract Trojan-specific configuration
@@ -230,6 +289,101 @@ func ToNodeConfigResponse(n *node.Node, referencedNodes []*node.Node, serverKeyF
 			case "grpc":
 				config.ServiceName = tc.Host() // In TrojanConfig, host is used as service name for gRPC
 			}
+		}
+
+	case n.Protocol().IsVLESS():
+		config.Protocol = "vless"
+
+		// Extract VLESS-specific configuration
+		if n.VLESSConfig() != nil {
+			vc := n.VLESSConfig()
+			config.TransportProtocol = vc.TransportType()
+			config.SNI = vc.SNI()
+			config.AllowInsecure = vc.AllowInsecure()
+
+			// VLESS specific fields
+			config.VLESSFlow = vc.Flow()
+			config.VLESSSecurity = vc.Security()
+			config.VLESSFingerprint = vc.Fingerprint()
+
+			// Reality specific fields
+			config.VLESSRealityPublicKey = vc.PublicKey()
+			config.VLESSRealityShortID = vc.ShortID()
+			config.VLESSRealitySpiderX = vc.SpiderX()
+
+			// Handle transport-specific fields
+			switch vc.TransportType() {
+			case "ws", "h2":
+				config.Host = vc.Host()
+				config.Path = vc.Path()
+			case "grpc":
+				config.ServiceName = vc.ServiceName()
+			}
+		}
+
+	case n.Protocol().IsVMess():
+		config.Protocol = "vmess"
+
+		// Extract VMess-specific configuration
+		if n.VMessConfig() != nil {
+			vc := n.VMessConfig()
+			config.TransportProtocol = vc.TransportType()
+			config.SNI = vc.SNI()
+			config.AllowInsecure = vc.AllowInsecure()
+
+			// VMess specific fields
+			config.VMessAlterID = vc.AlterID()
+			config.VMessSecurity = vc.Security()
+			config.VMessTLS = vc.TLS()
+
+			// Handle transport-specific fields
+			switch vc.TransportType() {
+			case "ws", "http":
+				config.Host = vc.Host()
+				config.Path = vc.Path()
+			case "grpc":
+				config.ServiceName = vc.ServiceName()
+			}
+		}
+
+	case n.Protocol().IsHysteria2():
+		config.Protocol = "hysteria2"
+
+		// Extract Hysteria2-specific configuration
+		if n.Hysteria2Config() != nil {
+			hc := n.Hysteria2Config()
+			config.SNI = hc.SNI()
+			config.AllowInsecure = hc.AllowInsecure()
+
+			// Hysteria2 specific fields
+			config.Hysteria2CongestionControl = hc.CongestionControl()
+			config.Hysteria2Obfs = hc.Obfs()
+			config.Hysteria2ObfsPassword = hc.ObfsPassword()
+			config.Hysteria2UpMbps = hc.UpMbps()
+			config.Hysteria2DownMbps = hc.DownMbps()
+			config.Hysteria2Fingerprint = hc.Fingerprint()
+
+			// Hysteria2 uses QUIC transport implicitly
+			config.TransportProtocol = "quic"
+		}
+
+	case n.Protocol().IsTUIC():
+		config.Protocol = "tuic"
+
+		// Extract TUIC-specific configuration
+		if n.TUICConfig() != nil {
+			tc := n.TUICConfig()
+			config.SNI = tc.SNI()
+			config.AllowInsecure = tc.AllowInsecure()
+
+			// TUIC specific fields
+			config.TUICCongestionControl = tc.CongestionControl()
+			config.TUICUDPRelayMode = tc.UDPRelayMode()
+			config.TUICAlpn = tc.ALPN()
+			config.TUICDisableSNI = tc.DisableSNI()
+
+			// TUIC uses QUIC transport implicitly
+			config.TransportProtocol = "quic"
 		}
 	}
 
@@ -299,7 +453,7 @@ func ToRouteRuleDTO(rule *vo.RouteRule) RouteRuleDTO {
 }
 
 // ToOutboundDTO converts a node entity to an OutboundDTO for sing-box outbound configuration.
-// The serverKey is used for Shadowsocks server password (pre-generated).
+// The serverKey is used for Shadowsocks server password (pre-generated), or UUID for VLESS/VMess/TUIC.
 func ToOutboundDTO(n *node.Node, serverKey string) *OutboundDTO {
 	if n == nil {
 		return nil
@@ -311,7 +465,8 @@ func ToOutboundDTO(n *node.Node, serverKey string) *OutboundDTO {
 		Port:   int(n.EffectiveSubscriptionPort()),
 	}
 
-	if n.Protocol().IsShadowsocks() {
+	switch {
+	case n.Protocol().IsShadowsocks():
 		dto.Type = "shadowsocks"
 		dto.Method = n.EncryptionConfig().Method()
 		dto.Password = serverKey
@@ -332,7 +487,8 @@ func ToOutboundDTO(n *node.Node, serverKey string) *OutboundDTO {
 				dto.PluginOpts = optsStr
 			}
 		}
-	} else if n.Protocol().IsTrojan() {
+
+	case n.Protocol().IsTrojan():
 		dto.Type = "trojan"
 		dto.Password = serverKey
 
@@ -361,6 +517,154 @@ func ToOutboundDTO(n *node.Node, serverKey string) *OutboundDTO {
 					Type:        "grpc",
 					ServiceName: tc.Host(),
 				}
+			}
+		}
+
+	case n.Protocol().IsVLESS():
+		dto.Type = "vless"
+		dto.UUID = serverKey // For VLESS, serverKey contains the user UUID
+
+		if n.VLESSConfig() != nil {
+			vc := n.VLESSConfig()
+
+			// VLESS flow control
+			dto.VLESSFlow = vc.Flow()
+
+			// TLS/Reality configuration
+			if vc.Security() == "reality" {
+				dto.TLS = &OutboundTLSDTO{
+					Enabled:    true,
+					ServerName: vc.SNI(),
+					Reality: &OutboundRealityDTO{
+						Enabled:   true,
+						PublicKey: vc.PublicKey(),
+						ShortID:   vc.ShortID(),
+					},
+				}
+			} else if vc.Security() == "tls" {
+				dto.TLS = &OutboundTLSDTO{
+					Enabled:    true,
+					ServerName: vc.SNI(),
+					Insecure:   vc.AllowInsecure(),
+				}
+			}
+
+			// Transport configuration for ws/grpc/h2
+			switch vc.TransportType() {
+			case "ws":
+				dto.Transport = &OutboundTransportDTO{
+					Type: "ws",
+					Path: vc.Path(),
+				}
+				if vc.Host() != "" {
+					dto.Transport.Headers = map[string]string{"Host": vc.Host()}
+				}
+			case "grpc":
+				dto.Transport = &OutboundTransportDTO{
+					Type:        "grpc",
+					ServiceName: vc.ServiceName(),
+				}
+			case "h2":
+				dto.Transport = &OutboundTransportDTO{
+					Type: "http",
+					Path: vc.Path(),
+				}
+				if vc.Host() != "" {
+					dto.Transport.Headers = map[string]string{"Host": vc.Host()}
+				}
+			}
+		}
+
+	case n.Protocol().IsVMess():
+		dto.Type = "vmess"
+		dto.UUID = serverKey // For VMess, serverKey contains the user UUID
+
+		if n.VMessConfig() != nil {
+			vc := n.VMessConfig()
+
+			// VMess specific fields
+			dto.VMessAlterID = vc.AlterID()
+			dto.VMessSecurity = vc.Security()
+
+			// TLS configuration
+			if vc.TLS() {
+				dto.TLS = &OutboundTLSDTO{
+					Enabled:    true,
+					ServerName: vc.SNI(),
+					Insecure:   vc.AllowInsecure(),
+				}
+			}
+
+			// Transport configuration for ws/grpc/http
+			switch vc.TransportType() {
+			case "ws":
+				dto.Transport = &OutboundTransportDTO{
+					Type: "ws",
+					Path: vc.Path(),
+				}
+				if vc.Host() != "" {
+					dto.Transport.Headers = map[string]string{"Host": vc.Host()}
+				}
+			case "grpc":
+				dto.Transport = &OutboundTransportDTO{
+					Type:        "grpc",
+					ServiceName: vc.ServiceName(),
+				}
+			case "http":
+				dto.Transport = &OutboundTransportDTO{
+					Type: "http",
+					Path: vc.Path(),
+				}
+				if vc.Host() != "" {
+					dto.Transport.Headers = map[string]string{"Host": vc.Host()}
+				}
+			}
+		}
+
+	case n.Protocol().IsHysteria2():
+		dto.Type = "hysteria2"
+		dto.Password = serverKey // For Hysteria2, serverKey is the password
+
+		if n.Hysteria2Config() != nil {
+			hc := n.Hysteria2Config()
+
+			// Hysteria2 specific fields
+			dto.Hysteria2Obfs = hc.Obfs()
+			dto.Hysteria2ObfsPassword = hc.ObfsPassword()
+			dto.Hysteria2UpMbps = hc.UpMbps()
+			dto.Hysteria2DownMbps = hc.DownMbps()
+
+			// TLS configuration
+			dto.TLS = &OutboundTLSDTO{
+				Enabled:    true,
+				ServerName: hc.SNI(),
+				Insecure:   hc.AllowInsecure(),
+			}
+		}
+
+	case n.Protocol().IsTUIC():
+		dto.Type = "tuic"
+		dto.UUID = serverKey // For TUIC, serverKey contains the UUID
+
+		if n.TUICConfig() != nil {
+			tc := n.TUICConfig()
+
+			// TUIC password (separate from UUID)
+			dto.Password = tc.Password()
+
+			// TUIC specific fields
+			dto.TUICCongestionControl = tc.CongestionControl()
+			dto.TUICUDPRelayMode = tc.UDPRelayMode()
+
+			// TLS configuration
+			dto.TLS = &OutboundTLSDTO{
+				Enabled:    true,
+				ServerName: tc.SNI(),
+				Insecure:   tc.AllowInsecure(),
+				DisableSNI: tc.DisableSNI(),
+			}
+			if tc.ALPN() != "" {
+				dto.TLS.ALPN = []string{tc.ALPN()}
 			}
 		}
 	}

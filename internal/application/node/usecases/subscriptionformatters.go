@@ -8,7 +8,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/orris-inc/orris/internal/domain/node/valueobjects"
+	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
 	"gopkg.in/yaml.v3"
 )
 
@@ -22,7 +22,7 @@ func adjustPasswordForMethod(password string, method string, tokenHash string) s
 	}
 
 	// Traditional SS: keep hex format
-	if !valueobjects.IsSS2022Method(method) {
+	if !vo.IsSS2022Method(method) {
 		return password
 	}
 
@@ -32,7 +32,7 @@ func adjustPasswordForMethod(password string, method string, tokenHash string) s
 		return password
 	}
 
-	keySize := valueobjects.GetSS2022KeySize(method)
+	keySize := vo.GetSS2022KeySize(method)
 	if keySize == 0 || keySize > len(keyMaterial) {
 		return password
 	}
@@ -41,7 +41,7 @@ func adjustPasswordForMethod(password string, method string, tokenHash string) s
 	userKey := base64.StdEncoding.EncodeToString(keyMaterial[:keySize])
 
 	// Generate server key from tokenHash
-	serverKey := valueobjects.GenerateSS2022ServerKey(tokenHash, method)
+	serverKey := vo.GenerateSS2022ServerKey(tokenHash, method)
 	if serverKey == "" {
 		// Fallback to user key only if no server key available
 		return userKey
@@ -67,10 +67,34 @@ func (f *Base64Formatter) FormatWithPassword(nodes []*Node, password string) (st
 	for _, node := range nodes {
 		var link string
 
-		if node.Protocol == "trojan" {
+		switch vo.Protocol(node.Protocol) {
+		case vo.ProtocolTrojan:
 			link = node.ToTrojanURI(password)
-		} else {
-			// Adjust password for SS2022 methods
+		case vo.ProtocolVLESS:
+			if node.VLESSConfig != nil {
+				// Use password as UUID for VLESS
+				link = node.VLESSConfig.ToURI(password, node.ServerAddress, node.SubscriptionPort, node.Name)
+			}
+		case vo.ProtocolVMess:
+			if node.VMessConfig != nil {
+				// Use password as UUID for VMess
+				uri, err := node.VMessConfig.ToURI(node.ServerAddress, node.SubscriptionPort, password, node.Name)
+				if err == nil {
+					link = uri
+				}
+			}
+		case vo.ProtocolHysteria2:
+			if node.Hysteria2Config != nil {
+				// Hysteria2 password is already in the config
+				link = node.Hysteria2Config.ToURI(node.ServerAddress, node.SubscriptionPort, node.Name)
+			}
+		case vo.ProtocolTUIC:
+			if node.TUICConfig != nil {
+				// TUIC uuid/password are already in the config
+				link = node.TUICConfig.ToURI(node.ServerAddress, node.SubscriptionPort, node.Name)
+			}
+		default:
+			// Shadowsocks: adjust password for SS2022 methods
 			nodePassword := adjustPasswordForMethod(password, node.EncryptionMethod, node.TokenHash)
 
 			// Shadowsocks URI format: ss://base64(method:password)@host:port#remarks
@@ -94,7 +118,9 @@ func (f *Base64Formatter) FormatWithPassword(nodes []*Node, password string) (st
 			}
 		}
 
-		links = append(links, link)
+		if link != "" {
+			links = append(links, link)
+		}
 	}
 
 	content := strings.Join(links, "\n")
@@ -117,8 +143,8 @@ type clashProxy struct {
 	Server         string            `yaml:"server"`
 	Port           uint16            `yaml:"port"`
 	Cipher         string            `yaml:"cipher,omitempty"`
-	Password       string            `yaml:"password"`
-	UDP            bool              `yaml:"udp"`
+	Password       string            `yaml:"password,omitempty"`
+	UDP            bool              `yaml:"udp,omitempty"`
 	Plugin         string            `yaml:"plugin,omitempty"`
 	PluginOpts     map[string]string `yaml:"plugin-opts,omitempty"`
 	SNI            string            `yaml:"sni,omitempty"`
@@ -126,6 +152,24 @@ type clashProxy struct {
 	Network        string            `yaml:"network,omitempty"`
 	WSOpts         *clashWSOpts      `yaml:"ws-opts,omitempty"`
 	GRPCOpts       *clashGRPCOpts    `yaml:"grpc-opts,omitempty"`
+	H2Opts         *clashH2Opts      `yaml:"h2-opts,omitempty"`
+	// VLESS/VMess specific fields
+	UUID        string            `yaml:"uuid,omitempty"`
+	Flow        string            `yaml:"flow,omitempty"`
+	TLS         bool              `yaml:"tls,omitempty"`
+	Fingerprint string            `yaml:"client-fingerprint,omitempty"`
+	AlterID     int               `yaml:"alterId,omitempty"`
+	RealityOpts *clashRealityOpts `yaml:"reality-opts,omitempty"`
+	// Hysteria2 specific fields
+	Obfs         string `yaml:"obfs,omitempty"`
+	ObfsPassword string `yaml:"obfs-password,omitempty"`
+	Up           string `yaml:"up,omitempty"`
+	Down         string `yaml:"down,omitempty"`
+	// TUIC specific fields
+	CongestionController string   `yaml:"congestion-controller,omitempty"`
+	UDPRelayMode         string   `yaml:"udp-relay-mode,omitempty"`
+	ALPN                 []string `yaml:"alpn,omitempty"`
+	DisableSNI           bool     `yaml:"disable-sni,omitempty"`
 }
 
 type clashWSOpts struct {
@@ -133,8 +177,18 @@ type clashWSOpts struct {
 	Headers map[string]string `yaml:"headers,omitempty"`
 }
 
+type clashH2Opts struct {
+	Host []string `yaml:"host,omitempty"`
+	Path string   `yaml:"path,omitempty"`
+}
+
 type clashGRPCOpts struct {
 	GRPCServiceName string `yaml:"grpc-service-name,omitempty"`
+}
+
+type clashRealityOpts struct {
+	PublicKey string `yaml:"public-key,omitempty"`
+	ShortID   string `yaml:"short-id,omitempty"`
 }
 
 type clashConfig struct {
@@ -153,7 +207,8 @@ func (f *ClashFormatter) FormatWithPassword(nodes []*Node, password string) (str
 	for _, node := range nodes {
 		var proxy clashProxy
 
-		if node.Protocol == "trojan" {
+		switch vo.Protocol(node.Protocol) {
+		case vo.ProtocolTrojan:
 			proxy = clashProxy{
 				Name:           node.Name,
 				Type:           "trojan",
@@ -183,8 +238,29 @@ func (f *ClashFormatter) FormatWithPassword(nodes []*Node, password string) (str
 					GRPCServiceName: node.Host,
 				}
 			}
-		} else {
-			// Adjust password for SS2022 methods
+
+		case vo.ProtocolVLESS:
+			if node.VLESSConfig != nil {
+				proxy = f.buildVLESSProxy(node, password)
+			}
+
+		case vo.ProtocolVMess:
+			if node.VMessConfig != nil {
+				proxy = f.buildVMessProxy(node, password)
+			}
+
+		case vo.ProtocolHysteria2:
+			if node.Hysteria2Config != nil {
+				proxy = f.buildHysteria2Proxy(node)
+			}
+
+		case vo.ProtocolTUIC:
+			if node.TUICConfig != nil {
+				proxy = f.buildTUICProxy(node)
+			}
+
+		default:
+			// Shadowsocks: adjust password for SS2022 methods
 			nodePassword := adjustPasswordForMethod(password, node.EncryptionMethod, node.TokenHash)
 
 			proxy = clashProxy{
@@ -203,7 +279,10 @@ func (f *ClashFormatter) FormatWithPassword(nodes []*Node, password string) (str
 			}
 		}
 
-		config.Proxies = append(config.Proxies, proxy)
+		// Only append non-empty proxy
+		if proxy.Type != "" {
+			config.Proxies = append(config.Proxies, proxy)
+		}
 	}
 
 	yamlBytes, err := yaml.Marshal(config)
@@ -212,6 +291,189 @@ func (f *ClashFormatter) FormatWithPassword(nodes []*Node, password string) (str
 	}
 
 	return string(yamlBytes), nil
+}
+
+// buildVLESSProxy builds a Clash Meta VLESS proxy configuration
+func (f *ClashFormatter) buildVLESSProxy(node *Node, uuid string) clashProxy {
+	cfg := node.VLESSConfig
+	proxy := clashProxy{
+		Name:           node.Name,
+		Type:           "vless",
+		Server:         node.ServerAddress,
+		Port:           node.SubscriptionPort,
+		UUID:           uuid,
+		UDP:            true,
+		Network:        cfg.TransportType(),
+		SkipCertVerify: cfg.AllowInsecure(),
+	}
+
+	// Set flow control
+	if cfg.Flow() != "" {
+		proxy.Flow = cfg.Flow()
+	}
+
+	// Set TLS/Reality security
+	switch cfg.Security() {
+	case vo.VLESSSecurityTLS:
+		proxy.TLS = true
+		if cfg.SNI() != "" {
+			proxy.SNI = cfg.SNI()
+		}
+		if cfg.Fingerprint() != "" {
+			proxy.Fingerprint = cfg.Fingerprint()
+		}
+	case vo.VLESSSecurityReality:
+		proxy.TLS = true
+		if cfg.SNI() != "" {
+			proxy.SNI = cfg.SNI()
+		}
+		if cfg.Fingerprint() != "" {
+			proxy.Fingerprint = cfg.Fingerprint()
+		}
+		proxy.RealityOpts = &clashRealityOpts{
+			PublicKey: cfg.PublicKey(),
+			ShortID:   cfg.ShortID(),
+		}
+	}
+
+	// Set transport-specific options
+	switch cfg.TransportType() {
+	case vo.VLESSTransportWS:
+		proxy.WSOpts = &clashWSOpts{
+			Path: cfg.Path(),
+		}
+		if cfg.Host() != "" {
+			proxy.WSOpts.Headers = map[string]string{
+				"Host": cfg.Host(),
+			}
+		}
+	case vo.VLESSTransportGRPC:
+		proxy.GRPCOpts = &clashGRPCOpts{
+			GRPCServiceName: cfg.ServiceName(),
+		}
+	case vo.VLESSTransportH2:
+		proxy.H2Opts = &clashH2Opts{
+			Path: cfg.Path(),
+		}
+		if cfg.Host() != "" {
+			proxy.H2Opts.Host = []string{cfg.Host()}
+		}
+	}
+
+	return proxy
+}
+
+// buildVMessProxy builds a Clash Meta VMess proxy configuration
+func (f *ClashFormatter) buildVMessProxy(node *Node, uuid string) clashProxy {
+	cfg := node.VMessConfig
+	proxy := clashProxy{
+		Name:           node.Name,
+		Type:           "vmess",
+		Server:         node.ServerAddress,
+		Port:           node.SubscriptionPort,
+		UUID:           uuid,
+		AlterID:        cfg.AlterID(),
+		Cipher:         cfg.Security(),
+		UDP:            true,
+		Network:        cfg.TransportType(),
+		TLS:            cfg.TLS(),
+		SkipCertVerify: cfg.AllowInsecure(),
+	}
+
+	if cfg.SNI() != "" {
+		proxy.SNI = cfg.SNI()
+	}
+
+	// Set transport-specific options
+	switch cfg.TransportType() {
+	case vo.VMessTransportWS:
+		proxy.WSOpts = &clashWSOpts{
+			Path: cfg.Path(),
+		}
+		if cfg.Host() != "" {
+			proxy.WSOpts.Headers = map[string]string{
+				"Host": cfg.Host(),
+			}
+		}
+	case vo.VMessTransportHTTP:
+		proxy.H2Opts = &clashH2Opts{
+			Path: cfg.Path(),
+		}
+		if cfg.Host() != "" {
+			proxy.H2Opts.Host = []string{cfg.Host()}
+		}
+	case vo.VMessTransportGRPC:
+		proxy.GRPCOpts = &clashGRPCOpts{
+			GRPCServiceName: cfg.ServiceName(),
+		}
+	}
+
+	return proxy
+}
+
+// buildHysteria2Proxy builds a Clash Meta Hysteria2 proxy configuration
+func (f *ClashFormatter) buildHysteria2Proxy(node *Node) clashProxy {
+	cfg := node.Hysteria2Config
+	proxy := clashProxy{
+		Name:           node.Name,
+		Type:           "hysteria2",
+		Server:         node.ServerAddress,
+		Port:           node.SubscriptionPort,
+		Password:       cfg.Password(),
+		SkipCertVerify: cfg.AllowInsecure(),
+	}
+
+	if cfg.SNI() != "" {
+		proxy.SNI = cfg.SNI()
+	}
+
+	if cfg.Obfs() != "" {
+		proxy.Obfs = cfg.Obfs()
+		if cfg.ObfsPassword() != "" {
+			proxy.ObfsPassword = cfg.ObfsPassword()
+		}
+	}
+
+	// Bandwidth limits (Clash Meta uses string format with unit)
+	if cfg.UpMbps() != nil {
+		proxy.Up = fmt.Sprintf("%d Mbps", *cfg.UpMbps())
+	}
+	if cfg.DownMbps() != nil {
+		proxy.Down = fmt.Sprintf("%d Mbps", *cfg.DownMbps())
+	}
+
+	if cfg.Fingerprint() != "" {
+		proxy.Fingerprint = cfg.Fingerprint()
+	}
+
+	return proxy
+}
+
+// buildTUICProxy builds a Clash Meta TUIC proxy configuration
+func (f *ClashFormatter) buildTUICProxy(node *Node) clashProxy {
+	cfg := node.TUICConfig
+	proxy := clashProxy{
+		Name:                 node.Name,
+		Type:                 "tuic",
+		Server:               node.ServerAddress,
+		Port:                 node.SubscriptionPort,
+		UUID:                 cfg.UUID(),
+		Password:             cfg.Password(),
+		CongestionController: cfg.CongestionControl(),
+		UDPRelayMode:         cfg.UDPRelayMode(),
+		SkipCertVerify:       cfg.AllowInsecure(),
+		DisableSNI:           cfg.DisableSNI(),
+	}
+
+	if cfg.SNI() != "" {
+		proxy.SNI = cfg.SNI()
+	}
+
+	if cfg.ALPN() != "" {
+		proxy.ALPN = strings.Split(cfg.ALPN(), ",")
+	}
+
+	return proxy
 }
 
 func (f *ClashFormatter) ContentType() string {
@@ -240,12 +502,12 @@ func (f *V2RayFormatter) Format(nodes []*Node) (string, error) {
 
 func (f *V2RayFormatter) FormatWithPassword(nodes []*Node, password string) (string, error) {
 	v2rayNodes := make([]v2rayNode, 0, len(nodes))
-	skippedTrojanCount := 0
+	skippedCount := 0
 
 	for _, node := range nodes {
-		// V2Ray format only supports Shadowsocks, skip Trojan nodes
-		if node.Protocol == "trojan" {
-			skippedTrojanCount++
+		// V2Ray format only supports Shadowsocks, skip other protocol nodes
+		if vo.Protocol(node.Protocol) != vo.ProtocolShadowsocks {
+			skippedCount++
 			continue
 		}
 
@@ -268,9 +530,9 @@ func (f *V2RayFormatter) FormatWithPassword(nodes []*Node, password string) (str
 		v2rayNodes = append(v2rayNodes, v2rayNode)
 	}
 
-	// Return error if all nodes were Trojan (V2Ray format doesn't support Trojan)
-	if len(v2rayNodes) == 0 && skippedTrojanCount > 0 {
-		return "", fmt.Errorf("v2ray format does not support Trojan protocol, please use base64 or clash format instead")
+	// Return error if all nodes were non-Shadowsocks (V2Ray format only supports Shadowsocks)
+	if len(v2rayNodes) == 0 && skippedCount > 0 {
+		return "", fmt.Errorf("v2ray format only supports Shadowsocks protocol, please use base64 or clash format instead")
 	}
 
 	jsonBytes, err := json.MarshalIndent(v2rayNodes, "", "  ")
@@ -316,12 +578,12 @@ func (f *SIP008Formatter) FormatWithPassword(nodes []*Node, password string) (st
 		Version: 1,
 		Servers: make([]sip008Server, 0, len(nodes)),
 	}
-	skippedTrojanCount := 0
+	skippedCount := 0
 
 	for _, node := range nodes {
-		// SIP008 format only supports Shadowsocks, skip Trojan nodes
-		if node.Protocol == "trojan" {
-			skippedTrojanCount++
+		// SIP008 format only supports Shadowsocks, skip other protocol nodes
+		if vo.Protocol(node.Protocol) != vo.ProtocolShadowsocks {
+			skippedCount++
 			continue
 		}
 
@@ -345,9 +607,9 @@ func (f *SIP008Formatter) FormatWithPassword(nodes []*Node, password string) (st
 		config.Servers = append(config.Servers, server)
 	}
 
-	// Return error if all nodes were Trojan (SIP008 format doesn't support Trojan)
-	if len(config.Servers) == 0 && skippedTrojanCount > 0 {
-		return "", fmt.Errorf("sip008 format does not support Trojan protocol, please use base64 or clash format instead")
+	// Return error if all nodes were non-Shadowsocks (SIP008 format only supports Shadowsocks)
+	if len(config.Servers) == 0 && skippedCount > 0 {
+		return "", fmt.Errorf("sip008 format only supports Shadowsocks protocol, please use base64 or clash format instead")
 	}
 
 	jsonBytes, err := json.MarshalIndent(config, "", "  ")
@@ -380,7 +642,8 @@ func (f *SurgeFormatter) FormatWithPassword(nodes []*Node, password string) (str
 		nodeName := node.Name
 		var line string
 
-		if node.Protocol == "trojan" {
+		switch vo.Protocol(node.Protocol) {
+		case vo.ProtocolTrojan:
 			// Surge Trojan format
 			line = fmt.Sprintf("%s = trojan, %s, %d, password=%s",
 				nodeName,
@@ -406,8 +669,28 @@ func (f *SurgeFormatter) FormatWithPassword(nodes []*Node, password string) (str
 					line += fmt.Sprintf(", ws-headers=Host:%s", node.Host)
 				}
 			}
-		} else {
-			// Adjust password for SS2022 methods
+
+		case vo.ProtocolVLESS:
+			// Surge 5 doesn't support VLESS natively, skip
+			continue
+
+		case vo.ProtocolVMess:
+			if node.VMessConfig != nil {
+				line = f.buildVMessLine(node, password)
+			}
+
+		case vo.ProtocolHysteria2:
+			if node.Hysteria2Config != nil {
+				line = f.buildHysteria2Line(node)
+			}
+
+		case vo.ProtocolTUIC:
+			if node.TUICConfig != nil {
+				line = f.buildTUICLine(node)
+			}
+
+		default:
+			// Shadowsocks: adjust password for SS2022 methods
 			nodePassword := adjustPasswordForMethod(password, node.EncryptionMethod, node.TokenHash)
 
 			// Shadowsocks format
@@ -428,10 +711,107 @@ func (f *SurgeFormatter) FormatWithPassword(nodes []*Node, password string) (str
 			}
 		}
 
-		lines = append(lines, line)
+		if line != "" {
+			lines = append(lines, line)
+		}
 	}
 
 	return strings.Join(lines, "\n"), nil
+}
+
+// buildVMessLine builds a Surge 5 VMess proxy line
+func (f *SurgeFormatter) buildVMessLine(node *Node, uuid string) string {
+	cfg := node.VMessConfig
+
+	// Surge VMess format: name = vmess, server, port, username=uuid, encrypt-method=auto
+	line := fmt.Sprintf("%s = vmess, %s, %d, username=%s, encrypt-method=%s",
+		node.Name,
+		node.ServerAddress,
+		node.SubscriptionPort,
+		uuid,
+		cfg.Security())
+
+	// Add TLS settings
+	if cfg.TLS() {
+		line += ", tls=true"
+		if cfg.SNI() != "" {
+			line += fmt.Sprintf(", sni=%s", cfg.SNI())
+		}
+		if cfg.AllowInsecure() {
+			line += ", skip-cert-verify=true"
+		}
+	}
+
+	// Handle transport
+	switch cfg.TransportType() {
+	case vo.VMessTransportWS:
+		line += ", ws=true"
+		if cfg.Path() != "" {
+			line += fmt.Sprintf(", ws-path=%s", cfg.Path())
+		}
+		if cfg.Host() != "" {
+			line += fmt.Sprintf(", ws-headers=Host:%s", cfg.Host())
+		}
+	}
+
+	return line
+}
+
+// buildHysteria2Line builds a Surge 5 Hysteria2 proxy line
+func (f *SurgeFormatter) buildHysteria2Line(node *Node) string {
+	cfg := node.Hysteria2Config
+
+	// Surge Hysteria2 format: name = hysteria2, server, port, password=xxx
+	line := fmt.Sprintf("%s = hysteria2, %s, %d, password=%s",
+		node.Name,
+		node.ServerAddress,
+		node.SubscriptionPort,
+		cfg.Password())
+
+	if cfg.SNI() != "" {
+		line += fmt.Sprintf(", sni=%s", cfg.SNI())
+	}
+
+	if cfg.AllowInsecure() {
+		line += ", skip-cert-verify=true"
+	}
+
+	// Bandwidth limits
+	if cfg.DownMbps() != nil {
+		line += fmt.Sprintf(", download-bandwidth=%d", *cfg.DownMbps())
+	}
+
+	return line
+}
+
+// buildTUICLine builds a Surge 5 TUIC proxy line
+func (f *SurgeFormatter) buildTUICLine(node *Node) string {
+	cfg := node.TUICConfig
+
+	// Surge TUIC format: name = tuic, server, port, token=uuid, password=xxx
+	line := fmt.Sprintf("%s = tuic, %s, %d, token=%s",
+		node.Name,
+		node.ServerAddress,
+		node.SubscriptionPort,
+		cfg.UUID())
+
+	if cfg.Password() != "" {
+		line += fmt.Sprintf(", password=%s", cfg.Password())
+	}
+
+	if cfg.SNI() != "" {
+		line += fmt.Sprintf(", sni=%s", cfg.SNI())
+	}
+
+	if cfg.AllowInsecure() {
+		line += ", skip-cert-verify=true"
+	}
+
+	if cfg.ALPN() != "" {
+		line += fmt.Sprintf(", alpn=%s", cfg.ALPN())
+	}
+
+	return line
 }
 
 func (f *SurgeFormatter) ContentType() string {

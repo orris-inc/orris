@@ -17,10 +17,11 @@ type RenewSubscriptionCommand struct {
 }
 
 type RenewSubscriptionUseCase struct {
-	subscriptionRepo subscription.SubscriptionRepository
-	planRepo         subscription.PlanRepository
-	pricingRepo      subscription.PlanPricingRepository
-	logger           logger.Interface
+	subscriptionRepo     subscription.SubscriptionRepository
+	planRepo             subscription.PlanRepository
+	pricingRepo          subscription.PlanPricingRepository
+	subscriptionNotifier SubscriptionChangeNotifier // Optional: for notifying node agents
+	logger               logger.Interface
 }
 
 func NewRenewSubscriptionUseCase(
@@ -35,6 +36,11 @@ func NewRenewSubscriptionUseCase(
 		pricingRepo:      pricingRepo,
 		logger:           logger,
 	}
+}
+
+// SetSubscriptionNotifier sets the subscription change notifier (optional).
+func (uc *RenewSubscriptionUseCase) SetSubscriptionNotifier(notifier SubscriptionChangeNotifier) {
+	uc.subscriptionNotifier = notifier
 }
 
 func (uc *RenewSubscriptionUseCase) Execute(ctx context.Context, cmd RenewSubscriptionCommand) error {
@@ -95,6 +101,18 @@ func (uc *RenewSubscriptionUseCase) Execute(ctx context.Context, cmd RenewSubscr
 		"new_end_date", newEndDate,
 		"status", sub.Status(),
 	)
+
+	// Notify node agents about the renewed subscription (updated expiry)
+	if uc.subscriptionNotifier != nil {
+		notifyCtx := context.Background()
+		if err := uc.subscriptionNotifier.NotifySubscriptionUpdate(notifyCtx, sub); err != nil {
+			// Log error but don't fail the renewal
+			uc.logger.Warnw("failed to notify nodes of subscription renewal",
+				"subscription_id", cmd.SubscriptionID,
+				"error", err,
+			)
+		}
+	}
 
 	return nil
 }

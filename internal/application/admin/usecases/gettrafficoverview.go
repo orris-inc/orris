@@ -73,18 +73,19 @@ func (uc *GetTrafficOverviewUseCase) Execute(
 	// Adjust 'to' time to end of day to include all records from that day
 	adjustedTo := biztime.EndOfDayUTC(query.To)
 
-	// Calculate today's boundary in business timezone
+	// Calculate time boundaries
 	now := biztime.NowUTC()
-	todayStart := biztime.StartOfDayUTC(now)
+	// Redis stores data for the last 48 hours
+	redisDataStart := now.Add(-48 * time.Hour)
 
 	var totalUpload, totalDownload, totalTraffic uint64
 
-	// Check if query range includes today (unaggregated data)
-	if !adjustedTo.Before(todayStart) {
-		// Query includes today - need to get Redis data for today
-		redisFrom := todayStart
-		if query.From.After(todayStart) {
-			redisFrom = query.From
+	// Check if query range overlaps with Redis data window (last 48 hours)
+	if !adjustedTo.Before(redisDataStart) {
+		// Query overlaps with Redis data window - get data from Redis
+		redisFrom := query.From
+		if redisFrom.Before(redisDataStart) {
+			redisFrom = redisDataStart
 		}
 
 		resourceType := ""
@@ -94,14 +95,14 @@ func (uc *GetTrafficOverviewUseCase) Execute(
 
 		redisTraffic, err := uc.hourlyTrafficCache.GetPlatformTotalTraffic(ctx, resourceType, redisFrom, adjustedTo)
 		if err != nil {
-			uc.logger.Warnw("failed to get today's traffic from Redis, continuing with MySQL only",
+			uc.logger.Warnw("failed to get traffic from Redis, continuing with MySQL only",
 				"error", err,
 			)
 		} else {
 			totalUpload += redisTraffic.Upload
 			totalDownload += redisTraffic.Download
 			totalTraffic += redisTraffic.Total
-			uc.logger.Debugw("got today's traffic from Redis",
+			uc.logger.Debugw("got traffic from Redis",
 				"redis_from", redisFrom,
 				"redis_to", adjustedTo,
 				"upload", redisTraffic.Upload,
@@ -110,15 +111,15 @@ func (uc *GetTrafficOverviewUseCase) Execute(
 		}
 	}
 
-	// Get historical data from MySQL (exclude today if query includes today)
+	// Get historical data from MySQL (data older than 48 hours)
 	mysqlTo := adjustedTo
-	if !adjustedTo.Before(todayStart) && !query.From.After(todayStart) {
-		// Query spans both historical and today - only query MySQL for historical data
-		mysqlTo = todayStart.Add(-time.Nanosecond)
+	if !adjustedTo.Before(redisDataStart) && !query.From.After(redisDataStart) {
+		// Query spans both historical and Redis window - only query MySQL for data before Redis window
+		mysqlTo = redisDataStart.Add(-time.Nanosecond)
 	}
 
-	// Only query MySQL if there's a valid historical range
-	if query.From.Before(todayStart) && mysqlTo.After(query.From) {
+	// Only query MySQL if there's a valid historical range (before Redis data window)
+	if query.From.Before(redisDataStart) && mysqlTo.After(query.From) {
 		totalUsage, err := uc.usageStatsRepo.GetPlatformTotalUsageByResourceType(ctx, query.ResourceType, query.From, mysqlTo)
 		if err != nil {
 			uc.logger.Errorw("failed to fetch platform total usage", "error", err)

@@ -31,13 +31,14 @@ type CreateSubscriptionResult struct {
 }
 
 type CreateSubscriptionUseCase struct {
-	subscriptionRepo subscription.SubscriptionRepository
-	planRepo         subscription.PlanRepository
-	tokenRepo        subscription.SubscriptionTokenRepository
-	pricingRepo      subscription.PlanPricingRepository
-	userRepo         user.Repository
-	tokenGenerator   TokenGenerator
-	logger           logger.Interface
+	subscriptionRepo     subscription.SubscriptionRepository
+	planRepo             subscription.PlanRepository
+	tokenRepo            subscription.SubscriptionTokenRepository
+	pricingRepo          subscription.PlanPricingRepository
+	userRepo             user.Repository
+	tokenGenerator       TokenGenerator
+	subscriptionNotifier SubscriptionChangeNotifier // Optional: for notifying node agents
+	logger               logger.Interface
 }
 
 func NewCreateSubscriptionUseCase(
@@ -58,6 +59,11 @@ func NewCreateSubscriptionUseCase(
 		tokenGenerator:   tokenGenerator,
 		logger:           logger,
 	}
+}
+
+// SetSubscriptionNotifier sets the subscription change notifier (optional).
+func (uc *CreateSubscriptionUseCase) SetSubscriptionNotifier(notifier SubscriptionChangeNotifier) {
+	uc.subscriptionNotifier = notifier
 }
 
 func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, cmd CreateSubscriptionCommand) (*CreateSubscriptionResult, error) {
@@ -179,6 +185,18 @@ func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, cmd CreateSubs
 			return nil, fmt.Errorf("failed to update subscription: %w", err)
 		}
 		uc.logger.Infow("subscription activated immediately", "subscription_id", sub.ID())
+
+		// Notify node agents about the new active subscription
+		if uc.subscriptionNotifier != nil {
+			notifyCtx := context.Background()
+			if err := uc.subscriptionNotifier.NotifySubscriptionActivation(notifyCtx, sub); err != nil {
+				// Log error but don't fail the subscription creation
+				uc.logger.Warnw("failed to notify nodes of subscription activation",
+					"subscription_id", sub.ID(),
+					"error", err,
+				)
+			}
+		}
 	}
 
 	// Create default token - this is critical for subscription usability

@@ -147,7 +147,7 @@ type Node struct {
 	Name             string
 	ServerAddress    string
 	SubscriptionPort uint16 // port for client subscriptions (effective port)
-	Protocol         string // shadowsocks, trojan
+	Protocol         string // shadowsocks, trojan, vless, vmess, hysteria2, tuic
 	EncryptionMethod string // for shadowsocks
 	TokenHash        string // Node token hash for SS2022 ServerKey derivation
 	Password         string
@@ -159,6 +159,11 @@ type Node struct {
 	Path              string // WebSocket path
 	SNI               string // TLS Server Name Indication
 	AllowInsecure     bool   // Allow insecure TLS connection
+	// New protocol specific fields
+	VLESSConfig     *valueobjects.VLESSConfig
+	VMessConfig     *valueobjects.VMessConfig
+	Hysteria2Config *valueobjects.Hysteria2Config
+	TUICConfig      *valueobjects.TUICConfig
 }
 
 // ToTrojanURI generates a Trojan URI string for subscription
