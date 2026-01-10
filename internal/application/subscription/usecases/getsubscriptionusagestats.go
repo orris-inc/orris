@@ -172,11 +172,6 @@ func (uc *GetSubscriptionUsageStatsUseCase) executeWithTrendAggregation(
 	return response, nil
 }
 
-// isWithinHourlyDataWindow checks if the given time is within the hourly data retention window.
-func isWithinHourlyDataWindow(t time.Time) bool {
-	return time.Since(t) <= maxHourlyDataHours*time.Hour
-}
-
 // hourlyRecordKey uniquely identifies an hourly traffic record by resource and time.
 type hourlyRecordKey struct {
 	resourceType string
@@ -190,16 +185,23 @@ func (uc *GetSubscriptionUsageStatsUseCase) getHourlyTrendFromRedis(
 	ctx context.Context,
 	query GetSubscriptionUsageStatsQuery,
 ) ([]*SubscriptionUsageStatsRecord, error) {
-	// Validate time range - hourly data only available for last 48 hours
-	if !isWithinHourlyDataWindow(query.From) {
-		uc.logger.Warnw("hourly data requested beyond retention window",
+	// Adjust time range if from is beyond retention window
+	now := biztime.NowUTC()
+	retentionBoundary := now.Add(-maxHourlyDataHours * time.Hour)
+	adjustedFrom := query.From
+	if adjustedFrom.Before(retentionBoundary) {
+		uc.logger.Infow("hourly data requested beyond retention window, adjusting from time",
 			"subscription_id", query.SubscriptionID,
-			"from", query.From,
+			"original_from", query.From,
+			"adjusted_from", retentionBoundary,
 			"hours_ago", time.Since(query.From).Hours(),
 			"max_hours", maxHourlyDataHours,
 		)
-		return nil, errors.NewValidationError("hourly data only available for the last 48 hours")
+		adjustedFrom = retentionBoundary
 	}
+
+	// Update query with adjusted from time
+	query.From = adjustedFrom
 
 	// Discover active resources for this subscription from recent daily stats
 	resourceSet, err := uc.discoverActiveResources(ctx, query.SubscriptionID)
@@ -242,29 +244,39 @@ type resourceKey struct {
 }
 
 // discoverActiveResources finds resources with recent traffic for a subscription.
-// It looks back 48 hours to ensure we capture all active resources.
+// It discovers resources directly from Redis hourly cache (last 48 hours).
 func (uc *GetSubscriptionUsageStatsUseCase) discoverActiveResources(
 	ctx context.Context,
 	subscriptionID uint,
 ) (map[resourceKey]struct{}, error) {
 	now := biztime.NowUTC()
-	lookbackStart := now.Add(-48 * time.Hour)
-
-	dailyStats, err := uc.usageStatsRepo.GetBySubscriptionID(
-		ctx, subscriptionID, subscription.GranularityDaily,
-		lookbackStart, now,
-	)
-	if err != nil {
-		return nil, err
-	}
+	lookbackStart := now.Add(-maxHourlyDataHours * time.Hour)
 
 	resourceSet := make(map[resourceKey]struct{})
-	for _, stat := range dailyStats {
-		resourceSet[resourceKey{
-			resourceType: stat.ResourceType(),
-			resourceID:   stat.ResourceID(),
-		}] = struct{}{}
+
+	// Discover from Redis hourly cache (real-time data within 48 hours)
+	hourlyData, err := uc.hourlyCache.GetAllHourlyTrafficBatch(ctx, lookbackStart, now)
+	if err != nil {
+		uc.logger.Warnw("failed to get hourly traffic batch for resource discovery",
+			"subscription_id", subscriptionID,
+			"error", err,
+		)
+		return resourceSet, nil
 	}
+
+	for _, data := range hourlyData {
+		if data.SubscriptionID == subscriptionID {
+			resourceSet[resourceKey{
+				resourceType: data.ResourceType,
+				resourceID:   data.ResourceID,
+			}] = struct{}{}
+		}
+	}
+
+	uc.logger.Debugw("discovered active resources for subscription from Redis",
+		"subscription_id", subscriptionID,
+		"resource_count", len(resourceSet),
+	)
 
 	return resourceSet, nil
 }
@@ -352,24 +364,185 @@ func (uc *GetSubscriptionUsageStatsUseCase) populateSIDsForHourlyRecords(
 	}
 }
 
-// getDailyTrendFromStats retrieves daily trend data from MySQL subscription_usage_stats table.
+// dailyRecordKey uniquely identifies a daily traffic record by resource and day.
+type dailyRecordKey struct {
+	resourceType string
+	resourceID   uint
+	day          time.Time
+}
+
+// getDailyTrendFromStats retrieves daily trend data by combining:
+// - Redis HourlyTrafficCache for recent data (last 48 hours)
+// - MySQL subscription_usage_stats table for historical data
 func (uc *GetSubscriptionUsageStatsUseCase) getDailyTrendFromStats(
 	ctx context.Context,
 	query GetSubscriptionUsageStatsQuery,
 ) ([]*SubscriptionUsageStatsRecord, error) {
-	stats, err := uc.usageStatsRepo.GetBySubscriptionID(
-		ctx, query.SubscriptionID, subscription.GranularityDaily,
-		query.From, query.To,
-	)
-	if err != nil {
-		uc.logger.Errorw("failed to fetch daily stats from subscription_usage_stats",
-			"subscription_id", query.SubscriptionID,
-			"error", err,
-		)
-		return nil, errors.NewInternalError("failed to fetch daily usage statistics")
+	now := biztime.NowUTC()
+	retentionBoundary := now.Add(-maxHourlyDataHours * time.Hour)
+
+	// Determine if query overlaps with Redis data window (last 48 hours)
+	includesRedisWindow := !query.To.Before(retentionBoundary)
+	includesHistory := query.From.Before(retentionBoundary)
+
+	var records []*SubscriptionUsageStatsRecord
+
+	// Step 1: Get recent data from Redis (if query overlaps with Redis window)
+	if includesRedisWindow {
+		redisFrom := query.From
+		if redisFrom.Before(retentionBoundary) {
+			redisFrom = retentionBoundary
+		}
+
+		redisRecords, err := uc.getDailyTrendFromRedis(ctx, query.SubscriptionID, redisFrom, query.To)
+		if err != nil {
+			uc.logger.Warnw("failed to get daily trend from Redis, continuing with MySQL only",
+				"subscription_id", query.SubscriptionID,
+				"error", err,
+			)
+		} else {
+			records = append(records, redisRecords...)
+		}
 	}
 
-	return uc.convertStatsToRecords(ctx, stats)
+	// Step 2: Get historical data from MySQL (if query includes data before Redis window)
+	if includesHistory {
+		mysqlTo := query.To
+		if includesRedisWindow {
+			// Exclude Redis window from MySQL query to avoid double counting
+			mysqlTo = retentionBoundary.Add(-time.Nanosecond)
+		}
+
+		stats, err := uc.usageStatsRepo.GetBySubscriptionID(
+			ctx, query.SubscriptionID, subscription.GranularityDaily,
+			query.From, mysqlTo,
+		)
+		if err != nil {
+			uc.logger.Errorw("failed to fetch daily stats from subscription_usage_stats",
+				"subscription_id", query.SubscriptionID,
+				"error", err,
+			)
+			return nil, errors.NewInternalError("failed to fetch daily usage statistics")
+		}
+
+		// Convert MySQL stats to records
+		mysqlRecords, err := uc.convertStatsToRecords(ctx, stats)
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, mysqlRecords...)
+	}
+
+	uc.logger.Infow("daily trend data fetched from Redis + MySQL",
+		"subscription_id", query.SubscriptionID,
+		"from", query.From,
+		"to", query.To,
+		"includes_redis", includesRedisWindow,
+		"includes_history", includesHistory,
+		"records_count", len(records),
+	)
+
+	return records, nil
+}
+
+// getDailyTrendFromRedis aggregates hourly data from Redis into daily records.
+func (uc *GetSubscriptionUsageStatsUseCase) getDailyTrendFromRedis(
+	ctx context.Context,
+	subscriptionID uint,
+	from, to time.Time,
+) ([]*SubscriptionUsageStatsRecord, error) {
+	// Discover active resources for this subscription
+	resourceSet, err := uc.discoverActiveResources(ctx, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(resourceSet) == 0 {
+		return []*SubscriptionUsageStatsRecord{}, nil
+	}
+
+	// Aggregate hourly data into daily records
+	// Use dailyRecordKey to track resourceID for later SID lookup
+	dailyRecords := make(map[dailyRecordKey]*SubscriptionUsageStatsRecord)
+
+	for rk := range resourceSet {
+		hourlyData, err := uc.hourlyCache.GetHourlyTrafficRange(
+			ctx, subscriptionID, rk.resourceType, rk.resourceID,
+			from, to,
+		)
+		if err != nil {
+			uc.logger.Warnw("failed to get hourly traffic from Redis",
+				"subscription_id", subscriptionID,
+				"resource_type", rk.resourceType,
+				"resource_id", rk.resourceID,
+				"error", err,
+			)
+			continue
+		}
+
+		for _, point := range hourlyData {
+			// Aggregate by day (start of day in business timezone, stored as UTC)
+			dayStart := biztime.StartOfDayUTC(point.Hour)
+			key := dailyRecordKey{
+				resourceType: rk.resourceType,
+				resourceID:   rk.resourceID,
+				day:          dayStart,
+			}
+
+			// Safe conversion: treat negative int64 values as 0
+			var upload, download uint64
+			if point.Upload > 0 {
+				upload = uint64(point.Upload)
+			}
+			if point.Download > 0 {
+				download = uint64(point.Download)
+			}
+
+			if existing, ok := dailyRecords[key]; ok {
+				existing.Upload += upload
+				existing.Download += download
+				existing.Total += upload + download
+			} else {
+				dailyRecords[key] = &SubscriptionUsageStatsRecord{
+					ResourceType: rk.resourceType,
+					ResourceSID:  "", // Will be filled below
+					Upload:       upload,
+					Download:     download,
+					Total:        upload + download,
+					Period:       dayStart,
+				}
+			}
+		}
+	}
+
+	// Collect resource IDs for SID lookup
+	nodeIDs := make([]uint, 0)
+	forwardRuleIDs := make([]uint, 0)
+	for key := range dailyRecords {
+		switch subscription.ResourceType(key.resourceType) {
+		case subscription.ResourceTypeNode:
+			nodeIDs = append(nodeIDs, key.resourceID)
+		case subscription.ResourceTypeForwardRule:
+			forwardRuleIDs = append(forwardRuleIDs, key.resourceID)
+		}
+	}
+
+	// Batch fetch SID maps
+	nodeSIDMap, forwardRuleSIDMap := uc.fetchSIDMaps(ctx, nodeIDs, forwardRuleIDs)
+
+	// Fill in SIDs and convert to slice
+	records := make([]*SubscriptionUsageStatsRecord, 0, len(dailyRecords))
+	for key, record := range dailyRecords {
+		switch subscription.ResourceType(key.resourceType) {
+		case subscription.ResourceTypeNode:
+			record.ResourceSID = nodeSIDMap[key.resourceID]
+		case subscription.ResourceTypeForwardRule:
+			record.ResourceSID = forwardRuleSIDMap[key.resourceID]
+		}
+		records = append(records, record)
+	}
+
+	return records, nil
 }
 
 // getMonthlyTrendFromStats retrieves monthly trend data from MySQL subscription_usage_stats table.
