@@ -393,11 +393,34 @@ func (uc *CreateSubscriptionForwardRuleUseCase) createRuleWithRetry(
 
 		// Notify config sync asynchronously if rule is enabled
 		if rule.IsEnabled() && uc.configSyncSvc != nil {
+			// Notify entry agent
 			go func() {
 				if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), rule.AgentID(), rule.SID(), "added"); err != nil {
-					uc.logger.Debugw("config sync notification skipped", "rule_id", rule.SID(), "subscription_id", cmd.SubscriptionID, "reason", err.Error())
+					uc.logger.Debugw("config sync notification skipped for entry agent", "rule_id", rule.SID(), "subscription_id", cmd.SubscriptionID, "agent_id", rule.AgentID(), "reason", err.Error())
 				}
 			}()
+
+			// Notify additional agents based on rule type
+			switch rule.RuleType().String() {
+			case "entry":
+				// Notify exit agent for entry type rules
+				if rule.ExitAgentID() != 0 {
+					go func() {
+						if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), rule.ExitAgentID(), rule.SID(), "added"); err != nil {
+							uc.logger.Debugw("config sync notification skipped for exit agent", "rule_id", rule.SID(), "subscription_id", cmd.SubscriptionID, "agent_id", rule.ExitAgentID(), "reason", err.Error())
+						}
+					}()
+				}
+			case "chain", "direct_chain":
+				// Notify all chain agents for chain and direct_chain type rules
+				for _, agentID := range rule.ChainAgentIDs() {
+					go func(aid uint) {
+						if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), aid, rule.SID(), "added"); err != nil {
+							uc.logger.Debugw("config sync notification skipped for chain agent", "rule_id", rule.SID(), "subscription_id", cmd.SubscriptionID, "agent_id", aid, "reason", err.Error())
+						}
+					}(agentID)
+				}
+			}
 		}
 
 		return result, nil

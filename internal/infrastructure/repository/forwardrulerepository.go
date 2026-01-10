@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -307,7 +308,9 @@ func (r *ForwardRuleRepositoryImpl) List(ctx context.Context, filter forward.Lis
 	if len(filter.GroupIDs) > 0 {
 		// Use JSON_OVERLAPS to check if group_ids array contains any of the filter group IDs
 		// JSON_OVERLAPS returns true if two JSON arrays have at least one element in common
-		query = query.Where("JSON_OVERLAPS(group_ids, ?)", fmt.Sprintf("[%s]", uintSliceToString(filter.GroupIDs)))
+		// Use json.Marshal for safe JSON array construction instead of string formatting
+		groupIDsJSON, _ := json.Marshal(filter.GroupIDs)
+		query = query.Where("JSON_OVERLAPS(group_ids, ?)", string(groupIDsJSON))
 	}
 
 	// Count total records

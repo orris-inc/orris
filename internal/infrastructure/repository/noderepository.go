@@ -784,7 +784,9 @@ func (r *NodeRepositoryImpl) List(ctx context.Context, filter node.NodeFilter) (
 	if len(filter.GroupIDs) > 0 {
 		// Use JSON_OVERLAPS to check if group_ids array contains any of the filter group IDs
 		// JSON_OVERLAPS returns true if two JSON arrays have at least one element in common
-		query = query.Where("JSON_OVERLAPS(group_ids, ?)", fmt.Sprintf("[%s]", uintSliceToString(filter.GroupIDs)))
+		// Use json.Marshal for safe JSON array construction instead of string formatting
+		groupIDsJSON, _ := json.Marshal(filter.GroupIDs)
+		query = query.Where("JSON_OVERLAPS(group_ids, ?)", string(groupIDsJSON))
 	}
 
 	// Count total records
@@ -1044,19 +1046,6 @@ func (r *NodeRepositoryImpl) GetLastSeenAt(ctx context.Context, nodeID uint) (*t
 	}
 
 	return model.LastSeenAt, nil
-}
-
-// uintSliceToString converts a slice of uint to a comma-separated string
-// Used for JSON_OVERLAPS query parameter
-func uintSliceToString(ids []uint) string {
-	if len(ids) == 0 {
-		return ""
-	}
-	parts := make([]string, len(ids))
-	for i, id := range ids {
-		parts[i] = fmt.Sprintf("%d", id)
-	}
-	return strings.Join(parts, ",")
 }
 
 // ListByUserID returns nodes owned by a specific user

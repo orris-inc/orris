@@ -46,6 +46,7 @@ func (l *SubscriptionTemplateLoader) Load() error {
 			filePath := filepath.Join(l.path, filename)
 
 			// Validate path to prevent path traversal attacks
+			// Use filepath.Rel for robust path traversal detection
 			absPath, err := filepath.Abs(filePath)
 			if err != nil {
 				l.logger.Warnw("failed to get absolute path", "file", filePath, "error", err)
@@ -56,7 +57,8 @@ func (l *SubscriptionTemplateLoader) Load() error {
 				l.logger.Warnw("failed to get absolute base path", "path", l.path, "error", err)
 				continue
 			}
-			if !strings.HasPrefix(absPath, absBase+string(filepath.Separator)) {
+			relPath, err := filepath.Rel(absBase, absPath)
+			if err != nil || strings.HasPrefix(relPath, "..") || filepath.IsAbs(relPath) {
 				l.logger.Warnw("path traversal attempt detected", "file", filePath)
 				continue
 			}

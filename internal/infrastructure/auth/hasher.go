@@ -27,10 +27,11 @@ func (h *BcryptPasswordHasher) Hash(password string) (string, error) {
 
 func (h *BcryptPasswordHasher) Verify(password, hash string) error {
 	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)); err != nil {
-		if err == bcrypt.ErrMismatchedHashAndPassword {
-			return fmt.Errorf("password does not match")
-		}
-		return fmt.Errorf("failed to verify password: %w", err)
+		// Return a generic error message regardless of the actual cause
+		// This prevents timing attacks that could distinguish between:
+		// - Invalid password (ErrMismatchedHashAndPassword)
+		// - Malformed hash or other internal errors
+		return fmt.Errorf("password verification failed")
 	}
 	return nil
 }
