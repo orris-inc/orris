@@ -73,7 +73,7 @@ func NewServiceDDD(
 		botLinkProvider: botLinkProvider,
 		userRoleChecker: userRoleChecker,
 		logger:          logger,
-		startedAt:       time.Now(),
+		startedAt:       biztime.NowUTC(),
 	}
 }
 

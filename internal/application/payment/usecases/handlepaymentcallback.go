@@ -10,6 +10,7 @@ import (
 	subscriptionUsecases "github.com/orris-inc/orris/internal/application/subscription/usecases"
 	"github.com/orris-inc/orris/internal/domain/payment"
 	vo "github.com/orris-inc/orris/internal/domain/payment/valueobjects"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -140,7 +141,7 @@ func (uc *HandlePaymentCallbackUseCase) handlePaymentSuccess(
 		go func() {
 			notifyCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
-			paidAt := time.Now()
+			paidAt := biztime.NowUTC()
 			if paymentOrder.PaidAt() != nil {
 				paidAt = *paymentOrder.PaidAt()
 			}

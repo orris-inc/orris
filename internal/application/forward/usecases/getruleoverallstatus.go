@@ -3,10 +3,10 @@ package usecases
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -230,7 +230,7 @@ func (uc *GetRuleOverallStatusUseCase) findLatestUpdate(statusMap map[uint]*dto.
 
 	// If no updates found, use current time
 	if latest == 0 {
-		latest = time.Now().Unix()
+		latest = biztime.NowUTC().Unix()
 	}
 
 	return latest

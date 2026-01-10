@@ -2,11 +2,11 @@ package usecases
 
 import (
 	"context"
-	"time"
 
 	"github.com/orris-inc/orris/internal/domain/ticket"
 	vo "github.com/orris-inc/orris/internal/domain/ticket/valueobjects"
 	"github.com/orris-inc/orris/internal/shared/auth"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -114,7 +114,7 @@ func (uc *GetTicketStatsUseCase) Execute(
 		result.ByCategory[category.String()] = 0
 	}
 
-	now := time.Now()
+	now := biztime.NowUTC()
 
 	for _, t := range tickets {
 		if !t.CanBeViewedBy(query.UserID, query.UserRoles) {

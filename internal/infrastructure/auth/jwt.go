@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/orris-inc/orris/internal/shared/authorization"
-
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/orris-inc/orris/internal/shared/authorization"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 )
 
 type TokenType string
@@ -45,7 +45,7 @@ func NewJWTService(secret string, accessExpMinutes, refreshExpDays int) *JWTServ
 }
 
 func (s *JWTService) Generate(userUUID string, sessionID string, role authorization.UserRole) (*TokenPair, error) {
-	now := time.Now()
+	now := biztime.NowUTC()
 
 	accessExp := now.Add(time.Duration(s.accessExpMinutes) * time.Minute)
 	accessClaims := &Claims{
@@ -121,7 +121,7 @@ func (s *JWTService) Refresh(refreshTokenString string) (string, error) {
 		return "", fmt.Errorf("token is not a refresh token")
 	}
 
-	now := time.Now()
+	now := biztime.NowUTC()
 	accessExp := now.Add(time.Duration(s.accessExpMinutes) * time.Minute)
 
 	newClaims := &Claims{

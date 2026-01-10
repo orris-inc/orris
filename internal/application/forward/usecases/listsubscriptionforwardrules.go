@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/domain/resource"
 	"github.com/orris-inc/orris/internal/domain/subscription"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -298,7 +298,7 @@ func (uc *ListSubscriptionForwardRulesUseCase) aggregateRuleStatus(
 	}
 
 	if latestUpdate == 0 {
-		latestUpdate = time.Now().Unix()
+		latestUpdate = biztime.NowUTC().Unix()
 	}
 
 	return &dto.RuleSyncStatusInfo{
