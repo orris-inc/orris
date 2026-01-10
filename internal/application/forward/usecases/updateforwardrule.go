@@ -17,6 +17,7 @@ import (
 // UpdateForwardRuleCommand represents the input for updating a forward rule.
 type UpdateForwardRuleCommand struct {
 	ShortID            string // External API identifier
+	UserID             *uint  // optional: for agent access validation (user endpoint only)
 	Name               *string
 	AgentShortID       *string           // entry agent ID (for all rule types)
 	ExitAgentShortID   *string           // exit agent ID (for entry type rules only)
@@ -44,6 +45,7 @@ type UpdateForwardRuleUseCase struct {
 	nodeRepo          node.NodeRepository
 	resourceGroupRepo resource.Repository
 	planRepo          subscription.PlanRepository
+	subscriptionRepo  subscription.SubscriptionRepository
 	configSyncSvc     ConfigSyncNotifier
 	logger            logger.Interface
 }
@@ -55,6 +57,7 @@ func NewUpdateForwardRuleUseCase(
 	nodeRepo node.NodeRepository,
 	resourceGroupRepo resource.Repository,
 	planRepo subscription.PlanRepository,
+	subscriptionRepo subscription.SubscriptionRepository,
 	configSyncSvc ConfigSyncNotifier,
 	logger logger.Interface,
 ) *UpdateForwardRuleUseCase {
@@ -64,6 +67,7 @@ func NewUpdateForwardRuleUseCase(
 		nodeRepo:          nodeRepo,
 		resourceGroupRepo: resourceGroupRepo,
 		planRepo:          planRepo,
+		subscriptionRepo:  subscriptionRepo,
 		configSyncSvc:     configSyncSvc,
 		logger:            logger,
 	}
@@ -108,6 +112,13 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 			return errors.NewNotFoundError("forward agent", *cmd.AgentShortID)
 		}
 
+		// Validate user access to agent (user endpoint only)
+		if cmd.UserID != nil {
+			if err := uc.validateUserAgentAccess(ctx, *cmd.UserID, agent); err != nil {
+				return err
+			}
+		}
+
 		// Validate current listen port against new agent's allowed port range
 		// Use the new listenPort if provided, otherwise use rule's current listenPort
 		portToCheck := rule.ListenPort()
@@ -149,6 +160,14 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 		if exitAgent == nil {
 			return errors.NewNotFoundError("exit forward agent", *cmd.ExitAgentShortID)
 		}
+
+		// Validate user access to exit agent (user endpoint only)
+		if cmd.UserID != nil {
+			if err := uc.validateUserAgentAccess(ctx, *cmd.UserID, exitAgent); err != nil {
+				return err
+			}
+		}
+
 		if err := rule.UpdateExitAgentID(exitAgent.ID()); err != nil {
 			return errors.NewValidationError(err.Error())
 		}
@@ -166,6 +185,14 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 			if chainAgent == nil {
 				return errors.NewNotFoundError("chain forward agent", shortID)
 			}
+
+			// Validate user access to chain agent (user endpoint only)
+			if cmd.UserID != nil {
+				if err := uc.validateUserAgentAccess(ctx, *cmd.UserID, chainAgent); err != nil {
+					return err
+				}
+			}
+
 			chainAgentIDs[i] = chainAgent.ID()
 		}
 		if err := rule.UpdateChainAgentIDs(chainAgentIDs); err != nil {
@@ -188,6 +215,14 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 			if chainAgent == nil {
 				return errors.NewNotFoundError("chain forward agent in chain_port_config", shortID)
 			}
+
+			// Validate user access to chain agent (user endpoint only)
+			if cmd.UserID != nil {
+				if err := uc.validateUserAgentAccess(ctx, *cmd.UserID, chainAgent); err != nil {
+					return err
+				}
+			}
+
 			// Validate port against chain agent's allowed port range
 			if !chainAgent.IsPortAllowed(port) {
 				return errors.NewValidationError(
@@ -488,4 +523,97 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 	}
 
 	return nil
+}
+
+// getAccessibleGroupIDs returns the resource group IDs that the user can access.
+// Access path: User -> Subscription -> Plan(forward) -> ResourceGroup
+func (uc *UpdateForwardRuleUseCase) getAccessibleGroupIDs(ctx context.Context, userID uint) ([]uint, error) {
+	// Step 1: Get user's active subscriptions
+	subscriptions, err := uc.subscriptionRepo.GetActiveByUserID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user subscriptions: %w", err)
+	}
+	if len(subscriptions) == 0 {
+		return nil, nil
+	}
+
+	// Step 2: Collect plan IDs from subscriptions
+	planIDs := make([]uint, 0, len(subscriptions))
+	for _, sub := range subscriptions {
+		planIDs = append(planIDs, sub.PlanID())
+	}
+
+	// Step 3: Get plans and filter forward type plans
+	plans, err := uc.planRepo.GetByIDs(ctx, planIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get plans: %w", err)
+	}
+
+	forwardPlanIDs := make([]uint, 0, len(plans))
+	for _, plan := range plans {
+		if plan.PlanType().IsForward() {
+			forwardPlanIDs = append(forwardPlanIDs, plan.ID())
+		}
+	}
+	if len(forwardPlanIDs) == 0 {
+		return nil, nil
+	}
+
+	// Step 4: Get active resource groups for these plans
+	groupIDs := make([]uint, 0)
+	for _, planID := range forwardPlanIDs {
+		groups, err := uc.resourceGroupRepo.GetByPlanID(ctx, planID)
+		if err != nil {
+			uc.logger.Warnw("failed to get resource groups for plan", "plan_id", planID, "error", err)
+			continue
+		}
+		for _, group := range groups {
+			if group.IsActive() {
+				groupIDs = append(groupIDs, group.ID())
+			}
+		}
+	}
+
+	return groupIDs, nil
+}
+
+// validateUserAgentAccess checks if the user has access to the specified agent.
+// Returns nil if access is allowed, or an error if access is denied.
+func (uc *UpdateForwardRuleUseCase) validateUserAgentAccess(ctx context.Context, userID uint, agent *forward.ForwardAgent) error {
+	// Get user's accessible group IDs
+	accessibleGroupIDs, err := uc.getAccessibleGroupIDs(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("failed to get accessible groups: %w", err)
+	}
+
+	// Check if agent's group ID is in the accessible list
+	agentGroupID := agent.GroupID()
+	if agentGroupID == nil {
+		// Agent has no group assigned, deny access for user endpoints
+		uc.logger.Warnw("user attempted to access agent without group",
+			"user_id", userID,
+			"agent_sid", agent.SID())
+		return errors.NewForbiddenError("agent is not accessible to user")
+	}
+
+	if !containsUint(accessibleGroupIDs, *agentGroupID) {
+		uc.logger.Warnw("user attempted to access unauthorized agent",
+			"user_id", userID,
+			"agent_sid", agent.SID(),
+			"agent_group_id", *agentGroupID,
+			"accessible_groups", accessibleGroupIDs)
+		return errors.NewForbiddenError("user does not have access to this agent")
+	}
+
+	return nil
+}
+
+// containsUint checks if a uint slice contains a specific value.
+func containsUint(slice []uint, val uint) bool {
+	for _, v := range slice {
+		if v == val {
+			return true
+		}
+	}
+	return false
 }

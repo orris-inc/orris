@@ -40,6 +40,12 @@ func SetupForwardRoutes(engine *gin.Engine, cfg *ForwardRouteConfig) {
 		forwardRules.GET("", cfg.ForwardRuleHandler.ListRules)
 		forwardRules.PATCH("/reorder", cfg.ForwardRuleHandler.ReorderRules)
 
+		// Batch operations
+		forwardRules.POST("/batch", cfg.ForwardRuleHandler.BatchCreateRules)
+		forwardRules.DELETE("/batch", cfg.ForwardRuleHandler.BatchDeleteRules)
+		forwardRules.PATCH("/batch", cfg.ForwardRuleHandler.BatchUpdateRules)
+		forwardRules.PATCH("/batch/status", cfg.ForwardRuleHandler.BatchToggleStatus)
+
 		// Resource operations
 		forwardRules.GET("/:id", cfg.ForwardRuleHandler.GetRule)
 		forwardRules.PUT("/:id", cfg.ForwardRuleHandler.UpdateRule)
@@ -126,6 +132,12 @@ func SetupForwardRoutes(engine *gin.Engine, cfg *ForwardRouteConfig) {
 		)
 		userForwardRules.GET("", cfg.UserForwardHandler.ListRules)
 		userForwardRules.PATCH("/reorder", cfg.UserForwardHandler.ReorderRules)
+
+		// Batch operations (ownership check is done in UseCase)
+		userForwardRules.POST("/batch", cfg.UserForwardHandler.BatchCreateRules)
+		userForwardRules.DELETE("/batch", cfg.UserForwardHandler.BatchDeleteRules)
+		userForwardRules.PATCH("/batch", cfg.UserForwardHandler.BatchUpdateRules)
+		userForwardRules.PATCH("/batch/status", cfg.UserForwardHandler.BatchToggleStatus)
 
 		// Quota usage
 		userForwardRules.GET("/usage", cfg.UserForwardHandler.GetUsage)

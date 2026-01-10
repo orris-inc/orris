@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/infrastructure/cache"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -17,6 +18,7 @@ type DeleteForwardRuleCommand struct {
 // DeleteForwardRuleUseCase handles forward rule deletion.
 type DeleteForwardRuleUseCase struct {
 	repo          forward.Repository
+	trafficCache  cache.ForwardTrafficCache
 	configSyncSvc ConfigSyncNotifier
 	logger        logger.Interface
 }
@@ -24,11 +26,13 @@ type DeleteForwardRuleUseCase struct {
 // NewDeleteForwardRuleUseCase creates a new DeleteForwardRuleUseCase.
 func NewDeleteForwardRuleUseCase(
 	repo forward.Repository,
+	trafficCache cache.ForwardTrafficCache,
 	configSyncSvc ConfigSyncNotifier,
 	logger logger.Interface,
 ) *DeleteForwardRuleUseCase {
 	return &DeleteForwardRuleUseCase{
 		repo:          repo,
+		trafficCache:  trafficCache,
 		configSyncSvc: configSyncSvc,
 		logger:        logger,
 	}
@@ -58,10 +62,24 @@ func (uc *DeleteForwardRuleUseCase) Execute(ctx context.Context, cmd DeleteForwa
 	exitAgentID := rule.ExitAgentID()
 	chainAgentIDs := rule.ChainAgentIDs()
 
+	// Store rule ID for cache cleanup
+	ruleID := rule.ID()
+
 	// Delete the rule using the internal ID
-	if err := uc.repo.Delete(ctx, rule.ID()); err != nil {
+	if err := uc.repo.Delete(ctx, ruleID); err != nil {
 		uc.logger.Errorw("failed to delete forward rule", "short_id", cmd.ShortID, "error", err)
 		return fmt.Errorf("failed to delete forward rule: %w", err)
+	}
+
+	// Clean up traffic cache (non-blocking, log warning on failure)
+	if uc.trafficCache != nil {
+		if err := uc.trafficCache.CleanupRuleCache(ctx, ruleID); err != nil {
+			uc.logger.Warnw("failed to cleanup traffic cache for deleted rule",
+				"short_id", cmd.ShortID,
+				"rule_id", ruleID,
+				"error", err,
+			)
+		}
 	}
 
 	uc.logger.Infow("forward rule deleted successfully", "short_id", cmd.ShortID)

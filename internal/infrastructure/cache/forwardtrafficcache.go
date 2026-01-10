@@ -9,6 +9,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -69,6 +70,10 @@ type ForwardTrafficCache interface {
 	// InitRuleTraffic initializes rule traffic (loads base value from MySQL).
 	// Uses HSETNX to prevent overwriting concurrent increments.
 	InitRuleTraffic(ctx context.Context, ruleID uint, upload, download int64) error
+
+	// CleanupRuleCache removes traffic cache for a rule.
+	// Should be called when a rule is deleted.
+	CleanupRuleCache(ctx context.Context, ruleID uint) error
 }
 
 // RedisForwardTrafficCache implements ForwardTrafficCache using Redis.
@@ -297,6 +302,17 @@ func (c *RedisForwardTrafficCache) FlushToDatabase(ctx context.Context) error {
 		// Update MySQL
 		err = c.ruleRepo.UpdateTraffic(ctx, ruleID, uploadDelta, downloadDelta)
 		if err != nil {
+			// If rule no longer exists, clean up Redis cache to prevent repeated errors
+			if errors.IsNotFoundError(err) {
+				c.logger.Warnw("forward rule no longer exists, cleaning up cache",
+					"rule_id", ruleID,
+					"upload_delta", uploadDelta,
+					"download_delta", downloadDelta,
+				)
+				c.cleanupDeletedRuleCache(ctx, key, ruleIDStr)
+				skippedCount++
+				continue
+			}
 			c.logger.Errorw("failed to flush forward rule traffic to database",
 				"rule_id", ruleID,
 				"upload_delta", uploadDelta,
@@ -345,6 +361,43 @@ func (c *RedisForwardTrafficCache) safeRemoveFromActiveSet(ctx context.Context, 
 	).Result()
 	if err != nil && err != redis.Nil {
 		c.logger.Warnw("failed to safely remove from active set",
+			"hash_key", hashKey,
+			"error", err,
+		)
+	}
+}
+
+// CleanupRuleCache removes traffic cache for a rule.
+// Should be called when a rule is deleted.
+func (c *RedisForwardTrafficCache) CleanupRuleCache(ctx context.Context, ruleID uint) error {
+	key := ruleTrafficKey(ruleID)
+	ruleIDStr := strconv.FormatUint(uint64(ruleID), 10)
+
+	pipe := c.client.Pipeline()
+	pipe.SRem(ctx, activeRulesSetKey, ruleIDStr)
+	pipe.Del(ctx, key)
+	_, err := pipe.Exec(ctx)
+	if err != nil {
+		c.logger.Warnw("failed to cleanup rule cache",
+			"rule_id", ruleID,
+			"error", err,
+		)
+		return fmt.Errorf("failed to cleanup rule cache: %w", err)
+	}
+
+	c.logger.Debugw("cleaned up rule traffic cache", "rule_id", ruleID)
+	return nil
+}
+
+// cleanupDeletedRuleCache removes traffic cache for a deleted rule.
+// This is called internally when we detect a rule no longer exists in MySQL during flush.
+func (c *RedisForwardTrafficCache) cleanupDeletedRuleCache(ctx context.Context, hashKey, ruleIDStr string) {
+	pipe := c.client.Pipeline()
+	pipe.SRem(ctx, activeRulesSetKey, ruleIDStr)
+	pipe.Del(ctx, hashKey)
+	_, err := pipe.Exec(ctx)
+	if err != nil {
+		c.logger.Warnw("failed to cleanup deleted rule cache",
 			"hash_key", hashKey,
 			"error", err,
 		)

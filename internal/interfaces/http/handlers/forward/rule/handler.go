@@ -22,6 +22,7 @@ type Handler struct {
 	disableRuleUC  *usecases.DisableForwardRuleUseCase
 	resetTrafficUC *usecases.ResetForwardRuleTrafficUseCase
 	reorderRulesUC *usecases.ReorderForwardRulesUseCase
+	batchRuleUC    *usecases.BatchForwardRuleUseCase
 	probeService   *services.ProbeService
 	logger         logger.Interface
 }
@@ -37,6 +38,7 @@ func NewHandler(
 	disableRuleUC *usecases.DisableForwardRuleUseCase,
 	resetTrafficUC *usecases.ResetForwardRuleTrafficUseCase,
 	reorderRulesUC *usecases.ReorderForwardRulesUseCase,
+	batchRuleUC *usecases.BatchForwardRuleUseCase,
 	probeService *services.ProbeService,
 ) *Handler {
 	return &Handler{
@@ -49,6 +51,7 @@ func NewHandler(
 		disableRuleUC:  disableRuleUC,
 		resetTrafficUC: resetTrafficUC,
 		reorderRulesUC: reorderRulesUC,
+		batchRuleUC:    batchRuleUC,
 		probeService:   probeService,
 		logger:         logger.NewLogger(),
 	}

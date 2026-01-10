@@ -916,8 +916,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Now initialize forward rule use cases with configSyncService
 	createForwardRuleUC = forwardUsecases.NewCreateForwardRuleUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, resourceGroupRepo, subscriptionPlanRepo, configSyncService, log)
 	getForwardRuleUC = forwardUsecases.NewGetForwardRuleUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, resourceGroupRepo, log)
-	updateForwardRuleUC = forwardUsecases.NewUpdateForwardRuleUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, resourceGroupRepo, subscriptionPlanRepo, configSyncService, log)
-	deleteForwardRuleUC = forwardUsecases.NewDeleteForwardRuleUseCase(forwardRuleRepo, configSyncService, log)
+	updateForwardRuleUC = forwardUsecases.NewUpdateForwardRuleUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, resourceGroupRepo, subscriptionPlanRepo, subscriptionRepo, configSyncService, log)
+	deleteForwardRuleUC = forwardUsecases.NewDeleteForwardRuleUseCase(forwardRuleRepo, forwardTrafficCache, configSyncService, log)
 	listForwardRulesUC = forwardUsecases.NewListForwardRulesUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, resourceGroupRepo, ruleSyncStatusAdapter, log)
 	enableForwardRuleUC = forwardUsecases.NewEnableForwardRuleUseCase(forwardRuleRepo, configSyncService, log)
 	disableForwardRuleUC = forwardUsecases.NewDisableForwardRuleUseCase(forwardRuleRepo, configSyncService, log)
@@ -974,6 +974,19 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		log,
 	)
 
+	// Initialize batch forward rule use case (needed by both admin and user handlers)
+	batchForwardRuleUC := forwardUsecases.NewBatchForwardRuleUseCase(
+		forwardRuleRepo,
+		createForwardRuleUC,
+		createUserForwardRuleUC,
+		deleteForwardRuleUC,
+		enableForwardRuleUC,
+		disableForwardRuleUC,
+		updateForwardRuleUC,
+		txMgr,
+		log,
+	)
+
 	// Initialize user forward rule handler
 	userForwardRuleHandler := forwardUserHandlers.NewHandler(
 		createUserForwardRuleUC,
@@ -986,6 +999,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		getForwardRuleUC,     // reuse existing
 		listUserForwardAgentsUC,
 		reorderForwardRulesUC, // reuse existing
+		batchForwardRuleUC,
 	)
 
 	// Initialize subscription forward rule use cases
@@ -1048,6 +1062,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		disableForwardRuleUC,
 		resetForwardTrafficUC,
 		reorderForwardRulesUC,
+		batchForwardRuleUC,
 		probeService,
 	)
 

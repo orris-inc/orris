@@ -22,6 +22,7 @@ type Handler struct {
 	getRuleUC      *usecases.GetForwardRuleUseCase
 	listAgentsUC   *usecases.ListUserForwardAgentsUseCase
 	reorderRulesUC *usecases.ReorderForwardRulesUseCase
+	batchRuleUC    *usecases.BatchForwardRuleUseCase
 	logger         logger.Interface
 }
 
@@ -37,6 +38,7 @@ func NewHandler(
 	getRuleUC *usecases.GetForwardRuleUseCase,
 	listAgentsUC *usecases.ListUserForwardAgentsUseCase,
 	reorderRulesUC *usecases.ReorderForwardRulesUseCase,
+	batchRuleUC *usecases.BatchForwardRuleUseCase,
 ) *Handler {
 	return &Handler{
 		createRuleUC:   createRuleUC,
@@ -49,6 +51,7 @@ func NewHandler(
 		getRuleUC:      getRuleUC,
 		listAgentsUC:   listAgentsUC,
 		reorderRulesUC: reorderRulesUC,
+		batchRuleUC:    batchRuleUC,
 		logger:         logger.NewLogger(),
 	}
 }
