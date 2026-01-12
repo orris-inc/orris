@@ -8,7 +8,6 @@ import (
 	commondto "github.com/orris-inc/orris/internal/application/common/dto"
 	nodeUsecases "github.com/orris-inc/orris/internal/application/node/usecases"
 	"github.com/orris-inc/orris/internal/domain/node"
-	nodevo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/services"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -52,11 +51,10 @@ func (a *NodeStatusQuerierAdapter) GetBatchStatus(nodeSIDs []string) (map[string
 	var err error
 
 	if nodeSIDs == nil {
-		// Get all active nodes
-		activeStatus := string(nodevo.NodeStatusActive)
-		nodes, _, err = a.nodeRepo.List(ctx, node.NodeFilter{
-			Status: &activeStatus,
-		})
+		// Get all nodes regardless of activation status.
+		// Node can be connected regardless of activation status,
+		// status is only used for business logic (e.g., subscription routing).
+		nodes, _, err = a.nodeRepo.List(ctx, node.NodeFilter{})
 		if err != nil {
 			a.logger.Errorw("failed to list nodes",
 				"error", err,

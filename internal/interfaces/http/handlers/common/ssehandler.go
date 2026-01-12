@@ -54,13 +54,18 @@ func (h *SSEHandlerBase) GetLogger() logger.Interface {
 	return h.logger
 }
 
-// SetupSSEResponse sets common SSE response headers.
+// SetupSSEResponse sets common SSE response headers and disables write timeout.
 // Note: CORS headers are handled by global CORS middleware.
 func (h *SSEHandlerBase) SetupSSEResponse(c *gin.Context) {
 	c.Header("Content-Type", SSEContentType)
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
 	c.Header("X-Accel-Buffering", "no") // Disable Nginx buffering
+
+	// Disable write timeout for SSE long-lived connections.
+	// Without this, the server's WriteTimeout (e.g., 15s) will close the connection.
+	rc := http.NewResponseController(c.Writer)
+	_ = rc.SetWriteDeadline(time.Time{}) // Zero time means no deadline
 }
 
 // GenerateConnID generates a unique connection ID.
@@ -194,4 +199,45 @@ func (h *SSEHandlerBase) HandleInitialWriteError(connID string, err error) {
 		"conn_id", connID,
 		"error", err,
 	)
+}
+
+// GetLastEventID extracts the Last-Event-ID header from the request.
+// Returns empty string if not present.
+func (h *SSEHandlerBase) GetLastEventID(c *gin.Context) string {
+	return c.GetHeader("Last-Event-ID")
+}
+
+// ReplayMissedEvents replays missed events to the client after reconnection.
+// eventType can be "node" or "agent".
+// filterSIDs is optional list of agent/node SIDs to filter events.
+// Returns true if all events were sent successfully, false if write error occurred.
+func (h *SSEHandlerBase) ReplayMissedEvents(c *gin.Context, userID uint, lastEventID string, eventType string, filterSIDs []string, connID string, logPrefix string) bool {
+	if lastEventID == "" {
+		return true // No replay needed
+	}
+
+	events := h.adminHub.GetEventsAfter(userID, lastEventID, eventType, filterSIDs)
+	if len(events) == 0 {
+		return true
+	}
+
+	h.logger.Infow(logPrefix+" replaying missed events",
+		"conn_id", connID,
+		"user_id", userID,
+		"last_event_id", lastEventID,
+		"event_count", len(events),
+	)
+
+	for _, event := range events {
+		if _, err := c.Writer.Write(event.Data); err != nil {
+			h.logger.Warnw(logPrefix+" replay write error",
+				"conn_id", connID,
+				"error", err,
+			)
+			return false
+		}
+	}
+	c.Writer.Flush()
+
+	return true
 }

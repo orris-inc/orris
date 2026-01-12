@@ -23,6 +23,7 @@ func NewNodeSSEHandler(adminHub *services.AdminHub, log logger.Interface) *NodeS
 
 // Events handles GET /nodes/events
 // Establishes an SSE connection for real-time node status updates.
+// Supports Last-Event-ID header for reconnection replay.
 func (h *NodeSSEHandler) Events(c *gin.Context) {
 	// Get user ID from context
 	userID, ok := h.GetUserID(c)
@@ -33,6 +34,9 @@ func (h *NodeSSEHandler) Events(c *gin.Context) {
 
 	// Parse node_ids filter
 	nodeFilters := h.ParseFilterIDs(c, "node_ids")
+
+	// Get Last-Event-ID for replay support
+	lastEventID := h.GetLastEventID(c)
 
 	// Generate connection ID
 	connID := h.GenerateConnID()
@@ -57,11 +61,20 @@ func (h *NodeSSEHandler) Events(c *gin.Context) {
 		"conn_id", connID,
 		"user_id", userID,
 		"node_filters", nodeFilters,
+		"last_event_id", lastEventID,
 	)
 
-	// Send initial node status immediately after connection
-	// This ensures the client gets current status without waiting for the next broadcast cycle
-	h.GetAdminHub().BroadcastNodeStatusToConn(conn)
+	// Replay missed events if reconnecting with Last-Event-ID
+	if lastEventID != "" {
+		if !h.ReplayMissedEvents(c, userID, lastEventID, "node", nodeFilters, connID, "node SSE") {
+			h.HandleInitialWriteError(connID, nil)
+			return
+		}
+	} else {
+		// Send initial node status immediately after connection
+		// This ensures the client gets current status without waiting for the next broadcast cycle
+		h.GetAdminHub().BroadcastNodeStatusToConn(conn)
+	}
 
 	// Run event loop
 	h.RunEventLoop(c, conn, connID, userID, "node SSE")

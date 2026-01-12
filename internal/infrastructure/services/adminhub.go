@@ -4,6 +4,8 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -11,6 +13,164 @@ import (
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
+
+const (
+	// DefaultEventCacheSize is the default number of events cached per user.
+	DefaultEventCacheSize = 100
+
+	// DefaultEventCacheTTL is the default TTL for cached events.
+	DefaultEventCacheTTL = 5 * time.Minute
+)
+
+// CachedEvent represents a cached SSE event for replay.
+type CachedEvent struct {
+	ID        string    // Event ID (timestamp-sequence format)
+	UserID    uint      // Owner user ID
+	EventType string    // "node" or "agent"
+	AgentSID  string    // Optional, for filtering
+	Data      []byte    // Complete SSE data (with id field)
+	Timestamp time.Time // For expiration cleanup
+}
+
+// SSEEventCache manages cached events per user using a ring buffer.
+type SSEEventCache struct {
+	events   []*CachedEvent // Ring buffer
+	head     int            // Next write position
+	size     int            // Current event count
+	capacity int            // Max capacity
+	mu       sync.RWMutex
+}
+
+// NewSSEEventCache creates a new event cache with given capacity.
+func NewSSEEventCache(capacity int) *SSEEventCache {
+	return &SSEEventCache{
+		events:   make([]*CachedEvent, capacity),
+		capacity: capacity,
+	}
+}
+
+// Add adds an event to the cache.
+func (c *SSEEventCache) Add(event *CachedEvent) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.events[c.head] = event
+	c.head = (c.head + 1) % c.capacity
+	if c.size < c.capacity {
+		c.size++
+	}
+}
+
+// GetEventsAfter returns all events after the given event ID.
+// Events are returned in chronological order.
+// If eventType is not empty, only events of that type are returned.
+// If agentSID is not empty, only events for that agent are returned.
+func (c *SSEEventCache) GetEventsAfter(lastEventID string, eventType string, agentSID string, ttl time.Duration) []*CachedEvent {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if c.size == 0 {
+		return nil
+	}
+
+	now := biztime.NowUTC()
+	var result []*CachedEvent
+	found := lastEventID == "" // If no lastEventID, return all non-expired events
+
+	// Calculate start position (oldest event)
+	start := (c.head - c.size + c.capacity) % c.capacity
+
+	for i := 0; i < c.size; i++ {
+		idx := (start + i) % c.capacity
+		event := c.events[idx]
+		if event == nil {
+			continue
+		}
+
+		// Skip expired events
+		if now.Sub(event.Timestamp) > ttl {
+			continue
+		}
+
+		// Skip until we find the lastEventID
+		if !found {
+			if event.ID == lastEventID {
+				found = true
+			}
+			continue
+		}
+
+		// Filter by event type
+		if eventType != "" && event.EventType != eventType {
+			continue
+		}
+
+		// Filter by agent SID (if specified)
+		if agentSID != "" && event.AgentSID != agentSID {
+			continue
+		}
+
+		result = append(result, event)
+	}
+
+	return result
+}
+
+// Cleanup removes expired events from the cache.
+func (c *SSEEventCache) Cleanup(ttl time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	now := biztime.NowUTC()
+	for i := 0; i < c.capacity; i++ {
+		if c.events[i] != nil && now.Sub(c.events[i].Timestamp) > ttl {
+			c.events[i] = nil
+		}
+	}
+}
+
+// eventIDGenerator generates unique event IDs.
+type eventIDGenerator struct {
+	lastTimestamp int64
+	sequence      int64
+	mu            sync.Mutex
+}
+
+// Generate generates a new unique event ID in format "timestamp-sequence".
+func (g *eventIDGenerator) Generate() string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	now := biztime.NowUTC().UnixMilli()
+	if now == g.lastTimestamp {
+		g.sequence++
+	} else {
+		g.lastTimestamp = now
+		g.sequence = 0
+	}
+
+	return fmt.Sprintf("%d-%d", now, g.sequence)
+}
+
+// ParseEventID parses an event ID and returns timestamp and sequence.
+func ParseEventID(id string) (timestamp int64, sequence int64, ok bool) {
+	parts := strings.Split(id, "-")
+	if len(parts) != 2 {
+		return 0, 0, false
+	}
+
+	ts, err := strconv.ParseInt(parts[0], 10, 64)
+	if err != nil {
+		return 0, 0, false
+	}
+
+	seq, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil {
+		return 0, 0, false
+	}
+
+	return ts, seq, true
+}
 
 // AgentEventType represents the type of agent SSE event.
 // Agents include both Node agents and Forward agents.
@@ -152,6 +312,11 @@ type AdminHub struct {
 	statusThrottle   map[string]time.Time
 	statusThrottleMu sync.RWMutex
 
+	// Event caching for Last-Event-ID support: map[userID]*SSEEventCache
+	eventCaches   map[uint]*SSEEventCache
+	eventCachesMu sync.RWMutex
+	eventIDGen    *eventIDGenerator
+
 	// Agent status querier for batch status retrieval (optional)
 	agentStatusQuerier AgentStatusQuerier
 
@@ -161,8 +326,10 @@ type AdminHub struct {
 	// Configuration
 	maxConnsPerUser  int
 	statusThrottleMs int64
-	agentBroadcastMs int64 // Aggregated broadcast interval for agents (default: 5000ms)
-	nodeBroadcastMs  int64 // Aggregated broadcast interval for nodes (default: 5000ms)
+	agentBroadcastMs int64         // Aggregated broadcast interval for agents (default: 5000ms)
+	nodeBroadcastMs  int64         // Aggregated broadcast interval for nodes (default: 5000ms)
+	eventCacheSize   int           // Events cached per user (default: 100)
+	eventCacheTTL    time.Duration // Event cache TTL (default: 5 minutes)
 
 	// Shutdown signal
 	done     chan struct{}
@@ -173,10 +340,12 @@ type AdminHub struct {
 
 // AdminHubConfig holds configuration for AdminHub.
 type AdminHubConfig struct {
-	MaxConnsPerUser  int   // Max SSE connections per user (default: 5)
-	StatusThrottleMs int64 // Throttle interval for status events in ms (default: 5000) - used for cleanup
-	AgentBroadcastMs int64 // Aggregated broadcast interval for agent status in ms (default: 5000, min: 1000)
-	NodeBroadcastMs  int64 // Aggregated broadcast interval for node status in ms (default: 5000, min: 1000)
+	MaxConnsPerUser  int           // Max SSE connections per user (default: 5)
+	StatusThrottleMs int64         // Throttle interval for status events in ms (default: 5000) - used for cleanup
+	AgentBroadcastMs int64         // Aggregated broadcast interval for agent status in ms (default: 5000, min: 1000)
+	NodeBroadcastMs  int64         // Aggregated broadcast interval for node status in ms (default: 5000, min: 1000)
+	EventCacheSize   int           // Events cached per user (default: 100)
+	EventCacheTTL    time.Duration // Event cache TTL (default: 5 minutes)
 }
 
 // NewAdminHub creates a new AdminHub instance.
@@ -185,6 +354,8 @@ func NewAdminHub(log logger.Interface, config *AdminHubConfig) *AdminHub {
 	throttleMs := int64(5000)
 	agentBroadcastMs := int64(5000)
 	nodeBroadcastMs := int64(5000)
+	eventCacheSize := DefaultEventCacheSize
+	eventCacheTTL := DefaultEventCacheTTL
 
 	if config != nil {
 		if config.MaxConnsPerUser > 0 {
@@ -199,16 +370,26 @@ func NewAdminHub(log logger.Interface, config *AdminHubConfig) *AdminHub {
 		if config.NodeBroadcastMs >= 1000 {
 			nodeBroadcastMs = config.NodeBroadcastMs
 		}
+		if config.EventCacheSize > 0 {
+			eventCacheSize = config.EventCacheSize
+		}
+		if config.EventCacheTTL > 0 {
+			eventCacheTTL = config.EventCacheTTL
+		}
 	}
 
 	h := &AdminHub{
 		conns:            make(map[string]*SSEConn),
 		userConns:        make(map[uint]int),
 		statusThrottle:   make(map[string]time.Time),
+		eventCaches:      make(map[uint]*SSEEventCache),
+		eventIDGen:       &eventIDGenerator{},
 		maxConnsPerUser:  maxConns,
 		statusThrottleMs: throttleMs,
 		agentBroadcastMs: agentBroadcastMs,
 		nodeBroadcastMs:  nodeBroadcastMs,
+		eventCacheSize:   eventCacheSize,
+		eventCacheTTL:    eventCacheTTL,
 		done:             make(chan struct{}),
 		logger:           log,
 	}
@@ -383,7 +564,7 @@ func (h *AdminHub) Broadcast(event *AgentEvent) {
 		}
 	}
 
-	data, err := h.formatSSEEvent(event)
+	result, err := h.formatSSEEvent(event)
 	if err != nil {
 		h.logger.Errorw("failed to format SSE event",
 			"event_type", event.Type,
@@ -397,7 +578,10 @@ func (h *AdminHub) Broadcast(event *AgentEvent) {
 
 	for _, conn := range h.conns {
 		if conn.ShouldReceive(event.AgentID) {
-			if !conn.TrySend(data) {
+			// Cache event for this user
+			h.cacheEvent(conn.UserID, result, "node")
+
+			if !conn.TrySend(result.Data) {
 				h.logger.Warnw("failed to send SSE event, channel full",
 					"conn_id", conn.ID,
 					"event_type", event.Type,
@@ -490,7 +674,7 @@ func (h *AdminHub) BroadcastForwardAgentUpdated(agentSID string, changes any) {
 // BroadcastForwardAgent sends a forward agent event to all matching SSE connections.
 // Note: For status events, use the aggregated broadcast via agentBroadcastLoop instead.
 func (h *AdminHub) BroadcastForwardAgent(event *AgentEvent) {
-	data, err := h.formatSSEEvent(event)
+	result, err := h.formatSSEEvent(event)
 	if err != nil {
 		h.logger.Errorw("failed to format SSE event",
 			"event_type", event.Type,
@@ -504,7 +688,10 @@ func (h *AdminHub) BroadcastForwardAgent(event *AgentEvent) {
 
 	for _, conn := range h.conns {
 		if conn.ShouldReceiveAgent(event.AgentID) {
-			if !conn.TrySend(data) {
+			// Cache event for this user
+			h.cacheEvent(conn.UserID, result, "agent")
+
+			if !conn.TrySend(result.Data) {
 				h.logger.Warnw("failed to send SSE event, channel full",
 					"conn_id", conn.ID,
 					"event_type", event.Type,
@@ -539,14 +726,29 @@ func (h *AdminHub) shouldPushStatus(nodeSID string) bool {
 }
 
 // formatSSEEvent formats an event as SSE data.
-func (h *AdminHub) formatSSEEvent(event *AgentEvent) ([]byte, error) {
+// formatSSEEventResult contains the formatted event data and metadata.
+type formatSSEEventResult struct {
+	ID       string // Event ID
+	Data     []byte // Complete SSE data with id field
+	AgentSID string // Agent SID for filtering
+}
+
+func (h *AdminHub) formatSSEEvent(event *AgentEvent) (*formatSSEEventResult, error) {
 	data, err := json.Marshal(event)
 	if err != nil {
 		return nil, err
 	}
 
-	// SSE format: "event: <type>\ndata: <json>\n\n"
-	return []byte(fmt.Sprintf("event: %s\ndata: %s\n\n", event.Type, data)), nil
+	eventID := h.eventIDGen.Generate()
+
+	// SSE format: "id: <id>\nevent: <type>\ndata: <json>\n\n"
+	sseData := []byte(fmt.Sprintf("id: %s\nevent: %s\ndata: %s\n\n", eventID, event.Type, data))
+
+	return &formatSSEEventResult{
+		ID:       eventID,
+		Data:     sseData,
+		AgentSID: event.AgentID,
+	}, nil
 }
 
 // CleanupThrottleCache removes old entries from the throttle cache.
@@ -563,6 +765,64 @@ func (h *AdminHub) CleanupThrottleCache() {
 		}
 	}
 	h.statusThrottleMu.Unlock()
+
+	// Cleanup expired events from all user caches
+	h.eventCachesMu.RLock()
+	for _, cache := range h.eventCaches {
+		cache.Cleanup(h.eventCacheTTL)
+	}
+	h.eventCachesMu.RUnlock()
+}
+
+// cacheEvent caches an event for the given user.
+func (h *AdminHub) cacheEvent(userID uint, result *formatSSEEventResult, eventType string) {
+	h.eventCachesMu.Lock()
+	cache, ok := h.eventCaches[userID]
+	if !ok {
+		cache = NewSSEEventCache(h.eventCacheSize)
+		h.eventCaches[userID] = cache
+	}
+	h.eventCachesMu.Unlock()
+
+	cache.Add(&CachedEvent{
+		ID:        result.ID,
+		UserID:    userID,
+		EventType: eventType,
+		AgentSID:  result.AgentSID,
+		Data:      result.Data,
+		Timestamp: biztime.NowUTC(),
+	})
+}
+
+// GetEventsAfter returns events after the given lastEventID for replay.
+// eventType can be "node", "agent", or empty for all types.
+// agentSIDs can be used to filter events by specific agents.
+func (h *AdminHub) GetEventsAfter(userID uint, lastEventID string, eventType string, agentSIDs []string) []*CachedEvent {
+	h.eventCachesMu.RLock()
+	cache, ok := h.eventCaches[userID]
+	h.eventCachesMu.RUnlock()
+
+	if !ok {
+		return nil
+	}
+
+	// If specific agent SIDs are requested, filter for each and combine
+	if len(agentSIDs) > 0 {
+		var result []*CachedEvent
+		seenIDs := make(map[string]bool)
+		for _, sid := range agentSIDs {
+			events := cache.GetEventsAfter(lastEventID, eventType, sid, h.eventCacheTTL)
+			for _, e := range events {
+				if !seenIDs[e.ID] {
+					seenIDs[e.ID] = true
+					result = append(result, e)
+				}
+			}
+		}
+		return result
+	}
+
+	return cache.GetEventsAfter(lastEventID, eventType, "", h.eventCacheTTL)
 }
 
 // SetAgentStatusQuerier sets the agent status querier for batch status retrieval.
@@ -666,14 +926,17 @@ func (h *AdminHub) broadcastAggregatedAgentStatus() {
 			Timestamp: timestamp,
 			Agents:    statusMap,
 		}
-		fullData, err := h.formatBatchSSEEvent(fullEvent)
+		fullResult, err := h.formatBatchSSEEvent(fullEvent)
 		if err != nil {
 			h.logger.Errorw("failed to format full batch SSE event",
 				"error", err,
 			)
 		} else {
 			for _, conn := range subscribeAllConns {
-				if !conn.TrySend(fullData) {
+				// Cache event for this user
+				h.cacheEvent(conn.UserID, fullResult, "agent")
+
+				if !conn.TrySend(fullResult.Data) {
 					h.logger.Warnw("failed to send batch SSE event, channel full",
 						"conn_id", conn.ID,
 					)
@@ -700,7 +963,7 @@ func (h *AdminHub) broadcastAggregatedAgentStatus() {
 			Timestamp: timestamp,
 			Agents:    filteredStatus,
 		}
-		filteredData, err := h.formatBatchSSEEvent(filteredEvent)
+		filteredResult, err := h.formatBatchSSEEvent(filteredEvent)
 		if err != nil {
 			h.logger.Errorw("failed to format filtered batch SSE event",
 				"error", err,
@@ -709,7 +972,10 @@ func (h *AdminHub) broadcastAggregatedAgentStatus() {
 			continue
 		}
 
-		if !conn.TrySend(filteredData) {
+		// Cache event for this user
+		h.cacheEvent(conn.UserID, filteredResult, "agent")
+
+		if !conn.TrySend(filteredResult.Data) {
 			h.logger.Warnw("failed to send batch SSE event, channel full",
 				"conn_id", conn.ID,
 			)
@@ -718,14 +984,22 @@ func (h *AdminHub) broadcastAggregatedAgentStatus() {
 }
 
 // formatBatchSSEEvent formats a batch event as SSE data.
-func (h *AdminHub) formatBatchSSEEvent(event *BatchAgentStatusEvent) ([]byte, error) {
+func (h *AdminHub) formatBatchSSEEvent(event *BatchAgentStatusEvent) (*formatSSEEventResult, error) {
 	data, err := json.Marshal(event)
 	if err != nil {
 		return nil, err
 	}
 
-	// SSE format: "event: <type>\ndata: <json>\n\n"
-	return []byte(fmt.Sprintf("event: %s\ndata: %s\n\n", event.Type, data)), nil
+	eventID := h.eventIDGen.Generate()
+
+	// SSE format: "id: <id>\nevent: <type>\ndata: <json>\n\n"
+	sseData := []byte(fmt.Sprintf("id: %s\nevent: %s\ndata: %s\n\n", eventID, event.Type, data))
+
+	return &formatSSEEventResult{
+		ID:       eventID,
+		Data:     sseData,
+		AgentSID: "", // Batch events don't have a single agent SID
+	}, nil
 }
 
 // BroadcastAgentStatusToConn sends current agent status to a specific connection.
@@ -766,7 +1040,7 @@ func (h *AdminHub) BroadcastAgentStatusToConn(conn *SSEConn) {
 		Agents:    statusMap,
 	}
 
-	data, err := h.formatBatchSSEEvent(batchEvent)
+	result, err := h.formatBatchSSEEvent(batchEvent)
 	if err != nil {
 		h.logger.Errorw("failed to format initial batch SSE event",
 			"error", err,
@@ -775,7 +1049,10 @@ func (h *AdminHub) BroadcastAgentStatusToConn(conn *SSEConn) {
 		return
 	}
 
-	if !conn.TrySend(data) {
+	// Cache event for this user
+	h.cacheEvent(conn.UserID, result, "agent")
+
+	if !conn.TrySend(result.Data) {
 		h.logger.Warnw("failed to send initial batch SSE event, channel full",
 			"conn_id", conn.ID,
 		)
@@ -883,14 +1160,17 @@ func (h *AdminHub) broadcastAggregatedNodeStatus() {
 			Timestamp: timestamp,
 			Agents:    statusMap,
 		}
-		fullData, err := h.formatBatchSSEEvent(fullEvent)
+		fullResult, err := h.formatBatchSSEEvent(fullEvent)
 		if err != nil {
 			h.logger.Errorw("failed to format full batch node SSE event",
 				"error", err,
 			)
 		} else {
 			for _, conn := range subscribeAllConns {
-				if !conn.TrySend(fullData) {
+				// Cache event for this user
+				h.cacheEvent(conn.UserID, fullResult, "node")
+
+				if !conn.TrySend(fullResult.Data) {
 					h.logger.Warnw("failed to send batch node SSE event, channel full",
 						"conn_id", conn.ID,
 					)
@@ -917,7 +1197,7 @@ func (h *AdminHub) broadcastAggregatedNodeStatus() {
 			Timestamp: timestamp,
 			Agents:    filteredStatus,
 		}
-		filteredData, err := h.formatBatchSSEEvent(filteredEvent)
+		filteredResult, err := h.formatBatchSSEEvent(filteredEvent)
 		if err != nil {
 			h.logger.Errorw("failed to format filtered batch node SSE event",
 				"error", err,
@@ -926,7 +1206,10 @@ func (h *AdminHub) broadcastAggregatedNodeStatus() {
 			continue
 		}
 
-		if !conn.TrySend(filteredData) {
+		// Cache event for this user
+		h.cacheEvent(conn.UserID, filteredResult, "node")
+
+		if !conn.TrySend(filteredResult.Data) {
 			h.logger.Warnw("failed to send batch node SSE event, channel full",
 				"conn_id", conn.ID,
 			)
@@ -972,7 +1255,7 @@ func (h *AdminHub) BroadcastNodeStatusToConn(conn *SSEConn) {
 		Agents:    statusMap,
 	}
 
-	data, err := h.formatBatchSSEEvent(batchEvent)
+	result, err := h.formatBatchSSEEvent(batchEvent)
 	if err != nil {
 		h.logger.Errorw("failed to format initial batch node SSE event",
 			"error", err,
@@ -981,7 +1264,10 @@ func (h *AdminHub) BroadcastNodeStatusToConn(conn *SSEConn) {
 		return
 	}
 
-	if !conn.TrySend(data) {
+	// Cache event for this user
+	h.cacheEvent(conn.UserID, result, "node")
+
+	if !conn.TrySend(result.Data) {
 		h.logger.Warnw("failed to send initial batch node SSE event, channel full",
 			"conn_id", conn.ID,
 		)
