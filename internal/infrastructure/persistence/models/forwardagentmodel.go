@@ -31,7 +31,6 @@ type ForwardAgentModel struct {
 	LastSeenAt       *time.Time
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
-	DeletedAt        gorm.DeletedAt `gorm:"index"`
 }
 
 // TableName specifies the table name for GORM.

@@ -421,7 +421,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	createNodeUC := nodeUsecases.NewCreateNodeUseCase(nodeRepoImpl, log)
 	getNodeUC := nodeUsecases.NewGetNodeUseCase(nodeRepoImpl, resourceGroupRepo, nodeStatusQuerier, log)
 	updateNodeUC := nodeUsecases.NewUpdateNodeUseCase(log, nodeRepoImpl, resourceGroupRepo)
-	deleteNodeUC := nodeUsecases.NewDeleteNodeUseCase(nodeRepoImpl, log)
+	deleteNodeUC := nodeUsecases.NewDeleteNodeUseCase(nodeRepoImpl, forwardRuleRepo, log)
 	listNodesUC := nodeUsecases.NewListNodesUseCase(nodeRepoImpl, resourceGroupRepo, userRepo, nodeStatusQuerier, nodeAgentReleaseService, log)
 	generateNodeTokenUC := nodeUsecases.NewGenerateNodeTokenUseCase(nodeRepoImpl, log)
 	generateNodeInstallScriptUC := nodeUsecases.NewGenerateNodeInstallScriptUseCase(nodeRepoImpl, log)
@@ -762,7 +762,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	getForwardAgentUC := forwardUsecases.NewGetForwardAgentUseCase(forwardAgentRepo, forwardAgentStatusAdapter, log)
 	// updateForwardAgentUC will be initialized later after configSyncService is available
 	var updateForwardAgentUC *forwardUsecases.UpdateForwardAgentUseCase
-	deleteForwardAgentUC := forwardUsecases.NewDeleteForwardAgentUseCase(forwardAgentRepo, log)
+	deleteForwardAgentUC := forwardUsecases.NewDeleteForwardAgentUseCase(forwardAgentRepo, forwardRuleRepo, log)
 	listForwardAgentsUC := forwardUsecases.NewListForwardAgentsUseCase(forwardAgentRepo, forwardAgentStatusAdapter, forwardAgentReleaseService, log)
 	enableForwardAgentUC := forwardUsecases.NewEnableForwardAgentUseCase(forwardAgentRepo, log)
 	disableForwardAgentUC := forwardUsecases.NewDisableForwardAgentUseCase(forwardAgentRepo, log)
@@ -1315,6 +1315,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	// Initialize node hub handler with traffic buffer support
 	nodeHubHandler := nodeHandlers.NewNodeHubHandler(agentHub, nodeRepoImpl, subscriptionTrafficBuffer, subscriptionIDResolver, log)
+	nodeHubHandler.SetAddressChangeNotifier(configSyncService)
+	nodeHubHandler.SetIPUpdater(nodeRepoImpl)
 
 	// Initialize node SSE handler
 	nodeSSEHandler := nodeHandlers.NewNodeSSEHandler(adminHub, log)

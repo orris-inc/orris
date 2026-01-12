@@ -94,7 +94,7 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, link
 	groupIDsJSON := uintSliceToJSONArray(groupIDs)
 	if err := r.db.WithContext(ctx).
 		Table("nodes").
-		Where("JSON_OVERLAPS(group_ids, ?) AND deleted_at IS NULL", groupIDsJSON).
+		Where("JSON_OVERLAPS(group_ids, ?)", groupIDsJSON).
 		Pluck("id", &nodeIDs).Error; err != nil {
 		r.logger.Errorw("failed to query nodes by group", "error", err, "group_ids", groupIDs)
 		return nil, err
@@ -596,7 +596,7 @@ func (r *NodeRepositoryAdapter) getHybridPlanNodes(ctx context.Context, userID u
 		groupIDsJSON := uintSliceToJSONArray(groupIDs)
 		if err := r.db.WithContext(ctx).
 			Table("nodes").
-			Where("JSON_OVERLAPS(group_ids, ?) AND deleted_at IS NULL", groupIDsJSON).
+			Where("JSON_OVERLAPS(group_ids, ?)", groupIDsJSON).
 			Pluck("id", &nodeIDs).Error; err != nil {
 			r.logger.Errorw("failed to query nodes by group", "error", err, "group_ids", groupIDs)
 			return nil, err

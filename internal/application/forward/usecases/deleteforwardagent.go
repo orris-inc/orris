@@ -16,18 +16,21 @@ type DeleteForwardAgentCommand struct {
 
 // DeleteForwardAgentUseCase handles forward agent deletion.
 type DeleteForwardAgentUseCase struct {
-	repo   forward.AgentRepository
-	logger logger.Interface
+	agentRepo forward.AgentRepository
+	ruleRepo  forward.Repository
+	logger    logger.Interface
 }
 
 // NewDeleteForwardAgentUseCase creates a new DeleteForwardAgentUseCase.
 func NewDeleteForwardAgentUseCase(
-	repo forward.AgentRepository,
+	agentRepo forward.AgentRepository,
+	ruleRepo forward.Repository,
 	logger logger.Interface,
 ) *DeleteForwardAgentUseCase {
 	return &DeleteForwardAgentUseCase{
-		repo:   repo,
-		logger: logger,
+		agentRepo: agentRepo,
+		ruleRepo:  ruleRepo,
+		logger:    logger,
 	}
 }
 
@@ -39,7 +42,7 @@ func (uc *DeleteForwardAgentUseCase) Execute(ctx context.Context, cmd DeleteForw
 
 	uc.logger.Infow("executing delete forward agent use case", "short_id", cmd.ShortID)
 
-	agent, err := uc.repo.GetBySID(ctx, cmd.ShortID)
+	agent, err := uc.agentRepo.GetBySID(ctx, cmd.ShortID)
 	if err != nil {
 		uc.logger.Errorw("failed to get forward agent", "short_id", cmd.ShortID, "error", err)
 		return fmt.Errorf("failed to get forward agent: %w", err)
@@ -48,12 +51,54 @@ func (uc *DeleteForwardAgentUseCase) Execute(ctx context.Context, cmd DeleteForw
 		return errors.NewNotFoundError("forward agent", cmd.ShortID)
 	}
 
+	agentID := agent.ID()
+
+	// Check if agent is referenced by any forward rules
+	if err := uc.checkAgentReferences(ctx, agentID); err != nil {
+		return err
+	}
+
 	// Delete the agent using internal ID
-	if err := uc.repo.Delete(ctx, agent.ID()); err != nil {
-		uc.logger.Errorw("failed to delete forward agent", "id", agent.ID(), "short_id", agent.SID(), "error", err)
+	if err := uc.agentRepo.Delete(ctx, agentID); err != nil {
+		uc.logger.Errorw("failed to delete forward agent", "id", agentID, "short_id", agent.SID(), "error", err)
 		return fmt.Errorf("failed to delete forward agent: %w", err)
 	}
 
-	uc.logger.Infow("forward agent deleted successfully", "id", agent.ID(), "short_id", agent.SID())
+	uc.logger.Infow("forward agent deleted successfully", "id", agentID, "short_id", agent.SID())
+	return nil
+}
+
+// checkAgentReferences checks if the agent is referenced by any forward rules.
+func (uc *DeleteForwardAgentUseCase) checkAgentReferences(ctx context.Context, agentID uint) error {
+	// Check rules where this agent is the entry agent (agent_id)
+	entryRules, err := uc.ruleRepo.ListByAgentID(ctx, agentID)
+	if err != nil {
+		uc.logger.Errorw("failed to check entry rules", "agent_id", agentID, "error", err)
+		return fmt.Errorf("failed to check agent references: %w", err)
+	}
+	if len(entryRules) > 0 {
+		return errors.NewConflictError(fmt.Sprintf("cannot delete agent: %d forward rule(s) use this agent as entry agent", len(entryRules)))
+	}
+
+	// Check rules where this agent is the exit agent (exit_agent_id)
+	exitRules, err := uc.ruleRepo.ListByExitAgentID(ctx, agentID)
+	if err != nil {
+		uc.logger.Errorw("failed to check exit rules", "agent_id", agentID, "error", err)
+		return fmt.Errorf("failed to check agent references: %w", err)
+	}
+	if len(exitRules) > 0 {
+		return errors.NewConflictError(fmt.Sprintf("cannot delete agent: %d forward rule(s) use this agent as exit agent", len(exitRules)))
+	}
+
+	// Check rules where this agent is in the chain (chain_agent_ids)
+	chainRules, err := uc.ruleRepo.ListEnabledByChainAgentID(ctx, agentID)
+	if err != nil {
+		uc.logger.Errorw("failed to check chain rules", "agent_id", agentID, "error", err)
+		return fmt.Errorf("failed to check agent references: %w", err)
+	}
+	if len(chainRules) > 0 {
+		return errors.NewConflictError(fmt.Sprintf("cannot delete agent: %d forward rule(s) use this agent in chain", len(chainRules)))
+	}
+
 	return nil
 }

@@ -11,7 +11,6 @@ import (
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 	"github.com/orris-inc/orris/internal/shared/biztime"
-	"github.com/orris-inc/orris/internal/shared/db"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -227,15 +226,10 @@ func (r *ForwardAgentRepositoryImpl) Update(ctx context.Context, agent *forward.
 	return nil
 }
 
-// Delete soft deletes a forward agent and sets status to disabled.
+// Delete permanently deletes a forward agent from the database.
 func (r *ForwardAgentRepositoryImpl) Delete(ctx context.Context, id uint) error {
-	// Set status to disabled before soft delete for defensive programming
-	result := r.db.WithContext(ctx).Model(&models.ForwardAgentModel{}).
-		Where("id = ? AND deleted_at IS NULL", id).
-		Updates(map[string]any{
-			"status":     "disabled",
-			"deleted_at": biztime.NowUTC(),
-		})
+	// Use Unscoped() to perform hard delete instead of soft delete
+	result := r.db.WithContext(ctx).Unscoped().Delete(&models.ForwardAgentModel{}, id)
 
 	if result.Error != nil {
 		r.logger.Errorw("failed to delete forward agent", "id", id, "error", result.Error)
@@ -322,11 +316,10 @@ func (r *ForwardAgentRepositoryImpl) ListEnabled(ctx context.Context) ([]*forwar
 	return entities, nil
 }
 
-// ExistsByName checks if an agent with the given name exists (excluding soft-deleted records).
+// ExistsByName checks if an agent with the given name exists.
 func (r *ForwardAgentRepositoryImpl) ExistsByName(ctx context.Context, name string) (bool, error) {
 	var count int64
 	err := r.db.WithContext(ctx).Model(&models.ForwardAgentModel{}).
-		Scopes(db.NotDeleted()).
 		Where("name = ?", name).
 		Count(&count).Error
 	if err != nil {

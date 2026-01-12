@@ -59,14 +59,8 @@ func (uc *GetNodeConfigUseCase) Execute(ctx context.Context, cmd GetNodeConfigCo
 		return nil, fmt.Errorf("node not found")
 	}
 
-	// Check if node is active
-	if !n.IsAvailable() {
-		uc.logger.Warnw("attempt to get configuration for inactive node",
-			"node_id", cmd.NodeID,
-			"status", n.Status(),
-		)
-		return nil, fmt.Errorf("node is not active")
-	}
+	// Node can be connected regardless of activation status.
+	// Status is only used for business logic (e.g., subscription routing).
 
 	// Fetch referenced nodes if route config has node references
 	var referencedNodes []*node.Node

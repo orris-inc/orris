@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"gorm.io/datatypes"
-	"gorm.io/gorm"
 
 	"github.com/orris-inc/orris/internal/domain/node"
 	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
@@ -262,15 +261,6 @@ func (m *NodeMapperImpl) ToModel(entity *node.Node) (*models.NodeModel, error) {
 		Version:           entity.Version(),
 		CreatedAt:         entity.CreatedAt(),
 		UpdatedAt:         entity.UpdatedAt(),
-	}
-
-	// Handle soft delete
-	if entity.Status().String() == "deleted" {
-		now := entity.UpdatedAt()
-		model.DeletedAt = gorm.DeletedAt{
-			Time:  now,
-			Valid: true,
-		}
 	}
 
 	return model, nil

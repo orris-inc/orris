@@ -42,6 +42,9 @@ type NodeRepository interface {
 	// GetPublicIPs retrieves the current public IPs for a node
 	// Returns (ipv4, ipv6, error) - empty string if IP is not set
 	GetPublicIPs(ctx context.Context, nodeID uint) (string, string, error)
+	// UpdatePublicIP updates the public IP for a node (immediate, no throttling)
+	// Pass empty string to skip updating that IP version
+	UpdatePublicIP(ctx context.Context, nodeID uint, ipv4, ipv6 string) error
 	// ValidateNodeSIDsForUser checks if all given node SIDs exist and belong to the specified user.
 	// Returns slice of invalid SIDs (not found or not owned by user).
 	ValidateNodeSIDsForUser(ctx context.Context, sids []string, userID uint) ([]string, error)

@@ -144,9 +144,6 @@ func (h *AgentHandler) GetConfig(c *gin.Context) {
 		if err.Error() == "node not found" {
 			statusCode = http.StatusNotFound
 			message = "node not found"
-		} else if err.Error() == "node is not active" {
-			statusCode = http.StatusNotFound
-			message = "node is not available"
 		}
 
 		utils.ErrorResponse(c, statusCode, message)

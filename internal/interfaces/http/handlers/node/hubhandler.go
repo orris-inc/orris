@@ -4,6 +4,7 @@ package node
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/url"
 	"time"
@@ -53,13 +54,25 @@ type trafficReport struct {
 	Download        int64  `json:"download"`
 }
 
+// NodeAddressChangeNotifier defines the interface for notifying node address changes.
+type NodeAddressChangeNotifier interface {
+	NotifyNodeAddressChange(ctx context.Context, nodeID uint) error
+}
+
+// NodeIPUpdater defines the interface for updating node public IPs.
+type NodeIPUpdater interface {
+	UpdatePublicIP(ctx context.Context, nodeID uint, ipv4, ipv6 string) error
+}
+
 // NodeHubHandler handles WebSocket connections for node agents.
 type NodeHubHandler struct {
-	hub                  *services.AgentHub
-	nodeRepo             node.NodeRepository
-	trafficBuffer        SubscriptionTrafficBufferWriter
-	subscriptionResolver usecases.SubscriptionIDResolver
-	logger               logger.Interface
+	hub                   *services.AgentHub
+	nodeRepo              node.NodeRepository
+	trafficBuffer         SubscriptionTrafficBufferWriter
+	subscriptionResolver  usecases.SubscriptionIDResolver
+	addressChangeNotifier NodeAddressChangeNotifier
+	ipUpdater             NodeIPUpdater
+	logger                logger.Interface
 }
 
 // NewNodeHubHandler creates a new NodeHubHandler.
@@ -77,6 +90,16 @@ func NewNodeHubHandler(
 		subscriptionResolver: subscriptionResolver,
 		logger:               log,
 	}
+}
+
+// SetAddressChangeNotifier sets the address change notifier (optional).
+func (h *NodeHubHandler) SetAddressChangeNotifier(notifier NodeAddressChangeNotifier) {
+	h.addressChangeNotifier = notifier
+}
+
+// SetIPUpdater sets the IP updater (optional).
+func (h *NodeHubHandler) SetIPUpdater(updater NodeIPUpdater) {
+	h.ipUpdater = updater
 }
 
 // NodeAgentWS handles WebSocket connections from node agents.
@@ -111,14 +134,97 @@ func (h *NodeHubHandler) NodeAgentWS(c *gin.Context) {
 
 	nodeConn := h.hub.RegisterNodeAgent(nodeID, conn)
 
+	clientIP := c.ClientIP()
 	h.logger.Infow("node agent hub websocket connected",
 		"node_id", nodeID,
-		"ip", c.ClientIP(),
+		"ip", clientIP,
 	)
+
+	// Check if node IP has changed, update database, and notify forward agents
+	h.checkAndNotifyIPChange(c.Request.Context(), nodeID, clientIP)
 
 	// Start read and write pumps
 	go h.writePump(nodeID, conn, nodeConn.Send)
 	h.readPump(nodeID, conn)
+}
+
+// checkAndNotifyIPChange checks if the node's public IP has changed,
+// updates the database first, then notifies forward agents.
+func (h *NodeHubHandler) checkAndNotifyIPChange(ctx context.Context, nodeID uint, newIP string) {
+	if h.addressChangeNotifier == nil || h.ipUpdater == nil || newIP == "" {
+		return
+	}
+
+	// Get current IPs from database
+	currentIPv4, currentIPv6, err := h.nodeRepo.GetPublicIPs(ctx, nodeID)
+	if err != nil {
+		h.logger.Warnw("failed to get current public IPs for change detection",
+			"error", err,
+			"node_id", nodeID,
+		)
+		return
+	}
+
+	// Check if the new IP differs from current IP
+	// newIP could be IPv4 or IPv6 depending on the connection
+	isIPv4 := false
+	parsedIP := net.ParseIP(newIP)
+	if parsedIP == nil {
+		return
+	}
+
+	// Determine IP version and check if changed (including first-time set)
+	var ipChanged bool
+	if parsedIP.To4() != nil {
+		isIPv4 = true
+		ipChanged = newIP != currentIPv4
+	} else {
+		ipChanged = newIP != currentIPv6
+	}
+
+	if !ipChanged {
+		return
+	}
+
+	h.logger.Infow("node IP changed on websocket connect",
+		"node_id", nodeID,
+		"new_ip", newIP,
+		"is_ipv4", isIPv4,
+		"current_ipv4", currentIPv4,
+		"current_ipv6", currentIPv6,
+	)
+
+	// Step 1: Update database first (so that sync reads the new IP)
+	var updateIPv4, updateIPv6 string
+	if isIPv4 {
+		updateIPv4 = newIP
+	} else {
+		updateIPv6 = newIP
+	}
+	if err := h.ipUpdater.UpdatePublicIP(ctx, nodeID, updateIPv4, updateIPv6); err != nil {
+		h.logger.Warnw("failed to update node public IP",
+			"error", err,
+			"node_id", nodeID,
+			"new_ip", newIP,
+		)
+		return
+	}
+
+	h.logger.Infow("node IP updated in database, notifying forward agents",
+		"node_id", nodeID,
+		"new_ip", newIP,
+	)
+
+	// Step 2: Notify forward agents asynchronously (now database has the new IP)
+	go func() {
+		notifyCtx := context.Background()
+		if err := h.addressChangeNotifier.NotifyNodeAddressChange(notifyCtx, nodeID); err != nil {
+			h.logger.Warnw("failed to notify forward agents of node IP change",
+				"error", err,
+				"node_id", nodeID,
+			)
+		}
+	}()
 }
 
 // readPump reads messages from node agent WebSocket.
