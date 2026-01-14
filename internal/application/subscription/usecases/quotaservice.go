@@ -39,6 +39,10 @@ type QuotaService interface {
 	// CheckUserForwardQuotaExceeded checks if user's Forward quota is exceeded.
 	// Returns true if all Forward subscriptions have exceeded their quota.
 	CheckUserForwardQuotaExceeded(ctx context.Context, userID uint) (bool, error)
+
+	// GetCurrentPeriodUsage returns the total usage for the current billing period.
+	// This method is used for real-time traffic limit checking.
+	GetCurrentPeriodUsage(ctx context.Context, subscriptionID uint, periodStart, periodEnd time.Time) (int64, error)
 }
 
 // QuotaServiceImpl implements the QuotaService interface.
@@ -80,6 +84,16 @@ func (s *QuotaServiceImpl) GetSubscriptionQuota(ctx context.Context, subscriptio
 
 	if sub == nil {
 		s.logger.Warnw("subscription not found", "subscription_id", subscriptionID)
+		return nil, nil
+	}
+
+	// Skip quota calculation for already suspended subscriptions to avoid redundant checks.
+	// Suspended subscriptions don't need quota enforcement - they're already suspended.
+	if sub.Status() == vo.StatusSuspended {
+		s.logger.Debugw("subscription already suspended, skipping quota check",
+			"subscription_id", subscriptionID,
+			"subscription_sid", sub.SID(),
+		)
 		return nil, nil
 	}
 
@@ -307,6 +321,27 @@ func (s *QuotaServiceImpl) getResourceTypeForPlan(planType vo.PlanType) *string 
 		rt := subscription.ResourceTypeNode.String()
 		return &rt
 	}
+}
+
+// GetCurrentPeriodUsage returns the total usage for the current billing period.
+// This method aggregates all resource types (forward_rule + node) for the subscription.
+// It is used for real-time traffic limit checking and implements the SubscriptionUsageReader interface.
+func (s *QuotaServiceImpl) GetCurrentPeriodUsage(
+	ctx context.Context,
+	subscriptionID uint,
+	periodStart time.Time,
+	periodEnd time.Time,
+) (int64, error) {
+	// Aggregate all resource types (nil = no filter)
+	usage, err := s.calculatePeriodUsage(ctx, []uint{subscriptionID}, nil, periodStart, periodEnd)
+	if err != nil {
+		return 0, err
+	}
+	// Safe conversion from uint64 to int64 (cap at MaxInt64 to prevent overflow)
+	if usage > uint64(^uint64(0)>>1) {
+		return int64(^uint64(0) >> 1), nil
+	}
+	return int64(usage), nil
 }
 
 // calculatePeriodUsage calculates total usage for subscriptions within a billing period.

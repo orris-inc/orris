@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
 
 	"github.com/orris-inc/orris/internal/domain/node"
@@ -838,50 +840,121 @@ func (r *NodeRepositoryImpl) List(ctx context.Context, filter node.NodeFilter) (
 		}
 	}
 
-	// Load protocol-specific configs
-	ssConfigsRaw, err := r.shadowsocksConfigRepo.GetByNodeIDs(ctx, ssNodeIDs)
-	if err != nil {
-		r.logger.Errorw("failed to get shadowsocks configs", "error", err)
-		return nil, 0, fmt.Errorf("failed to get shadowsocks configs: %w", err)
+	// Load protocol-specific configs in parallel
+	var (
+		ssConfigsRaw     map[uint]*ShadowsocksConfigData
+		trojanConfigs    map[uint]*vo.TrojanConfig
+		vlessConfigs     map[uint]*vo.VLESSConfig
+		vmessConfigs     map[uint]*vo.VMessConfig
+		hysteria2Configs map[uint]*vo.Hysteria2Config
+		tuicConfigs      map[uint]*vo.TUICConfig
+		mu               sync.Mutex
+	)
+
+	g, gctx := errgroup.WithContext(ctx)
+
+	// Shadowsocks configs
+	if len(ssNodeIDs) > 0 {
+		g.Go(func() error {
+			configs, err := r.shadowsocksConfigRepo.GetByNodeIDs(gctx, ssNodeIDs)
+			if err != nil {
+				r.logger.Errorw("failed to get shadowsocks configs", "error", err)
+				return fmt.Errorf("failed to get shadowsocks configs: %w", err)
+			}
+			mu.Lock()
+			ssConfigsRaw = configs
+			mu.Unlock()
+			return nil
+		})
 	}
 
-	// Convert to mapper format
+	// Trojan configs
+	if len(trojanNodeIDs) > 0 {
+		g.Go(func() error {
+			configs, err := r.trojanConfigRepo.GetByNodeIDs(gctx, trojanNodeIDs)
+			if err != nil {
+				r.logger.Errorw("failed to get trojan configs", "error", err)
+				return fmt.Errorf("failed to get trojan configs: %w", err)
+			}
+			mu.Lock()
+			trojanConfigs = configs
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	// VLESS configs
+	if len(vlessNodeIDs) > 0 {
+		g.Go(func() error {
+			configs, err := r.vlessConfigRepo.GetByNodeIDs(gctx, vlessNodeIDs)
+			if err != nil {
+				r.logger.Errorw("failed to get vless configs", "error", err)
+				return fmt.Errorf("failed to get vless configs: %w", err)
+			}
+			mu.Lock()
+			vlessConfigs = configs
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	// VMess configs
+	if len(vmessNodeIDs) > 0 {
+		g.Go(func() error {
+			configs, err := r.vmessConfigRepo.GetByNodeIDs(gctx, vmessNodeIDs)
+			if err != nil {
+				r.logger.Errorw("failed to get vmess configs", "error", err)
+				return fmt.Errorf("failed to get vmess configs: %w", err)
+			}
+			mu.Lock()
+			vmessConfigs = configs
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	// Hysteria2 configs
+	if len(hysteria2NodeIDs) > 0 {
+		g.Go(func() error {
+			configs, err := r.hysteria2ConfigRepo.GetByNodeIDs(gctx, hysteria2NodeIDs)
+			if err != nil {
+				r.logger.Errorw("failed to get hysteria2 configs", "error", err)
+				return fmt.Errorf("failed to get hysteria2 configs: %w", err)
+			}
+			mu.Lock()
+			hysteria2Configs = configs
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	// TUIC configs
+	if len(tuicNodeIDs) > 0 {
+		g.Go(func() error {
+			configs, err := r.tuicConfigRepo.GetByNodeIDs(gctx, tuicNodeIDs)
+			if err != nil {
+				r.logger.Errorw("failed to get tuic configs", "error", err)
+				return fmt.Errorf("failed to get tuic configs: %w", err)
+			}
+			mu.Lock()
+			tuicConfigs = configs
+			mu.Unlock()
+			return nil
+		})
+	}
+
+	// Wait for all goroutines to complete
+	if err := g.Wait(); err != nil {
+		return nil, 0, err
+	}
+
+	// Convert shadowsocks configs to mapper format
 	ssConfigs := make(map[uint]*mappers.ShadowsocksConfigData)
 	for nodeID, data := range ssConfigsRaw {
 		ssConfigs[nodeID] = &mappers.ShadowsocksConfigData{
 			EncryptionConfig: data.EncryptionConfig,
 			PluginConfig:     data.PluginConfig,
 		}
-	}
-
-	trojanConfigs, err := r.trojanConfigRepo.GetByNodeIDs(ctx, trojanNodeIDs)
-	if err != nil {
-		r.logger.Errorw("failed to get trojan configs", "error", err)
-		return nil, 0, fmt.Errorf("failed to get trojan configs: %w", err)
-	}
-
-	vlessConfigs, err := r.vlessConfigRepo.GetByNodeIDs(ctx, vlessNodeIDs)
-	if err != nil {
-		r.logger.Errorw("failed to get vless configs", "error", err)
-		return nil, 0, fmt.Errorf("failed to get vless configs: %w", err)
-	}
-
-	vmessConfigs, err := r.vmessConfigRepo.GetByNodeIDs(ctx, vmessNodeIDs)
-	if err != nil {
-		r.logger.Errorw("failed to get vmess configs", "error", err)
-		return nil, 0, fmt.Errorf("failed to get vmess configs: %w", err)
-	}
-
-	hysteria2Configs, err := r.hysteria2ConfigRepo.GetByNodeIDs(ctx, hysteria2NodeIDs)
-	if err != nil {
-		r.logger.Errorw("failed to get hysteria2 configs", "error", err)
-		return nil, 0, fmt.Errorf("failed to get hysteria2 configs: %w", err)
-	}
-
-	tuicConfigs, err := r.tuicConfigRepo.GetByNodeIDs(ctx, tuicNodeIDs)
-	if err != nil {
-		r.logger.Errorw("failed to get tuic configs", "error", err)
-		return nil, 0, fmt.Errorf("failed to get tuic configs: %w", err)
 	}
 
 	// Convert models to entities
@@ -1347,4 +1420,67 @@ func (r *NodeRepositoryImpl) ValidateNodeSIDsExist(ctx context.Context, sids []s
 	}
 
 	return invalidSIDs, nil
+}
+
+// GetAllMetadata returns lightweight metadata for all nodes.
+// Only queries id, sid, name fields without loading protocol configs.
+func (r *NodeRepositoryImpl) GetAllMetadata(ctx context.Context) ([]*node.NodeMetadata, error) {
+	var results []struct {
+		ID   uint   `gorm:"column:id"`
+		SID  string `gorm:"column:sid"`
+		Name string `gorm:"column:name"`
+	}
+
+	if err := r.db.WithContext(ctx).
+		Model(&models.NodeModel{}).
+		Select("id, sid, name").
+		Find(&results).Error; err != nil {
+		r.logger.Errorw("failed to get all node metadata", "error", err)
+		return nil, fmt.Errorf("failed to get node metadata: %w", err)
+	}
+
+	metadata := make([]*node.NodeMetadata, len(results))
+	for i, res := range results {
+		metadata[i] = &node.NodeMetadata{
+			ID:   res.ID,
+			SID:  res.SID,
+			Name: res.Name,
+		}
+	}
+
+	return metadata, nil
+}
+
+// GetMetadataBySIDs returns lightweight metadata for nodes by SIDs.
+// Only queries id, sid, name fields without loading protocol configs.
+func (r *NodeRepositoryImpl) GetMetadataBySIDs(ctx context.Context, sids []string) ([]*node.NodeMetadata, error) {
+	if len(sids) == 0 {
+		return []*node.NodeMetadata{}, nil
+	}
+
+	var results []struct {
+		ID   uint   `gorm:"column:id"`
+		SID  string `gorm:"column:sid"`
+		Name string `gorm:"column:name"`
+	}
+
+	if err := r.db.WithContext(ctx).
+		Model(&models.NodeModel{}).
+		Select("id, sid, name").
+		Where("sid IN ?", sids).
+		Find(&results).Error; err != nil {
+		r.logger.Errorw("failed to get node metadata by SIDs", "sids", sids, "error", err)
+		return nil, fmt.Errorf("failed to get node metadata: %w", err)
+	}
+
+	metadata := make([]*node.NodeMetadata, len(results))
+	for i, res := range results {
+		metadata[i] = &node.NodeMetadata{
+			ID:   res.ID,
+			SID:  res.SID,
+			Name: res.Name,
+		}
+	}
+
+	return metadata, nil
 }

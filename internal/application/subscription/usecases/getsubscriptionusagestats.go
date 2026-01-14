@@ -100,32 +100,23 @@ func (uc *GetSubscriptionUsageStatsUseCase) Execute(
 		return nil, err
 	}
 
-	// Get total usage summary from Redis (recent 48h) + MySQL stats (historical)
-	summary, err := uc.getTotalUsageBySubscriptionID(ctx, query.SubscriptionID, query.From, query.To)
-	if err != nil {
-		uc.logger.Errorw("failed to fetch subscription usage summary", "error", err)
-		return nil, errors.NewInternalError("failed to fetch usage summary")
+	// No granularity - default to daily granularity
+	if query.Granularity == "" {
+		query.Granularity = "day"
 	}
 
-	// If granularity is specified, use trend aggregation
-	if query.Granularity != "" {
-		return uc.executeWithTrendAggregation(ctx, query, summary)
-	}
-
-	// No granularity - default to daily granularity from stats table
-	// (Legacy raw records query from subscription_usages is deprecated)
-	query.Granularity = "day"
-	return uc.executeWithTrendAggregation(ctx, query, summary)
+	// Get records first, then calculate summary from records to ensure consistency
+	return uc.executeWithTrendAggregation(ctx, query)
 }
 
 // executeWithTrendAggregation fetches usage stats with time-based aggregation.
 // Routes to different data sources based on granularity:
 // - hour: Redis HourlyTrafficCache (last 48 hours only)
 // - day/month: MySQL subscription_usage_stats table
+// Summary is calculated from records to ensure data consistency.
 func (uc *GetSubscriptionUsageStatsUseCase) executeWithTrendAggregation(
 	ctx context.Context,
 	query GetSubscriptionUsageStatsQuery,
-	summary *SubscriptionUsageSummary,
 ) (*GetSubscriptionUsageStatsResponse, error) {
 	var records []*SubscriptionUsageStatsRecord
 	var err error
@@ -145,6 +136,10 @@ func (uc *GetSubscriptionUsageStatsUseCase) executeWithTrendAggregation(
 	if err != nil {
 		return nil, err
 	}
+
+	// Calculate summary from records to ensure consistency
+	// This avoids the issue where summary uses active sets but records use direct key lookup
+	summary := uc.calculateSummaryFromRecords(records)
 
 	page := query.Page
 	if page == 0 {
@@ -167,9 +162,24 @@ func (uc *GetSubscriptionUsageStatsUseCase) executeWithTrendAggregation(
 		"subscription_id", query.SubscriptionID,
 		"granularity", query.Granularity,
 		"count", len(records),
+		"summary_total", summary.Total,
 	)
 
 	return response, nil
+}
+
+// calculateSummaryFromRecords aggregates all records into a summary.
+// This ensures summary and records are always consistent since they use the same data source.
+func (uc *GetSubscriptionUsageStatsUseCase) calculateSummaryFromRecords(
+	records []*SubscriptionUsageStatsRecord,
+) *SubscriptionUsageSummary {
+	summary := &SubscriptionUsageSummary{}
+	for _, record := range records {
+		summary.TotalUpload += record.Upload
+		summary.TotalDownload += record.Download
+		summary.Total += record.Total
+	}
+	return summary
 }
 
 // hourlyRecordKey uniquely identifies an hourly traffic record by resource and time.
@@ -565,140 +575,6 @@ func (uc *GetSubscriptionUsageStatsUseCase) getMonthlyTrendFromStats(
 	return uc.convertStatsToRecords(ctx, stats)
 }
 
-// getTotalUsageBySubscriptionID combines recent traffic from Redis with historical from MySQL stats.
-// For data within the last 48 hours, it queries Redis HourlyTrafficCache.
-// For data older than 48 hours, it queries MySQL subscription_usage_stats table.
-func (uc *GetSubscriptionUsageStatsUseCase) getTotalUsageBySubscriptionID(
-	ctx context.Context,
-	subscriptionID uint,
-	from, to time.Time,
-) (*SubscriptionUsageSummary, error) {
-	now := biztime.NowUTC()
-	retentionBoundary := now.Add(-maxHourlyDataHours * time.Hour)
-
-	var totalUpload, totalDownload, total uint64
-
-	// Determine time boundaries for recent data (Redis)
-	recentFrom := from
-	if recentFrom.Before(retentionBoundary) {
-		recentFrom = retentionBoundary
-	}
-
-	// Get recent traffic from Redis (within retention window)
-	if recentFrom.Before(to) && recentFrom.Before(now) {
-		recentTo := to
-		if recentTo.After(now) {
-			recentTo = now
-		}
-		// Use hourlyCache to get subscription traffic
-		recentTraffic, err := uc.hourlyCache.GetTotalTrafficBySubscriptionIDs(
-			ctx, []uint{subscriptionID}, "", recentFrom, recentTo,
-		)
-		if err != nil {
-			uc.logger.Warnw("failed to get recent traffic from Redis",
-				"subscription_id", subscriptionID,
-				"from", recentFrom,
-				"to", recentTo,
-				"error", err,
-			)
-			// Continue with historical data even if Redis fails
-		} else if t, ok := recentTraffic[subscriptionID]; ok {
-			totalUpload += t.Upload
-			totalDownload += t.Download
-			total += t.Total
-		}
-	}
-
-	// Get historical traffic from MySQL stats (before retention window)
-	if from.Before(retentionBoundary) {
-		historicalTo := retentionBoundary
-		if historicalTo.After(to) {
-			historicalTo = to
-		}
-		// Use daily granularity for historical aggregation
-		historicalStats, err := uc.usageStatsRepo.GetTotalBySubscriptionIDs(
-			ctx, []uint{subscriptionID}, nil, subscription.GranularityDaily, from, historicalTo,
-		)
-		if err != nil {
-			uc.logger.Warnw("failed to get historical traffic from stats",
-				"subscription_id", subscriptionID,
-				"from", from,
-				"to", historicalTo,
-				"error", err,
-			)
-			// Continue with whatever data we have
-		} else if historicalStats != nil {
-			totalUpload += historicalStats.Upload
-			totalDownload += historicalStats.Download
-			total += historicalStats.Total
-		}
-	}
-
-	return &SubscriptionUsageSummary{
-		TotalUpload:   totalUpload,
-		TotalDownload: totalDownload,
-		Total:         total,
-	}, nil
-}
-
-// getLegacyTrend retrieves trend data from legacy subscription_usages table.
-// DEPRECATED: This method queries the old subscription_usages table and is only used
-// as a fallback when active resource discovery fails. Prefer using the stats-based methods.
-func (uc *GetSubscriptionUsageStatsUseCase) getLegacyTrend(
-	ctx context.Context,
-	query GetSubscriptionUsageStatsQuery,
-) ([]*SubscriptionUsageStatsRecord, error) {
-	uc.logger.Warnw("using deprecated legacy trend query on subscription_usages table",
-		"subscription_id", query.SubscriptionID,
-		"from", query.From,
-		"to", query.To,
-		"granularity", query.Granularity,
-	)
-	trendPoints, err := uc.usageRepo.GetSubscriptionUsageTrend(ctx, query.SubscriptionID, query.From, query.To, query.Granularity)
-	if err != nil {
-		uc.logger.Errorw("failed to fetch subscription usage trend from legacy table", "error", err)
-		return nil, errors.NewInternalError("failed to fetch usage statistics")
-	}
-
-	// Collect resource IDs by type for batch lookup
-	nodeIDs := make([]uint, 0)
-	forwardRuleIDs := make([]uint, 0)
-	for _, point := range trendPoints {
-		switch subscription.ResourceType(point.ResourceType) {
-		case subscription.ResourceTypeNode:
-			nodeIDs = append(nodeIDs, point.ResourceID)
-		case subscription.ResourceTypeForwardRule:
-			forwardRuleIDs = append(forwardRuleIDs, point.ResourceID)
-		}
-	}
-
-	// Batch fetch SID maps
-	nodeSIDMap, forwardRuleSIDMap := uc.fetchSIDMaps(ctx, nodeIDs, forwardRuleIDs)
-
-	// Convert trend points to response format
-	records := make([]*SubscriptionUsageStatsRecord, 0, len(trendPoints))
-	for _, point := range trendPoints {
-		var resourceSID string
-		switch subscription.ResourceType(point.ResourceType) {
-		case subscription.ResourceTypeNode:
-			resourceSID = nodeSIDMap[point.ResourceID]
-		case subscription.ResourceTypeForwardRule:
-			resourceSID = forwardRuleSIDMap[point.ResourceID]
-		}
-
-		records = append(records, &SubscriptionUsageStatsRecord{
-			ResourceType: point.ResourceType,
-			ResourceSID:  resourceSID,
-			Upload:       point.Upload,
-			Download:     point.Download,
-			Total:        point.Total,
-			Period:       point.Period,
-		})
-	}
-
-	return records, nil
-}
-
 // convertStatsToRecords converts SubscriptionUsageStats entities to SubscriptionUsageStatsRecord response format.
 func (uc *GetSubscriptionUsageStatsUseCase) convertStatsToRecords(
 	ctx context.Context,
@@ -741,81 +617,6 @@ func (uc *GetSubscriptionUsageStatsUseCase) convertStatsToRecords(
 	}
 
 	return records, nil
-}
-
-// executeWithRawRecords fetches raw usage records without aggregation.
-// DEPRECATED: This method queries the old subscription_usages table for raw records.
-// Raw record queries are being phased out in favor of aggregated stats from Redis + MySQL stats table.
-func (uc *GetSubscriptionUsageStatsUseCase) executeWithRawRecords(
-	ctx context.Context,
-	query GetSubscriptionUsageStatsQuery,
-	summary *SubscriptionUsageSummary,
-) (*GetSubscriptionUsageStatsResponse, error) {
-	uc.logger.Warnw("using deprecated raw records query on subscription_usages table",
-		"subscription_id", query.SubscriptionID,
-		"from", query.From,
-		"to", query.To,
-	)
-	filter := uc.buildFilter(query)
-
-	usageRecords, err := uc.usageRepo.GetUsageStats(ctx, filter)
-	if err != nil {
-		uc.logger.Errorw("failed to fetch subscription usage stats", "error", err)
-		return nil, errors.NewInternalError("failed to fetch usage statistics")
-	}
-
-	// Collect resource IDs by type for batch lookup
-	nodeIDs := make([]uint, 0)
-	forwardRuleIDs := make([]uint, 0)
-	for _, record := range usageRecords {
-		switch subscription.ResourceType(record.ResourceType()) {
-		case subscription.ResourceTypeNode:
-			nodeIDs = append(nodeIDs, record.ResourceID())
-		case subscription.ResourceTypeForwardRule:
-			forwardRuleIDs = append(forwardRuleIDs, record.ResourceID())
-		}
-	}
-
-	// Batch fetch SID maps
-	nodeSIDMap, forwardRuleSIDMap := uc.fetchSIDMaps(ctx, nodeIDs, forwardRuleIDs)
-
-	// Convert records to response format
-	records := make([]*SubscriptionUsageStatsRecord, 0, len(usageRecords))
-
-	for _, record := range usageRecords {
-		// Get resource SID based on type
-		var resourceSID string
-		switch subscription.ResourceType(record.ResourceType()) {
-		case subscription.ResourceTypeNode:
-			resourceSID = nodeSIDMap[record.ResourceID()]
-		case subscription.ResourceTypeForwardRule:
-			resourceSID = forwardRuleSIDMap[record.ResourceID()]
-		}
-
-		records = append(records, &SubscriptionUsageStatsRecord{
-			ResourceType: record.ResourceType(),
-			ResourceSID:  resourceSID,
-			Upload:       record.Upload(),
-			Download:     record.Download(),
-			Total:        record.Total(),
-			Period:       record.Period(),
-		})
-	}
-
-	response := &GetSubscriptionUsageStatsResponse{
-		Records:  records,
-		Summary:  summary,
-		Total:    len(records),
-		Page:     filter.Page,
-		PageSize: filter.PageSize,
-	}
-
-	uc.logger.Infow("subscription usage stats fetched successfully",
-		"subscription_id", query.SubscriptionID,
-		"count", len(records),
-	)
-
-	return response, nil
 }
 
 // fetchSIDMaps fetches SID mappings for nodes and forward rules using batch queries
@@ -901,30 +702,4 @@ func (uc *GetSubscriptionUsageStatsUseCase) validateQuery(query GetSubscriptionU
 	}
 
 	return nil
-}
-
-func (uc *GetSubscriptionUsageStatsUseCase) buildFilter(query GetSubscriptionUsageStatsQuery) subscription.UsageStatsFilter {
-	page := query.Page
-	if page == 0 {
-		page = constants.DefaultPage
-	}
-
-	pageSize := query.PageSize
-	if pageSize == 0 {
-		pageSize = constants.MaxPageSize
-	}
-
-	filter := subscription.UsageStatsFilter{
-		SubscriptionID: &query.SubscriptionID,
-		From:           query.From,
-		To:             query.To,
-	}
-	filter.Page = page
-	filter.PageSize = pageSize
-
-	if query.Granularity != "" {
-		filter.Period = &query.Granularity
-	}
-
-	return filter
 }

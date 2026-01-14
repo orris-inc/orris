@@ -7,6 +7,12 @@ import (
 	"golang.org/x/mod/semver"
 )
 
+// Current is the current application version.
+// This variable is set via ldflags at build time:
+//
+//	go build -ldflags="-X github.com/orris-inc/orris/internal/shared/version.Current=v1.0.0"
+var Current = "dev"
+
 // Normalize ensures version string has "v" prefix for semver compatibility.
 // Examples: "1.2.3" -> "v1.2.3", "v1.2.3" -> "v1.2.3"
 func Normalize(version string) string {

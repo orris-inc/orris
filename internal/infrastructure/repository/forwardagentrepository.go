@@ -112,6 +112,27 @@ func (r *ForwardAgentRepositoryImpl) GetBySID(ctx context.Context, sid string) (
 	return entity, nil
 }
 
+// GetBySIDs retrieves multiple forward agents by their SIDs.
+func (r *ForwardAgentRepositoryImpl) GetBySIDs(ctx context.Context, sids []string) ([]*forward.ForwardAgent, error) {
+	if len(sids) == 0 {
+		return []*forward.ForwardAgent{}, nil
+	}
+
+	var agentModels []*models.ForwardAgentModel
+	if err := r.db.WithContext(ctx).Where("sid IN ?", sids).Find(&agentModels).Error; err != nil {
+		r.logger.Errorw("failed to get forward agents by SIDs", "sids", sids, "error", err)
+		return nil, fmt.Errorf("failed to get forward agents: %w", err)
+	}
+
+	entities, err := r.mapper.ToEntities(agentModels)
+	if err != nil {
+		r.logger.Errorw("failed to map forward agent models to entities", "error", err)
+		return nil, fmt.Errorf("failed to map forward agents: %w", err)
+	}
+
+	return entities, nil
+}
+
 // GetSIDsByIDs retrieves SIDs for multiple agents by their internal IDs.
 func (r *ForwardAgentRepositoryImpl) GetSIDsByIDs(ctx context.Context, ids []uint) (map[uint]string, error) {
 	if len(ids) == 0 {
@@ -381,4 +402,68 @@ func (r *ForwardAgentRepositoryImpl) UpdateAgentInfo(ctx context.Context, id uin
 
 	r.logger.Infow("forward agent info updated", "id", id, "version", agentVersion, "platform", platform, "arch", arch)
 	return nil
+}
+
+// GetAllEnabledMetadata returns lightweight metadata for all enabled agents.
+// Only queries id, sid, name fields.
+func (r *ForwardAgentRepositoryImpl) GetAllEnabledMetadata(ctx context.Context) ([]*forward.AgentMetadata, error) {
+	var results []struct {
+		ID   uint   `gorm:"column:id"`
+		SID  string `gorm:"column:sid"`
+		Name string `gorm:"column:name"`
+	}
+
+	if err := r.db.WithContext(ctx).
+		Model(&models.ForwardAgentModel{}).
+		Select("id, sid, name").
+		Where("status = ?", "enabled").
+		Find(&results).Error; err != nil {
+		r.logger.Errorw("failed to get all enabled agent metadata", "error", err)
+		return nil, fmt.Errorf("failed to get agent metadata: %w", err)
+	}
+
+	metadata := make([]*forward.AgentMetadata, len(results))
+	for i, res := range results {
+		metadata[i] = &forward.AgentMetadata{
+			ID:   res.ID,
+			SID:  res.SID,
+			Name: res.Name,
+		}
+	}
+
+	return metadata, nil
+}
+
+// GetMetadataBySIDs returns lightweight metadata for agents by SIDs.
+// Only queries id, sid, name fields.
+func (r *ForwardAgentRepositoryImpl) GetMetadataBySIDs(ctx context.Context, sids []string) ([]*forward.AgentMetadata, error) {
+	if len(sids) == 0 {
+		return []*forward.AgentMetadata{}, nil
+	}
+
+	var results []struct {
+		ID   uint   `gorm:"column:id"`
+		SID  string `gorm:"column:sid"`
+		Name string `gorm:"column:name"`
+	}
+
+	if err := r.db.WithContext(ctx).
+		Model(&models.ForwardAgentModel{}).
+		Select("id, sid, name").
+		Where("sid IN ?", sids).
+		Find(&results).Error; err != nil {
+		r.logger.Errorw("failed to get agent metadata by SIDs", "sids", sids, "error", err)
+		return nil, fmt.Errorf("failed to get agent metadata: %w", err)
+	}
+
+	metadata := make([]*forward.AgentMetadata, len(results))
+	for i, res := range results {
+		metadata[i] = &forward.AgentMetadata{
+			ID:   res.ID,
+			SID:  res.SID,
+			Name: res.Name,
+		}
+	}
+
+	return metadata, nil
 }

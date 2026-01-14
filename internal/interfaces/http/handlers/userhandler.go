@@ -12,6 +12,7 @@ import (
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
+	"github.com/orris-inc/orris/internal/shared/version"
 )
 
 // UserHandler handles HTTP requests for user operations
@@ -203,5 +204,12 @@ func (h *UserHandler) HealthCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "healthy",
 		"service": "orris",
+	})
+}
+
+// Version handles GET /version to return the current application version
+func (h *UserHandler) Version(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"version": version.Current,
 	})
 }

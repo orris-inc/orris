@@ -40,6 +40,11 @@ func NewRuleSyncConverter(
 	}
 }
 
+// SetNodeRepo sets the node repository for circular dependency handling.
+func (c *RuleSyncConverter) SetNodeRepo(nodeRepo node.NodeRepository) {
+	c.nodeRepo = nodeRepo
+}
+
 // Convert converts a ForwardRule to RuleSyncData for a specific agent.
 // This mirrors the logic in AgentHandler.GetEnabledRules for building rule DTOs.
 func (c *RuleSyncConverter) Convert(ctx context.Context, rule *forward.ForwardRule, agentID uint) (*dto.RuleSyncData, error) {

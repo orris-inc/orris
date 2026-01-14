@@ -140,8 +140,8 @@ func (uc *GetSubscriptionTrafficStatsUseCase) Execute(
 			query.ResourceType,
 			query.From,
 			mysqlTo,
-			1,                                // Get all data without pagination for merging
-			maxSubscriptionAggregationLimit,  // Safety limit to prevent OOM
+			1,                               // Get all data without pagination for merging
+			maxSubscriptionAggregationLimit, // Safety limit to prevent OOM
 		)
 		if err != nil {
 			uc.logger.Errorw("failed to fetch subscription usage", "error", err)
@@ -174,10 +174,9 @@ func (uc *GetSubscriptionTrafficStatsUseCase) Execute(
 			}
 		}
 
-		// Use MySQL total as a baseline (may not be accurate when Redis window has new subscriptions)
-		if !includesRedisWindow {
-			total = mysqlTotal
-		}
+		// Note: total count is calculated after merging Redis and MySQL data (line 203)
+		// MySQL total is not used directly because it may not include Redis-only subscriptions
+		_ = mysqlTotal // Suppress unused warning, value used for debugging/logging if needed
 	}
 
 	// If no data found

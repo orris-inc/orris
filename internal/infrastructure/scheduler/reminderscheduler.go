@@ -15,13 +15,13 @@ type ReminderProcessor interface {
 
 // ReminderScheduler runs periodic reminder checks
 type ReminderScheduler struct {
-	processor    ReminderProcessor
-	logger       logger.Interface
-	stopChan     chan struct{}
-	interval     time.Duration
-	cancelFn     context.CancelFunc
-	wg           sync.WaitGroup
-	stopTimeout  time.Duration
+	processor   ReminderProcessor
+	logger      logger.Interface
+	stopChan    chan struct{}
+	interval    time.Duration
+	cancelFn    context.CancelFunc
+	wg          sync.WaitGroup
+	stopTimeout time.Duration
 }
 
 // NewReminderScheduler creates a new reminder scheduler
@@ -33,8 +33,8 @@ func NewReminderScheduler(
 		processor:   processor,
 		logger:      logger,
 		stopChan:    make(chan struct{}),
-		interval:    6 * time.Hour,     // Run every 6 hours
-		stopTimeout: 3 * time.Second,   // Wait up to 3 seconds for graceful stop
+		interval:    6 * time.Hour,   // Run every 6 hours
+		stopTimeout: 3 * time.Second, // Wait up to 3 seconds for graceful stop
 	}
 }
 

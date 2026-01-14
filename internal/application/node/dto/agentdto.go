@@ -23,25 +23,25 @@ type AgentResponse struct {
 // NodeConfigResponse represents node configuration data for node agents
 // Compatible with sing-box inbound configuration
 type NodeConfigResponse struct {
-	NodeSID           string          `json:"node_id" binding:"required"`                                                  // Node SID (Stripe-style: node_xxx)
+	NodeSID           string          `json:"node_id" binding:"required"`                                                      // Node SID (Stripe-style: node_xxx)
 	Protocol          string          `json:"protocol" binding:"required,oneof=shadowsocks trojan vless vmess hysteria2 tuic"` // Protocol type
-	ServerHost        string          `json:"server_host" binding:"required"`                                              // Server hostname or IP address
-	ServerPort        int             `json:"server_port" binding:"required,min=1,max=65535"`                              // Server port number
-	EncryptionMethod  string          `json:"encryption_method,omitempty"`                                                 // Encryption method for Shadowsocks
-	ServerKey         string          `json:"server_key,omitempty"`                                                        // Server password for SS
-	TransportProtocol string          `json:"transport_protocol,omitempty"`                                                // Transport protocol (tcp, ws, grpc, h2, http, quic)
-	Host              string          `json:"host,omitempty"`                                                              // WebSocket/HTTP host header
-	Path              string          `json:"path,omitempty"`                                                              // WebSocket/HTTP path
-	ServiceName       string          `json:"service_name,omitempty"`                                                      // gRPC service name
-	SNI               string          `json:"sni,omitempty"`                                                               // TLS Server Name Indication
-	AllowInsecure     bool            `json:"allow_insecure"`                                                              // Allow insecure TLS connection
-	EnableVless       bool            `json:"enable_vless"`                                                                // Enable VLESS protocol (deprecated, use Protocol=vless)
-	EnableXTLS        bool            `json:"enable_xtls"`                                                                 // Enable XTLS (deprecated, use VLESSFlow)
-	SpeedLimit        uint64          `json:"speed_limit"`                                                                 // Speed limit in Mbps, 0 = unlimited
-	DeviceLimit       int             `json:"device_limit"`                                                                // Device connection limit, 0 = unlimited
-	RuleListPath      string          `json:"rule_list_path,omitempty"`                                                    // Path to routing rule list file (deprecated, use Route)
-	Route             *RouteConfigDTO `json:"route,omitempty"`                                                             // Routing configuration for traffic splitting
-	Outbounds         []OutboundDTO   `json:"outbounds,omitempty"`                                                         // Outbound configs for nodes referenced in route rules
+	ServerHost        string          `json:"server_host" binding:"required"`                                                  // Server hostname or IP address
+	ServerPort        int             `json:"server_port" binding:"required,min=1,max=65535"`                                  // Server port number
+	EncryptionMethod  string          `json:"encryption_method,omitempty"`                                                     // Encryption method for Shadowsocks
+	ServerKey         string          `json:"server_key,omitempty"`                                                            // Server password for SS
+	TransportProtocol string          `json:"transport_protocol,omitempty"`                                                    // Transport protocol (tcp, ws, grpc, h2, http, quic)
+	Host              string          `json:"host,omitempty"`                                                                  // WebSocket/HTTP host header
+	Path              string          `json:"path,omitempty"`                                                                  // WebSocket/HTTP path
+	ServiceName       string          `json:"service_name,omitempty"`                                                          // gRPC service name
+	SNI               string          `json:"sni,omitempty"`                                                                   // TLS Server Name Indication
+	AllowInsecure     bool            `json:"allow_insecure"`                                                                  // Allow insecure TLS connection
+	EnableVless       bool            `json:"enable_vless"`                                                                    // Enable VLESS protocol (deprecated, use Protocol=vless)
+	EnableXTLS        bool            `json:"enable_xtls"`                                                                     // Enable XTLS (deprecated, use VLESSFlow)
+	SpeedLimit        uint64          `json:"speed_limit"`                                                                     // Speed limit in Mbps, 0 = unlimited
+	DeviceLimit       int             `json:"device_limit"`                                                                    // Device connection limit, 0 = unlimited
+	RuleListPath      string          `json:"rule_list_path,omitempty"`                                                        // Path to routing rule list file (deprecated, use Route)
+	Route             *RouteConfigDTO `json:"route,omitempty"`                                                                 // Routing configuration for traffic splitting
+	Outbounds         []OutboundDTO   `json:"outbounds,omitempty"`                                                             // Outbound configs for nodes referenced in route rules
 
 	// VLESS specific fields
 	VLESSFlow             string `json:"vless_flow,omitempty"`               // VLESS flow control (xtls-rprx-vision)
@@ -52,9 +52,9 @@ type NodeConfigResponse struct {
 	VLESSRealitySpiderX   string `json:"vless_reality_spider_x,omitempty"`   // Reality spider X parameter
 
 	// VMess specific fields
-	VMessAlterID  int    `json:"vmess_alter_id,omitempty"`  // VMess alter ID (usually 0)
-	VMessSecurity string `json:"vmess_security,omitempty"`  // VMess security (auto, aes-128-gcm, chacha20-poly1305, none, zero)
-	VMessTLS      bool   `json:"vmess_tls,omitempty"`       // VMess TLS enabled
+	VMessAlterID  int    `json:"vmess_alter_id,omitempty"` // VMess alter ID (usually 0)
+	VMessSecurity string `json:"vmess_security,omitempty"` // VMess security (auto, aes-128-gcm, chacha20-poly1305, none, zero)
+	VMessTLS      bool   `json:"vmess_tls,omitempty"`      // VMess TLS enabled
 
 	// Hysteria2 specific fields
 	Hysteria2CongestionControl string `json:"hysteria2_congestion_control,omitempty"` // Congestion control (cubic, bbr, new_reno)

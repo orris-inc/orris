@@ -7,12 +7,26 @@ import (
 	"github.com/orris-inc/orris/internal/shared/query"
 )
 
+// NodeMetadata holds lightweight node metadata for SSE broadcasting.
+// This avoids loading full node entities with protocol configs.
+type NodeMetadata struct {
+	ID   uint
+	SID  string
+	Name string
+}
+
 type NodeRepository interface {
 	Create(ctx context.Context, node *Node) error
 	GetByID(ctx context.Context, id uint) (*Node, error)
 	GetBySID(ctx context.Context, sid string) (*Node, error)
 	GetBySIDs(ctx context.Context, sids []string) ([]*Node, error)
 	GetByIDs(ctx context.Context, ids []uint) ([]*Node, error)
+	// GetAllMetadata returns lightweight metadata for all nodes.
+	// Used for SSE broadcasting where full entity is not needed.
+	GetAllMetadata(ctx context.Context) ([]*NodeMetadata, error)
+	// GetMetadataBySIDs returns lightweight metadata for nodes by SIDs.
+	// Used for SSE broadcasting where full entity is not needed.
+	GetMetadataBySIDs(ctx context.Context, sids []string) ([]*NodeMetadata, error)
 	GetByToken(ctx context.Context, tokenHash string) (*Node, error)
 	Update(ctx context.Context, node *Node) error
 	Delete(ctx context.Context, id uint) error

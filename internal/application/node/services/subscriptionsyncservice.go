@@ -11,6 +11,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/resource"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/infrastructure/config"
+	"github.com/orris-inc/orris/internal/infrastructure/pubsub"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -19,24 +20,34 @@ import (
 // It pushes subscription changes to relevant node agents via WebSocket.
 type SubscriptionSyncService struct {
 	nodeRepo          node.NodeRepository
+	subscriptionRepo  subscription.SubscriptionRepository
 	resourceGroupRepo resource.Repository
 	hub               NodeSyncHub
+	eventPublisher    pubsub.SubscriptionEventPublisher
 	logger            logger.Interface
 }
 
 // NewSubscriptionSyncService creates a new SubscriptionSyncService.
 func NewSubscriptionSyncService(
 	nodeRepo node.NodeRepository,
+	subscriptionRepo subscription.SubscriptionRepository,
 	resourceGroupRepo resource.Repository,
 	hub NodeSyncHub,
 	log logger.Interface,
 ) *SubscriptionSyncService {
 	return &SubscriptionSyncService{
 		nodeRepo:          nodeRepo,
+		subscriptionRepo:  subscriptionRepo,
 		resourceGroupRepo: resourceGroupRepo,
 		hub:               hub,
 		logger:            log,
 	}
+}
+
+// SetEventPublisher sets the event publisher for cross-instance synchronization.
+// This should be called after creating the service to enable Redis Pub/Sub.
+func (s *SubscriptionSyncService) SetEventPublisher(publisher pubsub.SubscriptionEventPublisher) {
+	s.eventPublisher = publisher
 }
 
 // NotifySubscriptionChange notifies relevant nodes about subscription changes.
@@ -150,26 +161,81 @@ func (s *SubscriptionSyncService) NotifySubscriptionChange(
 }
 
 // NotifySubscriptionActivation notifies nodes when a subscription becomes active.
+// It also publishes an event for cross-instance synchronization via Redis Pub/Sub.
 func (s *SubscriptionSyncService) NotifySubscriptionActivation(
 	ctx context.Context,
 	sub *subscription.Subscription,
 ) error {
+	if sub == nil {
+		return nil
+	}
+
+	// Publish activation event to Redis for cross-instance synchronization
+	// This must happen first so other instances receive the event promptly
+	if s.eventPublisher != nil {
+		if err := s.eventPublisher.PublishActivation(ctx, sub.ID(), sub.SID()); err != nil {
+			// Log but don't fail the operation - local notification should still happen
+			s.logger.Warnw("failed to publish activation event",
+				"subscription_id", sub.ID(),
+				"subscription_sid", sub.SID(),
+				"error", err,
+			)
+		}
+	}
+
+	// Notify local connected nodes
 	return s.NotifySubscriptionChange(ctx, sub, dto.SubscriptionChangeAdded)
 }
 
 // NotifySubscriptionDeactivation notifies nodes when a subscription is deactivated/expired.
+// It also publishes an event for cross-instance synchronization via Redis Pub/Sub.
 func (s *SubscriptionSyncService) NotifySubscriptionDeactivation(
 	ctx context.Context,
 	sub *subscription.Subscription,
 ) error {
+	if sub == nil {
+		return nil
+	}
+
+	// Publish deactivation event to Redis for cross-instance synchronization
+	// This must happen first so other instances receive the event promptly
+	if s.eventPublisher != nil {
+		if err := s.eventPublisher.PublishDeactivation(ctx, sub.ID(), sub.SID()); err != nil {
+			// Log but don't fail the operation - local notification should still happen
+			s.logger.Warnw("failed to publish deactivation event",
+				"subscription_id", sub.ID(),
+				"subscription_sid", sub.SID(),
+				"error", err,
+			)
+		}
+	}
+
+	// Notify local connected nodes
 	return s.NotifySubscriptionChange(ctx, sub, dto.SubscriptionChangeRemoved)
 }
 
 // NotifySubscriptionUpdate notifies nodes when a subscription is updated.
+// It also publishes an event for cross-instance synchronization via Redis Pub/Sub.
 func (s *SubscriptionSyncService) NotifySubscriptionUpdate(
 	ctx context.Context,
 	sub *subscription.Subscription,
 ) error {
+	if sub == nil {
+		return nil
+	}
+
+	// Publish update event to Redis for cross-instance synchronization
+	if s.eventPublisher != nil {
+		if err := s.eventPublisher.PublishUpdate(ctx, sub.ID(), sub.SID()); err != nil {
+			s.logger.Warnw("failed to publish update event",
+				"subscription_id", sub.ID(),
+				"subscription_sid", sub.SID(),
+				"error", err,
+			)
+		}
+	}
+
+	// Notify local connected nodes
 	return s.NotifySubscriptionChange(ctx, sub, dto.SubscriptionChangeUpdated)
 }
 
@@ -347,4 +413,27 @@ func (s *SubscriptionSyncService) FullSyncSubscriptionsToNode(
 	)
 
 	return nil
+}
+
+// SyncSubscriptionsOnNodeConnect syncs all active subscriptions to a node when it connects.
+// This method queries subscriptions internally and pushes them to the node.
+func (s *SubscriptionSyncService) SyncSubscriptionsOnNodeConnect(ctx context.Context, nodeID uint) error {
+	if s.subscriptionRepo == nil {
+		s.logger.Warnw("subscription repo not set, skipping sync on connect",
+			"node_id", nodeID,
+		)
+		return nil
+	}
+
+	// Get all active subscriptions for this node
+	subscriptions, err := s.subscriptionRepo.GetActiveSubscriptionsByNodeID(ctx, nodeID)
+	if err != nil {
+		s.logger.Errorw("failed to get subscriptions for node on connect",
+			"node_id", nodeID,
+			"error", err,
+		)
+		return err
+	}
+
+	return s.FullSyncSubscriptionsToNode(ctx, nodeID, subscriptions)
 }

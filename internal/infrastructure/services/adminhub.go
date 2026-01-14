@@ -248,6 +248,7 @@ type SSEConn struct {
 
 // TrySend attempts to send data to the SSE connection.
 // Returns false if the channel is closed or full.
+// When channel is full, the connection is closed to notify event loop.
 func (c *SSEConn) TrySend(data []byte) (sent bool) {
 	if c.closed.Load() {
 		return false
@@ -263,6 +264,9 @@ func (c *SSEConn) TrySend(data []byte) (sent bool) {
 	case c.Send <- data:
 		return true
 	default:
+		// Channel full - client is likely disconnected or too slow.
+		// Close the connection to notify the event loop.
+		c.Close()
 		return false
 	}
 }
@@ -402,7 +406,7 @@ func NewAdminHub(log logger.Interface, config *AdminHubConfig) *AdminHub {
 	return h
 }
 
-// cleanupLoop periodically cleans up the throttle cache.
+// cleanupLoop periodically cleans up the throttle cache and closed connections.
 func (h *AdminHub) cleanupLoop() {
 	// Cleanup interval: 2x throttle duration, minimum 10 seconds
 	interval := time.Duration(h.statusThrottleMs*2) * time.Millisecond
@@ -419,7 +423,33 @@ func (h *AdminHub) cleanupLoop() {
 			return
 		case <-ticker.C:
 			h.CleanupThrottleCache()
+			h.cleanupClosedConns()
 		}
+	}
+}
+
+// cleanupClosedConns removes connections that have been marked as closed.
+func (h *AdminHub) cleanupClosedConns() {
+	// Collect closed connection IDs
+	var closedIDs []string
+
+	h.connsMu.RLock()
+	for connID, conn := range h.conns {
+		if conn.closed.Load() {
+			closedIDs = append(closedIDs, connID)
+		}
+	}
+	h.connsMu.RUnlock()
+
+	// Remove closed connections
+	for _, connID := range closedIDs {
+		h.UnregisterConn(connID)
+	}
+
+	if len(closedIDs) > 0 {
+		h.logger.Debugw("cleaned up closed SSE connections",
+			"count", len(closedIDs),
+		)
 	}
 }
 
@@ -515,7 +545,7 @@ func (h *AdminHub) RegisterConnWithSubscription(connID string, userID uint, node
 	// Increment count only after successful registration
 	h.userConns[userID]++
 
-	h.logger.Infow("SSE connection registered",
+	h.logger.Debugw("SSE connection registered",
 		"conn_id", connID,
 		"user_id", userID,
 		"node_filters", nodeFilters,
@@ -548,7 +578,7 @@ func (h *AdminHub) UnregisterConn(connID string) {
 	if ok {
 		conn.Close()
 
-		h.logger.Infow("SSE connection unregistered",
+		h.logger.Debugw("SSE connection unregistered",
 			"conn_id", connID,
 			"user_id", conn.UserID,
 		)

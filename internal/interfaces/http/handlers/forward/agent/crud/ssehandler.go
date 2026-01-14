@@ -57,7 +57,7 @@ func (h *ForwardAgentSSEHandler) Events(c *gin.Context) {
 		return
 	}
 
-	h.GetLogger().Infow("forward agent SSE connection established",
+	h.GetLogger().Debugw("forward agent SSE connection established",
 		"conn_id", connID,
 		"user_id", userID,
 		"agent_filters", agentFilters,

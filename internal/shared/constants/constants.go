@@ -42,8 +42,8 @@ const (
 	TableTicketComments         = "ticket_comments"
 	TableForwardRules           = "forward_rules"
 	TableForwardAgents          = "forward_agents"
-	TableResourceGroups           = "resource_groups"
-	TableSubscriptionUsageStats   = "subscription_usage_stats"
+	TableResourceGroups         = "resource_groups"
+	TableSubscriptionUsageStats = "subscription_usage_stats"
 
 	// Default values
 	DefaultCurrency = "CNY"

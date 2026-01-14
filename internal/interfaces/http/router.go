@@ -18,6 +18,7 @@ import (
 	paymentUsecases "github.com/orris-inc/orris/internal/application/payment/usecases"
 	resourceUsecases "github.com/orris-inc/orris/internal/application/resource/usecases"
 	settingApp "github.com/orris-inc/orris/internal/application/setting"
+	subscriptionServices "github.com/orris-inc/orris/internal/application/subscription/services"
 	subscriptionUsecases "github.com/orris-inc/orris/internal/application/subscription/usecases"
 	telegramApp "github.com/orris-inc/orris/internal/application/telegram"
 	telegramAdminApp "github.com/orris-inc/orris/internal/application/telegram/admin"
@@ -32,6 +33,7 @@ import (
 	"github.com/orris-inc/orris/internal/infrastructure/cache"
 	"github.com/orris-inc/orris/internal/infrastructure/config"
 	"github.com/orris-inc/orris/internal/infrastructure/email"
+	"github.com/orris-inc/orris/internal/infrastructure/pubsub"
 	"github.com/orris-inc/orris/internal/infrastructure/repository"
 	"github.com/orris-inc/orris/internal/infrastructure/scheduler"
 	"github.com/orris-inc/orris/internal/infrastructure/services"
@@ -283,6 +285,15 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	cancelSubscriptionUC := subscriptionUsecases.NewCancelSubscriptionUseCase(
 		subscriptionRepo, subscriptionTokenRepo, log,
 	)
+	suspendSubscriptionUC := subscriptionUsecases.NewSuspendSubscriptionUseCase(
+		subscriptionRepo, log,
+	)
+	unsuspendSubscriptionUC := subscriptionUsecases.NewUnsuspendSubscriptionUseCase(
+		subscriptionRepo, log,
+	)
+	resetSubscriptionUsageUC := subscriptionUsecases.NewResetSubscriptionUsageUseCase(
+		subscriptionRepo, log,
+	)
 	deleteSubscriptionUC := subscriptionUsecases.NewDeleteSubscriptionUseCase(
 		subscriptionRepo, subscriptionTokenRepo, shareddb.NewTransactionManager(db), log,
 	)
@@ -363,7 +374,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	adminSubscriptionHandler := adminHandlers.NewSubscriptionHandler(
 		subscriptionRepo, createSubscriptionUC, getSubscriptionUC, listUserSubscriptionsUC,
 		cancelSubscriptionUC, deleteSubscriptionUC, renewSubscriptionUC, changePlanUC,
-		activateSubscriptionUC, log,
+		activateSubscriptionUC, suspendSubscriptionUC, unsuspendSubscriptionUC, resetSubscriptionUsageUC, log,
 	)
 	subscriptionOwnerMiddleware := middleware.NewSubscriptionOwnerMiddleware(subscriptionRepo, log)
 
@@ -648,6 +659,41 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	)
 	subscriptionTrafficBuffer := nodeServices.NewSubscriptionTrafficBuffer(subscriptionTrafficCache, log)
 	subscriptionTrafficBuffer.Start()
+
+	// Initialize subscription quota cache for node traffic limit checking
+	subscriptionQuotaCache := cache.NewRedisSubscriptionQuotaCache(redisClient, log)
+
+	// Initialize quota cache sync service for managing quota cache
+	quotaCacheSyncService := subscriptionServices.NewQuotaCacheSyncService(
+		subscriptionRepo,
+		subscriptionPlanRepo,
+		subscriptionQuotaCache,
+		log,
+	)
+
+	// Initialize node traffic limit enforcement service
+	nodeTrafficLimitEnforcementSvc := nodeServices.NewNodeTrafficLimitEnforcementService(
+		subscriptionRepo,
+		subscriptionUsageStatsRepo,
+		hourlyTrafficCache,
+		subscriptionPlanRepo,
+		subscriptionQuotaCache,
+		log,
+	)
+
+	// Initialize adapters for node hub handler traffic limit checking
+	nodeQuotaCacheAdapter := adapters.NewNodeSubscriptionQuotaCacheAdapter(subscriptionQuotaCache, log)
+	nodeQuotaLoaderAdapter := adapters.NewNodeSubscriptionQuotaLoaderAdapter(
+		subscriptionRepo,
+		subscriptionPlanRepo,
+		subscriptionQuotaCache,
+		log,
+	)
+	nodeUsageReaderAdapter := adapters.NewNodeSubscriptionUsageReaderAdapter(
+		hourlyTrafficCache,
+		subscriptionUsageStatsRepo,
+		log,
+	)
 
 	// Initialize agent report use cases with adapters
 	subscriptionUsageRecorder := adapters.NewSubscriptionUsageRecorderAdapter(subscriptionTrafficBuffer, log)
@@ -1077,7 +1123,26 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	nodeConfigSyncService := nodeServices.NewNodeConfigSyncService(nodeRepoImpl, agentHub, log)
 
 	// Initialize subscription sync service for pushing subscription changes to node agents
-	subscriptionSyncService := nodeServices.NewSubscriptionSyncService(nodeRepoImpl, resourceGroupRepo, agentHub, log)
+	subscriptionSyncService := nodeServices.NewSubscriptionSyncService(nodeRepoImpl, subscriptionRepo, resourceGroupRepo, agentHub, log)
+
+	// Initialize Redis Pub/Sub event bus for cross-instance subscription synchronization
+	subscriptionEventBus := pubsub.NewRedisSubscriptionEventBus(redisClient, log)
+
+	// Set event publisher on subscription sync service for cross-instance sync
+	subscriptionSyncService.SetEventPublisher(subscriptionEventBus)
+
+	// Set deactivation notifier on node traffic limit enforcement service
+	nodeTrafficLimitEnforcementSvc.SetDeactivationNotifier(subscriptionSyncService)
+
+	// Initialize subscription event handler for processing events from other instances
+	subscriptionEventHandler := nodeServices.NewSubscriptionEventHandler(
+		subscriptionRepo,
+		subscriptionSyncService,
+		log,
+	)
+
+	// Start subscription event subscriber in background
+	subscriptionEventHandler.StartSubscriber(context.Background(), subscriptionEventBus)
 
 	// Initialize admin hub for SSE connections to frontend (must be before callbacks)
 	adminHub := services.NewAdminHub(log, &services.AdminHubConfig{
@@ -1273,6 +1338,11 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	createSubscriptionUC.SetSubscriptionNotifier(subscriptionSyncService)
 	activateSubscriptionUC.SetSubscriptionNotifier(subscriptionSyncService)
 	cancelSubscriptionUC.SetSubscriptionNotifier(subscriptionSyncService)
+	suspendSubscriptionUC.SetSubscriptionNotifier(subscriptionSyncService)
+	unsuspendSubscriptionUC.SetSubscriptionNotifier(subscriptionSyncService)
+	unsuspendSubscriptionUC.SetQuotaCacheManager(quotaCacheSyncService)
+	resetSubscriptionUsageUC.SetSubscriptionNotifier(subscriptionSyncService)
+	resetSubscriptionUsageUC.SetQuotaCacheManager(quotaCacheSyncService)
 	renewSubscriptionUC.SetSubscriptionNotifier(subscriptionSyncService)
 
 	// Initialize QuotaService for unified quota calculation
@@ -1317,6 +1387,11 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	nodeHubHandler := nodeHandlers.NewNodeHubHandler(agentHub, nodeRepoImpl, subscriptionTrafficBuffer, subscriptionIDResolver, log)
 	nodeHubHandler.SetAddressChangeNotifier(configSyncService)
 	nodeHubHandler.SetIPUpdater(nodeRepoImpl)
+	nodeHubHandler.SetSubscriptionSyncer(subscriptionSyncService)
+	nodeHubHandler.SetTrafficEnforcer(nodeTrafficLimitEnforcementSvc)
+	nodeHubHandler.SetQuotaCache(nodeQuotaCacheAdapter)
+	nodeHubHandler.SetQuotaLoader(nodeQuotaLoaderAdapter)
+	nodeHubHandler.SetUsageReader(nodeUsageReaderAdapter)
 
 	// Initialize node SSE handler
 	nodeSSEHandler := nodeHandlers.NewNodeSSEHandler(adminHub, log)
@@ -1393,6 +1468,7 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 	r.engine.Use(middleware.CORS(cfg.Server.AllowedOrigins))
 
 	r.engine.GET("/health", r.userHandler.HealthCheck)
+	r.engine.GET("/version", r.userHandler.Version)
 
 	auth := r.engine.Group("/auth")
 	{
@@ -1442,6 +1518,9 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		adminSubscriptions.GET("/:id", r.adminSubscriptionHandler.Get)
 		adminSubscriptions.PATCH("/:id/status", r.adminSubscriptionHandler.UpdateStatus)
 		adminSubscriptions.PATCH("/:id/plan", r.adminSubscriptionHandler.ChangePlan)
+		adminSubscriptions.POST("/:id/suspend", r.adminSubscriptionHandler.Suspend)
+		adminSubscriptions.POST("/:id/unsuspend", r.adminSubscriptionHandler.Unsuspend)
+		adminSubscriptions.POST("/:id/reset-usage", r.adminSubscriptionHandler.ResetUsage)
 		adminSubscriptions.DELETE("/:id", r.adminSubscriptionHandler.Delete)
 	}
 

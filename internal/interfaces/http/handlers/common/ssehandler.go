@@ -155,7 +155,7 @@ func (h *SSEHandlerBase) RunEventLoop(c *gin.Context, conn *services.SSEConn, co
 		case <-ctx.Done():
 			// Client disconnected
 			h.adminHub.UnregisterConn(connID)
-			h.logger.Infow(logPrefix+" connection closed by client",
+			h.logger.Debugw(logPrefix+" connection closed by client",
 				"conn_id", connID,
 				"user_id", userID,
 			)

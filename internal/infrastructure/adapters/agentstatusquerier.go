@@ -3,24 +3,42 @@ package adapters
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/infrastructure/services"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 const (
 	// batchStatusQueryTimeout is the maximum time allowed for batch status queries.
 	batchStatusQueryTimeout = 10 * time.Second
+
+	// agentMetadataCacheTTL is the TTL for agent metadata cache.
+	agentMetadataCacheTTL = 1 * time.Minute
 )
+
+// agentMetadataCache holds cached agent metadata.
+type agentMetadataCache struct {
+	// allAgents maps agentID -> metadata for all enabled agents
+	allAgents map[uint]*forward.AgentMetadata
+	// sidToID maps SID -> agentID for quick lookup
+	sidToID map[string]uint
+	// lastUpdated is the time when cache was last refreshed
+	lastUpdated time.Time
+	mu          sync.RWMutex
+}
 
 // AgentStatusQuerierAdapter implements services.AgentStatusQuerier.
 // It fetches agent status from Redis and resolves agent metadata from database.
+// Metadata is cached in memory to reduce database queries.
 type AgentStatusQuerierAdapter struct {
 	agentRepo     forward.AgentRepository
 	statusAdapter *ForwardAgentStatusAdapter
+	cache         *agentMetadataCache
 	logger        logger.Interface
 }
 
@@ -33,8 +51,50 @@ func NewAgentStatusQuerierAdapter(
 	return &AgentStatusQuerierAdapter{
 		agentRepo:     agentRepo,
 		statusAdapter: statusAdapter,
-		logger:        log,
+		cache: &agentMetadataCache{
+			allAgents: make(map[uint]*forward.AgentMetadata),
+			sidToID:   make(map[string]uint),
+		},
+		logger: log,
 	}
+}
+
+// refreshCacheIfNeeded refreshes the metadata cache if it's expired.
+func (a *AgentStatusQuerierAdapter) refreshCacheIfNeeded(ctx context.Context) error {
+	a.cache.mu.RLock()
+	needsRefresh := biztime.NowUTC().Sub(a.cache.lastUpdated) > agentMetadataCacheTTL
+	a.cache.mu.RUnlock()
+
+	if !needsRefresh {
+		return nil
+	}
+
+	// Acquire write lock and check again
+	a.cache.mu.Lock()
+	defer a.cache.mu.Unlock()
+
+	// Double-check after acquiring write lock
+	if biztime.NowUTC().Sub(a.cache.lastUpdated) <= agentMetadataCacheTTL {
+		return nil
+	}
+
+	// Refresh cache from database using lightweight query
+	metadata, err := a.agentRepo.GetAllEnabledMetadata(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Rebuild cache
+	a.cache.allAgents = make(map[uint]*forward.AgentMetadata, len(metadata))
+	a.cache.sidToID = make(map[string]uint, len(metadata))
+	for _, m := range metadata {
+		a.cache.allAgents[m.ID] = m
+		a.cache.sidToID[m.SID] = m.ID
+	}
+	a.cache.lastUpdated = biztime.NowUTC()
+
+	a.logger.Debugw("agent metadata cache refreshed", "agent_count", len(metadata))
+	return nil
 }
 
 // GetBatchStatus returns status for multiple agents by their SIDs.
@@ -46,46 +106,48 @@ func (a *AgentStatusQuerierAdapter) GetBatchStatus(agentSIDs []string) (map[stri
 
 	result := make(map[string]*services.AgentStatusData)
 
-	var agents []*forward.ForwardAgent
-	var err error
+	// Refresh cache if needed
+	if err := a.refreshCacheIfNeeded(ctx); err != nil {
+		a.logger.Errorw("failed to refresh agent metadata cache", "error", err)
+		return nil, err
+	}
+
+	// Get metadata from cache
+	a.cache.mu.RLock()
+	var agentIDs []uint
+	var agentMetadata []*forward.AgentMetadata
 
 	if agentSIDs == nil {
-		// Get all enabled agents
-		agents, err = a.agentRepo.ListEnabled(ctx)
-		if err != nil {
-			a.logger.Errorw("failed to list enabled agents",
-				"error", err,
-			)
-			return nil, err
+		// Get all agents from cache
+		agentIDs = make([]uint, 0, len(a.cache.allAgents))
+		agentMetadata = make([]*forward.AgentMetadata, 0, len(a.cache.allAgents))
+		for id, m := range a.cache.allAgents {
+			agentIDs = append(agentIDs, id)
+			agentMetadata = append(agentMetadata, m)
 		}
 	} else {
-		// Get agents by SIDs
-		agents = make([]*forward.ForwardAgent, 0, len(agentSIDs))
+		// Get specific agents from cache
+		agentIDs = make([]uint, 0, len(agentSIDs))
+		agentMetadata = make([]*forward.AgentMetadata, 0, len(agentSIDs))
 		for _, sid := range agentSIDs {
-			agent, err := a.agentRepo.GetBySID(ctx, sid)
-			if err != nil {
-				a.logger.Warnw("failed to get agent by SID",
-					"sid", sid,
-					"error", err,
-				)
-				continue
-			}
-			if agent != nil {
-				agents = append(agents, agent)
+			if id, ok := a.cache.sidToID[sid]; ok {
+				agentIDs = append(agentIDs, id)
+				if m, ok := a.cache.allAgents[id]; ok {
+					agentMetadata = append(agentMetadata, m)
+				}
 			}
 		}
 	}
+	a.cache.mu.RUnlock()
 
-	if len(agents) == 0 {
+	if len(agentIDs) == 0 {
 		return result, nil
 	}
 
-	// Build ID to agent mapping
-	agentIDs := make([]uint, 0, len(agents))
-	idToAgent := make(map[uint]*forward.ForwardAgent, len(agents))
-	for _, agent := range agents {
-		agentIDs = append(agentIDs, agent.ID())
-		idToAgent[agent.ID()] = agent
+	// Build ID to metadata mapping
+	idToMetadata := make(map[uint]*forward.AgentMetadata, len(agentMetadata))
+	for _, m := range agentMetadata {
+		idToMetadata[m.ID] = m
 	}
 
 	// Batch get status from Redis
@@ -100,13 +162,13 @@ func (a *AgentStatusQuerierAdapter) GetBatchStatus(agentSIDs []string) (map[stri
 
 	// Build result map
 	for agentID, status := range statusMap {
-		agent, ok := idToAgent[agentID]
+		m, ok := idToMetadata[agentID]
 		if !ok {
 			continue
 		}
 
-		result[agent.SID()] = &services.AgentStatusData{
-			Name:   agent.Name(),
+		result[m.SID] = &services.AgentStatusData{
+			Name:   m.Name,
 			Status: a.toStatusResponse(status),
 		}
 	}

@@ -34,6 +34,26 @@ func safeTokenPrefix(token string) string {
 	return token[:8] + "..."
 }
 
+// subscriptionStatusError returns a specific error message based on subscription status.
+func subscriptionStatusError(status string) error {
+	switch status {
+	case string(valueobjects.StatusSuspended):
+		return errors.NewValidationError("subscription is suspended")
+	case string(valueobjects.StatusCancelled):
+		return errors.NewValidationError("subscription is cancelled")
+	case string(valueobjects.StatusExpired):
+		return errors.NewValidationError("subscription is expired")
+	case string(valueobjects.StatusPastDue):
+		return errors.NewValidationError("subscription is past due")
+	case string(valueobjects.StatusPendingPayment):
+		return errors.NewValidationError("subscription is pending payment")
+	case string(valueobjects.StatusInactive):
+		return errors.NewValidationError("subscription is inactive")
+	default:
+		return errors.NewValidationError("subscription is not active")
+	}
+}
+
 func (v *SubscriptionTokenValidatorAdapter) Validate(ctx context.Context, linkToken string) error {
 	var subscriptionModel models.SubscriptionModel
 	if err := v.db.WithContext(ctx).
@@ -47,14 +67,16 @@ func (v *SubscriptionTokenValidatorAdapter) Validate(ctx context.Context, linkTo
 		return errors.NewInternalError("failed to validate subscription")
 	}
 
-	if subscriptionModel.Status != string(valueobjects.StatusActive) {
+	// Check if subscription can use service (active or trialing)
+	status := valueobjects.SubscriptionStatus(subscriptionModel.Status)
+	if !status.CanUseService() {
 		v.logger.Warnw("subscription is not active", "subscription_id", subscriptionModel.ID, "status", subscriptionModel.Status)
-		return errors.NewValidationError("subscription is not active")
+		return subscriptionStatusError(subscriptionModel.Status)
 	}
 
 	if subscriptionModel.EndDate.Before(biztime.NowUTC()) {
 		v.logger.Warnw("subscription expired", "subscription_id", subscriptionModel.ID, "end_date", subscriptionModel.EndDate)
-		return errors.NewValidationError("subscription expired")
+		return errors.NewValidationError("subscription is expired")
 	}
 
 	return nil
@@ -73,14 +95,16 @@ func (v *SubscriptionTokenValidatorAdapter) ValidateAndGetSubscription(ctx conte
 		return nil, errors.NewInternalError("failed to validate subscription")
 	}
 
-	if subscriptionModel.Status != string(valueobjects.StatusActive) {
+	// Check if subscription can use service (active or trialing)
+	status := valueobjects.SubscriptionStatus(subscriptionModel.Status)
+	if !status.CanUseService() {
 		v.logger.Warnw("subscription is not active", "subscription_id", subscriptionModel.ID, "status", subscriptionModel.Status)
-		return nil, errors.NewValidationError("subscription is not active")
+		return nil, subscriptionStatusError(subscriptionModel.Status)
 	}
 
 	if subscriptionModel.EndDate.Before(biztime.NowUTC()) {
 		v.logger.Warnw("subscription expired", "subscription_id", subscriptionModel.ID, "end_date", subscriptionModel.EndDate)
-		return nil, errors.NewValidationError("subscription expired")
+		return nil, errors.NewValidationError("subscription is expired")
 	}
 
 	return &nodeusecases.SubscriptionValidationResult{

@@ -28,6 +28,7 @@ type Handler struct {
 	agentTokenService      *auth.AgentTokenService
 	trafficRecorder        adapters.ForwardTrafficRecorder
 	logger                 logger.Interface
+	ruleConverter          *dto.AgentRuleConverter // kept for SetNodeRepo
 }
 
 // NewHandler creates a new Handler instance
@@ -79,6 +80,16 @@ func NewHandler(
 		agentTokenService:      agentTokenService,
 		trafficRecorder:        trafficRecorder,
 		logger:                 logger,
+		ruleConverter:          ruleConverter,
+	}
+}
+
+// SetNodeRepo sets the node repository for circular dependency handling.
+// This allows the handler to be created before nodeRepo is available.
+func (h *Handler) SetNodeRepo(nodeRepo node.NodeRepository) {
+	h.nodeRepo = nodeRepo
+	if h.ruleConverter != nil {
+		h.ruleConverter.SetNodeRepo(nodeRepo)
 	}
 }
 

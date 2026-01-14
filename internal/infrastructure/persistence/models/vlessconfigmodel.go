@@ -12,19 +12,19 @@ import (
 // Separated from NodeModel to follow protocol-specific table pattern
 type VLESSConfigModel struct {
 	ID            uint   `gorm:"primarykey"`
-	NodeID        uint   `gorm:"uniqueIndex;not null"`           // Logical foreign key to nodes table
-	TransportType string `gorm:"not null;size:10;default:tcp"`   // tcp, ws, grpc, h2
-	Flow          string `gorm:"size:32"`                        // xtls-rprx-vision or empty
-	Security      string `gorm:"not null;size:16;default:none"`  // none, tls, reality
-	SNI           string `gorm:"size:255"`                       // TLS Server Name Indication
-	Fingerprint   string `gorm:"size:64"`                        // TLS fingerprint (chrome, firefox, safari, etc.)
-	AllowInsecure bool   `gorm:"not null;default:false"`         // Allow insecure TLS connection
-	Host          string `gorm:"size:255"`                       // WebSocket/H2 host header
-	Path          string `gorm:"size:255"`                       // WebSocket/H2 path
-	ServiceName   string `gorm:"size:255"`                       // gRPC service name
-	PublicKey     string `gorm:"size:255"`                       // Reality public key
-	ShortID       string `gorm:"size:32"`                        // Reality short ID
-	SpiderX       string `gorm:"size:255"`                       // Reality spider X parameter
+	NodeID        uint   `gorm:"uniqueIndex;not null"`          // Logical foreign key to nodes table
+	TransportType string `gorm:"not null;size:10;default:tcp"`  // tcp, ws, grpc, h2
+	Flow          string `gorm:"size:32"`                       // xtls-rprx-vision or empty
+	Security      string `gorm:"not null;size:16;default:none"` // none, tls, reality
+	SNI           string `gorm:"size:255"`                      // TLS Server Name Indication
+	Fingerprint   string `gorm:"size:64"`                       // TLS fingerprint (chrome, firefox, safari, etc.)
+	AllowInsecure bool   `gorm:"not null;default:false"`        // Allow insecure TLS connection
+	Host          string `gorm:"size:255"`                      // WebSocket/H2 host header
+	Path          string `gorm:"size:255"`                      // WebSocket/H2 path
+	ServiceName   string `gorm:"size:255"`                      // gRPC service name
+	PublicKey     string `gorm:"size:255"`                      // Reality public key
+	ShortID       string `gorm:"size:32"`                       // Reality short ID
+	SpiderX       string `gorm:"size:255"`                      // Reality spider X parameter
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 	DeletedAt     gorm.DeletedAt `gorm:"index"`

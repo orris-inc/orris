@@ -15,15 +15,15 @@ import (
 
 // BatchForwardRuleUseCase handles batch operations for forward rules.
 type BatchForwardRuleUseCase struct {
-	repo              forward.Repository
-	createRuleUC      *CreateForwardRuleUseCase
-	createUserRuleUC  *CreateUserForwardRuleUseCase
-	deleteRuleUC      *DeleteForwardRuleUseCase
-	enableRuleUC      *EnableForwardRuleUseCase
-	disableRuleUC     *DisableForwardRuleUseCase
-	updateRuleUC      *UpdateForwardRuleUseCase
-	txMgr             *db.TransactionManager
-	logger            logger.Interface
+	repo             forward.Repository
+	createRuleUC     *CreateForwardRuleUseCase
+	createUserRuleUC *CreateUserForwardRuleUseCase
+	deleteRuleUC     *DeleteForwardRuleUseCase
+	enableRuleUC     *EnableForwardRuleUseCase
+	disableRuleUC    *DisableForwardRuleUseCase
+	updateRuleUC     *UpdateForwardRuleUseCase
+	txMgr            *db.TransactionManager
+	logger           logger.Interface
 }
 
 // NewBatchForwardRuleUseCase creates a new BatchForwardRuleUseCase.

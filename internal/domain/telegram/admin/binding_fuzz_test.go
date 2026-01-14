@@ -14,11 +14,11 @@ func FuzzNewAdminTelegramBinding(f *testing.F) {
 		telegramUsername string
 	}{
 		{1, 12345, "testuser"},
-		{0, 12345, "testuser"},    // Invalid: zero userID
-		{1, 0, "testuser"},        // Invalid: zero telegramUserID
-		{1, 12345, ""},            // Valid: empty username is OK
+		{0, 12345, "testuser"}, // Invalid: zero userID
+		{1, 0, "testuser"},     // Invalid: zero telegramUserID
+		{1, 12345, ""},         // Valid: empty username is OK
 		{math.MaxUint32, math.MaxInt64, "maxuser"},
-		{1, -12345, "negative"},   // Negative telegramUserID (could be valid)
+		{1, -12345, "negative"}, // Negative telegramUserID (could be valid)
 		{1, 12345, "中文用户"},
 		{1, 12345, "@username"},
 	}

@@ -94,15 +94,15 @@ func ReconstructSystemSetting(
 }
 
 // Getters
-func (s *SystemSetting) ID() uint            { return s.id }
-func (s *SystemSetting) SID() string         { return s.sid }
-func (s *SystemSetting) Category() string    { return s.category }
-func (s *SystemSetting) Key() string         { return s.key }
-func (s *SystemSetting) Value() string       { return s.value }
+func (s *SystemSetting) ID() uint             { return s.id }
+func (s *SystemSetting) SID() string          { return s.sid }
+func (s *SystemSetting) Category() string     { return s.category }
+func (s *SystemSetting) Key() string          { return s.key }
+func (s *SystemSetting) Value() string        { return s.value }
 func (s *SystemSetting) ValueType() ValueType { return s.valueType }
-func (s *SystemSetting) Description() string { return s.description }
-func (s *SystemSetting) UpdatedBy() uint     { return s.updatedBy }
-func (s *SystemSetting) Version() int        { return s.version }
+func (s *SystemSetting) Description() string  { return s.description }
+func (s *SystemSetting) UpdatedBy() uint      { return s.updatedBy }
+func (s *SystemSetting) Version() int         { return s.version }
 func (s *SystemSetting) CreatedAt() time.Time { return s.createdAt }
 func (s *SystemSetting) UpdatedAt() time.Time { return s.updatedAt }
 

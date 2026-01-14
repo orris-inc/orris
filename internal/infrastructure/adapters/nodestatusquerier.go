@@ -3,25 +3,43 @@ package adapters
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	commondto "github.com/orris-inc/orris/internal/application/common/dto"
 	nodeUsecases "github.com/orris-inc/orris/internal/application/node/usecases"
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/infrastructure/services"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 const (
 	// batchNodeStatusQueryTimeout is the maximum time allowed for batch node status queries.
 	batchNodeStatusQueryTimeout = 10 * time.Second
+
+	// nodeMetadataCacheTTL is the TTL for node metadata cache.
+	nodeMetadataCacheTTL = 1 * time.Minute
 )
+
+// nodeMetadataCache holds cached node metadata.
+type nodeMetadataCache struct {
+	// allNodes maps nodeID -> metadata for all nodes
+	allNodes map[uint]*node.NodeMetadata
+	// sidToID maps SID -> nodeID for quick lookup
+	sidToID map[string]uint
+	// lastUpdated is the time when cache was last refreshed
+	lastUpdated time.Time
+	mu          sync.RWMutex
+}
 
 // NodeStatusQuerierAdapter implements services.NodeStatusQuerier.
 // It fetches node status from Redis and resolves node metadata from database.
+// Metadata is cached in memory to reduce database queries.
 type NodeStatusQuerierAdapter struct {
 	nodeRepo      node.NodeRepository
 	statusQuerier *NodeSystemStatusQuerierAdapter
+	cache         *nodeMetadataCache
 	logger        logger.Interface
 }
 
@@ -34,8 +52,50 @@ func NewNodeStatusQuerierAdapter(
 	return &NodeStatusQuerierAdapter{
 		nodeRepo:      nodeRepo,
 		statusQuerier: statusQuerier,
-		logger:        log,
+		cache: &nodeMetadataCache{
+			allNodes: make(map[uint]*node.NodeMetadata),
+			sidToID:  make(map[string]uint),
+		},
+		logger: log,
 	}
+}
+
+// refreshCacheIfNeeded refreshes the metadata cache if it's expired.
+func (a *NodeStatusQuerierAdapter) refreshCacheIfNeeded(ctx context.Context) error {
+	a.cache.mu.RLock()
+	needsRefresh := biztime.NowUTC().Sub(a.cache.lastUpdated) > nodeMetadataCacheTTL
+	a.cache.mu.RUnlock()
+
+	if !needsRefresh {
+		return nil
+	}
+
+	// Acquire write lock and check again
+	a.cache.mu.Lock()
+	defer a.cache.mu.Unlock()
+
+	// Double-check after acquiring write lock
+	if biztime.NowUTC().Sub(a.cache.lastUpdated) <= nodeMetadataCacheTTL {
+		return nil
+	}
+
+	// Refresh cache from database using lightweight query
+	metadata, err := a.nodeRepo.GetAllMetadata(ctx)
+	if err != nil {
+		return err
+	}
+
+	// Rebuild cache
+	a.cache.allNodes = make(map[uint]*node.NodeMetadata, len(metadata))
+	a.cache.sidToID = make(map[string]uint, len(metadata))
+	for _, m := range metadata {
+		a.cache.allNodes[m.ID] = m
+		a.cache.sidToID[m.SID] = m.ID
+	}
+	a.cache.lastUpdated = biztime.NowUTC()
+
+	a.logger.Debugw("node metadata cache refreshed", "node_count", len(metadata))
+	return nil
 }
 
 // GetBatchStatus returns status for multiple nodes by their SIDs.
@@ -47,48 +107,48 @@ func (a *NodeStatusQuerierAdapter) GetBatchStatus(nodeSIDs []string) (map[string
 
 	result := make(map[string]*services.AgentStatusData)
 
-	var nodes []*node.Node
-	var err error
+	// Refresh cache if needed
+	if err := a.refreshCacheIfNeeded(ctx); err != nil {
+		a.logger.Errorw("failed to refresh node metadata cache", "error", err)
+		return nil, err
+	}
+
+	// Get metadata from cache
+	a.cache.mu.RLock()
+	var nodeIDs []uint
+	var nodeMetadata []*node.NodeMetadata
 
 	if nodeSIDs == nil {
-		// Get all nodes regardless of activation status.
-		// Node can be connected regardless of activation status,
-		// status is only used for business logic (e.g., subscription routing).
-		nodes, _, err = a.nodeRepo.List(ctx, node.NodeFilter{})
-		if err != nil {
-			a.logger.Errorw("failed to list nodes",
-				"error", err,
-			)
-			return nil, err
+		// Get all nodes from cache
+		nodeIDs = make([]uint, 0, len(a.cache.allNodes))
+		nodeMetadata = make([]*node.NodeMetadata, 0, len(a.cache.allNodes))
+		for id, m := range a.cache.allNodes {
+			nodeIDs = append(nodeIDs, id)
+			nodeMetadata = append(nodeMetadata, m)
 		}
 	} else {
-		// Get nodes by SIDs
-		nodes = make([]*node.Node, 0, len(nodeSIDs))
+		// Get specific nodes from cache
+		nodeIDs = make([]uint, 0, len(nodeSIDs))
+		nodeMetadata = make([]*node.NodeMetadata, 0, len(nodeSIDs))
 		for _, sid := range nodeSIDs {
-			n, err := a.nodeRepo.GetBySID(ctx, sid)
-			if err != nil {
-				a.logger.Warnw("failed to get node by SID",
-					"sid", sid,
-					"error", err,
-				)
-				continue
-			}
-			if n != nil {
-				nodes = append(nodes, n)
+			if id, ok := a.cache.sidToID[sid]; ok {
+				nodeIDs = append(nodeIDs, id)
+				if m, ok := a.cache.allNodes[id]; ok {
+					nodeMetadata = append(nodeMetadata, m)
+				}
 			}
 		}
 	}
+	a.cache.mu.RUnlock()
 
-	if len(nodes) == 0 {
+	if len(nodeIDs) == 0 {
 		return result, nil
 	}
 
-	// Build ID to node mapping
-	nodeIDs := make([]uint, 0, len(nodes))
-	idToNode := make(map[uint]*node.Node, len(nodes))
-	for _, n := range nodes {
-		nodeIDs = append(nodeIDs, n.ID())
-		idToNode[n.ID()] = n
+	// Build ID to metadata mapping
+	idToMetadata := make(map[uint]*node.NodeMetadata, len(nodeMetadata))
+	for _, m := range nodeMetadata {
+		idToMetadata[m.ID] = m
 	}
 
 	// Batch get status from Redis
@@ -103,13 +163,13 @@ func (a *NodeStatusQuerierAdapter) GetBatchStatus(nodeSIDs []string) (map[string
 
 	// Build result map
 	for nodeID, status := range statusMap {
-		n, ok := idToNode[nodeID]
+		m, ok := idToMetadata[nodeID]
 		if !ok {
 			continue
 		}
 
-		result[n.SID()] = &services.AgentStatusData{
-			Name:   n.Name(),
+		result[m.SID] = &services.AgentStatusData{
+			Name:   m.Name,
 			Status: a.toStatusResponse(status),
 		}
 	}

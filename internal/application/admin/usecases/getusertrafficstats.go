@@ -136,8 +136,8 @@ func (uc *GetUserTrafficStatsUseCase) Execute(
 			query.ResourceType,
 			query.From,
 			mysqlTo,
-			1,                        // Get all data without pagination for merging
-			maxUserAggregationLimit,  // Safety limit to prevent OOM
+			1,                       // Get all data without pagination for merging
+			maxUserAggregationLimit, // Safety limit to prevent OOM
 		)
 		if err != nil {
 			uc.logger.Errorw("failed to fetch subscription usage", "error", err)

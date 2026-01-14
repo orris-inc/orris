@@ -57,7 +57,7 @@ func (h *NodeSSEHandler) Events(c *gin.Context) {
 		return
 	}
 
-	h.GetLogger().Infow("node SSE connection established",
+	h.GetLogger().Debugw("node SSE connection established",
 		"conn_id", connID,
 		"user_id", userID,
 		"node_filters", nodeFilters,

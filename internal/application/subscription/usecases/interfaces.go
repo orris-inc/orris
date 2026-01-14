@@ -20,3 +20,14 @@ type SubscriptionChangeNotifier interface {
 	// NotifySubscriptionUpdate notifies nodes when a subscription is updated.
 	NotifySubscriptionUpdate(ctx context.Context, sub *subscription.Subscription) error
 }
+
+// QuotaCacheManager defines the interface for managing subscription quota cache.
+// This is used to invalidate or update cache when subscription status changes.
+type QuotaCacheManager interface {
+	// InvalidateQuota removes quota cache for a subscription, forcing reload on next access.
+	InvalidateQuota(ctx context.Context, subscriptionID uint) error
+	// SyncQuotaFromSubscription syncs quota from subscription to cache.
+	SyncQuotaFromSubscription(ctx context.Context, sub *subscription.Subscription) error
+	// SetSuspended updates only the suspended status in cache.
+	SetSuspended(ctx context.Context, subscriptionID uint, suspended bool) error
+}

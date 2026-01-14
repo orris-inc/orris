@@ -44,6 +44,9 @@ func (uc *CancelSubscriptionUseCase) Execute(ctx context.Context, cmd CancelSubs
 		uc.logger.Errorw("failed to get subscription", "error", err, "subscription_id", cmd.SubscriptionID)
 		return fmt.Errorf("failed to get subscription: %w", err)
 	}
+	if sub == nil {
+		return fmt.Errorf("subscription not found")
+	}
 
 	if err := sub.Cancel(cmd.Reason); err != nil {
 		uc.logger.Errorw("failed to cancel subscription", "error", err, "subscription_id", cmd.SubscriptionID)
@@ -69,8 +72,8 @@ func (uc *CancelSubscriptionUseCase) Execute(ctx context.Context, cmd CancelSubs
 		"status", sub.Status(),
 	)
 
-	// Notify node agents about the cancelled subscription (only for immediate cancellation)
-	if cmd.Immediate && uc.subscriptionNotifier != nil {
+	// Notify node agents when subscription is no longer active
+	if !sub.Status().CanUseService() && uc.subscriptionNotifier != nil {
 		notifyCtx := context.Background()
 		if err := uc.subscriptionNotifier.NotifySubscriptionDeactivation(notifyCtx, sub); err != nil {
 			// Log error but don't fail the cancellation

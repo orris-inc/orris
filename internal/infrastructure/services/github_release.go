@@ -173,7 +173,7 @@ func (s *GitHubReleaseService) fetchFromGitHub(ctx context.Context) (*ReleaseInf
 	}
 	s.cacheMu.Unlock()
 
-	s.logger.Infow("fetched latest release from GitHub",
+	s.logger.Debugw("fetched latest release from GitHub",
 		"version", info.Version,
 		"assets_count", len(info.Assets),
 	)
@@ -254,7 +254,7 @@ func (s *GitHubReleaseService) GetLatestReleaseWithVersionCheck(ctx context.Cont
 			return info, nil
 		}
 
-		s.logger.Infow("cache may be stale, refreshing release info",
+		s.logger.Debugw("cache may be stale, refreshing release info",
 			"current_version", currentVersion,
 			"cached_version", info.Version,
 		)

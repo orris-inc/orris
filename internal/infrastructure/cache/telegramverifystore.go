@@ -17,7 +17,7 @@ const (
 	telegramVerifyTTL         = 10 * time.Minute
 	telegramVerifyCodeBytes   = 6 // 6 bytes = 48 bits of entropy (~281 trillion possibilities)
 	telegramVerifyRatePrefix  = "telegram:verify:rate:"
-	telegramVerifyMaxAttempts = 5               // Max failed attempts per telegram user
+	telegramVerifyMaxAttempts = 5                // Max failed attempts per telegram user
 	telegramVerifyLockoutTTL  = 15 * time.Minute // Lockout duration after max attempts
 )
 

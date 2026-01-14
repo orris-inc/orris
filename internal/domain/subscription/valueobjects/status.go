@@ -8,6 +8,7 @@ const (
 	StatusTrialing       SubscriptionStatus = "trialing"
 	StatusActive         SubscriptionStatus = "active"
 	StatusPastDue        SubscriptionStatus = "past_due"
+	StatusSuspended      SubscriptionStatus = "suspended" // Suspended due to traffic limit or admin action
 	StatusCancelled      SubscriptionStatus = "cancelled"
 	StatusExpired        SubscriptionStatus = "expired"
 )
@@ -28,9 +29,10 @@ func (s SubscriptionStatus) CanTransitionTo(target SubscriptionStatus) bool {
 	transitions := map[SubscriptionStatus][]SubscriptionStatus{
 		StatusInactive:       {StatusPendingPayment, StatusActive, StatusTrialing},
 		StatusPendingPayment: {StatusActive, StatusInactive, StatusExpired},
-		StatusTrialing:       {StatusActive, StatusCancelled, StatusExpired},
-		StatusActive:         {StatusPastDue, StatusCancelled, StatusExpired},
-		StatusPastDue:        {StatusActive, StatusCancelled, StatusExpired},
+		StatusTrialing:       {StatusActive, StatusCancelled, StatusExpired, StatusSuspended},
+		StatusActive:         {StatusPastDue, StatusCancelled, StatusExpired, StatusSuspended},
+		StatusPastDue:        {StatusActive, StatusCancelled, StatusExpired, StatusSuspended},
+		StatusSuspended:      {StatusActive}, // Can be reactivated after resolving the issue
 		StatusCancelled:      {},
 		StatusExpired:        {StatusActive},
 	}
@@ -54,6 +56,7 @@ var ValidStatuses = map[SubscriptionStatus]bool{
 	StatusTrialing:       true,
 	StatusActive:         true,
 	StatusPastDue:        true,
+	StatusSuspended:      true,
 	StatusCancelled:      true,
 	StatusExpired:        true,
 }

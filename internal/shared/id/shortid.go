@@ -17,20 +17,20 @@ const (
 
 // Prefixes for different entity types (Stripe-style)
 const (
-	PrefixForwardAgent      = "fa"
-	PrefixForwardRule       = "fr"
-	PrefixNode              = "node"
-	PrefixUser              = "usr"
-	PrefixSubscription      = "sub"
-	PrefixPlan              = "plan"
-	PrefixSubscriptionToken = "stoken"
-	PrefixSubscriptionUsage = "usage"
-	PrefixPlanPricing       = "price"
-	PrefixResourceGroup            = "rg"
-	PrefixTelegramBinding          = "tg_bind"
-	PrefixAdminTelegramBinding     = "atg_bind"
-	PrefixSetting                  = "setting"
-	PrefixSubscriptionUsageStats   = "usagestat"
+	PrefixForwardAgent           = "fa"
+	PrefixForwardRule            = "fr"
+	PrefixNode                   = "node"
+	PrefixUser                   = "usr"
+	PrefixSubscription           = "sub"
+	PrefixPlan                   = "plan"
+	PrefixSubscriptionToken      = "stoken"
+	PrefixSubscriptionUsage      = "usage"
+	PrefixPlanPricing            = "price"
+	PrefixResourceGroup          = "rg"
+	PrefixTelegramBinding        = "tg_bind"
+	PrefixAdminTelegramBinding   = "atg_bind"
+	PrefixSetting                = "setting"
+	PrefixSubscriptionUsageStats = "usagestat"
 )
 
 // Generate creates a random short ID with the specified length using Base62 encoding.

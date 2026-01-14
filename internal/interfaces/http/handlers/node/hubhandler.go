@@ -64,6 +64,55 @@ type NodeIPUpdater interface {
 	UpdatePublicIP(ctx context.Context, nodeID uint, ipv4, ipv6 string) error
 }
 
+// SubscriptionSyncer defines the interface for syncing subscriptions to nodes on connect.
+type SubscriptionSyncer interface {
+	SyncSubscriptionsOnNodeConnect(ctx context.Context, nodeID uint) error
+}
+
+// NodeTrafficEnforcer defines the interface for node subscription traffic limit enforcement.
+// When traffic is recorded, the enforcer checks if the subscription has exceeded its limit
+// and suspends it if necessary.
+type NodeTrafficEnforcer interface {
+	// CheckAndEnforceLimitForNode checks traffic limit for node subscriptions only.
+	// Skips forward and hybrid subscriptions.
+	CheckAndEnforceLimitForNode(ctx context.Context, subscriptionID uint) error
+}
+
+// NodeSubscriptionUsageReader defines the interface for reading node subscription usage.
+type NodeSubscriptionUsageReader interface {
+	// GetCurrentPeriodUsage returns the total usage for the current billing period.
+	GetCurrentPeriodUsage(ctx context.Context, subscriptionID uint, periodStart, periodEnd time.Time) (int64, error)
+}
+
+// NodeSubscriptionQuotaCache defines the interface for subscription quota caching.
+// This is a local interface to avoid import cycle with cache package.
+type NodeSubscriptionQuotaCache interface {
+	// GetQuota retrieves subscription quota information from cache.
+	// Returns nil if cache does not exist.
+	GetQuota(ctx context.Context, subscriptionID uint) (*CachedQuotaInfo, error)
+
+	// MarkSuspended marks the subscription as suspended in cache.
+	MarkSuspended(ctx context.Context, subscriptionID uint) error
+}
+
+// CachedQuotaInfo represents the cached subscription quota information.
+// This mirrors cache.CachedQuota to avoid import cycle.
+type CachedQuotaInfo struct {
+	Limit       int64     // Traffic limit in bytes
+	PeriodStart time.Time // Billing period start
+	PeriodEnd   time.Time // Billing period end
+	PlanType    string    // node/forward/hybrid
+	Suspended   bool      // Whether the subscription is suspended
+}
+
+// NodeSubscriptionQuotaLoader defines the interface for lazy loading subscription quota.
+// This is used when quota cache miss occurs to load quota from database.
+type NodeSubscriptionQuotaLoader interface {
+	// LoadQuotaByID loads subscription quota from database and caches it.
+	// Returns the cached quota info, or nil if subscription/plan not found.
+	LoadQuotaByID(ctx context.Context, subscriptionID uint) (*CachedQuotaInfo, error)
+}
+
 // NodeHubHandler handles WebSocket connections for node agents.
 type NodeHubHandler struct {
 	hub                   *services.AgentHub
@@ -72,7 +121,18 @@ type NodeHubHandler struct {
 	subscriptionResolver  usecases.SubscriptionIDResolver
 	addressChangeNotifier NodeAddressChangeNotifier
 	ipUpdater             NodeIPUpdater
+	subscriptionSyncer    SubscriptionSyncer
+	trafficEnforcer       NodeTrafficEnforcer
 	logger                logger.Interface
+
+	// quotaCache caches subscription quota info for real-time traffic limit checking
+	quotaCache NodeSubscriptionQuotaCache
+
+	// usageReader reads current period usage for traffic limit comparison
+	usageReader NodeSubscriptionUsageReader
+
+	// quotaLoader loads quota from database when cache miss occurs (lazy loading)
+	quotaLoader NodeSubscriptionQuotaLoader
 }
 
 // NewNodeHubHandler creates a new NodeHubHandler.
@@ -100,6 +160,31 @@ func (h *NodeHubHandler) SetAddressChangeNotifier(notifier NodeAddressChangeNoti
 // SetIPUpdater sets the IP updater (optional).
 func (h *NodeHubHandler) SetIPUpdater(updater NodeIPUpdater) {
 	h.ipUpdater = updater
+}
+
+// SetSubscriptionSyncer sets the subscription syncer for pushing subscriptions on connect (optional).
+func (h *NodeHubHandler) SetSubscriptionSyncer(syncer SubscriptionSyncer) {
+	h.subscriptionSyncer = syncer
+}
+
+// SetTrafficEnforcer sets the traffic enforcer for node subscription limit checking (optional).
+func (h *NodeHubHandler) SetTrafficEnforcer(enforcer NodeTrafficEnforcer) {
+	h.trafficEnforcer = enforcer
+}
+
+// SetQuotaCache sets the quota cache for real-time traffic limit checking (optional).
+func (h *NodeHubHandler) SetQuotaCache(cache NodeSubscriptionQuotaCache) {
+	h.quotaCache = cache
+}
+
+// SetUsageReader sets the usage reader for real-time traffic limit checking (optional).
+func (h *NodeHubHandler) SetUsageReader(reader NodeSubscriptionUsageReader) {
+	h.usageReader = reader
+}
+
+// SetQuotaLoader sets the quota loader for lazy loading when cache miss occurs (optional).
+func (h *NodeHubHandler) SetQuotaLoader(loader NodeSubscriptionQuotaLoader) {
+	h.quotaLoader = loader
 }
 
 // NodeAgentWS handles WebSocket connections from node agents.
@@ -142,6 +227,9 @@ func (h *NodeHubHandler) NodeAgentWS(c *gin.Context) {
 
 	// Check if node IP has changed, update database, and notify forward agents
 	h.checkAndNotifyIPChange(c.Request.Context(), nodeID, clientIP)
+
+	// Sync subscriptions to node on connect (async to not block connection)
+	h.syncSubscriptionsOnConnect(nodeID)
 
 	// Start read and write pumps
 	go h.writePump(nodeID, conn, nodeConn.Send)
@@ -222,6 +310,23 @@ func (h *NodeHubHandler) checkAndNotifyIPChange(ctx context.Context, nodeID uint
 			h.logger.Warnw("failed to notify forward agents of node IP change",
 				"error", err,
 				"node_id", nodeID,
+			)
+		}
+	}()
+}
+
+// syncSubscriptionsOnConnect pushes all active subscriptions to the node when it connects.
+func (h *NodeHubHandler) syncSubscriptionsOnConnect(nodeID uint) {
+	if h.subscriptionSyncer == nil {
+		return
+	}
+
+	go func() {
+		ctx := context.Background()
+		if err := h.subscriptionSyncer.SyncSubscriptionsOnNodeConnect(ctx, nodeID); err != nil {
+			h.logger.Warnw("failed to sync subscriptions on node connect",
+				"node_id", nodeID,
+				"error", err,
 			)
 		}
 	}()
@@ -443,6 +548,12 @@ func (h *NodeHubHandler) handleTrafficEvent(nodeID uint, extra any) {
 		// Add to buffer (will be flushed to Redis periodically)
 		h.trafficBuffer.AddTraffic(nodeID, subID, r.Upload, r.Download)
 		addedCount++
+
+		// Real-time traffic limit check using cached quota.
+		// Compare current usage against cached limit to detect over-limit immediately.
+		// Note: Only node/hybrid subscriptions are checked here; forward subscriptions are handled
+		// by Forward Agent traffic reporting flow.
+		h.checkAndEnforceTrafficLimit(ctx, subID)
 	}
 
 	if addedCount > 0 {
@@ -450,6 +561,93 @@ func (h *NodeHubHandler) handleTrafficEvent(nodeID uint, extra any) {
 			"node_id", nodeID,
 			"added_count", addedCount,
 		)
+	}
+}
+
+// checkAndEnforceTrafficLimit performs real-time traffic limit check using cached quota.
+// If the subscription exceeds its limit, it marks the subscription as suspended and triggers enforcement.
+func (h *NodeHubHandler) checkAndEnforceTrafficLimit(ctx context.Context, subscriptionID uint) {
+	// Skip if dependencies are not set
+	if h.quotaCache == nil || h.usageReader == nil || h.trafficEnforcer == nil {
+		return
+	}
+
+	// 1. Get quota from cache
+	quota, err := h.quotaCache.GetQuota(ctx, subscriptionID)
+	if err != nil {
+		h.logger.Warnw("failed to get quota cache for traffic limit check",
+			"subscription_id", subscriptionID,
+			"error", err,
+		)
+		return
+	}
+
+	// 2. If cache miss, try lazy loading from database
+	if quota == nil {
+		if h.quotaLoader == nil {
+			// No loader configured, skip check
+			return
+		}
+		quota, err = h.quotaLoader.LoadQuotaByID(ctx, subscriptionID)
+		if err != nil {
+			h.logger.Warnw("failed to load quota from database",
+				"subscription_id", subscriptionID,
+				"error", err,
+			)
+			return
+		}
+		if quota == nil {
+			// Subscription/plan not found or not active, skip check
+			return
+		}
+	}
+
+	// 3. Check if already suspended
+	if quota.Suspended {
+		return
+	}
+
+	// 4. Check if plan type is node or hybrid (skip forward-only subscriptions)
+	if quota.PlanType != "node" && quota.PlanType != "hybrid" {
+		return
+	}
+
+	// 5. Get current period usage
+	usage, err := h.usageReader.GetCurrentPeriodUsage(ctx, subscriptionID, quota.PeriodStart, quota.PeriodEnd)
+	if err != nil {
+		h.logger.Warnw("failed to get node subscription usage for traffic limit check",
+			"subscription_id", subscriptionID,
+			"error", err,
+		)
+		return
+	}
+
+	// 6. Compare usage against limit (skip unlimited quotas where Limit == 0)
+	if quota.Limit > 0 && usage >= quota.Limit {
+		h.logger.Infow("node subscription exceeded traffic limit, triggering enforcement",
+			"subscription_id", subscriptionID,
+			"usage", usage,
+			"limit", quota.Limit,
+		)
+
+		// Mark as suspended in cache to prevent duplicate enforcement
+		if err := h.quotaCache.MarkSuspended(ctx, subscriptionID); err != nil {
+			h.logger.Warnw("failed to mark subscription as suspended in cache",
+				"subscription_id", subscriptionID,
+				"error", err,
+			)
+		}
+
+		// Async enforcement to avoid blocking traffic report flow
+		go func(sid uint) {
+			enforceCtx := context.Background()
+			if err := h.trafficEnforcer.CheckAndEnforceLimitForNode(enforceCtx, sid); err != nil {
+				h.logger.Warnw("failed to enforce node traffic limit",
+					"subscription_id", sid,
+					"error", err,
+				)
+			}
+		}(subscriptionID)
 	}
 }
 

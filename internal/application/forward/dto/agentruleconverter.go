@@ -17,9 +17,9 @@ type AgentStatusInfo struct {
 
 // AgentInfo contains agent information for rule conversion.
 type AgentInfo struct {
-	ID                       uint
-	SID                      string
-	EffectiveTunnelAddress   string
+	ID                     uint
+	SID                    string
+	EffectiveTunnelAddress string
 }
 
 // AgentStatusProvider defines the interface for querying agent status.
@@ -54,6 +54,12 @@ type AgentRuleConverter struct {
 	statusQuerier AgentStatusProvider
 	tokenService  TokenGenerator
 	logger        logger.Interface
+}
+
+// SetNodeRepo sets the node repository for circular dependency handling.
+// This allows the converter to be created before nodeRepo is available.
+func (c *AgentRuleConverter) SetNodeRepo(nodeRepo NodeInfoProvider) {
+	c.nodeRepo = nodeRepo
 }
 
 // NewAgentRuleConverter creates a new AgentRuleConverter.

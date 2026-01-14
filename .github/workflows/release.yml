@@ -34,9 +34,19 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y upx
 
+      - name: Get version from tag
+        id: version
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          VERSION=${TAG#v}
+          echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+
       - name: Build binary
         run: |
-          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -ldflags="-w -s" -o orris-${{ matrix.suffix }} ./cmd/orris
+          VERSION=${{ steps.version.outputs.VERSION }}
+          CGO_ENABLED=0 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build \
+            -ldflags="-w -s -X github.com/orris-inc/orris/internal/shared/version.Current=${VERSION}" \
+            -o orris-${{ matrix.suffix }} ./cmd/orris
 
       - name: Compress binary (AMD64 only)
         if: matrix.goarch == 'amd64'

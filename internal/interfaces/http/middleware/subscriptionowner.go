@@ -104,4 +104,3 @@ func (m *SubscriptionOwnerMiddleware) RequireOwnership() gin.HandlerFunc {
 		c.Next()
 	}
 }
-

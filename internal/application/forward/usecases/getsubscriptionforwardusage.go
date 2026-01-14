@@ -32,7 +32,7 @@ type GetSubscriptionForwardUsageUseCase struct {
 	repo             forward.Repository
 	subscriptionRepo subscription.SubscriptionRepository
 	planRepo         subscription.PlanRepository
-	usageRepo        subscription.SubscriptionUsageRepository       // Legacy, kept for compatibility
+	usageRepo        subscription.SubscriptionUsageRepository      // Legacy, kept for compatibility
 	usageStatsRepo   subscription.SubscriptionUsageStatsRepository // For historical traffic data (>24h ago)
 	hourlyCache      cache.HourlyTrafficCache                      // For recent traffic data (last 24h)
 	logger           logger.Interface

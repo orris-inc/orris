@@ -216,9 +216,9 @@ func TestGenerateUniqueness(t *testing.T) {
 // TestNewSIDFormats tests that NewSID produces correct formats
 func TestNewSIDFormats(t *testing.T) {
 	tests := []struct {
-		name       string
-		generator  func() (string, error)
-		prefix     string
+		name      string
+		generator func() (string, error)
+		prefix    string
 		// hasUnderscoreInPrefix indicates the prefix itself contains underscore
 		// These prefixes cannot be correctly parsed by ParsePrefixedID
 		hasUnderscoreInPrefix bool

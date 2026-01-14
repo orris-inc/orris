@@ -142,6 +142,14 @@ type ListFilter struct {
 	GroupIDs         []uint // Filter by resource group IDs (uses JSON_OVERLAPS on group_ids column)
 }
 
+// AgentMetadata holds lightweight agent metadata for SSE broadcasting.
+// This avoids loading full agent entities.
+type AgentMetadata struct {
+	ID   uint
+	SID  string
+	Name string
+}
+
 // AgentRepository defines the interface for forward agent persistence.
 type AgentRepository interface {
 	// Create persists a new forward agent.
@@ -153,8 +161,20 @@ type AgentRepository interface {
 	// GetBySID retrieves a forward agent by SID.
 	GetBySID(ctx context.Context, sid string) (*ForwardAgent, error)
 
+	// GetBySIDs retrieves multiple forward agents by their SIDs.
+	// Returns a slice of forward agents found.
+	GetBySIDs(ctx context.Context, sids []string) ([]*ForwardAgent, error)
+
 	// GetByTokenHash retrieves a forward agent by token hash.
 	GetByTokenHash(ctx context.Context, tokenHash string) (*ForwardAgent, error)
+
+	// GetAllEnabledMetadata returns lightweight metadata for all enabled agents.
+	// Used for SSE broadcasting where full entity is not needed.
+	GetAllEnabledMetadata(ctx context.Context) ([]*AgentMetadata, error)
+
+	// GetMetadataBySIDs returns lightweight metadata for agents by SIDs.
+	// Used for SSE broadcasting where full entity is not needed.
+	GetMetadataBySIDs(ctx context.Context, sids []string) ([]*AgentMetadata, error)
 
 	// GetSIDsByIDs retrieves SIDs for multiple agents by their internal IDs.
 	// Returns a map from internal ID to SID.

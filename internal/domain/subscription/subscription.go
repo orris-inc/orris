@@ -382,6 +382,72 @@ func (s *Subscription) Cancel(reason string) error {
 	return nil
 }
 
+// Suspend suspends a subscription (e.g., due to traffic limit or admin action)
+func (s *Subscription) Suspend(reason string) error {
+	if s.status == vo.StatusSuspended {
+		return nil
+	}
+
+	if !s.status.CanTransitionTo(vo.StatusSuspended) {
+		return fmt.Errorf("cannot suspend subscription with status %s", s.status)
+	}
+
+	if reason == "" {
+		return fmt.Errorf("suspend reason is required")
+	}
+
+	s.status = vo.StatusSuspended
+	s.cancelReason = &reason // reuse cancelReason field for suspend reason
+	s.updatedAt = biztime.NowUTC()
+	s.version++
+
+	return nil
+}
+
+// Unsuspend reactivates a suspended subscription
+func (s *Subscription) Unsuspend() error {
+	if s.status != vo.StatusSuspended {
+		return fmt.Errorf("cannot unsuspend subscription with status %s", s.status)
+	}
+
+	if !s.status.CanTransitionTo(vo.StatusActive) {
+		return fmt.Errorf("invalid status transition from %s to active", s.status)
+	}
+
+	s.status = vo.StatusActive
+	s.cancelReason = nil
+	s.updatedAt = biztime.NowUTC()
+	s.version++
+
+	return nil
+}
+
+// ResetUsage resets the subscription's usage by updating the period start time.
+// This effectively clears the usage for the current period since usage is calculated
+// from period_start to period_end. The period_end remains unchanged to maintain
+// billing alignment.
+// If the subscription is suspended, it will be automatically unsuspended.
+func (s *Subscription) ResetUsage() error {
+	// If suspended, unsuspend first
+	if s.status == vo.StatusSuspended {
+		if err := s.Unsuspend(); err != nil {
+			return fmt.Errorf("failed to unsuspend: %w", err)
+		}
+	}
+
+	// Only active or trialing subscriptions can reset usage
+	if !s.status.CanUseService() {
+		return fmt.Errorf("cannot reset usage for subscription with status %s", s.status)
+	}
+
+	// Reset period start to now, keeping period end unchanged
+	s.currentPeriodStart = biztime.NowUTC()
+	s.updatedAt = biztime.NowUTC()
+	s.version++
+
+	return nil
+}
+
 // Renew renews a subscription to a new end date
 func (s *Subscription) Renew(endDate time.Time) error {
 	if !s.status.CanRenew() {

@@ -131,8 +131,8 @@ func (uc *GetAdminNodeTrafficStatsUseCase) Execute(
 			resourceType,
 			query.From,
 			mysqlTo,
-			1,                    // Get all data without pagination for merging
-			maxAggregationLimit,  // Safety limit to prevent OOM
+			1,                   // Get all data without pagination for merging
+			maxAggregationLimit, // Safety limit to prevent OOM
 		)
 		if err != nil {
 			uc.logger.Errorw("failed to fetch node usage", "error", err)
