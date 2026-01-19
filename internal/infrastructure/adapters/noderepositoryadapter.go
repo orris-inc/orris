@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/orris-inc/orris/internal/application/node/usecases"
+	"github.com/orris-inc/orris/internal/domain/externalforward"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
 	nodevo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
@@ -23,10 +24,11 @@ type NodeRepository interface {
 }
 
 type NodeRepositoryAdapter struct {
-	nodeRepo        NodeRepository
-	forwardRuleRepo forward.Repository
-	db              *gorm.DB
-	logger          logger.Interface
+	nodeRepo            NodeRepository
+	forwardRuleRepo     forward.Repository
+	externalForwardRepo externalforward.Repository
+	db                  *gorm.DB
+	logger              logger.Interface
 }
 
 func NewNodeRepositoryAdapter(nodeRepo NodeRepository, forwardRuleRepo forward.Repository, db *gorm.DB, logger logger.Interface) *NodeRepositoryAdapter {
@@ -36,6 +38,11 @@ func NewNodeRepositoryAdapter(nodeRepo NodeRepository, forwardRuleRepo forward.R
 		db:              db,
 		logger:          logger,
 	}
+}
+
+// SetExternalForwardRepo sets the external forward repository for optional external rule integration.
+func (r *NodeRepositoryAdapter) SetExternalForwardRepo(repo externalforward.Repository) {
+	r.externalForwardRepo = repo
 }
 
 func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, linkToken string, mode string) ([]*usecases.Node, error) {
@@ -64,12 +71,12 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, link
 
 	// For forward plan, return user's forward rules as nodes
 	if planModel.PlanType == "forward" {
-		return r.getForwardPlanNodes(ctx, subscriptionModel.UserID, mode)
+		return r.getForwardPlanNodes(ctx, subscriptionModel.ID, subscriptionModel.UserID, mode)
 	}
 
 	// For hybrid plan, return both resource group nodes AND user's forward rules
 	if planModel.PlanType == "hybrid" {
-		return r.getHybridPlanNodes(ctx, subscriptionModel.UserID, subscriptionModel.PlanID, mode)
+		return r.getHybridPlanNodes(ctx, subscriptionModel.ID, subscriptionModel.UserID, subscriptionModel.PlanID, mode)
 	}
 
 	// For node plan, query nodes via resource_groups
@@ -374,7 +381,7 @@ func (r *NodeRepositoryAdapter) getForwardedNodes(ctx context.Context, nodeIDs [
 // For forward plans, users see their own forward rules as subscription nodes
 // Forward plans have no "origin" nodes - all nodes are forwarded by nature
 // Uses Repository method to ensure proper scope isolation (user's own rules only).
-func (r *NodeRepositoryAdapter) getForwardPlanNodes(ctx context.Context, userID uint, mode string) ([]*usecases.Node, error) {
+func (r *NodeRepositoryAdapter) getForwardPlanNodes(ctx context.Context, subscriptionID uint, userID uint, mode string) ([]*usecases.Node, error) {
 	// Forward plans have no origin nodes, return empty for origin mode
 	if mode == usecases.NodeModeOrigin {
 		r.logger.Infow("forward plan has no origin nodes", "user_id", userID, "mode", mode)
@@ -565,10 +572,16 @@ func (r *NodeRepositoryAdapter) getForwardPlanNodes(ctx context.Context, userID 
 		forwardedNodes = append(forwardedNodes, forwardedNode)
 	}
 
+	// Append external forward rules if repository is configured
+	externalNodes := r.getExternalForwardNodes(ctx, subscriptionID)
+	forwardedNodes = append(forwardedNodes, externalNodes...)
+
 	r.logger.Infow("retrieved forward plan nodes for user",
 		"user_id", userID,
+		"subscription_id", subscriptionID,
 		"forward_rule_count", len(forwardRules),
 		"forwarded_node_count", len(forwardedNodes),
+		"external_node_count", len(externalNodes),
 		"mode", mode,
 	)
 
@@ -577,7 +590,7 @@ func (r *NodeRepositoryAdapter) getForwardPlanNodes(ctx context.Context, userID 
 
 // getHybridPlanNodes returns nodes for hybrid plan subscriptions
 // For hybrid plans, users see both resource group nodes AND their own forward rules
-func (r *NodeRepositoryAdapter) getHybridPlanNodes(ctx context.Context, userID uint, planID uint, mode string) ([]*usecases.Node, error) {
+func (r *NodeRepositoryAdapter) getHybridPlanNodes(ctx context.Context, subscriptionID uint, userID uint, planID uint, mode string) ([]*usecases.Node, error) {
 	// Step 1: Get resource group nodes (same as node plan logic)
 	// Query resource group IDs for this plan
 	var groupIDs []uint
@@ -648,11 +661,17 @@ func (r *NodeRepositoryAdapter) getHybridPlanNodes(ctx context.Context, userID u
 	// Combine both types of nodes
 	allNodes := append(resourceGroupNodes, userForwardNodes...)
 
+	// Append external forward rules if repository is configured
+	externalNodes := r.getExternalForwardNodes(ctx, subscriptionID)
+	allNodes = append(allNodes, externalNodes...)
+
 	r.logger.Infow("retrieved hybrid plan nodes",
 		"user_id", userID,
+		"subscription_id", subscriptionID,
 		"plan_id", planID,
 		"resource_group_node_count", len(resourceGroupNodes),
 		"user_forward_node_count", len(userForwardNodes),
+		"external_node_count", len(externalNodes),
 		"total_count", len(allNodes),
 		"mode", mode,
 	)
@@ -964,6 +983,49 @@ func (r *NodeRepositoryAdapter) getUserForwardNodes(ctx context.Context, userID 
 	}
 
 	return forwardedNodes, nil
+}
+
+// getExternalForwardNodes retrieves external forward rules for a subscription and converts them to subscription nodes.
+// Returns empty slice if external forward repository is not configured.
+func (r *NodeRepositoryAdapter) getExternalForwardNodes(ctx context.Context, subscriptionID uint) []*usecases.Node {
+	if r.externalForwardRepo == nil {
+		return nil
+	}
+
+	// Query enabled external forward rules for this subscription
+	externalRules, err := r.externalForwardRepo.ListEnabledBySubscriptionID(ctx, subscriptionID)
+	if err != nil {
+		r.logger.Warnw("failed to query external forward rules", "subscription_id", subscriptionID, "error", err)
+		return nil
+	}
+
+	if len(externalRules) == 0 {
+		return nil
+	}
+
+	// Convert external rules to subscription nodes
+	// Note: Protocol configuration is inherited from the associated node
+	var nodes []*usecases.Node
+	for _, rule := range externalRules {
+		node := &usecases.Node{
+			ID:               0, // External rules don't have internal node IDs
+			Name:             rule.Name(),
+			ServerAddress:    rule.ServerAddress(),
+			SubscriptionPort: rule.ListenPort(),
+			Protocol:         "", // Protocol info comes from node configuration
+			Password:         "", // Will be filled with subscription UUID by caller
+		}
+
+		nodes = append(nodes, node)
+	}
+
+	r.logger.Infow("retrieved external forward nodes for subscription",
+		"subscription_id", subscriptionID,
+		"external_rule_count", len(externalRules),
+		"node_count", len(nodes),
+	)
+
+	return nodes
 }
 
 // resolveServerAddress returns the effective server address for subscription

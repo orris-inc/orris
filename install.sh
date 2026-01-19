@@ -285,7 +285,7 @@ print_summary() {
     log_info "For more information, visit: https://github.com/orris-inc/orris"
 }
 
-# Update function - pulls latest images, runs migrations, and restarts services
+# Update function - pulls latest images, restarts services, and runs migrations
 do_update() {
     echo -e "${BLUE}"
     echo "  ___  ____  ____  ___  ____  "
@@ -309,11 +309,24 @@ do_update() {
     log_info "Pulling latest images..."
     $DOCKER_COMPOSE pull
 
+    log_info "Restarting services with new images..."
+    $DOCKER_COMPOSE up -d
+
+    log_info "Waiting for services to be ready..."
+    sleep 10
+
+    # Wait for app container to be healthy
+    for i in {1..30}; do
+        if docker exec orris_app /app/orris migrate status &>/dev/null; then
+            break
+        fi
+        echo -n "."
+        sleep 2
+    done
+    echo ""
+
     log_info "Running database migrations..."
     docker exec orris_app /app/orris migrate up
-
-    log_info "Restarting services..."
-    $DOCKER_COMPOSE up -d
 
     echo ""
     echo -e "${GREEN}========================================${NC}"

@@ -43,7 +43,8 @@ const (
 	TableForwardRules           = "forward_rules"
 	TableForwardAgents          = "forward_agents"
 	TableResourceGroups         = "resource_groups"
-	TableSubscriptionUsageStats = "subscription_usage_stats"
+	TableSubscriptionUsageStats  = "subscription_usage_stats"
+	TableExternalForwardRules    = "external_forward_rules"
 
 	// Default values
 	DefaultCurrency = "CNY"

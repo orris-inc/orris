@@ -31,6 +31,7 @@ const (
 	PrefixAdminTelegramBinding   = "atg_bind"
 	PrefixSetting                = "setting"
 	PrefixSubscriptionUsageStats = "usagestat"
+	PrefixExternalForwardRule    = "efr"
 )
 
 // Generate creates a random short ID with the specified length using Base62 encoding.
@@ -278,4 +279,14 @@ func NewSubscriptionUsageStatsID() (string, error) {
 // ParseSubscriptionUsageStatsID extracts the short ID from a Subscription Usage Stats prefixed ID.
 func ParseSubscriptionUsageStatsID(prefixedID string) (string, error) {
 	return ExtractShortID(prefixedID, PrefixSubscriptionUsageStats)
+}
+
+// NewExternalForwardRuleID generates a new External Forward Rule SID (efr_xxx).
+func NewExternalForwardRuleID() (string, error) {
+	return NewSID(PrefixExternalForwardRule)
+}
+
+// ParseExternalForwardRuleID extracts the short ID from an External Forward Rule prefixed ID.
+func ParseExternalForwardRuleID(prefixedID string) (string, error) {
+	return ExtractShortID(prefixedID, PrefixExternalForwardRule)
 }

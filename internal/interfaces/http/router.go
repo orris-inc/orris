@@ -9,6 +9,8 @@ import (
 	"gorm.io/gorm"
 
 	adminUsecases "github.com/orris-inc/orris/internal/application/admin/usecases"
+	externalForwardUsecases "github.com/orris-inc/orris/internal/application/externalforward/usecases"
+	adminExternalForwardUsecases "github.com/orris-inc/orris/internal/application/externalforward/usecases/admin"
 	forwardServices "github.com/orris-inc/orris/internal/application/forward/services"
 	forwardUsecases "github.com/orris-inc/orris/internal/application/forward/usecases"
 	nodeServices "github.com/orris-inc/orris/internal/application/node/services"
@@ -26,6 +28,7 @@ import (
 	"github.com/orris-inc/orris/internal/application/user"
 	"github.com/orris-inc/orris/internal/application/user/helpers"
 	"github.com/orris-inc/orris/internal/application/user/usecases"
+	"github.com/orris-inc/orris/internal/domain/externalforward"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/infrastructure/adapters"
@@ -42,6 +45,7 @@ import (
 	"github.com/orris-inc/orris/internal/infrastructure/token"
 	"github.com/orris-inc/orris/internal/interfaces/http/handlers"
 	adminHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/admin"
+	externalForwardHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/externalforward"
 	forwardAgentAPIHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward/agent/api"
 	forwardAgentCrudHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward/agent/crud"
 	forwardAgentHubHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward/agent/hub"
@@ -62,64 +66,67 @@ import (
 
 // Router represents the HTTP router configuration
 type Router struct {
-	engine                         *gin.Engine
-	userHandler                    *handlers.UserHandler
-	authHandler                    *handlers.AuthHandler
-	profileHandler                 *handlers.ProfileHandler
-	dashboardHandler               *handlers.DashboardHandler
-	subscriptionHandler            *handlers.SubscriptionHandler
-	adminSubscriptionHandler       *adminHandlers.SubscriptionHandler
-	adminResourceGroupHandler      *adminHandlers.ResourceGroupHandler
-	adminTrafficStatsHandler       *adminHandlers.TrafficStatsHandler
-	adminTelegramHandler           *adminHandlers.AdminTelegramHandler
-	adminNotificationService       *telegramAdminApp.ServiceDDD
-	settingHandler                 *adminHandlers.SettingHandler
-	settingService                 *settingApp.ServiceDDD
-	planHandler                    *handlers.PlanHandler
-	subscriptionTokenHandler       *handlers.SubscriptionTokenHandler
-	paymentHandler                 *handlers.PaymentHandler
-	nodeHandler                    *handlers.NodeHandler
-	nodeSubscriptionHandler        *handlers.NodeSubscriptionHandler
-	userNodeHandler                *nodeHandlers.UserNodeHandler
-	agentHandler                   *nodeHandlers.AgentHandler
-	ticketHandler                  *ticketHandlers.TicketHandler
-	notificationHandler            *handlers.NotificationHandler
-	telegramHandler                *telegramHandlers.Handler
-	telegramService                *telegramApp.ServiceDDD
-	telegramBotManager             *telegramInfra.BotServiceManager
-	forwardRuleHandler             *forwardRuleHandlers.Handler
-	forwardAgentHandler            *forwardAgentCrudHandlers.Handler
-	forwardAgentVersionHandler     *forwardAgentCrudHandlers.VersionHandler
-	forwardAgentSSEHandler         *forwardAgentCrudHandlers.ForwardAgentSSEHandler
-	forwardAgentAPIHandler         *forwardAgentAPIHandlers.Handler
-	userForwardRuleHandler         *forwardUserHandlers.Handler
-	subscriptionForwardRuleHandler *forwardSubscriptionHandlers.Handler
-	agentHub                       *services.AgentHub
-	agentHubHandler                *forwardAgentHubHandlers.Handler
-	nodeHubHandler                 *nodeHandlers.NodeHubHandler
-	nodeVersionHandler             *nodeHandlers.NodeVersionHandler
-	nodeSSEHandler                 *nodeHandlers.NodeSSEHandler
-	adminHub                       *services.AdminHub
-	configSyncService              *forwardServices.ConfigSyncService
-	trafficLimitEnforcementSvc     *forwardServices.TrafficLimitEnforcementService
-	forwardTrafficCache            cache.ForwardTrafficCache
-	ruleTrafficBuffer              *forwardServices.RuleTrafficBuffer
-	ruleTrafficFlushDone           chan struct{}
-	subscriptionTrafficCache       cache.SubscriptionTrafficCache
-	subscriptionTrafficBuffer      *nodeServices.SubscriptionTrafficBuffer
-	subscriptionTrafficFlushDone   chan struct{}
-	adminNotificationScheduler     *scheduler.AdminNotificationScheduler
-	usageAggregationScheduler      *scheduler.UsageAggregationScheduler
-	logger                         logger.Interface
-	authMiddleware                 *middleware.AuthMiddleware
-	subscriptionOwnerMiddleware    *middleware.SubscriptionOwnerMiddleware
-	nodeTokenMiddleware            *middleware.NodeTokenMiddleware
-	nodeOwnerMiddleware            *middleware.NodeOwnerMiddleware
-	nodeQuotaMiddleware            *middleware.NodeQuotaMiddleware
-	forwardAgentTokenMiddleware    *middleware.ForwardAgentTokenMiddleware
-	forwardRuleOwnerMiddleware     *middleware.ForwardRuleOwnerMiddleware
-	forwardQuotaMiddleware         *middleware.ForwardQuotaMiddleware
-	rateLimiter                    *middleware.RateLimiter
+	engine                          *gin.Engine
+	userHandler                     *handlers.UserHandler
+	authHandler                     *handlers.AuthHandler
+	profileHandler                  *handlers.ProfileHandler
+	dashboardHandler                *handlers.DashboardHandler
+	subscriptionHandler             *handlers.SubscriptionHandler
+	adminSubscriptionHandler        *adminHandlers.SubscriptionHandler
+	adminResourceGroupHandler       *adminHandlers.ResourceGroupHandler
+	adminTrafficStatsHandler        *adminHandlers.TrafficStatsHandler
+	adminTelegramHandler            *adminHandlers.AdminTelegramHandler
+	adminNotificationService        *telegramAdminApp.ServiceDDD
+	settingHandler                  *adminHandlers.SettingHandler
+	settingService                  *settingApp.ServiceDDD
+	planHandler                     *handlers.PlanHandler
+	subscriptionTokenHandler        *handlers.SubscriptionTokenHandler
+	paymentHandler                  *handlers.PaymentHandler
+	nodeHandler                     *handlers.NodeHandler
+	nodeSubscriptionHandler         *handlers.NodeSubscriptionHandler
+	userNodeHandler                 *nodeHandlers.UserNodeHandler
+	agentHandler                    *nodeHandlers.AgentHandler
+	ticketHandler                   *ticketHandlers.TicketHandler
+	notificationHandler             *handlers.NotificationHandler
+	telegramHandler                 *telegramHandlers.Handler
+	telegramService                 *telegramApp.ServiceDDD
+	telegramBotManager              *telegramInfra.BotServiceManager
+	forwardRuleHandler              *forwardRuleHandlers.Handler
+	forwardAgentHandler             *forwardAgentCrudHandlers.Handler
+	forwardAgentVersionHandler      *forwardAgentCrudHandlers.VersionHandler
+	forwardAgentSSEHandler          *forwardAgentCrudHandlers.ForwardAgentSSEHandler
+	forwardAgentAPIHandler          *forwardAgentAPIHandlers.Handler
+	userForwardRuleHandler          *forwardUserHandlers.Handler
+	subscriptionForwardRuleHandler  *forwardSubscriptionHandlers.Handler
+	externalForwardHandler          *externalForwardHandlers.Handler
+	adminExternalForwardRuleHandler *adminHandlers.ExternalForwardRuleHandler
+	externalForwardRepo             externalforward.Repository
+	agentHub                        *services.AgentHub
+	agentHubHandler                 *forwardAgentHubHandlers.Handler
+	nodeHubHandler                  *nodeHandlers.NodeHubHandler
+	nodeVersionHandler              *nodeHandlers.NodeVersionHandler
+	nodeSSEHandler                  *nodeHandlers.NodeSSEHandler
+	adminHub                        *services.AdminHub
+	configSyncService               *forwardServices.ConfigSyncService
+	trafficLimitEnforcementSvc      *forwardServices.TrafficLimitEnforcementService
+	forwardTrafficCache             cache.ForwardTrafficCache
+	ruleTrafficBuffer               *forwardServices.RuleTrafficBuffer
+	ruleTrafficFlushDone            chan struct{}
+	subscriptionTrafficCache        cache.SubscriptionTrafficCache
+	subscriptionTrafficBuffer       *nodeServices.SubscriptionTrafficBuffer
+	subscriptionTrafficFlushDone    chan struct{}
+	adminNotificationScheduler      *scheduler.AdminNotificationScheduler
+	usageAggregationScheduler       *scheduler.UsageAggregationScheduler
+	logger                          logger.Interface
+	authMiddleware                  *middleware.AuthMiddleware
+	subscriptionOwnerMiddleware     *middleware.SubscriptionOwnerMiddleware
+	nodeTokenMiddleware             *middleware.NodeTokenMiddleware
+	nodeOwnerMiddleware             *middleware.NodeOwnerMiddleware
+	nodeQuotaMiddleware             *middleware.NodeQuotaMiddleware
+	forwardAgentTokenMiddleware     *middleware.ForwardAgentTokenMiddleware
+	forwardRuleOwnerMiddleware      *middleware.ForwardRuleOwnerMiddleware
+	forwardQuotaMiddleware          *middleware.ForwardQuotaMiddleware
+	rateLimiter                     *middleware.RateLimiter
 }
 
 type jwtServiceAdapter struct {
@@ -1088,6 +1095,54 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		reorderForwardRulesUC, // reuse existing
 	)
 
+	// Initialize external forward rule repository and use cases
+	externalForwardRuleRepo := repository.NewExternalForwardRuleRepository(db, log)
+	createExternalForwardRuleUC := externalForwardUsecases.NewCreateExternalForwardRuleUseCase(externalForwardRuleRepo, nodeRepoImpl, log)
+	updateExternalForwardRuleUC := externalForwardUsecases.NewUpdateExternalForwardRuleUseCase(externalForwardRuleRepo, nodeRepoImpl, log)
+	deleteExternalForwardRuleUC := externalForwardUsecases.NewDeleteExternalForwardRuleUseCase(externalForwardRuleRepo, log)
+	listExternalForwardRulesUC := externalForwardUsecases.NewListExternalForwardRulesUseCase(externalForwardRuleRepo, subscriptionRepo, resourceGroupRepo, nodeRepoImpl, log)
+	getExternalForwardRuleUC := externalForwardUsecases.NewGetExternalForwardRuleUseCase(externalForwardRuleRepo, subscriptionRepo, resourceGroupRepo, nodeRepoImpl, log)
+	enableExternalForwardRuleUC := externalForwardUsecases.NewEnableExternalForwardRuleUseCase(externalForwardRuleRepo, log)
+	disableExternalForwardRuleUC := externalForwardUsecases.NewDisableExternalForwardRuleUseCase(externalForwardRuleRepo, log)
+
+	// Initialize external forward handler
+	externalForwardHandler := externalForwardHandlers.NewHandler(
+		createExternalForwardRuleUC,
+		updateExternalForwardRuleUC,
+		deleteExternalForwardRuleUC,
+		listExternalForwardRulesUC,
+		getExternalForwardRuleUC,
+		enableExternalForwardRuleUC,
+		disableExternalForwardRuleUC,
+	)
+
+	// Initialize admin external forward rule use cases
+	adminCreateExternalForwardRuleUC := adminExternalForwardUsecases.NewAdminCreateExternalForwardRuleUseCase(externalForwardRuleRepo, resourceGroupRepo, nodeRepoImpl, subscriptionPlanRepo, log)
+	adminListExternalForwardRulesUC := adminExternalForwardUsecases.NewAdminListExternalForwardRulesUseCase(externalForwardRuleRepo, resourceGroupRepo, nodeRepoImpl, log)
+	adminGetExternalForwardRuleUC := adminExternalForwardUsecases.NewAdminGetExternalForwardRuleUseCase(externalForwardRuleRepo, resourceGroupRepo, nodeRepoImpl, log)
+	adminUpdateExternalForwardRuleUC := adminExternalForwardUsecases.NewAdminUpdateExternalForwardRuleUseCase(externalForwardRuleRepo, nodeRepoImpl, log)
+	adminDeleteExternalForwardRuleUC := adminExternalForwardUsecases.NewAdminDeleteExternalForwardRuleUseCase(externalForwardRuleRepo, log)
+	adminEnableExternalForwardRuleUC := adminExternalForwardUsecases.NewAdminEnableExternalForwardRuleUseCase(externalForwardRuleRepo, log)
+	adminDisableExternalForwardRuleUC := adminExternalForwardUsecases.NewAdminDisableExternalForwardRuleUseCase(externalForwardRuleRepo, log)
+
+	// Initialize admin external forward rule handler
+	adminExternalForwardRuleHandler := adminHandlers.NewExternalForwardRuleHandler(
+		adminCreateExternalForwardRuleUC,
+		adminListExternalForwardRulesUC,
+		adminGetExternalForwardRuleUC,
+		adminUpdateExternalForwardRuleUC,
+		adminDeleteExternalForwardRuleUC,
+		adminEnableExternalForwardRuleUC,
+		adminDisableExternalForwardRuleUC,
+		log,
+	)
+
+	// Inject external forward repository into node repository adapter for subscription link output
+	nodeRepo.SetExternalForwardRepo(externalForwardRuleRepo)
+
+	// Inject external forward use case into subscription forward rule handler for combined rule listing
+	subscriptionForwardRuleHandler.SetExternalRulesUseCase(listExternalForwardRulesUC)
+
 	// Initialize forward rule owner middleware
 	forwardRuleOwnerMiddleware := middleware.NewForwardRuleOwnerMiddleware(
 		forwardRuleRepo,
@@ -1400,64 +1455,67 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	forwardAgentSSEHandler := forwardAgentCrudHandlers.NewForwardAgentSSEHandler(adminHub, log)
 
 	return &Router{
-		engine:                         engine,
-		userHandler:                    userHandler,
-		authHandler:                    authHandler,
-		profileHandler:                 profileHandler,
-		dashboardHandler:               dashboardHandler,
-		subscriptionHandler:            subscriptionHandler,
-		adminSubscriptionHandler:       adminSubscriptionHandler,
-		adminResourceGroupHandler:      adminResourceGroupHandler,
-		adminTrafficStatsHandler:       adminTrafficStatsHandler,
-		adminTelegramHandler:           adminTelegramHandler,
-		adminNotificationService:       adminNotificationServiceDDD,
-		settingHandler:                 settingHandler,
-		settingService:                 settingServiceDDD,
-		planHandler:                    planHandler,
-		subscriptionTokenHandler:       subscriptionTokenHandler,
-		paymentHandler:                 paymentHandler,
-		nodeHandler:                    nodeHandler,
-		nodeSubscriptionHandler:        nodeSubscriptionHandler,
-		userNodeHandler:                userNodeHandler,
-		agentHandler:                   agentHandler,
-		ticketHandler:                  ticketHandler,
-		notificationHandler:            notificationHandler,
-		telegramHandler:                telegramHandler,
-		telegramService:                telegramServiceDDD,
-		telegramBotManager:             telegramBotManager,
-		forwardRuleHandler:             forwardRuleHandler,
-		forwardAgentHandler:            forwardAgentHandler,
-		forwardAgentVersionHandler:     forwardAgentVersionHandler,
-		forwardAgentSSEHandler:         forwardAgentSSEHandler,
-		forwardAgentAPIHandler:         forwardAgentAPIHandler,
-		userForwardRuleHandler:         userForwardRuleHandler,
-		subscriptionForwardRuleHandler: subscriptionForwardRuleHandler,
-		agentHub:                       agentHub,
-		agentHubHandler:                agentHubHandler,
-		nodeHubHandler:                 nodeHubHandler,
-		nodeVersionHandler:             nodeVersionHandler,
-		nodeSSEHandler:                 nodeSSEHandler,
-		adminHub:                       adminHub,
-		configSyncService:              configSyncService,
-		trafficLimitEnforcementSvc:     trafficLimitEnforcementSvc,
-		forwardTrafficCache:            forwardTrafficCache,
-		ruleTrafficBuffer:              ruleTrafficBuffer,
-		ruleTrafficFlushDone:           ruleTrafficFlushDone,
-		subscriptionTrafficCache:       subscriptionTrafficCache,
-		subscriptionTrafficBuffer:      subscriptionTrafficBuffer,
-		subscriptionTrafficFlushDone:   subscriptionTrafficFlushDone,
-		adminNotificationScheduler:     adminNotificationScheduler,
-		usageAggregationScheduler:      usageAggregationScheduler,
-		logger:                         log,
-		authMiddleware:                 authMiddleware,
-		subscriptionOwnerMiddleware:    subscriptionOwnerMiddleware,
-		nodeTokenMiddleware:            nodeTokenMiddleware,
-		nodeOwnerMiddleware:            nodeOwnerMiddleware,
-		nodeQuotaMiddleware:            nodeQuotaMiddleware,
-		forwardAgentTokenMiddleware:    forwardAgentTokenMiddleware,
-		forwardRuleOwnerMiddleware:     forwardRuleOwnerMiddleware,
-		forwardQuotaMiddleware:         forwardQuotaMiddleware,
-		rateLimiter:                    rateLimiter,
+		engine:                          engine,
+		userHandler:                     userHandler,
+		authHandler:                     authHandler,
+		profileHandler:                  profileHandler,
+		dashboardHandler:                dashboardHandler,
+		subscriptionHandler:             subscriptionHandler,
+		adminSubscriptionHandler:        adminSubscriptionHandler,
+		adminResourceGroupHandler:       adminResourceGroupHandler,
+		adminTrafficStatsHandler:        adminTrafficStatsHandler,
+		adminTelegramHandler:            adminTelegramHandler,
+		adminNotificationService:        adminNotificationServiceDDD,
+		settingHandler:                  settingHandler,
+		settingService:                  settingServiceDDD,
+		planHandler:                     planHandler,
+		subscriptionTokenHandler:        subscriptionTokenHandler,
+		paymentHandler:                  paymentHandler,
+		nodeHandler:                     nodeHandler,
+		nodeSubscriptionHandler:         nodeSubscriptionHandler,
+		userNodeHandler:                 userNodeHandler,
+		agentHandler:                    agentHandler,
+		ticketHandler:                   ticketHandler,
+		notificationHandler:             notificationHandler,
+		telegramHandler:                 telegramHandler,
+		telegramService:                 telegramServiceDDD,
+		telegramBotManager:              telegramBotManager,
+		forwardRuleHandler:              forwardRuleHandler,
+		forwardAgentHandler:             forwardAgentHandler,
+		forwardAgentVersionHandler:      forwardAgentVersionHandler,
+		forwardAgentSSEHandler:          forwardAgentSSEHandler,
+		forwardAgentAPIHandler:          forwardAgentAPIHandler,
+		userForwardRuleHandler:          userForwardRuleHandler,
+		subscriptionForwardRuleHandler:  subscriptionForwardRuleHandler,
+		externalForwardHandler:          externalForwardHandler,
+		adminExternalForwardRuleHandler: adminExternalForwardRuleHandler,
+		externalForwardRepo:             externalForwardRuleRepo,
+		agentHub:                        agentHub,
+		agentHubHandler:                 agentHubHandler,
+		nodeHubHandler:                  nodeHubHandler,
+		nodeVersionHandler:              nodeVersionHandler,
+		nodeSSEHandler:                  nodeSSEHandler,
+		adminHub:                        adminHub,
+		configSyncService:               configSyncService,
+		trafficLimitEnforcementSvc:      trafficLimitEnforcementSvc,
+		forwardTrafficCache:             forwardTrafficCache,
+		ruleTrafficBuffer:               ruleTrafficBuffer,
+		ruleTrafficFlushDone:            ruleTrafficFlushDone,
+		subscriptionTrafficCache:        subscriptionTrafficCache,
+		subscriptionTrafficBuffer:       subscriptionTrafficBuffer,
+		subscriptionTrafficFlushDone:    subscriptionTrafficFlushDone,
+		adminNotificationScheduler:      adminNotificationScheduler,
+		usageAggregationScheduler:       usageAggregationScheduler,
+		logger:                          log,
+		authMiddleware:                  authMiddleware,
+		subscriptionOwnerMiddleware:     subscriptionOwnerMiddleware,
+		nodeTokenMiddleware:             nodeTokenMiddleware,
+		nodeOwnerMiddleware:             nodeOwnerMiddleware,
+		nodeQuotaMiddleware:             nodeQuotaMiddleware,
+		forwardAgentTokenMiddleware:     forwardAgentTokenMiddleware,
+		forwardRuleOwnerMiddleware:      forwardRuleOwnerMiddleware,
+		forwardQuotaMiddleware:          forwardQuotaMiddleware,
+		rateLimiter:                     rateLimiter,
 	}
 }
 
@@ -1574,6 +1632,19 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 			adminTelegram.DELETE("/binding", r.adminTelegramHandler.Unbind)
 			adminTelegram.PATCH("/preferences", r.adminTelegramHandler.UpdatePreferences)
 		}
+	}
+
+	// Admin external forward rules routes
+	adminExternalForwardRules := r.engine.Group("/admin/external-forward-rules")
+	adminExternalForwardRules.Use(r.authMiddleware.RequireAuth(), authorization.RequireAdmin())
+	{
+		adminExternalForwardRules.POST("", r.adminExternalForwardRuleHandler.Create)
+		adminExternalForwardRules.GET("", r.adminExternalForwardRuleHandler.List)
+		adminExternalForwardRules.GET("/:id", r.adminExternalForwardRuleHandler.Get)
+		adminExternalForwardRules.PUT("/:id", r.adminExternalForwardRuleHandler.Update)
+		adminExternalForwardRules.DELETE("/:id", r.adminExternalForwardRuleHandler.Delete)
+		adminExternalForwardRules.POST("/:id/enable", r.adminExternalForwardRuleHandler.Enable)
+		adminExternalForwardRules.POST("/:id/disable", r.adminExternalForwardRuleHandler.Disable)
 	}
 
 	// User subscription routes - only own subscriptions
@@ -1727,6 +1798,13 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		SubscriptionOwnerMiddleware: r.subscriptionOwnerMiddleware,
 		ForwardRuleOwnerMiddleware:  r.forwardRuleOwnerMiddleware,
 		ForwardQuotaMiddleware:      r.forwardQuotaMiddleware,
+	})
+
+	// External forward rules routes (third-party forward rules)
+	routes.SetupExternalForwardRoutes(r.engine, &routes.ExternalForwardRouteConfig{
+		ExternalForwardHandler:      r.externalForwardHandler,
+		AuthMiddleware:              r.authMiddleware,
+		SubscriptionOwnerMiddleware: r.subscriptionOwnerMiddleware,
 	})
 
 	routes.SetupAgentHubRoutes(r.engine, &routes.AgentHubRouteConfig{
