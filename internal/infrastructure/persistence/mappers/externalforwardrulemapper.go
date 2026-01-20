@@ -25,7 +25,7 @@ func (m *ExternalForwardRuleMapper) ToModel(rule *externalforward.ExternalForwar
 		return nil, nil
 	}
 
-	// Serialize group_ids to JSON
+	// Serialize group_ids to JSON (nil/empty slice -> null, non-empty -> JSON array)
 	var groupIDsJSON datatypes.JSON
 	if len(rule.GroupIDs()) > 0 {
 		jsonBytes, err := json.Marshal(rule.GroupIDs())
@@ -33,6 +33,9 @@ func (m *ExternalForwardRuleMapper) ToModel(rule *externalforward.ExternalForwar
 			return nil, fmt.Errorf("failed to serialize group_ids: %w", err)
 		}
 		groupIDsJSON = jsonBytes
+	} else {
+		// Explicitly set to null to ensure GORM updates the field
+		groupIDsJSON = datatypes.JSON("null")
 	}
 
 	return &models.ExternalForwardRuleModel{

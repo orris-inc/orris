@@ -77,7 +77,9 @@ func (uc *AdminGetExternalForwardRuleUseCase) Execute(ctx context.Context, query
 			n := nodes[0]
 			info := &dto.NodeInfo{
 				SID:           n.SID(),
+				Name:          n.Name(),
 				ServerAddress: n.ServerAddress().Value(),
+				Protocol:      n.Protocol().String(),
 			}
 			if n.PublicIPv4() != nil {
 				info.PublicIPv4 = *n.PublicIPv4()

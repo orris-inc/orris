@@ -394,7 +394,7 @@ type UpdateNodeRequest struct {
 	Tags             []string          `json:"tags,omitempty" example:"premium,low-latency"`
 	Description      *string           `json:"description,omitempty" example:"Updated description"`
 	SortOrder        *int              `json:"sort_order,omitempty" example:"2"`
-	GroupSID         *string           `json:"group_sid,omitempty" example:"rg_xK9mP2vL3nQ" comment:"Resource group SID to associate with (use empty string to remove)"`
+	GroupSIDs        []string          `json:"group_sids,omitempty" example:"[\"rg_xK9mP2vL3nQ\"]" comment:"Resource group SIDs to associate with (empty array to remove all)"`
 	MuteNotification *bool             `json:"mute_notification,omitempty" example:"false" comment:"Mute online/offline notifications for this node"`
 	// Trojan specific fields
 	TransportProtocol *string `json:"transport_protocol,omitempty" binding:"omitempty,oneof=tcp ws grpc" example:"ws" comment:"Transport protocol for Trojan (tcp, ws, grpc)"`
@@ -465,7 +465,7 @@ func (r *UpdateNodeRequest) ToCommand(sid string) usecases.UpdateNodeCommand {
 		Tags:                    r.Tags,
 		Description:             r.Description,
 		SortOrder:               r.SortOrder,
-		GroupSID:                r.GroupSID,
+		GroupSIDs:               r.GroupSIDs,
 		MuteNotification:        r.MuteNotification,
 		TrojanTransportProtocol: r.TransportProtocol,
 		TrojanHost:              r.Host,

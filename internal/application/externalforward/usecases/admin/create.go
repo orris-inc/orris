@@ -90,7 +90,9 @@ func (uc *AdminCreateExternalForwardRuleUseCase) Execute(ctx context.Context, cm
 		nodeID = &id
 		info := &dto.NodeInfo{
 			SID:           nodeEntity.SID(),
+			Name:          nodeEntity.Name(),
 			ServerAddress: nodeEntity.ServerAddress().Value(),
+			Protocol:      nodeEntity.Protocol().String(),
 		}
 		if nodeEntity.PublicIPv4() != nil {
 			info.PublicIPv4 = *nodeEntity.PublicIPv4()

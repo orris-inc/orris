@@ -65,12 +65,13 @@ type CreateRuleRequest struct {
 
 // UpdateRuleRequest represents a request to update an external forward rule.
 type UpdateRuleRequest struct {
-	Name          *string `json:"name,omitempty" example:"MySQL-Forward-Updated"`
-	ServerAddress *string `json:"server_address,omitempty" example:"192.168.1.101"`
-	ListenPort    *uint16 `json:"listen_port,omitempty" example:"13307"`
-	NodeID        *string `json:"node_id,omitempty" example:"node_xxxxx"`
-	Remark        *string `json:"remark,omitempty" example:"Updated remark"`
-	SortOrder     *int    `json:"sort_order,omitempty" example:"100"`
+	Name          *string  `json:"name,omitempty" example:"MySQL-Forward-Updated"`
+	ServerAddress *string  `json:"server_address,omitempty" example:"192.168.1.101"`
+	ListenPort    *uint16  `json:"listen_port,omitempty" example:"13307"`
+	NodeID        *string  `json:"node_id,omitempty" example:"node_xxxxx"`
+	Remark        *string  `json:"remark,omitempty" example:"Updated remark"`
+	SortOrder     *int     `json:"sort_order,omitempty" example:"100"`
+	GroupSIDs     []string `json:"group_ids,omitempty" example:"rg_xxxxx"`
 }
 
 // parseRuleSID validates a prefixed rule ID and returns the SID.
@@ -242,6 +243,7 @@ func (h *ExternalForwardRuleHandler) Update(c *gin.Context) {
 		ListenPort:    req.ListenPort,
 		Remark:        req.Remark,
 		SortOrder:     req.SortOrder,
+		GroupSIDs:     req.GroupSIDs,
 	}
 
 	if err := h.updateUC.Execute(c.Request.Context(), cmd); err != nil {

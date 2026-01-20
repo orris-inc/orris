@@ -7,6 +7,8 @@ import (
 	"github.com/orris-inc/orris/internal/application/externalforward/dto"
 	"github.com/orris-inc/orris/internal/domain/externalforward"
 	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/domain/resource"
+	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -35,21 +37,27 @@ type CreateExternalForwardRuleResult struct {
 
 // CreateExternalForwardRuleUseCase handles external forward rule creation.
 type CreateExternalForwardRuleUseCase struct {
-	repo     externalforward.Repository
-	nodeRepo node.NodeRepository
-	logger   logger.Interface
+	repo              externalforward.Repository
+	nodeRepo          node.NodeRepository
+	subscriptionRepo  subscription.SubscriptionRepository
+	resourceGroupRepo resource.Repository
+	logger            logger.Interface
 }
 
 // NewCreateExternalForwardRuleUseCase creates a new use case.
 func NewCreateExternalForwardRuleUseCase(
 	repo externalforward.Repository,
 	nodeRepo node.NodeRepository,
+	subscriptionRepo subscription.SubscriptionRepository,
+	resourceGroupRepo resource.Repository,
 	logger logger.Interface,
 ) *CreateExternalForwardRuleUseCase {
 	return &CreateExternalForwardRuleUseCase{
-		repo:     repo,
-		nodeRepo: nodeRepo,
-		logger:   logger,
+		repo:              repo,
+		nodeRepo:          nodeRepo,
+		subscriptionRepo:  subscriptionRepo,
+		resourceGroupRepo: resourceGroupRepo,
+		logger:            logger,
 	}
 }
 
@@ -80,11 +88,23 @@ func (uc *CreateExternalForwardRuleUseCase) Execute(ctx context.Context, cmd Cre
 		if nodeEntity == nil {
 			return nil, errors.NewNotFoundError("node", cmd.NodeSID)
 		}
-		id := nodeEntity.ID()
-		nodeID = &id
+
+		// Security: Validate that the node belongs to user's subscription resource groups
+		if err := ValidateNodeAccess(ctx, cmd.SubscriptionID, nodeEntity, uc.subscriptionRepo, uc.resourceGroupRepo); err != nil {
+			uc.logger.Warnw("node access validation failed",
+				"node_sid", cmd.NodeSID,
+				"subscription_id", cmd.SubscriptionID,
+				"error", err,
+			)
+			return nil, err
+		}
+
+		nid := nodeEntity.ID()
+		nodeID = &nid
 		nodeInfo = &dto.NodeInfo{
 			SID:           nodeEntity.SID(),
 			ServerAddress: nodeEntity.ServerAddress().Value(),
+			Protocol:      nodeEntity.Protocol().String(),
 		}
 		if nodeEntity.PublicIPv4() != nil {
 			nodeInfo.PublicIPv4 = *nodeEntity.PublicIPv4()

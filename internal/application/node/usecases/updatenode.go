@@ -27,7 +27,7 @@ type UpdateNodeCommand struct {
 	Description      *string
 	SortOrder        *int
 	Status           *string
-	GroupSID         *string // Resource group SID (empty string to remove association)
+	GroupSIDs        []string // Resource group SIDs (empty slice to remove all, nil means no change)
 	MuteNotification *bool   // nil: no update, non-nil: set mute notification flag
 	// Trojan specific fields
 	TrojanTransportProtocol *string
@@ -179,22 +179,41 @@ func (uc *UpdateNodeUseCase) Execute(ctx context.Context, cmd UpdateNodeCommand)
 		}
 	}
 
-	// Handle GroupSID update (resolve SID to internal ID)
-	if cmd.GroupSID != nil {
-		if *cmd.GroupSID == "" {
-			// Empty string means remove all group associations
+	// Handle GroupSIDs update (resolve SIDs to internal IDs)
+	if cmd.GroupSIDs != nil {
+		if len(cmd.GroupSIDs) == 0 {
+			// Empty slice means remove all group associations
 			existingNode.SetGroupIDs(nil)
 		} else {
-			// Resolve group SID to internal ID and set as the only group
-			group, err := uc.resourceGroupRepo.GetBySID(ctx, *cmd.GroupSID)
-			if err != nil {
-				uc.logger.Errorw("failed to get resource group by SID", "group_sid", *cmd.GroupSID, "error", err)
-				return nil, errors.NewNotFoundError("resource group not found")
+			// Resolve each group SID to internal ID (with deduplication)
+			seenSIDs := make(map[string]struct{}, len(cmd.GroupSIDs))
+			resolvedIDs := make([]uint, 0, len(cmd.GroupSIDs))
+			for _, sid := range cmd.GroupSIDs {
+				// Skip empty strings
+				if sid == "" {
+					continue
+				}
+				// Skip duplicate SIDs
+				if _, exists := seenSIDs[sid]; exists {
+					continue
+				}
+				seenSIDs[sid] = struct{}{}
+
+				group, err := uc.resourceGroupRepo.GetBySID(ctx, sid)
+				if err != nil {
+					uc.logger.Errorw("failed to get resource group by SID", "group_sid", sid, "error", err)
+					return nil, errors.NewNotFoundError(fmt.Sprintf("resource group not found: %s", sid))
+				}
+				if group == nil {
+					return nil, errors.NewNotFoundError(fmt.Sprintf("resource group not found: %s", sid))
+				}
+				resolvedIDs = append(resolvedIDs, group.ID())
 			}
-			if group == nil {
-				return nil, errors.NewNotFoundError("resource group not found")
+			// Only update if we have valid SIDs after filtering
+			// (prevents accidental clear when all SIDs are empty strings)
+			if len(resolvedIDs) > 0 {
+				existingNode.SetGroupIDs(resolvedIDs)
 			}
-			existingNode.SetGroupIDs([]uint{group.ID()})
 		}
 	}
 
@@ -452,7 +471,7 @@ func (uc *UpdateNodeUseCase) validateCommand(cmd UpdateNodeCommand) error {
 		cmd.SubscriptionPort != nil || cmd.Method != nil || cmd.Plugin != nil ||
 		len(cmd.PluginOpts) > 0 || cmd.Region != nil || cmd.Tags != nil ||
 		cmd.Description != nil || cmd.SortOrder != nil || cmd.Status != nil ||
-		cmd.GroupSID != nil || cmd.MuteNotification != nil ||
+		cmd.GroupSIDs != nil || cmd.MuteNotification != nil ||
 		cmd.TrojanTransportProtocol != nil || cmd.TrojanHost != nil ||
 		cmd.TrojanPath != nil || cmd.TrojanSNI != nil || cmd.TrojanAllowInsecure != nil ||
 		cmd.Route != nil || cmd.ClearRoute ||

@@ -6,6 +6,8 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/externalforward"
 	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/domain/resource"
+	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
@@ -26,21 +28,27 @@ type UpdateExternalForwardRuleCommand struct {
 
 // UpdateExternalForwardRuleUseCase handles external forward rule updates.
 type UpdateExternalForwardRuleUseCase struct {
-	repo     externalforward.Repository
-	nodeRepo node.NodeRepository
-	logger   logger.Interface
+	repo              externalforward.Repository
+	nodeRepo          node.NodeRepository
+	subscriptionRepo  subscription.SubscriptionRepository
+	resourceGroupRepo resource.Repository
+	logger            logger.Interface
 }
 
 // NewUpdateExternalForwardRuleUseCase creates a new use case.
 func NewUpdateExternalForwardRuleUseCase(
 	repo externalforward.Repository,
 	nodeRepo node.NodeRepository,
+	subscriptionRepo subscription.SubscriptionRepository,
+	resourceGroupRepo resource.Repository,
 	logger logger.Interface,
 ) *UpdateExternalForwardRuleUseCase {
 	return &UpdateExternalForwardRuleUseCase{
-		repo:     repo,
-		nodeRepo: nodeRepo,
-		logger:   logger,
+		repo:              repo,
+		nodeRepo:          nodeRepo,
+		subscriptionRepo:  subscriptionRepo,
+		resourceGroupRepo: resourceGroupRepo,
+		logger:            logger,
 	}
 }
 
@@ -125,6 +133,17 @@ func (uc *UpdateExternalForwardRuleUseCase) Execute(ctx context.Context, cmd Upd
 			if nodeEntity == nil {
 				return errors.NewNotFoundError("node", *cmd.NodeSID)
 			}
+
+			// Security: Validate that the node belongs to user's subscription resource groups
+			if err := ValidateNodeAccess(ctx, cmd.SubscriptionID, nodeEntity, uc.subscriptionRepo, uc.resourceGroupRepo); err != nil {
+				uc.logger.Warnw("node access validation failed",
+					"node_sid", *cmd.NodeSID,
+					"subscription_id", cmd.SubscriptionID,
+					"error", err,
+				)
+				return err
+			}
+
 			nodeID := nodeEntity.ID()
 			rule.UpdateNodeID(&nodeID)
 		}

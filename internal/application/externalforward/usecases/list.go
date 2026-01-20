@@ -126,6 +126,7 @@ func (uc *ListExternalForwardRulesUseCase) Execute(ctx context.Context, query Li
 				info := &dto.NodeInfo{
 					SID:           n.SID(),
 					ServerAddress: n.ServerAddress().Value(),
+					Protocol:      n.Protocol().String(),
 				}
 				if n.PublicIPv4() != nil {
 					info.PublicIPv4 = *n.PublicIPv4()
@@ -337,6 +338,7 @@ func (uc *GetExternalForwardRuleUseCase) Execute(ctx context.Context, query GetE
 		info := &dto.NodeInfo{
 			SID:           n.SID(),
 			ServerAddress: n.ServerAddress().Value(),
+			Protocol:      n.Protocol().String(),
 		}
 		if n.PublicIPv4() != nil {
 			info.PublicIPv4 = *n.PublicIPv4()

@@ -23,6 +23,7 @@ type ExternalForwardRuleDTO struct {
 	NodeServerAddress string `json:"node_server_address,omitempty"`
 	NodePublicIPv4    string `json:"node_public_ipv4,omitempty"`
 	NodePublicIPv6    string `json:"node_public_ipv6,omitempty"`
+	NodeProtocol      string `json:"node_protocol,omitempty"`
 	CreatedAt         string `json:"created_at"`
 	UpdatedAt         string `json:"updated_at"`
 }
@@ -30,9 +31,11 @@ type ExternalForwardRuleDTO struct {
 // NodeInfo contains node details for populating DTOs.
 type NodeInfo struct {
 	SID           string
+	Name          string
 	ServerAddress string
 	PublicIPv4    string
 	PublicIPv6    string
+	Protocol      string
 }
 
 // FromDomain converts a domain entity to a DTO.
@@ -62,6 +65,7 @@ func FromDomain(rule *externalforward.ExternalForwardRule, subscriptionSID strin
 		dto.NodeServerAddress = nodeInfo.ServerAddress
 		dto.NodePublicIPv4 = nodeInfo.PublicIPv4
 		dto.NodePublicIPv6 = nodeInfo.PublicIPv6
+		dto.NodeProtocol = nodeInfo.Protocol
 	}
 
 	return dto
@@ -105,9 +109,11 @@ type AdminExternalForwardRuleDTO struct {
 	Remark         string   `json:"remark,omitempty"`
 	GroupSIDs      []string `json:"group_ids,omitempty"`
 	// Node details (populated when node is assigned)
+	NodeName          string `json:"node_name,omitempty"`
 	NodeServerAddress string `json:"node_server_address,omitempty"`
 	NodePublicIPv4    string `json:"node_public_ipv4,omitempty"`
 	NodePublicIPv6    string `json:"node_public_ipv6,omitempty"`
+	NodeProtocol      string `json:"node_protocol,omitempty"`
 	CreatedAt         string `json:"created_at"`
 	UpdatedAt         string `json:"updated_at"`
 }
@@ -163,9 +169,11 @@ func FromDomainToAdmin(rule *externalforward.ExternalForwardRule, lookups *Admin
 	if rule.NodeID() != nil && lookups.NodeIDToInfo != nil {
 		if info, ok := lookups.NodeIDToInfo[*rule.NodeID()]; ok && info != nil {
 			dto.NodeSID = info.SID
+			dto.NodeName = info.Name
 			dto.NodeServerAddress = info.ServerAddress
 			dto.NodePublicIPv4 = info.PublicIPv4
 			dto.NodePublicIPv6 = info.PublicIPv6
+			dto.NodeProtocol = info.Protocol
 		}
 	}
 

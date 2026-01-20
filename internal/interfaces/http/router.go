@@ -1097,8 +1097,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	// Initialize external forward rule repository and use cases
 	externalForwardRuleRepo := repository.NewExternalForwardRuleRepository(db, log)
-	createExternalForwardRuleUC := externalForwardUsecases.NewCreateExternalForwardRuleUseCase(externalForwardRuleRepo, nodeRepoImpl, log)
-	updateExternalForwardRuleUC := externalForwardUsecases.NewUpdateExternalForwardRuleUseCase(externalForwardRuleRepo, nodeRepoImpl, log)
+	createExternalForwardRuleUC := externalForwardUsecases.NewCreateExternalForwardRuleUseCase(externalForwardRuleRepo, nodeRepoImpl, subscriptionRepo, resourceGroupRepo, log)
+	updateExternalForwardRuleUC := externalForwardUsecases.NewUpdateExternalForwardRuleUseCase(externalForwardRuleRepo, nodeRepoImpl, subscriptionRepo, resourceGroupRepo, log)
 	deleteExternalForwardRuleUC := externalForwardUsecases.NewDeleteExternalForwardRuleUseCase(externalForwardRuleRepo, log)
 	listExternalForwardRulesUC := externalForwardUsecases.NewListExternalForwardRulesUseCase(externalForwardRuleRepo, subscriptionRepo, resourceGroupRepo, nodeRepoImpl, log)
 	getExternalForwardRuleUC := externalForwardUsecases.NewGetExternalForwardRuleUseCase(externalForwardRuleRepo, subscriptionRepo, resourceGroupRepo, nodeRepoImpl, log)
@@ -1120,7 +1120,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	adminCreateExternalForwardRuleUC := adminExternalForwardUsecases.NewAdminCreateExternalForwardRuleUseCase(externalForwardRuleRepo, resourceGroupRepo, nodeRepoImpl, subscriptionPlanRepo, log)
 	adminListExternalForwardRulesUC := adminExternalForwardUsecases.NewAdminListExternalForwardRulesUseCase(externalForwardRuleRepo, resourceGroupRepo, nodeRepoImpl, log)
 	adminGetExternalForwardRuleUC := adminExternalForwardUsecases.NewAdminGetExternalForwardRuleUseCase(externalForwardRuleRepo, resourceGroupRepo, nodeRepoImpl, log)
-	adminUpdateExternalForwardRuleUC := adminExternalForwardUsecases.NewAdminUpdateExternalForwardRuleUseCase(externalForwardRuleRepo, nodeRepoImpl, log)
+	adminUpdateExternalForwardRuleUC := adminExternalForwardUsecases.NewAdminUpdateExternalForwardRuleUseCase(externalForwardRuleRepo, nodeRepoImpl, resourceGroupRepo, subscriptionPlanRepo, log)
 	adminDeleteExternalForwardRuleUC := adminExternalForwardUsecases.NewAdminDeleteExternalForwardRuleUseCase(externalForwardRuleRepo, log)
 	adminEnableExternalForwardRuleUC := adminExternalForwardUsecases.NewAdminEnableExternalForwardRuleUseCase(externalForwardRuleRepo, log)
 	adminDisableExternalForwardRuleUC := adminExternalForwardUsecases.NewAdminDisableExternalForwardRuleUseCase(externalForwardRuleRepo, log)

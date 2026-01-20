@@ -123,7 +123,9 @@ func (uc *AdminListExternalForwardRulesUseCase) Execute(ctx context.Context, que
 			for _, n := range nodes {
 				info := &dto.NodeInfo{
 					SID:           n.SID(),
+					Name:          n.Name(),
 					ServerAddress: n.ServerAddress().Value(),
+					Protocol:      n.Protocol().String(),
 				}
 				if n.PublicIPv4() != nil {
 					info.PublicIPv4 = *n.PublicIPv4()

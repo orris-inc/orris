@@ -243,12 +243,18 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, link
 	// Only include rules that belong to the same resource groups
 	forwardedNodes := r.getForwardedNodes(ctx, nodeIDs, groupIDs, nodeMap)
 
+	// Append external forward rules if repository is configured
+	// Pass groupIDs to include rules distributed through resource groups
+	externalNodes := r.getExternalForwardNodes(ctx, subscriptionModel.ID, groupIDs)
+	forwardedNodes = append(forwardedNodes, externalNodes...)
+
 	r.logger.Infow("retrieved nodes for subscription token",
 		"subscription_id", subscriptionModel.ID,
 		"plan_id", subscriptionModel.PlanID,
 		"group_count", len(groupIDs),
 		"node_count", len(originNodes),
 		"forwarded_count", len(forwardedNodes),
+		"external_count", len(externalNodes),
 		"mode", mode,
 	)
 
@@ -573,7 +579,8 @@ func (r *NodeRepositoryAdapter) getForwardPlanNodes(ctx context.Context, subscri
 	}
 
 	// Append external forward rules if repository is configured
-	externalNodes := r.getExternalForwardNodes(ctx, subscriptionID)
+	// Forward plans have no resource groups, so pass empty groupIDs
+	externalNodes := r.getExternalForwardNodes(ctx, subscriptionID, nil)
 	forwardedNodes = append(forwardedNodes, externalNodes...)
 
 	r.logger.Infow("retrieved forward plan nodes for user",
@@ -662,7 +669,8 @@ func (r *NodeRepositoryAdapter) getHybridPlanNodes(ctx context.Context, subscrip
 	allNodes := append(resourceGroupNodes, userForwardNodes...)
 
 	// Append external forward rules if repository is configured
-	externalNodes := r.getExternalForwardNodes(ctx, subscriptionID)
+	// Pass groupIDs to include rules distributed through resource groups
+	externalNodes := r.getExternalForwardNodes(ctx, subscriptionID, groupIDs)
 	allNodes = append(allNodes, externalNodes...)
 
 	r.logger.Infow("retrieved hybrid plan nodes",
@@ -986,34 +994,180 @@ func (r *NodeRepositoryAdapter) getUserForwardNodes(ctx context.Context, userID 
 }
 
 // getExternalForwardNodes retrieves external forward rules for a subscription and converts them to subscription nodes.
+// It queries both:
+// 1. Rules directly associated with the subscription (via subscription_id field)
+// 2. Rules distributed through resource groups (via group_ids field)
 // Returns empty slice if external forward repository is not configured.
-func (r *NodeRepositoryAdapter) getExternalForwardNodes(ctx context.Context, subscriptionID uint) []*usecases.Node {
+func (r *NodeRepositoryAdapter) getExternalForwardNodes(ctx context.Context, subscriptionID uint, groupIDs []uint) []*usecases.Node {
 	if r.externalForwardRepo == nil {
 		return nil
 	}
 
-	// Query enabled external forward rules for this subscription
-	externalRules, err := r.externalForwardRepo.ListEnabledBySubscriptionID(ctx, subscriptionID)
+	// Use slice to preserve sort order, map only for deduplication check
+	var rules []*externalforward.ExternalForwardRule
+	seenIDs := make(map[uint]bool)
+
+	// Track counts for logging
+	var subscriptionRuleCount, groupRuleCount int
+
+	// Query enabled external forward rules directly associated with this subscription
+	subscriptionRules, err := r.externalForwardRepo.ListEnabledBySubscriptionID(ctx, subscriptionID)
 	if err != nil {
-		r.logger.Warnw("failed to query external forward rules", "subscription_id", subscriptionID, "error", err)
+		r.logger.Warnw("failed to query external forward rules by subscription", "subscription_id", subscriptionID, "error", err)
+	} else {
+		for _, rule := range subscriptionRules {
+			if !seenIDs[rule.ID()] {
+				seenIDs[rule.ID()] = true
+				rules = append(rules, rule)
+				subscriptionRuleCount++
+			}
+		}
+	}
+
+	// Query enabled external forward rules distributed through resource groups
+	if len(groupIDs) > 0 {
+		groupRules, err := r.externalForwardRepo.ListEnabledByGroupIDs(ctx, groupIDs)
+		if err != nil {
+			r.logger.Warnw("failed to query external forward rules by group IDs", "group_ids", groupIDs, "error", err)
+		} else {
+			for _, rule := range groupRules {
+				if !seenIDs[rule.ID()] {
+					seenIDs[rule.ID()] = true
+					rules = append(rules, rule)
+					groupRuleCount++
+				}
+			}
+		}
+	}
+
+	if len(rules) == 0 {
 		return nil
 	}
 
-	if len(externalRules) == 0 {
-		return nil
+	// Collect node IDs from rules that have associated nodes
+	nodeIDSet := make(map[uint]bool)
+	for _, rule := range rules {
+		if rule.NodeID() != nil {
+			nodeIDSet[*rule.NodeID()] = true
+		}
+	}
+
+	// Query nodes and their protocol configs if any rules have associated nodes
+	nodeMap := make(map[uint]*models.NodeModel)
+	ssConfigMap := make(map[uint]*models.ShadowsocksConfigModel)
+	trojanConfigMap := make(map[uint]*models.TrojanConfigModel)
+
+	if len(nodeIDSet) > 0 {
+		nodeIDs := make([]uint, 0, len(nodeIDSet))
+		for id := range nodeIDSet {
+			nodeIDs = append(nodeIDs, id)
+		}
+
+		// Query nodes
+		var nodeModels []models.NodeModel
+		if err := r.db.WithContext(ctx).
+			Where("id IN ?", nodeIDs).
+			Where("status = ?", string(nodevo.NodeStatusActive)).
+			Find(&nodeModels).Error; err != nil {
+			r.logger.Warnw("failed to query nodes for external forward rules", "error", err)
+		} else {
+			for i := range nodeModels {
+				nodeMap[nodeModels[i].ID] = &nodeModels[i]
+			}
+
+			// Collect shadowsocks and trojan node IDs
+			var ssNodeIDs, trojanNodeIDs []uint
+			for _, nm := range nodeModels {
+				if nm.Protocol == "shadowsocks" || nm.Protocol == "" {
+					ssNodeIDs = append(ssNodeIDs, nm.ID)
+				} else if nm.Protocol == "trojan" {
+					trojanNodeIDs = append(trojanNodeIDs, nm.ID)
+				}
+			}
+
+			// Load shadowsocks configs
+			if len(ssNodeIDs) > 0 {
+				var ssConfigs []models.ShadowsocksConfigModel
+				if err := r.db.WithContext(ctx).
+					Where("node_id IN ?", ssNodeIDs).
+					Find(&ssConfigs).Error; err != nil {
+					r.logger.Warnw("failed to query shadowsocks configs for external forward rules", "error", err)
+				} else {
+					for i := range ssConfigs {
+						ssConfigMap[ssConfigs[i].NodeID] = &ssConfigs[i]
+					}
+				}
+			}
+
+			// Load trojan configs
+			if len(trojanNodeIDs) > 0 {
+				var trojanConfigs []models.TrojanConfigModel
+				if err := r.db.WithContext(ctx).
+					Where("node_id IN ?", trojanNodeIDs).
+					Find(&trojanConfigs).Error; err != nil {
+					r.logger.Warnw("failed to query trojan configs for external forward rules", "error", err)
+				} else {
+					for i := range trojanConfigs {
+						trojanConfigMap[trojanConfigs[i].NodeID] = &trojanConfigs[i]
+					}
+				}
+			}
+		}
 	}
 
 	// Convert external rules to subscription nodes
-	// Note: Protocol configuration is inherited from the associated node
-	var nodes []*usecases.Node
-	for _, rule := range externalRules {
+	// Protocol configuration is inherited from the associated node
+	// Rules without an active associated node are skipped to avoid invalid subscription URIs
+	nodes := make([]*usecases.Node, 0, len(rules))
+	var skippedCount int
+	for _, rule := range rules {
+		// Skip rules without associated node - they cannot generate valid subscription URIs
+		if rule.NodeID() == nil {
+			skippedCount++
+			continue
+		}
+
+		// Skip rules whose associated node is not active
+		targetNode, ok := nodeMap[*rule.NodeID()]
+		if !ok {
+			skippedCount++
+			continue
+		}
+
+		// Determine protocol
+		protocol := targetNode.Protocol
+		if protocol == "" {
+			protocol = "shadowsocks"
+		}
+
 		node := &usecases.Node{
 			ID:               0, // External rules don't have internal node IDs
 			Name:             rule.Name(),
 			ServerAddress:    rule.ServerAddress(),
 			SubscriptionPort: rule.ListenPort(),
-			Protocol:         "", // Protocol info comes from node configuration
 			Password:         "", // Will be filled with subscription UUID by caller
+			Protocol:         protocol,
+			TokenHash:        targetNode.TokenHash, // For SS2022 ServerKey derivation
+		}
+
+		// Load protocol-specific configs
+		if protocol == "shadowsocks" {
+			if sc, ok := ssConfigMap[targetNode.ID]; ok {
+				node.EncryptionMethod = sc.EncryptionMethod
+				if sc.Plugin != nil {
+					node.Plugin = *sc.Plugin
+				}
+			}
+		} else if protocol == "trojan" {
+			if tc, ok := trojanConfigMap[targetNode.ID]; ok {
+				node.TransportProtocol = tc.TransportProtocol
+				node.Host = tc.Host
+				node.Path = tc.Path
+				node.SNI = tc.SNI
+				node.AllowInsecure = tc.AllowInsecure
+			} else {
+				node.TransportProtocol = "tcp"
+			}
 		}
 
 		nodes = append(nodes, node)
@@ -1021,7 +1175,11 @@ func (r *NodeRepositoryAdapter) getExternalForwardNodes(ctx context.Context, sub
 
 	r.logger.Infow("retrieved external forward nodes for subscription",
 		"subscription_id", subscriptionID,
-		"external_rule_count", len(externalRules),
+		"group_ids", groupIDs,
+		"subscription_rule_count", subscriptionRuleCount,
+		"group_rule_count", groupRuleCount,
+		"total_rule_count", len(rules),
+		"skipped_count", skippedCount,
 		"node_count", len(nodes),
 	)
 
