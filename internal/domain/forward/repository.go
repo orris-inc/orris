@@ -124,6 +124,10 @@ type Repository interface {
 	// RemoveGroupIDFromAllRules removes a group ID from all rules that contain it.
 	// This is used when deleting a resource group to clean up orphaned references.
 	RemoveGroupIDFromAllRules(ctx context.Context, groupID uint) (int64, error)
+
+	// ListByExternalSource returns all forward rules with the given external source.
+	// Used for querying rules imported from a specific external system.
+	ListByExternalSource(ctx context.Context, source string) ([]*ForwardRule, error)
 }
 
 // ListFilter defines the filtering options for listing forward rules.
@@ -137,6 +141,8 @@ type ListFilter struct {
 	Name             string
 	Protocol         string
 	Status           string
+	RuleType         string // Filter by rule type (direct, entry, chain, direct_chain, external)
+	ExternalSource   string // Filter by external source (only for external rules)
 	OrderBy          string
 	Order            string
 	GroupIDs         []uint // Filter by resource group IDs (uses JSON_OVERLAPS on group_ids column)

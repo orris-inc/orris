@@ -9,7 +9,6 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/orris-inc/orris/internal/application/node/usecases"
-	"github.com/orris-inc/orris/internal/domain/externalforward"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
 	nodevo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
@@ -24,11 +23,10 @@ type NodeRepository interface {
 }
 
 type NodeRepositoryAdapter struct {
-	nodeRepo            NodeRepository
-	forwardRuleRepo     forward.Repository
-	externalForwardRepo externalforward.Repository
-	db                  *gorm.DB
-	logger              logger.Interface
+	nodeRepo        NodeRepository
+	forwardRuleRepo forward.Repository
+	db              *gorm.DB
+	logger          logger.Interface
 }
 
 func NewNodeRepositoryAdapter(nodeRepo NodeRepository, forwardRuleRepo forward.Repository, db *gorm.DB, logger logger.Interface) *NodeRepositoryAdapter {
@@ -38,11 +36,6 @@ func NewNodeRepositoryAdapter(nodeRepo NodeRepository, forwardRuleRepo forward.R
 		db:              db,
 		logger:          logger,
 	}
-}
-
-// SetExternalForwardRepo sets the external forward repository for optional external rule integration.
-func (r *NodeRepositoryAdapter) SetExternalForwardRepo(repo externalforward.Repository) {
-	r.externalForwardRepo = repo
 }
 
 func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, linkToken string, mode string) ([]*usecases.Node, error) {
@@ -241,12 +234,8 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, link
 
 	// Query forward rules that target these nodes to generate additional subscription entries
 	// Only include rules that belong to the same resource groups
+	// This includes both regular forward rules and external forward rules (rule_type='external')
 	forwardedNodes := r.getForwardedNodes(ctx, nodeIDs, groupIDs, nodeMap)
-
-	// Append external forward rules if repository is configured
-	// Pass groupIDs to include rules distributed through resource groups
-	externalNodes := r.getExternalForwardNodes(ctx, subscriptionModel.ID, groupIDs)
-	forwardedNodes = append(forwardedNodes, externalNodes...)
 
 	r.logger.Infow("retrieved nodes for subscription token",
 		"subscription_id", subscriptionModel.ID,
@@ -254,7 +243,6 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, link
 		"group_count", len(groupIDs),
 		"node_count", len(originNodes),
 		"forwarded_count", len(forwardedNodes),
-		"external_count", len(externalNodes),
 		"mode", mode,
 	)
 
@@ -312,43 +300,40 @@ func (r *NodeRepositoryAdapter) getForwardedNodes(ctx context.Context, nodeIDs [
 		return nil
 	}
 
-	// Collect agent IDs
+	// Collect agent IDs (skip external rules which have agentID = 0)
 	agentIDSet := make(map[uint]bool)
 	for _, rule := range forwardRules {
-		agentIDSet[rule.AgentID()] = true
+		if rule.AgentID() > 0 {
+			agentIDSet[rule.AgentID()] = true
+		}
 	}
 
-	agentIDs := make([]uint, 0, len(agentIDSet))
-	for agentID := range agentIDSet {
-		agentIDs = append(agentIDs, agentID)
-	}
-
-	// Query forward agents
-	var agents []models.ForwardAgentModel
-	if err := r.db.WithContext(ctx).
-		Where("id IN ?", agentIDs).
-		Where("status = ?", "enabled").
-		Order("sort_order ASC").
-		Find(&agents).Error; err != nil {
-		r.logger.Warnw("failed to query forward agents", "error", err)
-		return nil
-	}
-
-	// Build agent map
+	// Query forward agents if there are any non-external rules
 	agentMap := make(map[uint]*models.ForwardAgentModel)
-	for i := range agents {
-		agentMap[agents[i].ID] = &agents[i]
+	if len(agentIDSet) > 0 {
+		agentIDs := make([]uint, 0, len(agentIDSet))
+		for agentID := range agentIDSet {
+			agentIDs = append(agentIDs, agentID)
+		}
+
+		var agents []models.ForwardAgentModel
+		if err := r.db.WithContext(ctx).
+			Where("id IN ?", agentIDs).
+			Where("status = ?", "enabled").
+			Order("sort_order ASC").
+			Find(&agents).Error; err != nil {
+			r.logger.Warnw("failed to query forward agents", "error", err)
+			return nil
+		}
+
+		for i := range agents {
+			agentMap[agents[i].ID] = &agents[i]
+		}
 	}
 
 	// Generate forwarded node entries
 	var forwardedNodes []*usecases.Node
 	for _, rule := range forwardRules {
-		agent, ok := agentMap[rule.AgentID()]
-		if !ok || agent.PublicAddress == "" {
-			// Skip if agent not found or has no public address
-			continue
-		}
-
 		if rule.TargetNodeID() == nil {
 			continue
 		}
@@ -358,11 +343,28 @@ func (r *NodeRepositoryAdapter) getForwardedNodes(ctx context.Context, nodeIDs [
 			continue
 		}
 
-		// Create a forwarded node entry with agent's public address
+		// Determine server address based on rule type
+		var serverAddress string
+		if rule.IsExternal() {
+			// External rules use serverAddress directly
+			serverAddress = rule.ServerAddress()
+			if serverAddress == "" {
+				continue
+			}
+		} else {
+			// Non-external rules use agent's public address
+			agent, ok := agentMap[rule.AgentID()]
+			if !ok || agent.PublicAddress == "" {
+				continue
+			}
+			serverAddress = agent.PublicAddress
+		}
+
+		// Create a forwarded node entry
 		forwardedNode := &usecases.Node{
 			ID:                originalNode.ID,
 			Name:              rule.Name(), // Use forward rule name
-			ServerAddress:     agent.PublicAddress,
+			ServerAddress:     serverAddress,
 			SubscriptionPort:  rule.ListenPort(),
 			Protocol:          originalNode.Protocol,
 			EncryptionMethod:  originalNode.EncryptionMethod,
@@ -375,6 +377,7 @@ func (r *NodeRepositoryAdapter) getForwardedNodes(ctx context.Context, nodeIDs [
 			Path:              originalNode.Path,
 			SNI:               originalNode.SNI,
 			AllowInsecure:     originalNode.AllowInsecure,
+			SortOrder:         rule.SortOrder(),
 		}
 
 		forwardedNodes = append(forwardedNodes, forwardedNode)
@@ -407,14 +410,16 @@ func (r *NodeRepositoryAdapter) getForwardPlanNodes(ctx context.Context, subscri
 		return []*usecases.Node{}, nil
 	}
 
-	// Collect target node IDs and agent IDs
+	// Collect target node IDs and agent IDs (skip external rules which have agentID = 0)
 	nodeIDSet := make(map[uint]bool)
 	agentIDSet := make(map[uint]bool)
 	for _, rule := range forwardRules {
 		if rule.TargetNodeID() != nil {
 			nodeIDSet[*rule.TargetNodeID()] = true
 		}
-		agentIDSet[rule.AgentID()] = true
+		if rule.AgentID() > 0 {
+			agentIDSet[rule.AgentID()] = true
+		}
 	}
 
 	// Convert to slices
@@ -510,11 +515,6 @@ func (r *NodeRepositoryAdapter) getForwardPlanNodes(ctx context.Context, subscri
 	// Generate forwarded node entries
 	var forwardedNodes []*usecases.Node
 	for _, rule := range forwardRules {
-		agent, ok := agentMap[rule.AgentID()]
-		if !ok || agent.PublicAddress == "" {
-			continue
-		}
-
 		if rule.TargetNodeID() == nil {
 			continue
 		}
@@ -522,6 +522,23 @@ func (r *NodeRepositoryAdapter) getForwardPlanNodes(ctx context.Context, subscri
 		targetNode, ok := nodeMap[*rule.TargetNodeID()]
 		if !ok {
 			continue
+		}
+
+		// Determine server address based on rule type
+		var serverAddress string
+		if rule.IsExternal() {
+			// External rules use serverAddress directly
+			serverAddress = rule.ServerAddress()
+			if serverAddress == "" {
+				continue
+			}
+		} else {
+			// Non-external rules use agent's public address
+			agent, ok := agentMap[rule.AgentID()]
+			if !ok || agent.PublicAddress == "" {
+				continue
+			}
+			serverAddress = agent.PublicAddress
 		}
 
 		// Determine protocol
@@ -534,10 +551,12 @@ func (r *NodeRepositoryAdapter) getForwardPlanNodes(ctx context.Context, subscri
 		forwardedNode := &usecases.Node{
 			ID:               targetNode.ID,
 			Name:             rule.Name(),
-			ServerAddress:    agent.PublicAddress,
+			ServerAddress:    serverAddress,
 			SubscriptionPort: rule.ListenPort(),
 			Protocol:         protocol,
-			Password:         "", // Will be filled with subscription UUID
+			TokenHash:        targetNode.TokenHash, // For SS2022 ServerKey derivation
+			Password:         "",                   // Will be filled with subscription UUID
+			SortOrder:        rule.SortOrder(),
 		}
 
 		// Load Shadowsocks config
@@ -578,17 +597,11 @@ func (r *NodeRepositoryAdapter) getForwardPlanNodes(ctx context.Context, subscri
 		forwardedNodes = append(forwardedNodes, forwardedNode)
 	}
 
-	// Append external forward rules if repository is configured
-	// Forward plans have no resource groups, so pass empty groupIDs
-	externalNodes := r.getExternalForwardNodes(ctx, subscriptionID, nil)
-	forwardedNodes = append(forwardedNodes, externalNodes...)
-
 	r.logger.Infow("retrieved forward plan nodes for user",
 		"user_id", userID,
 		"subscription_id", subscriptionID,
 		"forward_rule_count", len(forwardRules),
 		"forwarded_node_count", len(forwardedNodes),
-		"external_node_count", len(externalNodes),
 		"mode", mode,
 	)
 
@@ -666,12 +679,10 @@ func (r *NodeRepositoryAdapter) getHybridPlanNodes(ctx context.Context, subscrip
 	}
 
 	// Combine both types of nodes
+	// External forward rules are already included via:
+	// - getForwardedNodes for resource group nodes (system external rules)
+	// - getUserForwardNodes for user's own external rules
 	allNodes := append(resourceGroupNodes, userForwardNodes...)
-
-	// Append external forward rules if repository is configured
-	// Pass groupIDs to include rules distributed through resource groups
-	externalNodes := r.getExternalForwardNodes(ctx, subscriptionID, groupIDs)
-	allNodes = append(allNodes, externalNodes...)
 
 	r.logger.Infow("retrieved hybrid plan nodes",
 		"user_id", userID,
@@ -679,7 +690,6 @@ func (r *NodeRepositoryAdapter) getHybridPlanNodes(ctx context.Context, subscrip
 		"plan_id", planID,
 		"resource_group_node_count", len(resourceGroupNodes),
 		"user_forward_node_count", len(userForwardNodes),
-		"external_node_count", len(externalNodes),
 		"total_count", len(allNodes),
 		"mode", mode,
 	)
@@ -819,14 +829,16 @@ func (r *NodeRepositoryAdapter) getUserForwardNodes(ctx context.Context, userID 
 		return []*usecases.Node{}, nil
 	}
 
-	// Collect target node IDs and agent IDs
+	// Collect target node IDs and agent IDs (skip external rules which have agentID = 0)
 	nodeIDSet := make(map[uint]bool)
 	agentIDSet := make(map[uint]bool)
 	for _, rule := range forwardRules {
 		if rule.TargetNodeID() != nil {
 			nodeIDSet[*rule.TargetNodeID()] = true
 		}
-		agentIDSet[rule.AgentID()] = true
+		if rule.AgentID() > 0 {
+			agentIDSet[rule.AgentID()] = true
+		}
 	}
 
 	// Convert to slices
@@ -922,11 +934,6 @@ func (r *NodeRepositoryAdapter) getUserForwardNodes(ctx context.Context, userID 
 	// Generate forwarded node entries
 	var forwardedNodes []*usecases.Node
 	for _, rule := range forwardRules {
-		agent, ok := agentMap[rule.AgentID()]
-		if !ok || agent.PublicAddress == "" {
-			continue
-		}
-
 		if rule.TargetNodeID() == nil {
 			continue
 		}
@@ -934,6 +941,23 @@ func (r *NodeRepositoryAdapter) getUserForwardNodes(ctx context.Context, userID 
 		targetNode, ok := nodeMap[*rule.TargetNodeID()]
 		if !ok {
 			continue
+		}
+
+		// Determine server address based on rule type
+		var serverAddress string
+		if rule.IsExternal() {
+			// External rules use serverAddress directly
+			serverAddress = rule.ServerAddress()
+			if serverAddress == "" {
+				continue
+			}
+		} else {
+			// Non-external rules use agent's public address
+			agent, ok := agentMap[rule.AgentID()]
+			if !ok || agent.PublicAddress == "" {
+				continue
+			}
+			serverAddress = agent.PublicAddress
 		}
 
 		// Determine protocol
@@ -946,10 +970,12 @@ func (r *NodeRepositoryAdapter) getUserForwardNodes(ctx context.Context, userID 
 		forwardedNode := &usecases.Node{
 			ID:               targetNode.ID,
 			Name:             rule.Name(),
-			ServerAddress:    agent.PublicAddress,
+			ServerAddress:    serverAddress,
 			SubscriptionPort: rule.ListenPort(),
 			Protocol:         protocol,
-			Password:         "", // Will be filled with subscription UUID
+			TokenHash:        targetNode.TokenHash, // For SS2022 ServerKey derivation
+			Password:         "",                   // Will be filled with subscription UUID
+			SortOrder:        rule.SortOrder(),
 		}
 
 		// Load Shadowsocks config
@@ -991,199 +1017,6 @@ func (r *NodeRepositoryAdapter) getUserForwardNodes(ctx context.Context, userID 
 	}
 
 	return forwardedNodes, nil
-}
-
-// getExternalForwardNodes retrieves external forward rules for a subscription and converts them to subscription nodes.
-// It queries both:
-// 1. Rules directly associated with the subscription (via subscription_id field)
-// 2. Rules distributed through resource groups (via group_ids field)
-// Returns empty slice if external forward repository is not configured.
-func (r *NodeRepositoryAdapter) getExternalForwardNodes(ctx context.Context, subscriptionID uint, groupIDs []uint) []*usecases.Node {
-	if r.externalForwardRepo == nil {
-		return nil
-	}
-
-	// Use slice to preserve sort order, map only for deduplication check
-	var rules []*externalforward.ExternalForwardRule
-	seenIDs := make(map[uint]bool)
-
-	// Track counts for logging
-	var subscriptionRuleCount, groupRuleCount int
-
-	// Query enabled external forward rules directly associated with this subscription
-	subscriptionRules, err := r.externalForwardRepo.ListEnabledBySubscriptionID(ctx, subscriptionID)
-	if err != nil {
-		r.logger.Warnw("failed to query external forward rules by subscription", "subscription_id", subscriptionID, "error", err)
-	} else {
-		for _, rule := range subscriptionRules {
-			if !seenIDs[rule.ID()] {
-				seenIDs[rule.ID()] = true
-				rules = append(rules, rule)
-				subscriptionRuleCount++
-			}
-		}
-	}
-
-	// Query enabled external forward rules distributed through resource groups
-	if len(groupIDs) > 0 {
-		groupRules, err := r.externalForwardRepo.ListEnabledByGroupIDs(ctx, groupIDs)
-		if err != nil {
-			r.logger.Warnw("failed to query external forward rules by group IDs", "group_ids", groupIDs, "error", err)
-		} else {
-			for _, rule := range groupRules {
-				if !seenIDs[rule.ID()] {
-					seenIDs[rule.ID()] = true
-					rules = append(rules, rule)
-					groupRuleCount++
-				}
-			}
-		}
-	}
-
-	if len(rules) == 0 {
-		return nil
-	}
-
-	// Collect node IDs from rules that have associated nodes
-	nodeIDSet := make(map[uint]bool)
-	for _, rule := range rules {
-		if rule.NodeID() != nil {
-			nodeIDSet[*rule.NodeID()] = true
-		}
-	}
-
-	// Query nodes and their protocol configs if any rules have associated nodes
-	nodeMap := make(map[uint]*models.NodeModel)
-	ssConfigMap := make(map[uint]*models.ShadowsocksConfigModel)
-	trojanConfigMap := make(map[uint]*models.TrojanConfigModel)
-
-	if len(nodeIDSet) > 0 {
-		nodeIDs := make([]uint, 0, len(nodeIDSet))
-		for id := range nodeIDSet {
-			nodeIDs = append(nodeIDs, id)
-		}
-
-		// Query nodes
-		var nodeModels []models.NodeModel
-		if err := r.db.WithContext(ctx).
-			Where("id IN ?", nodeIDs).
-			Where("status = ?", string(nodevo.NodeStatusActive)).
-			Find(&nodeModels).Error; err != nil {
-			r.logger.Warnw("failed to query nodes for external forward rules", "error", err)
-		} else {
-			for i := range nodeModels {
-				nodeMap[nodeModels[i].ID] = &nodeModels[i]
-			}
-
-			// Collect shadowsocks and trojan node IDs
-			var ssNodeIDs, trojanNodeIDs []uint
-			for _, nm := range nodeModels {
-				if nm.Protocol == "shadowsocks" || nm.Protocol == "" {
-					ssNodeIDs = append(ssNodeIDs, nm.ID)
-				} else if nm.Protocol == "trojan" {
-					trojanNodeIDs = append(trojanNodeIDs, nm.ID)
-				}
-			}
-
-			// Load shadowsocks configs
-			if len(ssNodeIDs) > 0 {
-				var ssConfigs []models.ShadowsocksConfigModel
-				if err := r.db.WithContext(ctx).
-					Where("node_id IN ?", ssNodeIDs).
-					Find(&ssConfigs).Error; err != nil {
-					r.logger.Warnw("failed to query shadowsocks configs for external forward rules", "error", err)
-				} else {
-					for i := range ssConfigs {
-						ssConfigMap[ssConfigs[i].NodeID] = &ssConfigs[i]
-					}
-				}
-			}
-
-			// Load trojan configs
-			if len(trojanNodeIDs) > 0 {
-				var trojanConfigs []models.TrojanConfigModel
-				if err := r.db.WithContext(ctx).
-					Where("node_id IN ?", trojanNodeIDs).
-					Find(&trojanConfigs).Error; err != nil {
-					r.logger.Warnw("failed to query trojan configs for external forward rules", "error", err)
-				} else {
-					for i := range trojanConfigs {
-						trojanConfigMap[trojanConfigs[i].NodeID] = &trojanConfigs[i]
-					}
-				}
-			}
-		}
-	}
-
-	// Convert external rules to subscription nodes
-	// Protocol configuration is inherited from the associated node
-	// Rules without an active associated node are skipped to avoid invalid subscription URIs
-	nodes := make([]*usecases.Node, 0, len(rules))
-	var skippedCount int
-	for _, rule := range rules {
-		// Skip rules without associated node - they cannot generate valid subscription URIs
-		if rule.NodeID() == nil {
-			skippedCount++
-			continue
-		}
-
-		// Skip rules whose associated node is not active
-		targetNode, ok := nodeMap[*rule.NodeID()]
-		if !ok {
-			skippedCount++
-			continue
-		}
-
-		// Determine protocol
-		protocol := targetNode.Protocol
-		if protocol == "" {
-			protocol = "shadowsocks"
-		}
-
-		node := &usecases.Node{
-			ID:               0, // External rules don't have internal node IDs
-			Name:             rule.Name(),
-			ServerAddress:    rule.ServerAddress(),
-			SubscriptionPort: rule.ListenPort(),
-			Password:         "", // Will be filled with subscription UUID by caller
-			Protocol:         protocol,
-			TokenHash:        targetNode.TokenHash, // For SS2022 ServerKey derivation
-		}
-
-		// Load protocol-specific configs
-		if protocol == "shadowsocks" {
-			if sc, ok := ssConfigMap[targetNode.ID]; ok {
-				node.EncryptionMethod = sc.EncryptionMethod
-				if sc.Plugin != nil {
-					node.Plugin = *sc.Plugin
-				}
-			}
-		} else if protocol == "trojan" {
-			if tc, ok := trojanConfigMap[targetNode.ID]; ok {
-				node.TransportProtocol = tc.TransportProtocol
-				node.Host = tc.Host
-				node.Path = tc.Path
-				node.SNI = tc.SNI
-				node.AllowInsecure = tc.AllowInsecure
-			} else {
-				node.TransportProtocol = "tcp"
-			}
-		}
-
-		nodes = append(nodes, node)
-	}
-
-	r.logger.Infow("retrieved external forward nodes for subscription",
-		"subscription_id", subscriptionID,
-		"group_ids", groupIDs,
-		"subscription_rule_count", subscriptionRuleCount,
-		"group_rule_count", groupRuleCount,
-		"total_rule_count", len(rules),
-		"skipped_count", skippedCount,
-		"node_count", len(nodes),
-	)
-
-	return nodes
 }
 
 // resolveServerAddress returns the effective server address for subscription

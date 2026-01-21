@@ -9,8 +9,6 @@ import (
 	"gorm.io/gorm"
 
 	adminUsecases "github.com/orris-inc/orris/internal/application/admin/usecases"
-	externalForwardUsecases "github.com/orris-inc/orris/internal/application/externalforward/usecases"
-	adminExternalForwardUsecases "github.com/orris-inc/orris/internal/application/externalforward/usecases/admin"
 	forwardServices "github.com/orris-inc/orris/internal/application/forward/services"
 	forwardUsecases "github.com/orris-inc/orris/internal/application/forward/usecases"
 	nodeServices "github.com/orris-inc/orris/internal/application/node/services"
@@ -28,7 +26,6 @@ import (
 	"github.com/orris-inc/orris/internal/application/user"
 	"github.com/orris-inc/orris/internal/application/user/helpers"
 	"github.com/orris-inc/orris/internal/application/user/usecases"
-	"github.com/orris-inc/orris/internal/domain/externalforward"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/infrastructure/adapters"
@@ -45,7 +42,6 @@ import (
 	"github.com/orris-inc/orris/internal/infrastructure/token"
 	"github.com/orris-inc/orris/internal/interfaces/http/handlers"
 	adminHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/admin"
-	externalForwardHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/externalforward"
 	forwardAgentAPIHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward/agent/api"
 	forwardAgentCrudHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward/agent/crud"
 	forwardAgentHubHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward/agent/hub"
@@ -96,12 +92,9 @@ type Router struct {
 	forwardAgentVersionHandler      *forwardAgentCrudHandlers.VersionHandler
 	forwardAgentSSEHandler          *forwardAgentCrudHandlers.ForwardAgentSSEHandler
 	forwardAgentAPIHandler          *forwardAgentAPIHandlers.Handler
-	userForwardRuleHandler          *forwardUserHandlers.Handler
-	subscriptionForwardRuleHandler  *forwardSubscriptionHandlers.Handler
-	externalForwardHandler          *externalForwardHandlers.Handler
-	adminExternalForwardRuleHandler *adminHandlers.ExternalForwardRuleHandler
-	externalForwardRepo             externalforward.Repository
-	agentHub                        *services.AgentHub
+	userForwardRuleHandler         *forwardUserHandlers.Handler
+	subscriptionForwardRuleHandler *forwardSubscriptionHandlers.Handler
+	agentHub                       *services.AgentHub
 	agentHubHandler                 *forwardAgentHubHandlers.Handler
 	nodeHubHandler                  *nodeHandlers.NodeHubHandler
 	nodeVersionHandler              *nodeHandlers.NodeVersionHandler
@@ -1095,53 +1088,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		reorderForwardRulesUC, // reuse existing
 	)
 
-	// Initialize external forward rule repository and use cases
-	externalForwardRuleRepo := repository.NewExternalForwardRuleRepository(db, log)
-	createExternalForwardRuleUC := externalForwardUsecases.NewCreateExternalForwardRuleUseCase(externalForwardRuleRepo, nodeRepoImpl, subscriptionRepo, resourceGroupRepo, log)
-	updateExternalForwardRuleUC := externalForwardUsecases.NewUpdateExternalForwardRuleUseCase(externalForwardRuleRepo, nodeRepoImpl, subscriptionRepo, resourceGroupRepo, log)
-	deleteExternalForwardRuleUC := externalForwardUsecases.NewDeleteExternalForwardRuleUseCase(externalForwardRuleRepo, log)
-	listExternalForwardRulesUC := externalForwardUsecases.NewListExternalForwardRulesUseCase(externalForwardRuleRepo, subscriptionRepo, resourceGroupRepo, nodeRepoImpl, log)
-	getExternalForwardRuleUC := externalForwardUsecases.NewGetExternalForwardRuleUseCase(externalForwardRuleRepo, subscriptionRepo, resourceGroupRepo, nodeRepoImpl, log)
-	enableExternalForwardRuleUC := externalForwardUsecases.NewEnableExternalForwardRuleUseCase(externalForwardRuleRepo, log)
-	disableExternalForwardRuleUC := externalForwardUsecases.NewDisableExternalForwardRuleUseCase(externalForwardRuleRepo, log)
-
-	// Initialize external forward handler
-	externalForwardHandler := externalForwardHandlers.NewHandler(
-		createExternalForwardRuleUC,
-		updateExternalForwardRuleUC,
-		deleteExternalForwardRuleUC,
-		listExternalForwardRulesUC,
-		getExternalForwardRuleUC,
-		enableExternalForwardRuleUC,
-		disableExternalForwardRuleUC,
-	)
-
-	// Initialize admin external forward rule use cases
-	adminCreateExternalForwardRuleUC := adminExternalForwardUsecases.NewAdminCreateExternalForwardRuleUseCase(externalForwardRuleRepo, resourceGroupRepo, nodeRepoImpl, subscriptionPlanRepo, log)
-	adminListExternalForwardRulesUC := adminExternalForwardUsecases.NewAdminListExternalForwardRulesUseCase(externalForwardRuleRepo, resourceGroupRepo, nodeRepoImpl, log)
-	adminGetExternalForwardRuleUC := adminExternalForwardUsecases.NewAdminGetExternalForwardRuleUseCase(externalForwardRuleRepo, resourceGroupRepo, nodeRepoImpl, log)
-	adminUpdateExternalForwardRuleUC := adminExternalForwardUsecases.NewAdminUpdateExternalForwardRuleUseCase(externalForwardRuleRepo, nodeRepoImpl, resourceGroupRepo, subscriptionPlanRepo, log)
-	adminDeleteExternalForwardRuleUC := adminExternalForwardUsecases.NewAdminDeleteExternalForwardRuleUseCase(externalForwardRuleRepo, log)
-	adminEnableExternalForwardRuleUC := adminExternalForwardUsecases.NewAdminEnableExternalForwardRuleUseCase(externalForwardRuleRepo, log)
-	adminDisableExternalForwardRuleUC := adminExternalForwardUsecases.NewAdminDisableExternalForwardRuleUseCase(externalForwardRuleRepo, log)
-
-	// Initialize admin external forward rule handler
-	adminExternalForwardRuleHandler := adminHandlers.NewExternalForwardRuleHandler(
-		adminCreateExternalForwardRuleUC,
-		adminListExternalForwardRulesUC,
-		adminGetExternalForwardRuleUC,
-		adminUpdateExternalForwardRuleUC,
-		adminDeleteExternalForwardRuleUC,
-		adminEnableExternalForwardRuleUC,
-		adminDisableExternalForwardRuleUC,
-		log,
-	)
-
-	// Inject external forward repository into node repository adapter for subscription link output
-	nodeRepo.SetExternalForwardRepo(externalForwardRuleRepo)
-
-	// Inject external forward use case into subscription forward rule handler for combined rule listing
-	subscriptionForwardRuleHandler.SetExternalRulesUseCase(listExternalForwardRulesUC)
+	// Note: External forward rules have been merged into forward_rules table with rule_type='external'
+	// The separate externalforward module has been removed.
 
 	// Initialize forward rule owner middleware
 	forwardRuleOwnerMiddleware := middleware.NewForwardRuleOwnerMiddleware(
@@ -1485,12 +1433,9 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		forwardAgentVersionHandler:      forwardAgentVersionHandler,
 		forwardAgentSSEHandler:          forwardAgentSSEHandler,
 		forwardAgentAPIHandler:          forwardAgentAPIHandler,
-		userForwardRuleHandler:          userForwardRuleHandler,
-		subscriptionForwardRuleHandler:  subscriptionForwardRuleHandler,
-		externalForwardHandler:          externalForwardHandler,
-		adminExternalForwardRuleHandler: adminExternalForwardRuleHandler,
-		externalForwardRepo:             externalForwardRuleRepo,
-		agentHub:                        agentHub,
+		userForwardRuleHandler:         userForwardRuleHandler,
+		subscriptionForwardRuleHandler: subscriptionForwardRuleHandler,
+		agentHub:                       agentHub,
 		agentHubHandler:                 agentHubHandler,
 		nodeHubHandler:                  nodeHubHandler,
 		nodeVersionHandler:              nodeVersionHandler,
@@ -1634,18 +1579,8 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		}
 	}
 
-	// Admin external forward rules routes
-	adminExternalForwardRules := r.engine.Group("/admin/external-forward-rules")
-	adminExternalForwardRules.Use(r.authMiddleware.RequireAuth(), authorization.RequireAdmin())
-	{
-		adminExternalForwardRules.POST("", r.adminExternalForwardRuleHandler.Create)
-		adminExternalForwardRules.GET("", r.adminExternalForwardRuleHandler.List)
-		adminExternalForwardRules.GET("/:id", r.adminExternalForwardRuleHandler.Get)
-		adminExternalForwardRules.PUT("/:id", r.adminExternalForwardRuleHandler.Update)
-		adminExternalForwardRules.DELETE("/:id", r.adminExternalForwardRuleHandler.Delete)
-		adminExternalForwardRules.POST("/:id/enable", r.adminExternalForwardRuleHandler.Enable)
-		adminExternalForwardRules.POST("/:id/disable", r.adminExternalForwardRuleHandler.Disable)
-	}
+	// Note: Admin external forward rules routes have been removed.
+	// External forward rules are now managed as forward_rules with rule_type='external'.
 
 	// User subscription routes - only own subscriptions
 	subscriptions := r.engine.Group("/subscriptions")
@@ -1800,12 +1735,8 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		ForwardQuotaMiddleware:      r.forwardQuotaMiddleware,
 	})
 
-	// External forward rules routes (third-party forward rules)
-	routes.SetupExternalForwardRoutes(r.engine, &routes.ExternalForwardRouteConfig{
-		ExternalForwardHandler:      r.externalForwardHandler,
-		AuthMiddleware:              r.authMiddleware,
-		SubscriptionOwnerMiddleware: r.subscriptionOwnerMiddleware,
-	})
+	// Note: External forward rules routes have been removed.
+	// External rules are now part of forward_rules with rule_type='external'.
 
 	routes.SetupAgentHubRoutes(r.engine, &routes.AgentHubRouteConfig{
 		HubHandler:                  r.agentHubHandler,

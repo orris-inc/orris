@@ -8,7 +8,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 
-	externalForwardUsecases "github.com/orris-inc/orris/internal/application/externalforward/usecases"
 	"github.com/orris-inc/orris/internal/application/forward/usecases"
 	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
@@ -19,17 +18,16 @@ import (
 
 // Handler handles HTTP requests for subscription-level forward rules.
 type Handler struct {
-	createRuleUC        *usecases.CreateSubscriptionForwardRuleUseCase
-	listRulesUC         *usecases.ListSubscriptionForwardRulesUseCase
-	getUsageUC          *usecases.GetSubscriptionForwardUsageUseCase
-	updateRuleUC        *usecases.UpdateForwardRuleUseCase
-	deleteRuleUC        *usecases.DeleteForwardRuleUseCase
-	enableRuleUC        *usecases.EnableForwardRuleUseCase
-	disableRuleUC       *usecases.DisableForwardRuleUseCase
-	getRuleUC           *usecases.GetForwardRuleUseCase
-	reorderRulesUC      *usecases.ReorderForwardRulesUseCase
-	listExternalRulesUC *externalForwardUsecases.ListExternalForwardRulesUseCase
-	logger              logger.Interface
+	createRuleUC   *usecases.CreateSubscriptionForwardRuleUseCase
+	listRulesUC    *usecases.ListSubscriptionForwardRulesUseCase
+	getUsageUC     *usecases.GetSubscriptionForwardUsageUseCase
+	updateRuleUC   *usecases.UpdateForwardRuleUseCase
+	deleteRuleUC   *usecases.DeleteForwardRuleUseCase
+	enableRuleUC   *usecases.EnableForwardRuleUseCase
+	disableRuleUC  *usecases.DisableForwardRuleUseCase
+	getRuleUC      *usecases.GetForwardRuleUseCase
+	reorderRulesUC *usecases.ReorderForwardRulesUseCase
+	logger         logger.Interface
 }
 
 // NewHandler creates a new subscription Handler.
@@ -45,23 +43,17 @@ func NewHandler(
 	reorderRulesUC *usecases.ReorderForwardRulesUseCase,
 ) *Handler {
 	return &Handler{
-		createRuleUC:        createRuleUC,
-		listRulesUC:         listRulesUC,
-		getUsageUC:          getUsageUC,
-		updateRuleUC:        updateRuleUC,
-		deleteRuleUC:        deleteRuleUC,
-		enableRuleUC:        enableRuleUC,
-		disableRuleUC:       disableRuleUC,
-		getRuleUC:           getRuleUC,
-		reorderRulesUC:      reorderRulesUC,
-		listExternalRulesUC: nil, // Optional, set via SetExternalRulesUseCase
-		logger:              logger.NewLogger(),
+		createRuleUC:   createRuleUC,
+		listRulesUC:    listRulesUC,
+		getUsageUC:     getUsageUC,
+		updateRuleUC:   updateRuleUC,
+		deleteRuleUC:   deleteRuleUC,
+		enableRuleUC:   enableRuleUC,
+		disableRuleUC:  disableRuleUC,
+		getRuleUC:      getRuleUC,
+		reorderRulesUC: reorderRulesUC,
+		logger:         logger.NewLogger(),
 	}
-}
-
-// SetExternalRulesUseCase sets the external forward rules use case for optional external rule integration.
-func (h *Handler) SetExternalRulesUseCase(uc *externalForwardUsecases.ListExternalForwardRulesUseCase) {
-	h.listExternalRulesUC = uc
 }
 
 // CreateForwardRuleRequest represents a request to create a subscription forward rule.
@@ -282,25 +274,15 @@ func (h *Handler) CreateRule(c *gin.Context) {
 	utils.CreatedResponse(c, result, "Forward rule created successfully")
 }
 
-// ListRulesResponse represents the response for listing subscription forward rules.
-type ListRulesResponse struct {
-	Rules         interface{} `json:"rules"`
-	ExternalRules interface{} `json:"external_rules,omitempty"`
-	Total         int64       `json:"total"`
-	Page          int         `json:"page"`
-	PageSize      int         `json:"page_size"`
-}
-
 // ListRules handles GET /subscriptions/:sid/forward-rules
+// Note: External rules are now part of the unified ForwardRule model with rule_type='external'.
+// They are returned together with other rules and can be identified by their rule_type field.
 func (h *Handler) ListRules(c *gin.Context) {
 	subscriptionID, err := getSubscriptionIDFromContext(c, h.logger)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
-
-	// Get subscription SID from context for external rules DTO
-	subscriptionSID := c.Param("sid")
 
 	// Parse pagination parameters
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -330,39 +312,7 @@ func (h *Handler) ListRules(c *gin.Context) {
 		return
 	}
 
-	// Check if external rules should be included
-	includeExternal := c.Query("include_external") == "true"
-
-	// If external rules use case is not configured or not requested, return standard response
-	if h.listExternalRulesUC == nil || !includeExternal {
-		utils.ListSuccessResponse(c, result.Rules, result.Total, page, pageSize)
-		return
-	}
-
-	// Fetch external rules
-	externalQuery := externalForwardUsecases.ListExternalForwardRulesQuery{
-		SubscriptionID:  subscriptionID,
-		SubscriptionSID: subscriptionSID,
-	}
-
-	externalResult, err := h.listExternalRulesUC.Execute(c.Request.Context(), externalQuery)
-	if err != nil {
-		h.logger.Warnw("failed to fetch external rules", "subscription_id", subscriptionID, "error", err)
-		// Return standard response without external rules on error
-		utils.ListSuccessResponse(c, result.Rules, result.Total, page, pageSize)
-		return
-	}
-
-	// Return combined response with external rules
-	response := ListRulesResponse{
-		Rules:         result.Rules,
-		ExternalRules: externalResult.Rules,
-		Total:         result.Total,
-		Page:          page,
-		PageSize:      pageSize,
-	}
-
-	utils.SuccessResponse(c, http.StatusOK, "", response)
+	utils.ListSuccessResponse(c, result.Rules, result.Total, page, pageSize)
 }
 
 // GetUsage handles GET /subscriptions/:sid/forward-rules/usage

@@ -111,6 +111,20 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 	ipVersion := vo.IPVersion(model.IPVersion)
 	tunnelType := vo.TunnelType(model.TunnelType)
 
+	// Handle external rule fields
+	var serverAddress string
+	if model.ServerAddress != nil {
+		serverAddress = *model.ServerAddress
+	}
+	var externalSource string
+	if model.ExternalSource != nil {
+		externalSource = *model.ExternalSource
+	}
+	var externalRuleID string
+	if model.ExternalRuleID != nil {
+		externalRuleID = *model.ExternalRuleID
+	}
+
 	entity, err := forward.ReconstructForwardRule(
 		model.ID,
 		model.SID,
@@ -138,6 +152,9 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 		model.TrafficMultiplier,
 		model.SortOrder,
 		groupIDs,
+		serverAddress,
+		externalSource,
+		externalRuleID,
 		model.CreatedAt,
 		model.UpdatedAt,
 	)
@@ -211,6 +228,23 @@ func (m *ForwardRuleMapperImpl) ToModel(entity *forward.ForwardRule) (*models.Fo
 		groupIDsJSON = jsonBytes
 	}
 
+	// Handle external rule fields
+	var serverAddress *string
+	if entity.ServerAddress() != "" {
+		s := entity.ServerAddress()
+		serverAddress = &s
+	}
+	var externalSource *string
+	if entity.ExternalSource() != "" {
+		s := entity.ExternalSource()
+		externalSource = &s
+	}
+	var externalRuleID *string
+	if entity.ExternalRuleID() != "" {
+		s := entity.ExternalRuleID()
+		externalRuleID = &s
+	}
+
 	return &models.ForwardRuleModel{
 		ID:                entity.ID(),
 		SID:               entity.SID(),
@@ -238,6 +272,9 @@ func (m *ForwardRuleMapperImpl) ToModel(entity *forward.ForwardRule) (*models.Fo
 		TrafficMultiplier: entity.GetTrafficMultiplier(),
 		SortOrder:         entity.SortOrder(),
 		GroupIDs:          groupIDsJSON,
+		ServerAddress:     serverAddress,
+		ExternalSource:    externalSource,
+		ExternalRuleID:    externalRuleID,
 		CreatedAt:         entity.CreatedAt(),
 		UpdatedAt:         entity.UpdatedAt(),
 	}, nil

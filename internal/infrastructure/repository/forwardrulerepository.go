@@ -305,6 +305,12 @@ func (r *ForwardRuleRepositoryImpl) List(ctx context.Context, filter forward.Lis
 	if filter.Status != "" {
 		query = query.Where("status = ?", filter.Status)
 	}
+	if filter.RuleType != "" {
+		query = query.Where("rule_type = ?", filter.RuleType)
+	}
+	if filter.ExternalSource != "" {
+		query = query.Where("external_source = ?", filter.ExternalSource)
+	}
 	if len(filter.GroupIDs) > 0 {
 		// Use JSON_OVERLAPS to check if group_ids array contains any of the filter group IDs
 		// JSON_OVERLAPS returns true if two JSON arrays have at least one element in common
@@ -745,7 +751,7 @@ func (r *ForwardRuleRepositoryImpl) ListSystemRulesByTargetNodes(ctx context.Con
 	query := tx.
 		Where("target_node_id IN ?", nodeIDs).
 		Where("status = ?", "enabled").
-		Where("rule_type IN ?", []string{"direct", "entry", "chain", "direct_chain"}).
+		Where("rule_type IN ?", []string{"direct", "entry", "chain", "direct_chain", "external"}).
 		Where("user_id IS NULL OR user_id = 0")
 
 	// If groupIDs is specified, filter by resource group membership
@@ -777,11 +783,12 @@ func (r *ForwardRuleRepositoryImpl) ListUserRulesForDelivery(ctx context.Context
 	tx := db.GetTxFromContext(ctx, r.db)
 	// Query enabled user rules with target_node_id set
 	// This encapsulates the isolation logic for user-specific rule delivery
+	// Includes external rules which also require target_node_id for protocol information
 	if err := tx.
 		Where("user_id = ?", userID).
 		Where("status = ?", "enabled").
 		Where("target_node_id IS NOT NULL").
-		Where("rule_type IN ?", []string{"direct", "entry", "chain", "direct_chain"}).
+		Where("rule_type IN ?", []string{"direct", "entry", "chain", "direct_chain", "external"}).
 		Order("sort_order ASC").
 		Find(&ruleModels).Error; err != nil {
 		r.logger.Errorw("failed to list user rules for delivery", "user_id", userID, "error", err)
@@ -983,4 +990,29 @@ func uintSliceToJSONArray(ids []uint) string {
 		parts[i] = fmt.Sprintf("%d", id)
 	}
 	return "[" + strings.Join(parts, ",") + "]"
+}
+
+// ListByExternalSource returns all forward rules with the given external source.
+func (r *ForwardRuleRepositoryImpl) ListByExternalSource(ctx context.Context, source string) ([]*forward.ForwardRule, error) {
+	if source == "" {
+		return []*forward.ForwardRule{}, nil
+	}
+
+	var ruleModels []*models.ForwardRuleModel
+
+	tx := db.GetTxFromContext(ctx, r.db)
+	if err := tx.Where("external_source = ?", source).
+		Order("sort_order ASC, created_at DESC").
+		Find(&ruleModels).Error; err != nil {
+		r.logger.Errorw("failed to list forward rules by external source", "source", source, "error", err)
+		return nil, fmt.Errorf("failed to list forward rules by external source: %w", err)
+	}
+
+	entities, err := r.mapper.ToEntities(ruleModels)
+	if err != nil {
+		r.logger.Errorw("failed to map forward rule models to entities", "error", err)
+		return nil, fmt.Errorf("failed to map forward rules: %w", err)
+	}
+
+	return entities, nil
 }

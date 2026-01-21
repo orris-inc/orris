@@ -79,6 +79,11 @@ type ForwardRuleDTO struct {
 	// Resource group IDs (admin only)
 	GroupSIDs []string `json:"group_sids,omitempty"` // resource group SIDs
 
+	// External rule fields (for rule_type = "external")
+	ServerAddress  string `json:"server_address,omitempty"`   // server address for external rules
+	ExternalSource string `json:"external_source,omitempty"`  // external source identifier
+	ExternalRuleID string `json:"external_rule_id,omitempty"` // external rule reference ID
+
 	// Internal fields for mapping (not exposed in JSON)
 	internalAgentID         uint            `json:"-"`
 	internalExitAgentID     uint            `json:"-"`
@@ -102,9 +107,9 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 	nodeCount := rule.CalculateNodeCount()
 	isAuto := rule.GetTrafficMultiplier() == nil
 
-	// direct and direct_chain types do not use tunnel, so tunnel_type should be empty
+	// direct, direct_chain, and external types do not use tunnel, so tunnel_type should be empty
 	tunnelType := ""
-	if !rule.RuleType().IsDirect() && !rule.RuleType().IsDirectChain() {
+	if !rule.RuleType().IsDirect() && !rule.RuleType().IsDirectChain() && !rule.RuleType().IsExternal() {
 		tunnelType = rule.TunnelType().String()
 	}
 
@@ -137,6 +142,9 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 		SortOrder:                  rule.SortOrder(),
 		TunnelType:                 tunnelType,
 		TunnelHops:                 rule.TunnelHops(),
+		ServerAddress:              rule.ServerAddress(),
+		ExternalSource:             rule.ExternalSource(),
+		ExternalRuleID:             rule.ExternalRuleID(),
 		internalAgentID:            rule.AgentID(),
 		internalExitAgentID:        rule.ExitAgentID(),
 		internalChainAgents:        rule.ChainAgentIDs(),

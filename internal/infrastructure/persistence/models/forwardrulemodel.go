@@ -37,9 +37,13 @@ type ForwardRuleModel struct {
 	TrafficMultiplier *float64       `gorm:"column:traffic_multiplier;type:decimal(10,4)"`
 	SortOrder         int            `gorm:"not null;default:0"`
 	GroupIDs          datatypes.JSON `gorm:"column:group_ids"` // resource group IDs (JSON array)
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
-	DeletedAt         gorm.DeletedAt `gorm:"index"`
+	// External rule fields (used when RuleType = 'external')
+	ServerAddress  *string `gorm:"column:server_address;size:255"`                                    // server address for external rules
+	ExternalSource *string `gorm:"column:external_source;size:50"`                                    // external source identifier
+	ExternalRuleID *string `gorm:"column:external_rule_id;size:100;index:idx_forward_rules_external"` // external rule reference ID
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	DeletedAt      gorm.DeletedAt `gorm:"index"`
 }
 
 // TableName specifies the table name for GORM.

@@ -1719,6 +1719,7 @@ func TestForwardRule_Validate_RejectsInvalidRuleType(t *testing.T) {
 		"", 0, 0, nil,
 		0,   // sortOrder
 		nil, // groupIDs
+		"", "", "", // serverAddress, externalSource, externalRuleID
 		time.Now(), time.Now(),
 	)
 

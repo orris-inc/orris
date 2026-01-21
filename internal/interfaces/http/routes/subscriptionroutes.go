@@ -5,7 +5,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/orris-inc/orris/internal/interfaces/http/handlers"
-	externalForwardHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/externalforward"
 	forwardSubscriptionHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward/subscription"
 	"github.com/orris-inc/orris/internal/interfaces/http/middleware"
 )
@@ -98,36 +97,6 @@ func SetupSubscriptionForwardRoutes(engine *gin.Engine, cfg *SubscriptionForward
 	}
 }
 
-// ExternalForwardRouteConfig contains dependencies for external forward rule routes.
-type ExternalForwardRouteConfig struct {
-	ExternalForwardHandler      *externalForwardHandlers.Handler
-	AuthMiddleware              *middleware.AuthMiddleware
-	SubscriptionOwnerMiddleware *middleware.SubscriptionOwnerMiddleware
-}
-
-// SetupExternalForwardRoutes configures external forward rule routes.
-// Routes: /subscriptions/:sid/external-forward-rules/*
-// :sid is subscription SID (sub_xxx format)
-// :rule_id is external forward rule SID (efr_xxx format)
-func SetupExternalForwardRoutes(engine *gin.Engine, cfg *ExternalForwardRouteConfig) {
-	// Subscription-scoped external forward rules API
-	// All routes require authentication and subscription ownership verification
-	externalForwardRules := engine.Group("/subscriptions/:sid/external-forward-rules")
-	externalForwardRules.Use(cfg.AuthMiddleware.RequireAuth())
-	externalForwardRules.Use(cfg.SubscriptionOwnerMiddleware.RequireOwnership())
-	{
-		// Collection operations
-		externalForwardRules.POST("", cfg.ExternalForwardHandler.CreateRule)
-		externalForwardRules.GET("", cfg.ExternalForwardHandler.ListRules)
-
-		// Single rule operations
-		ruleGroup := externalForwardRules.Group("/:rule_id")
-		{
-			ruleGroup.GET("", cfg.ExternalForwardHandler.GetRule)
-			ruleGroup.PUT("", cfg.ExternalForwardHandler.UpdateRule)
-			ruleGroup.DELETE("", cfg.ExternalForwardHandler.DeleteRule)
-			ruleGroup.POST("/enable", cfg.ExternalForwardHandler.EnableRule)
-			ruleGroup.POST("/disable", cfg.ExternalForwardHandler.DisableRule)
-		}
-	}
-}
+// Note: External forward rules have been merged into ForwardRule with rule_type='external'.
+// The separate /external-forward-rules routes have been removed.
+// External rules are now managed through the standard /forward-rules endpoints with rule_type='external'.

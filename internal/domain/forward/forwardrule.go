@@ -39,8 +39,12 @@ type ForwardRule struct {
 	trafficMultiplier *float64 // traffic multiplier for display. nil means auto-calculate based on node count
 	sortOrder         int
 	groupIDs          []uint // resource group IDs for access control
-	createdAt         time.Time
-	updatedAt         time.Time
+	// External rule fields (used when ruleType = external)
+	serverAddress  string // server address for external rules (replaces agent's public address)
+	externalSource string // external source identifier (required for external rules)
+	externalRuleID string // external rule ID for reference (optional)
+	createdAt      time.Time
+	updatedAt      time.Time
 }
 
 // NewForwardRule creates a new forward rule aggregate.
@@ -75,7 +79,8 @@ func NewForwardRule(
 	sortOrder int,
 	shortIDGenerator func() (string, error),
 ) (*ForwardRule, error) {
-	if agentID == 0 {
+	// Agent ID is required for non-external rules
+	if ruleType.RequiresAgent() && agentID == 0 {
 		return nil, fmt.Errorf("agent ID is required")
 	}
 	if !ruleType.IsValid() {
@@ -264,6 +269,9 @@ func NewForwardRule(
 				return nil, fmt.Errorf("invalid target address: %w", err)
 			}
 		}
+	case vo.ForwardRuleTypeExternal:
+		// External rules don't support NewForwardRule, use NewExternalForwardRule instead
+		return nil, fmt.Errorf("use NewExternalForwardRule to create external forward rules")
 	}
 
 	// Default ipVersion to auto if not set
@@ -316,6 +324,77 @@ func NewForwardRule(
 	}, nil
 }
 
+// NewExternalForwardRule creates a new external forward rule aggregate.
+// External rules are for third-party forward services that don't use agents.
+// Parameters:
+//   - userID: optional user ID (nil for admin-created rules distributed via resource groups)
+//   - subscriptionID: optional subscription ID (nil for admin-created rules)
+//   - targetNodeID: required for protocol information
+//   - name: rule name
+//   - serverAddress: required server address for subscription delivery
+//   - listenPort: listen port
+//   - externalSource: required source identifier
+//   - externalRuleID: optional external reference ID
+//   - remark: optional description
+//   - sortOrder: display sort order
+//   - groupIDs: optional resource group IDs for distribution
+//   - shortIDGenerator: function to generate SID
+func NewExternalForwardRule(
+	userID *uint,
+	subscriptionID *uint,
+	targetNodeID *uint,
+	name string,
+	serverAddress string,
+	listenPort uint16,
+	externalSource string,
+	externalRuleID string,
+	remark string,
+	sortOrder int,
+	groupIDs []uint,
+	shortIDGenerator func() (string, error),
+) (*ForwardRule, error) {
+	if name == "" {
+		return nil, fmt.Errorf("external forward rule name is required")
+	}
+	if serverAddress == "" {
+		return nil, fmt.Errorf("server address is required for external forward")
+	}
+	if listenPort == 0 {
+		return nil, fmt.Errorf("listen port is required for external forward")
+	}
+	if externalSource == "" {
+		return nil, fmt.Errorf("external source is required for external forward")
+	}
+
+	// Generate SID for external API use
+	sid, err := shortIDGenerator()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate SID: %w", err)
+	}
+
+	now := biztime.NowUTC()
+	return &ForwardRule{
+		sid:            sid,
+		agentID:        0, // External rules don't have agents
+		userID:         userID,
+		subscriptionID: subscriptionID,
+		ruleType:       vo.ForwardRuleTypeExternal,
+		name:           name,
+		listenPort:     listenPort,
+		targetNodeID:   targetNodeID,
+		protocol:       vo.ForwardProtocolTCP, // Default, will be determined from targetNodeID
+		status:         vo.ForwardStatusEnabled,
+		remark:         remark,
+		sortOrder:      sortOrder,
+		groupIDs:       groupIDs,
+		serverAddress:  serverAddress,
+		externalSource: externalSource,
+		externalRuleID: externalRuleID,
+		createdAt:      now,
+		updatedAt:      now,
+	}, nil
+}
+
 // ReconstructForwardRule reconstructs a forward rule from persistence.
 // It performs full validation to ensure data integrity, even for persisted data.
 func ReconstructForwardRule(
@@ -345,6 +424,9 @@ func ReconstructForwardRule(
 	trafficMultiplier *float64,
 	sortOrder int,
 	groupIDs []uint,
+	serverAddress string,
+	externalSource string,
+	externalRuleID string,
 	createdAt, updatedAt time.Time,
 ) (*ForwardRule, error) {
 	if id == 0 {
@@ -353,7 +435,8 @@ func ReconstructForwardRule(
 	if sid == "" {
 		return nil, fmt.Errorf("forward rule SID is required")
 	}
-	if agentID == 0 {
+	// Agent ID is required for non-external rules
+	if ruleType.RequiresAgent() && agentID == 0 {
 		return nil, fmt.Errorf("agent ID is required")
 	}
 	if !ruleType.IsValid() {
@@ -367,6 +450,15 @@ func ReconstructForwardRule(
 	}
 	if !status.IsValid() {
 		return nil, fmt.Errorf("invalid status: %s", status)
+	}
+	// Validate external rule specific fields
+	if ruleType.IsExternal() {
+		if serverAddress == "" {
+			return nil, fmt.Errorf("server address is required for external forward")
+		}
+		if externalSource == "" {
+			return nil, fmt.Errorf("external source is required for external forward")
+		}
 	}
 
 	// Validate traffic multiplier
@@ -411,6 +503,9 @@ func ReconstructForwardRule(
 		trafficMultiplier: trafficMultiplier,
 		sortOrder:         sortOrder,
 		groupIDs:          groupIDs,
+		serverAddress:     serverAddress,
+		externalSource:    externalSource,
+		externalRuleID:    externalRuleID,
 		createdAt:         createdAt,
 		updatedAt:         updatedAt,
 	}
@@ -844,6 +939,71 @@ func (r *ForwardRule) HasGroupID(groupID uint) bool {
 	return false
 }
 
+// ServerAddress returns the server address for external rules.
+func (r *ForwardRule) ServerAddress() string {
+	return r.serverAddress
+}
+
+// ExternalSource returns the external source identifier.
+func (r *ForwardRule) ExternalSource() string {
+	return r.externalSource
+}
+
+// ExternalRuleID returns the external rule ID reference.
+func (r *ForwardRule) ExternalRuleID() string {
+	return r.externalRuleID
+}
+
+// IsExternal returns true if this is an external forward rule.
+func (r *ForwardRule) IsExternal() bool {
+	return r.ruleType.IsExternal()
+}
+
+// UpdateServerAddress updates the server address for external rules.
+func (r *ForwardRule) UpdateServerAddress(serverAddress string) error {
+	if !r.ruleType.IsExternal() {
+		return fmt.Errorf("server address can only be updated for external type rules")
+	}
+	if serverAddress == "" {
+		return fmt.Errorf("server address cannot be empty for external rules")
+	}
+	if r.serverAddress == serverAddress {
+		return nil
+	}
+	r.serverAddress = serverAddress
+	r.updatedAt = biztime.NowUTC()
+	return nil
+}
+
+// UpdateExternalSource updates the external source identifier.
+func (r *ForwardRule) UpdateExternalSource(externalSource string) error {
+	if !r.ruleType.IsExternal() {
+		return fmt.Errorf("external source can only be updated for external type rules")
+	}
+	if externalSource == "" {
+		return fmt.Errorf("external source cannot be empty for external rules")
+	}
+	if r.externalSource == externalSource {
+		return nil
+	}
+	r.externalSource = externalSource
+	r.updatedAt = biztime.NowUTC()
+	return nil
+}
+
+// UpdateExternalRuleID updates the external rule ID reference.
+func (r *ForwardRule) UpdateExternalRuleID(externalRuleID string) error {
+	if !r.ruleType.IsExternal() {
+		return fmt.Errorf("external rule ID can only be updated for external type rules")
+	}
+	if r.externalRuleID == externalRuleID {
+		return nil
+	}
+	r.externalRuleID = externalRuleID
+	r.updatedAt = biztime.NowUTC()
+	return nil
+}
+
 // CalculateNodeCount calculates the total number of nodes in the forward chain.
 func (r *ForwardRule) CalculateNodeCount() int {
 	switch r.ruleType {
@@ -864,6 +1024,8 @@ func (r *ForwardRule) CalculateNodeCount() int {
 			chainCount = len(r.chainAgentIDs)
 		}
 		return 2 + chainCount // Entry + Chain + Exit
+	case vo.ForwardRuleTypeExternal:
+		return 1 // External rules have no agents, traffic multiplier calculation returns 1.0
 	default:
 		return 1 // Safe fallback
 	}
@@ -1394,7 +1556,8 @@ func (r *ForwardRule) IsEnabled() bool {
 
 // Validate performs domain-level validation.
 func (r *ForwardRule) Validate() error {
-	if r.agentID == 0 {
+	// Agent ID is required for non-external rules
+	if r.ruleType.RequiresAgent() && r.agentID == 0 {
 		return fmt.Errorf("agent ID is required")
 	}
 	if !r.ruleType.IsValid() {
@@ -1503,6 +1666,16 @@ func (r *ForwardRule) Validate() error {
 		}
 		if hasTarget && hasTargetNode {
 			return fmt.Errorf("target address+port and target node ID are mutually exclusive for direct_chain forward")
+		}
+	case vo.ForwardRuleTypeExternal:
+		if r.listenPort == 0 {
+			return fmt.Errorf("listen port is required for external forward")
+		}
+		if r.serverAddress == "" {
+			return fmt.Errorf("server address is required for external forward")
+		}
+		if r.externalSource == "" {
+			return fmt.Errorf("external source is required for external forward")
 		}
 	}
 

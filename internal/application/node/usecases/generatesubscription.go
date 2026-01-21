@@ -164,6 +164,8 @@ type Node struct {
 	VMessConfig     *valueobjects.VMessConfig
 	Hysteria2Config *valueobjects.Hysteria2Config
 	TUICConfig      *valueobjects.TUICConfig
+	// Sorting field for subscription output ordering
+	SortOrder int
 }
 
 // ToTrojanURI generates a Trojan URI string for subscription

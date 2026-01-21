@@ -18,6 +18,10 @@ const (
 	// Traffic is directly forwarded through TCP/UDP connections across multiple agents.
 	// Each agent listens on a specific port defined in chain_port_config.
 	ForwardRuleTypeDirectChain ForwardRuleType = "direct_chain"
+	// ForwardRuleTypeExternal is for external/third-party forward rules.
+	// External rules do not require an agent (agentID=0), instead they use serverAddress
+	// directly for subscription delivery. Protocol info is obtained from targetNodeID.
+	ForwardRuleTypeExternal ForwardRuleType = "external"
 )
 
 var validForwardRuleTypes = map[ForwardRuleType]bool{
@@ -25,6 +29,7 @@ var validForwardRuleTypes = map[ForwardRuleType]bool{
 	ForwardRuleTypeEntry:       true,
 	ForwardRuleTypeChain:       true,
 	ForwardRuleTypeDirectChain: true,
+	ForwardRuleTypeExternal:    true,
 }
 
 // String returns the string representation.
@@ -57,6 +62,11 @@ func (t ForwardRuleType) IsDirectChain() bool {
 	return t == ForwardRuleTypeDirectChain
 }
 
+// IsExternal checks if this is an external forward rule.
+func (t ForwardRuleType) IsExternal() bool {
+	return t == ForwardRuleTypeExternal
+}
+
 // RequiresTarget checks if this rule type requires target address/port.
 func (t ForwardRuleType) RequiresTarget() bool {
 	return t == ForwardRuleTypeDirect
@@ -69,7 +79,7 @@ func (t ForwardRuleType) RequiresExitAgent() bool {
 
 // RequiresListenPort checks if this rule type requires listen port.
 func (t ForwardRuleType) RequiresListenPort() bool {
-	return t == ForwardRuleTypeDirect || t == ForwardRuleTypeEntry || t == ForwardRuleTypeChain || t == ForwardRuleTypeDirectChain
+	return t == ForwardRuleTypeDirect || t == ForwardRuleTypeEntry || t == ForwardRuleTypeChain || t == ForwardRuleTypeDirectChain || t == ForwardRuleTypeExternal
 }
 
 // RequiresChainAgents checks if this rule type requires chain agent IDs.
@@ -80,4 +90,21 @@ func (t ForwardRuleType) RequiresChainAgents() bool {
 // RequiresChainPortConfig checks if this rule type requires chain port configuration.
 func (t ForwardRuleType) RequiresChainPortConfig() bool {
 	return t == ForwardRuleTypeDirectChain
+}
+
+// RequiresAgent checks if this rule type requires an agent (agentID > 0).
+// External rules do not require an agent.
+func (t ForwardRuleType) RequiresAgent() bool {
+	return t != ForwardRuleTypeExternal
+}
+
+// RequiresServerAddress checks if this rule type requires a server address.
+// Only external rules require a server address for subscription delivery.
+func (t ForwardRuleType) RequiresServerAddress() bool {
+	return t == ForwardRuleTypeExternal
+}
+
+// RequiresExternalSource checks if this rule type requires external source.
+func (t ForwardRuleType) RequiresExternalSource() bool {
+	return t == ForwardRuleTypeExternal
 }
