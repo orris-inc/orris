@@ -6,11 +6,10 @@ import (
 	"time"
 
 	dto "github.com/orris-inc/orris/internal/application/admin/dto"
+	"github.com/orris-inc/orris/internal/application/admin/usecases/trafficstatsutil"
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/infrastructure/cache"
-	"github.com/orris-inc/orris/internal/shared/biztime"
-	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -70,19 +69,8 @@ func (uc *GetAdminNodeTrafficStatsUseCase) Execute(
 		return nil, err
 	}
 
-	page, pageSize := uc.getPaginationParams(query)
-
-	// Adjust 'to' time to end of day to include all records from that day
-	adjustedTo := biztime.EndOfDayUTC(query.To)
-
-	// Calculate time boundaries
-	now := biztime.NowUTC()
-	// Redis stores data for the last 48 hours
-	redisDataStart := now.Add(-48 * time.Hour)
-
-	// Determine if query overlaps with Redis data window (last 48 hours)
-	includesRedisWindow := !adjustedTo.Before(redisDataStart)
-	includesHistory := query.From.Before(redisDataStart)
+	pagination := trafficstatsutil.GetPaginationParams(query.Page, query.PageSize)
+	timeWindow := trafficstatsutil.CalculateTimeWindow(query.From, query.To)
 
 	// Resource type for nodes
 	resourceType := subscription.ResourceTypeNode.String()
@@ -91,13 +79,10 @@ func (uc *GetAdminNodeTrafficStatsUseCase) Execute(
 	nodeUsageMap := make(map[uint]*subscription.ResourceUsageSummary)
 
 	// If query overlaps with Redis data window, get Redis data first
-	if includesRedisWindow {
-		redisFrom := query.From
-		if redisFrom.Before(redisDataStart) {
-			redisFrom = redisDataStart
-		}
+	if timeWindow.IncludesRedisWindow {
+		redisFrom, redisTo := timeWindow.GetRedisQueryRange(query.From)
 
-		redisTraffic, err := uc.hourlyTrafficCache.GetTrafficGroupedByResourceID(ctx, resourceType, redisFrom, adjustedTo)
+		redisTraffic, err := uc.hourlyTrafficCache.GetTrafficGroupedByResourceID(ctx, resourceType, redisFrom, redisTo)
 		if err != nil {
 			uc.logger.Warnw("failed to get node traffic from Redis",
 				"error", err,
@@ -119,12 +104,8 @@ func (uc *GetAdminNodeTrafficStatsUseCase) Execute(
 	}
 
 	// If query includes historical data (before Redis window), get MySQL data
-	if includesHistory {
-		mysqlTo := adjustedTo
-		if includesRedisWindow {
-			// Exclude Redis window from MySQL query
-			mysqlTo = redisDataStart.Add(-time.Nanosecond)
-		}
+	if timeWindow.IncludesHistory {
+		_, mysqlTo := timeWindow.GetMySQLQueryRange(query.From)
 
 		resourceUsages, mysqlTotal, err := uc.usageStatsRepo.GetUsageGroupedByResourceID(
 			ctx,
@@ -172,8 +153,8 @@ func (uc *GetAdminNodeTrafficStatsUseCase) Execute(
 		return &dto.NodeTrafficStatsResponse{
 			Items:    []dto.NodeTrafficStatsItem{},
 			Total:    0,
-			Page:     page,
-			PageSize: pageSize,
+			Page:     pagination.Page,
+			PageSize: pagination.PageSize,
 		}, nil
 	}
 
@@ -188,14 +169,7 @@ func (uc *GetAdminNodeTrafficStatsUseCase) Execute(
 
 	// Apply pagination
 	total := int64(len(resourceUsages))
-	start := (page - 1) * pageSize
-	end := start + pageSize
-	if start > len(resourceUsages) {
-		start = len(resourceUsages)
-	}
-	if end > len(resourceUsages) {
-		end = len(resourceUsages)
-	}
+	start, end := trafficstatsutil.ApplyPagination(len(resourceUsages), pagination.Page, pagination.PageSize)
 	pagedUsages := resourceUsages[start:end]
 
 	// Extract node IDs
@@ -240,8 +214,8 @@ func (uc *GetAdminNodeTrafficStatsUseCase) Execute(
 	response := &dto.NodeTrafficStatsResponse{
 		Items:    items,
 		Total:    total,
-		Page:     page,
-		PageSize: pageSize,
+		Page:     pagination.Page,
+		PageSize: pagination.PageSize,
 	}
 
 	uc.logger.Infow("node traffic stats fetched successfully",
@@ -253,43 +227,8 @@ func (uc *GetAdminNodeTrafficStatsUseCase) Execute(
 }
 
 func (uc *GetAdminNodeTrafficStatsUseCase) validateQuery(query GetAdminNodeTrafficStatsQuery) error {
-	if query.From.IsZero() {
-		return errors.NewValidationError("from time is required")
+	if err := trafficstatsutil.ValidateTimeRange(query.From, query.To); err != nil {
+		return err
 	}
-
-	if query.To.IsZero() {
-		return errors.NewValidationError("to time is required")
-	}
-
-	if query.To.Before(query.From) {
-		return errors.NewValidationError("to time must be after from time")
-	}
-
-	// Page must be positive (0 is allowed and will be converted to default)
-	if query.Page < 0 {
-		return errors.NewValidationError("page must be non-negative")
-	}
-
-	if query.PageSize < 0 {
-		return errors.NewValidationError("page_size must be non-negative")
-	}
-
-	return nil
-}
-
-func (uc *GetAdminNodeTrafficStatsUseCase) getPaginationParams(query GetAdminNodeTrafficStatsQuery) (int, int) {
-	page := query.Page
-	if page < 1 {
-		page = constants.DefaultPage
-	}
-
-	pageSize := query.PageSize
-	if pageSize < 1 {
-		pageSize = constants.DefaultPageSize
-	}
-	if pageSize > constants.MaxPageSize {
-		pageSize = constants.MaxPageSize
-	}
-
-	return page, pageSize
+	return trafficstatsutil.ValidatePaginationInput(query.Page, query.PageSize)
 }

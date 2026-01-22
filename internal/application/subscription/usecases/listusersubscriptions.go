@@ -8,6 +8,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/domain/user"
 	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils/setutil"
 )
 
 type ListUserSubscriptionsQuery struct {
@@ -75,14 +76,14 @@ func (uc *ListUserSubscriptionsUseCase) Execute(ctx context.Context, query ListU
 	}
 
 	// Collect unique plan IDs
-	planIDs := make(map[uint]bool)
+	planIDSet := setutil.NewUintSet()
 	for _, sub := range subscriptions {
-		planIDs[sub.PlanID()] = true
+		planIDSet.Add(sub.PlanID())
 	}
 
 	// Fetch plans
 	plans := make(map[uint]*subscription.Plan)
-	for planID := range planIDs {
+	for _, planID := range planIDSet.ToSlice() {
 		plan, err := uc.planRepo.GetByID(ctx, planID)
 		if err != nil {
 			uc.logger.Warnw("failed to get plan", "error", err, "plan_id", planID)
@@ -92,16 +93,16 @@ func (uc *ListUserSubscriptionsUseCase) Execute(ctx context.Context, query ListU
 	}
 
 	// Collect unique user IDs
-	userIDs := make(map[uint]bool)
+	userIDSet := setutil.NewUintSet()
 	for _, sub := range subscriptions {
 		if sub.UserID() > 0 {
-			userIDs[sub.UserID()] = true
+			userIDSet.Add(sub.UserID())
 		}
 	}
 
 	// Fetch users
 	users := make(map[uint]*user.User)
-	for userID := range userIDs {
+	for _, userID := range userIDSet.ToSlice() {
 		u, err := uc.userRepo.GetByID(ctx, userID)
 		if err != nil {
 			uc.logger.Warnw("failed to get user", "error", err, "user_id", userID)

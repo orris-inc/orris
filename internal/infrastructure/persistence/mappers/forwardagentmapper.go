@@ -7,6 +7,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/forward"
 	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/mapper"
 )
 
 // ForwardAgentMapper handles the conversion between domain entities and persistence models.
@@ -140,18 +141,6 @@ func (m *ForwardAgentMapperImpl) ToModel(entity *forward.ForwardAgent) (*models.
 }
 
 // ToEntities converts multiple persistence models to domain entities.
-func (m *ForwardAgentMapperImpl) ToEntities(models []*models.ForwardAgentModel) ([]*forward.ForwardAgent, error) {
-	entities := make([]*forward.ForwardAgent, 0, len(models))
-
-	for _, model := range models {
-		entity, err := m.ToEntity(model)
-		if err != nil {
-			return nil, fmt.Errorf("failed to map model ID %d: %w", model.ID, err)
-		}
-		if entity != nil {
-			entities = append(entities, entity)
-		}
-	}
-
-	return entities, nil
+func (m *ForwardAgentMapperImpl) ToEntities(modelList []*models.ForwardAgentModel) ([]*forward.ForwardAgent, error) {
+	return mapper.MapSlicePtrWithID(modelList, m.ToEntity, func(model *models.ForwardAgentModel) uint { return model.ID })
 }

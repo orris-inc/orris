@@ -1,5 +1,7 @@
 package query
 
+import "github.com/orris-inc/orris/internal/shared/constants"
+
 type PageFilter struct {
 	Page     int
 	PageSize int
@@ -14,10 +16,10 @@ func (f PageFilter) Offset() int {
 
 func (f PageFilter) Limit() int {
 	if f.PageSize <= 0 {
-		return 10
+		return constants.DefaultPageSize
 	}
-	if f.PageSize > 100 {
-		return 100
+	if f.PageSize > constants.MaxPageSize {
+		return constants.MaxPageSize
 	}
 	return f.PageSize
 }
@@ -74,8 +76,8 @@ func WithSort(sortBy, sortOrder string) FilterOption {
 func NewBaseFilter(opts ...FilterOption) BaseFilter {
 	f := BaseFilter{
 		PageFilter: PageFilter{
-			Page:     1,
-			PageSize: 10,
+			Page:     constants.DefaultPage,
+			PageSize: constants.DefaultPageSize,
 		},
 		SortFilter: SortFilter{
 			SortOrder: "DESC",

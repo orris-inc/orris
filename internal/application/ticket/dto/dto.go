@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/orris-inc/orris/internal/domain/ticket"
+	"github.com/orris-inc/orris/internal/shared/mapper"
 )
 
 type TicketDTO struct {
@@ -119,9 +120,5 @@ func ToTicketListItemDTO(t *ticket.Ticket) TicketListItemDTO {
 }
 
 func ToTicketListItemDTOs(tickets []*ticket.Ticket) []TicketListItemDTO {
-	items := make([]TicketListItemDTO, 0, len(tickets))
-	for _, t := range tickets {
-		items = append(items, ToTicketListItemDTO(t))
-	}
-	return items
+	return mapper.MapSlice(tickets, ToTicketListItemDTO)
 }

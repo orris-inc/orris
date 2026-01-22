@@ -9,6 +9,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/resource"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils/setutil"
 )
 
 // ListResourceGroupsUseCase handles listing resource groups with pagination
@@ -61,14 +62,11 @@ func (uc *ListResourceGroupsUseCase) Execute(ctx context.Context, req dto.ListRe
 	}
 
 	// Collect unique plan IDs for batch lookup
-	planIDs := make([]uint, 0, len(groups))
-	planIDSet := make(map[uint]bool)
+	planIDSet := setutil.NewUintSet()
 	for _, group := range groups {
-		if !planIDSet[group.PlanID()] {
-			planIDSet[group.PlanID()] = true
-			planIDs = append(planIDs, group.PlanID())
-		}
+		planIDSet.Add(group.PlanID())
 	}
+	planIDs := planIDSet.ToSlice()
 
 	// Batch lookup plan SIDs
 	planSIDMap := make(map[uint]string)

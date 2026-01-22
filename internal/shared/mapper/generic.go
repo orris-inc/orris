@@ -1,6 +1,9 @@
 package mapper
 
-import "reflect"
+import (
+	"fmt"
+	"reflect"
+)
 
 type Mapper[T any, D any] struct {
 	toDTO    func(T) D
@@ -46,6 +49,8 @@ func (m *Mapper[T, D]) ToDomainList(dtos []D) []T {
 	return entities
 }
 
+// MapSlice applies a mapper function to each element of a slice.
+// Returns nil if the input slice is nil.
 func MapSlice[T any, R any](items []T, mapFunc func(T) R) []R {
 	if items == nil {
 		return nil
@@ -58,6 +63,8 @@ func MapSlice[T any, R any](items []T, mapFunc func(T) R) []R {
 	return result
 }
 
+// MapSlicePtr applies a mapper function to each element of a pointer slice,
+// skipping nil inputs. Returns nil if the input slice is nil.
 func MapSlicePtr[T any, R any](items []*T, mapFunc func(*T) *R) []*R {
 	if items == nil {
 		return nil
@@ -70,6 +77,70 @@ func MapSlicePtr[T any, R any](items []*T, mapFunc func(*T) *R) []*R {
 		}
 	}
 	return result
+}
+
+// MapSliceWithError applies a mapper function that may return an error to each element.
+// Returns early if any mapping fails.
+func MapSliceWithError[T any, R any](items []T, mapFunc func(T) (R, error)) ([]R, error) {
+	if items == nil {
+		return nil, nil
+	}
+
+	result := make([]R, 0, len(items))
+	for _, item := range items {
+		mapped, err := mapFunc(item)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, mapped)
+	}
+	return result, nil
+}
+
+// MapSlicePtrSkipNil applies a mapper function to each element of a pointer slice,
+// skipping nil inputs and nil outputs.
+func MapSlicePtrSkipNil[T any, R any](items []*T, mapFunc func(*T) *R) []*R {
+	if items == nil {
+		return nil
+	}
+
+	result := make([]*R, 0, len(items))
+	for _, item := range items {
+		if item != nil {
+			if mapped := mapFunc(item); mapped != nil {
+				result = append(result, mapped)
+			}
+		}
+	}
+	return result
+}
+
+// MapSlicePtrWithID maps a slice of pointers with error handling and ID extraction.
+// It skips nil inputs and nil outputs, and includes the item ID in error messages.
+// This is useful for mapper implementations that need detailed error context.
+func MapSlicePtrWithID[T any, R any, ID any](
+	items []*T,
+	mapFunc func(*T) (*R, error),
+	getID func(*T) ID,
+) ([]*R, error) {
+	if items == nil {
+		return nil, nil
+	}
+
+	result := make([]*R, 0, len(items))
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		mapped, err := mapFunc(item)
+		if err != nil {
+			return nil, fmt.Errorf("failed to map item ID %v: %w", getID(item), err)
+		}
+		if mapped != nil {
+			result = append(result, mapped)
+		}
+	}
+	return result, nil
 }
 
 func CopyFields(src interface{}, dst interface{}) {

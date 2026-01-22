@@ -10,6 +10,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils/setutil"
 )
 
 // ManageResourceGroupForwardRulesUseCase handles adding/removing forward rules from resource groups
@@ -270,18 +271,13 @@ func (uc *ManageResourceGroupForwardRulesUseCase) executeListRules(ctx context.C
 	}
 
 	// Collect all unique group IDs from the rules for batch lookup
-	groupIDSet := make(map[uint]bool)
+	groupIDSet := setutil.NewUintSet()
 	for _, rule := range rules {
-		for _, gid := range rule.GroupIDs() {
-			groupIDSet[gid] = true
-		}
+		groupIDSet.AddAll(rule.GroupIDs())
 	}
 
 	// Batch fetch all resource groups to avoid N+1 queries
-	groupIDs := make([]uint, 0, len(groupIDSet))
-	for gid := range groupIDSet {
-		groupIDs = append(groupIDs, gid)
-	}
+	groupIDs := groupIDSet.ToSlice()
 
 	groupIDToSID := make(map[uint]string)
 	if len(groupIDs) > 0 {

@@ -6,11 +6,10 @@ import (
 	"time"
 
 	dto "github.com/orris-inc/orris/internal/application/admin/dto"
+	"github.com/orris-inc/orris/internal/application/admin/usecases/trafficstatsutil"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/domain/user"
 	"github.com/orris-inc/orris/internal/infrastructure/cache"
-	"github.com/orris-inc/orris/internal/shared/biztime"
-	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -77,37 +76,22 @@ func (uc *GetSubscriptionTrafficStatsUseCase) Execute(
 		return nil, err
 	}
 
-	page, pageSize := uc.getPaginationParams(query)
-
-	// Adjust 'to' time to end of day to include all records from that day
-	adjustedTo := biztime.EndOfDayUTC(query.To)
-
-	// Calculate time boundaries
-	now := biztime.NowUTC()
-	// Redis stores data for the last 48 hours
-	redisDataStart := now.Add(-48 * time.Hour)
-
-	// Determine if query overlaps with Redis data window (last 48 hours)
-	includesRedisWindow := !adjustedTo.Before(redisDataStart)
-	includesHistory := query.From.Before(redisDataStart)
+	pagination := trafficstatsutil.GetPaginationParams(query.Page, query.PageSize)
+	timeWindow := trafficstatsutil.CalculateTimeWindow(query.From, query.To)
 
 	// Prepare to merge data from MySQL and Redis
 	subscriptionUsageMap := make(map[uint]*subscription.SubscriptionUsageSummary)
-	var total int64
 
 	// If query overlaps with Redis data window, get Redis data first
-	if includesRedisWindow {
-		redisFrom := query.From
-		if redisFrom.Before(redisDataStart) {
-			redisFrom = redisDataStart
-		}
+	if timeWindow.IncludesRedisWindow {
+		redisFrom, redisTo := timeWindow.GetRedisQueryRange(query.From)
 
 		resourceType := ""
 		if query.ResourceType != nil {
 			resourceType = *query.ResourceType
 		}
 
-		redisTraffic, err := uc.hourlyTrafficCache.GetTrafficGroupedBySubscription(ctx, resourceType, redisFrom, adjustedTo)
+		redisTraffic, err := uc.hourlyTrafficCache.GetTrafficGroupedBySubscription(ctx, resourceType, redisFrom, redisTo)
 		if err != nil {
 			uc.logger.Warnw("failed to get traffic from Redis",
 				"error", err,
@@ -128,12 +112,8 @@ func (uc *GetSubscriptionTrafficStatsUseCase) Execute(
 	}
 
 	// If query includes historical data (before Redis window), get MySQL data
-	if includesHistory {
-		mysqlTo := adjustedTo
-		if includesRedisWindow {
-			// Exclude Redis window from MySQL query
-			mysqlTo = redisDataStart.Add(-time.Nanosecond)
-		}
+	if timeWindow.IncludesHistory {
+		_, mysqlTo := timeWindow.GetMySQLQueryRange(query.From)
 
 		subscriptionUsages, mysqlTotal, err := uc.usageStatsRepo.GetUsageGroupedBySubscription(
 			ctx,
@@ -173,10 +153,6 @@ func (uc *GetSubscriptionTrafficStatsUseCase) Execute(
 				}
 			}
 		}
-
-		// Note: total count is calculated after merging Redis and MySQL data (line 203)
-		// MySQL total is not used directly because it may not include Redis-only subscriptions
-		_ = mysqlTotal // Suppress unused warning, value used for debugging/logging if needed
 	}
 
 	// If no data found
@@ -184,8 +160,8 @@ func (uc *GetSubscriptionTrafficStatsUseCase) Execute(
 		return &dto.SubscriptionTrafficStatsResponse{
 			Items:    []dto.SubscriptionTrafficStatsItem{},
 			Total:    0,
-			Page:     page,
-			PageSize: pageSize,
+			Page:     pagination.Page,
+			PageSize: pagination.PageSize,
 		}, nil
 	}
 
@@ -199,15 +175,8 @@ func (uc *GetSubscriptionTrafficStatsUseCase) Execute(
 	})
 
 	// Apply pagination
-	total = int64(len(subscriptionUsages))
-	start := (page - 1) * pageSize
-	end := start + pageSize
-	if start > len(subscriptionUsages) {
-		start = len(subscriptionUsages)
-	}
-	if end > len(subscriptionUsages) {
-		end = len(subscriptionUsages)
-	}
+	total := int64(len(subscriptionUsages))
+	start, end := trafficstatsutil.ApplyPagination(len(subscriptionUsages), pagination.Page, pagination.PageSize)
 	pagedUsages := subscriptionUsages[start:end]
 
 	// Extract subscription IDs
@@ -287,8 +256,8 @@ func (uc *GetSubscriptionTrafficStatsUseCase) Execute(
 	response := &dto.SubscriptionTrafficStatsResponse{
 		Items:    items,
 		Total:    total,
-		Page:     page,
-		PageSize: pageSize,
+		Page:     pagination.Page,
+		PageSize: pagination.PageSize,
 	}
 
 	uc.logger.Infow("subscription traffic stats fetched successfully",
@@ -300,42 +269,8 @@ func (uc *GetSubscriptionTrafficStatsUseCase) Execute(
 }
 
 func (uc *GetSubscriptionTrafficStatsUseCase) validateQuery(query GetSubscriptionTrafficStatsQuery) error {
-	if query.From.IsZero() {
-		return errors.NewValidationError("from time is required")
+	if err := trafficstatsutil.ValidateTimeRange(query.From, query.To); err != nil {
+		return err
 	}
-
-	if query.To.IsZero() {
-		return errors.NewValidationError("to time is required")
-	}
-
-	if query.To.Before(query.From) {
-		return errors.NewValidationError("to time must be after from time")
-	}
-
-	if query.Page < 0 {
-		return errors.NewValidationError("page must be non-negative")
-	}
-
-	if query.PageSize < 0 {
-		return errors.NewValidationError("page_size must be non-negative")
-	}
-
-	return nil
-}
-
-func (uc *GetSubscriptionTrafficStatsUseCase) getPaginationParams(query GetSubscriptionTrafficStatsQuery) (int, int) {
-	page := query.Page
-	if page < 1 {
-		page = constants.DefaultPage
-	}
-
-	pageSize := query.PageSize
-	if pageSize < 1 {
-		pageSize = constants.DefaultPageSize
-	}
-	if pageSize > constants.MaxPageSize {
-		pageSize = constants.MaxPageSize
-	}
-
-	return page, pageSize
+	return trafficstatsutil.ValidatePaginationInput(query.Page, query.PageSize)
 }

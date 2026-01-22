@@ -33,7 +33,7 @@ func (m *TrojanConfigMapperImpl) ToValueObject(model *models.TrojanConfigModel, 
 
 	// Use placeholder password if not provided (for node entity reconstruction)
 	if password == "" {
-		password = "placeholder"
+		password = PlaceholderPassword
 	}
 
 	config, err := vo.NewTrojanConfig(

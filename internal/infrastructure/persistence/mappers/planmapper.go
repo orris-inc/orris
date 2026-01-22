@@ -9,6 +9,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	vo "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/mapper"
 )
 
 // PlanMapper handles the conversion between domain entities and persistence models
@@ -146,35 +147,11 @@ func (m *planMapper) ToModel(entity *subscription.Plan) (*models.PlanModel, erro
 }
 
 // ToEntities converts multiple persistence models to domain entities
-func (m *planMapper) ToEntities(models []*models.PlanModel) ([]*subscription.Plan, error) {
-	entities := make([]*subscription.Plan, 0, len(models))
-
-	for i, model := range models {
-		entity, err := m.ToEntity(model)
-		if err != nil {
-			return nil, fmt.Errorf("failed to map model at index %d (ID %d): %w", i, model.ID, err)
-		}
-		if entity != nil {
-			entities = append(entities, entity)
-		}
-	}
-
-	return entities, nil
+func (m *planMapper) ToEntities(modelList []*models.PlanModel) ([]*subscription.Plan, error) {
+	return mapper.MapSlicePtrWithID(modelList, m.ToEntity, func(model *models.PlanModel) uint { return model.ID })
 }
 
 // ToModels converts multiple domain entities to persistence models
 func (m *planMapper) ToModels(entities []*subscription.Plan) ([]*models.PlanModel, error) {
-	models := make([]*models.PlanModel, 0, len(entities))
-
-	for i, entity := range entities {
-		model, err := m.ToModel(entity)
-		if err != nil {
-			return nil, fmt.Errorf("failed to map entity at index %d (ID %d): %w", i, entity.ID(), err)
-		}
-		if model != nil {
-			models = append(models, model)
-		}
-	}
-
-	return models, nil
+	return mapper.MapSlicePtrWithID(entities, m.ToModel, func(entity *subscription.Plan) uint { return entity.ID() })
 }

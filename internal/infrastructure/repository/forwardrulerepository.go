@@ -15,6 +15,7 @@ import (
 	"github.com/orris-inc/orris/internal/shared/db"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils/jsonutil"
 )
 
 // allowedRuleOrderByFields defines the whitelist of allowed ORDER BY fields
@@ -756,7 +757,7 @@ func (r *ForwardRuleRepositoryImpl) ListSystemRulesByTargetNodes(ctx context.Con
 
 	// If groupIDs is specified, filter by resource group membership
 	if len(groupIDs) > 0 {
-		groupIDsJSON := uintSliceToJSONArray(groupIDs)
+		groupIDsJSON := jsonutil.UintSliceToJSONArray(groupIDs)
 		query = query.Where("JSON_OVERLAPS(group_ids, ?)", groupIDsJSON)
 	}
 
@@ -977,19 +978,6 @@ func (r *ForwardRuleRepositoryImpl) RemoveGroupIDFromAllRules(ctx context.Contex
 
 	r.logger.Infow("removed group ID from rules", "group_id", groupID, "affected_rows", result.RowsAffected)
 	return result.RowsAffected, nil
-}
-
-// uintSliceToJSONArray converts a slice of uint to a JSON array string.
-// Used for JSON_OVERLAPS query parameter.
-func uintSliceToJSONArray(ids []uint) string {
-	if len(ids) == 0 {
-		return "[]"
-	}
-	parts := make([]string, len(ids))
-	for i, id := range ids {
-		parts[i] = fmt.Sprintf("%d", id)
-	}
-	return "[" + strings.Join(parts, ",") + "]"
 }
 
 // ListByExternalSource returns all forward rules with the given external source.

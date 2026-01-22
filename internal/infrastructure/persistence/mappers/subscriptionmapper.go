@@ -10,6 +10,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	vo "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/mapper"
 )
 
 type SubscriptionMapper interface {
@@ -122,34 +123,10 @@ func (m *SubscriptionMapperImpl) ToModel(entity *subscription.Subscription) (*mo
 	return model, nil
 }
 
-func (m *SubscriptionMapperImpl) ToEntities(models []*models.SubscriptionModel) ([]*subscription.Subscription, error) {
-	entities := make([]*subscription.Subscription, 0, len(models))
-
-	for _, model := range models {
-		entity, err := m.ToEntity(model)
-		if err != nil {
-			return nil, fmt.Errorf("failed to map model ID %d: %w", model.ID, err)
-		}
-		if entity != nil {
-			entities = append(entities, entity)
-		}
-	}
-
-	return entities, nil
+func (m *SubscriptionMapperImpl) ToEntities(modelList []*models.SubscriptionModel) ([]*subscription.Subscription, error) {
+	return mapper.MapSlicePtrWithID(modelList, m.ToEntity, func(model *models.SubscriptionModel) uint { return model.ID })
 }
 
 func (m *SubscriptionMapperImpl) ToModels(entities []*subscription.Subscription) ([]*models.SubscriptionModel, error) {
-	models := make([]*models.SubscriptionModel, 0, len(entities))
-
-	for _, entity := range entities {
-		model, err := m.ToModel(entity)
-		if err != nil {
-			return nil, fmt.Errorf("failed to map entity ID %d: %w", entity.ID(), err)
-		}
-		if model != nil {
-			models = append(models, model)
-		}
-	}
-
-	return models, nil
+	return mapper.MapSlicePtrWithID(entities, m.ToModel, func(entity *subscription.Subscription) uint { return entity.ID() })
 }

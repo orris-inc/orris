@@ -34,7 +34,7 @@ func (m *Hysteria2ConfigMapperImpl) ToValueObject(model *models.Hysteria2ConfigM
 
 	// Use placeholder password if not provided (for node entity reconstruction)
 	if password == "" {
-		password = placeholderPassword
+		password = PlaceholderPassword
 	}
 
 	// Convert uint* to int* for bandwidth limits with overflow check

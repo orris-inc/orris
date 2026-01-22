@@ -3,6 +3,7 @@ package dto
 
 import (
 	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/shared/mapper"
 )
 
 // ForwardRuleDTO represents the data transfer object for forward rules.
@@ -266,11 +267,7 @@ func CollectTargetNodeIDs(dtos []*ForwardRuleDTO) []uint {
 
 // ToForwardRuleDTOs converts a slice of domain forward rules to DTOs.
 func ToForwardRuleDTOs(rules []*forward.ForwardRule) []*ForwardRuleDTO {
-	dtos := make([]*ForwardRuleDTO, len(rules))
-	for i, rule := range rules {
-		dtos[i] = ToForwardRuleDTO(rule)
-	}
-	return dtos
+	return mapper.MapSlice(rules, ToForwardRuleDTO)
 }
 
 // CollectAgentIDs collects unique agent IDs from DTOs for batch lookup.

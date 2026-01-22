@@ -5,6 +5,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/resource"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/mapper"
 )
 
 // ResourceGroupMapper handles the conversion between domain entities and persistence models.
@@ -72,17 +73,5 @@ func (m *ResourceGroupMapperImpl) ToModel(entity *resource.ResourceGroup) (*mode
 
 // ToEntities converts multiple persistence models to domain entities.
 func (m *ResourceGroupMapperImpl) ToEntities(modelList []*models.ResourceGroupModel) ([]*resource.ResourceGroup, error) {
-	entities := make([]*resource.ResourceGroup, 0, len(modelList))
-
-	for _, model := range modelList {
-		entity, err := m.ToEntity(model)
-		if err != nil {
-			return nil, fmt.Errorf("failed to map model ID %d: %w", model.ID, err)
-		}
-		if entity != nil {
-			entities = append(entities, entity)
-		}
-	}
-
-	return entities, nil
+	return mapper.MapSlicePtrWithID(modelList, m.ToEntity, func(model *models.ResourceGroupModel) uint { return model.ID })
 }

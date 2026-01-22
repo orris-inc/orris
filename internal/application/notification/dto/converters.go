@@ -1,6 +1,10 @@
 package dto
 
-import "time"
+import (
+	"time"
+
+	"github.com/orris-inc/orris/internal/shared/mapper"
+)
 
 type MarkdownService interface {
 	ToHTML(markdown string) (string, error)
@@ -71,15 +75,9 @@ func ToAnnouncementResponse(announcement Announcement, markdownSvc MarkdownServi
 }
 
 func ToAnnouncementResponseList[T Announcement](announcements []T, markdownSvc MarkdownService) ([]*AnnouncementResponse, error) {
-	responses := make([]*AnnouncementResponse, 0, len(announcements))
-	for _, announcement := range announcements {
-		resp, err := ToAnnouncementResponse(announcement, markdownSvc)
-		if err != nil {
-			return nil, err
-		}
-		responses = append(responses, resp)
-	}
-	return responses, nil
+	return mapper.MapSliceWithError(announcements, func(a T) (*AnnouncementResponse, error) {
+		return ToAnnouncementResponse(a, markdownSvc)
+	})
 }
 
 func ToNotificationResponse(notification Notification, markdownSvc MarkdownService) (*NotificationResponse, error) {
@@ -108,15 +106,9 @@ func ToNotificationResponse(notification Notification, markdownSvc MarkdownServi
 }
 
 func ToNotificationResponseList[T Notification](notifications []T, markdownSvc MarkdownService) ([]*NotificationResponse, error) {
-	responses := make([]*NotificationResponse, 0, len(notifications))
-	for _, notification := range notifications {
-		resp, err := ToNotificationResponse(notification, markdownSvc)
-		if err != nil {
-			return nil, err
-		}
-		responses = append(responses, resp)
-	}
-	return responses, nil
+	return mapper.MapSliceWithError(notifications, func(n T) (*NotificationResponse, error) {
+		return ToNotificationResponse(n, markdownSvc)
+	})
 }
 
 func ToTemplateResponse(template NotificationTemplate) *TemplateResponse {
@@ -137,9 +129,7 @@ func ToTemplateResponse(template NotificationTemplate) *TemplateResponse {
 }
 
 func ToTemplateResponseList[T NotificationTemplate](templates []T) []*TemplateResponse {
-	responses := make([]*TemplateResponse, 0, len(templates))
-	for _, template := range templates {
-		responses = append(responses, ToTemplateResponse(template))
-	}
-	return responses
+	return mapper.MapSlice(templates, func(t T) *TemplateResponse {
+		return ToTemplateResponse(t)
+	})
 }

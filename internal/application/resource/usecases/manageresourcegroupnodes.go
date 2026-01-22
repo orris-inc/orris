@@ -9,6 +9,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/resource"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils/setutil"
 )
 
 // ManageResourceGroupNodesUseCase handles adding/removing nodes from resource groups
@@ -260,15 +261,13 @@ func (uc *ManageResourceGroupNodesUseCase) executeListNodes(ctx context.Context,
 
 	// Convert to response DTOs
 	// Build a map of groupID -> groupSID for all groups the nodes belong to
-	groupIDSet := make(map[uint]bool)
+	groupIDSet := setutil.NewUintSet()
 	for _, n := range nodes {
-		for _, gid := range n.GroupIDs() {
-			groupIDSet[gid] = true
-		}
+		groupIDSet.AddAll(n.GroupIDs())
 	}
 	groupIDToSID := make(map[uint]string)
 	groupIDToSID[groupID] = group.SID() // Current group is already loaded
-	for gid := range groupIDSet {
+	for _, gid := range groupIDSet.ToSlice() {
 		if gid != groupID {
 			g, err := uc.resourceGroupRepo.GetByID(ctx, gid)
 			if err == nil && g != nil {

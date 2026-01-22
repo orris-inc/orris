@@ -13,6 +13,7 @@ import (
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils/setutil"
 )
 
 // ListSubscriptionForwardRulesQuery represents the input for listing a subscription's forward rules.
@@ -351,7 +352,7 @@ func (uc *ListSubscriptionForwardRulesUseCase) getRulesWithResourceGroupPriority
 
 	// Get rules from all active resource groups
 	var allRules []*forward.ForwardRule
-	seenRuleIDs := make(map[uint]bool)
+	seenRuleIDs := setutil.NewUintSet()
 
 	for _, groupID := range activeGroupIDs {
 		// Use page=0 and pageSize=0 to get all rules without pagination
@@ -365,8 +366,8 @@ func (uc *ListSubscriptionForwardRulesUseCase) getRulesWithResourceGroupPriority
 
 		// Deduplicate rules (a rule can belong to multiple groups)
 		for _, rule := range rules {
-			if !seenRuleIDs[rule.ID()] {
-				seenRuleIDs[rule.ID()] = true
+			if !seenRuleIDs.Has(rule.ID()) {
+				seenRuleIDs.Add(rule.ID())
 				allRules = append(allRules, rule)
 			}
 		}

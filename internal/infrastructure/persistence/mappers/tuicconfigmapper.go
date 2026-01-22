@@ -7,12 +7,6 @@ import (
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 )
 
-// Placeholder values used for node entity reconstruction when actual values are not available
-const (
-	placeholderUUID     = "placeholder-uuid"
-	placeholderPassword = "placeholder"
-)
-
 // TUICConfigMapper handles the conversion between TUICConfig value objects and persistence models
 type TUICConfigMapper interface {
 	// ToValueObject converts a persistence model to a domain value object
@@ -39,10 +33,10 @@ func (m *TUICConfigMapperImpl) ToValueObject(model *models.TUICConfigModel, uuid
 
 	// Use placeholder values if not provided (for node entity reconstruction)
 	if uuid == "" {
-		uuid = placeholderUUID
+		uuid = PlaceholderUUID
 	}
 	if password == "" {
-		password = placeholderPassword
+		password = PlaceholderPassword
 	}
 
 	config, err := vo.NewTUICConfig(

@@ -9,7 +9,6 @@ import (
 
 	"github.com/go-playground/validator/v10"
 
-	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
 )
 
@@ -107,20 +106,6 @@ func getFieldErrorMessage(fe validator.FieldError) string {
 func ValidateID(id string) error {
 	if strings.TrimSpace(id) == "" {
 		return errors.NewValidationError("ID cannot be empty")
-	}
-	return nil
-}
-
-// ValidatePagination validates pagination parameters
-func ValidatePagination(page, pageSize int) error {
-	if page < 1 {
-		return errors.NewValidationError("Page must be greater than 0")
-	}
-	if pageSize < 1 {
-		return errors.NewValidationError("Page size must be greater than 0")
-	}
-	if pageSize > constants.MaxPageSize {
-		return errors.NewValidationError(fmt.Sprintf("Page size must not exceed %d", constants.MaxPageSize))
 	}
 	return nil
 }

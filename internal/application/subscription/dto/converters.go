@@ -3,6 +3,7 @@ package dto
 import (
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	vo "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
+	"github.com/orris-inc/orris/internal/shared/mapper"
 )
 
 // ToPricingOptionDTO converts a PlanPricing value object to PricingOptionDTO
@@ -27,15 +28,7 @@ func ToPricingOptionDTOList(pricings []*vo.PlanPricing) []*PricingOptionDTO {
 	if len(pricings) == 0 {
 		return []*PricingOptionDTO{}
 	}
-
-	dtos := make([]*PricingOptionDTO, 0, len(pricings))
-	for _, pricing := range pricings {
-		if pricing != nil {
-			dtos = append(dtos, ToPricingOptionDTO(pricing))
-		}
-	}
-
-	return dtos
+	return mapper.MapSlicePtr(pricings, ToPricingOptionDTO)
 }
 
 // ToPlanDTOWithPricings converts a Plan and its pricing options to PlanDTO

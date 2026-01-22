@@ -38,102 +38,53 @@ func (e *AppError) Error() string {
 	return fmt.Sprintf("%s: %s", e.Type, e.Message)
 }
 
-// NewValidationError creates a new validation error
-func NewValidationError(message string, details ...string) *AppError {
+// newAppError is an internal helper that creates AppError with common logic.
+func newAppError(errType ErrorType, httpCode int, message string, details ...string) *AppError {
 	detail := ""
 	if len(details) > 0 {
 		detail = details[0]
 	}
 	return &AppError{
-		Type:    ErrorTypeValidation,
+		Type:    errType,
 		Message: message,
-		Code:    http.StatusBadRequest,
+		Code:    httpCode,
 		Details: detail,
 	}
+}
+
+// NewValidationError creates a new validation error
+func NewValidationError(message string, details ...string) *AppError {
+	return newAppError(ErrorTypeValidation, http.StatusBadRequest, message, details...)
 }
 
 // NewNotFoundError creates a new not found error
 func NewNotFoundError(message string, details ...string) *AppError {
-	detail := ""
-	if len(details) > 0 {
-		detail = details[0]
-	}
-	return &AppError{
-		Type:    ErrorTypeNotFound,
-		Message: message,
-		Code:    http.StatusNotFound,
-		Details: detail,
-	}
+	return newAppError(ErrorTypeNotFound, http.StatusNotFound, message, details...)
 }
 
 // NewConflictError creates a new conflict error
 func NewConflictError(message string, details ...string) *AppError {
-	detail := ""
-	if len(details) > 0 {
-		detail = details[0]
-	}
-	return &AppError{
-		Type:    ErrorTypeConflict,
-		Message: message,
-		Code:    http.StatusConflict,
-		Details: detail,
-	}
+	return newAppError(ErrorTypeConflict, http.StatusConflict, message, details...)
 }
 
 // NewUnauthorizedError creates a new unauthorized error
 func NewUnauthorizedError(message string, details ...string) *AppError {
-	detail := ""
-	if len(details) > 0 {
-		detail = details[0]
-	}
-	return &AppError{
-		Type:    ErrorTypeUnauthorized,
-		Message: message,
-		Code:    http.StatusUnauthorized,
-		Details: detail,
-	}
+	return newAppError(ErrorTypeUnauthorized, http.StatusUnauthorized, message, details...)
 }
 
 // NewForbiddenError creates a new forbidden error
 func NewForbiddenError(message string, details ...string) *AppError {
-	detail := ""
-	if len(details) > 0 {
-		detail = details[0]
-	}
-	return &AppError{
-		Type:    ErrorTypeForbidden,
-		Message: message,
-		Code:    http.StatusForbidden,
-		Details: detail,
-	}
+	return newAppError(ErrorTypeForbidden, http.StatusForbidden, message, details...)
 }
 
 // NewInternalError creates a new internal error
 func NewInternalError(message string, details ...string) *AppError {
-	detail := ""
-	if len(details) > 0 {
-		detail = details[0]
-	}
-	return &AppError{
-		Type:    ErrorTypeInternal,
-		Message: message,
-		Code:    http.StatusInternalServerError,
-		Details: detail,
-	}
+	return newAppError(ErrorTypeInternal, http.StatusInternalServerError, message, details...)
 }
 
 // NewBadRequestError creates a new bad request error
 func NewBadRequestError(message string, details ...string) *AppError {
-	detail := ""
-	if len(details) > 0 {
-		detail = details[0]
-	}
-	return &AppError{
-		Type:    ErrorTypeBadRequest,
-		Message: message,
-		Code:    http.StatusBadRequest,
-		Details: detail,
-	}
+	return newAppError(ErrorTypeBadRequest, http.StatusBadRequest, message, details...)
 }
 
 // IsAppError checks if the error is an AppError

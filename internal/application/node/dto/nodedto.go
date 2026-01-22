@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/shared/mapper"
 )
 
 type NodeDTO struct {
@@ -377,18 +378,7 @@ func ToNodeDTO(n *node.Node) *NodeDTO {
 }
 
 func ToNodeDTOList(nodes []*node.Node) []*NodeDTO {
-	if nodes == nil {
-		return nil
-	}
-
-	dtos := make([]*NodeDTO, 0, len(nodes))
-	for _, n := range nodes {
-		if dto := ToNodeDTO(n); dto != nil {
-			dtos = append(dtos, dto)
-		}
-	}
-
-	return dtos
+	return mapper.MapSlicePtrSkipNil(nodes, ToNodeDTO)
 }
 
 // UserNodeDTO represents a user-owned node for API responses
@@ -544,16 +534,5 @@ func ToUserNodeDTO(n *node.Node) *UserNodeDTO {
 
 // ToUserNodeDTOList converts a list of node entities to user node DTOs
 func ToUserNodeDTOList(nodes []*node.Node) []*UserNodeDTO {
-	if nodes == nil {
-		return nil
-	}
-
-	dtos := make([]*UserNodeDTO, 0, len(nodes))
-	for _, n := range nodes {
-		if dto := ToUserNodeDTO(n); dto != nil {
-			dtos = append(dtos, dto)
-		}
-	}
-
-	return dtos
+	return mapper.MapSlicePtrSkipNil(nodes, ToUserNodeDTO)
 }

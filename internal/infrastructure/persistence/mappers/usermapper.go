@@ -9,6 +9,7 @@ import (
 	vo "github.com/orris-inc/orris/internal/domain/user/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 	"github.com/orris-inc/orris/internal/shared/authorization"
+	"github.com/orris-inc/orris/internal/shared/mapper"
 )
 
 // UserMapper handles the conversion between domain entities and persistence models
@@ -129,35 +130,11 @@ func (m *UserMapperImpl) ToModel(entity *user.User) (*models.UserModel, error) {
 }
 
 // ToEntities converts multiple persistence models to domain entities
-func (m *UserMapperImpl) ToEntities(models []*models.UserModel) ([]*user.User, error) {
-	entities := make([]*user.User, 0, len(models))
-
-	for _, model := range models {
-		entity, err := m.ToEntity(model)
-		if err != nil {
-			return nil, fmt.Errorf("failed to map model ID %d: %w", model.ID, err)
-		}
-		if entity != nil {
-			entities = append(entities, entity)
-		}
-	}
-
-	return entities, nil
+func (m *UserMapperImpl) ToEntities(modelList []*models.UserModel) ([]*user.User, error) {
+	return mapper.MapSlicePtrWithID(modelList, m.ToEntity, func(model *models.UserModel) uint { return model.ID })
 }
 
 // ToModels converts multiple domain entities to persistence models
 func (m *UserMapperImpl) ToModels(entities []*user.User) ([]*models.UserModel, error) {
-	models := make([]*models.UserModel, 0, len(entities))
-
-	for _, entity := range entities {
-		model, err := m.ToModel(entity)
-		if err != nil {
-			return nil, fmt.Errorf("failed to map entity ID %d: %w", entity.ID(), err)
-		}
-		if model != nil {
-			models = append(models, model)
-		}
-	}
-
-	return models, nil
+	return mapper.MapSlicePtrWithID(entities, m.ToModel, func(entity *user.User) uint { return entity.ID() })
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/user"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	sharedquery "github.com/orris-inc/orris/internal/shared/query"
+	"github.com/orris-inc/orris/internal/shared/utils/setutil"
 	"github.com/orris-inc/orris/internal/shared/version"
 )
 
@@ -137,32 +138,27 @@ func (uc *ListNodesUseCase) Execute(ctx context.Context, query ListNodesQuery) (
 	nodeIDs := make([]uint, 0, len(nodes))
 	idToIndexMap := make(map[uint]int, len(nodes))
 	// Collect unique group IDs for batch query
-	groupIDSet := make(map[uint]bool)
+	groupIDSet := setutil.NewUintSet()
 	// Collect unique user IDs for batch query (for user-created nodes)
-	userIDSet := make(map[uint]bool)
+	userIDSet := setutil.NewUintSet()
 	userIDToNodeIndices := make(map[uint][]int) // Map user ID to node indices
 	for i, n := range nodes {
 		nodeIDs = append(nodeIDs, n.ID())
 		idToIndexMap[n.ID()] = i
-		for _, gid := range n.GroupIDs() {
-			groupIDSet[gid] = true
-		}
+		groupIDSet.AddAll(n.GroupIDs())
 		// Collect user IDs for user-created nodes
 		if n.UserID() != nil {
 			uid := *n.UserID()
-			userIDSet[uid] = true
+			userIDSet.Add(uid)
 			userIDToNodeIndices[uid] = append(userIDToNodeIndices[uid], i)
 		}
 	}
 
 	// Batch query resource groups to resolve GroupID -> GroupSID
 	groupIDToSID := make(map[uint]string)
-	if len(groupIDSet) > 0 && uc.resourceGroupRepo != nil {
+	if groupIDSet.Len() > 0 && uc.resourceGroupRepo != nil {
 		// Convert set to slice for batch query
-		groupIDs := make([]uint, 0, len(groupIDSet))
-		for groupID := range groupIDSet {
-			groupIDs = append(groupIDs, groupID)
-		}
+		groupIDs := groupIDSet.ToSlice()
 
 		groups, err := uc.resourceGroupRepo.GetByIDs(ctx, groupIDs)
 		if err != nil {
@@ -191,12 +187,9 @@ func (uc *ListNodesUseCase) Execute(ctx context.Context, query ListNodesQuery) (
 	}
 
 	// Batch query users to resolve UserID -> Owner info
-	if len(userIDSet) > 0 && uc.userRepo != nil {
+	if userIDSet.Len() > 0 && uc.userRepo != nil {
 		// Convert set to slice for batch query
-		userIDs := make([]uint, 0, len(userIDSet))
-		for userID := range userIDSet {
-			userIDs = append(userIDs, userID)
-		}
+		userIDs := userIDSet.ToSlice()
 
 		users, err := uc.userRepo.GetByIDs(ctx, userIDs)
 		if err != nil {

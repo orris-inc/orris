@@ -8,6 +8,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/notification"
 	vo "github.com/orris-inc/orris/internal/domain/notification/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/mapper"
 )
 
 type AnnouncementMapper interface {
@@ -89,40 +90,10 @@ func (m *AnnouncementMapperImpl) ToModel(entity *notification.Announcement) (*mo
 	return model, nil
 }
 
-func (m *AnnouncementMapperImpl) ToEntities(models []*models.AnnouncementModel) ([]*notification.Announcement, error) {
-	if models == nil {
-		return nil, nil
-	}
-
-	entities := make([]*notification.Announcement, 0, len(models))
-	for _, model := range models {
-		entity, err := m.ToEntity(model)
-		if err != nil {
-			return nil, fmt.Errorf("failed to map model ID %d: %w", model.ID, err)
-		}
-		if entity != nil {
-			entities = append(entities, entity)
-		}
-	}
-
-	return entities, nil
+func (m *AnnouncementMapperImpl) ToEntities(modelList []*models.AnnouncementModel) ([]*notification.Announcement, error) {
+	return mapper.MapSlicePtrWithID(modelList, m.ToEntity, func(model *models.AnnouncementModel) uint { return model.ID })
 }
 
 func (m *AnnouncementMapperImpl) ToModels(entities []*notification.Announcement) ([]*models.AnnouncementModel, error) {
-	if entities == nil {
-		return nil, nil
-	}
-
-	models := make([]*models.AnnouncementModel, 0, len(entities))
-	for _, entity := range entities {
-		model, err := m.ToModel(entity)
-		if err != nil {
-			return nil, fmt.Errorf("failed to map entity ID %d: %w", entity.ID(), err)
-		}
-		if model != nil {
-			models = append(models, model)
-		}
-	}
-
-	return models, nil
+	return mapper.MapSlicePtrWithID(entities, m.ToModel, func(entity *notification.Announcement) uint { return entity.ID() })
 }
