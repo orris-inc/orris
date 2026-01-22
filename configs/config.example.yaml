@@ -7,6 +7,7 @@ server:
   port: 8080
   mode: "debug" # debug | release | test
   timezone: "Asia/Shanghai" # Business timezone for traffic statistics
+  base_url: "http://localhost:8080" # Backend base URL (used for WebAuthn rp_id, OAuth callbacks)
   allowed_origins:
     - "http://localhost:3000"
   frontend_callback_url: "http://localhost:3000/oauth/callback"
@@ -56,3 +57,14 @@ telegram:
   bot_token: ""       # ORRIS_TELEGRAM_BOT_TOKEN (from @BotFather)
   webhook_url: ""     # ORRIS_TELEGRAM_WEBHOOK_URL (optional, auto-derived from server.base_url if empty)
   webhook_secret: ""  # ORRIS_TELEGRAM_WEBHOOK_SECRET (optional)
+
+# WebAuthn/Passkey Configuration (auto-derived from server.base_url)
+# rp_id: extracted from server.base_url hostname
+# rp_origins: server.base_url + server.allowed_origins
+# Override only if you need different values:
+# webauthn:
+#   rp_id: "example.com"         # Override domain
+#   rp_name: "My App"            # Name shown in passkey prompts (default: "Orris Platform")
+#   rp_origins:                  # Override origins
+#     - "https://example.com"
+#   timeout: 60000               # Timeout in ms (default: 60000)

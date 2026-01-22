@@ -65,6 +65,7 @@ type Router struct {
 	engine                          *gin.Engine
 	userHandler                     *handlers.UserHandler
 	authHandler                     *handlers.AuthHandler
+	passkeyHandler                  *handlers.PasskeyHandler
 	profileHandler                  *handlers.ProfileHandler
 	dashboardHandler                *handlers.DashboardHandler
 	subscriptionHandler             *handlers.SubscriptionHandler
@@ -249,6 +250,38 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		cfg.Auth.Cookie, cfg.Auth.JWT,
 		cfg.Server.FrontendCallbackURL, cfg.Server.AllowedOrigins,
 	)
+
+	// Initialize Passkey (WebAuthn) components if configured
+	var passkeyHandler *handlers.PasskeyHandler
+	if cfg.WebAuthn.IsConfigured() {
+		webAuthnService, err := auth.NewWebAuthnService(cfg.WebAuthn)
+		if err != nil {
+			log.Warnw("failed to initialize WebAuthn service, passkey authentication disabled", "error", err)
+		} else {
+			passkeyRepo := repository.NewPasskeyCredentialRepository(db, log)
+			passkeyChallengeStore := cache.NewPasskeyChallengeStore(redisClient)
+
+			startPasskeyRegistrationUC := usecases.NewStartPasskeyRegistrationUseCase(userRepo, passkeyRepo, webAuthnService, passkeyChallengeStore, log)
+			finishPasskeyRegistrationUC := usecases.NewFinishPasskeyRegistrationUseCase(userRepo, passkeyRepo, webAuthnService, passkeyChallengeStore, log)
+			startPasskeyAuthenticationUC := usecases.NewStartPasskeyAuthenticationUseCase(userRepo, passkeyRepo, webAuthnService, passkeyChallengeStore, log)
+			finishPasskeyAuthenticationUC := usecases.NewFinishPasskeyAuthenticationUseCase(userRepo, passkeyRepo, sessionRepo, webAuthnService, passkeyChallengeStore, jwtService, authHelper, cfg.Auth.Session, log)
+			listUserPasskeysUC := usecases.NewListUserPasskeysUseCase(passkeyRepo, log)
+			deletePasskeyUC := usecases.NewDeletePasskeyUseCase(passkeyRepo, log)
+
+			passkeyHandler = handlers.NewPasskeyHandler(
+				startPasskeyRegistrationUC,
+				finishPasskeyRegistrationUC,
+				startPasskeyAuthenticationUC,
+				finishPasskeyAuthenticationUC,
+				listUserPasskeysUC,
+				deletePasskeyUC,
+				log,
+				cfg.Auth.Cookie,
+				cfg.Auth.JWT,
+			)
+			log.Infow("WebAuthn passkey authentication enabled")
+		}
+	}
 
 	userHandler := handlers.NewUserHandler(userService, adminResetPasswordUC)
 
@@ -1406,6 +1439,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		engine:                          engine,
 		userHandler:                     userHandler,
 		authHandler:                     authHandler,
+		passkeyHandler:                  passkeyHandler,
 		profileHandler:                  profileHandler,
 		dashboardHandler:                dashboardHandler,
 		subscriptionHandler:             subscriptionHandler,
@@ -1488,6 +1522,14 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		auth.POST("/refresh", r.authHandler.RefreshToken)
 		auth.POST("/logout", r.authMiddleware.RequireAuth(), r.authHandler.Logout)
 		auth.GET("/me", r.authMiddleware.RequireAuth(), r.authHandler.GetCurrentUser)
+
+		// Passkey (WebAuthn) authentication routes
+		if r.passkeyHandler != nil {
+			auth.POST("/passkey/register/start", r.authMiddleware.RequireAuth(), r.passkeyHandler.StartRegistration)
+			auth.POST("/passkey/register/finish", r.authMiddleware.RequireAuth(), r.passkeyHandler.FinishRegistration)
+			auth.POST("/passkey/login/start", r.rateLimiter.Limit(), r.passkeyHandler.StartAuthentication)
+			auth.POST("/passkey/login/finish", r.rateLimiter.Limit(), r.passkeyHandler.FinishAuthentication)
+		}
 	}
 
 	users := r.engine.Group("/users")
@@ -1503,6 +1545,13 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 		users.PATCH("/me", r.profileHandler.UpdateProfile)
 		users.PUT("/me/password", r.profileHandler.ChangePassword)
 		users.GET("/me/dashboard", r.dashboardHandler.GetDashboard)
+
+		// Passkey management routes
+		if r.passkeyHandler != nil {
+			users.GET("/me/passkeys", r.passkeyHandler.ListPasskeys)
+			users.DELETE("/me/passkeys/:id", r.passkeyHandler.DeletePasskey)
+		}
+
 		users.GET("/email/:email", authorization.RequireAdmin(), r.userHandler.GetUserByEmail)
 
 		// Generic parameterized routes (must come LAST)

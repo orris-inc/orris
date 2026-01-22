@@ -45,6 +45,7 @@ const (
 	TableResourceGroups         = "resource_groups"
 	TableSubscriptionUsageStats  = "subscription_usage_stats"
 	TableExternalForwardRules    = "external_forward_rules"
+	TablePasskeyCredentials      = "passkey_credentials"
 
 	// Default values
 	DefaultCurrency = "CNY"

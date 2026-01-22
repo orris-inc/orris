@@ -22,6 +22,7 @@ type Config struct {
 	Forward      sharedConfig.ForwardConfig      `mapstructure:"forward"`
 	Admin        sharedConfig.AdminConfig        `mapstructure:"admin"`
 	Telegram     sharedConfig.TelegramConfig     `mapstructure:"telegram"`
+	WebAuthn     sharedConfig.WebAuthnConfig     `mapstructure:"webauthn"`
 }
 
 var (
@@ -73,6 +74,9 @@ func Load(env string, configPath ...string) (*Config, error) {
 	if err := viper.Unmarshal(&config); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
+
+	// Apply server-derived defaults for WebAuthn
+	config.WebAuthn.ApplyServerDefaults(&config.Server)
 
 	appConfigMu.Lock()
 	appConfig = &config
@@ -167,4 +171,10 @@ func setDefaults() {
 	viper.SetDefault("telegram.bot_token", "")
 	viper.SetDefault("telegram.webhook_url", "")
 	viper.SetDefault("telegram.webhook_secret", "")
+
+	// WebAuthn defaults - derived from server config if not explicitly set
+	viper.SetDefault("webauthn.rp_id", "")
+	viper.SetDefault("webauthn.rp_name", "")
+	viper.SetDefault("webauthn.rp_origins", []string{})
+	viper.SetDefault("webauthn.timeout", 0)
 }

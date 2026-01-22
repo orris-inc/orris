@@ -31,6 +31,7 @@ const (
 	PrefixAdminTelegramBinding   = "atg_bind"
 	PrefixSetting                = "setting"
 	PrefixSubscriptionUsageStats = "usagestat"
+	PrefixPasskeyCredential      = "pk"
 )
 
 // Generate creates a random short ID with the specified length using Base62 encoding.
@@ -278,5 +279,15 @@ func NewSubscriptionUsageStatsID() (string, error) {
 // ParseSubscriptionUsageStatsID extracts the short ID from a Subscription Usage Stats prefixed ID.
 func ParseSubscriptionUsageStatsID(prefixedID string) (string, error) {
 	return ExtractShortID(prefixedID, PrefixSubscriptionUsageStats)
+}
+
+// NewPasskeyCredentialID generates a new Passkey Credential SID (pk_xxx).
+func NewPasskeyCredentialID() (string, error) {
+	return NewSID(PrefixPasskeyCredential)
+}
+
+// ParsePasskeyCredentialID extracts the short ID from a Passkey Credential prefixed ID.
+func ParsePasskeyCredentialID(prefixedID string) (string, error) {
+	return ExtractShortID(prefixedID, PrefixPasskeyCredential)
 }
 

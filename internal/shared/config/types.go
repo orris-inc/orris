@@ -203,3 +203,85 @@ func (t *TelegramConfig) GetWebhookURL() string {
 func (t *TelegramConfig) UsePolling() bool {
 	return t.WebhookURL == ""
 }
+
+// WebAuthnConfig holds WebAuthn/Passkey configuration
+type WebAuthnConfig struct {
+	// RPID is the relying party identifier (domain name)
+	RPID string `mapstructure:"rp_id"`
+	// RPName is the human-readable relying party name
+	RPName string `mapstructure:"rp_name"`
+	// RPOrigins is the list of allowed origins for WebAuthn requests
+	RPOrigins []string `mapstructure:"rp_origins"`
+	// Timeout is the timeout for WebAuthn operations in milliseconds
+	Timeout int `mapstructure:"timeout"`
+}
+
+// IsConfigured returns true if WebAuthn config has required fields
+func (w *WebAuthnConfig) IsConfigured() bool {
+	return w.RPID != "" && w.RPName != "" && len(w.RPOrigins) > 0
+}
+
+// ApplyServerDefaults fills empty WebAuthn fields from ServerConfig
+func (w *WebAuthnConfig) ApplyServerDefaults(server *ServerConfig) {
+	baseURL := server.GetBaseURL()
+
+	// Derive RPID from base_url (extract hostname)
+	if w.RPID == "" {
+		w.RPID = extractHostFromURL(baseURL)
+	}
+
+	// Default name
+	if w.RPName == "" {
+		w.RPName = "Orris Platform"
+	}
+
+	// Derive origins from base_url and allowed_origins
+	if len(w.RPOrigins) == 0 {
+		origins := make([]string, 0)
+		if baseURL != "" {
+			origins = append(origins, baseURL)
+		}
+		// Also add allowed_origins as they may include frontend URLs
+		origins = append(origins, server.AllowedOrigins...)
+		w.RPOrigins = origins
+	}
+
+	// Default timeout
+	if w.Timeout == 0 {
+		w.Timeout = 60000
+	}
+}
+
+// extractHostFromURL extracts hostname from a URL string
+func extractHostFromURL(rawURL string) string {
+	if rawURL == "" {
+		return "localhost"
+	}
+	// Remove protocol prefix
+	host := rawURL
+	if idx := len("https://"); len(host) > idx && host[:idx] == "https://" {
+		host = host[idx:]
+	} else if idx := len("http://"); len(host) > idx && host[:idx] == "http://" {
+		host = host[idx:]
+	}
+	// Remove port and path
+	if idx := findFirstOf(host, ":/"); idx != -1 {
+		host = host[:idx]
+	}
+	if host == "" {
+		return "localhost"
+	}
+	return host
+}
+
+// findFirstOf returns index of first occurrence of any char in chars, or -1
+func findFirstOf(s string, chars string) int {
+	for i, c := range s {
+		for _, ch := range chars {
+			if c == ch {
+				return i
+			}
+		}
+	}
+	return -1
+}
