@@ -23,6 +23,8 @@ type PasskeyHandler struct {
 	finishRegistrationUC   *usecases.FinishPasskeyRegistrationUseCase
 	startAuthenticationUC  *usecases.StartPasskeyAuthenticationUseCase
 	finishAuthenticationUC *usecases.FinishPasskeyAuthenticationUseCase
+	startSignupUC          *usecases.StartPasskeySignupUseCase
+	finishSignupUC         *usecases.FinishPasskeySignupUseCase
 	listPasskeysUC         *usecases.ListUserPasskeysUseCase
 	deletePasskeyUC        *usecases.DeletePasskeyUseCase
 	logger                 logger.Interface
@@ -50,6 +52,8 @@ func NewPasskeyHandler(
 	finishRegistrationUC *usecases.FinishPasskeyRegistrationUseCase,
 	startAuthenticationUC *usecases.StartPasskeyAuthenticationUseCase,
 	finishAuthenticationUC *usecases.FinishPasskeyAuthenticationUseCase,
+	startSignupUC *usecases.StartPasskeySignupUseCase,
+	finishSignupUC *usecases.FinishPasskeySignupUseCase,
 	listPasskeysUC *usecases.ListUserPasskeysUseCase,
 	deletePasskeyUC *usecases.DeletePasskeyUseCase,
 	logger logger.Interface,
@@ -61,6 +65,8 @@ func NewPasskeyHandler(
 		finishRegistrationUC:   finishRegistrationUC,
 		startAuthenticationUC:  startAuthenticationUC,
 		finishAuthenticationUC: finishAuthenticationUC,
+		startSignupUC:          startSignupUC,
+		finishSignupUC:         finishSignupUC,
 		listPasskeysUC:         listPasskeysUC,
 		deletePasskeyUC:        deletePasskeyUC,
 		logger:                 logger,
@@ -201,6 +207,169 @@ func (h *PasskeyHandler) FinishRegistration(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "passkey registered successfully", gin.H{
 		"passkey": result.Credential.GetDisplayInfo(),
 	})
+}
+
+// StartSignupRequest is the request body for starting passkey signup
+type StartSignupRequest struct {
+	Email string `json:"email" binding:"required"`
+	Name  string `json:"name" binding:"required"`
+}
+
+// StartSignup starts the passkey signup ceremony for new users
+// @Summary Start passkey signup
+// @Description Starts the WebAuthn registration ceremony for a new user (no password required)
+// @Tags Passkey
+// @Accept json
+// @Produce json
+// @Param request body StartSignupRequest true "Signup request"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 409 {object} utils.ErrorResponse
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /auth/passkey/signup/start [post]
+func (h *PasskeyHandler) StartSignup(c *gin.Context) {
+	var req StartSignupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "email and name are required")
+		return
+	}
+
+	cmd := usecases.StartPasskeySignupCommand{
+		Email: req.Email,
+		Name:  req.Name,
+	}
+
+	result, err := h.startSignupUC.Execute(c.Request.Context(), cmd)
+	if err != nil {
+		h.logger.Errorw("failed to start passkey signup", "email", req.Email, "error", err)
+		// Use generic error to prevent email enumeration
+		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"options":       result.Options,
+		"session_token": result.SessionToken,
+	})
+}
+
+// FinishSignupRequest is the request body for finishing passkey signup
+type FinishSignupRequest struct {
+	SessionToken string `json:"session_token" binding:"required"`
+	// WebAuthn credential creation response from the browser
+	ID                      string                               `json:"id" binding:"required"`
+	RawID                   string                               `json:"rawId" binding:"required"`
+	Type                    string                               `json:"type" binding:"required"`
+	Response                AuthenticatorAttestationResponseJSON `json:"response" binding:"required"`
+	AuthenticatorAttachment string                               `json:"authenticatorAttachment,omitempty"`
+	ClientExtensionResults  map[string]interface{}               `json:"clientExtensionResults,omitempty"`
+	DeviceName              string                               `json:"device_name,omitempty"`
+}
+
+// FinishSignup completes the passkey signup ceremony and creates a new user
+// @Summary Finish passkey signup
+// @Description Completes the WebAuthn registration ceremony, creates user and session
+// @Tags Passkey
+// @Accept json
+// @Produce json
+// @Param request body FinishSignupRequest true "Credential creation response with session token"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} utils.ErrorResponse
+// @Failure 500 {object} utils.ErrorResponse
+// @Router /auth/passkey/signup/finish [post]
+func (h *PasskeyHandler) FinishSignup(c *gin.Context) {
+	var req FinishSignupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	// Validate and sanitize device name
+	deviceName := h.sanitizeDeviceName(req.DeviceName)
+
+	// Parse the credential creation response
+	credResponse, err := h.parseCredentialCreationResponseForSignup(&req)
+	if err != nil {
+		h.logger.Errorw("failed to parse credential creation response", "error", err)
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid credential response")
+		return
+	}
+
+	// Parse to get the parsed data structure that includes challenge
+	parsedResponse, err := credResponse.Parse()
+	if err != nil {
+		h.logger.Errorw("failed to parse credential response",
+			"error", err,
+			"attestation_object_len", len(credResponse.AttestationResponse.AttestationObject),
+		)
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid client data")
+		return
+	}
+
+	cmd := usecases.FinishPasskeySignupCommand{
+		SessionToken: req.SessionToken,
+		Challenge:    string(parsedResponse.Response.CollectedClientData.Challenge),
+		Response:     parsedResponse,
+		DeviceName:   deviceName,
+		DeviceType:   "web",
+		IPAddress:    c.ClientIP(),
+		UserAgent:    c.GetHeader("User-Agent"),
+	}
+
+	result, err := h.finishSignupUC.Execute(c.Request.Context(), cmd)
+	if err != nil {
+		h.logger.Errorw("failed to finish passkey signup", "error", err)
+		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// Set tokens in HttpOnly cookies
+	accessMaxAge := h.jwtConfig.AccessExpMinutes * 60
+	refreshMaxAge := h.jwtConfig.RefreshExpDays * 24 * 60 * 60
+	utils.SetAuthCookies(c, h.cookieConfig, result.AccessToken, result.RefreshToken, accessMaxAge, refreshMaxAge)
+
+	utils.SuccessResponse(c, http.StatusOK, "signup successful", gin.H{
+		"user":       result.User.GetDisplayInfo(),
+		"passkey":    result.Credential.GetDisplayInfo(),
+		"expires_in": result.ExpiresIn,
+	})
+}
+
+// parseCredentialCreationResponseForSignup parses signup finish request
+func (h *PasskeyHandler) parseCredentialCreationResponseForSignup(req *FinishSignupRequest) (*protocol.CredentialCreationResponse, error) {
+	rawID, err := decodeBase64(req.RawID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode rawId: %w", err)
+	}
+
+	clientDataJSON, err := decodeBase64(req.Response.ClientDataJSON)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode clientDataJSON: %w", err)
+	}
+
+	attestationObject, err := decodeBase64(req.Response.AttestationObject)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode attestationObject: %w", err)
+	}
+
+	return &protocol.CredentialCreationResponse{
+		PublicKeyCredential: protocol.PublicKeyCredential{
+			Credential: protocol.Credential{
+				ID:   req.ID,
+				Type: req.Type,
+			},
+			RawID:                   rawID,
+			ClientExtensionResults:  protocol.AuthenticationExtensionsClientOutputs(req.ClientExtensionResults),
+			AuthenticatorAttachment: req.AuthenticatorAttachment,
+		},
+		AttestationResponse: protocol.AuthenticatorAttestationResponse{
+			AuthenticatorResponse: protocol.AuthenticatorResponse{
+				ClientDataJSON: clientDataJSON,
+			},
+			AttestationObject: attestationObject,
+			Transports:        req.Response.Transports,
+		},
+	}, nil
 }
 
 // StartAuthenticationRequest is the request body for starting passkey authentication

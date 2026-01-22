@@ -16,8 +16,9 @@ import (
 const (
 	// PasskeyChallengePrefix is the Redis key prefix for passkey challenges
 	PasskeyChallengePrefix = "passkey:challenge:"
-	// PasskeyChallengeTTL is the default TTL for passkey challenges (3 minutes)
-	PasskeyChallengeTTL = 3 * time.Minute
+	// PasskeyChallengeTTL is the default TTL for passkey challenges (5 minutes)
+	// Note: Must be >= PasskeySignupSessionTTL to ensure challenge doesn't expire before signup session
+	PasskeyChallengeTTL = 5 * time.Minute
 )
 
 // PasskeyChallengeStore stores WebAuthn session data for registration/login ceremonies

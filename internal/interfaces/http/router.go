@@ -260,11 +260,14 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		} else {
 			passkeyRepo := repository.NewPasskeyCredentialRepository(db, log)
 			passkeyChallengeStore := cache.NewPasskeyChallengeStore(redisClient)
+			passkeySignupSessionStore := cache.NewPasskeySignupSessionStore(redisClient)
 
 			startPasskeyRegistrationUC := usecases.NewStartPasskeyRegistrationUseCase(userRepo, passkeyRepo, webAuthnService, passkeyChallengeStore, log)
 			finishPasskeyRegistrationUC := usecases.NewFinishPasskeyRegistrationUseCase(userRepo, passkeyRepo, webAuthnService, passkeyChallengeStore, log)
 			startPasskeyAuthenticationUC := usecases.NewStartPasskeyAuthenticationUseCase(userRepo, passkeyRepo, webAuthnService, passkeyChallengeStore, log)
 			finishPasskeyAuthenticationUC := usecases.NewFinishPasskeyAuthenticationUseCase(userRepo, passkeyRepo, sessionRepo, webAuthnService, passkeyChallengeStore, jwtService, authHelper, cfg.Auth.Session, log)
+			startPasskeySignupUC := usecases.NewStartPasskeySignupUseCase(userRepo, webAuthnService, passkeyChallengeStore, passkeySignupSessionStore, log)
+			finishPasskeySignupUC := usecases.NewFinishPasskeySignupUseCase(userRepo, passkeyRepo, sessionRepo, webAuthnService, passkeyChallengeStore, passkeySignupSessionStore, jwtService, authHelper, cfg.Auth.Session, log)
 			listUserPasskeysUC := usecases.NewListUserPasskeysUseCase(passkeyRepo, log)
 			deletePasskeyUC := usecases.NewDeletePasskeyUseCase(passkeyRepo, log)
 
@@ -273,6 +276,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 				finishPasskeyRegistrationUC,
 				startPasskeyAuthenticationUC,
 				finishPasskeyAuthenticationUC,
+				startPasskeySignupUC,
+				finishPasskeySignupUC,
 				listUserPasskeysUC,
 				deletePasskeyUC,
 				log,
@@ -1529,6 +1534,9 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 			auth.POST("/passkey/register/finish", r.authMiddleware.RequireAuth(), r.passkeyHandler.FinishRegistration)
 			auth.POST("/passkey/login/start", r.rateLimiter.Limit(), r.passkeyHandler.StartAuthentication)
 			auth.POST("/passkey/login/finish", r.rateLimiter.Limit(), r.passkeyHandler.FinishAuthentication)
+			// Passkey signup (new user registration without password)
+			auth.POST("/passkey/signup/start", r.rateLimiter.Limit(), r.passkeyHandler.StartSignup)
+			auth.POST("/passkey/signup/finish", r.rateLimiter.Limit(), r.passkeyHandler.FinishSignup)
 		}
 	}
 

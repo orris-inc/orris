@@ -5,6 +5,10 @@ on:
     tags:
       - 'v*'
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
@@ -12,6 +16,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       matrix:
         include:
@@ -23,16 +28,17 @@ jobs:
             suffix: linux-arm64
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@0a12ed9d6a96ab950c8f026ed9f722fe0da7ef32 # v5.0.2
         with:
           go-version: '1.24'
 
       - name: Install UPX
-        run: |
-          sudo apt-get update && sudo apt-get install -y upx
+        run: sudo apt-get update && sudo apt-get install -y upx
+        env:
+          DEBIAN_FRONTEND: noninteractive
 
       - name: Get version from tag
         id: version
@@ -50,8 +56,7 @@ jobs:
 
       - name: Compress binary (AMD64 only)
         if: matrix.goarch == 'amd64'
-        run: |
-          upx --best --lzma orris-${{ matrix.suffix }}
+        run: upx --best --lzma orris-${{ matrix.suffix }}
 
       - name: Compress binary (ARM64)
         if: matrix.goarch == 'arm64'
@@ -60,71 +65,118 @@ jobs:
           upx --best --lzma orris-${{ matrix.suffix }} || upx --best orris-${{ matrix.suffix }} || echo "UPX compression skipped for ARM64"
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@6f51ac03b9356f520e9adb1b1b7802705f340c2b # v4.5.0
         with:
           name: orris-${{ matrix.suffix }}
           path: orris-${{ matrix.suffix }}
+          retention-days: 1
 
   release:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
-      - name: Download AMD64 artifact
-        uses: actions/download-artifact@v4
+      - name: Checkout code
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
         with:
-          name: orris-linux-amd64
+          fetch-depth: 0
 
-      - name: Download ARM64 artifact
-        uses: actions/download-artifact@v4
+      - name: Get changelog since last tag
+        id: changelog
+        run: |
+          # Get previous tag
+          CURRENT_TAG=${GITHUB_REF#refs/tags/}
+          PREV_TAG=$(git describe --tags --abbrev=0 "${CURRENT_TAG}^" 2>/dev/null || echo "")
+
+          if [ -n "$PREV_TAG" ]; then
+            # Get full commit messages between previous tag and current tag
+            echo "Generating changelog from $PREV_TAG to $CURRENT_TAG"
+            git log ${PREV_TAG}..${CURRENT_TAG} --pretty=format:"%B---" | sed 's/---$//' > /tmp/changelog.txt
+          else
+            # No previous tag, get the current commit's full message
+            echo "No previous tag found, using current commit"
+            git log -1 --pretty=format:"%B" > /tmp/changelog.txt
+          fi
+
+      - name: Download artifacts
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
-          name: orris-linux-arm64
+          pattern: orris-*
+          merge-multiple: true
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda # v2.2.1
         with:
           files: |
             orris-linux-amd64
             orris-linux-arm64
-          generate_release_notes: true
+          body_path: /tmp/changelog.txt
+
+      - name: Send Telegram Notification
+        if: success()
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+          VERSION: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ -z "$TELEGRAM_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "Telegram secrets not configured, skipping notification"
+            exit 0
+          fi
+
+          CHANGELOG=$(cat /tmp/changelog.txt)
+          RELEASE_URL="https://github.com/${REPO}/releases/tag/${VERSION}"
+
+          # Build message file
+          {
+            echo "🚀 *Orris ${VERSION}*"
+            echo ""
+            echo "${CHANGELOG}"
+            echo ""
+            echo "[GitHub Release](${RELEASE_URL})"
+          } > /tmp/telegram_message.txt
+
+          # Send to Telegram
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            -d parse_mode="Markdown" \
+            --data-urlencode text@/tmp/telegram_message.txt
 
   docker:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       packages: write
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
 
-      - name: Download AMD64 artifact
-        uses: actions/download-artifact@v4
+      - name: Download artifacts
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4.1.8
         with:
-          name: orris-linux-amd64
-          path: build/linux/amd64
-
-      - name: Download ARM64 artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: orris-linux-arm64
-          path: build/linux/arm64
+          pattern: orris-*
+          path: build/tmp
 
       - name: Prepare binaries
         run: |
-          mv build/linux/amd64/orris-linux-amd64 build/linux/amd64/orris
-          mv build/linux/arm64/orris-linux-arm64 build/linux/arm64/orris
+          mkdir -p build/linux/amd64 build/linux/arm64
+          mv build/tmp/orris-linux-amd64/orris-linux-amd64 build/linux/amd64/orris
+          mv build/tmp/orris-linux-arm64/orris-linux-arm64 build/linux/arm64/orris
           chmod +x build/linux/amd64/orris build/linux/arm64/orris
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@49b3bc8e6bdd4a60e6116a5414239cba5943d3cf # v3.2.0
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@c47758b77c9736f4b2ef4073d4d51994fabfe349 # v3.7.1
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -132,7 +184,7 @@ jobs:
 
       - name: Extract metadata for Docker
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@8e5442c4ef9f78752691e2d8f8d19755c6f78e81 # v5.5.1
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
@@ -142,7 +194,7 @@ jobs:
             type=raw,value=latest
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@4f58ea79222b3b9dc2c8bbdd6debcef730109a75 # v6.9.0
         with:
           context: .
           platforms: linux/amd64,linux/arm64
