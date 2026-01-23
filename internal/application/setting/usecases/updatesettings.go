@@ -213,3 +213,8 @@ func (uc *UpdateSettingsUseCase) setValueByType(s *setting.SystemSetting, value 
 		return fmt.Errorf("unsupported value type: %s", s.ValueType())
 	}
 }
+
+// UpsertSetting creates or updates a setting directly
+func (uc *UpdateSettingsUseCase) UpsertSetting(ctx context.Context, s *setting.SystemSetting) error {
+	return uc.settingRepo.Upsert(ctx, s)
+}

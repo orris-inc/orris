@@ -23,7 +23,23 @@ func SetupSettingRoutes(engine *gin.Engine, config *SettingRouteConfig) {
 	{
 		// IMPORTANT: Register specific paths BEFORE parameterized paths to avoid route conflicts
 
-		// Telegram configuration endpoints (specific paths first)
+		// System settings
+		settings.GET("/system", config.Handler.GetSystemSettings)
+		settings.PUT("/system", config.Handler.UpdateSystemSettings)
+
+		// OAuth settings
+		settings.GET("/oauth", config.Handler.GetOAuthSettings)
+		settings.PUT("/oauth", config.Handler.UpdateOAuthSettings)
+
+		// Email settings
+		settings.GET("/email", config.Handler.GetEmailSettings)
+		settings.PUT("/email", config.Handler.UpdateEmailSettings)
+		settings.POST("/email/test", config.Handler.TestEmailConnection)
+
+		// Setup status
+		settings.GET("/setup-status", config.Handler.GetSetupStatus)
+
+		// Telegram configuration endpoints
 		settings.GET("/telegram/config", config.Handler.GetTelegramConfig)
 		settings.PUT("/telegram/config", config.Handler.UpdateTelegramConfig)
 		settings.POST("/telegram/test", config.Handler.TestTelegramConnection)

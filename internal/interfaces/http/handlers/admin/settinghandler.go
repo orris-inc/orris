@@ -13,6 +13,20 @@ import (
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
+// validCategories defines the whitelist of allowed setting categories
+var validCategories = map[string]bool{
+	"system":       true,
+	"telegram":     true,
+	"oauth_google": true,
+	"oauth_github": true,
+	"email":        true,
+}
+
+// isValidCategory checks if the category is in the whitelist
+func isValidCategory(category string) bool {
+	return validCategories[category]
+}
+
 // SettingHandler handles system settings admin API operations
 type SettingHandler struct {
 	service *settingApp.ServiceDDD
@@ -37,6 +51,12 @@ func (h *SettingHandler) GetCategorySettings(c *gin.Context) {
 		return
 	}
 
+	if !isValidCategory(category) {
+		h.logger.Warnw("invalid category parameter", "category", category)
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid category")
+		return
+	}
+
 	result, err := h.service.GetByCategory(c.Request.Context(), category)
 	if err != nil {
 		if err == setting.ErrSettingNotFound {
@@ -58,6 +78,12 @@ func (h *SettingHandler) UpdateCategorySettings(c *gin.Context) {
 	if category == "" {
 		h.logger.Warnw("missing category parameter")
 		utils.ErrorResponse(c, http.StatusBadRequest, "category parameter is required")
+		return
+	}
+
+	if !isValidCategory(category) {
+		h.logger.Warnw("invalid category parameter", "category", category)
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid category")
 		return
 	}
 
@@ -174,5 +200,171 @@ func (h *SettingHandler) TestTelegramConnection(c *gin.Context) {
 		return
 	}
 
+	utils.SuccessResponse(c, http.StatusOK, "", result)
+}
+
+// GetSystemSettings retrieves system settings
+// GET /admin/settings/system
+func (h *SettingHandler) GetSystemSettings(c *gin.Context) {
+	result, err := h.service.GetSystemSettings(c.Request.Context())
+	if err != nil {
+		h.logger.Errorw("failed to get system settings", "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+	utils.SuccessResponse(c, http.StatusOK, "", result)
+}
+
+// UpdateSystemSettings updates system settings
+// PUT /admin/settings/system
+func (h *SettingHandler) UpdateSystemSettings(c *gin.Context) {
+	var req dto.UpdateSystemSettingsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	// Get user ID from context
+	userID, exists := c.Get("user_id")
+	if !exists {
+		h.logger.Errorw("user_id not found in context")
+		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+		return
+	}
+
+	uid, ok := userID.(uint)
+	if !ok {
+		h.logger.Errorw("invalid user_id type", "user_id", userID)
+		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if err := h.service.UpdateSystemSettings(c.Request.Context(), req, uid); err != nil {
+		h.logger.Errorw("failed to update system settings", "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "System settings updated successfully", nil)
+}
+
+// GetOAuthSettings retrieves OAuth settings
+// GET /admin/settings/oauth
+func (h *SettingHandler) GetOAuthSettings(c *gin.Context) {
+	result, err := h.service.GetOAuthSettings(c.Request.Context())
+	if err != nil {
+		h.logger.Errorw("failed to get oauth settings", "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+	utils.SuccessResponse(c, http.StatusOK, "", result)
+}
+
+// UpdateOAuthSettings updates OAuth settings
+// PUT /admin/settings/oauth
+func (h *SettingHandler) UpdateOAuthSettings(c *gin.Context) {
+	var req dto.UpdateOAuthSettingsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	// Get user ID from context
+	userID, exists := c.Get("user_id")
+	if !exists {
+		h.logger.Errorw("user_id not found in context")
+		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+		return
+	}
+
+	uid, ok := userID.(uint)
+	if !ok {
+		h.logger.Errorw("invalid user_id type", "user_id", userID)
+		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if err := h.service.UpdateOAuthSettings(c.Request.Context(), req, uid); err != nil {
+		h.logger.Errorw("failed to update oauth settings", "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "OAuth settings updated successfully", nil)
+}
+
+// GetEmailSettings retrieves email settings
+// GET /admin/settings/email
+func (h *SettingHandler) GetEmailSettings(c *gin.Context) {
+	result, err := h.service.GetEmailSettings(c.Request.Context())
+	if err != nil {
+		h.logger.Errorw("failed to get email settings", "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+	utils.SuccessResponse(c, http.StatusOK, "", result)
+}
+
+// UpdateEmailSettings updates email settings
+// PUT /admin/settings/email
+func (h *SettingHandler) UpdateEmailSettings(c *gin.Context) {
+	var req dto.UpdateEmailSettingsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	// Get user ID from context
+	userID, exists := c.Get("user_id")
+	if !exists {
+		h.logger.Errorw("user_id not found in context")
+		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+		return
+	}
+
+	uid, ok := userID.(uint)
+	if !ok {
+		h.logger.Errorw("invalid user_id type", "user_id", userID)
+		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if err := h.service.UpdateEmailSettings(c.Request.Context(), req, uid); err != nil {
+		h.logger.Errorw("failed to update email settings", "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Email settings updated successfully", nil)
+}
+
+// TestEmailConnection tests the email SMTP connection
+// POST /admin/settings/email/test
+func (h *SettingHandler) TestEmailConnection(c *gin.Context) {
+	var req dto.EmailTestRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	result, err := h.service.TestEmailConnection(c.Request.Context(), req.RecipientEmail)
+	if err != nil {
+		h.logger.Errorw("failed to test email connection", "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "", result)
+}
+
+// GetSetupStatus checks if the system is configured
+// GET /admin/settings/setup-status
+func (h *SettingHandler) GetSetupStatus(c *gin.Context) {
+	result, err := h.service.GetSetupStatus(c.Request.Context())
+	if err != nil {
+		h.logger.Errorw("failed to get setup status", "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
 	utils.SuccessResponse(c, http.StatusOK, "", result)
 }

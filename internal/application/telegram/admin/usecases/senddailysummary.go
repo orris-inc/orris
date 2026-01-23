@@ -182,7 +182,8 @@ func (uc *SendDailySummaryUseCase) gatherDailyStats(ctx context.Context, start, 
 		}
 
 		for _, u := range users {
-			if u.CreatedAt().After(start) && u.CreatedAt().Before(end) {
+			// Use closed interval [start, end] to include boundary times
+			if !u.CreatedAt().Before(start) && !u.CreatedAt().After(end) {
 				summary.NewUsers++
 			}
 			if u.Status().IsActive() {
@@ -209,7 +210,8 @@ func (uc *SendDailySummaryUseCase) gatherDailyStats(ctx context.Context, start, 
 		}
 
 		for _, s := range subs {
-			if s.CreatedAt().After(start) && s.CreatedAt().Before(end) {
+			// Use closed interval [start, end] to include boundary times
+			if !s.CreatedAt().Before(start) && !s.CreatedAt().After(end) {
 				summary.NewSubscriptions++
 			}
 		}

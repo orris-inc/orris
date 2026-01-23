@@ -221,12 +221,12 @@ func (uc *SendWeeklySummaryUseCase) gatherWeeklyStats(ctx context.Context, lastS
 		}
 
 		for _, u := range users {
-			// Last week new users
-			if u.CreatedAt().After(lastStart) && u.CreatedAt().Before(lastEnd) {
+			// Last week new users - use closed interval [lastStart, lastEnd]
+			if !u.CreatedAt().Before(lastStart) && !u.CreatedAt().After(lastEnd) {
 				summary.NewUsers++
 			}
-			// Previous week new users
-			if u.CreatedAt().After(prevStart) && u.CreatedAt().Before(prevEnd) {
+			// Previous week new users - use closed interval [prevStart, prevEnd]
+			if !u.CreatedAt().Before(prevStart) && !u.CreatedAt().After(prevEnd) {
 				summary.PrevNewUsers++
 			}
 			// Active users
@@ -254,10 +254,12 @@ func (uc *SendWeeklySummaryUseCase) gatherWeeklyStats(ctx context.Context, lastS
 		}
 
 		for _, s := range subs {
-			if s.CreatedAt().After(lastStart) && s.CreatedAt().Before(lastEnd) {
+			// Use closed interval [lastStart, lastEnd]
+			if !s.CreatedAt().Before(lastStart) && !s.CreatedAt().After(lastEnd) {
 				summary.NewSubscriptions++
 			}
-			if s.CreatedAt().After(prevStart) && s.CreatedAt().Before(prevEnd) {
+			// Use closed interval [prevStart, prevEnd]
+			if !s.CreatedAt().Before(prevStart) && !s.CreatedAt().After(prevEnd) {
 				summary.PrevNewSubscriptions++
 			}
 		}

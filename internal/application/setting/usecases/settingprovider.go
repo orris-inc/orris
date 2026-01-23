@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	settingDTO "github.com/orris-inc/orris/internal/application/setting/dto"
 	"github.com/orris-inc/orris/internal/domain/setting"
 	sharedConfig "github.com/orris-inc/orris/internal/shared/config"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -15,12 +16,32 @@ type SettingChangeSubscriber interface {
 	OnSettingChange(ctx context.Context, category string, changes map[string]any) error
 }
 
+// SettingProviderConfig holds all fallback configurations from environment
+type SettingProviderConfig struct {
+	TelegramConfig      sharedConfig.TelegramConfig
+	GoogleOAuthConfig   sharedConfig.GoogleOAuthConfig
+	GitHubOAuthConfig   sharedConfig.GitHubOAuthConfig
+	EmailConfig         sharedConfig.EmailConfig
+	APIBaseURL          string
+	SubscriptionBaseURL string
+	FrontendURL         string
+	Timezone            string
+}
+
 // SettingProvider provides hot-reloadable configuration with database-first, env-fallback logic
 type SettingProvider struct {
 	settingRepo    setting.Repository
 	telegramConfig sharedConfig.TelegramConfig
 	apiBaseURL     string // Server API base URL for auto-generating webhook URLs
 	logger         logger.Interface
+
+	// Extended fields for System, OAuth, Email configurations
+	subscriptionBaseURL string
+	frontendURL         string
+	timezone            string
+	googleOAuthConfig   sharedConfig.GoogleOAuthConfig
+	githubOAuthConfig   sharedConfig.GitHubOAuthConfig
+	emailConfig         sharedConfig.EmailConfig
 
 	subscribers []SettingChangeSubscriber
 	mu          sync.RWMutex
@@ -29,16 +50,21 @@ type SettingProvider struct {
 // NewSettingProvider creates a new SettingProvider
 func NewSettingProvider(
 	settingRepo setting.Repository,
-	telegramConfig sharedConfig.TelegramConfig,
-	apiBaseURL string,
+	cfg SettingProviderConfig,
 	logger logger.Interface,
 ) *SettingProvider {
 	return &SettingProvider{
-		settingRepo:    settingRepo,
-		telegramConfig: telegramConfig,
-		apiBaseURL:     apiBaseURL,
-		logger:         logger,
-		subscribers:    make([]SettingChangeSubscriber, 0),
+		settingRepo:         settingRepo,
+		telegramConfig:      cfg.TelegramConfig,
+		apiBaseURL:          cfg.APIBaseURL,
+		subscriptionBaseURL: cfg.SubscriptionBaseURL,
+		frontendURL:         cfg.FrontendURL,
+		timezone:            cfg.Timezone,
+		googleOAuthConfig:   cfg.GoogleOAuthConfig,
+		githubOAuthConfig:   cfg.GitHubOAuthConfig,
+		emailConfig:         cfg.EmailConfig,
+		logger:              logger,
+		subscribers:         make([]SettingChangeSubscriber, 0),
 	}
 }
 
@@ -69,18 +95,24 @@ func (p *SettingProvider) NotifyChange(ctx context.Context, category string, cha
 	copy(subscribers, p.subscribers)
 	p.mu.RUnlock()
 
-	var lastErr error
+	var errs []error
 	for _, subscriber := range subscribers {
 		if err := subscriber.OnSettingChange(ctx, category, changes); err != nil {
 			p.logger.Errorw("subscriber failed to handle setting change",
 				"category", category,
+				"subscriber", fmt.Sprintf("%T", subscriber),
 				"error", err,
 			)
-			lastErr = err
+			errs = append(errs, err)
 		}
 	}
 
-	return lastErr
+	if len(errs) > 0 {
+		// Return combined error info for caller awareness
+		return fmt.Errorf("failed to notify %d/%d subscribers, first error: %w", len(errs), len(subscribers), errs[0])
+	}
+
+	return nil
 }
 
 // GetTelegramConfig returns the merged Telegram configuration
@@ -187,4 +219,189 @@ func (p *SettingProvider) IsTelegramEnabled(ctx context.Context) bool {
 func (p *SettingProvider) GetWebhookSecret(ctx context.Context) string {
 	config := p.GetTelegramConfig(ctx)
 	return config.WebhookSecret
+}
+
+// GetAPIBaseURL returns the API base URL with source tracking
+// Priority: Database > Environment > Default
+func (p *SettingProvider) GetAPIBaseURL(ctx context.Context) settingDTO.SettingWithSource {
+	// 1. Check database
+	if s, err := p.settingRepo.GetByKey(ctx, "system", "api_base_url"); err == nil && s != nil && s.HasValue() {
+		return settingDTO.SettingWithSource{
+			Value:  s.GetStringValue(),
+			Source: settingDTO.SourceDatabase,
+		}
+	}
+	// 2. Fall back to environment variable
+	if p.apiBaseURL != "" {
+		return settingDTO.SettingWithSource{
+			Value:  p.apiBaseURL,
+			Source: settingDTO.SourceEnvironment,
+		}
+	}
+	// 3. Default
+	return settingDTO.SettingWithSource{
+		Value:  "http://localhost:8080",
+		Source: settingDTO.SourceDefault,
+	}
+}
+
+// GetSubscriptionBaseURL returns the subscription base URL
+// Priority: Database > Environment > APIBaseURL
+func (p *SettingProvider) GetSubscriptionBaseURL(ctx context.Context) settingDTO.SettingWithSource {
+	if s, err := p.settingRepo.GetByKey(ctx, "system", "subscription_base_url"); err == nil && s != nil && s.HasValue() {
+		return settingDTO.SettingWithSource{
+			Value:  s.GetStringValue(),
+			Source: settingDTO.SourceDatabase,
+		}
+	}
+	if p.subscriptionBaseURL != "" {
+		return settingDTO.SettingWithSource{
+			Value:  p.subscriptionBaseURL,
+			Source: settingDTO.SourceEnvironment,
+		}
+	}
+	// Fall back to API base URL
+	return p.GetAPIBaseURL(ctx)
+}
+
+// GetFrontendURL returns the frontend callback URL
+// Priority: Database > Environment > Default (empty)
+func (p *SettingProvider) GetFrontendURL(ctx context.Context) settingDTO.SettingWithSource {
+	if s, err := p.settingRepo.GetByKey(ctx, "system", "frontend_url"); err == nil && s != nil && s.HasValue() {
+		return settingDTO.SettingWithSource{
+			Value:  s.GetStringValue(),
+			Source: settingDTO.SourceDatabase,
+		}
+	}
+	if p.frontendURL != "" {
+		return settingDTO.SettingWithSource{
+			Value:  p.frontendURL,
+			Source: settingDTO.SourceEnvironment,
+		}
+	}
+	return settingDTO.SettingWithSource{
+		Value:  "",
+		Source: settingDTO.SourceDefault,
+	}
+}
+
+// GetTimezone returns the timezone (read-only from environment)
+func (p *SettingProvider) GetTimezone(_ context.Context) settingDTO.SettingWithSource {
+	return settingDTO.SettingWithSource{
+		Value:  p.timezone,
+		Source: settingDTO.SourceEnvironment,
+	}
+}
+
+// GetGoogleOAuthConfig returns the merged Google OAuth configuration
+// Database values take precedence over environment variables
+func (p *SettingProvider) GetGoogleOAuthConfig(ctx context.Context) sharedConfig.GoogleOAuthConfig {
+	config := p.googleOAuthConfig
+
+	settings, err := p.settingRepo.GetByCategory(ctx, "oauth_google")
+	if err != nil {
+		p.logger.Warnw("failed to get Google OAuth settings from database", "error", err)
+		return config
+	}
+
+	for _, s := range settings {
+		switch s.Key() {
+		case "client_id":
+			if s.HasValue() {
+				config.ClientID = s.GetStringValue()
+			}
+		case "client_secret":
+			if s.HasValue() {
+				config.ClientSecret = s.GetStringValue()
+			}
+		case "redirect_url":
+			if s.HasValue() {
+				config.RedirectURL = s.GetStringValue()
+			}
+		}
+	}
+
+	return config
+}
+
+// GetGitHubOAuthConfig returns the merged GitHub OAuth configuration
+// Database values take precedence over environment variables
+func (p *SettingProvider) GetGitHubOAuthConfig(ctx context.Context) sharedConfig.GitHubOAuthConfig {
+	config := p.githubOAuthConfig
+
+	settings, err := p.settingRepo.GetByCategory(ctx, "oauth_github")
+	if err != nil {
+		p.logger.Warnw("failed to get GitHub OAuth settings from database", "error", err)
+		return config
+	}
+
+	for _, s := range settings {
+		switch s.Key() {
+		case "client_id":
+			if s.HasValue() {
+				config.ClientID = s.GetStringValue()
+			}
+		case "client_secret":
+			if s.HasValue() {
+				config.ClientSecret = s.GetStringValue()
+			}
+		case "redirect_url":
+			if s.HasValue() {
+				config.RedirectURL = s.GetStringValue()
+			}
+		}
+	}
+
+	return config
+}
+
+// GetEmailConfig returns the merged Email configuration
+// Database values take precedence over environment variables
+func (p *SettingProvider) GetEmailConfig(ctx context.Context) sharedConfig.EmailConfig {
+	config := p.emailConfig
+
+	settings, err := p.settingRepo.GetByCategory(ctx, "email")
+	if err != nil {
+		p.logger.Warnw("failed to get Email settings from database", "error", err)
+		return config
+	}
+
+	for _, s := range settings {
+		switch s.Key() {
+		case "smtp_host":
+			if s.HasValue() {
+				config.SMTPHost = s.GetStringValue()
+			}
+		case "smtp_port":
+			if s.HasValue() {
+				if port, err := s.GetIntValue(); err == nil {
+					config.SMTPPort = port
+				}
+			}
+		case "smtp_user":
+			if s.HasValue() {
+				config.SMTPUser = s.GetStringValue()
+			}
+		case "smtp_password":
+			if s.HasValue() {
+				config.SMTPPassword = s.GetStringValue()
+			}
+		case "from_address":
+			if s.HasValue() {
+				config.FromAddress = s.GetStringValue()
+			}
+		case "from_name":
+			if s.HasValue() {
+				config.FromName = s.GetStringValue()
+			}
+		}
+	}
+
+	return config
+}
+
+// IsSystemConfigured checks if the essential system configuration is set
+func (p *SettingProvider) IsSystemConfigured(ctx context.Context) bool {
+	apiBaseURL := p.GetAPIBaseURL(ctx)
+	return apiBaseURL.Value != "" && apiBaseURL.Source != settingDTO.SourceDefault
 }

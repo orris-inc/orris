@@ -18,6 +18,7 @@ import (
 	paymentUsecases "github.com/orris-inc/orris/internal/application/payment/usecases"
 	resourceUsecases "github.com/orris-inc/orris/internal/application/resource/usecases"
 	settingApp "github.com/orris-inc/orris/internal/application/setting"
+	settingUsecases "github.com/orris-inc/orris/internal/application/setting/usecases"
 	subscriptionServices "github.com/orris-inc/orris/internal/application/subscription/services"
 	subscriptionUsecases "github.com/orris-inc/orris/internal/application/subscription/usecases"
 	telegramApp "github.com/orris-inc/orris/internal/application/telegram"
@@ -62,65 +63,67 @@ import (
 
 // Router represents the HTTP router configuration
 type Router struct {
-	engine                          *gin.Engine
-	userHandler                     *handlers.UserHandler
-	authHandler                     *handlers.AuthHandler
-	passkeyHandler                  *handlers.PasskeyHandler
-	profileHandler                  *handlers.ProfileHandler
-	dashboardHandler                *handlers.DashboardHandler
-	subscriptionHandler             *handlers.SubscriptionHandler
-	adminSubscriptionHandler        *adminHandlers.SubscriptionHandler
-	adminResourceGroupHandler       *adminHandlers.ResourceGroupHandler
-	adminTrafficStatsHandler        *adminHandlers.TrafficStatsHandler
-	adminTelegramHandler            *adminHandlers.AdminTelegramHandler
-	adminNotificationService        *telegramAdminApp.ServiceDDD
-	settingHandler                  *adminHandlers.SettingHandler
-	settingService                  *settingApp.ServiceDDD
-	planHandler                     *handlers.PlanHandler
-	subscriptionTokenHandler        *handlers.SubscriptionTokenHandler
-	paymentHandler                  *handlers.PaymentHandler
-	nodeHandler                     *handlers.NodeHandler
-	nodeSubscriptionHandler         *handlers.NodeSubscriptionHandler
-	userNodeHandler                 *nodeHandlers.UserNodeHandler
-	agentHandler                    *nodeHandlers.AgentHandler
-	ticketHandler                   *ticketHandlers.TicketHandler
-	notificationHandler             *handlers.NotificationHandler
-	telegramHandler                 *telegramHandlers.Handler
-	telegramService                 *telegramApp.ServiceDDD
-	telegramBotManager              *telegramInfra.BotServiceManager
-	forwardRuleHandler              *forwardRuleHandlers.Handler
-	forwardAgentHandler             *forwardAgentCrudHandlers.Handler
-	forwardAgentVersionHandler      *forwardAgentCrudHandlers.VersionHandler
-	forwardAgentSSEHandler          *forwardAgentCrudHandlers.ForwardAgentSSEHandler
-	forwardAgentAPIHandler          *forwardAgentAPIHandlers.Handler
+	engine                         *gin.Engine
+	userHandler                    *handlers.UserHandler
+	authHandler                    *handlers.AuthHandler
+	passkeyHandler                 *handlers.PasskeyHandler
+	profileHandler                 *handlers.ProfileHandler
+	dashboardHandler               *handlers.DashboardHandler
+	subscriptionHandler            *handlers.SubscriptionHandler
+	adminSubscriptionHandler       *adminHandlers.SubscriptionHandler
+	adminResourceGroupHandler      *adminHandlers.ResourceGroupHandler
+	adminTrafficStatsHandler       *adminHandlers.TrafficStatsHandler
+	adminTelegramHandler           *adminHandlers.AdminTelegramHandler
+	adminNotificationService       *telegramAdminApp.ServiceDDD
+	settingHandler                 *adminHandlers.SettingHandler
+	settingService                 *settingApp.ServiceDDD
+	planHandler                    *handlers.PlanHandler
+	subscriptionTokenHandler       *handlers.SubscriptionTokenHandler
+	paymentHandler                 *handlers.PaymentHandler
+	nodeHandler                    *handlers.NodeHandler
+	nodeSubscriptionHandler        *handlers.NodeSubscriptionHandler
+	userNodeHandler                *nodeHandlers.UserNodeHandler
+	agentHandler                   *nodeHandlers.AgentHandler
+	ticketHandler                  *ticketHandlers.TicketHandler
+	notificationHandler            *handlers.NotificationHandler
+	telegramHandler                *telegramHandlers.Handler
+	telegramService                *telegramApp.ServiceDDD
+	telegramBotManager             *telegramInfra.BotServiceManager
+	forwardRuleHandler             *forwardRuleHandlers.Handler
+	forwardAgentHandler            *forwardAgentCrudHandlers.Handler
+	forwardAgentVersionHandler     *forwardAgentCrudHandlers.VersionHandler
+	forwardAgentSSEHandler         *forwardAgentCrudHandlers.ForwardAgentSSEHandler
+	forwardAgentAPIHandler         *forwardAgentAPIHandlers.Handler
 	userForwardRuleHandler         *forwardUserHandlers.Handler
 	subscriptionForwardRuleHandler *forwardSubscriptionHandlers.Handler
 	agentHub                       *services.AgentHub
-	agentHubHandler                 *forwardAgentHubHandlers.Handler
-	nodeHubHandler                  *nodeHandlers.NodeHubHandler
-	nodeVersionHandler              *nodeHandlers.NodeVersionHandler
-	nodeSSEHandler                  *nodeHandlers.NodeSSEHandler
-	adminHub                        *services.AdminHub
-	configSyncService               *forwardServices.ConfigSyncService
-	trafficLimitEnforcementSvc      *forwardServices.TrafficLimitEnforcementService
-	forwardTrafficCache             cache.ForwardTrafficCache
-	ruleTrafficBuffer               *forwardServices.RuleTrafficBuffer
-	ruleTrafficFlushDone            chan struct{}
-	subscriptionTrafficCache        cache.SubscriptionTrafficCache
-	subscriptionTrafficBuffer       *nodeServices.SubscriptionTrafficBuffer
-	subscriptionTrafficFlushDone    chan struct{}
-	adminNotificationScheduler      *scheduler.AdminNotificationScheduler
-	usageAggregationScheduler       *scheduler.UsageAggregationScheduler
-	logger                          logger.Interface
-	authMiddleware                  *middleware.AuthMiddleware
-	subscriptionOwnerMiddleware     *middleware.SubscriptionOwnerMiddleware
-	nodeTokenMiddleware             *middleware.NodeTokenMiddleware
-	nodeOwnerMiddleware             *middleware.NodeOwnerMiddleware
-	nodeQuotaMiddleware             *middleware.NodeQuotaMiddleware
-	forwardAgentTokenMiddleware     *middleware.ForwardAgentTokenMiddleware
-	forwardRuleOwnerMiddleware      *middleware.ForwardRuleOwnerMiddleware
-	forwardQuotaMiddleware          *middleware.ForwardQuotaMiddleware
-	rateLimiter                     *middleware.RateLimiter
+	agentHubHandler                *forwardAgentHubHandlers.Handler
+	nodeHubHandler                 *nodeHandlers.NodeHubHandler
+	nodeVersionHandler             *nodeHandlers.NodeVersionHandler
+	nodeSSEHandler                 *nodeHandlers.NodeSSEHandler
+	adminHub                       *services.AdminHub
+	configSyncService              *forwardServices.ConfigSyncService
+	trafficLimitEnforcementSvc     *forwardServices.TrafficLimitEnforcementService
+	forwardTrafficCache            cache.ForwardTrafficCache
+	ruleTrafficBuffer              *forwardServices.RuleTrafficBuffer
+	ruleTrafficFlushDone           chan struct{}
+	subscriptionTrafficCache       cache.SubscriptionTrafficCache
+	subscriptionTrafficBuffer      *nodeServices.SubscriptionTrafficBuffer
+	subscriptionTrafficFlushDone   chan struct{}
+	adminNotificationScheduler     *scheduler.AdminNotificationScheduler
+	usageAggregationScheduler      *scheduler.UsageAggregationScheduler
+	logger                         logger.Interface
+	authMiddleware                 *middleware.AuthMiddleware
+	subscriptionOwnerMiddleware    *middleware.SubscriptionOwnerMiddleware
+	nodeTokenMiddleware            *middleware.NodeTokenMiddleware
+	nodeOwnerMiddleware            *middleware.NodeOwnerMiddleware
+	nodeQuotaMiddleware            *middleware.NodeQuotaMiddleware
+	forwardAgentTokenMiddleware    *middleware.ForwardAgentTokenMiddleware
+	forwardRuleOwnerMiddleware     *middleware.ForwardRuleOwnerMiddleware
+	forwardQuotaMiddleware         *middleware.ForwardQuotaMiddleware
+	rateLimiter                    *middleware.RateLimiter
+	oauthManager                   *auth.OAuthServiceManager
+	emailManager                   *email.EmailServiceManager
 }
 
 type jwtServiceAdapter struct {
@@ -170,6 +173,63 @@ func (a *oauthClientAdapter) GetUserInfo(ctx context.Context, accessToken string
 	}, nil
 }
 
+// dynamicOAuthClientAdapter wraps OAuthServiceManager to provide dynamic OAuth client access
+// This adapter fetches the current OAuth client from manager on each call, enabling hot-reload support
+type dynamicOAuthClientAdapter struct {
+	manager  *auth.OAuthServiceManager
+	provider string // "google" or "github"
+}
+
+func (a *dynamicOAuthClientAdapter) getClient() interface {
+	GetAuthURL(state string) (authURL string, codeVerifier string, err error)
+	ExchangeCode(ctx context.Context, code string, codeVerifier string) (string, error)
+	GetUserInfo(ctx context.Context, accessToken string) (*auth.OAuthUserInfo, error)
+} {
+	switch a.provider {
+	case "google":
+		return a.manager.GetGoogleClient()
+	case "github":
+		return a.manager.GetGitHubClient()
+	default:
+		return nil
+	}
+}
+
+func (a *dynamicOAuthClientAdapter) GetAuthURL(state string) (string, string, error) {
+	client := a.getClient()
+	if client == nil {
+		return "", "", auth.ErrOAuthNotConfigured
+	}
+	return client.GetAuthURL(state)
+}
+
+func (a *dynamicOAuthClientAdapter) ExchangeCode(ctx context.Context, code string, codeVerifier string) (string, error) {
+	client := a.getClient()
+	if client == nil {
+		return "", auth.ErrOAuthNotConfigured
+	}
+	return client.ExchangeCode(ctx, code, codeVerifier)
+}
+
+func (a *dynamicOAuthClientAdapter) GetUserInfo(ctx context.Context, accessToken string) (*usecases.OAuthUserInfo, error) {
+	client := a.getClient()
+	if client == nil {
+		return nil, auth.ErrOAuthNotConfigured
+	}
+	info, err := client.GetUserInfo(ctx, accessToken)
+	if err != nil {
+		return nil, err
+	}
+	return &usecases.OAuthUserInfo{
+		Email:         info.Email,
+		Name:          info.Name,
+		Picture:       info.Picture,
+		EmailVerified: info.EmailVerified,
+		Provider:      info.Provider,
+		ProviderID:    info.ProviderID,
+	}, nil
+}
+
 // NewRouter creates a new HTTP router with all dependencies
 func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, log logger.Interface) *Router {
 	engine := gin.New()
@@ -182,30 +242,9 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	jwtSvc := auth.NewJWTService(cfg.Auth.JWT.Secret, cfg.Auth.JWT.AccessExpMinutes, cfg.Auth.JWT.RefreshExpDays)
 	jwtService := &jwtServiceAdapter{jwtSvc}
 
-	emailCfg := email.SMTPConfig{
-		Host:        cfg.Email.SMTPHost,
-		Port:        cfg.Email.SMTPPort,
-		Username:    cfg.Email.SMTPUser,
-		Password:    cfg.Email.SMTPPassword,
-		FromAddress: cfg.Email.FromAddress,
-		FromName:    cfg.Email.FromName,
-		BaseURL:     cfg.Server.GetBaseURL(),
-	}
-	emailService := email.NewSMTPEmailService(emailCfg)
-
-	googleBase := auth.NewGoogleOAuthClient(auth.GoogleOAuthConfig{
-		ClientID:     cfg.OAuth.Google.ClientID,
-		ClientSecret: cfg.OAuth.Google.ClientSecret,
-		RedirectURL:  cfg.OAuth.Google.GetRedirectURL(cfg.Server.GetBaseURL()),
-	})
-	googleClient := &oauthClientAdapter{googleBase}
-
-	githubBase := auth.NewGitHubOAuthClient(auth.GitHubOAuthConfig{
-		ClientID:     cfg.OAuth.GitHub.ClientID,
-		ClientSecret: cfg.OAuth.GitHub.ClientSecret,
-		RedirectURL:  cfg.OAuth.GitHub.GetRedirectURL(cfg.Server.GetBaseURL()),
-	})
-	githubClient := &oauthClientAdapter{githubBase}
+	// Note: Email service and OAuth clients are now initialized later via
+	// EmailServiceManager and OAuthServiceManager for hot-reload support.
+	// See section after settingServiceDDD initialization.
 
 	// Initialize Redis client for OAuth state storage and Asynq
 	redisClient := redis.NewClient(&redis.Options{
@@ -233,62 +272,14 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	authHelper := helpers.NewAuthHelper(userRepo, sessionRepo, log)
 
-	registerUC := usecases.NewRegisterWithPasswordUseCase(userRepo, hasher, emailService, authHelper, log)
-	loginUC := usecases.NewLoginWithPasswordUseCase(userRepo, sessionRepo, hasher, jwtService, authHelper, cfg.Auth.Session, log)
-	verifyEmailUC := usecases.NewVerifyEmailUseCase(userRepo, log)
-	requestResetUC := usecases.NewRequestPasswordResetUseCase(userRepo, emailService, log)
-	resetPasswordUC := usecases.NewResetPasswordUseCase(userRepo, sessionRepo, hasher, emailService, log)
-	adminResetPasswordUC := usecases.NewAdminResetPasswordUseCase(userRepo, sessionRepo, hasher, emailService, log)
-	initiateOAuthUC := usecases.NewInitiateOAuthLoginUseCase(googleClient, githubClient, log, stateStore)
-	handleOAuthUC := usecases.NewHandleOAuthCallbackUseCase(userRepo, oauthRepo, sessionRepo, googleClient, githubClient, jwtService, initiateOAuthUC, authHelper, cfg.Auth.Session, log)
-	refreshTokenUC := usecases.NewRefreshTokenUseCase(userRepo, sessionRepo, jwtService, authHelper, log)
-	logoutUC := usecases.NewLogoutUseCase(sessionRepo, log)
+	// Note: Auth-related use cases (registerUC, loginUC, etc.) and authHandler
+	// are initialized later after OAuthServiceManager and EmailServiceManager
+	// are created for hot-reload support. See section after settingServiceDDD.
 
-	authHandler := handlers.NewAuthHandler(
-		registerUC, loginUC, verifyEmailUC, requestResetUC, resetPasswordUC,
-		initiateOAuthUC, handleOAuthUC, refreshTokenUC, logoutUC, userRepo, log,
-		cfg.Auth.Cookie, cfg.Auth.JWT,
-		cfg.Server.FrontendCallbackURL, cfg.Server.AllowedOrigins,
-	)
-
-	// Initialize Passkey (WebAuthn) components if configured
+	// Declare variables for auth components that will be initialized later
+	var authHandler *handlers.AuthHandler
 	var passkeyHandler *handlers.PasskeyHandler
-	if cfg.WebAuthn.IsConfigured() {
-		webAuthnService, err := auth.NewWebAuthnService(cfg.WebAuthn)
-		if err != nil {
-			log.Warnw("failed to initialize WebAuthn service, passkey authentication disabled", "error", err)
-		} else {
-			passkeyRepo := repository.NewPasskeyCredentialRepository(db, log)
-			passkeyChallengeStore := cache.NewPasskeyChallengeStore(redisClient)
-			passkeySignupSessionStore := cache.NewPasskeySignupSessionStore(redisClient)
-
-			startPasskeyRegistrationUC := usecases.NewStartPasskeyRegistrationUseCase(userRepo, passkeyRepo, webAuthnService, passkeyChallengeStore, log)
-			finishPasskeyRegistrationUC := usecases.NewFinishPasskeyRegistrationUseCase(userRepo, passkeyRepo, webAuthnService, passkeyChallengeStore, log)
-			startPasskeyAuthenticationUC := usecases.NewStartPasskeyAuthenticationUseCase(userRepo, passkeyRepo, webAuthnService, passkeyChallengeStore, log)
-			finishPasskeyAuthenticationUC := usecases.NewFinishPasskeyAuthenticationUseCase(userRepo, passkeyRepo, sessionRepo, webAuthnService, passkeyChallengeStore, jwtService, authHelper, cfg.Auth.Session, log)
-			startPasskeySignupUC := usecases.NewStartPasskeySignupUseCase(userRepo, webAuthnService, passkeyChallengeStore, passkeySignupSessionStore, log)
-			finishPasskeySignupUC := usecases.NewFinishPasskeySignupUseCase(userRepo, passkeyRepo, sessionRepo, webAuthnService, passkeyChallengeStore, passkeySignupSessionStore, jwtService, authHelper, cfg.Auth.Session, log)
-			listUserPasskeysUC := usecases.NewListUserPasskeysUseCase(passkeyRepo, log)
-			deletePasskeyUC := usecases.NewDeletePasskeyUseCase(passkeyRepo, log)
-
-			passkeyHandler = handlers.NewPasskeyHandler(
-				startPasskeyRegistrationUC,
-				finishPasskeyRegistrationUC,
-				startPasskeyAuthenticationUC,
-				finishPasskeyAuthenticationUC,
-				startPasskeySignupUC,
-				finishPasskeySignupUC,
-				listUserPasskeysUC,
-				deletePasskeyUC,
-				log,
-				cfg.Auth.Cookie,
-				cfg.Auth.JWT,
-			)
-			log.Infow("WebAuthn passkey authentication enabled")
-		}
-	}
-
-	userHandler := handlers.NewUserHandler(userService, adminResetPasswordUC)
+	var userHandler *handlers.UserHandler
 
 	authMiddleware := middleware.NewAuthMiddleware(jwtSvc, userRepo, log)
 	rateLimiter := middleware.NewRateLimiter(100, 1*time.Minute)
@@ -541,9 +532,102 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	// Initialize System Setting components
 	settingRepo := repository.NewSystemSettingRepository(db, log)
-	settingServiceDDD := settingApp.NewServiceDDD(settingRepo, cfg.Telegram, apiBaseURL, nil, log)
+	settingProviderCfg := settingUsecases.SettingProviderConfig{
+		TelegramConfig:      cfg.Telegram,
+		GoogleOAuthConfig:   cfg.OAuth.Google,
+		GitHubOAuthConfig:   cfg.OAuth.GitHub,
+		EmailConfig:         cfg.Email,
+		APIBaseURL:          apiBaseURL,
+		SubscriptionBaseURL: cfg.Subscription.BaseURL,
+		FrontendURL:         cfg.Server.FrontendCallbackURL,
+		Timezone:            cfg.Server.Timezone,
+	}
+	settingServiceDDD := settingApp.NewServiceDDD(settingRepo, settingProviderCfg, nil, log)
 	settingHandler := adminHandlers.NewSettingHandler(settingServiceDDD, log)
 	settingProvider := settingServiceDDD.GetSettingProvider()
+
+	// Initialize OAuthServiceManager for hot-reload support
+	// Note: Initial failure is acceptable - will be re-initialized on setting changes
+	oauthManager := auth.NewOAuthServiceManager(settingProvider, log)
+	if err := oauthManager.Initialize(context.Background()); err != nil {
+		log.Warnw("oauth service manager initial config incomplete, will reinitialize on setting change", "error", err)
+	}
+	settingServiceDDD.Subscribe(oauthManager)
+
+	// Initialize EmailServiceManager for hot-reload support
+	// Note: Initial failure is acceptable - will be re-initialized on setting changes
+	emailManager := email.NewEmailServiceManager(settingProvider, log)
+	if err := emailManager.Initialize(context.Background()); err != nil {
+		log.Warnw("email service manager initial config incomplete, will reinitialize on setting change", "error", err)
+	}
+	settingServiceDDD.Subscribe(emailManager)
+
+	// Create DynamicEmailService for use cases
+	dynamicEmailSvc := email.NewDynamicEmailService(emailManager, log)
+
+	// Inject EmailTester to break circular dependency
+	settingServiceDDD.SetEmailTester(dynamicEmailSvc)
+
+	// Create dynamic OAuth clients that fetch current client from manager
+	dynamicGoogleClient := &dynamicOAuthClientAdapter{manager: oauthManager, provider: "google"}
+	dynamicGitHubClient := &dynamicOAuthClientAdapter{manager: oauthManager, provider: "github"}
+
+	// Initialize auth-related use cases with dynamic services for hot-reload support
+	registerUC := usecases.NewRegisterWithPasswordUseCase(userRepo, hasher, dynamicEmailSvc, authHelper, log)
+	loginUC := usecases.NewLoginWithPasswordUseCase(userRepo, sessionRepo, hasher, jwtService, authHelper, cfg.Auth.Session, log)
+	verifyEmailUC := usecases.NewVerifyEmailUseCase(userRepo, log)
+	requestResetUC := usecases.NewRequestPasswordResetUseCase(userRepo, dynamicEmailSvc, log)
+	resetPasswordUC := usecases.NewResetPasswordUseCase(userRepo, sessionRepo, hasher, dynamicEmailSvc, log)
+	adminResetPasswordUC := usecases.NewAdminResetPasswordUseCase(userRepo, sessionRepo, hasher, dynamicEmailSvc, log)
+	initiateOAuthUC := usecases.NewInitiateOAuthLoginUseCase(dynamicGoogleClient, dynamicGitHubClient, log, stateStore)
+	handleOAuthUC := usecases.NewHandleOAuthCallbackUseCase(userRepo, oauthRepo, sessionRepo, dynamicGoogleClient, dynamicGitHubClient, jwtService, initiateOAuthUC, authHelper, cfg.Auth.Session, log)
+	refreshTokenUC := usecases.NewRefreshTokenUseCase(userRepo, sessionRepo, jwtService, authHelper, log)
+	logoutUC := usecases.NewLogoutUseCase(sessionRepo, log)
+
+	authHandler = handlers.NewAuthHandler(
+		registerUC, loginUC, verifyEmailUC, requestResetUC, resetPasswordUC,
+		initiateOAuthUC, handleOAuthUC, refreshTokenUC, logoutUC, userRepo, log,
+		cfg.Auth.Cookie, cfg.Auth.JWT,
+		cfg.Server.FrontendCallbackURL, cfg.Server.AllowedOrigins,
+	)
+
+	// Initialize Passkey (WebAuthn) components if configured
+	if cfg.WebAuthn.IsConfigured() {
+		webAuthnService, err := auth.NewWebAuthnService(cfg.WebAuthn)
+		if err != nil {
+			log.Warnw("failed to initialize WebAuthn service, passkey authentication disabled", "error", err)
+		} else {
+			passkeyRepo := repository.NewPasskeyCredentialRepository(db, log)
+			passkeyChallengeStore := cache.NewPasskeyChallengeStore(redisClient)
+			passkeySignupSessionStore := cache.NewPasskeySignupSessionStore(redisClient)
+
+			startPasskeyRegistrationUC := usecases.NewStartPasskeyRegistrationUseCase(userRepo, passkeyRepo, webAuthnService, passkeyChallengeStore, log)
+			finishPasskeyRegistrationUC := usecases.NewFinishPasskeyRegistrationUseCase(userRepo, passkeyRepo, webAuthnService, passkeyChallengeStore, log)
+			startPasskeyAuthenticationUC := usecases.NewStartPasskeyAuthenticationUseCase(userRepo, passkeyRepo, webAuthnService, passkeyChallengeStore, log)
+			finishPasskeyAuthenticationUC := usecases.NewFinishPasskeyAuthenticationUseCase(userRepo, passkeyRepo, sessionRepo, webAuthnService, passkeyChallengeStore, jwtService, authHelper, cfg.Auth.Session, log)
+			startPasskeySignupUC := usecases.NewStartPasskeySignupUseCase(userRepo, webAuthnService, passkeyChallengeStore, passkeySignupSessionStore, log)
+			finishPasskeySignupUC := usecases.NewFinishPasskeySignupUseCase(userRepo, passkeyRepo, sessionRepo, webAuthnService, passkeyChallengeStore, passkeySignupSessionStore, jwtService, authHelper, cfg.Auth.Session, log)
+			listUserPasskeysUC := usecases.NewListUserPasskeysUseCase(passkeyRepo, log)
+			deletePasskeyUC := usecases.NewDeletePasskeyUseCase(passkeyRepo, log)
+
+			passkeyHandler = handlers.NewPasskeyHandler(
+				startPasskeyRegistrationUC,
+				finishPasskeyRegistrationUC,
+				startPasskeyAuthenticationUC,
+				finishPasskeyAuthenticationUC,
+				startPasskeySignupUC,
+				finishPasskeySignupUC,
+				listUserPasskeysUC,
+				deletePasskeyUC,
+				log,
+				cfg.Auth.Cookie,
+				cfg.Auth.JWT,
+			)
+			log.Infow("WebAuthn passkey authentication enabled")
+		}
+	}
+
+	userHandler = handlers.NewUserHandler(userService, adminResetPasswordUC)
 
 	// Initialize Telegram notification components using BotServiceManager for hot-reload support
 	var telegramHandler *telegramHandlers.Handler
@@ -1441,65 +1525,67 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	forwardAgentSSEHandler := forwardAgentCrudHandlers.NewForwardAgentSSEHandler(adminHub, log)
 
 	return &Router{
-		engine:                          engine,
-		userHandler:                     userHandler,
-		authHandler:                     authHandler,
-		passkeyHandler:                  passkeyHandler,
-		profileHandler:                  profileHandler,
-		dashboardHandler:                dashboardHandler,
-		subscriptionHandler:             subscriptionHandler,
-		adminSubscriptionHandler:        adminSubscriptionHandler,
-		adminResourceGroupHandler:       adminResourceGroupHandler,
-		adminTrafficStatsHandler:        adminTrafficStatsHandler,
-		adminTelegramHandler:            adminTelegramHandler,
-		adminNotificationService:        adminNotificationServiceDDD,
-		settingHandler:                  settingHandler,
-		settingService:                  settingServiceDDD,
-		planHandler:                     planHandler,
-		subscriptionTokenHandler:        subscriptionTokenHandler,
-		paymentHandler:                  paymentHandler,
-		nodeHandler:                     nodeHandler,
-		nodeSubscriptionHandler:         nodeSubscriptionHandler,
-		userNodeHandler:                 userNodeHandler,
-		agentHandler:                    agentHandler,
-		ticketHandler:                   ticketHandler,
-		notificationHandler:             notificationHandler,
-		telegramHandler:                 telegramHandler,
-		telegramService:                 telegramServiceDDD,
-		telegramBotManager:              telegramBotManager,
-		forwardRuleHandler:              forwardRuleHandler,
-		forwardAgentHandler:             forwardAgentHandler,
-		forwardAgentVersionHandler:      forwardAgentVersionHandler,
-		forwardAgentSSEHandler:          forwardAgentSSEHandler,
-		forwardAgentAPIHandler:          forwardAgentAPIHandler,
+		engine:                         engine,
+		userHandler:                    userHandler,
+		authHandler:                    authHandler,
+		passkeyHandler:                 passkeyHandler,
+		profileHandler:                 profileHandler,
+		dashboardHandler:               dashboardHandler,
+		subscriptionHandler:            subscriptionHandler,
+		adminSubscriptionHandler:       adminSubscriptionHandler,
+		adminResourceGroupHandler:      adminResourceGroupHandler,
+		adminTrafficStatsHandler:       adminTrafficStatsHandler,
+		adminTelegramHandler:           adminTelegramHandler,
+		adminNotificationService:       adminNotificationServiceDDD,
+		settingHandler:                 settingHandler,
+		settingService:                 settingServiceDDD,
+		planHandler:                    planHandler,
+		subscriptionTokenHandler:       subscriptionTokenHandler,
+		paymentHandler:                 paymentHandler,
+		nodeHandler:                    nodeHandler,
+		nodeSubscriptionHandler:        nodeSubscriptionHandler,
+		userNodeHandler:                userNodeHandler,
+		agentHandler:                   agentHandler,
+		ticketHandler:                  ticketHandler,
+		notificationHandler:            notificationHandler,
+		telegramHandler:                telegramHandler,
+		telegramService:                telegramServiceDDD,
+		telegramBotManager:             telegramBotManager,
+		forwardRuleHandler:             forwardRuleHandler,
+		forwardAgentHandler:            forwardAgentHandler,
+		forwardAgentVersionHandler:     forwardAgentVersionHandler,
+		forwardAgentSSEHandler:         forwardAgentSSEHandler,
+		forwardAgentAPIHandler:         forwardAgentAPIHandler,
 		userForwardRuleHandler:         userForwardRuleHandler,
 		subscriptionForwardRuleHandler: subscriptionForwardRuleHandler,
 		agentHub:                       agentHub,
-		agentHubHandler:                 agentHubHandler,
-		nodeHubHandler:                  nodeHubHandler,
-		nodeVersionHandler:              nodeVersionHandler,
-		nodeSSEHandler:                  nodeSSEHandler,
-		adminHub:                        adminHub,
-		configSyncService:               configSyncService,
-		trafficLimitEnforcementSvc:      trafficLimitEnforcementSvc,
-		forwardTrafficCache:             forwardTrafficCache,
-		ruleTrafficBuffer:               ruleTrafficBuffer,
-		ruleTrafficFlushDone:            ruleTrafficFlushDone,
-		subscriptionTrafficCache:        subscriptionTrafficCache,
-		subscriptionTrafficBuffer:       subscriptionTrafficBuffer,
-		subscriptionTrafficFlushDone:    subscriptionTrafficFlushDone,
-		adminNotificationScheduler:      adminNotificationScheduler,
-		usageAggregationScheduler:       usageAggregationScheduler,
-		logger:                          log,
-		authMiddleware:                  authMiddleware,
-		subscriptionOwnerMiddleware:     subscriptionOwnerMiddleware,
-		nodeTokenMiddleware:             nodeTokenMiddleware,
-		nodeOwnerMiddleware:             nodeOwnerMiddleware,
-		nodeQuotaMiddleware:             nodeQuotaMiddleware,
-		forwardAgentTokenMiddleware:     forwardAgentTokenMiddleware,
-		forwardRuleOwnerMiddleware:      forwardRuleOwnerMiddleware,
-		forwardQuotaMiddleware:          forwardQuotaMiddleware,
-		rateLimiter:                     rateLimiter,
+		agentHubHandler:                agentHubHandler,
+		nodeHubHandler:                 nodeHubHandler,
+		nodeVersionHandler:             nodeVersionHandler,
+		nodeSSEHandler:                 nodeSSEHandler,
+		adminHub:                       adminHub,
+		configSyncService:              configSyncService,
+		trafficLimitEnforcementSvc:     trafficLimitEnforcementSvc,
+		forwardTrafficCache:            forwardTrafficCache,
+		ruleTrafficBuffer:              ruleTrafficBuffer,
+		ruleTrafficFlushDone:           ruleTrafficFlushDone,
+		subscriptionTrafficCache:       subscriptionTrafficCache,
+		subscriptionTrafficBuffer:      subscriptionTrafficBuffer,
+		subscriptionTrafficFlushDone:   subscriptionTrafficFlushDone,
+		adminNotificationScheduler:     adminNotificationScheduler,
+		usageAggregationScheduler:      usageAggregationScheduler,
+		logger:                         log,
+		authMiddleware:                 authMiddleware,
+		subscriptionOwnerMiddleware:    subscriptionOwnerMiddleware,
+		nodeTokenMiddleware:            nodeTokenMiddleware,
+		nodeOwnerMiddleware:            nodeOwnerMiddleware,
+		nodeQuotaMiddleware:            nodeQuotaMiddleware,
+		forwardAgentTokenMiddleware:    forwardAgentTokenMiddleware,
+		forwardRuleOwnerMiddleware:     forwardRuleOwnerMiddleware,
+		forwardQuotaMiddleware:         forwardQuotaMiddleware,
+		rateLimiter:                    rateLimiter,
+		oauthManager:                   oauthManager,
+		emailManager:                   emailManager,
 	}
 }
 

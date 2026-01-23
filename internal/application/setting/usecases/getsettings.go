@@ -208,3 +208,8 @@ func (uc *GetSettingsUseCase) parseValue(s *setting.SystemSetting) any {
 	}
 	return s.GetStringValue()
 }
+
+// GetSettingByKey retrieves a setting by category and key
+func (uc *GetSettingsUseCase) GetSettingByKey(ctx context.Context, category, key string) (*setting.SystemSetting, error) {
+	return uc.settingRepo.GetByKey(ctx, category, key)
+}

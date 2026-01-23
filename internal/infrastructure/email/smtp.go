@@ -1,10 +1,14 @@
 package email
 
 import (
+	"errors"
 	"fmt"
 
 	"gopkg.in/gomail.v2"
 )
+
+// ErrEmailServiceNotConfigured is returned when attempting to send email without configuration
+var ErrEmailServiceNotConfigured = errors.New("email service not configured")
 
 type SMTPConfig struct {
 	Host        string
@@ -130,4 +134,28 @@ func (s *SMTPEmailService) sendEmail(to, subject, htmlBody, plainBody string) er
 	}
 
 	return nil
+}
+
+// SendTestEmail sends a test email to verify the configuration
+func (s *SMTPEmailService) SendTestEmail(to string) error {
+	subject := "Orris Email Configuration Test"
+	htmlBody := `
+		<html>
+		<body>
+			<h2>Email Configuration Test</h2>
+			<p>This is a test email from Orris to verify your email configuration is working correctly.</p>
+			<p>If you received this email, your SMTP settings are configured properly.</p>
+		</body>
+		</html>
+	`
+
+	plainBody := `
+Email Configuration Test
+
+This is a test email from Orris to verify your email configuration is working correctly.
+
+If you received this email, your SMTP settings are configured properly.
+	`
+
+	return s.sendEmail(to, subject, htmlBody, plainBody)
 }
