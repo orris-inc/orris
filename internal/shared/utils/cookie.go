@@ -42,6 +42,22 @@ func SetAuthCookies(c *gin.Context, cookieConfig config.CookieConfig, accessToke
 	c.SetSameSite(sameSite)
 }
 
+// SetAccessTokenCookie sets only the access token cookie (used for auto-refresh)
+func SetAccessTokenCookie(c *gin.Context, cookieConfig config.CookieConfig, accessToken string, maxAge int) {
+	sameSite := parseSameSite(cookieConfig.SameSite)
+
+	c.SetCookie(
+		AccessTokenCookie,
+		accessToken,
+		maxAge,
+		cookieConfig.Path,
+		cookieConfig.Domain,
+		cookieConfig.Secure,
+		true, // HttpOnly
+	)
+	c.SetSameSite(sameSite)
+}
+
 // ClearAuthCookies clears access and refresh token cookies
 func ClearAuthCookies(c *gin.Context, cookieConfig config.CookieConfig) {
 	sameSite := parseSameSite(cookieConfig.SameSite)

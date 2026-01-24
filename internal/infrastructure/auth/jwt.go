@@ -111,6 +111,43 @@ func (s *JWTService) Verify(tokenString string) (*Claims, error) {
 	return nil, fmt.Errorf("invalid token")
 }
 
+// ShouldRefresh checks if the access token should be refreshed
+// Returns true if the token will expire within the threshold (default: 5 minutes)
+func (s *JWTService) ShouldRefresh(claims *Claims) bool {
+	if claims == nil || claims.ExpiresAt == nil {
+		return false
+	}
+	// Refresh if token expires within 5 minutes
+	threshold := 5 * time.Minute
+	return biztime.NowUTC().Add(threshold).After(claims.ExpiresAt.Time)
+}
+
+// RefreshAccessToken generates a new access token using the same claims
+func (s *JWTService) RefreshAccessToken(claims *Claims) (string, error) {
+	now := biztime.NowUTC()
+	accessExp := now.Add(time.Duration(s.accessExpMinutes) * time.Minute)
+
+	newClaims := &Claims{
+		UserUUID:  claims.UserUUID,
+		SessionID: claims.SessionID,
+		Role:      claims.Role,
+		TokenType: TokenTypeAccess,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(accessExp),
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
+		},
+	}
+
+	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, newClaims)
+	return accessToken.SignedString(s.secret)
+}
+
+// AccessExpMinutes returns the access token expiration time in minutes
+func (s *JWTService) AccessExpMinutes() int {
+	return s.accessExpMinutes
+}
+
 func (s *JWTService) Refresh(refreshTokenString string) (string, error) {
 	claims, err := s.Verify(refreshTokenString)
 	if err != nil {

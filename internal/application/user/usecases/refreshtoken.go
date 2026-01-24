@@ -3,9 +3,11 @@ package usecases
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/orris-inc/orris/internal/application/user/helpers"
 	"github.com/orris-inc/orris/internal/domain/user"
+	"github.com/orris-inc/orris/internal/shared/config"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -19,11 +21,12 @@ type RefreshTokenResult struct {
 }
 
 type RefreshTokenUseCase struct {
-	userRepo    user.Repository
-	sessionRepo user.SessionRepository
-	jwtService  JWTService
-	authHelper  *helpers.AuthHelper
-	logger      logger.Interface
+	userRepo      user.Repository
+	sessionRepo   user.SessionRepository
+	jwtService    JWTService
+	authHelper    *helpers.AuthHelper
+	sessionConfig config.SessionConfig
+	logger        logger.Interface
 }
 
 func NewRefreshTokenUseCase(
@@ -31,14 +34,16 @@ func NewRefreshTokenUseCase(
 	sessionRepo user.SessionRepository,
 	jwtService JWTService,
 	authHelper *helpers.AuthHelper,
+	sessionConfig config.SessionConfig,
 	logger logger.Interface,
 ) *RefreshTokenUseCase {
 	return &RefreshTokenUseCase{
-		userRepo:    userRepo,
-		sessionRepo: sessionRepo,
-		jwtService:  jwtService,
-		authHelper:  authHelper,
-		logger:      logger,
+		userRepo:      userRepo,
+		sessionRepo:   sessionRepo,
+		jwtService:    jwtService,
+		authHelper:    authHelper,
+		sessionConfig: sessionConfig,
+		logger:        logger,
 	}
 }
 
@@ -84,6 +89,11 @@ func (uc *RefreshTokenUseCase) Execute(ctx context.Context, cmd RefreshTokenComm
 
 	uc.authHelper.UpdateSessionAccessToken(session, newAccessToken)
 	session.UpdateActivity()
+
+	// Extend session expiration on refresh to keep active users logged in
+	// Use default session duration (active users shouldn't need to re-login frequently)
+	sessionDuration := time.Duration(uc.sessionConfig.DefaultExpDays) * 24 * time.Hour
+	session.ExtendExpiration(sessionDuration)
 
 	if err := uc.sessionRepo.Update(session); err != nil {
 		uc.logger.Errorw("failed to update session", "error", err)

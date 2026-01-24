@@ -55,6 +55,11 @@ func (s *Session) UpdateActivity() {
 	s.LastActivityAt = biztime.NowUTC()
 }
 
+// ExtendExpiration extends the session expiration time by the given duration from now
+func (s *Session) ExtendExpiration(duration time.Duration) {
+	s.ExpiresAt = biztime.NowUTC().Add(duration)
+}
+
 func generateSessionID() (string, error) {
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {

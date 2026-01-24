@@ -8,22 +8,25 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/user"
 	"github.com/orris-inc/orris/internal/infrastructure/auth"
+	"github.com/orris-inc/orris/internal/shared/config"
 	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 type AuthMiddleware struct {
-	jwtService *auth.JWTService
-	userRepo   user.Repository
-	logger     logger.Interface
+	jwtService   *auth.JWTService
+	userRepo     user.Repository
+	cookieConfig config.CookieConfig
+	logger       logger.Interface
 }
 
-func NewAuthMiddleware(jwtService *auth.JWTService, userRepo user.Repository, logger logger.Interface) *AuthMiddleware {
+func NewAuthMiddleware(jwtService *auth.JWTService, userRepo user.Repository, cookieConfig config.CookieConfig, logger logger.Interface) *AuthMiddleware {
 	return &AuthMiddleware{
-		jwtService: jwtService,
-		userRepo:   userRepo,
-		logger:     logger,
+		jwtService:   jwtService,
+		userRepo:     userRepo,
+		cookieConfig: cookieConfig,
+		logger:       logger,
 	}
 }
 
@@ -79,8 +82,28 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 		c.Set("session_id", claims.SessionID)
 		c.Set(constants.ContextKeyUserRole, string(claims.Role))
 
+		// Auto-refresh: if token is about to expire, generate a new one
+		if m.jwtService.ShouldRefresh(claims) {
+			m.refreshAccessToken(c, claims)
+		}
+
 		c.Next()
 	}
+}
+
+// refreshAccessToken generates a new access token and sets it in the cookie
+func (m *AuthMiddleware) refreshAccessToken(c *gin.Context, claims *auth.Claims) {
+	newToken, err := m.jwtService.RefreshAccessToken(claims)
+	if err != nil {
+		m.logger.Warnw("failed to auto-refresh access token", "error", err, "user_uuid", claims.UserUUID)
+		return
+	}
+
+	// Set the new access token in cookie
+	accessMaxAge := m.jwtService.AccessExpMinutes() * 60
+	utils.SetAccessTokenCookie(c, m.cookieConfig, newToken, accessMaxAge)
+
+	m.logger.Debugw("access token auto-refreshed", "user_uuid", claims.UserUUID)
 }
 
 func (m *AuthMiddleware) OptionalAuth() gin.HandlerFunc {
