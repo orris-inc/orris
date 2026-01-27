@@ -9,6 +9,7 @@ import (
 	vo "github.com/orris-inc/orris/internal/domain/payment/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	subscriptionVO "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
+	"github.com/orris-inc/orris/internal/shared/db"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
@@ -27,14 +28,22 @@ type CreatePaymentResult struct {
 	QRCode     string
 }
 
+// USDTGatewayProvider provides access to the USDT gateway
+type USDTGatewayProvider interface {
+	IsEnabled() bool
+	GetUSDTGateway() *paymentgateway.USDTGateway
+}
+
 type CreatePaymentUseCase struct {
-	paymentRepo      payment.PaymentRepository
-	subscriptionRepo subscription.SubscriptionRepository
-	planRepo         subscription.PlanRepository
-	pricingRepo      subscription.PlanPricingRepository
-	gateway          paymentgateway.PaymentGateway
-	logger           logger.Interface
-	config           PaymentConfig
+	paymentRepo         payment.PaymentRepository
+	subscriptionRepo    subscription.SubscriptionRepository
+	planRepo            subscription.PlanRepository
+	pricingRepo         subscription.PlanPricingRepository
+	gateway             paymentgateway.PaymentGateway
+	usdtGatewayProvider USDTGatewayProvider
+	txMgr               *db.TransactionManager
+	logger              logger.Interface
+	config              PaymentConfig
 }
 
 type PaymentConfig struct {
@@ -47,6 +56,7 @@ func NewCreatePaymentUseCase(
 	planRepo subscription.PlanRepository,
 	pricingRepo subscription.PlanPricingRepository,
 	gateway paymentgateway.PaymentGateway,
+	txMgr *db.TransactionManager,
 	logger logger.Interface,
 	config PaymentConfig,
 ) *CreatePaymentUseCase {
@@ -56,9 +66,15 @@ func NewCreatePaymentUseCase(
 		planRepo:         planRepo,
 		pricingRepo:      pricingRepo,
 		gateway:          gateway,
+		txMgr:            txMgr,
 		logger:           logger,
 		config:           config,
 	}
+}
+
+// SetUSDTGatewayProvider sets the USDT gateway provider
+func (uc *CreatePaymentUseCase) SetUSDTGatewayProvider(provider USDTGatewayProvider) {
+	uc.usdtGatewayProvider = provider
 }
 
 func (uc *CreatePaymentUseCase) Execute(ctx context.Context, cmd CreatePaymentCommand) (*CreatePaymentResult, error) {
@@ -124,6 +140,11 @@ func (uc *CreatePaymentUseCase) Execute(ctx context.Context, cmd CreatePaymentCo
 		return nil, fmt.Errorf("failed to create payment: %w", err)
 	}
 
+	// Handle USDT payments separately
+	if method.IsUSDT() {
+		return uc.createUSDTPayment(ctx, paymentOrder, amount, method, plan.Name())
+	}
+
 	gatewayReq := paymentgateway.CreatePaymentRequest{
 		OrderNo:   paymentOrder.OrderNo(),
 		Amount:    amount.AmountInCents(),
@@ -158,4 +179,67 @@ func (uc *CreatePaymentUseCase) Execute(ctx context.Context, cmd CreatePaymentCo
 		PaymentURL: gatewayResp.PaymentURL,
 		QRCode:     gatewayResp.QRCode,
 	}, nil
+}
+
+// createUSDTPayment handles USDT-specific payment creation
+// Uses database transaction to ensure atomicity of payment creation and suffix allocation
+func (uc *CreatePaymentUseCase) createUSDTPayment(ctx context.Context, paymentOrder *payment.Payment, amount vo.Money, method vo.PaymentMethod, planName string) (*CreatePaymentResult, error) {
+	if uc.usdtGatewayProvider == nil || !uc.usdtGatewayProvider.IsEnabled() {
+		return nil, fmt.Errorf("USDT payment is not enabled")
+	}
+
+	usdtGateway := uc.usdtGatewayProvider.GetUSDTGateway()
+	if usdtGateway == nil {
+		return nil, fmt.Errorf("USDT gateway not configured")
+	}
+
+	var result *CreatePaymentResult
+	var usdtInfo *paymentgateway.USDTPaymentInfo
+
+	// Execute all operations in a transaction
+	txErr := uc.txMgr.RunInTransaction(ctx, func(txCtx context.Context) error {
+		// Save the payment to get an ID
+		if err := uc.paymentRepo.Create(txCtx, paymentOrder); err != nil {
+			uc.logger.Errorw("failed to save payment", "error", err)
+			return fmt.Errorf("failed to save payment: %w", err)
+		}
+
+		// Create USDT payment info (allocates suffix within transaction)
+		var err error
+		usdtInfo, err = usdtGateway.CreateUSDTPayment(txCtx, paymentOrder.ID(), amount.AmountInCents(), method)
+		if err != nil {
+			uc.logger.Errorw("failed to create USDT payment", "error", err)
+			return fmt.Errorf("failed to create USDT payment: %w", err)
+		}
+
+		// Set USDT-specific info on the payment (using raw uint64 amount)
+		paymentOrder.SetUSDTInfo(usdtInfo.ChainType, usdtInfo.USDTAmountRaw, usdtInfo.ReceivingAddress, usdtInfo.ExchangeRate)
+
+		// Update the payment with USDT info
+		if err := uc.paymentRepo.Update(txCtx, paymentOrder); err != nil {
+			uc.logger.Errorw("failed to update payment with USDT info", "error", err)
+			return fmt.Errorf("failed to update payment with USDT info: %w", err)
+		}
+
+		result = &CreatePaymentResult{
+			Payment: paymentOrder,
+		}
+		return nil
+	})
+
+	if txErr != nil {
+		// Transaction was rolled back, no need to release suffix manually
+		return nil, txErr
+	}
+
+	uc.logger.Infow("USDT payment created successfully",
+		"payment_id", paymentOrder.ID(),
+		"order_no", paymentOrder.OrderNo(),
+		"chain_type", usdtInfo.ChainType,
+		"usdt_amount_raw", usdtInfo.USDTAmountRaw,
+		"usdt_amount", usdtInfo.USDTAmountFloat(),
+		"receiving_address", usdtInfo.ReceivingAddress,
+	)
+
+	return result, nil
 }

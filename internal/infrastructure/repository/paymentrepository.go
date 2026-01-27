@@ -11,6 +11,7 @@ import (
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 	"github.com/orris-inc/orris/internal/shared/biztime"
+	"github.com/orris-inc/orris/internal/shared/db"
 )
 
 type PaymentRepository struct {
@@ -24,9 +25,12 @@ func NewPaymentRepository(db *gorm.DB) *PaymentRepository {
 func (r *PaymentRepository) Create(ctx context.Context, p *payment.Payment) error {
 	model := mappers.PaymentToModel(p)
 
-	if err := r.db.WithContext(ctx).Create(model).Error; err != nil {
+	if err := db.GetTxFromContext(ctx, r.db).Create(model).Error; err != nil {
 		return fmt.Errorf("failed to create payment: %w", err)
 	}
+
+	// Write back the auto-generated ID to the domain object
+	p.SetID(model.ID)
 
 	return nil
 }
@@ -34,7 +38,7 @@ func (r *PaymentRepository) Create(ctx context.Context, p *payment.Payment) erro
 func (r *PaymentRepository) Update(ctx context.Context, p *payment.Payment) error {
 	model := mappers.PaymentToModel(p)
 
-	result := r.db.WithContext(ctx).
+	result := db.GetTxFromContext(ctx, r.db).
 		Model(&models.PaymentModel{}).
 		Where("id = ?", model.ID).
 		Updates(map[string]interface{}{
@@ -47,6 +51,14 @@ func (r *PaymentRepository) Update(ctx context.Context, p *payment.Payment) erro
 			"gateway_order_no": model.GatewayOrderNo,
 			"payment_url":      model.PaymentURL,
 			"qr_code":          model.QRCode,
+			// USDT-specific fields
+			"chain_type":        model.ChainType,
+			"usdt_amount_raw":   model.USDTAmountRaw,
+			"receiving_address": model.ReceivingAddress,
+			"exchange_rate":     model.ExchangeRate,
+			"tx_hash":           model.TxHash,
+			"block_number":      model.BlockNumber,
+			"confirmed_at":      model.ConfirmedAt,
 		})
 
 	if result.Error != nil {
@@ -61,7 +73,7 @@ func (r *PaymentRepository) Update(ctx context.Context, p *payment.Payment) erro
 func (r *PaymentRepository) GetByID(ctx context.Context, id uint) (*payment.Payment, error) {
 	var model models.PaymentModel
 
-	if err := r.db.WithContext(ctx).First(&model, id).Error; err != nil {
+	if err := db.GetTxFromContext(ctx, r.db).First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, fmt.Errorf("payment not found")
 		}
@@ -74,7 +86,7 @@ func (r *PaymentRepository) GetByID(ctx context.Context, id uint) (*payment.Paym
 func (r *PaymentRepository) GetByOrderNo(ctx context.Context, orderNo string) (*payment.Payment, error) {
 	var model models.PaymentModel
 
-	if err := r.db.WithContext(ctx).
+	if err := db.GetTxFromContext(ctx, r.db).
 		Where("order_no = ?", orderNo).
 		First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -89,7 +101,7 @@ func (r *PaymentRepository) GetByOrderNo(ctx context.Context, orderNo string) (*
 func (r *PaymentRepository) GetByGatewayOrderNo(ctx context.Context, gatewayOrderNo string) (*payment.Payment, error) {
 	var model models.PaymentModel
 
-	if err := r.db.WithContext(ctx).
+	if err := db.GetTxFromContext(ctx, r.db).
 		Where("gateway_order_no = ?", gatewayOrderNo).
 		First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -104,7 +116,7 @@ func (r *PaymentRepository) GetByGatewayOrderNo(ctx context.Context, gatewayOrde
 func (r *PaymentRepository) GetBySubscriptionID(ctx context.Context, subscriptionID uint) ([]*payment.Payment, error) {
 	var paymentModels []models.PaymentModel
 
-	if err := r.db.WithContext(ctx).
+	if err := db.GetTxFromContext(ctx, r.db).
 		Where("subscription_id = ?", subscriptionID).
 		Order("created_at DESC").
 		Find(&paymentModels).Error; err != nil {
@@ -126,7 +138,7 @@ func (r *PaymentRepository) GetBySubscriptionID(ctx context.Context, subscriptio
 func (r *PaymentRepository) GetPendingBySubscriptionID(ctx context.Context, subscriptionID uint) (*payment.Payment, error) {
 	var model models.PaymentModel
 
-	if err := r.db.WithContext(ctx).
+	if err := db.GetTxFromContext(ctx, r.db).
 		Where("subscription_id = ? AND payment_status = ?", subscriptionID, vo.PaymentStatusPending).
 		Order("created_at DESC").
 		First(&model).Error; err != nil {
@@ -142,10 +154,64 @@ func (r *PaymentRepository) GetPendingBySubscriptionID(ctx context.Context, subs
 func (r *PaymentRepository) GetExpiredPayments(ctx context.Context) ([]*payment.Payment, error) {
 	var paymentModels []models.PaymentModel
 
-	if err := r.db.WithContext(ctx).
+	if err := db.GetTxFromContext(ctx, r.db).
 		Where("payment_status = ? AND expired_at < ?", vo.PaymentStatusPending, biztime.NowUTC()).
 		Find(&paymentModels).Error; err != nil {
 		return nil, fmt.Errorf("failed to get expired payments: %w", err)
+	}
+
+	payments := make([]*payment.Payment, len(paymentModels))
+	for i, model := range paymentModels {
+		p, err := mappers.PaymentToDomain(&model)
+		if err != nil {
+			return nil, err
+		}
+		payments[i] = p
+	}
+
+	return payments, nil
+}
+
+// GetPendingUSDTPayments returns all pending USDT payments that haven't expired
+func (r *PaymentRepository) GetPendingUSDTPayments(ctx context.Context) ([]*payment.Payment, error) {
+	var paymentModels []models.PaymentModel
+
+	if err := db.GetTxFromContext(ctx, r.db).
+		Where("payment_status = ? AND payment_method IN ? AND expired_at > ?",
+			vo.PaymentStatusPending,
+			[]string{string(vo.PaymentMethodUSDTPOL), string(vo.PaymentMethodUSDTTRC)},
+			biztime.NowUTC(),
+		).
+		Find(&paymentModels).Error; err != nil {
+		return nil, fmt.Errorf("failed to get pending USDT payments: %w", err)
+	}
+
+	payments := make([]*payment.Payment, len(paymentModels))
+	for i, model := range paymentModels {
+		p, err := mappers.PaymentToDomain(&model)
+		if err != nil {
+			return nil, err
+		}
+		payments[i] = p
+	}
+
+	return payments, nil
+}
+
+// GetConfirmedUSDTPaymentsNeedingActivation returns confirmed USDT payments
+// that have subscription_activation_pending=true in metadata
+func (r *PaymentRepository) GetConfirmedUSDTPaymentsNeedingActivation(ctx context.Context) ([]*payment.Payment, error) {
+	var paymentModels []models.PaymentModel
+
+	// Query for paid USDT payments with subscription_activation_pending in metadata
+	// Using JSON_EXTRACT for MySQL/MariaDB compatibility
+	if err := db.GetTxFromContext(ctx, r.db).
+		Where("payment_status = ? AND payment_method IN ? AND JSON_EXTRACT(metadata, '$.subscription_activation_pending') = true",
+			vo.PaymentStatusPaid,
+			[]string{string(vo.PaymentMethodUSDTPOL), string(vo.PaymentMethodUSDTTRC)},
+		).
+		Find(&paymentModels).Error; err != nil {
+		return nil, fmt.Errorf("failed to get payments needing activation: %w", err)
 	}
 
 	payments := make([]*payment.Payment, len(paymentModels))

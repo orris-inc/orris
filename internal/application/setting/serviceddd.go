@@ -490,3 +490,203 @@ func (s *ServiceDDD) getSettingWithSourceMasked(ctx context.Context, category, k
 	}
 	return result
 }
+
+// GetUSDTSettings retrieves USDT payment settings
+func (s *ServiceDDD) GetUSDTSettings(ctx context.Context) (*dto.USDTSettingsResponse, error) {
+	return &dto.USDTSettingsResponse{
+		Enabled:               s.getSettingWithSourceBool(ctx, "usdt", "enabled"),
+		POLReceivingAddresses: s.getSettingWithSourceStringArray(ctx, "usdt", "pol_receiving_addresses"),
+		TRCReceivingAddresses: s.getSettingWithSourceStringArray(ctx, "usdt", "trc_receiving_addresses"),
+		PolygonScanAPIKey:     s.getSettingWithSourceMasked(ctx, "usdt", "polygonscan_api_key"),
+		TronGridAPIKey:        s.getSettingWithSourceMasked(ctx, "usdt", "trongrid_api_key"),
+		PaymentTTLMinutes:     s.getSettingWithSourceInt(ctx, "usdt", "payment_ttl_minutes", 10),
+		POLConfirmations:      s.getSettingWithSourceInt(ctx, "usdt", "pol_confirmations", 12),
+		TRCConfirmations:      s.getSettingWithSourceInt(ctx, "usdt", "trc_confirmations", 19),
+	}, nil
+}
+
+// UpdateUSDTSettings updates USDT payment settings
+func (s *ServiceDDD) UpdateUSDTSettings(ctx context.Context, req dto.UpdateUSDTSettingsRequest, updatedBy uint) error {
+	// Validation constants
+	const (
+		maxConfirmations = 100
+		minConfirmations = 1
+		maxPaymentTTL    = 1440 // 24 hours in minutes
+		minPaymentTTL    = 5
+		maxAddresses     = 10 // Maximum number of addresses per chain
+	)
+
+	// Validate confirmation counts
+	if req.POLConfirmations != nil {
+		if *req.POLConfirmations < minConfirmations || *req.POLConfirmations > maxConfirmations {
+			return fmt.Errorf("pol_confirmations must be between %d and %d", minConfirmations, maxConfirmations)
+		}
+	}
+	if req.TRCConfirmations != nil {
+		if *req.TRCConfirmations < minConfirmations || *req.TRCConfirmations > maxConfirmations {
+			return fmt.Errorf("trc_confirmations must be between %d and %d", minConfirmations, maxConfirmations)
+		}
+	}
+	if req.PaymentTTLMinutes != nil {
+		if *req.PaymentTTLMinutes < minPaymentTTL || *req.PaymentTTLMinutes > maxPaymentTTL {
+			return fmt.Errorf("payment_ttl_minutes must be between %d and %d", minPaymentTTL, maxPaymentTTL)
+		}
+	}
+	// Validate address arrays
+	if req.POLReceivingAddresses != nil && len(*req.POLReceivingAddresses) > maxAddresses {
+		return fmt.Errorf("pol_receiving_addresses cannot exceed %d addresses", maxAddresses)
+	}
+	if req.TRCReceivingAddresses != nil && len(*req.TRCReceivingAddresses) > maxAddresses {
+		return fmt.Errorf("trc_receiving_addresses cannot exceed %d addresses", maxAddresses)
+	}
+
+	changes := make(map[string]any)
+
+	if req.Enabled != nil {
+		if err := s.upsertSettingBool(ctx, "usdt", "enabled", *req.Enabled, updatedBy); err != nil {
+			return err
+		}
+		changes["enabled"] = *req.Enabled
+	}
+	if req.POLReceivingAddresses != nil {
+		if err := s.upsertSettingStringArray(ctx, "usdt", "pol_receiving_addresses", *req.POLReceivingAddresses, updatedBy); err != nil {
+			return err
+		}
+		changes["pol_receiving_addresses"] = *req.POLReceivingAddresses
+	}
+	if req.TRCReceivingAddresses != nil {
+		if err := s.upsertSettingStringArray(ctx, "usdt", "trc_receiving_addresses", *req.TRCReceivingAddresses, updatedBy); err != nil {
+			return err
+		}
+		changes["trc_receiving_addresses"] = *req.TRCReceivingAddresses
+	}
+	if req.PolygonScanAPIKey != nil {
+		if err := s.upsertSetting(ctx, "usdt", "polygonscan_api_key", *req.PolygonScanAPIKey, updatedBy); err != nil {
+			return err
+		}
+		changes["polygonscan_api_key"] = "[REDACTED]"
+	}
+	if req.TronGridAPIKey != nil {
+		if err := s.upsertSetting(ctx, "usdt", "trongrid_api_key", *req.TronGridAPIKey, updatedBy); err != nil {
+			return err
+		}
+		changes["trongrid_api_key"] = "[REDACTED]"
+	}
+	if req.PaymentTTLMinutes != nil {
+		if err := s.upsertSettingInt(ctx, "usdt", "payment_ttl_minutes", *req.PaymentTTLMinutes, updatedBy); err != nil {
+			return err
+		}
+		changes["payment_ttl_minutes"] = *req.PaymentTTLMinutes
+	}
+	if req.POLConfirmations != nil {
+		if err := s.upsertSettingInt(ctx, "usdt", "pol_confirmations", *req.POLConfirmations, updatedBy); err != nil {
+			return err
+		}
+		changes["pol_confirmations"] = *req.POLConfirmations
+	}
+	if req.TRCConfirmations != nil {
+		if err := s.upsertSettingInt(ctx, "usdt", "trc_confirmations", *req.TRCConfirmations, updatedBy); err != nil {
+			return err
+		}
+		changes["trc_confirmations"] = *req.TRCConfirmations
+	}
+
+	if len(changes) > 0 {
+		if err := s.settingProvider.NotifyChange(ctx, "usdt", changes); err != nil {
+			s.logger.Warnw("failed to notify USDT setting changes", "error", err)
+		}
+	}
+	return nil
+}
+
+// getSettingWithSourceBool retrieves a bool setting value with its source
+func (s *ServiceDDD) getSettingWithSourceBool(ctx context.Context, category, key string) dto.SettingWithSource {
+	existing, err := s.getSettingsUC.GetSettingByKey(ctx, category, key)
+	if err == nil && existing != nil && existing.HasValue() {
+		val, err := existing.GetBoolValue()
+		if err == nil {
+			return dto.SettingWithSource{
+				Value:  val,
+				Source: dto.SourceDatabase,
+			}
+		}
+	}
+	return dto.SettingWithSource{
+		Value:  false,
+		Source: dto.SourceDefault,
+	}
+}
+
+// getSettingWithSourceInt retrieves an int setting value with its source
+func (s *ServiceDDD) getSettingWithSourceInt(ctx context.Context, category, key string, defaultVal int) dto.SettingWithSource {
+	existing, err := s.getSettingsUC.GetSettingByKey(ctx, category, key)
+	if err == nil && existing != nil && existing.HasValue() {
+		val, err := existing.GetIntValue()
+		if err == nil {
+			return dto.SettingWithSource{
+				Value:  val,
+				Source: dto.SourceDatabase,
+			}
+		}
+	}
+	return dto.SettingWithSource{
+		Value:  defaultVal,
+		Source: dto.SourceDefault,
+	}
+}
+
+// upsertSettingBool creates or updates a bool setting
+func (s *ServiceDDD) upsertSettingBool(ctx context.Context, category, key string, value bool, updatedBy uint) error {
+	existing, err := s.getSettingsUC.GetSettingByKey(ctx, category, key)
+	if err != nil || existing == nil {
+		newSetting, err := setting.NewSystemSetting(category, key, setting.ValueTypeBool, "")
+		if err != nil {
+			return err
+		}
+		if err := newSetting.SetBoolValue(value, updatedBy); err != nil {
+			return err
+		}
+		return s.updateSettingsUC.UpsertSetting(ctx, newSetting)
+	}
+	if err := existing.SetBoolValue(value, updatedBy); err != nil {
+		return err
+	}
+	return s.updateSettingsUC.UpsertSetting(ctx, existing)
+}
+
+// upsertSettingStringArray creates or updates a string array setting (stored as JSON)
+func (s *ServiceDDD) upsertSettingStringArray(ctx context.Context, category, key string, value []string, updatedBy uint) error {
+	existing, err := s.getSettingsUC.GetSettingByKey(ctx, category, key)
+	if err != nil || existing == nil {
+		newSetting, err := setting.NewSystemSetting(category, key, setting.ValueTypeJSON, "")
+		if err != nil {
+			return err
+		}
+		if err := newSetting.SetJSONValue(value, updatedBy); err != nil {
+			return err
+		}
+		return s.updateSettingsUC.UpsertSetting(ctx, newSetting)
+	}
+	if err := existing.SetJSONValue(value, updatedBy); err != nil {
+		return err
+	}
+	return s.updateSettingsUC.UpsertSetting(ctx, existing)
+}
+
+// getSettingWithSourceStringArray retrieves a string array setting value with its source
+func (s *ServiceDDD) getSettingWithSourceStringArray(ctx context.Context, category, key string) dto.SettingWithSource {
+	existing, err := s.getSettingsUC.GetSettingByKey(ctx, category, key)
+	if err == nil && existing != nil && existing.HasValue() {
+		val, err := existing.GetStringArrayValue()
+		if err == nil {
+			return dto.SettingWithSource{
+				Value:  val,
+				Source: dto.SourceDatabase,
+			}
+		}
+	}
+	return dto.SettingWithSource{
+		Value:  []string{},
+		Source: dto.SourceDefault,
+	}
+}

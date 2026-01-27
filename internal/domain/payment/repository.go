@@ -11,4 +11,8 @@ type PaymentRepository interface {
 	GetBySubscriptionID(ctx context.Context, subscriptionID uint) ([]*Payment, error)
 	GetPendingBySubscriptionID(ctx context.Context, subscriptionID uint) (*Payment, error)
 	GetExpiredPayments(ctx context.Context) ([]*Payment, error)
+	GetPendingUSDTPayments(ctx context.Context) ([]*Payment, error)
+	// GetConfirmedUSDTPaymentsNeedingActivation returns confirmed USDT payments
+	// that have subscription_activation_pending=true in metadata
+	GetConfirmedUSDTPaymentsNeedingActivation(ctx context.Context) ([]*Payment, error)
 }

@@ -306,6 +306,15 @@ func (s *Subscription) Metadata() map[string]interface{} {
 	return s.metadata
 }
 
+// SetMetadata sets a metadata key-value pair
+func (s *Subscription) SetMetadata(key string, value interface{}) {
+	if s.metadata == nil {
+		s.metadata = make(map[string]interface{})
+	}
+	s.metadata[key] = value
+	s.updatedAt = biztime.NowUTC()
+}
+
 // Version returns the aggregate version for optimistic locking
 func (s *Subscription) Version() int {
 	return s.version

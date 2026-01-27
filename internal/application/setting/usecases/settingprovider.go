@@ -405,3 +405,82 @@ func (p *SettingProvider) IsSystemConfigured(ctx context.Context) bool {
 	apiBaseURL := p.GetAPIBaseURL(ctx)
 	return apiBaseURL.Value != "" && apiBaseURL.Source != settingDTO.SourceDefault
 }
+
+// USDTConfig holds USDT payment configuration from settings
+type USDTConfig struct {
+	Enabled               bool
+	POLReceivingAddresses []string
+	TRCReceivingAddresses []string
+	PolygonScanAPIKey     string
+	TronGridAPIKey        string
+	PaymentTTLMinutes     int
+	POLConfirmations      int
+	TRCConfirmations      int
+}
+
+// GetUSDTConfig returns the USDT payment configuration
+func (p *SettingProvider) GetUSDTConfig(ctx context.Context) USDTConfig {
+	config := USDTConfig{
+		Enabled:               false,
+		POLReceivingAddresses: []string{},
+		TRCReceivingAddresses: []string{},
+		PaymentTTLMinutes:     10, // Default 10 minutes per flow diagram
+		POLConfirmations:      12,
+		TRCConfirmations:      19,
+	}
+
+	settings, err := p.settingRepo.GetByCategory(ctx, "usdt")
+	if err != nil {
+		p.logger.Warnw("failed to get USDT settings from database", "error", err)
+		return config
+	}
+
+	for _, s := range settings {
+		switch s.Key() {
+		case "enabled":
+			if val, err := s.GetBoolValue(); err == nil {
+				config.Enabled = val
+			}
+		case "pol_receiving_addresses":
+			if s.HasValue() {
+				if addrs, err := s.GetStringArrayValue(); err == nil {
+					config.POLReceivingAddresses = addrs
+				}
+			}
+		case "trc_receiving_addresses":
+			if s.HasValue() {
+				if addrs, err := s.GetStringArrayValue(); err == nil {
+					config.TRCReceivingAddresses = addrs
+				}
+			}
+		case "polygonscan_api_key":
+			if s.HasValue() {
+				config.PolygonScanAPIKey = s.GetStringValue()
+			}
+		case "trongrid_api_key":
+			if s.HasValue() {
+				config.TronGridAPIKey = s.GetStringValue()
+			}
+		case "payment_ttl_minutes":
+			if val, err := s.GetIntValue(); err == nil && val > 0 {
+				config.PaymentTTLMinutes = val
+			}
+		case "pol_confirmations":
+			if val, err := s.GetIntValue(); err == nil && val > 0 {
+				config.POLConfirmations = val
+			}
+		case "trc_confirmations":
+			if val, err := s.GetIntValue(); err == nil && val > 0 {
+				config.TRCConfirmations = val
+			}
+		}
+	}
+
+	return config
+}
+
+// IsUSDTEnabled checks if USDT payment is enabled
+func (p *SettingProvider) IsUSDTEnabled(ctx context.Context) bool {
+	config := p.GetUSDTConfig(ctx)
+	return config.Enabled
+}

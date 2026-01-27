@@ -171,6 +171,35 @@ func (r *SubscriptionRepositoryImpl) GetActiveByUserID(ctx context.Context, user
 	return entities, nil
 }
 
+func (r *SubscriptionRepositoryImpl) GetByStatuses(ctx context.Context, statuses []valueobjects.SubscriptionStatus) ([]*subscription.Subscription, error) {
+	if len(statuses) == 0 {
+		return []*subscription.Subscription{}, nil
+	}
+
+	// Convert to string slice for SQL query
+	statusStrings := make([]string, len(statuses))
+	for i, s := range statuses {
+		statusStrings[i] = string(s)
+	}
+
+	var models []*models.SubscriptionModel
+	if err := r.db.WithContext(ctx).
+		Where("status IN ?", statusStrings).
+		Order("created_at DESC").
+		Find(&models).Error; err != nil {
+		r.logger.Errorw("failed to get subscriptions by statuses", "statuses", statusStrings, "error", err)
+		return nil, fmt.Errorf("failed to get subscriptions by statuses: %w", err)
+	}
+
+	entities, err := r.mapper.ToEntities(models)
+	if err != nil {
+		r.logger.Errorw("failed to map subscription models to entities", "statuses", statusStrings, "error", err)
+		return nil, fmt.Errorf("failed to map subscriptions: %w", err)
+	}
+
+	return entities, nil
+}
+
 func (r *SubscriptionRepositoryImpl) GetActiveSubscriptionsByNodeID(ctx context.Context, nodeID uint) ([]*subscription.Subscription, error) {
 	// Get node's group_ids from nodes table
 	var nodeModel models.NodeModel

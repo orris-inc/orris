@@ -44,6 +44,10 @@ func SetupSettingRoutes(engine *gin.Engine, config *SettingRouteConfig) {
 		settings.PUT("/telegram/config", config.Handler.UpdateTelegramConfig)
 		settings.POST("/telegram/test", config.Handler.TestTelegramConnection)
 
+		// USDT payment settings
+		settings.GET("/usdt", config.Handler.GetUSDTSettings)
+		settings.PUT("/usdt", config.Handler.UpdateUSDTSettings)
+
 		// Category-based settings (parameterized routes last)
 		settings.GET("/:category", config.Handler.GetCategorySettings)
 		settings.PUT("/:category", config.Handler.UpdateCategorySettings)

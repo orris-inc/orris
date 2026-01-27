@@ -76,6 +76,7 @@ type SubscriptionTokenDTO struct {
 	SID             string     `json:"id"`              // Stripe-style ID: stoken_xxx
 	SubscriptionSID string     `json:"subscription_id"` // Subscription's Stripe-style ID
 	Name            string     `json:"name"`
+	Token           string     `json:"token,omitempty"` // Plain token value, only available at creation time
 	Prefix          string     `json:"prefix"`
 	Scope           string     `json:"scope"`
 	ExpiresAt       *time.Time `json:"expires_at,omitempty"`
@@ -219,6 +220,28 @@ func ToSubscriptionTokenDTO(token *subscription.SubscriptionToken) *Subscription
 		SID:             token.SID(),
 		SubscriptionSID: subscriptionSID,
 		Name:            token.Name(),
+		Prefix:          token.Prefix(),
+		Scope:           token.Scope().String(),
+		ExpiresAt:       token.ExpiresAt(),
+		LastUsedAt:      token.LastUsedAt(),
+		UsageCount:      token.UsageCount(),
+		IsActive:        token.IsActive(),
+		CreatedAt:       token.CreatedAt(),
+	}
+}
+
+// ToSubscriptionTokenDTOWithPlainToken converts a domain subscription token to DTO with plain token value.
+// This should only be used during token creation when the plain token is available.
+func ToSubscriptionTokenDTOWithPlainToken(token *subscription.SubscriptionToken, subscriptionSID string, plainToken string) *SubscriptionTokenDTO {
+	if token == nil {
+		return nil
+	}
+
+	return &SubscriptionTokenDTO{
+		SID:             token.SID(),
+		SubscriptionSID: subscriptionSID,
+		Name:            token.Name(),
+		Token:           plainToken,
 		Prefix:          token.Prefix(),
 		Scope:           token.Scope().String(),
 		ExpiresAt:       token.ExpiresAt(),

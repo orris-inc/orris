@@ -11,23 +11,35 @@ import (
 
 func PaymentToModel(p *payment.Payment) *models.PaymentModel {
 	model := &models.PaymentModel{
-		ID:             p.ID(),
-		OrderNo:        p.OrderNo(),
-		SubscriptionID: p.SubscriptionID(),
-		UserID:         p.UserID(),
-		Amount:         p.Amount().AmountInCents(),
-		Currency:       p.Amount().Currency(),
-		PaymentMethod:  p.PaymentMethod().String(),
-		PaymentStatus:  p.Status().String(),
-		GatewayOrderNo: p.GatewayOrderNo(),
-		TransactionID:  p.TransactionID(),
-		PaymentURL:     p.PaymentURL(),
-		QRCode:         p.QRCode(),
-		PaidAt:         p.PaidAt(),
-		ExpiredAt:      p.ExpiredAt(),
-		Version:        p.Version(),
-		CreatedAt:      p.CreatedAt(),
-		UpdatedAt:      p.UpdatedAt(),
+		ID:               p.ID(),
+		OrderNo:          p.OrderNo(),
+		SubscriptionID:   p.SubscriptionID(),
+		UserID:           p.UserID(),
+		Amount:           p.Amount().AmountInCents(),
+		Currency:         p.Amount().Currency(),
+		PaymentMethod:    p.PaymentMethod().String(),
+		PaymentStatus:    p.Status().String(),
+		GatewayOrderNo:   p.GatewayOrderNo(),
+		TransactionID:    p.TransactionID(),
+		PaymentURL:       p.PaymentURL(),
+		QRCode:           p.QRCode(),
+		PaidAt:           p.PaidAt(),
+		ExpiredAt:        p.ExpiredAt(),
+		USDTAmountRaw:    p.USDTAmountRaw(),
+		ReceivingAddress: p.ReceivingAddress(),
+		ExchangeRate:     p.ExchangeRate(),
+		TxHash:           p.TxHash(),
+		BlockNumber:      p.BlockNumber(),
+		ConfirmedAt:      p.ConfirmedAt(),
+		Version:          p.Version(),
+		CreatedAt:        p.CreatedAt(),
+		UpdatedAt:        p.UpdatedAt(),
+	}
+
+	// Map ChainType
+	if ct := p.ChainType(); ct != nil {
+		ctStr := ct.String()
+		model.ChainType = &ctStr
 	}
 
 	if len(p.Metadata()) > 0 {
@@ -53,6 +65,28 @@ func PaymentToDomain(model *models.PaymentModel) (*payment.Payment, error) {
 	metadata := model.Metadata
 	if metadata == nil {
 		metadata = make(map[string]interface{})
+	}
+
+	// Parse ChainType if present
+	var chainType *vo.ChainType
+	if model.ChainType != nil && *model.ChainType != "" {
+		ct, err := vo.NewChainType(*model.ChainType)
+		if err == nil {
+			chainType = &ct
+		}
+	}
+
+	// Use ReconstructPaymentWithUSDT if there are USDT fields
+	if method.IsUSDT() || chainType != nil {
+		return payment.ReconstructPaymentWithUSDT(
+			model.ID, model.OrderNo, model.SubscriptionID, model.UserID,
+			amount, method, status,
+			model.GatewayOrderNo, model.TransactionID, model.PaymentURL, model.QRCode,
+			model.PaidAt, model.ExpiredAt,
+			metadata, model.Version, model.CreatedAt, model.UpdatedAt,
+			chainType, model.USDTAmountRaw, model.ReceivingAddress, model.ExchangeRate,
+			model.TxHash, model.BlockNumber, model.ConfirmedAt,
+		), nil
 	}
 
 	p := &payment.Payment{}

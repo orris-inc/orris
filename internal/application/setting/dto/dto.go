@@ -71,13 +71,15 @@ func MaskSensitiveValue(value string) string {
 
 // SensitiveKeys defines keys that should be masked in responses
 var SensitiveKeys = map[string]bool{
-	"bot_token":      true,
-	"webhook_secret": true,
-	"api_key":        true,
-	"secret_key":     true,
-	"password":       true,
-	"client_secret":  true, // OAuth
-	"smtp_password":  true, // Email
+	"bot_token":          true,
+	"webhook_secret":     true,
+	"api_key":            true,
+	"secret_key":         true,
+	"password":           true,
+	"client_secret":      true, // OAuth
+	"smtp_password":      true, // Email
+	"polygonscan_api_key": true, // USDT - PolygonScan API
+	"trongrid_api_key":    true, // USDT - TronGrid API
 }
 
 // IsSensitiveKey checks if a key should be masked

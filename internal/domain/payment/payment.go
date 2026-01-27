@@ -26,6 +26,15 @@ type Payment struct {
 	paidAt    *time.Time
 	expiredAt time.Time
 
+	// USDT-specific fields
+	chainType        *vo.ChainType
+	usdtAmountRaw    *uint64 // USDT amount in smallest unit (1 USDT = 1000000)
+	receivingAddress *string
+	exchangeRate     *float64 // Exchange rate at time of payment (for reference only)
+	txHash           *string
+	blockNumber      *uint64
+	confirmedAt      *time.Time
+
 	metadata map[string]interface{}
 
 	version   int
@@ -174,6 +183,15 @@ func (p *Payment) Metadata() map[string]interface{} {
 	return p.metadata
 }
 
+// SetMetadata sets a metadata key-value pair
+func (p *Payment) SetMetadata(key string, value interface{}) {
+	if p.metadata == nil {
+		p.metadata = make(map[string]interface{})
+	}
+	p.metadata[key] = value
+	p.updatedAt = biztime.NowUTC()
+}
+
 func (p *Payment) Version() int {
 	return p.version
 }
@@ -184,6 +202,83 @@ func (p *Payment) CreatedAt() time.Time {
 
 func (p *Payment) UpdatedAt() time.Time {
 	return p.updatedAt
+}
+
+// USDT-specific getters
+
+func (p *Payment) ChainType() *vo.ChainType {
+	return p.chainType
+}
+
+func (p *Payment) USDTAmountRaw() *uint64 {
+	return p.usdtAmountRaw
+}
+
+func (p *Payment) ReceivingAddress() *string {
+	return p.receivingAddress
+}
+
+func (p *Payment) ExchangeRate() *float64 {
+	return p.exchangeRate
+}
+
+func (p *Payment) TxHash() *string {
+	return p.txHash
+}
+
+func (p *Payment) BlockNumber() *uint64 {
+	return p.blockNumber
+}
+
+func (p *Payment) ConfirmedAt() *time.Time {
+	return p.confirmedAt
+}
+
+// SetUSDTInfo sets USDT-specific payment information
+// usdtAmountRaw is the USDT amount in smallest unit (1 USDT = 1000000)
+func (p *Payment) SetUSDTInfo(chainType vo.ChainType, usdtAmountRaw uint64, receivingAddress string, exchangeRate float64) {
+	p.chainType = &chainType
+	p.usdtAmountRaw = &usdtAmountRaw
+	p.receivingAddress = &receivingAddress
+	p.exchangeRate = &exchangeRate
+	p.updatedAt = biztime.NowUTC()
+}
+
+// ConfirmUSDTTransaction marks the USDT payment as confirmed with blockchain transaction details
+func (p *Payment) ConfirmUSDTTransaction(txHash string, blockNumber uint64) error {
+	if p.status == vo.PaymentStatusPaid {
+		return nil
+	}
+
+	if p.status != vo.PaymentStatusPending {
+		return fmt.Errorf("cannot confirm USDT transaction with status %s", p.status)
+	}
+
+	if !p.paymentMethod.IsUSDT() {
+		return fmt.Errorf("cannot confirm USDT transaction for non-USDT payment method")
+	}
+
+	now := biztime.NowUTC()
+	p.status = vo.PaymentStatusPaid
+	p.txHash = &txHash
+	p.blockNumber = &blockNumber
+	p.confirmedAt = &now
+	p.paidAt = &now
+	p.transactionID = &txHash
+	p.updatedAt = now
+	p.version++
+
+	return nil
+}
+
+// IsUSDTPayment returns true if this is a USDT payment
+func (p *Payment) IsUSDTPayment() bool {
+	return p.paymentMethod.IsUSDT()
+}
+
+// SetID sets the payment ID after persistence (used by repository after Create)
+func (p *Payment) SetID(id uint) {
+	p.id = id
 }
 
 func ReconstructPayment(
@@ -218,5 +313,56 @@ func ReconstructPayment(
 		version:        version,
 		createdAt:      createdAt,
 		updatedAt:      updatedAt,
+	}
+}
+
+// ReconstructPaymentWithUSDT creates a Payment instance with USDT-specific fields from persistence
+func ReconstructPaymentWithUSDT(
+	id uint,
+	orderNo string,
+	subscriptionID, userID uint,
+	amount vo.Money,
+	paymentMethod vo.PaymentMethod,
+	status vo.PaymentStatus,
+	gatewayOrderNo, transactionID, paymentURL, qrCode *string,
+	paidAt *time.Time,
+	expiredAt time.Time,
+	metadata map[string]interface{},
+	version int,
+	createdAt, updatedAt time.Time,
+	// USDT-specific fields
+	chainType *vo.ChainType,
+	usdtAmountRaw *uint64, // USDT amount in smallest unit (1 USDT = 1000000)
+	receivingAddress *string,
+	exchangeRate *float64,
+	txHash *string,
+	blockNumber *uint64,
+	confirmedAt *time.Time,
+) *Payment {
+	return &Payment{
+		id:               id,
+		orderNo:          orderNo,
+		subscriptionID:   subscriptionID,
+		userID:           userID,
+		amount:           amount,
+		paymentMethod:    paymentMethod,
+		status:           status,
+		gatewayOrderNo:   gatewayOrderNo,
+		transactionID:    transactionID,
+		paymentURL:       paymentURL,
+		qrCode:           qrCode,
+		paidAt:           paidAt,
+		expiredAt:        expiredAt,
+		chainType:        chainType,
+		usdtAmountRaw:    usdtAmountRaw,
+		receivingAddress: receivingAddress,
+		exchangeRate:     exchangeRate,
+		txHash:           txHash,
+		blockNumber:      blockNumber,
+		confirmedAt:      confirmedAt,
+		metadata:         metadata,
+		version:          version,
+		createdAt:        createdAt,
+		updatedAt:        updatedAt,
 	}
 }

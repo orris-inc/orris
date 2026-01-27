@@ -46,6 +46,7 @@ const (
 	TableSubscriptionUsageStats  = "subscription_usage_stats"
 	TableExternalForwardRules    = "external_forward_rules"
 	TablePasskeyCredentials      = "passkey_credentials"
+	TableUSDTAmountSuffixes      = "usdt_amount_suffixes"
 
 	// Default values
 	DefaultCurrency = "CNY"

@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	subdto "github.com/orris-inc/orris/internal/application/subscription/dto"
 	"github.com/orris-inc/orris/internal/application/subscription/usecases"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
@@ -92,6 +93,12 @@ type SuspendRequest struct {
 	Reason string `json:"reason" binding:"required"`
 }
 
+// CreateSubscriptionResponse represents the response for subscription creation
+type CreateSubscriptionResponse struct {
+	Subscription *subdto.SubscriptionDTO      `json:"subscription"`
+	Token        *subdto.SubscriptionTokenDTO `json:"token"`
+}
+
 // ChangePlanRequest represents the request to change subscription plan
 type ChangePlanRequest struct {
 	NewPlanID     uint   `json:"new_plan_id" binding:"required"`
@@ -140,9 +147,13 @@ func (h *SubscriptionHandler) Create(c *gin.Context) {
 		return
 	}
 
-	utils.CreatedResponse(c, gin.H{
-		"subscription": result.Subscription,
-		"token":        result.Token,
+	// Convert domain entities to DTOs for proper JSON serialization
+	subscriptionDTO := subdto.ToSubscriptionDTO(result.Subscription, nil, nil, "")
+	tokenDTO := subdto.ToSubscriptionTokenDTOWithPlainToken(result.Token, result.Subscription.SID(), result.PlainToken)
+
+	utils.CreatedResponse(c, CreateSubscriptionResponse{
+		Subscription: subscriptionDTO,
+		Token:        tokenDTO,
 	}, "Subscription created successfully")
 }
 

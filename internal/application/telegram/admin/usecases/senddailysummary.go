@@ -239,11 +239,8 @@ func (uc *SendDailySummaryUseCase) gatherDailyStats(ctx context.Context, start, 
 	if err == nil {
 		summary.TotalAgents = agentTotal
 		for _, a := range agents {
-			if a.IsEnabled() {
-				// Check if agent reported recently (within 5 minutes)
-				if time.Since(a.UpdatedAt()) < 5*time.Minute {
-					summary.OnlineAgents++
-				}
+			if a.IsOnline() {
+				summary.OnlineAgents++
 			}
 		}
 		summary.OfflineAgents = summary.TotalAgents - summary.OnlineAgents

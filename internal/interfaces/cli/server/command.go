@@ -130,6 +130,14 @@ func run(cmd *cobra.Command, args []string) error {
 	router.StartUsageAggregationScheduler(ctx)
 	logger.Info("usage aggregation scheduler started")
 
+	// Start payment expiration scheduler
+	router.StartPaymentScheduler(ctx)
+	logger.Info("payment scheduler started")
+
+	// Start USDT payment monitor scheduler
+	router.StartUSDTMonitorScheduler(ctx)
+	logger.Info("USDT monitor scheduler started")
+
 	// HTTP Server setup
 	srv := &http.Server{
 		Addr:         cfg.Server.GetAddr(),

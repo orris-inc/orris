@@ -32,6 +32,7 @@ import (
 	"github.com/orris-inc/orris/internal/infrastructure/cache"
 	"github.com/orris-inc/orris/internal/infrastructure/config"
 	"github.com/orris-inc/orris/internal/infrastructure/email"
+	infraPayment "github.com/orris-inc/orris/internal/infrastructure/payment"
 	"github.com/orris-inc/orris/internal/infrastructure/pubsub"
 	"github.com/orris-inc/orris/internal/infrastructure/repository"
 	"github.com/orris-inc/orris/internal/infrastructure/scheduler"
@@ -108,6 +109,8 @@ type Router struct {
 	subscriptionTrafficFlushDone   chan struct{}
 	adminNotificationScheduler     *scheduler.AdminNotificationScheduler
 	usageAggregationScheduler      *scheduler.UsageAggregationScheduler
+	paymentScheduler               *scheduler.PaymentScheduler
+	usdtServiceManager             *infraPayment.USDTServiceManager
 	logger                         logger.Interface
 	authMiddleware                 *middleware.AuthMiddleware
 	subscriptionOwnerMiddleware    *middleware.SubscriptionOwnerMiddleware
@@ -253,6 +256,11 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		scheduler.DefaultRetentionDays,
 		log,
 	)
+
+	// Initialize payment scheduler for expiring pending payments and cancelling unpaid subscriptions
+	expirePaymentsUC := paymentUsecases.NewExpirePaymentsUseCase(paymentRepo, subscriptionRepo, log)
+	cancelUnpaidSubsUC := paymentUsecases.NewCancelUnpaidSubscriptionsUseCase(subscriptionRepo, log)
+	paymentScheduler := scheduler.NewPaymentScheduler(expirePaymentsUC, cancelUnpaidSubsUC, log)
 
 	createPlanUC := subscriptionUsecases.NewCreatePlanUseCase(
 		subscriptionPlanRepo, planPricingRepo, log,
@@ -659,12 +667,14 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	paymentConfig := paymentUsecases.PaymentConfig{
 		NotifyURL: cfg.Server.GetBaseURL() + "/payments/callback",
 	}
+	paymentTxMgr := shareddb.NewTransactionManager(db)
 	createPaymentUC := paymentUsecases.NewCreatePaymentUseCase(
 		paymentRepo,
 		subscriptionRepo,
 		subscriptionPlanRepo,
 		planPricingRepo,
 		gateway,
+		paymentTxMgr,
 		log,
 		paymentConfig,
 	)
@@ -675,7 +685,33 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		log,
 	)
 
-	paymentHandler := handlers.NewPaymentHandler(createPaymentUC, handleCallbackUC, log)
+	paymentHandler := handlers.NewPaymentHandler(createPaymentUC, handleCallbackUC, subscriptionRepo, log)
+
+	// Initialize USDT Service Manager for crypto payment support
+	usdtServiceManager := infraPayment.NewUSDTServiceManager(
+		db,
+		paymentRepo,
+		subscriptionRepo,
+		log,
+	)
+	// Load USDT config from settings and initialize services
+	usdtConfig := settingProvider.GetUSDTConfig(context.Background())
+	if err := usdtServiceManager.Initialize(context.Background(), infraPayment.USDTConfig{
+		Enabled:               usdtConfig.Enabled,
+		POLReceivingAddresses: usdtConfig.POLReceivingAddresses,
+		TRCReceivingAddresses: usdtConfig.TRCReceivingAddresses,
+		PolygonScanAPIKey:     usdtConfig.PolygonScanAPIKey,
+		TronGridAPIKey:        usdtConfig.TronGridAPIKey,
+		PaymentTTLMinutes:     usdtConfig.PaymentTTLMinutes,
+		POLConfirmations:      usdtConfig.POLConfirmations,
+		TRCConfirmations:      usdtConfig.TRCConfirmations,
+	}); err != nil {
+		log.Warnw("failed to initialize USDT services, will retry on setting change", "error", err)
+	}
+	// Subscribe to setting changes for hot-reload
+	settingServiceDDD.Subscribe(usdtServiceManager)
+	// Set USDT gateway provider on payment use case
+	createPaymentUC.SetUSDTGatewayProvider(usdtServiceManager)
 
 	// Agent API handlers
 	getNodeConfigUC := nodeUsecases.NewGetNodeConfigUseCase(nodeRepoImpl, log)
@@ -1499,6 +1535,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		subscriptionTrafficFlushDone:   subscriptionTrafficFlushDone,
 		adminNotificationScheduler:     adminNotificationScheduler,
 		usageAggregationScheduler:      usageAggregationScheduler,
+		paymentScheduler:               paymentScheduler,
+		usdtServiceManager:             usdtServiceManager,
 		logger:                         log,
 		authMiddleware:                 authMiddleware,
 		subscriptionOwnerMiddleware:    subscriptionOwnerMiddleware,

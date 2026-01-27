@@ -165,3 +165,19 @@ func MySQLTimezoneOffset() string {
 	}
 	return fmt.Sprintf("%03d:%02d", hours, minutes)
 }
+
+// FormatMetadataTime formats a UTC time for storage in metadata using RFC3339 format.
+// This ensures consistent timestamp serialization across the application.
+func FormatMetadataTime(t time.Time) string {
+	return t.Format(time.RFC3339)
+}
+
+// ParseMetadataTime parses a timestamp from metadata string (RFC3339 format).
+// This is the counterpart to FormatMetadataTime for deserializing timestamps from metadata.
+func ParseMetadataTime(s string) (time.Time, error) {
+	t, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("invalid metadata timestamp format %q: %w", s, err)
+	}
+	return t, nil
+}

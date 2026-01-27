@@ -23,10 +23,20 @@ type PaymentModel struct {
 	QRCode         *string `gorm:"type:text"`
 	PaidAt         *time.Time
 	ExpiredAt      time.Time `gorm:"not null"`
-	Metadata       JSONB     `gorm:"type:jsonb"`
-	Version        int       `gorm:"default:0"`
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+
+	// USDT-specific fields
+	ChainType        *string  `gorm:"size:10;uniqueIndex:uk_payments_chain_tx_hash,priority:1"`
+	USDTAmountRaw    *uint64  `gorm:"column:usdt_amount_raw"` // USDT amount in smallest unit (1 USDT = 1000000)
+	ReceivingAddress *string  `gorm:"size:64"`
+	ExchangeRate     *float64 `gorm:"type:decimal(20,8)"` // Exchange rate at time of payment (for display only)
+	TxHash           *string  `gorm:"size:128;uniqueIndex:uk_payments_chain_tx_hash,priority:2"`
+	BlockNumber      *uint64
+	ConfirmedAt      *time.Time
+
+	Metadata  JSONB `gorm:"type:jsonb"`
+	Version   int   `gorm:"default:0"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 func (PaymentModel) TableName() string {

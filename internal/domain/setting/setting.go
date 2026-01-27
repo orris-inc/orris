@@ -145,6 +145,18 @@ func (s *SystemSetting) GetJSONValue(target interface{}) error {
 	return json.Unmarshal([]byte(s.value), target)
 }
 
+// GetStringArrayValue returns the value as a string array (for JSON array type)
+func (s *SystemSetting) GetStringArrayValue() ([]string, error) {
+	if s.value == "" || s.value == "[]" {
+		return []string{}, nil
+	}
+	var result []string
+	if err := json.Unmarshal([]byte(s.value), &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal string array: %w", err)
+	}
+	return result, nil
+}
+
 // SetStringValue sets the value as a string
 func (s *SystemSetting) SetStringValue(value string, updatedBy uint) error {
 	if s.valueType != ValueTypeString {

@@ -20,6 +20,7 @@ var validCategories = map[string]bool{
 	"oauth_google": true,
 	"oauth_github": true,
 	"email":        true,
+	"usdt":         true,
 }
 
 // isValidCategory checks if the category is in the whitelist
@@ -367,4 +368,49 @@ func (h *SettingHandler) GetSetupStatus(c *gin.Context) {
 		return
 	}
 	utils.SuccessResponse(c, http.StatusOK, "", result)
+}
+
+// GetUSDTSettings retrieves USDT payment settings
+// GET /admin/settings/usdt
+func (h *SettingHandler) GetUSDTSettings(c *gin.Context) {
+	result, err := h.service.GetUSDTSettings(c.Request.Context())
+	if err != nil {
+		h.logger.Errorw("failed to get USDT settings", "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+	utils.SuccessResponse(c, http.StatusOK, "", result)
+}
+
+// UpdateUSDTSettings updates USDT payment settings
+// PUT /admin/settings/usdt
+func (h *SettingHandler) UpdateUSDTSettings(c *gin.Context) {
+	var req dto.UpdateUSDTSettingsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	// Get user ID from context
+	userID, exists := c.Get("user_id")
+	if !exists {
+		h.logger.Errorw("user_id not found in context")
+		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+		return
+	}
+
+	uid, ok := userID.(uint)
+	if !ok {
+		h.logger.Errorw("invalid user_id type", "user_id", userID)
+		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if err := h.service.UpdateUSDTSettings(c.Request.Context(), req, uid); err != nil {
+		h.logger.Errorw("failed to update USDT settings", "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "USDT settings updated successfully", nil)
 }

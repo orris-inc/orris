@@ -351,6 +351,16 @@ func (r *Router) Shutdown() {
 		r.usageAggregationScheduler.Stop()
 	}
 
+	// Stop payment scheduler
+	if r.paymentScheduler != nil {
+		r.paymentScheduler.Stop()
+	}
+
+	// Stop USDT monitor scheduler
+	if r.usdtServiceManager != nil {
+		r.usdtServiceManager.StopScheduler()
+	}
+
 	// Stop telegram bot service manager if running
 	if r.telegramBotManager != nil {
 		r.telegramBotManager.Stop()
@@ -439,5 +449,19 @@ func (r *Router) StartTelegramPolling(ctx context.Context) error {
 func (r *Router) StartUsageAggregationScheduler(ctx context.Context) {
 	if r.usageAggregationScheduler != nil {
 		r.usageAggregationScheduler.Start(ctx)
+	}
+}
+
+// StartPaymentScheduler starts the payment expiration scheduler
+func (r *Router) StartPaymentScheduler(ctx context.Context) {
+	if r.paymentScheduler != nil {
+		r.paymentScheduler.Start(ctx)
+	}
+}
+
+// StartUSDTMonitorScheduler starts the USDT payment monitor scheduler
+func (r *Router) StartUSDTMonitorScheduler(ctx context.Context) {
+	if r.usdtServiceManager != nil {
+		r.usdtServiceManager.StartScheduler(ctx)
 	}
 }

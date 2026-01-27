@@ -136,9 +136,13 @@ func (h *SubscriptionHandler) CreateSubscription(c *gin.Context) {
 		return
 	}
 
-	utils.CreatedResponse(c, gin.H{
-		"subscription": result.Subscription,
-		"token":        result.PlainToken,
+	// Convert domain entities to DTOs for proper JSON serialization
+	subscriptionDTO := subdto.ToSubscriptionDTO(result.Subscription, nil, nil, "")
+	tokenDTO := subdto.ToSubscriptionTokenDTOWithPlainToken(result.Token, result.Subscription.SID(), result.PlainToken)
+
+	utils.CreatedResponse(c, CreateSubscriptionResponse{
+		Subscription: subscriptionDTO,
+		Token:        tokenDTO,
 	}, "Subscription created successfully")
 }
 
