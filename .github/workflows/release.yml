@@ -130,20 +130,17 @@ jobs:
           CHANGELOG=$(cat /tmp/changelog.txt)
           RELEASE_URL="https://github.com/${REPO}/releases/tag/${VERSION}"
 
-          # Build message file
-          {
-            echo "🚀 *Orris ${VERSION}*"
-            echo ""
-            echo "${CHANGELOG}"
-            echo ""
-            echo "[GitHub Release](${RELEASE_URL})"
-          } > /tmp/telegram_message.txt
+          # Escape HTML special characters in changelog to prevent parsing errors
+          CHANGELOG_ESCAPED=$(echo "$CHANGELOG" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
 
-          # Send to Telegram
+          # Build message with HTML format (more stable than Markdown)
+          printf -v MESSAGE "🚀 <b>Orris %s</b>\n\n%s\n\n<a href=\"%s\">GitHub Release</a>" "${VERSION}" "${CHANGELOG_ESCAPED}" "${RELEASE_URL}"
+
+          # Send to Telegram with HTML parse mode
           curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
             -d chat_id="${TELEGRAM_CHAT_ID}" \
-            -d parse_mode="Markdown" \
-            --data-urlencode text@/tmp/telegram_message.txt
+            -d parse_mode="HTML" \
+            --data-urlencode text="$MESSAGE"
 
   docker:
     needs: build
