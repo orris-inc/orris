@@ -46,6 +46,16 @@ func (m *SubscriptionMapperImpl) ToEntity(model *models.SubscriptionModel) (*sub
 		metadata = make(map[string]interface{})
 	}
 
+	// Parse billing cycle from model
+	var billingCycle *vo.BillingCycle
+	if model.BillingCycle != nil && *model.BillingCycle != "" {
+		bc, err := vo.NewBillingCycle(*model.BillingCycle)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse billing cycle: %w", err)
+		}
+		billingCycle = bc
+	}
+
 	entity, err := subscription.ReconstructSubscriptionWithSubject(
 		model.ID,
 		model.UserID,
@@ -67,6 +77,7 @@ func (m *SubscriptionMapperImpl) ToEntity(model *models.SubscriptionModel) (*sub
 		model.Version,
 		model.CreatedAt,
 		model.UpdatedAt,
+		billingCycle,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to reconstruct subscription entity: %w", err)
@@ -89,6 +100,13 @@ func (m *SubscriptionMapperImpl) ToModel(entity *subscription.Subscription) (*mo
 		metadataJSON = data
 	}
 
+	// Convert billing cycle to string pointer
+	var billingCycleStr *string
+	if bc := entity.BillingCycle(); bc != nil {
+		s := bc.String()
+		billingCycleStr = &s
+	}
+
 	model := &models.SubscriptionModel{
 		ID:                 entity.ID(),
 		SID:                entity.SID(),
@@ -102,6 +120,7 @@ func (m *SubscriptionMapperImpl) ToModel(entity *subscription.Subscription) (*mo
 		StartDate:          entity.StartDate(),
 		EndDate:            entity.EndDate(),
 		AutoRenew:          entity.AutoRenew(),
+		BillingCycle:       billingCycleStr,
 		CurrentPeriodStart: entity.CurrentPeriodStart(),
 		CurrentPeriodEnd:   entity.CurrentPeriodEnd(),
 		CancelledAt:        entity.CancelledAt(),

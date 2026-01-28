@@ -117,7 +117,7 @@ func (uc *GetDashboardUseCase) Execute(
 		// Build subscription DTO
 		subDTO := &dto.DashboardSubscriptionDTO{
 			SID:                sub.SID(),
-			Status:             sub.Status().String(),
+			Status:             sub.EffectiveStatus().String(),
 			CurrentPeriodStart: sub.CurrentPeriodStart(),
 			CurrentPeriodEnd:   sub.CurrentPeriodEnd(),
 			IsActive:           sub.IsActive(),

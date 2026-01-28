@@ -13,24 +13,28 @@ import (
 // - Runs every 5 minutes to check and expire pending payments that have passed their expiration time
 // - Payment orders expire 30 minutes after creation if not completed
 // - Auto-cancels subscriptions with unpaid payments after 24-hour grace period
+// - Retries failed subscription activations for paid non-USDT payments
 type PaymentScheduler struct {
-	expirePaymentsUC    *paymentUsecases.ExpirePaymentsUseCase
-	cancelUnpaidSubsUC  *paymentUsecases.CancelUnpaidSubscriptionsUseCase
-	logger              logger.Interface
-	stopChan            chan struct{}
-	stopOnce            sync.Once      // Ensures Stop() is only called once
-	wg                  sync.WaitGroup // Tracks running goroutines for graceful shutdown
-	interval            time.Duration
+	expirePaymentsUC   *paymentUsecases.ExpirePaymentsUseCase
+	cancelUnpaidSubsUC *paymentUsecases.CancelUnpaidSubscriptionsUseCase
+	retryActivationUC  *paymentUsecases.RetrySubscriptionActivationUseCase
+	logger             logger.Interface
+	stopChan           chan struct{}
+	stopOnce           sync.Once      // Ensures Stop() is only called once
+	wg                 sync.WaitGroup // Tracks running goroutines for graceful shutdown
+	interval           time.Duration
 }
 
 func NewPaymentScheduler(
 	expirePaymentsUC *paymentUsecases.ExpirePaymentsUseCase,
 	cancelUnpaidSubsUC *paymentUsecases.CancelUnpaidSubscriptionsUseCase,
+	retryActivationUC *paymentUsecases.RetrySubscriptionActivationUseCase,
 	logger logger.Interface,
 ) *PaymentScheduler {
 	return &PaymentScheduler{
 		expirePaymentsUC:   expirePaymentsUC,
 		cancelUnpaidSubsUC: cancelUnpaidSubsUC,
+		retryActivationUC:  retryActivationUC,
 		logger:             logger,
 		stopChan:           make(chan struct{}),
 		interval:           5 * time.Minute,
@@ -110,5 +114,19 @@ func (s *PaymentScheduler) processExpiredPayments(ctx context.Context) {
 		s.logger.Infow("unpaid subscriptions cancelled",
 			"count", cancelledCount,
 		)
+	}
+
+	// Step 3: Retry failed subscription activations for paid non-USDT payments
+	if s.retryActivationUC != nil {
+		retryCount, err := s.retryActivationUC.Execute(ctx)
+		if err != nil {
+			s.logger.Errorw("failed to retry subscription activations",
+				"error", err,
+			)
+		} else if retryCount > 0 {
+			s.logger.Infow("subscription activations retried",
+				"count", retryCount,
+			)
+		}
 	}
 }

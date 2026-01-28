@@ -10,9 +10,16 @@ type PaymentRepository interface {
 	GetByGatewayOrderNo(ctx context.Context, gatewayOrderNo string) (*Payment, error)
 	GetBySubscriptionID(ctx context.Context, subscriptionID uint) ([]*Payment, error)
 	GetPendingBySubscriptionID(ctx context.Context, subscriptionID uint) (*Payment, error)
+	// HasPendingPaymentBySubscriptionID checks if there are any pending payments for a subscription
+	HasPendingPaymentBySubscriptionID(ctx context.Context, subscriptionID uint) (bool, error)
 	GetExpiredPayments(ctx context.Context) ([]*Payment, error)
 	GetPendingUSDTPayments(ctx context.Context) ([]*Payment, error)
 	// GetConfirmedUSDTPaymentsNeedingActivation returns confirmed USDT payments
 	// that have subscription_activation_pending=true in metadata
 	GetConfirmedUSDTPaymentsNeedingActivation(ctx context.Context) ([]*Payment, error)
+	// GetPaidPaymentsNeedingActivation returns paid non-USDT payments
+	// that have subscription_activation_pending=true in metadata
+	GetPaidPaymentsNeedingActivation(ctx context.Context) ([]*Payment, error)
+	// CountPendingUSDTPaymentsByUser returns the count of pending USDT payments for a user
+	CountPendingUSDTPaymentsByUser(ctx context.Context, userID uint) (int, error)
 }

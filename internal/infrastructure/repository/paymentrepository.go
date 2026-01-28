@@ -151,6 +151,20 @@ func (r *PaymentRepository) GetPendingBySubscriptionID(ctx context.Context, subs
 	return mappers.PaymentToDomain(&model)
 }
 
+// HasPendingPaymentBySubscriptionID checks if there are any pending payments for a subscription
+func (r *PaymentRepository) HasPendingPaymentBySubscriptionID(ctx context.Context, subscriptionID uint) (bool, error) {
+	var count int64
+
+	if err := db.GetTxFromContext(ctx, r.db).
+		Model(&models.PaymentModel{}).
+		Where("subscription_id = ? AND payment_status = ?", subscriptionID, vo.PaymentStatusPending).
+		Count(&count).Error; err != nil {
+		return false, fmt.Errorf("failed to check pending payments: %w", err)
+	}
+
+	return count > 0, nil
+}
+
 func (r *PaymentRepository) GetExpiredPayments(ctx context.Context) ([]*payment.Payment, error) {
 	var paymentModels []models.PaymentModel
 
@@ -212,6 +226,50 @@ func (r *PaymentRepository) GetConfirmedUSDTPaymentsNeedingActivation(ctx contex
 		).
 		Find(&paymentModels).Error; err != nil {
 		return nil, fmt.Errorf("failed to get payments needing activation: %w", err)
+	}
+
+	payments := make([]*payment.Payment, len(paymentModels))
+	for i, model := range paymentModels {
+		p, err := mappers.PaymentToDomain(&model)
+		if err != nil {
+			return nil, err
+		}
+		payments[i] = p
+	}
+
+	return payments, nil
+}
+
+// CountPendingUSDTPaymentsByUser returns the count of pending USDT payments for a user
+func (r *PaymentRepository) CountPendingUSDTPaymentsByUser(ctx context.Context, userID uint) (int, error) {
+	var count int64
+
+	if err := db.GetTxFromContext(ctx, r.db).
+		Model(&models.PaymentModel{}).
+		Where("user_id = ? AND payment_status = ? AND payment_method IN ?",
+			userID,
+			vo.PaymentStatusPending,
+			[]string{string(vo.PaymentMethodUSDTPOL), string(vo.PaymentMethodUSDTTRC)},
+		).
+		Count(&count).Error; err != nil {
+		return 0, fmt.Errorf("failed to count pending USDT payments: %w", err)
+	}
+
+	return int(count), nil
+}
+
+// GetPaidPaymentsNeedingActivation returns paid non-USDT payments
+// that have subscription_activation_pending=true in metadata
+func (r *PaymentRepository) GetPaidPaymentsNeedingActivation(ctx context.Context) ([]*payment.Payment, error) {
+	var paymentModels []models.PaymentModel
+
+	if err := db.GetTxFromContext(ctx, r.db).
+		Where("payment_status = ? AND payment_method NOT IN ? AND JSON_EXTRACT(metadata, '$.subscription_activation_pending') = true",
+			vo.PaymentStatusPaid,
+			[]string{string(vo.PaymentMethodUSDTPOL), string(vo.PaymentMethodUSDTTRC)},
+		).
+		Find(&paymentModels).Error; err != nil {
+		return nil, fmt.Errorf("failed to get non-USDT payments needing activation: %w", err)
 	}
 
 	payments := make([]*payment.Payment, len(paymentModels))

@@ -163,7 +163,7 @@ func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, cmd CreateSubs
 	// Calculate subscription end date based on billing cycle
 	endDate := uc.calculateEndDate(startDate, billingCycle)
 
-	sub, err := subscription.NewSubscription(userID, planID, startDate, endDate, cmd.AutoRenew)
+	sub, err := subscription.NewSubscription(userID, planID, startDate, endDate, cmd.AutoRenew, &billingCycle)
 	if err != nil {
 		uc.logger.Errorw("failed to create subscription aggregate", "error", err)
 		return nil, fmt.Errorf("failed to create subscription: %w", err)

@@ -459,6 +459,13 @@ func (r *Router) StartPaymentScheduler(ctx context.Context) {
 	}
 }
 
+// StartSubscriptionScheduler starts the subscription maintenance scheduler
+func (r *Router) StartSubscriptionScheduler(ctx context.Context) {
+	if r.subscriptionScheduler != nil {
+		r.subscriptionScheduler.Start(ctx)
+	}
+}
+
 // StartUSDTMonitorScheduler starts the USDT payment monitor scheduler
 func (r *Router) StartUSDTMonitorScheduler(ctx context.Context) {
 	if r.usdtServiceManager != nil {

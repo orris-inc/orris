@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/orris-inc/orris/internal/domain/payment"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	vo "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
 	"github.com/orris-inc/orris/internal/shared/biztime"
@@ -21,22 +22,25 @@ const (
 // that have unpaid payments beyond the grace period.
 //
 // Fault tolerance:
-// - If Cancel() succeeds but Update() fails, the subscription state in memory is changed but not persisted.
-// - On the next scheduler run, the subscription will be re-processed but will fail at the Cancel() step
-//   (since it's already marked as cancelled), which is safe and idempotent.
-// - This design prevents data corruption while allowing the scheduler to retry on transient failures.
+//   - If Cancel() succeeds but Update() fails, the subscription state in memory is changed but not persisted.
+//   - On the next scheduler run, the subscription will be re-processed but will fail at the Cancel() step
+//     (since it's already marked as cancelled), which is safe and idempotent.
+//   - This design prevents data corruption while allowing the scheduler to retry on transient failures.
 type CancelUnpaidSubscriptionsUseCase struct {
 	subscriptionRepo subscription.SubscriptionRepository
+	paymentRepo      payment.PaymentRepository
 	logger           logger.Interface
 }
 
 // NewCancelUnpaidSubscriptionsUseCase creates a new CancelUnpaidSubscriptionsUseCase
 func NewCancelUnpaidSubscriptionsUseCase(
 	subscriptionRepo subscription.SubscriptionRepository,
+	paymentRepo payment.PaymentRepository,
 	logger logger.Interface,
 ) *CancelUnpaidSubscriptionsUseCase {
 	return &CancelUnpaidSubscriptionsUseCase{
 		subscriptionRepo: subscriptionRepo,
+		paymentRepo:      paymentRepo,
 		logger:           logger,
 	}
 }
@@ -81,6 +85,29 @@ func (uc *CancelUnpaidSubscriptionsUseCase) Execute(ctx context.Context) (int, e
 		// Check if grace period has passed
 		if now.Before(paymentExpiredAt.Add(unpaidGracePeriod)) {
 			// Still within grace period
+			continue
+		}
+
+		// Check if there are any pending payments for this subscription
+		// A new payment may have been created after the previous one expired
+		hasPending, err := uc.paymentRepo.HasPendingPaymentBySubscriptionID(ctx, sub.ID())
+		if err != nil {
+			uc.logger.Errorw("failed to check pending payments",
+				"subscription_id", sub.ID(),
+				"error", err)
+			continue
+		}
+
+		if hasPending {
+			// New pending payment exists, skip cancellation and clear expired marker
+			uc.logger.Infow("skipping cancellation: new pending payment exists",
+				"subscription_id", sub.ID())
+			sub.SetMetadata("payment_expired_at", nil)
+			if err := uc.subscriptionRepo.Update(ctx, sub); err != nil {
+				uc.logger.Errorw("failed to clear payment_expired_at",
+					"subscription_id", sub.ID(),
+					"error", err)
+			}
 			continue
 		}
 

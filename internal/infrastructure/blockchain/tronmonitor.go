@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -20,6 +21,8 @@ const (
 	tronUSDTContract = "TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t"
 	// HTTP request timeout
 	tronRequestTimeout = 15 * time.Second
+	// Maximum response body size for blockchain API (1MB)
+	maxTronResponseSize = 1 << 20
 )
 
 // trc20Transfer represents a TRC-20 transfer from TronGrid
@@ -74,8 +77,25 @@ func (m *TronMonitor) FindTransaction(ctx context.Context, chainType vo.ChainTyp
 	// Note: Tron addresses are case-sensitive (Base58Check encoding)
 
 	// Query TRC-20 transfers to the receiving address
-	url := fmt.Sprintf("%s/v1/accounts/%s/transactions/trc20?only_to=true&limit=20&contract_address=%s",
-		trongridAPIURL, toAddress, tronUSDTContract)
+	// Use min_timestamp (milliseconds) for API-level filtering to prevent DoS from old transactions
+	// Allow 30 seconds buffer for clock skew between system and blockchain
+	timeBuffer := 30 * time.Second
+
+	// Build URL with optional min_timestamp filter
+	// Skip min_timestamp if createdAfter is zero to avoid negative timestamp which API may reject
+	var url string
+	if !createdAfter.IsZero() {
+		minTimestamp := createdAfter.Add(-timeBuffer).UnixMilli()
+		url = fmt.Sprintf("%s/v1/accounts/%s/transactions/trc20?only_to=true&limit=200&contract_address=%s&min_timestamp=%d",
+			trongridAPIURL, toAddress, tronUSDTContract, minTimestamp)
+	} else {
+		m.logger.Warnw("createdAfter is zero, querying without time filter",
+			"to_address", toAddress,
+			"amount_raw", amountRaw,
+		)
+		url = fmt.Sprintf("%s/v1/accounts/%s/transactions/trc20?only_to=true&limit=200&contract_address=%s",
+			trongridAPIURL, toAddress, tronUSDTContract)
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -94,7 +114,7 @@ func (m *TronMonitor) FindTransaction(ctx context.Context, chainType vo.ChainTyp
 	defer resp.Body.Close()
 
 	var apiResp trc20Response
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxTronResponseSize)).Decode(&apiResp); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
@@ -127,10 +147,9 @@ func (m *TronMonitor) FindTransaction(ctx context.Context, chainType vo.ChainTyp
 		if txAmountRaw == amountRaw {
 			txTime := time.UnixMilli(transfer.BlockTimestamp)
 
-			// Time window check: only accept transactions after payment creation
+			// Time window check (second layer): only accept transactions after payment creation
 			// This prevents attackers from using pre-existing transactions to claim payments
-			// Allow 30 seconds buffer for clock skew between system and blockchain
-			timeBuffer := 30 * time.Second
+			// Note: API-level filtering via min_timestamp is the first layer of defense
 			if !createdAfter.IsZero() && txTime.Before(createdAfter.Add(-timeBuffer)) {
 				m.logger.Debugw("skipping transaction before payment creation",
 					"tx_hash", transfer.TransactionID,
@@ -213,7 +232,7 @@ func (m *TronMonitor) getTransactionDetails(ctx context.Context, txHash string) 
 		} `json:"data"`
 		Success bool `json:"success"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&txResp); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxTronResponseSize)).Decode(&txResp); err != nil {
 		return 0, 0, fmt.Errorf("failed to decode response: %w", err)
 	}
 
@@ -264,7 +283,7 @@ func (m *TronMonitor) getCurrentBlockNumber(ctx context.Context) (uint64, error)
 			} `json:"raw_data"`
 		} `json:"block_header"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&blockResp); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxTronResponseSize)).Decode(&blockResp); err != nil {
 		return 0, err
 	}
 

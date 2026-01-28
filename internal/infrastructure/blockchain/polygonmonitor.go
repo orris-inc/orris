@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -23,6 +24,12 @@ const (
 	polygonUSDTContract = "0xc2132D05D31c914a87C6611C10748AEb04B58e8F"
 	// HTTP request timeout
 	polygonRequestTimeout = 15 * time.Second
+	// Maximum response body size for blockchain API (1MB)
+	maxBlockchainResponseSize = 1 << 20
+	// Maximum pages to scan to prevent DoS
+	maxPolygonPages = 5
+	// Results per page
+	polygonPageSize = 200
 )
 
 // polygonscanResponse represents the PolygonScan API response
@@ -80,9 +87,104 @@ func (m *PolygonMonitor) FindTransaction(ctx context.Context, chainType vo.Chain
 	// Normalize address to lowercase
 	toAddress = strings.ToLower(toAddress)
 
-	// Query token transfers to the receiving address (Etherscan V2 API)
-	url := fmt.Sprintf("%s?chainid=%s&module=account&action=tokentx&contractaddress=%s&address=%s&page=1&offset=20&sort=desc&apikey=%s",
-		etherscanV2APIURL, polygonChainID, polygonUSDTContract, toAddress, m.apiKey)
+	// Allow 30 seconds buffer for clock skew between system and blockchain
+	timeBuffer := 30 * time.Second
+	minTime := createdAfter.Add(-timeBuffer)
+
+	// Scan multiple pages with early termination when transactions become too old
+	for page := 1; page <= maxPolygonPages; page++ {
+		tx, shouldStop, err := m.scanPage(ctx, toAddress, amountRaw, minTime, page)
+		if err != nil {
+			return nil, err
+		}
+		if tx != nil {
+			return tx, nil
+		}
+		if shouldStop {
+			// All transactions on this page are older than our time window
+			break
+		}
+	}
+
+	return nil, nil
+}
+
+// scanPage fetches a single page of transactions and searches for a match
+// Returns (transaction, shouldStop, error) where shouldStop indicates if we've gone past the time window
+func (m *PolygonMonitor) scanPage(ctx context.Context, toAddress string, amountRaw uint64, minTime time.Time, page int) (*blockchain.Transaction, bool, error) {
+	transfers, err := m.fetchTokenTransfers(ctx, toAddress, page)
+	if err != nil {
+		return nil, false, err
+	}
+
+	if len(transfers) == 0 {
+		return nil, true, nil // No more transactions
+	}
+
+	// Find matching transaction
+	for _, transfer := range transfers {
+		if strings.ToLower(transfer.To) != toAddress {
+			continue
+		}
+
+		// Parse timestamp first for early termination check
+		timestamp, _ := strconv.ParseInt(transfer.TimeStamp, 10, 64)
+		txTime := time.Unix(timestamp, 0)
+
+		// Early termination: since results are sorted desc, if we see a tx older than minTime,
+		// all subsequent transactions will also be older
+		if !minTime.IsZero() && txTime.Before(minTime) {
+			m.logger.Debugw("stopping scan: transaction older than payment creation",
+				"tx_hash", transfer.Hash,
+				"tx_time", txTime,
+				"min_time", minTime,
+			)
+			return nil, true, nil
+		}
+
+		// Parse amount from blockchain (returns raw uint64)
+		txAmountRaw, err := parseUSDTAmountRaw(transfer.Value)
+		if err != nil {
+			m.logger.Warnw("failed to parse transaction amount",
+				"tx_hash", transfer.Hash,
+				"value", transfer.Value,
+				"error", err,
+			)
+			continue
+		}
+
+		// Exact integer match - no tolerance needed
+		if txAmountRaw == amountRaw {
+			blockNumber, _ := strconv.ParseUint(transfer.BlockNumber, 10, 64)
+			confirmations, _ := strconv.Atoi(transfer.Confirmations)
+
+			m.logger.Infow("found matching USDT transaction",
+				"tx_hash", transfer.Hash,
+				"amount_raw", txAmountRaw,
+				"amount_usdt", blockchain.RawAmountToFloat(txAmountRaw),
+				"confirmations", confirmations,
+				"tx_time", txTime,
+			)
+
+			return &blockchain.Transaction{
+				TxHash:        transfer.Hash,
+				FromAddress:   transfer.From,
+				ToAddress:     transfer.To,
+				AmountRaw:     txAmountRaw,
+				BlockNumber:   blockNumber,
+				Confirmations: confirmations,
+				Timestamp:     txTime,
+			}, false, nil
+		}
+	}
+
+	return nil, false, nil
+}
+
+// fetchTokenTransfers fetches a page of token transfers from Etherscan API
+func (m *PolygonMonitor) fetchTokenTransfers(ctx context.Context, toAddress string, page int) ([]polygonTokenTransfer, error) {
+	url := fmt.Sprintf("%s?chainid=%s&module=account&action=tokentx&contractaddress=%s&address=%s&page=%d&offset=%d&sort=desc&apikey=%s",
+		etherscanV2APIURL, polygonChainID, polygonUSDTContract, toAddress, page, polygonPageSize, m.apiKey)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -96,7 +198,7 @@ func (m *PolygonMonitor) FindTransaction(ctx context.Context, chainType vo.Chain
 	defer resp.Body.Close()
 
 	var apiResp polygonscanResponse
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxBlockchainResponseSize)).Decode(&apiResp); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
 	}
 
@@ -127,65 +229,7 @@ func (m *PolygonMonitor) FindTransaction(ctx context.Context, chainType vo.Chain
 		return nil, fmt.Errorf("failed to unmarshal transfers: %w", err)
 	}
 
-	// Find matching transaction
-	for _, transfer := range transfers {
-		if strings.ToLower(transfer.To) != toAddress {
-			continue
-		}
-
-		// Parse amount from blockchain (returns raw uint64)
-		txAmountRaw, err := parseUSDTAmountRaw(transfer.Value)
-		if err != nil {
-			m.logger.Warnw("failed to parse transaction amount",
-				"tx_hash", transfer.Hash,
-				"value", transfer.Value,
-				"error", err,
-			)
-			continue
-		}
-
-		// Exact integer match - no tolerance needed
-		if txAmountRaw == amountRaw {
-			blockNumber, _ := strconv.ParseUint(transfer.BlockNumber, 10, 64)
-			confirmations, _ := strconv.Atoi(transfer.Confirmations)
-			timestamp, _ := strconv.ParseInt(transfer.TimeStamp, 10, 64)
-			txTime := time.Unix(timestamp, 0)
-
-			// Time window check: only accept transactions after payment creation
-			// This prevents attackers from using pre-existing transactions to claim payments
-			// Allow 30 seconds buffer for clock skew between system and blockchain
-			timeBuffer := 30 * time.Second
-			if !createdAfter.IsZero() && txTime.Before(createdAfter.Add(-timeBuffer)) {
-				m.logger.Debugw("skipping transaction before payment creation",
-					"tx_hash", transfer.Hash,
-					"tx_time", txTime,
-					"payment_created", createdAfter,
-					"buffer", timeBuffer,
-				)
-				continue
-			}
-
-			m.logger.Infow("found matching USDT transaction",
-				"tx_hash", transfer.Hash,
-				"amount_raw", txAmountRaw,
-				"amount_usdt", blockchain.RawAmountToFloat(txAmountRaw),
-				"confirmations", confirmations,
-				"tx_time", txTime,
-			)
-
-			return &blockchain.Transaction{
-				TxHash:        transfer.Hash,
-				FromAddress:   transfer.From,
-				ToAddress:     transfer.To,
-				AmountRaw:     txAmountRaw,
-				BlockNumber:   blockNumber,
-				Confirmations: confirmations,
-				Timestamp:     txTime,
-			}, nil
-		}
-	}
-
-	return nil, nil
+	return transfers, nil
 }
 
 // GetConfirmations returns the current number of confirmations for a transaction
@@ -218,7 +262,7 @@ func (m *PolygonMonitor) GetConfirmations(ctx context.Context, chainType vo.Chai
 			BlockNumber string `json:"blockNumber"`
 		} `json:"result"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxBlockchainResponseSize)).Decode(&apiResp); err != nil {
 		return 0, fmt.Errorf("failed to decode response: %w", err)
 	}
 
@@ -266,7 +310,7 @@ func (m *PolygonMonitor) getCurrentBlockNumber(ctx context.Context) (int64, erro
 	var apiResp struct {
 		Result string `json:"result"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxBlockchainResponseSize)).Decode(&apiResp); err != nil {
 		return 0, err
 	}
 

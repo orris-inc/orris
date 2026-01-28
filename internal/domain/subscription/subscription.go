@@ -41,6 +41,7 @@ type Subscription struct {
 	autoRenew          bool
 	currentPeriodStart time.Time
 	currentPeriodEnd   time.Time
+	billingCycle       *vo.BillingCycle
 	cancelledAt        *time.Time
 	cancelReason       *string
 	metadata           map[string]interface{}
@@ -51,12 +52,12 @@ type Subscription struct {
 
 // NewSubscription creates a new subscription
 // For backward compatibility, this defaults to user subject type
-func NewSubscription(userID, planID uint, startDate, endDate time.Time, autoRenew bool) (*Subscription, error) {
-	return NewSubscriptionWithSubject("user", userID, planID, startDate, endDate, autoRenew)
+func NewSubscription(userID, planID uint, startDate, endDate time.Time, autoRenew bool, billingCycle *vo.BillingCycle) (*Subscription, error) {
+	return NewSubscriptionWithSubject("user", userID, planID, startDate, endDate, autoRenew, billingCycle)
 }
 
 // NewSubscriptionWithSubject creates a new subscription with specific subject type
-func NewSubscriptionWithSubject(subjectType string, subjectID, planID uint, startDate, endDate time.Time, autoRenew bool) (*Subscription, error) {
+func NewSubscriptionWithSubject(subjectType string, subjectID, planID uint, startDate, endDate time.Time, autoRenew bool, billingCycle *vo.BillingCycle) (*Subscription, error) {
 	if subjectType == "" {
 		return nil, fmt.Errorf("subject type is required")
 	}
@@ -100,6 +101,7 @@ func NewSubscriptionWithSubject(subjectType string, subjectID, planID uint, star
 		autoRenew:          autoRenew,
 		currentPeriodStart: startDate,
 		currentPeriodEnd:   endDate,
+		billingCycle:       billingCycle,
 		metadata:           make(map[string]interface{}),
 		version:            1,
 		createdAt:          now,
@@ -125,6 +127,7 @@ func ReconstructSubscription(
 	metadata map[string]interface{},
 	version int,
 	createdAt, updatedAt time.Time,
+	billingCycle *vo.BillingCycle,
 ) (*Subscription, error) {
 	return ReconstructSubscriptionWithSubject(
 		id, userID, planID,
@@ -141,6 +144,7 @@ func ReconstructSubscription(
 		metadata,
 		version,
 		createdAt, updatedAt,
+		billingCycle,
 	)
 }
 
@@ -161,6 +165,7 @@ func ReconstructSubscriptionWithSubject(
 	metadata map[string]interface{},
 	version int,
 	createdAt, updatedAt time.Time,
+	billingCycle *vo.BillingCycle,
 ) (*Subscription, error) {
 	if id == 0 {
 		return nil, fmt.Errorf("subscription ID cannot be zero")
@@ -206,6 +211,7 @@ func ReconstructSubscriptionWithSubject(
 		autoRenew:          autoRenew,
 		currentPeriodStart: currentPeriodStart,
 		currentPeriodEnd:   currentPeriodEnd,
+		billingCycle:       billingCycle,
 		cancelledAt:        cancelledAt,
 		cancelReason:       cancelReason,
 		metadata:           metadata,
@@ -266,6 +272,17 @@ func (s *Subscription) Status() vo.SubscriptionStatus {
 	return s.status
 }
 
+// EffectiveStatus returns the actual status considering time factors.
+// If the subscription has passed end_date but status is still active/trialing/past_due,
+// it returns expired status. This ensures the display layer always shows correct status
+// without waiting for the background job to update the database.
+func (s *Subscription) EffectiveStatus() vo.SubscriptionStatus {
+	if s.IsExpired() && s.status.CanTransitionTo(vo.StatusExpired) {
+		return vo.StatusExpired
+	}
+	return s.status
+}
+
 // StartDate returns the subscription start date
 func (s *Subscription) StartDate() time.Time {
 	return s.startDate
@@ -279,6 +296,11 @@ func (s *Subscription) EndDate() time.Time {
 // AutoRenew returns the auto-renew setting
 func (s *Subscription) AutoRenew() bool {
 	return s.autoRenew
+}
+
+// BillingCycle returns the billing cycle of this subscription
+func (s *Subscription) BillingCycle() *vo.BillingCycle {
+	return s.billingCycle
 }
 
 // CurrentPeriodStart returns the current period start date

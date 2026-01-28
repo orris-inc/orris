@@ -85,7 +85,7 @@ func (h *PaymentHandler) CreatePayment(c *gin.Context) {
 	result, err := h.createPaymentUC.Execute(c.Request.Context(), cmd)
 	if err != nil {
 		h.logger.Errorw("failed to create payment", "error", err, "user_id", userID)
-		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to create payment: "+err.Error())
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
@@ -120,7 +120,7 @@ func (h *PaymentHandler) CreatePayment(c *gin.Context) {
 func (h *PaymentHandler) HandleCallback(c *gin.Context) {
 	if err := h.handleCallbackUC.Execute(c.Request.Context(), c.Request); err != nil {
 		h.logger.Errorw("failed to handle payment callback", "error", err)
-		utils.ErrorResponse(c, http.StatusBadRequest, "failed to process callback: "+err.Error())
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 

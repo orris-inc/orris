@@ -289,6 +289,7 @@ func (r *SubscriptionRepositoryImpl) Update(ctx context.Context, subscriptionEnt
 			"start_date":           model.StartDate,
 			"end_date":             model.EndDate,
 			"auto_renew":           model.AutoRenew,
+			"billing_cycle":        model.BillingCycle,
 			"current_period_start": model.CurrentPeriodStart,
 			"current_period_end":   model.CurrentPeriodEnd,
 			"link_token":           model.LinkToken,

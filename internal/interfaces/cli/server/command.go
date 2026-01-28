@@ -134,6 +134,10 @@ func run(cmd *cobra.Command, args []string) error {
 	router.StartPaymentScheduler(ctx)
 	logger.Info("payment scheduler started")
 
+	// Start subscription maintenance scheduler (marks expired subscriptions daily)
+	router.StartSubscriptionScheduler(ctx)
+	logger.Info("subscription scheduler started")
+
 	// Start USDT payment monitor scheduler
 	router.StartUSDTMonitorScheduler(ctx)
 	logger.Info("USDT monitor scheduler started")

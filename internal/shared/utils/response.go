@@ -89,11 +89,11 @@ func ErrorResponseWithError(c *gin.Context, err error) {
 			Details: appErr.Details,
 		}
 	} else {
+		// For non-AppError, do not expose internal error details to prevent information leakage
 		statusCode = http.StatusInternalServerError
 		errorInfo = ErrorInfo{
 			Type:    string(errors.ErrorTypeInternal),
 			Message: "Internal server error occurred",
-			Details: err.Error(),
 		}
 	}
 

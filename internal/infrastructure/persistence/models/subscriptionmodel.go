@@ -24,6 +24,7 @@ type SubscriptionModel struct {
 	StartDate          time.Time `gorm:"not null"`
 	EndDate            time.Time `gorm:"not null;index:idx_end_date"`
 	AutoRenew          bool      `gorm:"default:false"`
+	BillingCycle       *string   `gorm:"column:billing_cycle;size:20;index:idx_subscriptions_billing_cycle;comment:billing cycle (weekly, monthly, quarterly, etc.)"`
 	CurrentPeriodStart time.Time `gorm:"not null"`
 	CurrentPeriodEnd   time.Time `gorm:"not null"`
 	CancelledAt        *time.Time

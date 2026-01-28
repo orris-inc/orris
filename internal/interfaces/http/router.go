@@ -110,6 +110,7 @@ type Router struct {
 	adminNotificationScheduler     *scheduler.AdminNotificationScheduler
 	usageAggregationScheduler      *scheduler.UsageAggregationScheduler
 	paymentScheduler               *scheduler.PaymentScheduler
+	subscriptionScheduler          *scheduler.SubscriptionScheduler
 	usdtServiceManager             *infraPayment.USDTServiceManager
 	logger                         logger.Interface
 	authMiddleware                 *middleware.AuthMiddleware
@@ -259,8 +260,13 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	// Initialize payment scheduler for expiring pending payments and cancelling unpaid subscriptions
 	expirePaymentsUC := paymentUsecases.NewExpirePaymentsUseCase(paymentRepo, subscriptionRepo, log)
-	cancelUnpaidSubsUC := paymentUsecases.NewCancelUnpaidSubscriptionsUseCase(subscriptionRepo, log)
-	paymentScheduler := scheduler.NewPaymentScheduler(expirePaymentsUC, cancelUnpaidSubsUC, log)
+	cancelUnpaidSubsUC := paymentUsecases.NewCancelUnpaidSubscriptionsUseCase(subscriptionRepo, paymentRepo, log)
+	retryActivationUC := paymentUsecases.NewRetrySubscriptionActivationUseCase(paymentRepo, activateSubscriptionUC, log)
+	paymentScheduler := scheduler.NewPaymentScheduler(expirePaymentsUC, cancelUnpaidSubsUC, retryActivationUC, log)
+
+	// Initialize subscription scheduler for marking expired subscriptions (runs daily)
+	expireSubscriptionsUC := subscriptionUsecases.NewExpireSubscriptionsUseCase(subscriptionRepo, log)
+	subscriptionScheduler := scheduler.NewSubscriptionScheduler(expireSubscriptionsUC, log)
 
 	createPlanUC := subscriptionUsecases.NewCreatePlanUseCase(
 		subscriptionPlanRepo, planPricingRepo, log,
@@ -1536,6 +1542,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		adminNotificationScheduler:     adminNotificationScheduler,
 		usageAggregationScheduler:      usageAggregationScheduler,
 		paymentScheduler:               paymentScheduler,
+		subscriptionScheduler:          subscriptionScheduler,
 		usdtServiceManager:             usdtServiceManager,
 		logger:                         log,
 		authMiddleware:                 authMiddleware,

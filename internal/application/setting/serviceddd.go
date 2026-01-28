@@ -6,6 +6,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/setting/dto"
 	"github.com/orris-inc/orris/internal/application/setting/usecases"
+	paymentVO "github.com/orris-inc/orris/internal/domain/payment/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/setting"
 	sharedConfig "github.com/orris-inc/orris/internal/shared/config"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -538,6 +539,22 @@ func (s *ServiceDDD) UpdateUSDTSettings(ctx context.Context, req dto.UpdateUSDTS
 	}
 	if req.TRCReceivingAddresses != nil && len(*req.TRCReceivingAddresses) > maxAddresses {
 		return fmt.Errorf("trc_receiving_addresses cannot exceed %d addresses", maxAddresses)
+	}
+
+	// Validate address formats
+	if req.POLReceivingAddresses != nil {
+		for i, addr := range *req.POLReceivingAddresses {
+			if err := paymentVO.ChainTypePOL.ValidateAddress(addr); err != nil {
+				return fmt.Errorf("invalid Polygon address at index %d: %w", i, err)
+			}
+		}
+	}
+	if req.TRCReceivingAddresses != nil {
+		for i, addr := range *req.TRCReceivingAddresses {
+			if err := paymentVO.ChainTypeTRC.ValidateAddress(addr); err != nil {
+				return fmt.Errorf("invalid Tron address at index %d: %w", i, err)
+			}
+		}
 	}
 
 	changes := make(map[string]any)

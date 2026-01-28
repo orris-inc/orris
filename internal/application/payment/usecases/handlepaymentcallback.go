@@ -114,6 +114,34 @@ func (uc *HandlePaymentCallbackUseCase) handlePaymentSuccess(
 	paymentOrder *payment.Payment,
 	callbackData *paymentgateway.CallbackData,
 ) error {
+	// Validate callback amount and currency match the payment
+	if err := paymentOrder.ValidateCallbackAmount(callbackData.Amount, callbackData.Currency); err != nil {
+		uc.logger.Errorw("callback amount/currency mismatch",
+			"payment_id", paymentOrder.ID(),
+			"error", err,
+			"expected_amount", paymentOrder.Amount().AmountInCents(),
+			"callback_amount", callbackData.Amount,
+			"expected_currency", paymentOrder.Amount().Currency(),
+			"callback_currency", callbackData.Currency,
+		)
+		// Mark payment as failed due to amount mismatch
+		if markErr := paymentOrder.MarkAsFailed(fmt.Sprintf("amount/currency mismatch: %s", err.Error())); markErr != nil {
+			uc.logger.Errorw("failed to mark payment as failed after amount mismatch", "error", markErr)
+			return fmt.Errorf("failed to mark payment as failed after amount mismatch: %w", markErr)
+		}
+		if updateErr := uc.paymentRepo.Update(ctx, paymentOrder); updateErr != nil {
+			uc.logger.Errorw("failed to update payment after amount mismatch", "error", updateErr)
+			return fmt.Errorf("failed to update payment after amount mismatch: %w", updateErr)
+		}
+		// Acknowledge callback to avoid repeated retries for a known mismatch
+		return nil
+	}
+
+	// Pre-set activation_pending flag before marking as paid.
+	// This ensures the flag is persisted together with paid status in a single update,
+	// so if activation fails later, we have a reliable marker for retry.
+	paymentOrder.SetMetadata("subscription_activation_pending", true)
+
 	if err := paymentOrder.MarkAsPaid(callbackData.TransactionID); err != nil {
 		return fmt.Errorf("failed to mark payment as paid: %w", err)
 	}
@@ -122,13 +150,40 @@ func (uc *HandlePaymentCallbackUseCase) handlePaymentSuccess(
 		return fmt.Errorf("failed to update payment: %w", err)
 	}
 
+	// Now try to activate the subscription
 	activateCmd := subscriptionUsecases.ActivateSubscriptionCommand{
 		SubscriptionID: paymentOrder.SubscriptionID(),
 	}
 
 	if err := uc.activateSubscriptionUC.Execute(ctx, activateCmd); err != nil {
-		uc.logger.Errorw("failed to activate subscription", "error", err, "subscription_id", paymentOrder.SubscriptionID())
-		return fmt.Errorf("failed to activate subscription: %w", err)
+		uc.logger.Errorw("failed to activate subscription after payment, will retry later",
+			"error", err,
+			"payment_id", paymentOrder.ID(),
+			"subscription_id", paymentOrder.SubscriptionID(),
+		)
+		// Update metadata with error details for debugging
+		paymentOrder.SetMetadata("subscription_activation_error", err.Error())
+		if updateErr := uc.paymentRepo.Update(ctx, paymentOrder); updateErr != nil {
+			uc.logger.Warnw("failed to update payment with activation error details",
+				"payment_id", paymentOrder.ID(),
+				"error", updateErr,
+			)
+		}
+		// Return nil to acknowledge the callback (payment is already recorded with pending flag)
+		// The scheduler will retry subscription activation later
+	} else {
+		// Activation succeeded, clear the pending flag
+		paymentOrder.SetMetadata("subscription_activation_pending", false)
+		paymentOrder.SetMetadata("subscription_activation_error", nil)
+		if updateErr := uc.paymentRepo.Update(ctx, paymentOrder); updateErr != nil {
+			// Return error to trigger callback retry, ensuring the pending flag gets cleared
+			// This prevents the scheduler from continuously retrying activation unnecessarily
+			uc.logger.Errorw("failed to clear activation pending flag, triggering callback retry",
+				"payment_id", paymentOrder.ID(),
+				"error", updateErr,
+			)
+			return fmt.Errorf("failed to clear activation pending flag: %w", updateErr)
+		}
 	}
 
 	uc.logger.Infow("payment processed successfully",

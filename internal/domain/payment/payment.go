@@ -276,6 +276,17 @@ func (p *Payment) IsUSDTPayment() bool {
 	return p.paymentMethod.IsUSDT()
 }
 
+// ValidateCallbackAmount validates that the callback amount and currency match the payment
+func (p *Payment) ValidateCallbackAmount(amount int64, currency string) error {
+	if p.amount.AmountInCents() != amount {
+		return fmt.Errorf("amount mismatch: expected %d, got %d", p.amount.AmountInCents(), amount)
+	}
+	if p.amount.Currency() != currency {
+		return fmt.Errorf("currency mismatch: expected %s, got %s", p.amount.Currency(), currency)
+	}
+	return nil
+}
+
 // SetID sets the payment ID after persistence (used by repository after Create)
 func (p *Payment) SetID(id uint) {
 	p.id = id
