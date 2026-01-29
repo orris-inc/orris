@@ -7,6 +7,7 @@ import (
 
 type Announcement interface {
 	ID() uint
+	SID() string
 	Title() string
 	Content() string
 	Type() string
@@ -17,6 +18,7 @@ type Announcement interface {
 	ViewCount() int
 	CreatedAt() time.Time
 	UpdatedAt() time.Time
+	Update(title, content string, priority int, expiresAt *time.Time) error
 	Publish() error
 	Archive() error
 	IncrementViewCount()
@@ -51,7 +53,9 @@ type AnnouncementRepository interface {
 	Create(ctx context.Context, announcement Announcement) error
 	Update(ctx context.Context, announcement Announcement) error
 	Delete(ctx context.Context, id uint) error
+	DeleteBySID(ctx context.Context, sid string) error
 	FindByID(ctx context.Context, id uint) (Announcement, error)
+	FindBySID(ctx context.Context, sid string) (Announcement, error)
 	FindAll(ctx context.Context, limit, offset int) ([]Announcement, int64, error)
 	FindPublished(ctx context.Context, limit, offset int) ([]Announcement, int64, error)
 }

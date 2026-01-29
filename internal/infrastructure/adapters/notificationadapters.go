@@ -2,12 +2,15 @@ package adapters
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/orris-inc/orris/internal/application/notification/usecases"
 	"github.com/orris-inc/orris/internal/domain/notification"
 	vo "github.com/orris-inc/orris/internal/domain/notification/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/user"
 	uservo "github.com/orris-inc/orris/internal/domain/user/valueobjects"
+	"github.com/orris-inc/orris/internal/shared/id"
 )
 
 type announcementAdapter struct {
@@ -22,13 +25,20 @@ func (a *announcementAdapter) Status() string {
 	return a.Announcement.Status().String()
 }
 
+func (a *announcementAdapter) SID() string {
+	return a.Announcement.SID()
+}
+
 func (a *announcementAdapter) Archive() error {
-	a.Announcement.MarkAsExpired()
-	return nil
+	return a.Announcement.Archive()
 }
 
 func (a *announcementAdapter) Publish() error {
 	return a.Announcement.Publish()
+}
+
+func (a *announcementAdapter) Update(title, content string, priority int, expiresAt *time.Time) error {
+	return a.Announcement.Update(title, content, priority, expiresAt)
 }
 
 type notificationAdapter struct {
@@ -66,7 +76,7 @@ func NewAnnouncementRepositoryAdapter(repo notification.AnnouncementRepository) 
 func (a *AnnouncementRepositoryAdapter) Create(ctx context.Context, announcement usecases.Announcement) error {
 	adapter, ok := announcement.(*announcementAdapter)
 	if !ok {
-		return nil
+		return fmt.Errorf("invalid type: expected *announcementAdapter, got %T", announcement)
 	}
 	return a.repo.Create(ctx, adapter.Announcement)
 }
@@ -74,7 +84,7 @@ func (a *AnnouncementRepositoryAdapter) Create(ctx context.Context, announcement
 func (a *AnnouncementRepositoryAdapter) Update(ctx context.Context, announcement usecases.Announcement) error {
 	adapter, ok := announcement.(*announcementAdapter)
 	if !ok {
-		return nil
+		return fmt.Errorf("invalid type: expected *announcementAdapter, got %T", announcement)
 	}
 	return a.repo.Update(ctx, adapter.Announcement)
 }
@@ -105,32 +115,28 @@ func (a *AnnouncementRepositoryAdapter) FindAll(ctx context.Context, limit, offs
 }
 
 func (a *AnnouncementRepositoryAdapter) FindPublished(ctx context.Context, limit, offset int) ([]usecases.Announcement, int64, error) {
-	allAnnouncements, _, err := a.repo.List(ctx, 10000, 0)
+	announcements, total, err := a.repo.FindByStatus(ctx, vo.AnnouncementStatusPublished, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	published := make([]*notification.Announcement, 0)
-	for _, ann := range allAnnouncements {
-		if ann.Status().String() == "published" {
-			published = append(published, ann)
-		}
-	}
-
-	start := offset
-	end := offset + limit
-	if start > len(published) {
-		start = len(published)
-	}
-	if end > len(published) {
-		end = len(published)
-	}
-
-	result := make([]usecases.Announcement, end-start)
-	for i, ann := range published[start:end] {
+	result := make([]usecases.Announcement, len(announcements))
+	for i, ann := range announcements {
 		result[i] = &announcementAdapter{ann}
 	}
-	return result, int64(len(published)), nil
+	return result, total, nil
+}
+
+func (a *AnnouncementRepositoryAdapter) FindBySID(ctx context.Context, sid string) (usecases.Announcement, error) {
+	ann, err := a.repo.GetBySID(ctx, sid)
+	if err != nil || ann == nil {
+		return nil, err
+	}
+	return &announcementAdapter{ann}, nil
+}
+
+func (a *AnnouncementRepositoryAdapter) DeleteBySID(ctx context.Context, sid string) error {
+	return a.repo.DeleteBySID(ctx, sid)
 }
 
 type NotificationRepositoryAdapter struct {
@@ -144,7 +150,7 @@ func NewNotificationRepositoryAdapter(repo notification.NotificationRepository) 
 func (a *NotificationRepositoryAdapter) Create(ctx context.Context, notif usecases.Notification) error {
 	adapter, ok := notif.(*notificationAdapter)
 	if !ok {
-		return nil
+		return fmt.Errorf("invalid type: expected *notificationAdapter, got %T", notif)
 	}
 	return a.repo.Create(ctx, adapter.Notification)
 }
@@ -229,7 +235,7 @@ func (a *NotificationRepositoryAdapter) CountUnreadByUserID(ctx context.Context,
 func (a *NotificationRepositoryAdapter) Update(ctx context.Context, notif usecases.Notification) error {
 	adapter, ok := notif.(*notificationAdapter)
 	if !ok {
-		return nil
+		return fmt.Errorf("invalid type: expected *notificationAdapter, got %T", notif)
 	}
 	return a.repo.Update(ctx, adapter.Notification)
 }
@@ -268,7 +274,7 @@ func NewTemplateRepositoryAdapter(repo notification.NotificationTemplateReposito
 func (a *TemplateRepositoryAdapter) Create(ctx context.Context, template usecases.NotificationTemplate) error {
 	adapter, ok := template.(*templateAdapter)
 	if !ok {
-		return nil
+		return fmt.Errorf("invalid type: expected *templateAdapter, got %T", template)
 	}
 	return a.repo.Create(ctx, adapter.NotificationTemplate)
 }
@@ -276,7 +282,7 @@ func (a *TemplateRepositoryAdapter) Create(ctx context.Context, template usecase
 func (a *TemplateRepositoryAdapter) Update(ctx context.Context, template usecases.NotificationTemplate) error {
 	adapter, ok := template.(*templateAdapter)
 	if !ok {
-		return nil
+		return fmt.Errorf("invalid type: expected *templateAdapter, got %T", template)
 	}
 	return a.repo.Update(ctx, adapter.NotificationTemplate)
 }
@@ -352,7 +358,7 @@ func NewAnnouncementFactoryAdapter() usecases.AnnouncementFactory {
 	return &AnnouncementFactoryAdapter{}
 }
 
-func (f *AnnouncementFactoryAdapter) CreateAnnouncement(title, content, announcementType string, priority int) (usecases.Announcement, error) {
+func (f *AnnouncementFactoryAdapter) CreateAnnouncement(title, content, announcementType string, creatorID uint, priority int) (usecases.Announcement, error) {
 	annType, err := vo.NewAnnouncementType(announcementType)
 	if err != nil {
 		return nil, err
@@ -362,10 +368,11 @@ func (f *AnnouncementFactoryAdapter) CreateAnnouncement(title, content, announce
 		title,
 		content,
 		annType,
-		0,
+		creatorID,
 		priority,
 		nil,
 		nil,
+		id.NewAnnouncementID,
 	)
 	if err != nil {
 		return nil, err

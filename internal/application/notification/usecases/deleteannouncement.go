@@ -23,25 +23,30 @@ func NewDeleteAnnouncementUseCase(
 	}
 }
 
-func (uc *DeleteAnnouncementUseCase) Execute(ctx context.Context, id uint) error {
-	uc.logger.Infow("executing delete announcement use case", "id", id)
+func (uc *DeleteAnnouncementUseCase) Execute(ctx context.Context, sid string) error {
+	uc.logger.Infow("executing delete announcement use case", "sid", sid)
 
-	announcement, err := uc.repo.FindByID(ctx, id)
+	announcement, err := uc.repo.FindBySID(ctx, sid)
 	if err != nil {
-		uc.logger.Errorw("failed to find announcement", "id", id, "error", err)
+		uc.logger.Errorw("failed to find announcement", "sid", sid, "error", err)
+		return fmt.Errorf("failed to find announcement: %w", err)
+	}
+
+	if announcement == nil {
+		uc.logger.Warnw("announcement not found", "sid", sid)
 		return errors.NewNotFoundError("announcement not found")
 	}
 
 	if err := announcement.Archive(); err != nil {
-		uc.logger.Errorw("failed to archive announcement", "id", id, "error", err)
+		uc.logger.Errorw("failed to archive announcement", "sid", sid, "error", err)
 		return fmt.Errorf("failed to archive announcement: %w", err)
 	}
 
 	if err := uc.repo.Update(ctx, announcement); err != nil {
-		uc.logger.Errorw("failed to persist announcement deletion", "id", id, "error", err)
+		uc.logger.Errorw("failed to persist announcement deletion", "sid", sid, "error", err)
 		return fmt.Errorf("failed to delete announcement: %w", err)
 	}
 
-	uc.logger.Infow("announcement deleted successfully", "id", id)
+	uc.logger.Infow("announcement deleted successfully", "sid", sid)
 	return nil
 }

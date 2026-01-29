@@ -32,6 +32,7 @@ const (
 	PrefixSetting                = "setting"
 	PrefixSubscriptionUsageStats = "usagestat"
 	PrefixPasskeyCredential      = "pk"
+	PrefixAnnouncement           = "ann"
 )
 
 // Generate creates a random short ID with the specified length using Base62 encoding.
@@ -116,7 +117,22 @@ func ParsePrefixedID(prefixedID string) (prefix, shortID string, err error) {
 	if len(parts) != 2 {
 		return "", "", fmt.Errorf("invalid prefixed ID format: %s", prefixedID)
 	}
-	return parts[0], parts[1], nil
+
+	shortID = parts[1]
+
+	// Validate shortID length (should match DefaultLength)
+	if len(shortID) != DefaultLength {
+		return "", "", fmt.Errorf("invalid short ID length: expected %d, got %d", DefaultLength, len(shortID))
+	}
+
+	// Validate shortID charset (must be base62)
+	for _, c := range shortID {
+		if !strings.ContainsRune(alphabet, c) {
+			return "", "", fmt.Errorf("invalid character in short ID: %c", c)
+		}
+	}
+
+	return parts[0], shortID, nil
 }
 
 // ValidatePrefix checks if the prefixed ID has the expected prefix.
@@ -291,3 +307,12 @@ func ParsePasskeyCredentialID(prefixedID string) (string, error) {
 	return ExtractShortID(prefixedID, PrefixPasskeyCredential)
 }
 
+// NewAnnouncementID generates a new Announcement SID (ann_xxx).
+func NewAnnouncementID() (string, error) {
+	return NewSID(PrefixAnnouncement)
+}
+
+// ParseAnnouncementID extracts the short ID from an Announcement prefixed ID.
+func ParseAnnouncementID(prefixedID string) (string, error) {
+	return ExtractShortID(prefixedID, PrefixAnnouncement)
+}

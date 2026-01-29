@@ -9,11 +9,14 @@ import (
 type AnnouncementRepository interface {
 	Create(ctx context.Context, announcement *Announcement) error
 	GetByID(ctx context.Context, id uint) (*Announcement, error)
+	GetBySID(ctx context.Context, sid string) (*Announcement, error)
 	Update(ctx context.Context, announcement *Announcement) error
 	Delete(ctx context.Context, id uint) error
+	DeleteBySID(ctx context.Context, sid string) error
 	List(ctx context.Context, limit, offset int) ([]*Announcement, int64, error)
 	FindBySpecification(ctx context.Context, spec Specification, limit, offset int) ([]*Announcement, int64, error)
 	IncrementViewCount(ctx context.Context, id uint) error
+	IncrementViewCountBySID(ctx context.Context, sid string) error
 	FindByStatus(ctx context.Context, status vo.AnnouncementStatus, limit, offset int) ([]*Announcement, int64, error)
 }
 

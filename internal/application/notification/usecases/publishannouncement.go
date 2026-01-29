@@ -40,28 +40,33 @@ func NewPublishAnnouncementUseCase(
 	}
 }
 
-func (uc *PublishAnnouncementUseCase) Execute(ctx context.Context, id uint, req dto.PublishAnnouncementRequest) (*dto.AnnouncementResponse, error) {
-	uc.logger.Infow("executing publish announcement use case", "id", id, "send_notification", req.SendNotification)
+func (uc *PublishAnnouncementUseCase) Execute(ctx context.Context, sid string, req dto.PublishAnnouncementRequest) (*dto.AnnouncementResponse, error) {
+	uc.logger.Infow("executing publish announcement use case", "sid", sid, "send_notification", req.SendNotification)
 
-	announcement, err := uc.announcementRepo.FindByID(ctx, id)
+	announcement, err := uc.announcementRepo.FindBySID(ctx, sid)
 	if err != nil {
-		uc.logger.Errorw("failed to find announcement", "id", id, "error", err)
+		uc.logger.Errorw("failed to find announcement", "sid", sid, "error", err)
+		return nil, fmt.Errorf("failed to find announcement: %w", err)
+	}
+
+	if announcement == nil {
+		uc.logger.Warnw("announcement not found", "sid", sid)
 		return nil, errors.NewNotFoundError("announcement not found")
 	}
 
 	if err := announcement.Publish(); err != nil {
-		uc.logger.Errorw("failed to publish announcement", "id", id, "error", err)
+		uc.logger.Errorw("failed to publish announcement", "sid", sid, "error", err)
 		return nil, fmt.Errorf("failed to publish announcement: %w", err)
 	}
 
 	if err := uc.announcementRepo.Update(ctx, announcement); err != nil {
-		uc.logger.Errorw("failed to persist announcement publication", "id", id, "error", err)
+		uc.logger.Errorw("failed to persist announcement publication", "sid", sid, "error", err)
 		return nil, fmt.Errorf("failed to save published announcement: %w", err)
 	}
 
 	if req.SendNotification {
 		if err := uc.createNotificationsForAllUsers(ctx, announcement); err != nil {
-			uc.logger.Errorw("failed to create notifications", "id", id, "error", err)
+			uc.logger.Errorw("failed to create notifications", "sid", sid, "error", err)
 		}
 	}
 
@@ -71,7 +76,7 @@ func (uc *PublishAnnouncementUseCase) Execute(ctx context.Context, id uint, req 
 		return nil, err
 	}
 
-	uc.logger.Infow("announcement published successfully", "id", id)
+	uc.logger.Infow("announcement published successfully", "sid", sid)
 	return response, nil
 }
 

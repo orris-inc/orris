@@ -10,6 +10,7 @@ import (
 
 type AnnouncementModel struct {
 	ID          uint   `gorm:"primaryKey"`
+	SID         string `gorm:"column:sid;size:50;not null;uniqueIndex"`
 	Title       string `gorm:"size:255;not null"`
 	Content     string `gorm:"type:longtext;not null"`
 	Type        string `gorm:"size:50;not null;default:'system'"`

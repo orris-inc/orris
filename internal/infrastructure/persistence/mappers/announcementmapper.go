@@ -41,6 +41,7 @@ func (m *AnnouncementMapperImpl) ToEntity(model *models.AnnouncementModel) (*not
 
 	entity, err := notification.ReconstructAnnouncement(
 		model.ID,
+		model.SID,
 		model.Title,
 		model.Content,
 		announcementType,
@@ -67,6 +68,7 @@ func (m *AnnouncementMapperImpl) ToModel(entity *notification.Announcement) (*mo
 
 	model := &models.AnnouncementModel{
 		ID:          entity.ID(),
+		SID:         entity.SID(),
 		Title:       entity.Title(),
 		Content:     entity.Content(),
 		Type:        entity.Type().String(),

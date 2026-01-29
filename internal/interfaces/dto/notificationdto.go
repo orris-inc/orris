@@ -9,6 +9,7 @@ import (
 	appDto "github.com/orris-inc/orris/internal/application/notification/dto"
 	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
@@ -38,6 +39,7 @@ func (r *CreateAnnouncementRequest) ToApplicationDTO(creatorID uint) appDto.Crea
 		Priority:    r.Priority,
 		ScheduledAt: toUTCPtr(r.ScheduledAt),
 		ExpiresAt:   toUTCPtr(r.ExpiresAt),
+		CreatorID:   creatorID,
 	}
 }
 
@@ -60,12 +62,11 @@ func (r *UpdateAnnouncementRequest) ToApplicationDTO() appDto.UpdateAnnouncement
 }
 
 type AnnouncementResponse struct {
-	ID          uint       `json:"id"`
+	ID          string     `json:"id"`
 	Title       string     `json:"title"`
 	Content     string     `json:"content"`
 	Type        string     `json:"type"`
 	Status      string     `json:"status"`
-	CreatorID   uint       `json:"creator_id"`
 	Priority    int        `json:"priority"`
 	ScheduledAt *time.Time `json:"scheduled_at,omitempty"`
 	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
@@ -149,22 +150,20 @@ type RenderTemplateResponse struct {
 	Content string `json:"content"`
 }
 
-func ParseAnnouncementID(c *gin.Context) (uint, error) {
-	idStr := c.Param("id")
-	if idStr == "" {
-		return 0, errors.NewValidationError("Announcement ID is required")
+// ParseAnnouncementSID parses the announcement SID from the request path.
+// It expects a Stripe-style ID in the format "ann_xxx" where xxx is a base62 string.
+func ParseAnnouncementSID(c *gin.Context) (string, error) {
+	sid := c.Param("id")
+	if sid == "" {
+		return "", errors.NewValidationError("Announcement ID is required")
 	}
 
-	id, err := strconv.ParseUint(idStr, 10, 32)
-	if err != nil {
-		return 0, errors.NewValidationError("Invalid announcement ID format")
+	// Use id.ParseAnnouncementID for full validation (prefix, format, length, charset)
+	if _, err := id.ParseAnnouncementID(sid); err != nil {
+		return "", errors.NewValidationError("Invalid announcement ID format, expected format: ann_xxx")
 	}
 
-	if id == 0 {
-		return 0, errors.NewValidationError("Announcement ID cannot be zero")
-	}
-
-	return uint(id), nil
+	return sid, nil
 }
 
 func ParseNotificationID(c *gin.Context) (uint, error) {

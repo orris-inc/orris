@@ -12,6 +12,7 @@ type MarkdownService interface {
 
 type Announcement interface {
 	ID() uint
+	SID() string
 	Title() string
 	Content() string
 	Type() string
@@ -59,7 +60,7 @@ func ToAnnouncementResponse(announcement Announcement, markdownSvc MarkdownServi
 	}
 
 	return &AnnouncementResponse{
-		ID:          announcement.ID(),
+		ID:          announcement.SID(),
 		Title:       announcement.Title(),
 		Content:     announcement.Content(),
 		ContentHTML: contentHTML,

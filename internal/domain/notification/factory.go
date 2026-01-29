@@ -14,8 +14,9 @@ func CreateAnnouncement(
 	priority int,
 	scheduledAt *time.Time,
 	expiresAt *time.Time,
+	sidGenerator SIDGenerator,
 ) (*Announcement, error) {
-	return NewAnnouncement(title, content, announcementType, creatorID, priority, scheduledAt, expiresAt)
+	return NewAnnouncement(title, content, announcementType, creatorID, priority, scheduledAt, expiresAt, sidGenerator)
 }
 
 func CreateNotification(
@@ -50,14 +51,14 @@ func CreateSubscriptionNotification(userID uint, title, content string, relatedI
 	return NewNotification(userID, vo.NotificationTypeSubscription, title, content, &relatedID)
 }
 
-func CreateSystemAnnouncement(title, content string, creatorID uint, priority int, expiresAt *time.Time) (*Announcement, error) {
-	return NewAnnouncement(title, content, vo.AnnouncementTypeSystem, creatorID, priority, nil, expiresAt)
+func CreateSystemAnnouncement(title, content string, creatorID uint, priority int, expiresAt *time.Time, sidGenerator SIDGenerator) (*Announcement, error) {
+	return NewAnnouncement(title, content, vo.AnnouncementTypeSystem, creatorID, priority, nil, expiresAt, sidGenerator)
 }
 
-func CreateMaintenanceAnnouncement(title, content string, creatorID uint, priority int, scheduledAt, expiresAt *time.Time) (*Announcement, error) {
-	return NewAnnouncement(title, content, vo.AnnouncementTypeMaintenance, creatorID, priority, scheduledAt, expiresAt)
+func CreateMaintenanceAnnouncement(title, content string, creatorID uint, priority int, scheduledAt, expiresAt *time.Time, sidGenerator SIDGenerator) (*Announcement, error) {
+	return NewAnnouncement(title, content, vo.AnnouncementTypeMaintenance, creatorID, priority, scheduledAt, expiresAt, sidGenerator)
 }
 
-func CreateEventAnnouncement(title, content string, creatorID uint, priority int, scheduledAt, expiresAt *time.Time) (*Announcement, error) {
-	return NewAnnouncement(title, content, vo.AnnouncementTypeEvent, creatorID, priority, scheduledAt, expiresAt)
+func CreateEventAnnouncement(title, content string, creatorID uint, priority int, scheduledAt, expiresAt *time.Time, sidGenerator SIDGenerator) (*Announcement, error) {
+	return NewAnnouncement(title, content, vo.AnnouncementTypeEvent, creatorID, priority, scheduledAt, expiresAt, sidGenerator)
 }

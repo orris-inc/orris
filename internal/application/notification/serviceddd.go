@@ -15,6 +15,7 @@ type ServiceDDD struct {
 	updateAnnouncement  *usecases.UpdateAnnouncementUseCase
 	deleteAnnouncement  *usecases.DeleteAnnouncementUseCase
 	publishAnnouncement *usecases.PublishAnnouncementUseCase
+	archiveAnnouncement *usecases.ArchiveAnnouncementUseCase
 	listAnnouncements   *usecases.ListAnnouncementsUseCase
 	getAnnouncement     *usecases.GetAnnouncementUseCase
 
@@ -49,6 +50,7 @@ func NewServiceDDD(
 		updateAnnouncement:  usecases.NewUpdateAnnouncementUseCase(announcementRepo, markdownService, logger),
 		deleteAnnouncement:  usecases.NewDeleteAnnouncementUseCase(announcementRepo, logger),
 		publishAnnouncement: usecases.NewPublishAnnouncementUseCase(announcementRepo, notificationRepo, userRepo, notificationFactory, markdownService, logger),
+		archiveAnnouncement: usecases.NewArchiveAnnouncementUseCase(announcementRepo, markdownService, logger),
 		listAnnouncements:   usecases.NewListAnnouncementsUseCase(announcementRepo, markdownService, logger),
 		getAnnouncement:     usecases.NewGetAnnouncementUseCase(announcementRepo, markdownService, logger),
 
@@ -70,16 +72,20 @@ func (s *ServiceDDD) CreateAnnouncement(ctx context.Context, req dto.CreateAnnou
 	return s.createAnnouncement.Execute(ctx, req)
 }
 
-func (s *ServiceDDD) UpdateAnnouncement(ctx context.Context, id uint, req dto.UpdateAnnouncementRequest) (*dto.AnnouncementResponse, error) {
-	return s.updateAnnouncement.Execute(ctx, id, req)
+func (s *ServiceDDD) UpdateAnnouncement(ctx context.Context, sid string, req dto.UpdateAnnouncementRequest) (*dto.AnnouncementResponse, error) {
+	return s.updateAnnouncement.Execute(ctx, sid, req)
 }
 
-func (s *ServiceDDD) DeleteAnnouncement(ctx context.Context, id uint) error {
-	return s.deleteAnnouncement.Execute(ctx, id)
+func (s *ServiceDDD) DeleteAnnouncement(ctx context.Context, sid string) error {
+	return s.deleteAnnouncement.Execute(ctx, sid)
 }
 
-func (s *ServiceDDD) PublishAnnouncement(ctx context.Context, id uint, req dto.PublishAnnouncementRequest) (*dto.AnnouncementResponse, error) {
-	return s.publishAnnouncement.Execute(ctx, id, req)
+func (s *ServiceDDD) PublishAnnouncement(ctx context.Context, sid string, req dto.PublishAnnouncementRequest) (*dto.AnnouncementResponse, error) {
+	return s.publishAnnouncement.Execute(ctx, sid, req)
+}
+
+func (s *ServiceDDD) ArchiveAnnouncement(ctx context.Context, sid string) (*dto.AnnouncementResponse, error) {
+	return s.archiveAnnouncement.Execute(ctx, sid)
 }
 
 func (s *ServiceDDD) ListAnnouncements(ctx context.Context, limit, offset int) (*dto.ListResponse, error) {
@@ -90,8 +96,8 @@ func (s *ServiceDDD) ListPublishedAnnouncements(ctx context.Context, limit, offs
 	return s.listAnnouncements.ExecutePublished(ctx, limit, offset)
 }
 
-func (s *ServiceDDD) GetAnnouncement(ctx context.Context, id uint) (*dto.AnnouncementResponse, error) {
-	return s.getAnnouncement.Execute(ctx, id)
+func (s *ServiceDDD) GetAnnouncement(ctx context.Context, sid string) (*dto.AnnouncementResponse, error) {
+	return s.getAnnouncement.Execute(ctx, sid)
 }
 
 func (s *ServiceDDD) ListNotifications(ctx context.Context, req dto.ListNotificationsRequest) (*dto.ListResponse, error) {

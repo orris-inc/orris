@@ -10,6 +10,7 @@ import (
 
 type Announcement struct {
 	id               uint
+	sid              string
 	title            string
 	content          string
 	announcementType vo.AnnouncementType
@@ -24,6 +25,9 @@ type Announcement struct {
 	events           []interface{}
 }
 
+// SIDGenerator is a function type for generating Stripe-style IDs.
+type SIDGenerator func() (string, error)
+
 func NewAnnouncement(
 	title string,
 	content string,
@@ -32,6 +36,7 @@ func NewAnnouncement(
 	priority int,
 	scheduledAt *time.Time,
 	expiresAt *time.Time,
+	sidGenerator SIDGenerator,
 ) (*Announcement, error) {
 	if len(title) == 0 {
 		return nil, fmt.Errorf("title is required")
@@ -57,9 +62,18 @@ func NewAnnouncement(
 	if expiresAt != nil && scheduledAt != nil && expiresAt.Before(*scheduledAt) {
 		return nil, fmt.Errorf("expires at must be after scheduled at")
 	}
+	if sidGenerator == nil {
+		return nil, fmt.Errorf("SID generator is required")
+	}
+
+	sid, err := sidGenerator()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate SID: %w", err)
+	}
 
 	now := biztime.NowUTC()
 	a := &Announcement{
+		sid:              sid,
 		title:            title,
 		content:          content,
 		announcementType: announcementType,
@@ -79,6 +93,7 @@ func NewAnnouncement(
 
 func ReconstructAnnouncement(
 	id uint,
+	sid string,
 	title string,
 	content string,
 	announcementType vo.AnnouncementType,
@@ -92,6 +107,9 @@ func ReconstructAnnouncement(
 ) (*Announcement, error) {
 	if id == 0 {
 		return nil, fmt.Errorf("announcement ID cannot be zero")
+	}
+	if len(sid) == 0 {
+		return nil, fmt.Errorf("announcement SID cannot be empty")
 	}
 	if len(title) == 0 {
 		return nil, fmt.Errorf("title is required")
@@ -108,6 +126,7 @@ func ReconstructAnnouncement(
 
 	return &Announcement{
 		id:               id,
+		sid:              sid,
 		title:            title,
 		content:          content,
 		announcementType: announcementType,
@@ -125,6 +144,10 @@ func ReconstructAnnouncement(
 
 func (a *Announcement) ID() uint {
 	return a.id
+}
+
+func (a *Announcement) SID() string {
+	return a.sid
 }
 
 func (a *Announcement) Title() string {
@@ -180,6 +203,22 @@ func (a *Announcement) SetID(id uint) error {
 	}
 	a.id = id
 	return nil
+}
+
+// Archive marks the announcement as archived.
+// For draft announcements, it marks them as deleted.
+// For published announcements, it marks them as expired.
+// For already expired or deleted announcements, it does nothing.
+func (a *Announcement) Archive() error {
+	if a.status.IsExpired() || a.status.IsDeleted() {
+		return nil
+	}
+
+	if a.status.IsDraft() {
+		return a.markAsDeleted()
+	}
+
+	return a.MarkAsExpired()
 }
 
 func (a *Announcement) Publish() error {
@@ -238,6 +277,21 @@ func (a *Announcement) MarkAsExpired() error {
 	}
 
 	a.status = vo.AnnouncementStatusExpired
+	a.updatedAt = biztime.NowUTC()
+
+	return nil
+}
+
+func (a *Announcement) markAsDeleted() error {
+	if a.status.IsDeleted() {
+		return nil
+	}
+
+	if !a.status.CanTransitionTo(vo.AnnouncementStatusDeleted) {
+		return fmt.Errorf("cannot mark announcement with status %s as deleted", a.status)
+	}
+
+	a.status = vo.AnnouncementStatusDeleted
 	a.updatedAt = biztime.NowUTC()
 
 	return nil

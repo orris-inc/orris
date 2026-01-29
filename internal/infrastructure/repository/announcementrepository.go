@@ -60,6 +60,24 @@ func (r *AnnouncementRepositoryImpl) GetByID(ctx context.Context, id uint) (*not
 	return entity, nil
 }
 
+func (r *AnnouncementRepositoryImpl) GetBySID(ctx context.Context, sid string) (*notification.Announcement, error) {
+	var model models.AnnouncementModel
+
+	if err := r.db.WithContext(ctx).Where("sid = ?", sid).First(&model).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get announcement by SID: %w", err)
+	}
+
+	entity, err := r.mapper.ToEntity(&model)
+	if err != nil {
+		return nil, fmt.Errorf("failed to map announcement model to entity: %w", err)
+	}
+
+	return entity, nil
+}
+
 func (r *AnnouncementRepositoryImpl) Update(ctx context.Context, announcement *notification.Announcement) error {
 	model, err := r.mapper.ToModel(announcement)
 	if err != nil {
@@ -80,6 +98,19 @@ func (r *AnnouncementRepositoryImpl) Update(ctx context.Context, announcement *n
 
 func (r *AnnouncementRepositoryImpl) Delete(ctx context.Context, id uint) error {
 	result := r.db.WithContext(ctx).Delete(&models.AnnouncementModel{}, id)
+	if result.Error != nil {
+		return fmt.Errorf("failed to delete announcement: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return errors.NewNotFoundError("announcement not found")
+	}
+
+	return nil
+}
+
+func (r *AnnouncementRepositoryImpl) DeleteBySID(ctx context.Context, sid string) error {
+	result := r.db.WithContext(ctx).Where("sid = ?", sid).Delete(&models.AnnouncementModel{})
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete announcement: %w", result.Error)
 	}
@@ -157,6 +188,22 @@ func (r *AnnouncementRepositoryImpl) FindBySpecification(
 func (r *AnnouncementRepositoryImpl) IncrementViewCount(ctx context.Context, id uint) error {
 	result := r.db.WithContext(ctx).Model(&models.AnnouncementModel{}).
 		Where("id = ?", id).
+		UpdateColumn("view_count", gorm.Expr("view_count + ?", 1))
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to increment view count: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return errors.NewNotFoundError("announcement not found")
+	}
+
+	return nil
+}
+
+func (r *AnnouncementRepositoryImpl) IncrementViewCountBySID(ctx context.Context, sid string) error {
+	result := r.db.WithContext(ctx).Model(&models.AnnouncementModel{}).
+		Where("sid = ?", sid).
 		UpdateColumn("view_count", gorm.Expr("view_count + ?", 1))
 
 	if result.Error != nil {

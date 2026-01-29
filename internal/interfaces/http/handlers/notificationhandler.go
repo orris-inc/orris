@@ -62,7 +62,7 @@ func (h *NotificationHandler) CreateAnnouncement(c *gin.Context) {
 }
 
 func (h *NotificationHandler) UpdateAnnouncement(c *gin.Context) {
-	announcementID, err := dto.ParseAnnouncementID(c)
+	sid, err := dto.ParseAnnouncementSID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -71,7 +71,7 @@ func (h *NotificationHandler) UpdateAnnouncement(c *gin.Context) {
 	var req dto.UpdateAnnouncementRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Warnw("invalid request body for update announcement",
-			"announcement_id", announcementID,
+			"announcement_sid", sid,
 			"error", err)
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -84,7 +84,7 @@ func (h *NotificationHandler) UpdateAnnouncement(c *gin.Context) {
 
 	appReq := req.ToApplicationDTO()
 
-	result, err := h.serviceDDD.UpdateAnnouncement(c.Request.Context(), announcementID, appReq)
+	result, err := h.serviceDDD.UpdateAnnouncement(c.Request.Context(), sid, appReq)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -94,13 +94,13 @@ func (h *NotificationHandler) UpdateAnnouncement(c *gin.Context) {
 }
 
 func (h *NotificationHandler) DeleteAnnouncement(c *gin.Context) {
-	announcementID, err := dto.ParseAnnouncementID(c)
+	sid, err := dto.ParseAnnouncementSID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	err = h.serviceDDD.DeleteAnnouncement(c.Request.Context(), announcementID)
+	err = h.serviceDDD.DeleteAnnouncement(c.Request.Context(), sid)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -116,7 +116,7 @@ type UpdateAnnouncementStatusRequest struct {
 }
 
 func (h *NotificationHandler) UpdateAnnouncementStatus(c *gin.Context) {
-	announcementID, err := dto.ParseAnnouncementID(c)
+	sid, err := dto.ParseAnnouncementSID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -131,23 +131,29 @@ func (h *NotificationHandler) UpdateAnnouncementStatus(c *gin.Context) {
 
 	switch req.Status {
 	case "published":
-		// Use PublishAnnouncement service method
 		sendNotification := false
 		if req.SendNotification != nil {
 			sendNotification = *req.SendNotification
 		}
 		publishReq := &dto.PublishAnnouncementRequest{SendNotification: sendNotification}
 		appReq := publishReq.ToApplicationDTO()
-		result, err := h.serviceDDD.PublishAnnouncement(c.Request.Context(), announcementID, appReq)
+		result, err := h.serviceDDD.PublishAnnouncement(c.Request.Context(), sid, appReq)
 		if err != nil {
 			utils.ErrorResponseWithError(c, err)
 			return
 		}
 		utils.SuccessResponse(c, http.StatusOK, "Announcement published successfully", result)
 
-	case "draft", "archived":
-		// TODO: Implement draft/archive status change when service method is available
-		utils.ErrorResponse(c, http.StatusNotImplemented, "Status change to "+req.Status+" not yet implemented")
+	case "archived":
+		result, err := h.serviceDDD.ArchiveAnnouncement(c.Request.Context(), sid)
+		if err != nil {
+			utils.ErrorResponseWithError(c, err)
+			return
+		}
+		utils.SuccessResponse(c, http.StatusOK, "Announcement archived successfully", result)
+
+	case "draft":
+		utils.ErrorResponse(c, http.StatusNotImplemented, "Status change to draft not yet implemented")
 
 	default:
 		utils.ErrorResponse(c, http.StatusBadRequest, "invalid status value")
@@ -174,13 +180,13 @@ func (h *NotificationHandler) ListAnnouncements(c *gin.Context) {
 }
 
 func (h *NotificationHandler) GetAnnouncement(c *gin.Context) {
-	announcementID, err := dto.ParseAnnouncementID(c)
+	sid, err := dto.ParseAnnouncementSID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	result, err := h.serviceDDD.GetAnnouncement(c.Request.Context(), announcementID)
+	result, err := h.serviceDDD.GetAnnouncement(c.Request.Context(), sid)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return

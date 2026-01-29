@@ -11,6 +11,7 @@ type CreateAnnouncementRequest struct {
 	Priority    int        `json:"priority" binding:"min=1,max=5"`
 	ScheduledAt *time.Time `json:"scheduled_at"`
 	ExpiresAt   *time.Time `json:"expires_at"`
+	CreatorID   uint       `json:"-"` // Set by handler from authenticated user
 }
 
 type UpdateAnnouncementRequest struct {
@@ -56,7 +57,7 @@ type MarkNotificationAsReadRequest struct {
 }
 
 type AnnouncementResponse struct {
-	ID          uint       `json:"id"`
+	ID          string     `json:"id"`
 	Title       string     `json:"title"`
 	Content     string     `json:"content"`
 	ContentHTML string     `json:"content_html"`

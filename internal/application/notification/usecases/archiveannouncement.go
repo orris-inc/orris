@@ -9,30 +9,30 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
-type GetAnnouncementUseCase struct {
+type ArchiveAnnouncementUseCase struct {
 	repo            AnnouncementRepository
 	markdownService dto.MarkdownService
 	logger          logger.Interface
 }
 
-func NewGetAnnouncementUseCase(
+func NewArchiveAnnouncementUseCase(
 	repo AnnouncementRepository,
 	markdownService dto.MarkdownService,
 	logger logger.Interface,
-) *GetAnnouncementUseCase {
-	return &GetAnnouncementUseCase{
+) *ArchiveAnnouncementUseCase {
+	return &ArchiveAnnouncementUseCase{
 		repo:            repo,
 		markdownService: markdownService,
 		logger:          logger,
 	}
 }
 
-func (uc *GetAnnouncementUseCase) Execute(ctx context.Context, sid string) (*dto.AnnouncementResponse, error) {
-	uc.logger.Infow("executing get announcement use case", "sid", sid)
+func (uc *ArchiveAnnouncementUseCase) Execute(ctx context.Context, sid string) (*dto.AnnouncementResponse, error) {
+	uc.logger.Infow("executing archive announcement use case", "sid", sid)
 
 	announcement, err := uc.repo.FindBySID(ctx, sid)
 	if err != nil {
-		uc.logger.Errorw("failed to find announcement", "sid", sid, "error", err)
+		uc.logger.Errorw("failed to find announcement by SID", "sid", sid, "error", err)
 		return nil, fmt.Errorf("failed to find announcement: %w", err)
 	}
 
@@ -41,17 +41,22 @@ func (uc *GetAnnouncementUseCase) Execute(ctx context.Context, sid string) (*dto
 		return nil, errors.NewNotFoundError("announcement not found")
 	}
 
-	announcement.IncrementViewCount()
+	if err := announcement.Archive(); err != nil {
+		uc.logger.Errorw("failed to archive announcement", "sid", sid, "error", err)
+		return nil, errors.NewValidationError(fmt.Sprintf("failed to archive announcement: %v", err))
+	}
 
 	if err := uc.repo.Update(ctx, announcement); err != nil {
-		uc.logger.Warnw("failed to update view count", "sid", sid, "error", err)
+		uc.logger.Errorw("failed to update archived announcement", "sid", sid, "error", err)
+		return nil, fmt.Errorf("failed to save archived announcement: %w", err)
 	}
 
 	response, err := dto.ToAnnouncementResponse(announcement, uc.markdownService)
 	if err != nil {
-		uc.logger.Errorw("failed to convert announcement to response", "error", err)
+		uc.logger.Errorw("failed to convert announcement to response", "sid", sid, "error", err)
 		return nil, err
 	}
 
+	uc.logger.Infow("announcement archived successfully", "sid", sid)
 	return response, nil
 }

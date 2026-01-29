@@ -10,7 +10,7 @@ import (
 )
 
 type AnnouncementFactory interface {
-	CreateAnnouncement(title, content, announcementType string, priority int) (Announcement, error)
+	CreateAnnouncement(title, content, announcementType string, creatorID uint, priority int) (Announcement, error)
 }
 
 type CreateAnnouncementUseCase struct {
@@ -35,9 +35,9 @@ func NewCreateAnnouncementUseCase(
 }
 
 func (uc *CreateAnnouncementUseCase) Execute(ctx context.Context, req dto.CreateAnnouncementRequest) (*dto.AnnouncementResponse, error) {
-	uc.logger.Infow("executing create announcement use case", "title", req.Title)
+	uc.logger.Infow("executing create announcement use case", "title", req.Title, "creator_id", req.CreatorID)
 
-	announcement, err := uc.factory.CreateAnnouncement(req.Title, req.Content, req.Type, req.Priority)
+	announcement, err := uc.factory.CreateAnnouncement(req.Title, req.Content, req.Type, req.CreatorID, req.Priority)
 	if err != nil {
 		uc.logger.Errorw("failed to create announcement entity", "error", err)
 		return nil, errors.NewValidationError(fmt.Sprintf("failed to create announcement: %v", err))
