@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/orris-inc/orris/internal/application/subscription/dto"
 	"github.com/orris-inc/orris/internal/domain/subscription"
@@ -12,10 +13,17 @@ import (
 )
 
 type ListUserSubscriptionsQuery struct {
-	UserID   *uint // nil means all users (admin only)
-	Status   *string
-	Page     int
-	PageSize int
+	UserID        *uint // nil means all users (admin only)
+	PlanID        *uint
+	Status        *string
+	BillingCycle  *string
+	CreatedFrom   *time.Time
+	CreatedTo     *time.Time
+	ExpiresBefore *time.Time
+	Page          int
+	PageSize      int
+	SortBy        string
+	SortDesc      *bool // nil means default (true = DESC)
 }
 
 type ListUserSubscriptionsResult struct {
@@ -60,13 +68,28 @@ func (uc *ListUserSubscriptionsUseCase) Execute(ctx context.Context, query ListU
 		query.PageSize = 100
 	}
 
+	// Default sort settings
+	sortBy := "created_at"
+	if query.SortBy != "" {
+		sortBy = query.SortBy
+	}
+	sortDesc := true
+	if query.SortDesc != nil {
+		sortDesc = *query.SortDesc
+	}
+
 	filter := subscription.SubscriptionFilter{
-		UserID:   query.UserID,
-		Status:   query.Status,
-		Page:     query.Page,
-		PageSize: query.PageSize,
-		SortBy:   "created_at",
-		SortDesc: true,
+		UserID:        query.UserID,
+		PlanID:        query.PlanID,
+		Status:        query.Status,
+		BillingCycle:  query.BillingCycle,
+		CreatedFrom:   query.CreatedFrom,
+		CreatedTo:     query.CreatedTo,
+		ExpiresBefore: query.ExpiresBefore,
+		Page:          query.Page,
+		PageSize:      query.PageSize,
+		SortBy:        sortBy,
+		SortDesc:      sortDesc,
 	}
 
 	subscriptions, total, err := uc.subscriptionRepo.List(ctx, filter)

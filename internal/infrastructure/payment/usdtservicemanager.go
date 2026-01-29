@@ -3,6 +3,7 @@ package payment
 import (
 	"context"
 	"sync"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -16,7 +17,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	infraBlockchain "github.com/orris-inc/orris/internal/infrastructure/blockchain"
 	infraExchangerate "github.com/orris-inc/orris/internal/infrastructure/exchangerate"
-	"github.com/orris-inc/orris/internal/infrastructure/scheduler"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -51,7 +52,15 @@ type USDTServiceManager struct {
 	compositeMonitor *infraBlockchain.CompositeMonitor
 	usdtGateway      *paymentgateway.USDTGateway
 	confirmUseCase   *paymentUsecases.ConfirmUSDTPaymentUseCase
-	monitorScheduler *scheduler.USDTMonitorScheduler
+
+	// Internal scheduler state
+	stopChan         chan struct{}
+	stopOnce         sync.Once
+	wg               sync.WaitGroup
+	running          bool
+	cleanupInterval  time.Duration
+	lastCleanup      time.Time
+	cleanupRunning   bool
 }
 
 // NewUSDTServiceManager creates a new USDT service manager
@@ -66,6 +75,8 @@ func NewUSDTServiceManager(
 		paymentRepo:      paymentRepo,
 		subscriptionRepo: subscriptionRepo,
 		logger:           logger,
+		stopChan:         make(chan struct{}),
+		cleanupInterval:  5 * time.Minute,
 	}
 }
 
@@ -119,10 +130,6 @@ func (m *USDTServiceManager) Initialize(ctx context.Context, config USDTConfig) 
 		},
 		m.logger,
 	)
-
-	// Initialize monitor scheduler
-	m.monitorScheduler = scheduler.NewUSDTMonitorScheduler(m.confirmUseCase, m.logger)
-	m.monitorScheduler.SetSuffixAllocator(m.suffixAllocator)
 
 	m.logger.Infow("USDT services initialized",
 		"enabled", config.Enabled,
@@ -274,25 +281,174 @@ func (m *USDTServiceManager) GetConfirmUseCase() *paymentUsecases.ConfirmUSDTPay
 
 // StartScheduler starts the USDT monitor scheduler
 func (m *USDTServiceManager) StartScheduler(ctx context.Context) {
-	m.mu.RLock()
-	scheduler := m.monitorScheduler
-	enabled := m.config.Enabled
-	m.mu.RUnlock()
-
-	if scheduler != nil && enabled {
-		scheduler.Start(ctx)
+	m.mu.Lock()
+	if m.running {
+		m.mu.Unlock()
+		return
 	}
+	m.running = true
+	enabled := m.config.Enabled
+	m.mu.Unlock()
+
+	if !enabled {
+		m.logger.Infow("USDT scheduler not started (disabled)")
+		return
+	}
+
+	m.logger.Infow("starting USDT monitor scheduler", "interval", "30s")
+
+	m.wg.Add(1)
+	go func() {
+		defer m.wg.Done()
+		m.runMonitorLoop(ctx)
+	}()
 }
 
 // StopScheduler stops the USDT monitor scheduler
 func (m *USDTServiceManager) StopScheduler() {
+	m.stopOnce.Do(func() {
+		m.mu.Lock()
+		m.running = false
+		m.mu.Unlock()
+
+		m.logger.Infow("stopping USDT monitor scheduler")
+		close(m.stopChan)
+		m.wg.Wait()
+		m.logger.Infow("USDT monitor scheduler stopped")
+	})
+}
+
+// IsRunning returns whether the scheduler is running
+func (m *USDTServiceManager) IsRunning() bool {
 	m.mu.RLock()
-	scheduler := m.monitorScheduler
+	defer m.mu.RUnlock()
+	return m.running
+}
+
+func (m *USDTServiceManager) runMonitorLoop(ctx context.Context) {
+	// Run immediately on startup
+	m.processUSDTPayments(ctx)
+
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			m.logger.Infow("USDT monitor scheduler stopped due to context cancellation")
+			return
+		case <-m.stopChan:
+			m.logger.Infow("USDT monitor scheduler stopped")
+			return
+		case <-ticker.C:
+			m.processUSDTPayments(ctx)
+		}
+	}
+}
+
+func (m *USDTServiceManager) processUSDTPayments(ctx context.Context) {
+	m.mu.RLock()
+	confirmUC := m.confirmUseCase
+	allocator := m.suffixAllocator
 	m.mu.RUnlock()
 
-	if scheduler != nil {
-		scheduler.Stop()
+	if confirmUC == nil {
+		return
 	}
+
+	m.logger.Debugw("checking USDT payments")
+
+	startTime := biztime.NowUTC()
+	results, err := confirmUC.Execute(ctx)
+	if err != nil {
+		m.logger.Errorw("failed to check USDT payments",
+			"error", err,
+			"duration", time.Since(startTime),
+		)
+		return
+	}
+
+	if len(results) > 0 {
+		confirmedCount := 0
+		pendingCount := 0
+		activationFailedCount := 0
+		for _, r := range results {
+			if r.Confirmed {
+				confirmedCount++
+				if r.SubscriptionActivation == "failed" {
+					activationFailedCount++
+				}
+				m.logger.Infow("USDT payment confirmed",
+					"payment_id", r.PaymentID,
+					"tx_hash", r.TxHash,
+					"confirmations", r.Confirmations,
+					"subscription_activated", r.SubscriptionActivated,
+				)
+			} else {
+				pendingCount++
+			}
+		}
+
+		if confirmedCount > 0 || pendingCount > 0 {
+			m.logger.Infow("USDT payment check completed",
+				"confirmed", confirmedCount,
+				"pending_confirmations", pendingCount,
+				"activation_failed", activationFailedCount,
+				"duration", time.Since(startTime),
+			)
+		}
+	}
+
+	// Retry pending subscription activations
+	m.retryPendingActivations(ctx, confirmUC)
+
+	// Cleanup expired suffix allocations periodically
+	m.cleanupExpiredSuffixes(ctx, allocator)
+}
+
+func (m *USDTServiceManager) retryPendingActivations(ctx context.Context, confirmUC *paymentUsecases.ConfirmUSDTPaymentUseCase) {
+	successCount, err := confirmUC.RetryPendingSubscriptionActivations(ctx)
+	if err != nil {
+		m.logger.Warnw("failed to retry pending activations", "error", err)
+		return
+	}
+	if successCount > 0 {
+		m.logger.Infow("retried pending subscription activations", "success_count", successCount)
+	}
+}
+
+func (m *USDTServiceManager) cleanupExpiredSuffixes(ctx context.Context, allocator suffixalloc.SuffixAllocator) {
+	if allocator == nil {
+		return
+	}
+
+	m.mu.Lock()
+	// Only cleanup every cleanupInterval
+	if time.Since(m.lastCleanup) < m.cleanupInterval {
+		m.mu.Unlock()
+		return
+	}
+
+	// Check if cleanup is already running to prevent concurrent executions
+	if m.cleanupRunning {
+		m.mu.Unlock()
+		return
+	}
+
+	// Mark cleanup as started
+	m.cleanupRunning = true
+	m.lastCleanup = biztime.NowUTC()
+	m.mu.Unlock()
+
+	// Perform cleanup outside of lock to avoid blocking other operations
+	if err := allocator.CleanupExpired(ctx); err != nil {
+		m.logger.Warnw("failed to cleanup expired suffixes", "error", err)
+	}
+
+	// Mark cleanup as finished
+	m.mu.Lock()
+	m.cleanupRunning = false
+	m.mu.Unlock()
 }
 
 // GetConfig returns the current USDT configuration

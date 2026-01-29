@@ -2,7 +2,6 @@ package mappers
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/orris-inc/orris/internal/domain/payment"
 	vo "github.com/orris-inc/orris/internal/domain/payment/valueobjects"
@@ -76,40 +75,30 @@ func PaymentToDomain(model *models.PaymentModel) (*payment.Payment, error) {
 		}
 	}
 
-	// Use ReconstructPaymentWithUSDT if there are USDT fields
-	if method.IsUSDT() || chainType != nil {
-		return payment.ReconstructPaymentWithUSDT(
-			model.ID, model.OrderNo, model.SubscriptionID, model.UserID,
-			amount, method, status,
-			model.GatewayOrderNo, model.TransactionID, model.PaymentURL, model.QRCode,
-			model.PaidAt, model.ExpiredAt,
-			metadata, model.Version, model.CreatedAt, model.UpdatedAt,
-			chainType, model.USDTAmountRaw, model.ReceivingAddress, model.ExchangeRate,
-			model.TxHash, model.BlockNumber, model.ConfirmedAt,
-		), nil
-	}
-
-	p := &payment.Payment{}
-
-	setPaymentFields(p, model.ID, model.OrderNo, model.SubscriptionID, model.UserID,
-		amount, method, status, model.GatewayOrderNo, model.TransactionID,
-		model.PaymentURL, model.QRCode, model.PaidAt, model.ExpiredAt,
-		metadata, model.Version, model.CreatedAt, model.UpdatedAt)
-
-	return p, nil
-}
-
-func setPaymentFields(p *payment.Payment, id uint, orderNo string, subscriptionID, userID uint,
-	amount vo.Money, method vo.PaymentMethod, status vo.PaymentStatus,
-	gatewayOrderNo, transactionID, paymentURL, qrCode *string,
-	paidAt *time.Time, expiredAt time.Time, metadata map[string]interface{},
-	version int, createdAt, updatedAt time.Time) {
-
-	paymentValue := payment.ReconstructPayment(
-		id, orderNo, subscriptionID, userID, amount, method, status,
-		gatewayOrderNo, transactionID, paymentURL, qrCode,
-		paidAt, expiredAt, metadata, version, createdAt, updatedAt,
-	)
-
-	*p = *paymentValue
+	return payment.ReconstructPaymentWithParams(payment.PaymentReconstructParams{
+		ID:               model.ID,
+		OrderNo:          model.OrderNo,
+		SubscriptionID:   model.SubscriptionID,
+		UserID:           model.UserID,
+		Amount:           amount,
+		PaymentMethod:    method,
+		Status:           status,
+		GatewayOrderNo:   model.GatewayOrderNo,
+		TransactionID:    model.TransactionID,
+		PaymentURL:       model.PaymentURL,
+		QRCode:           model.QRCode,
+		PaidAt:           model.PaidAt,
+		ExpiredAt:        model.ExpiredAt,
+		Metadata:         metadata,
+		Version:          model.Version,
+		CreatedAt:        model.CreatedAt,
+		UpdatedAt:        model.UpdatedAt,
+		ChainType:        chainType,
+		USDTAmountRaw:    model.USDTAmountRaw,
+		ReceivingAddress: model.ReceivingAddress,
+		ExchangeRate:     model.ExchangeRate,
+		TxHash:           model.TxHash,
+		BlockNumber:      model.BlockNumber,
+		ConfirmedAt:      model.ConfirmedAt,
+	}), nil
 }

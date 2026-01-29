@@ -83,7 +83,7 @@ type CreateSubscriptionRequest struct {
 
 // UpdateStatusRequest represents the request to update subscription status
 type UpdateStatusRequest struct {
-	Status    string  `json:"status" binding:"required,oneof=active cancelled renewed suspended"`
+	Status    string  `json:"status" binding:"required,oneof=active cancelled suspended"`
 	Reason    *string `json:"reason"`
 	Immediate *bool   `json:"immediate"`
 }
@@ -91,6 +91,11 @@ type UpdateStatusRequest struct {
 // SuspendRequest represents the request to suspend a subscription
 type SuspendRequest struct {
 	Reason string `json:"reason" binding:"required"`
+}
+
+// RenewRequest represents the request to manually renew a subscription
+type RenewRequest struct {
+	BillingCycle *string `json:"billing_cycle,omitempty"` // Optional: weekly, monthly, quarterly, semi_annual, yearly, lifetime. If empty, uses current billing cycle.
 }
 
 // CreateSubscriptionResponse represents the response for subscription creation
@@ -101,7 +106,7 @@ type CreateSubscriptionResponse struct {
 
 // ChangePlanRequest represents the request to change subscription plan
 type ChangePlanRequest struct {
-	NewPlanID     uint   `json:"new_plan_id" binding:"required"`
+	NewPlanID     string `json:"new_plan_id" binding:"required"` // Stripe-style SID (plan_xxx)
 	ChangeType    string `json:"change_type" binding:"required,oneof=upgrade downgrade"`
 	EffectiveDate string `json:"effective_date" binding:"required,oneof=immediate period_end"`
 }
@@ -157,6 +162,13 @@ func (h *SubscriptionHandler) Create(c *gin.Context) {
 	}, "Subscription created successfully")
 }
 
+// allowedSortByFields defines valid sort_by parameter values for subscription list
+var allowedSortByFields = map[string]bool{
+	"id": true, "sid": true, "user_id": true, "plan_id": true,
+	"status": true, "billing_cycle": true, "start_date": true,
+	"end_date": true, "created_at": true, "updated_at": true,
+}
+
 func (h *SubscriptionHandler) List(c *gin.Context) {
 	page := 1
 	if pageStr := c.Query("page"); pageStr != "" {
@@ -172,9 +184,15 @@ func (h *SubscriptionHandler) List(c *gin.Context) {
 		}
 	}
 
+	// Validate status parameter against allowed values
 	var status *string
 	if statusStr := c.Query("status"); statusStr != "" {
-		status = &statusStr
+		if valueobjects.ValidStatuses[valueobjects.SubscriptionStatus(statusStr)] {
+			status = &statusStr
+		} else {
+			utils.ErrorResponse(c, http.StatusBadRequest, "invalid status value")
+			return
+		}
 	}
 
 	var userID *uint
@@ -185,11 +203,89 @@ func (h *SubscriptionHandler) List(c *gin.Context) {
 		}
 	}
 
+	var planID *uint
+	if planIDStr := c.Query("plan_id"); planIDStr != "" {
+		if pid, err := strconv.ParseUint(planIDStr, 10, 64); err == nil {
+			pidVal := uint(pid)
+			planID = &pidVal
+		}
+	}
+
+	// Validate billing_cycle parameter against allowed values
+	var billingCycle *string
+	if billingCycleStr := c.Query("billing_cycle"); billingCycleStr != "" {
+		if valueobjects.ValidBillingCycles[valueobjects.BillingCycle(billingCycleStr)] {
+			billingCycle = &billingCycleStr
+		} else {
+			utils.ErrorResponse(c, http.StatusBadRequest, "invalid billing_cycle value")
+			return
+		}
+	}
+
+	var createdFrom *time.Time
+	if createdFromStr := c.Query("created_from"); createdFromStr != "" {
+		if t, err := time.Parse(time.RFC3339, createdFromStr); err == nil {
+			createdFrom = &t
+		} else {
+			utils.ErrorResponse(c, http.StatusBadRequest, "invalid created_from format, use RFC3339")
+			return
+		}
+	}
+
+	var createdTo *time.Time
+	if createdToStr := c.Query("created_to"); createdToStr != "" {
+		if t, err := time.Parse(time.RFC3339, createdToStr); err == nil {
+			createdTo = &t
+		} else {
+			utils.ErrorResponse(c, http.StatusBadRequest, "invalid created_to format, use RFC3339")
+			return
+		}
+	}
+
+	var expiresBefore *time.Time
+	if expiresBeforeStr := c.Query("expires_before"); expiresBeforeStr != "" {
+		if t, err := time.Parse(time.RFC3339, expiresBeforeStr); err == nil {
+			expiresBefore = &t
+		} else {
+			utils.ErrorResponse(c, http.StatusBadRequest, "invalid expires_before format, use RFC3339")
+			return
+		}
+	}
+
+	// Validate sort_by parameter against whitelist
+	var sortBy string
+	if sortByStr := c.Query("sort_by"); sortByStr != "" {
+		if allowedSortByFields[sortByStr] {
+			sortBy = sortByStr
+		} else {
+			utils.ErrorResponse(c, http.StatusBadRequest, "invalid sort_by value")
+			return
+		}
+	}
+
+	// Validate sort_order parameter
+	var sortDesc *bool
+	if sortOrderStr := c.Query("sort_order"); sortOrderStr != "" {
+		if sortOrderStr != "asc" && sortOrderStr != "desc" {
+			utils.ErrorResponse(c, http.StatusBadRequest, "invalid sort_order value, use 'asc' or 'desc'")
+			return
+		}
+		desc := sortOrderStr == "desc"
+		sortDesc = &desc
+	}
+
 	query := usecases.ListUserSubscriptionsQuery{
-		UserID:   userID,
-		Status:   status,
-		Page:     page,
-		PageSize: pageSize,
+		UserID:        userID,
+		PlanID:        planID,
+		Status:        status,
+		BillingCycle:  billingCycle,
+		CreatedFrom:   createdFrom,
+		CreatedTo:     createdTo,
+		ExpiresBefore: expiresBefore,
+		Page:          page,
+		PageSize:      pageSize,
+		SortBy:        sortBy,
+		SortDesc:      sortDesc,
 	}
 
 	result, err := h.listUseCase.Execute(c.Request.Context(), query)
@@ -302,18 +398,6 @@ func (h *SubscriptionHandler) UpdateStatus(c *gin.Context) {
 		}
 		utils.SuccessResponse(c, http.StatusOK, "Subscription cancelled successfully", nil)
 
-	case "renewed":
-		cmd := usecases.RenewSubscriptionCommand{
-			SubscriptionID: subscriptionID,
-			IsAutoRenew:    false,
-		}
-		if err := h.renewUseCase.Execute(c.Request.Context(), cmd); err != nil {
-			h.logger.Errorw("failed to renew subscription", "error", err, "subscription_id", subscriptionID)
-			utils.ErrorResponseWithError(c, err)
-			return
-		}
-		utils.SuccessResponse(c, http.StatusOK, "Subscription renewed successfully", nil)
-
 	case string(valueobjects.StatusSuspended):
 		if req.Reason == nil || *req.Reason == "" {
 			utils.ErrorResponse(c, http.StatusBadRequest, "reason is required for suspension")
@@ -355,7 +439,7 @@ func (h *SubscriptionHandler) ChangePlan(c *gin.Context) {
 
 	cmd := usecases.ChangePlanCommand{
 		SubscriptionID: subscriptionID,
-		NewPlanID:      req.NewPlanID,
+		NewPlanSID:     req.NewPlanID, // Use Stripe-style SID
 		ChangeType:     usecases.ChangeType(req.ChangeType),
 		EffectiveDate:  usecases.EffectiveDate(req.EffectiveDate),
 	}
@@ -470,4 +554,40 @@ func (h *SubscriptionHandler) ResetUsage(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "Subscription usage reset successfully", nil)
+}
+
+// Renew manually renews a subscription for another billing period
+func (h *SubscriptionHandler) Renew(c *gin.Context) {
+	subscriptionID, err := h.parseSubscriptionID(c)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID")
+		return
+	}
+	if subscriptionID == 0 {
+		utils.ErrorResponse(c, http.StatusNotFound, "subscription not found")
+		return
+	}
+
+	var req RenewRequest
+	// Allow empty body - billing_cycle is optional
+	_ = c.ShouldBindJSON(&req)
+
+	var billingCycle string
+	if req.BillingCycle != nil {
+		billingCycle = *req.BillingCycle
+	}
+
+	cmd := usecases.RenewSubscriptionCommand{
+		SubscriptionID: subscriptionID,
+		BillingCycle:   billingCycle, // Optional: if empty, uses subscription's current billing cycle
+		IsAutoRenew:    false,
+	}
+
+	if err := h.renewUseCase.Execute(c.Request.Context(), cmd); err != nil {
+		h.logger.Errorw("failed to renew subscription", "error", err, "subscription_id", subscriptionID)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Subscription renewed successfully", nil)
 }

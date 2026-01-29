@@ -25,6 +25,31 @@ func generateLinkToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(bytes), nil
 }
 
+// SubscriptionReconstructParams contains all parameters needed to reconstruct a Subscription from persistence
+type SubscriptionReconstructParams struct {
+	ID                 uint
+	UserID             uint
+	PlanID             uint
+	SubjectType        string
+	SubjectID          uint
+	SID                string
+	UUID               string
+	LinkToken          string
+	Status             vo.SubscriptionStatus
+	StartDate          time.Time
+	EndDate            time.Time
+	AutoRenew          bool
+	CurrentPeriodStart time.Time
+	CurrentPeriodEnd   time.Time
+	CancelledAt        *time.Time
+	CancelReason       *string
+	Metadata           map[string]interface{}
+	Version            int
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
+	BillingCycle       *vo.BillingCycle
+}
+
 // Subscription represents the subscription aggregate root
 type Subscription struct {
 	id                 uint
@@ -111,113 +136,59 @@ func NewSubscriptionWithSubject(subjectType string, subjectID, planID uint, star
 	return s, nil
 }
 
-// ReconstructSubscription reconstructs a subscription from persistence
-// Deprecated: Use ReconstructSubscriptionWithSubject for new code
-func ReconstructSubscription(
-	id, userID, planID uint,
-	sid string,
-	uuid string,
-	linkToken string,
-	status vo.SubscriptionStatus,
-	startDate, endDate time.Time,
-	autoRenew bool,
-	currentPeriodStart, currentPeriodEnd time.Time,
-	cancelledAt *time.Time,
-	cancelReason *string,
-	metadata map[string]interface{},
-	version int,
-	createdAt, updatedAt time.Time,
-	billingCycle *vo.BillingCycle,
-) (*Subscription, error) {
-	return ReconstructSubscriptionWithSubject(
-		id, userID, planID,
-		"user", userID, // Default to user subject type
-		sid,
-		uuid,
-		linkToken,
-		status,
-		startDate, endDate,
-		autoRenew,
-		currentPeriodStart, currentPeriodEnd,
-		cancelledAt,
-		cancelReason,
-		metadata,
-		version,
-		createdAt, updatedAt,
-		billingCycle,
-	)
-}
-
-// ReconstructSubscriptionWithSubject reconstructs a subscription from persistence with subject fields
-func ReconstructSubscriptionWithSubject(
-	id, userID, planID uint,
-	subjectType string,
-	subjectID uint,
-	sid string,
-	uuid string,
-	linkToken string,
-	status vo.SubscriptionStatus,
-	startDate, endDate time.Time,
-	autoRenew bool,
-	currentPeriodStart, currentPeriodEnd time.Time,
-	cancelledAt *time.Time,
-	cancelReason *string,
-	metadata map[string]interface{},
-	version int,
-	createdAt, updatedAt time.Time,
-	billingCycle *vo.BillingCycle,
-) (*Subscription, error) {
-	if id == 0 {
+// ReconstructSubscriptionWithParams reconstructs a subscription from persistence using a parameter struct
+func ReconstructSubscriptionWithParams(params SubscriptionReconstructParams) (*Subscription, error) {
+	if params.ID == 0 {
 		return nil, fmt.Errorf("subscription ID cannot be zero")
 	}
-	if sid == "" {
+	if params.SID == "" {
 		return nil, fmt.Errorf("subscription SID is required")
 	}
-	if uuid == "" {
+	if params.UUID == "" {
 		return nil, fmt.Errorf("subscription UUID is required")
 	}
-	if linkToken == "" {
+	if params.LinkToken == "" {
 		return nil, fmt.Errorf("subscription link token is required")
 	}
-	if subjectType == "" {
+	if params.SubjectType == "" {
 		return nil, fmt.Errorf("subject type is required")
 	}
-	if subjectID == 0 {
+	if params.SubjectID == 0 {
 		return nil, fmt.Errorf("subject ID is required")
 	}
-	if planID == 0 {
+	if params.PlanID == 0 {
 		return nil, fmt.Errorf("plan ID is required")
 	}
-	if !vo.ValidStatuses[status] {
-		return nil, fmt.Errorf("invalid subscription status: %s", status)
+	if !vo.ValidStatuses[params.Status] {
+		return nil, fmt.Errorf("invalid subscription status: %s", params.Status)
 	}
 
-	if metadata == nil {
-		metadata = make(map[string]interface{})
+	if params.Metadata == nil {
+		params.Metadata = make(map[string]interface{})
 	}
 
 	return &Subscription{
-		id:                 id,
-		sid:                sid,
-		uuid:               uuid,
-		linkToken:          linkToken,
-		userID:             userID,
-		subjectType:        subjectType,
-		subjectID:          subjectID,
-		planID:             planID,
-		status:             status,
-		startDate:          startDate,
-		endDate:            endDate,
-		autoRenew:          autoRenew,
-		currentPeriodStart: currentPeriodStart,
-		currentPeriodEnd:   currentPeriodEnd,
-		billingCycle:       billingCycle,
-		cancelledAt:        cancelledAt,
-		cancelReason:       cancelReason,
-		metadata:           metadata,
-		version:            version,
-		createdAt:          createdAt,
-		updatedAt:          updatedAt,
+		id:                 params.ID,
+		sid:                params.SID,
+		uuid:               params.UUID,
+		linkToken:          params.LinkToken,
+		userID:             params.UserID,
+		subjectType:        params.SubjectType,
+		subjectID:          params.SubjectID,
+		planID:             params.PlanID,
+		status:             params.Status,
+		startDate:          params.StartDate,
+		endDate:            params.EndDate,
+		autoRenew:          params.AutoRenew,
+		currentPeriodStart: params.CurrentPeriodStart,
+		currentPeriodEnd:   params.CurrentPeriodEnd,
+		billingCycle:       params.BillingCycle,
+		cancelledAt:        params.CancelledAt,
+		cancelReason:       params.CancelReason,
+		metadata:           params.Metadata,
+		version:            params.Version,
+		createdAt:          params.CreatedAt,
+		updatedAt:          params.UpdatedAt,
 	}, nil
 }
 
@@ -337,6 +308,14 @@ func (s *Subscription) SetMetadata(key string, value interface{}) {
 	s.updatedAt = biztime.NowUTC()
 }
 
+// DeleteMetadata removes a metadata key
+func (s *Subscription) DeleteMetadata(key string) {
+	if s.metadata != nil {
+		delete(s.metadata, key)
+		s.updatedAt = biztime.NowUTC()
+	}
+}
+
 // Version returns the aggregate version for optimistic locking
 func (s *Subscription) Version() int {
 	return s.version
@@ -386,17 +365,14 @@ func (s *Subscription) Activate() error {
 }
 
 // Cancel cancels a subscription with a reason
+// Can cancel from active, inactive, or pending_payment status
 func (s *Subscription) Cancel(reason string) error {
 	if s.status == vo.StatusCancelled {
 		return nil
 	}
 
-	if s.status != vo.StatusActive {
-		return fmt.Errorf("cannot cancel subscription with status %s", s.status)
-	}
-
 	if !s.status.CanTransitionTo(vo.StatusCancelled) {
-		return fmt.Errorf("invalid status transition from %s to cancelled", s.status)
+		return fmt.Errorf("cannot cancel subscription with status %s", s.status)
 	}
 
 	if reason == "" {

@@ -237,15 +237,17 @@ func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, cmd CreateSubs
 }
 
 func (uc *CreateSubscriptionUseCase) calculateEndDate(startDate time.Time, billingCycle vo.BillingCycle) time.Time {
+	// Use fixed days to ensure consistent subscription periods
+	// This prevents "drifting" when starting on month boundaries (e.g., Jan 31 -> Feb 28 -> Mar 28)
 	switch billingCycle {
 	case vo.BillingCycleMonthly:
-		return startDate.AddDate(0, 1, 0)
+		return startDate.Add(31 * 24 * time.Hour) // 31 days
 	case vo.BillingCycleQuarterly:
-		return startDate.AddDate(0, 3, 0)
+		return startDate.Add(93 * 24 * time.Hour) // 93 days (31 * 3)
 	case vo.BillingCycleYearly:
-		return startDate.AddDate(1, 0, 0)
+		return startDate.Add(365 * 24 * time.Hour) // 365 days
 	default:
-		return startDate.AddDate(0, 1, 0)
+		return startDate.Add(31 * 24 * time.Hour) // Default to 31 days
 	}
 }
 

@@ -22,7 +22,6 @@ import (
 	"github.com/orris-inc/orris/internal/infrastructure/database"
 	"github.com/orris-inc/orris/internal/infrastructure/migration"
 	"github.com/orris-inc/orris/internal/infrastructure/repository"
-	"github.com/orris-inc/orris/internal/infrastructure/scheduler"
 	httpRouter "github.com/orris-inc/orris/internal/interfaces/http"
 	"github.com/orris-inc/orris/internal/shared/authorization"
 	"github.com/orris-inc/orris/internal/shared/biztime"
@@ -107,8 +106,6 @@ func run(cmd *cobra.Command, args []string) error {
 	router := httpRouter.NewRouter(userAppService, database.Get(), cfg, logger.NewLogger())
 	router.SetupRoutes(cfg)
 
-	// Start telegram services using BotServiceManager
-	var reminderScheduler *scheduler.ReminderScheduler
 	ctx := context.Background()
 
 	// Start BotServiceManager (handles both polling and webhook modes with hot-reload)
@@ -116,29 +113,20 @@ func run(cmd *cobra.Command, args []string) error {
 		logger.Warn("failed to start telegram bot service", "error", err)
 	}
 
-	// Start reminder scheduler if telegram service is available
+	// Register reminder jobs if telegram service is available
 	if telegramService := router.GetTelegramService(); telegramService != nil {
-		reminderScheduler = scheduler.NewReminderScheduler(
-			telegramService.GetProcessReminderUseCase(),
-			logger.NewLogger(),
-		)
-		go reminderScheduler.Start(ctx)
-		logger.Info("telegram reminder scheduler started")
+		if schedulerMgr := router.GetSchedulerManager(); schedulerMgr != nil {
+			if err := schedulerMgr.RegisterReminderJobs(telegramService.GetProcessReminderUseCase()); err != nil {
+				logger.Warn("failed to register reminder jobs", "error", err)
+			}
+		}
 	}
 
-	// Start usage aggregation scheduler
-	router.StartUsageAggregationScheduler(ctx)
-	logger.Info("usage aggregation scheduler started")
+	// Start unified scheduler (all jobs: payment, subscription, usage aggregation, reminder, admin notifications)
+	router.StartScheduler()
+	logger.Info("unified scheduler started")
 
-	// Start payment expiration scheduler
-	router.StartPaymentScheduler(ctx)
-	logger.Info("payment scheduler started")
-
-	// Start subscription maintenance scheduler (marks expired subscriptions daily)
-	router.StartSubscriptionScheduler(ctx)
-	logger.Info("subscription scheduler started")
-
-	// Start USDT payment monitor scheduler
+	// Start USDT payment monitor scheduler (managed separately by USDTServiceManager)
 	router.StartUSDTMonitorScheduler(ctx)
 	logger.Info("USDT monitor scheduler started")
 
@@ -169,13 +157,7 @@ func run(cmd *cobra.Command, args []string) error {
 
 	logger.Info("shutting down server...")
 
-	// Stop reminder scheduler if running
-	if reminderScheduler != nil {
-		reminderScheduler.Stop()
-		logger.Info("telegram reminder scheduler stopped")
-	}
-
-	// Shutdown router first (closes SSE connections, flushes traffic data, etc.)
+	// Shutdown router first (stops scheduler, closes SSE connections, flushes traffic data, etc.)
 	// This must happen before HTTP server shutdown to allow connections to close gracefully
 	router.Shutdown()
 

@@ -107,7 +107,11 @@ func (uc *CreatePaymentUseCase) Execute(ctx context.Context, cmd CreatePaymentCo
 		return nil, fmt.Errorf("failed to get plan: %w", err)
 	}
 
-	existingPayment, _ := uc.paymentRepo.GetPendingBySubscriptionID(ctx, cmd.SubscriptionID)
+	existingPayment, err := uc.paymentRepo.GetPendingBySubscriptionID(ctx, cmd.SubscriptionID)
+	if err != nil {
+		uc.logger.Errorw("failed to check existing payment", "error", err, "subscription_id", cmd.SubscriptionID)
+		return nil, fmt.Errorf("failed to check existing payment: %w", err)
+	}
 	if existingPayment != nil {
 		return nil, errors.NewConflictError("pending payment already exists")
 	}

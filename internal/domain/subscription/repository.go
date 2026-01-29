@@ -2,6 +2,7 @@ package subscription
 
 import (
 	"context"
+	"time"
 
 	vo "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
 )
@@ -30,13 +31,17 @@ type SubscriptionRepository interface {
 }
 
 type SubscriptionFilter struct {
-	UserID   *uint
-	PlanID   *uint
-	Status   *string
-	Page     int
-	PageSize int
-	SortBy   string
-	SortDesc bool
+	UserID       *uint
+	PlanID       *uint
+	Status       *string
+	BillingCycle *string
+	CreatedFrom  *time.Time
+	CreatedTo    *time.Time
+	ExpiresBefore *time.Time // For finding subscriptions expiring before a certain date
+	Page         int
+	PageSize     int
+	SortBy       string
+	SortDesc     bool
 }
 
 type PlanRepository interface {

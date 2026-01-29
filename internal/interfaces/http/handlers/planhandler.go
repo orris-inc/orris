@@ -60,28 +60,22 @@ func NewPlanHandler(
 }
 
 type CreatePlanRequest struct {
-	Name         string                      `json:"name" binding:"required"`
-	Slug         string                      `json:"slug" binding:"required"`
-	Description  string                      `json:"description"`
-	PlanType     string                      `json:"plan_type" binding:"required,oneof=node forward hybrid"`
-	Limits       map[string]interface{}      `json:"limits"`
-	APIRateLimit uint                        `json:"api_rate_limit"`
-	MaxUsers     uint                        `json:"max_users"`
-	MaxProjects  uint                        `json:"max_projects"`
-	IsPublic     bool                        `json:"is_public"`
-	SortOrder    int                         `json:"sort_order"`
-	Pricings     []subdto.PricingOptionInput `json:"pricings" binding:"required,min=1"`
+	Name        string                      `json:"name" binding:"required"`
+	Slug        string                      `json:"slug" binding:"required"`
+	Description string                      `json:"description"`
+	PlanType    string                      `json:"plan_type" binding:"required,oneof=node forward hybrid"`
+	Limits      map[string]interface{}      `json:"limits"`
+	IsPublic    bool                        `json:"is_public"`
+	SortOrder   int                         `json:"sort_order"`
+	Pricings    []subdto.PricingOptionInput `json:"pricings" binding:"required,min=1"`
 }
 
 type UpdatePlanRequest struct {
-	Description  *string                      `json:"description"`
-	Limits       *map[string]interface{}      `json:"limits"`
-	APIRateLimit *uint                        `json:"api_rate_limit"`
-	MaxUsers     *uint                        `json:"max_users"`
-	MaxProjects  *uint                        `json:"max_projects"`
-	IsPublic     *bool                        `json:"is_public"`
-	SortOrder    *int                         `json:"sort_order"`
-	Pricings     *[]subdto.PricingOptionInput `json:"pricings"` // Optional: update pricing options
+	Description *string                      `json:"description"`
+	Limits      *map[string]interface{}      `json:"limits"`
+	IsPublic    *bool                        `json:"is_public"`
+	SortOrder   *int                         `json:"sort_order"`
+	Pricings    *[]subdto.PricingOptionInput `json:"pricings"` // Optional: update pricing options
 }
 
 // UpdatePlanStatusRequest represents a unified request for plan status changes
@@ -98,17 +92,14 @@ func (h *PlanHandler) CreatePlan(c *gin.Context) {
 	}
 
 	cmd := usecases.CreatePlanCommand{
-		Name:         req.Name,
-		Slug:         req.Slug,
-		Description:  req.Description,
-		PlanType:     req.PlanType,
-		Limits:       req.Limits,
-		APIRateLimit: req.APIRateLimit,
-		MaxUsers:     req.MaxUsers,
-		MaxProjects:  req.MaxProjects,
-		IsPublic:     req.IsPublic,
-		SortOrder:    req.SortOrder,
-		Pricings:     req.Pricings,
+		Name:        req.Name,
+		Slug:        req.Slug,
+		Description: req.Description,
+		PlanType:    req.PlanType,
+		Limits:      req.Limits,
+		IsPublic:    req.IsPublic,
+		SortOrder:   req.SortOrder,
+		Pricings:    req.Pricings,
 	}
 
 	result, err := h.createPlanUC.Execute(c.Request.Context(), cmd)
@@ -137,15 +128,12 @@ func (h *PlanHandler) UpdatePlan(c *gin.Context) {
 	}
 
 	cmd := usecases.UpdatePlanCommand{
-		PlanSID:      planSID,
-		Description:  req.Description,
-		Limits:       req.Limits,
-		APIRateLimit: req.APIRateLimit,
-		MaxUsers:     req.MaxUsers,
-		MaxProjects:  req.MaxProjects,
-		IsPublic:     req.IsPublic,
-		SortOrder:    req.SortOrder,
-		Pricings:     req.Pricings,
+		PlanSID:     planSID,
+		Description: req.Description,
+		Limits:      req.Limits,
+		IsPublic:    req.IsPublic,
+		SortOrder:   req.SortOrder,
+		Pricings:    req.Pricings,
 	}
 
 	result, err := h.updatePlanUC.Execute(c.Request.Context(), cmd)

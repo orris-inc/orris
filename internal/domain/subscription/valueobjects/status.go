@@ -27,8 +27,8 @@ func (s SubscriptionStatus) CanRenew() bool {
 
 func (s SubscriptionStatus) CanTransitionTo(target SubscriptionStatus) bool {
 	transitions := map[SubscriptionStatus][]SubscriptionStatus{
-		StatusInactive:       {StatusPendingPayment, StatusActive, StatusTrialing},
-		StatusPendingPayment: {StatusActive, StatusInactive, StatusExpired},
+		StatusInactive:       {StatusPendingPayment, StatusActive, StatusTrialing, StatusCancelled},
+		StatusPendingPayment: {StatusActive, StatusInactive, StatusExpired, StatusCancelled},
 		StatusTrialing:       {StatusActive, StatusCancelled, StatusExpired, StatusSuspended},
 		StatusActive:         {StatusPastDue, StatusCancelled, StatusExpired, StatusSuspended},
 		StatusPastDue:        {StatusActive, StatusCancelled, StatusExpired, StatusSuspended},

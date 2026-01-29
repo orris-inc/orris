@@ -9,6 +9,7 @@ import (
 	telegramApp "github.com/orris-inc/orris/internal/application/telegram"
 	telegramAdminApp "github.com/orris-inc/orris/internal/application/telegram/admin"
 	"github.com/orris-inc/orris/internal/infrastructure/config"
+	"github.com/orris-inc/orris/internal/infrastructure/scheduler"
 	telegramInfra "github.com/orris-inc/orris/internal/infrastructure/telegram"
 	"github.com/orris-inc/orris/internal/interfaces/http/middleware"
 	"github.com/orris-inc/orris/internal/interfaces/http/routes"
@@ -110,6 +111,7 @@ func (r *Router) setupAdminRoutes() {
 		adminSubscriptions.POST("/:id/suspend", r.adminSubscriptionHandler.Suspend)
 		adminSubscriptions.POST("/:id/unsuspend", r.adminSubscriptionHandler.Unsuspend)
 		adminSubscriptions.POST("/:id/reset-usage", r.adminSubscriptionHandler.ResetUsage)
+		adminSubscriptions.POST("/:id/renew", r.adminSubscriptionHandler.Renew)
 		adminSubscriptions.DELETE("/:id", r.adminSubscriptionHandler.Delete)
 	}
 
@@ -341,22 +343,14 @@ func (r *Router) Run(addr string) error {
 
 // Shutdown gracefully shuts down the router
 func (r *Router) Shutdown() {
-	// Stop admin notification scheduler first
-	if r.adminNotificationScheduler != nil {
-		r.adminNotificationScheduler.Stop()
+	// Stop unified scheduler manager (includes all scheduled jobs)
+	if r.schedulerManager != nil {
+		if err := r.schedulerManager.Stop(); err != nil {
+			r.logger.Errorw("failed to stop scheduler manager", "error", err)
+		}
 	}
 
-	// Stop usage aggregation scheduler
-	if r.usageAggregationScheduler != nil {
-		r.usageAggregationScheduler.Stop()
-	}
-
-	// Stop payment scheduler
-	if r.paymentScheduler != nil {
-		r.paymentScheduler.Stop()
-	}
-
-	// Stop USDT monitor scheduler
+	// Stop USDT monitor scheduler (managed by USDTServiceManager separately)
 	if r.usdtServiceManager != nil {
 		r.usdtServiceManager.StopScheduler()
 	}
@@ -436,39 +430,25 @@ func (r *Router) StartTelegramPolling(ctx context.Context) error {
 	if err := r.telegramBotManager.Start(ctx); err != nil {
 		return err
 	}
-
-	// Start admin notification scheduler after telegram bot manager
-	if r.adminNotificationScheduler != nil {
-		r.adminNotificationScheduler.Start(ctx)
-	}
-
 	return nil
 }
 
-// StartUsageAggregationScheduler starts the usage aggregation scheduler
-func (r *Router) StartUsageAggregationScheduler(ctx context.Context) {
-	if r.usageAggregationScheduler != nil {
-		r.usageAggregationScheduler.Start(ctx)
-	}
-}
-
-// StartPaymentScheduler starts the payment expiration scheduler
-func (r *Router) StartPaymentScheduler(ctx context.Context) {
-	if r.paymentScheduler != nil {
-		r.paymentScheduler.Start(ctx)
-	}
-}
-
-// StartSubscriptionScheduler starts the subscription maintenance scheduler
-func (r *Router) StartSubscriptionScheduler(ctx context.Context) {
-	if r.subscriptionScheduler != nil {
-		r.subscriptionScheduler.Start(ctx)
+// StartScheduler starts the unified scheduler manager (all registered jobs)
+func (r *Router) StartScheduler() {
+	if r.schedulerManager != nil {
+		r.schedulerManager.Start()
 	}
 }
 
 // StartUSDTMonitorScheduler starts the USDT payment monitor scheduler
+// (managed by USDTServiceManager separately from the unified scheduler)
 func (r *Router) StartUSDTMonitorScheduler(ctx context.Context) {
 	if r.usdtServiceManager != nil {
 		r.usdtServiceManager.StartScheduler(ctx)
 	}
+}
+
+// GetSchedulerManager returns the scheduler manager for external job registration
+func (r *Router) GetSchedulerManager() *scheduler.SchedulerManager {
+	return r.schedulerManager
 }

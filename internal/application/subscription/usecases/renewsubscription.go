@@ -3,7 +3,6 @@ package usecases
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	vo "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
@@ -12,7 +11,7 @@ import (
 
 type RenewSubscriptionCommand struct {
 	SubscriptionID uint
-	BillingCycle   string // Required: billing cycle for renewal period
+	BillingCycle   string // Optional: billing cycle for renewal period. If empty, uses current subscription's billing cycle.
 	IsAutoRenew    bool
 }
 
@@ -60,16 +59,32 @@ func (uc *RenewSubscriptionUseCase) Execute(ctx context.Context, cmd RenewSubscr
 		return fmt.Errorf("plan is not active")
 	}
 
-	// BillingCycle is required for renewal
-	if cmd.BillingCycle == "" {
-		return fmt.Errorf("billing cycle is required for renewal")
+	// Determine billing cycle: use provided value or fall back to subscription's current billing cycle
+	var billingCycle vo.BillingCycle
+	if cmd.BillingCycle != "" {
+		// Use explicitly provided billing cycle
+		parsed, err := vo.ParseBillingCycle(cmd.BillingCycle)
+		if err != nil {
+			uc.logger.Warnw("invalid billing cycle for renewal", "error", err, "billing_cycle", cmd.BillingCycle)
+			return fmt.Errorf("invalid billing cycle: %w", err)
+		}
+		billingCycle = parsed
+	} else if sub.BillingCycle() != nil {
+		// Fall back to subscription's current billing cycle
+		billingCycle = *sub.BillingCycle()
+		uc.logger.Debugw("using subscription's current billing cycle for renewal",
+			"subscription_id", cmd.SubscriptionID,
+			"billing_cycle", billingCycle,
+		)
+	} else {
+		// No billing cycle available - this is a legacy subscription without billing cycle
+		return fmt.Errorf("billing cycle is required: subscription has no billing cycle set")
 	}
 
-	// Parse and validate the billing cycle
-	billingCycle, err := vo.ParseBillingCycle(cmd.BillingCycle)
-	if err != nil {
-		uc.logger.Warnw("invalid billing cycle for renewal", "error", err, "billing_cycle", cmd.BillingCycle)
-		return fmt.Errorf("invalid billing cycle: %w", err)
+	// Lifetime subscriptions cannot be renewed
+	if billingCycle.IsLifetime() {
+		uc.logger.Warnw("attempted to renew lifetime subscription", "subscription_id", cmd.SubscriptionID)
+		return fmt.Errorf("lifetime subscriptions cannot be renewed")
 	}
 
 	// Verify that pricing exists for this plan and billing cycle
@@ -84,7 +99,7 @@ func (uc *RenewSubscriptionUseCase) Execute(ctx context.Context, cmd RenewSubscr
 		return fmt.Errorf("pricing not found for selected billing cycle")
 	}
 
-	newEndDate := uc.calculateNewEndDate(sub.EndDate(), billingCycle)
+	newEndDate := billingCycle.NextBillingDate(sub.EndDate())
 
 	if err := sub.Renew(newEndDate); err != nil {
 		uc.logger.Errorw("failed to renew subscription", "error", err, "subscription_id", cmd.SubscriptionID)
@@ -115,17 +130,4 @@ func (uc *RenewSubscriptionUseCase) Execute(ctx context.Context, cmd RenewSubscr
 	}
 
 	return nil
-}
-
-func (uc *RenewSubscriptionUseCase) calculateNewEndDate(currentEndDate time.Time, billingCycle vo.BillingCycle) time.Time {
-	switch billingCycle {
-	case vo.BillingCycleMonthly:
-		return currentEndDate.AddDate(0, 1, 0)
-	case vo.BillingCycleQuarterly:
-		return currentEndDate.AddDate(0, 3, 0)
-	case vo.BillingCycleYearly:
-		return currentEndDate.AddDate(1, 0, 0)
-	default:
-		return currentEndDate.AddDate(0, 1, 0)
-	}
 }

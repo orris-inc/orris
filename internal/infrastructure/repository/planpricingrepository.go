@@ -253,10 +253,12 @@ func (r *PlanPricingRepositoryImpl) Delete(ctx context.Context, id uint) error {
 	return nil
 }
 
-// DeleteByPlanID deletes all pricing records for a specific plan
+// DeleteByPlanID permanently deletes all pricing records for a specific plan.
+// Uses hard delete (Unscoped) because this is used for syncing pricing options,
+// and soft-deleted records would conflict with the uk_plan_billing_cycle unique constraint.
 func (r *PlanPricingRepositoryImpl) DeleteByPlanID(ctx context.Context, planID uint) error {
 	tx := db.GetTxFromContext(ctx, r.db)
-	result := tx.Where("plan_id = ?", planID).
+	result := tx.Unscoped().Where("plan_id = ?", planID).
 		Delete(&models.PlanPricingModel{})
 
 	if result.Error != nil {

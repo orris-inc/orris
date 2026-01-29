@@ -39,21 +39,18 @@ type SubscriptionDTO struct {
 }
 
 type PlanDTO struct {
-	SID          string                 `json:"id"` // Stripe-style ID: plan_xxx
-	Name         string                 `json:"name"`
-	Slug         string                 `json:"slug"`
-	Description  string                 `json:"description"`
-	Status       string                 `json:"status"`
-	PlanType     string                 `json:"plan_type"` // Plan type: node or forward
-	Limits       map[string]interface{} `json:"limits"`
-	APIRateLimit uint                   `json:"api_rate_limit"`
-	MaxUsers     uint                   `json:"max_users"`
-	MaxProjects  uint                   `json:"max_projects"`
-	IsPublic     bool                   `json:"is_public"`
-	SortOrder    int                    `json:"sort_order"`
-	Pricings     []*PricingOptionDTO    `json:"pricings"` // Multiple pricing options for different billing cycles
-	CreatedAt    time.Time              `json:"created_at"`
-	UpdatedAt    time.Time              `json:"updated_at"`
+	SID         string                 `json:"id"` // Stripe-style ID: plan_xxx
+	Name        string                 `json:"name"`
+	Slug        string                 `json:"slug"`
+	Description string                 `json:"description"`
+	Status      string                 `json:"status"`
+	PlanType    string                 `json:"plan_type"` // Plan type: node or forward
+	Limits      map[string]interface{} `json:"limits"`
+	IsPublic    bool                   `json:"is_public"`
+	SortOrder   int                    `json:"sort_order"`
+	Pricings    []*PricingOptionDTO    `json:"pricings"` // Multiple pricing options for different billing cycles
+	CreatedAt   time.Time              `json:"created_at"`
+	UpdatedAt   time.Time              `json:"updated_at"`
 }
 
 // PricingOptionDTO represents a single pricing option for a specific billing cycle
@@ -191,20 +188,17 @@ func ToPlanDTO(plan *subscription.Plan) *PlanDTO {
 	}
 
 	return &PlanDTO{
-		SID:          plan.SID(),
-		Name:         plan.Name(),
-		Slug:         plan.Slug(),
-		Description:  plan.Description(),
-		Status:       string(plan.Status()),
-		PlanType:     plan.PlanType().String(),
-		Limits:       limits,
-		APIRateLimit: plan.APIRateLimit(),
-		MaxUsers:     plan.MaxUsers(),
-		MaxProjects:  plan.MaxProjects(),
-		IsPublic:     plan.IsPublic(),
-		SortOrder:    plan.SortOrder(),
-		CreatedAt:    plan.CreatedAt(),
-		UpdatedAt:    plan.UpdatedAt(),
+		SID:         plan.SID(),
+		Name:        plan.Name(),
+		Slug:        plan.Slug(),
+		Description: plan.Description(),
+		Status:      string(plan.Status()),
+		PlanType:    plan.PlanType().String(),
+		Limits:      limits,
+		IsPublic:    plan.IsPublic(),
+		SortOrder:   plan.SortOrder(),
+		CreatedAt:   plan.CreatedAt(),
+		UpdatedAt:   plan.UpdatedAt(),
 	}
 }
 

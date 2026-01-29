@@ -126,18 +126,15 @@ func (r *PlanRepositoryImpl) Update(ctx context.Context, plan *subscription.Plan
 	result := r.db.WithContext(ctx).Model(&models.PlanModel{}).
 		Where("id = ?", plan.ID()).
 		Updates(map[string]interface{}{
-			"name":           model.Name,
-			"description":    model.Description,
-			"status":         model.Status,
-			"limits":         model.Limits,
-			"api_rate_limit": model.APIRateLimit,
-			"max_users":      model.MaxUsers,
-			"max_projects":   model.MaxProjects,
-			"is_public":      model.IsPublic,
-			"sort_order":     model.SortOrder,
-			"metadata":       model.Metadata,
-			"version":        model.Version,
-			"updated_at":     model.UpdatedAt,
+			"name":        model.Name,
+			"description": model.Description,
+			"status":      model.Status,
+			"limits":      model.Limits,
+			"is_public":   model.IsPublic,
+			"sort_order":  model.SortOrder,
+			"metadata":    model.Metadata,
+			"version":     model.Version,
+			"updated_at":  model.UpdatedAt,
 		})
 
 	if result.Error != nil {
@@ -306,9 +303,6 @@ func (r *PlanRepositoryImpl) toEntity(model *models.PlanModel) (*subscription.Pl
 		model.Status,
 		model.PlanType,
 		features,
-		model.APIRateLimit,
-		model.MaxUsers,
-		model.MaxProjects,
 		model.NodeLimit,
 		model.IsPublic,
 		model.SortOrder,
@@ -343,24 +337,21 @@ func (r *PlanRepositoryImpl) toModel(plan *subscription.Plan) (*models.PlanModel
 	}
 
 	return &models.PlanModel{
-		ID:           plan.ID(),
-		SID:          plan.SID(),
-		Name:         plan.Name(),
-		Slug:         plan.Slug(),
-		PlanType:     plan.PlanType().String(),
-		Description:  plan.Description(),
-		Status:       string(plan.Status()),
-		Limits:       limitsJSON,
-		APIRateLimit: plan.APIRateLimit(),
-		MaxUsers:     plan.MaxUsers(),
-		MaxProjects:  plan.MaxProjects(),
-		NodeLimit:    plan.NodeLimit(),
-		IsPublic:     plan.IsPublic(),
-		SortOrder:    plan.SortOrder(),
-		Metadata:     metadataJSON,
-		Version:      plan.Version(),
-		CreatedAt:    plan.CreatedAt(),
-		UpdatedAt:    plan.UpdatedAt(),
+		ID:          plan.ID(),
+		SID:         plan.SID(),
+		Name:        plan.Name(),
+		Slug:        plan.Slug(),
+		PlanType:    plan.PlanType().String(),
+		Description: plan.Description(),
+		Status:      string(plan.Status()),
+		Limits:      limitsJSON,
+		NodeLimit:   plan.NodeLimit(),
+		IsPublic:    plan.IsPublic(),
+		SortOrder:   plan.SortOrder(),
+		Metadata:    metadataJSON,
+		Version:     plan.Version(),
+		CreatedAt:   plan.CreatedAt(),
+		UpdatedAt:   plan.UpdatedAt(),
 	}, nil
 }
 

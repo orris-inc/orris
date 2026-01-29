@@ -11,17 +11,14 @@ import (
 )
 
 type CreatePlanCommand struct {
-	Name         string
-	Slug         string
-	Description  string
-	PlanType     string // Required: "node" or "forward"
-	Limits       map[string]interface{}
-	APIRateLimit uint
-	MaxUsers     uint
-	MaxProjects  uint
-	IsPublic     bool
-	SortOrder    int
-	Pricings     []dto.PricingOptionInput // Required: multiple pricing options
+	Name        string
+	Slug        string
+	Description string
+	PlanType    string // Required: "node" or "forward"
+	Limits      map[string]interface{}
+	IsPublic    bool
+	SortOrder   int
+	Pricings    []dto.PricingOptionInput // Required: multiple pricing options
 }
 
 type CreatePlanUseCase struct {
@@ -88,21 +85,6 @@ func (uc *CreatePlanUseCase) Execute(
 			uc.logger.Errorw("failed to set plan features", "error", err)
 			return nil, fmt.Errorf("failed to set plan features: %w", err)
 		}
-	}
-
-	if cmd.APIRateLimit > 0 {
-		if err := plan.SetAPIRateLimit(cmd.APIRateLimit); err != nil {
-			uc.logger.Errorw("failed to set API rate limit", "error", err)
-			return nil, fmt.Errorf("failed to set API rate limit: %w", err)
-		}
-	}
-
-	if cmd.MaxUsers > 0 {
-		plan.SetMaxUsers(cmd.MaxUsers)
-	}
-
-	if cmd.MaxProjects > 0 {
-		plan.SetMaxProjects(cmd.MaxProjects)
 	}
 
 	plan.SetPublic(cmd.IsPublic)

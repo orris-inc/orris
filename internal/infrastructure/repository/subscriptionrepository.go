@@ -20,15 +20,16 @@ import (
 // allowedSubscriptionSortByFields defines the whitelist of allowed ORDER BY fields
 // to prevent SQL injection attacks.
 var allowedSubscriptionSortByFields = map[string]bool{
-	"id":         true,
-	"sid":        true,
-	"user_id":    true,
-	"plan_id":    true,
-	"status":     true,
-	"start_date": true,
-	"end_date":   true,
-	"created_at": true,
-	"updated_at": true,
+	"id":            true,
+	"sid":           true,
+	"user_id":       true,
+	"plan_id":       true,
+	"status":        true,
+	"billing_cycle": true,
+	"start_date":    true,
+	"end_date":      true,
+	"created_at":    true,
+	"updated_at":    true,
 }
 
 type SubscriptionRepositoryImpl struct {
@@ -384,6 +385,18 @@ func (r *SubscriptionRepositoryImpl) List(ctx context.Context, filter subscripti
 	}
 	if filter.Status != nil {
 		query = query.Where("status = ?", *filter.Status)
+	}
+	if filter.BillingCycle != nil {
+		query = query.Where("billing_cycle = ?", *filter.BillingCycle)
+	}
+	if filter.CreatedFrom != nil {
+		query = query.Where("created_at >= ?", *filter.CreatedFrom)
+	}
+	if filter.CreatedTo != nil {
+		query = query.Where("created_at <= ?", *filter.CreatedTo)
+	}
+	if filter.ExpiresBefore != nil {
+		query = query.Where("end_date <= ?", *filter.ExpiresBefore)
 	}
 
 	if err := query.Count(&total).Error; err != nil {

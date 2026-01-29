@@ -56,29 +56,29 @@ func (m *SubscriptionMapperImpl) ToEntity(model *models.SubscriptionModel) (*sub
 		billingCycle = bc
 	}
 
-	entity, err := subscription.ReconstructSubscriptionWithSubject(
-		model.ID,
-		model.UserID,
-		model.PlanID,
-		model.SubjectType,
-		model.SubjectID,
-		model.SID,
-		model.UUID,
-		model.LinkToken,
-		status,
-		model.StartDate,
-		model.EndDate,
-		model.AutoRenew,
-		model.CurrentPeriodStart,
-		model.CurrentPeriodEnd,
-		model.CancelledAt,
-		model.CancelReason,
-		metadata,
-		model.Version,
-		model.CreatedAt,
-		model.UpdatedAt,
-		billingCycle,
-	)
+	entity, err := subscription.ReconstructSubscriptionWithParams(subscription.SubscriptionReconstructParams{
+		ID:                 model.ID,
+		UserID:             model.UserID,
+		PlanID:             model.PlanID,
+		SubjectType:        model.SubjectType,
+		SubjectID:          model.SubjectID,
+		SID:                model.SID,
+		UUID:               model.UUID,
+		LinkToken:          model.LinkToken,
+		Status:             status,
+		StartDate:          model.StartDate,
+		EndDate:            model.EndDate,
+		AutoRenew:          model.AutoRenew,
+		CurrentPeriodStart: model.CurrentPeriodStart,
+		CurrentPeriodEnd:   model.CurrentPeriodEnd,
+		CancelledAt:        model.CancelledAt,
+		CancelReason:       model.CancelReason,
+		Metadata:           metadata,
+		Version:            model.Version,
+		CreatedAt:          model.CreatedAt,
+		UpdatedAt:          model.UpdatedAt,
+		BillingCycle:       billingCycle,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to reconstruct subscription entity: %w", err)
 	}

@@ -9,6 +9,35 @@ import (
 	"github.com/orris-inc/orris/internal/shared/biztime"
 )
 
+// PaymentReconstructParams contains all parameters needed to reconstruct a Payment from persistence
+type PaymentReconstructParams struct {
+	ID             uint
+	OrderNo        string
+	SubscriptionID uint
+	UserID         uint
+	Amount         vo.Money
+	PaymentMethod  vo.PaymentMethod
+	Status         vo.PaymentStatus
+	GatewayOrderNo *string
+	TransactionID  *string
+	PaymentURL     *string
+	QRCode         *string
+	PaidAt         *time.Time
+	ExpiredAt      time.Time
+	Metadata       map[string]interface{}
+	Version        int
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	// USDT-specific fields
+	ChainType        *vo.ChainType
+	USDTAmountRaw    *uint64 // USDT amount in smallest unit (1 USDT = 1000000)
+	ReceivingAddress *string
+	ExchangeRate     *float64
+	TxHash           *string
+	BlockNumber      *uint64
+	ConfirmedAt      *time.Time
+}
+
 type Payment struct {
 	id             uint
 	orderNo        string
@@ -292,88 +321,32 @@ func (p *Payment) SetID(id uint) {
 	p.id = id
 }
 
-func ReconstructPayment(
-	id uint,
-	orderNo string,
-	subscriptionID, userID uint,
-	amount vo.Money,
-	paymentMethod vo.PaymentMethod,
-	status vo.PaymentStatus,
-	gatewayOrderNo, transactionID, paymentURL, qrCode *string,
-	paidAt *time.Time,
-	expiredAt time.Time,
-	metadata map[string]interface{},
-	version int,
-	createdAt, updatedAt time.Time,
-) *Payment {
+// ReconstructPaymentWithParams reconstructs a payment from persistence using a parameter struct
+func ReconstructPaymentWithParams(params PaymentReconstructParams) *Payment {
 	return &Payment{
-		id:             id,
-		orderNo:        orderNo,
-		subscriptionID: subscriptionID,
-		userID:         userID,
-		amount:         amount,
-		paymentMethod:  paymentMethod,
-		status:         status,
-		gatewayOrderNo: gatewayOrderNo,
-		transactionID:  transactionID,
-		paymentURL:     paymentURL,
-		qrCode:         qrCode,
-		paidAt:         paidAt,
-		expiredAt:      expiredAt,
-		metadata:       metadata,
-		version:        version,
-		createdAt:      createdAt,
-		updatedAt:      updatedAt,
-	}
-}
-
-// ReconstructPaymentWithUSDT creates a Payment instance with USDT-specific fields from persistence
-func ReconstructPaymentWithUSDT(
-	id uint,
-	orderNo string,
-	subscriptionID, userID uint,
-	amount vo.Money,
-	paymentMethod vo.PaymentMethod,
-	status vo.PaymentStatus,
-	gatewayOrderNo, transactionID, paymentURL, qrCode *string,
-	paidAt *time.Time,
-	expiredAt time.Time,
-	metadata map[string]interface{},
-	version int,
-	createdAt, updatedAt time.Time,
-	// USDT-specific fields
-	chainType *vo.ChainType,
-	usdtAmountRaw *uint64, // USDT amount in smallest unit (1 USDT = 1000000)
-	receivingAddress *string,
-	exchangeRate *float64,
-	txHash *string,
-	blockNumber *uint64,
-	confirmedAt *time.Time,
-) *Payment {
-	return &Payment{
-		id:               id,
-		orderNo:          orderNo,
-		subscriptionID:   subscriptionID,
-		userID:           userID,
-		amount:           amount,
-		paymentMethod:    paymentMethod,
-		status:           status,
-		gatewayOrderNo:   gatewayOrderNo,
-		transactionID:    transactionID,
-		paymentURL:       paymentURL,
-		qrCode:           qrCode,
-		paidAt:           paidAt,
-		expiredAt:        expiredAt,
-		chainType:        chainType,
-		usdtAmountRaw:    usdtAmountRaw,
-		receivingAddress: receivingAddress,
-		exchangeRate:     exchangeRate,
-		txHash:           txHash,
-		blockNumber:      blockNumber,
-		confirmedAt:      confirmedAt,
-		metadata:         metadata,
-		version:          version,
-		createdAt:        createdAt,
-		updatedAt:        updatedAt,
+		id:               params.ID,
+		orderNo:          params.OrderNo,
+		subscriptionID:   params.SubscriptionID,
+		userID:           params.UserID,
+		amount:           params.Amount,
+		paymentMethod:    params.PaymentMethod,
+		status:           params.Status,
+		gatewayOrderNo:   params.GatewayOrderNo,
+		transactionID:    params.TransactionID,
+		paymentURL:       params.PaymentURL,
+		qrCode:           params.QRCode,
+		paidAt:           params.PaidAt,
+		expiredAt:        params.ExpiredAt,
+		chainType:        params.ChainType,
+		usdtAmountRaw:    params.USDTAmountRaw,
+		receivingAddress: params.ReceivingAddress,
+		exchangeRate:     params.ExchangeRate,
+		txHash:           params.TxHash,
+		blockNumber:      params.BlockNumber,
+		confirmedAt:      params.ConfirmedAt,
+		metadata:         params.Metadata,
+		version:          params.Version,
+		createdAt:        params.CreatedAt,
+		updatedAt:        params.UpdatedAt,
 	}
 }

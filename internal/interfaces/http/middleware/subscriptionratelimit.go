@@ -9,7 +9,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/infrastructure/ratelimit"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
@@ -30,6 +29,9 @@ func NewSubscriptionRateLimitMiddleware(
 	}
 }
 
+// defaultRateLimit is the default API rate limit per minute for all subscriptions
+const defaultRateLimit = 60
+
 func (m *SubscriptionRateLimitMiddleware) LimitBySubscription() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		subscriptionIDValue, exists := c.Get("subscription_id")
@@ -48,26 +50,8 @@ func (m *SubscriptionRateLimitMiddleware) LimitBySubscription() gin.HandlerFunc 
 			return
 		}
 
-		planValue, exists := c.Get("subscription_plan")
-		if !exists {
-			m.logger.Warnw("subscription plan not found in context", "subscription_id", subscriptionID)
-			utils.ErrorResponse(c, http.StatusUnauthorized, "subscription plan not found")
-			c.Abort()
-			return
-		}
-
-		plan, ok := planValue.(*subscription.Plan)
-		if !ok {
-			m.logger.Errorw("invalid subscription plan type in context", "subscription_id", subscriptionID)
-			utils.ErrorResponse(c, http.StatusInternalServerError, "invalid subscription plan")
-			c.Abort()
-			return
-		}
-
-		rateLimit := plan.APIRateLimit()
-		if rateLimit == 0 {
-			rateLimit = 60
-		}
+		// Use default rate limit for all subscriptions
+		rateLimit := uint(defaultRateLimit)
 
 		key := fmt.Sprintf("subscription:%d", subscriptionID)
 
@@ -125,7 +109,6 @@ func (m *SubscriptionRateLimitMiddleware) LimitBySubscription() gin.HandlerFunc 
 		if !allowed {
 			m.logger.Warnw("rate limit exceeded",
 				"subscription_id", subscriptionID,
-				"plan_id", plan.ID(),
 				"limit", rateLimit,
 			)
 

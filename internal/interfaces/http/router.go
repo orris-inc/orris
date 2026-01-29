@@ -107,10 +107,7 @@ type Router struct {
 	subscriptionTrafficCache       cache.SubscriptionTrafficCache
 	subscriptionTrafficBuffer      *nodeServices.SubscriptionTrafficBuffer
 	subscriptionTrafficFlushDone   chan struct{}
-	adminNotificationScheduler     *scheduler.AdminNotificationScheduler
-	usageAggregationScheduler      *scheduler.UsageAggregationScheduler
-	paymentScheduler               *scheduler.PaymentScheduler
-	subscriptionScheduler          *scheduler.SubscriptionScheduler
+	schedulerManager               *scheduler.SchedulerManager
 	usdtServiceManager             *infraPayment.USDTServiceManager
 	logger                         logger.Interface
 	authMiddleware                 *middleware.AuthMiddleware
@@ -251,22 +248,30 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		subscriptionUsageRepo, subscriptionUsageStatsRepo, hourlyTrafficCache, log,
 	)
 
-	// Initialize usage aggregation scheduler with default retention days (90 days)
-	usageAggregationScheduler := scheduler.NewUsageAggregationScheduler(
-		aggregateUsageUC,
-		scheduler.DefaultRetentionDays,
-		log,
-	)
+	// Initialize unified scheduler manager (gocron v2)
+	schedulerManager, err := scheduler.NewSchedulerManager(log)
+	if err != nil {
+		log.Fatalw("failed to create scheduler manager", "error", err)
+	}
 
-	// Initialize payment scheduler for expiring pending payments and cancelling unpaid subscriptions
+	// Register payment jobs (5 min interval)
 	expirePaymentsUC := paymentUsecases.NewExpirePaymentsUseCase(paymentRepo, subscriptionRepo, log)
 	cancelUnpaidSubsUC := paymentUsecases.NewCancelUnpaidSubscriptionsUseCase(subscriptionRepo, paymentRepo, log)
 	retryActivationUC := paymentUsecases.NewRetrySubscriptionActivationUseCase(paymentRepo, activateSubscriptionUC, log)
-	paymentScheduler := scheduler.NewPaymentScheduler(expirePaymentsUC, cancelUnpaidSubsUC, retryActivationUC, log)
+	if err := schedulerManager.RegisterPaymentJobs(expirePaymentsUC, cancelUnpaidSubsUC, retryActivationUC); err != nil {
+		log.Warnw("failed to register payment jobs", "error", err)
+	}
 
-	// Initialize subscription scheduler for marking expired subscriptions (runs daily)
+	// Register subscription jobs (24h interval)
 	expireSubscriptionsUC := subscriptionUsecases.NewExpireSubscriptionsUseCase(subscriptionRepo, log)
-	subscriptionScheduler := scheduler.NewSubscriptionScheduler(expireSubscriptionsUC, log)
+	if err := schedulerManager.RegisterSubscriptionJobs(expireSubscriptionsUC); err != nil {
+		log.Warnw("failed to register subscription jobs", "error", err)
+	}
+
+	// Register usage aggregation jobs (cron-based)
+	if err := schedulerManager.RegisterUsageAggregationJobs(aggregateUsageUC, scheduler.DefaultRetentionDays); err != nil {
+		log.Warnw("failed to register usage aggregation jobs", "error", err)
+	}
 
 	createPlanUC := subscriptionUsecases.NewCreatePlanUseCase(
 		subscriptionPlanRepo, planPricingRepo, log,
@@ -808,7 +813,10 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		&botServiceProviderAdapter{telegramBotManager},
 		log,
 	)
-	adminNotificationScheduler := scheduler.NewAdminNotificationScheduler(adminNotificationProcessor, log)
+	// Register admin notification jobs (2min offline check, 09:00 daily/weekly summaries)
+	if err := schedulerManager.RegisterAdminNotificationJobs(adminNotificationProcessor); err != nil {
+		log.Warnw("failed to register admin notification jobs", "error", err)
+	}
 
 	// Initialize mute notification service and inject into telegram handler
 	muteNotificationUC := telegramAdminUsecases.NewMuteNotificationUseCase(forwardAgentRepo, nodeRepoImpl, log)
@@ -1539,10 +1547,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		subscriptionTrafficCache:       subscriptionTrafficCache,
 		subscriptionTrafficBuffer:      subscriptionTrafficBuffer,
 		subscriptionTrafficFlushDone:   subscriptionTrafficFlushDone,
-		adminNotificationScheduler:     adminNotificationScheduler,
-		usageAggregationScheduler:      usageAggregationScheduler,
-		paymentScheduler:               paymentScheduler,
-		subscriptionScheduler:          subscriptionScheduler,
+		schedulerManager:               schedulerManager,
 		usdtServiceManager:             usdtServiceManager,
 		logger:                         log,
 		authMiddleware:                 authMiddleware,

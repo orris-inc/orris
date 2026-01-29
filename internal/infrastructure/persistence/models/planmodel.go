@@ -13,25 +13,22 @@ import (
 // PlanModel represents the database persistence model for subscription plans
 // This is the anti-corruption layer between domain and database
 type PlanModel struct {
-	ID           uint   `gorm:"primarykey"`
-	SID          string `gorm:"column:sid;uniqueIndex;not null;size:50;comment:Stripe-style ID: plan_xxx"`
-	Name         string `gorm:"not null;size:100"`
-	Slug         string `gorm:"uniqueIndex;not null;size:50"`
-	PlanType     string `gorm:"not null;size:20;default:node"`
-	Description  string `gorm:"size:500"`
-	Status       string `gorm:"not null;size:20;default:active"`
-	Limits       datatypes.JSON
-	APIRateLimit uint `gorm:"default:60"`
-	MaxUsers     uint `gorm:"default:1"`
-	MaxProjects  uint `gorm:"default:1"`
-	NodeLimit    *int `gorm:"default:null;comment:Maximum number of user nodes (null or 0 = unlimited)"`
-	IsPublic     bool `gorm:"default:true"`
-	SortOrder    int  `gorm:"default:0"`
-	Metadata     datatypes.JSON
-	Version      int `gorm:"not null;default:1"`
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-	DeletedAt    gorm.DeletedAt `gorm:"index"`
+	ID          uint   `gorm:"primarykey"`
+	SID         string `gorm:"column:sid;uniqueIndex;not null;size:50;comment:Stripe-style ID: plan_xxx"`
+	Name        string `gorm:"not null;size:100"`
+	Slug        string `gorm:"uniqueIndex;not null;size:50"`
+	PlanType    string `gorm:"not null;size:20;default:node"`
+	Description string `gorm:"size:500"`
+	Status      string `gorm:"not null;size:20;default:active"`
+	Limits      datatypes.JSON
+	NodeLimit   *int `gorm:"default:null;comment:Maximum number of user nodes (null or 0 = unlimited)"`
+	IsPublic    bool `gorm:"default:true"`
+	SortOrder   int  `gorm:"default:0"`
+	Metadata    datatypes.JSON
+	Version     int `gorm:"not null;default:1"`
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	DeletedAt   gorm.DeletedAt `gorm:"index"`
 }
 
 // TableName specifies the table name for GORM

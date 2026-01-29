@@ -16,10 +16,20 @@ const (
 	// Grace period before auto-cancelling unpaid subscriptions
 	// After a payment expires, the user has this much time to pay before the subscription is cancelled
 	unpaidGracePeriod = 24 * time.Hour
+
+	// Maximum time an inactive subscription can exist without any payment activity
+	// If a subscription is created but no payment is ever made within this period, it will be cancelled
+	inactiveSubscriptionTimeout = 48 * time.Hour
 )
 
 // CancelUnpaidSubscriptionsUseCase automatically cancels subscriptions
-// that have unpaid payments beyond the grace period.
+// that have not been paid within the allowed time period.
+//
+// Two scenarios are handled:
+//  1. Payment expired: If a payment was created but expired, the subscription is cancelled
+//     after a 24-hour grace period (unpaidGracePeriod).
+//  2. No payment initiated: If no payment was ever created for a subscription, it is cancelled
+//     after 48 hours from creation (inactiveSubscriptionTimeout).
 //
 // Fault tolerance:
 //   - If Cancel() succeeds but Update() fails, the subscription state in memory is changed but not persisted.
@@ -66,30 +76,8 @@ func (uc *CancelUnpaidSubscriptionsUseCase) Execute(ctx context.Context) (int, e
 	cancelledCount := 0
 
 	for _, sub := range subscriptions {
-		// Check if payment_expired_at is set in metadata
-		paymentExpiredAtStr, ok := sub.Metadata()["payment_expired_at"].(string)
-		if !ok || paymentExpiredAtStr == "" {
-			// No payment expiration recorded, skip
-			continue
-		}
-
-		paymentExpiredAt, err := biztime.ParseMetadataTime(paymentExpiredAtStr)
-		if err != nil {
-			uc.logger.Warnw("failed to parse payment_expired_at",
-				"subscription_id", sub.ID(),
-				"value", paymentExpiredAtStr,
-				"error", err)
-			continue
-		}
-
-		// Check if grace period has passed
-		if now.Before(paymentExpiredAt.Add(unpaidGracePeriod)) {
-			// Still within grace period
-			continue
-		}
-
-		// Check if there are any pending payments for this subscription
-		// A new payment may have been created after the previous one expired
+		// Check if there are any pending payments for this subscription first
+		// A new payment may have been created, skip cancellation
 		hasPending, err := uc.paymentRepo.HasPendingPaymentBySubscriptionID(ctx, sub.ID())
 		if err != nil {
 			uc.logger.Errorw("failed to check pending payments",
@@ -99,20 +87,56 @@ func (uc *CancelUnpaidSubscriptionsUseCase) Execute(ctx context.Context) (int, e
 		}
 
 		if hasPending {
-			// New pending payment exists, skip cancellation and clear expired marker
-			uc.logger.Infow("skipping cancellation: new pending payment exists",
-				"subscription_id", sub.ID())
-			sub.SetMetadata("payment_expired_at", nil)
-			if err := uc.subscriptionRepo.Update(ctx, sub); err != nil {
-				uc.logger.Errorw("failed to clear payment_expired_at",
-					"subscription_id", sub.ID(),
-					"error", err)
+			// New pending payment exists, skip cancellation
+			// Also clear payment_expired_at if it was set
+			if _, ok := sub.Metadata()["payment_expired_at"].(string); ok {
+				uc.logger.Debugw("skipping cancellation: new pending payment exists",
+					"subscription_id", sub.ID())
+				sub.DeleteMetadata("payment_expired_at")
+				if err := uc.subscriptionRepo.Update(ctx, sub); err != nil {
+					uc.logger.Errorw("failed to clear payment_expired_at",
+						"subscription_id", sub.ID(),
+						"error", err)
+				}
 			}
 			continue
 		}
 
-		// Grace period has passed, cancel the subscription
-		if err := sub.Cancel("auto-cancelled: payment not completed within grace period"); err != nil {
+		// Determine if subscription should be cancelled and the reason
+		var cancelReason string
+
+		// Check if payment_expired_at is set in metadata
+		paymentExpiredAtStr, hasPaymentExpired := sub.Metadata()["payment_expired_at"].(string)
+		if hasPaymentExpired && paymentExpiredAtStr != "" {
+			// Scenario 1: Payment was created but expired, check grace period
+			paymentExpiredAt, err := biztime.ParseMetadataTime(paymentExpiredAtStr)
+			if err != nil {
+				uc.logger.Warnw("failed to parse payment_expired_at",
+					"subscription_id", sub.ID(),
+					"value", paymentExpiredAtStr,
+					"error", err)
+				continue
+			}
+
+			// Check if grace period has passed
+			if now.Before(paymentExpiredAt.Add(unpaidGracePeriod)) {
+				// Still within grace period
+				continue
+			}
+
+			cancelReason = "auto-cancelled: payment not completed within grace period"
+		} else {
+			// Scenario 2: No payment ever made, check creation timeout
+			if now.Before(sub.CreatedAt().Add(inactiveSubscriptionTimeout)) {
+				// Still within timeout period
+				continue
+			}
+
+			cancelReason = "auto-cancelled: no payment initiated within timeout period"
+		}
+
+		// Cancel the subscription
+		if err := sub.Cancel(cancelReason); err != nil {
 			uc.logger.Errorw("failed to cancel subscription",
 				"subscription_id", sub.ID(),
 				"error", err)
@@ -127,10 +151,10 @@ func (uc *CancelUnpaidSubscriptionsUseCase) Execute(ctx context.Context) (int, e
 		}
 
 		cancelledCount++
-		uc.logger.Infow("subscription auto-cancelled due to unpaid payment",
+		uc.logger.Infow("subscription auto-cancelled",
 			"subscription_id", sub.ID(),
-			"payment_expired_at", paymentExpiredAt,
-			"grace_period", unpaidGracePeriod)
+			"reason", cancelReason,
+			"created_at", sub.CreatedAt())
 	}
 
 	if cancelledCount > 0 {

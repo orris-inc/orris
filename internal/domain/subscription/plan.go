@@ -17,24 +17,21 @@ const (
 )
 
 type Plan struct {
-	id           uint
-	sid          string // Stripe-style ID: plan_xxx
-	name         string
-	slug         string
-	description  string
-	status       PlanStatus
-	planType     vo.PlanType
-	features     *vo.PlanFeatures
-	apiRateLimit uint
-	maxUsers     uint
-	maxProjects  uint
-	nodeLimit    *int // maximum number of user nodes (nil or 0 = unlimited)
-	isPublic     bool
-	sortOrder    int
-	metadata     map[string]interface{}
-	version      int
-	createdAt    time.Time
-	updatedAt    time.Time
+	id          uint
+	sid         string // Stripe-style ID: plan_xxx
+	name        string
+	slug        string
+	description string
+	status      PlanStatus
+	planType    vo.PlanType
+	features    *vo.PlanFeatures
+	nodeLimit   *int // maximum number of user nodes (nil or 0 = unlimited)
+	isPublic    bool
+	sortOrder   int
+	metadata    map[string]interface{}
+	version     int
+	createdAt   time.Time
+	updatedAt   time.Time
 }
 
 func NewPlan(name, slug, description string, planType vo.PlanType) (*Plan, error) {
@@ -63,28 +60,25 @@ func NewPlan(name, slug, description string, planType vo.PlanType) (*Plan, error
 
 	now := biztime.NowUTC()
 	return &Plan{
-		sid:          sid,
-		name:         name,
-		slug:         slug,
-		description:  description,
-		status:       PlanStatusActive,
-		planType:     planType,
-		features:     nil,
-		apiRateLimit: 60,
-		maxUsers:     0,
-		maxProjects:  0,
-		isPublic:     true,
-		sortOrder:    0,
-		metadata:     make(map[string]interface{}),
-		version:      1,
-		createdAt:    now,
-		updatedAt:    now,
+		sid:         sid,
+		name:        name,
+		slug:        slug,
+		description: description,
+		status:      PlanStatusActive,
+		planType:    planType,
+		features:    nil,
+		isPublic:    true,
+		sortOrder:   0,
+		metadata:    make(map[string]interface{}),
+		version:     1,
+		createdAt:   now,
+		updatedAt:   now,
 	}, nil
 }
 
 func ReconstructPlan(id uint, sid string, name, slug, description string,
 	status string, planType string, features *vo.PlanFeatures,
-	apiRateLimit, maxUsers, maxProjects uint, nodeLimit *int, isPublic bool, sortOrder int,
+	nodeLimit *int, isPublic bool, sortOrder int,
 	metadata map[string]interface{}, version int,
 	createdAt, updatedAt time.Time) (*Plan, error) {
 
@@ -110,24 +104,21 @@ func ReconstructPlan(id uint, sid string, name, slug, description string,
 	}
 
 	return &Plan{
-		id:           id,
-		sid:          sid,
-		name:         name,
-		slug:         slug,
-		description:  description,
-		status:       planStatus,
-		planType:     pt,
-		features:     features,
-		apiRateLimit: apiRateLimit,
-		maxUsers:     maxUsers,
-		maxProjects:  maxProjects,
-		nodeLimit:    nodeLimit,
-		isPublic:     isPublic,
-		sortOrder:    sortOrder,
-		metadata:     metadata,
-		version:      version,
-		createdAt:    createdAt,
-		updatedAt:    updatedAt,
+		id:          id,
+		sid:         sid,
+		name:        name,
+		slug:        slug,
+		description: description,
+		status:      planStatus,
+		planType:    pt,
+		features:    features,
+		nodeLimit:   nodeLimit,
+		isPublic:    isPublic,
+		sortOrder:   sortOrder,
+		metadata:    metadata,
+		version:     version,
+		createdAt:   createdAt,
+		updatedAt:   updatedAt,
 	}, nil
 }
 
@@ -178,18 +169,6 @@ func (p *Plan) PlanType() vo.PlanType {
 
 func (p *Plan) Features() *vo.PlanFeatures {
 	return p.features
-}
-
-func (p *Plan) APIRateLimit() uint {
-	return p.apiRateLimit
-}
-
-func (p *Plan) MaxUsers() uint {
-	return p.maxUsers
-}
-
-func (p *Plan) MaxProjects() uint {
-	return p.maxProjects
 }
 
 // NodeLimit returns the maximum number of user nodes (nil or 0 = unlimited)
@@ -261,28 +240,6 @@ func (p *Plan) UpdateFeatures(features *vo.PlanFeatures) error {
 	p.updatedAt = biztime.NowUTC()
 	p.version++
 	return nil
-}
-
-func (p *Plan) SetAPIRateLimit(limit uint) error {
-	if limit == 0 {
-		return fmt.Errorf("API rate limit must be greater than 0")
-	}
-	p.apiRateLimit = limit
-	p.updatedAt = biztime.NowUTC()
-	p.version++
-	return nil
-}
-
-func (p *Plan) SetMaxUsers(max uint) {
-	p.maxUsers = max
-	p.updatedAt = biztime.NowUTC()
-	p.version++
-}
-
-func (p *Plan) SetMaxProjects(max uint) {
-	p.maxProjects = max
-	p.updatedAt = biztime.NowUTC()
-	p.version++
 }
 
 // SetNodeLimit sets the maximum number of user nodes

@@ -11,15 +11,12 @@ import (
 )
 
 type UpdatePlanCommand struct {
-	PlanSID      string
-	Description  *string
-	Limits       *map[string]interface{}
-	APIRateLimit *uint
-	MaxUsers     *uint
-	MaxProjects  *uint
-	SortOrder    *int
-	IsPublic     *bool
-	Pricings     *[]dto.PricingOptionInput // Optional: update pricing options
+	PlanSID     string
+	Description *string
+	Limits      *map[string]interface{}
+	SortOrder   *int
+	IsPublic    *bool
+	Pricings    *[]dto.PricingOptionInput // Optional: update pricing options
 }
 
 type UpdatePlanUseCase struct {
@@ -67,21 +64,6 @@ func (uc *UpdatePlanUseCase) Execute(
 			uc.logger.Errorw("failed to update features", "error", err)
 			return nil, fmt.Errorf("failed to update features: %w", err)
 		}
-	}
-
-	if cmd.APIRateLimit != nil {
-		if err := plan.SetAPIRateLimit(*cmd.APIRateLimit); err != nil {
-			uc.logger.Errorw("failed to set API rate limit", "error", err)
-			return nil, fmt.Errorf("failed to set API rate limit: %w", err)
-		}
-	}
-
-	if cmd.MaxUsers != nil {
-		plan.SetMaxUsers(*cmd.MaxUsers)
-	}
-
-	if cmd.MaxProjects != nil {
-		plan.SetMaxProjects(*cmd.MaxProjects)
 	}
 
 	if cmd.SortOrder != nil {
