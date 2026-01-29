@@ -69,6 +69,7 @@ type AnnouncementResponse struct {
 	ViewCount   int        `json:"view_count"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
+	IsRead      *bool      `json:"is_read,omitempty"` // nil for unauthenticated users
 }
 
 type NotificationResponse struct {

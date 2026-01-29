@@ -1,11 +1,14 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/orris-inc/orris/internal/application/notification"
+	appDto "github.com/orris-inc/orris/internal/application/notification/dto"
+	"github.com/orris-inc/orris/internal/domain/user"
 	"github.com/orris-inc/orris/internal/interfaces/dto"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -14,12 +17,14 @@ import (
 
 type NotificationHandler struct {
 	serviceDDD *notification.ServiceDDD
+	userRepo   user.Repository
 	logger     logger.Interface
 }
 
-func NewNotificationHandler(serviceDDD *notification.ServiceDDD, logger logger.Interface) *NotificationHandler {
+func NewNotificationHandler(serviceDDD *notification.ServiceDDD, userRepo user.Repository, logger logger.Interface) *NotificationHandler {
 	return &NotificationHandler{
 		serviceDDD: serviceDDD,
+		userRepo:   userRepo,
 		logger:     logger,
 	}
 }
@@ -452,5 +457,84 @@ func (h *NotificationHandler) ListPublicAnnouncements(c *gin.Context) {
 		return
 	}
 
+	// If user is authenticated, calculate is_read for each announcement
+	if userID, exists := c.Get("user_id"); exists {
+		if uid, ok := userID.(uint); ok {
+			h.enrichAnnouncementsWithReadStatus(c.Request.Context(), result, uid)
+		}
+	}
+
 	utils.SuccessResponse(c, http.StatusOK, "", result)
+}
+
+// enrichAnnouncementsWithReadStatus calculates is_read for each announcement
+// based on the user's announcements_read_at timestamp.
+func (h *NotificationHandler) enrichAnnouncementsWithReadStatus(ctx context.Context, result *appDto.ListResponse, userID uint) {
+	if result == nil || result.Items == nil {
+		return
+	}
+
+	u, err := h.userRepo.GetByID(ctx, userID)
+	if err != nil || u == nil {
+		return
+	}
+
+	userReadAt := u.AnnouncementsReadAt()
+
+	// Type assert to []*appDto.AnnouncementResponse
+	items, ok := result.Items.([]*appDto.AnnouncementResponse)
+	if !ok {
+		return
+	}
+
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		// Use UpdatedAt to compare because it reflects the publish time
+		// CreatedAt is when the draft was created, UpdatedAt is updated when published
+		isRead := userReadAt != nil && !item.UpdatedAt.After(*userReadAt)
+		item.IsRead = &isRead
+	}
+}
+
+// MarkAnnouncementsAsRead marks all announcements as read for the current user.
+// This updates the user's announcements_read_at timestamp to the current time.
+func (h *NotificationHandler) MarkAnnouncementsAsRead(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		utils.ErrorResponseWithError(c, errors.NewUnauthorizedError("User not authenticated"))
+		return
+	}
+
+	uid, ok := userID.(uint)
+	if !ok {
+		h.logger.Errorw("invalid user_id type", "user_id", userID)
+		utils.ErrorResponseWithError(c, errors.NewInternalError("Internal error"))
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	u, err := h.userRepo.GetByID(ctx, uid)
+	if err != nil {
+		h.logger.Errorw("failed to get user", "user_id", uid, "error", err)
+		utils.ErrorResponseWithError(c, errors.NewInternalError("Failed to get user"))
+		return
+	}
+
+	if u == nil {
+		utils.ErrorResponseWithError(c, errors.NewNotFoundError("User not found"))
+		return
+	}
+
+	u.MarkAnnouncementsAsRead()
+
+	if err := h.userRepo.Update(ctx, u); err != nil {
+		h.logger.Errorw("failed to update user announcements read time", "user_id", uid, "error", err)
+		utils.ErrorResponseWithError(c, errors.NewInternalError("Failed to mark announcements as read"))
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Announcements marked as read", nil)
 }

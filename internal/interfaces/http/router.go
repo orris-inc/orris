@@ -451,7 +451,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		log,
 	)
 
-	notificationHandler := handlers.NewNotificationHandler(notificationServiceDDD, log)
+	notificationHandler := handlers.NewNotificationHandler(notificationServiceDDD, userRepo, log)
 
 	// ============================================================
 	// Section 4: Settings & Auth - OAuth, Email, Passkey

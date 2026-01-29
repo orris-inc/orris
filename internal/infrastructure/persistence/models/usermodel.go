@@ -29,6 +29,7 @@ type UserModel struct {
 	LastPasswordChangeAt       *time.Time
 	FailedLoginAttempts        int `gorm:"default:0"`
 	LockedUntil                *time.Time
+	AnnouncementsReadAt        *time.Time
 	CreatedAt                  time.Time
 	UpdatedAt                  time.Time
 	DeletedAt                  gorm.DeletedAt `gorm:"index"`

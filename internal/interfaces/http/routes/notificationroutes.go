@@ -51,6 +51,9 @@ func SetupNotificationRoutes(engine *gin.Engine, config *NotificationRouteConfig
 			authorization.RequireAdmin(),
 			config.NotificationHandler.CreateAnnouncement)
 
+		// Batch operations - mark all announcements as read for current user
+		announcements.POST("/read-all", config.NotificationHandler.MarkAnnouncementsAsRead)
+
 		// Specific action endpoints (must come BEFORE /:id to avoid conflicts)
 		// Using PATCH for state changes as per RESTful best practices
 		announcements.PATCH("/:id/status",

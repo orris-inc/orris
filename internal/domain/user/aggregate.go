@@ -31,6 +31,7 @@ type User struct {
 	lastPasswordChangeAt       *time.Time
 	failedLoginAttempts        int
 	lockedUntil                *time.Time
+	announcementsReadAt        *time.Time
 }
 
 // NewUser creates a new user aggregate with initial values
@@ -101,6 +102,7 @@ type UserAuthData struct {
 	LastPasswordChangeAt       *time.Time
 	FailedLoginAttempts        int
 	LockedUntil                *time.Time
+	AnnouncementsReadAt        *time.Time
 }
 
 func ReconstructUserWithAuth(id uint, sid string, email *vo.Email, name *vo.Name, role authorization.UserRole, status vo.Status, createdAt, updatedAt time.Time, version int, authData *UserAuthData) (*User, error) {
@@ -119,6 +121,7 @@ func ReconstructUserWithAuth(id uint, sid string, email *vo.Email, name *vo.Name
 		u.lastPasswordChangeAt = authData.LastPasswordChangeAt
 		u.failedLoginAttempts = authData.FailedLoginAttempts
 		u.lockedUntil = authData.LockedUntil
+		u.announcementsReadAt = authData.AnnouncementsReadAt
 	}
 
 	return u, nil
@@ -135,6 +138,7 @@ func (u *User) GetAuthData() *UserAuthData {
 		LastPasswordChangeAt:       u.lastPasswordChangeAt,
 		FailedLoginAttempts:        u.failedLoginAttempts,
 		LockedUntil:                u.lockedUntil,
+		AnnouncementsReadAt:        u.announcementsReadAt,
 	}
 }
 
@@ -396,4 +400,16 @@ func (u *User) Validate() error {
 		return fmt.Errorf("invalid status: %s", u.status)
 	}
 	return nil
+}
+
+// AnnouncementsReadAt returns the timestamp when user last read announcements
+func (u *User) AnnouncementsReadAt() *time.Time {
+	return u.announcementsReadAt
+}
+
+// MarkAnnouncementsAsRead marks all announcements as read up to the current time
+func (u *User) MarkAnnouncementsAsRead() {
+	now := biztime.NowUTC()
+	u.announcementsReadAt = &now
+	u.updatedAt = now
 }

@@ -68,6 +68,7 @@ func (m *UserMapperImpl) ToEntity(model *models.UserModel) (*user.User, error) {
 		LastPasswordChangeAt:       model.LastPasswordChangeAt,
 		FailedLoginAttempts:        model.FailedLoginAttempts,
 		LockedUntil:                model.LockedUntil,
+		AnnouncementsReadAt:        model.AnnouncementsReadAt,
 	}
 
 	userEntity, err := user.ReconstructUserWithAuth(
@@ -116,6 +117,7 @@ func (m *UserMapperImpl) ToModel(entity *user.User) (*models.UserModel, error) {
 		LastPasswordChangeAt:       authData.LastPasswordChangeAt,
 		FailedLoginAttempts:        authData.FailedLoginAttempts,
 		LockedUntil:                authData.LockedUntil,
+		AnnouncementsReadAt:        authData.AnnouncementsReadAt,
 	}
 
 	if entity.Status().IsDeleted() {
