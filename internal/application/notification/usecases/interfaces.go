@@ -58,6 +58,8 @@ type AnnouncementRepository interface {
 	FindBySID(ctx context.Context, sid string) (Announcement, error)
 	FindAll(ctx context.Context, limit, offset int) ([]Announcement, int64, error)
 	FindPublished(ctx context.Context, limit, offset int) ([]Announcement, int64, error)
+	CountPublished(ctx context.Context) (int64, error)
+	CountPublishedAfter(ctx context.Context, after time.Time) (int64, error)
 }
 
 type NotificationRepository interface {
@@ -83,4 +85,12 @@ type NotificationTemplateRepository interface {
 
 type UserRepository interface {
 	FindAllActiveUserIDs(ctx context.Context) ([]uint, error)
+}
+
+type UserAnnouncementReadRepository interface {
+	MarkAsRead(ctx context.Context, userID, announcementID uint) error
+	IsRead(ctx context.Context, userID, announcementID uint) (bool, error)
+	GetReadAnnouncementIDs(ctx context.Context, userID uint) ([]uint, error)
+	GetReadStatusByIDs(ctx context.Context, userID uint, announcementIDs []uint) (map[uint]bool, error)
+	CountUnreadByUser(ctx context.Context, userID uint, userReadAt *time.Time) (int64, error)
 }

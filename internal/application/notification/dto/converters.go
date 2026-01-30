@@ -61,6 +61,7 @@ func ToAnnouncementResponse(announcement Announcement, markdownSvc MarkdownServi
 
 	return &AnnouncementResponse{
 		ID:          announcement.SID(),
+		InternalID:  announcement.ID(),
 		Title:       announcement.Title(),
 		Content:     announcement.Content(),
 		ContentHTML: contentHTML,

@@ -135,16 +135,6 @@ func (r *RenderTemplateRequest) ToApplicationDTO() appDto.RenderTemplateRequest 
 	}
 }
 
-type PublishAnnouncementRequest struct {
-	SendNotification bool `json:"send_notification"`
-}
-
-func (r *PublishAnnouncementRequest) ToApplicationDTO() appDto.PublishAnnouncementRequest {
-	return appDto.PublishAnnouncementRequest{
-		SendNotification: r.SendNotification,
-	}
-}
-
 type RenderTemplateResponse struct {
 	Title   string `json:"title"`
 	Content string `json:"content"`

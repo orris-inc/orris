@@ -14,34 +14,25 @@ type NotificationFactory interface {
 }
 
 type PublishAnnouncementUseCase struct {
-	announcementRepo    AnnouncementRepository
-	notificationRepo    NotificationRepository
-	userRepo            UserRepository
-	notificationFactory NotificationFactory
-	markdownService     dto.MarkdownService
-	logger              logger.Interface
+	announcementRepo AnnouncementRepository
+	markdownService  dto.MarkdownService
+	logger           logger.Interface
 }
 
 func NewPublishAnnouncementUseCase(
 	announcementRepo AnnouncementRepository,
-	notificationRepo NotificationRepository,
-	userRepo UserRepository,
-	notificationFactory NotificationFactory,
 	markdownService dto.MarkdownService,
 	logger logger.Interface,
 ) *PublishAnnouncementUseCase {
 	return &PublishAnnouncementUseCase{
-		announcementRepo:    announcementRepo,
-		notificationRepo:    notificationRepo,
-		userRepo:            userRepo,
-		notificationFactory: notificationFactory,
-		markdownService:     markdownService,
-		logger:              logger,
+		announcementRepo: announcementRepo,
+		markdownService:  markdownService,
+		logger:           logger,
 	}
 }
 
-func (uc *PublishAnnouncementUseCase) Execute(ctx context.Context, sid string, req dto.PublishAnnouncementRequest) (*dto.AnnouncementResponse, error) {
-	uc.logger.Infow("executing publish announcement use case", "sid", sid, "send_notification", req.SendNotification)
+func (uc *PublishAnnouncementUseCase) Execute(ctx context.Context, sid string) (*dto.AnnouncementResponse, error) {
+	uc.logger.Infow("executing publish announcement use case", "sid", sid)
 
 	announcement, err := uc.announcementRepo.FindBySID(ctx, sid)
 	if err != nil {
@@ -64,12 +55,6 @@ func (uc *PublishAnnouncementUseCase) Execute(ctx context.Context, sid string, r
 		return nil, fmt.Errorf("failed to save published announcement: %w", err)
 	}
 
-	if req.SendNotification {
-		if err := uc.createNotificationsForAllUsers(ctx, announcement); err != nil {
-			uc.logger.Errorw("failed to create notifications", "sid", sid, "error", err)
-		}
-	}
-
 	response, err := dto.ToAnnouncementResponse(announcement, uc.markdownService)
 	if err != nil {
 		uc.logger.Errorw("failed to convert announcement to response", "error", err)
@@ -78,45 +63,4 @@ func (uc *PublishAnnouncementUseCase) Execute(ctx context.Context, sid string, r
 
 	uc.logger.Infow("announcement published successfully", "sid", sid)
 	return response, nil
-}
-
-func (uc *PublishAnnouncementUseCase) createNotificationsForAllUsers(ctx context.Context, announcement Announcement) error {
-	userIDs, err := uc.userRepo.FindAllActiveUserIDs(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to fetch user IDs: %w", err)
-	}
-
-	if len(userIDs) == 0 {
-		uc.logger.Infow("no active users to notify")
-		return nil
-	}
-
-	notifications := make([]Notification, 0, len(userIDs))
-	announcementID := announcement.ID()
-
-	for _, userID := range userIDs {
-		notification, err := uc.notificationFactory.CreateNotification(
-			userID,
-			"announcement",
-			announcement.Title(),
-			announcement.Content(),
-			&announcementID,
-		)
-		if err != nil {
-			uc.logger.Warnw("failed to create notification for user", "user_id", userID, "error", err)
-			continue
-		}
-		notifications = append(notifications, notification)
-	}
-
-	if len(notifications) == 0 {
-		return fmt.Errorf("no notifications were created")
-	}
-
-	if err := uc.notificationRepo.BulkCreate(ctx, notifications); err != nil {
-		return fmt.Errorf("failed to bulk create notifications: %w", err)
-	}
-
-	uc.logger.Infow("notifications created for announcement", "announcement_id", announcement.ID(), "count", len(notifications))
-	return nil
 }

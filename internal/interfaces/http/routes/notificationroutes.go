@@ -46,13 +46,22 @@ func SetupNotificationRoutes(engine *gin.Engine, config *NotificationRouteConfig
 		// IMPORTANT: Register specific paths BEFORE parameterized paths to avoid route conflicts
 
 		// Collection operations (no ID parameter)
-		announcements.GET("", config.NotificationHandler.ListAnnouncements)
+		// Admin only: list all announcements including drafts
+		announcements.GET("",
+			authorization.RequireAdmin(),
+			config.NotificationHandler.ListAnnouncements)
 		announcements.POST("",
 			authorization.RequireAdmin(),
 			config.NotificationHandler.CreateAnnouncement)
 
 		// Batch operations - mark all announcements as read for current user
 		announcements.POST("/read-all", config.NotificationHandler.MarkAnnouncementsAsRead)
+
+		// Get unread count for current user
+		announcements.GET("/unread-count", config.NotificationHandler.GetAnnouncementUnreadCount)
+
+		// Mark specific announcement as read
+		announcements.POST("/:id/read", config.NotificationHandler.MarkAnnouncementAsRead)
 
 		// Specific action endpoints (must come BEFORE /:id to avoid conflicts)
 		// Using PATCH for state changes as per RESTful best practices

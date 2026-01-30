@@ -47,6 +47,7 @@ const (
 	TableExternalForwardRules    = "external_forward_rules"
 	TablePasskeyCredentials      = "passkey_credentials"
 	TableUSDTAmountSuffixes      = "usdt_amount_suffixes"
+	TableUserAnnouncementReads   = "user_announcement_reads"
 
 	// Default values
 	DefaultCurrency = "CNY"

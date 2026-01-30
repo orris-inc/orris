@@ -431,21 +431,19 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	announcementRepo := adapters.NewAnnouncementRepositoryAdapter(repository.NewAnnouncementRepository(db))
 	notificationRepo := adapters.NewNotificationRepositoryAdapter(repository.NewNotificationRepository(db))
 	templateRepo := adapters.NewTemplateRepositoryAdapter(repository.NewNotificationTemplateRepository(db))
-	userRepoAdapter := adapters.NewUserRepositoryAdapter(userRepo)
+	userAnnouncementReadRepo := adapters.NewUserAnnouncementReadRepositoryAdapter(repository.NewUserAnnouncementReadRepository(db))
 
 	markdownService := markdown.NewMarkdownService()
 
 	announcementFactory := adapters.NewAnnouncementFactoryAdapter()
-	notificationFactory := adapters.NewNotificationFactoryAdapter()
 	templateFactory := adapters.NewTemplateFactoryAdapter()
 
 	notificationServiceDDD := notificationApp.NewServiceDDD(
 		announcementRepo,
 		notificationRepo,
 		templateRepo,
-		userRepoAdapter,
+		userAnnouncementReadRepo,
 		announcementFactory,
-		notificationFactory,
 		templateFactory,
 		markdownService,
 		log,

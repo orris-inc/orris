@@ -298,9 +298,11 @@ func (r *ForwardAgentRepositoryImpl) List(ctx context.Context, filter forward.Ag
 	}
 	query = query.Order(fmt.Sprintf("%s %s", orderBy, order))
 
-	// Apply pagination
-	offset := (filter.Page - 1) * filter.PageSize
-	query = query.Offset(offset).Limit(filter.PageSize)
+	// Apply pagination (only when PageSize > 0)
+	if filter.PageSize > 0 {
+		offset := (filter.Page - 1) * filter.PageSize
+		query = query.Offset(offset).Limit(filter.PageSize)
+	}
 
 	// Execute query
 	var agentModels []*models.ForwardAgentModel

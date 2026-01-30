@@ -21,10 +21,6 @@ type UpdateAnnouncementRequest struct {
 	ExpiresAt *time.Time `json:"expires_at"`
 }
 
-type PublishAnnouncementRequest struct {
-	SendNotification bool `json:"send_notification"`
-}
-
 type ListNotificationsRequest struct {
 	UserID uint
 	Limit  int
@@ -58,6 +54,7 @@ type MarkNotificationAsReadRequest struct {
 
 type AnnouncementResponse struct {
 	ID          string     `json:"id"`
+	InternalID  uint       `json:"-"` // Internal database ID, not exposed in JSON
 	Title       string     `json:"title"`
 	Content     string     `json:"content"`
 	ContentHTML string     `json:"content_html"`

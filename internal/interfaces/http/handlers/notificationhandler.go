@@ -10,6 +10,8 @@ import (
 	appDto "github.com/orris-inc/orris/internal/application/notification/dto"
 	"github.com/orris-inc/orris/internal/domain/user"
 	"github.com/orris-inc/orris/internal/interfaces/dto"
+	"github.com/orris-inc/orris/internal/shared/authorization"
+	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
@@ -116,8 +118,7 @@ func (h *NotificationHandler) DeleteAnnouncement(c *gin.Context) {
 
 // UpdateAnnouncementStatusRequest represents a request for announcement status changes
 type UpdateAnnouncementStatusRequest struct {
-	Status           string `json:"status" binding:"required,oneof=draft published archived"`
-	SendNotification *bool  `json:"send_notification"` // Optional: for publish action
+	Status string `json:"status" binding:"required,oneof=draft published archived"`
 }
 
 func (h *NotificationHandler) UpdateAnnouncementStatus(c *gin.Context) {
@@ -136,13 +137,7 @@ func (h *NotificationHandler) UpdateAnnouncementStatus(c *gin.Context) {
 
 	switch req.Status {
 	case "published":
-		sendNotification := false
-		if req.SendNotification != nil {
-			sendNotification = *req.SendNotification
-		}
-		publishReq := &dto.PublishAnnouncementRequest{SendNotification: sendNotification}
-		appReq := publishReq.ToApplicationDTO()
-		result, err := h.serviceDDD.PublishAnnouncement(c.Request.Context(), sid, appReq)
+		result, err := h.serviceDDD.PublishAnnouncement(c.Request.Context(), sid)
 		if err != nil {
 			utils.ErrorResponseWithError(c, err)
 			return
@@ -194,6 +189,13 @@ func (h *NotificationHandler) GetAnnouncement(c *gin.Context) {
 	result, err := h.serviceDDD.GetAnnouncement(c.Request.Context(), sid)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	// Non-admin users can only access published announcements
+	userRole := authorization.ParseUserRole(c.GetString(constants.ContextKeyUserRole))
+	if !userRole.IsAdmin() && result.Status != "published" {
+		utils.ErrorResponseWithError(c, errors.NewNotFoundError("announcement not found"))
 		return
 	}
 
@@ -468,7 +470,9 @@ func (h *NotificationHandler) ListPublicAnnouncements(c *gin.Context) {
 }
 
 // enrichAnnouncementsWithReadStatus calculates is_read for each announcement
-// based on the user's announcements_read_at timestamp.
+// based on two conditions:
+// 1. Global: user's announcements_read_at timestamp (marks all old announcements as read)
+// 2. Individual: user_announcement_reads table (marks specific announcements as read)
 func (h *NotificationHandler) enrichAnnouncementsWithReadStatus(ctx context.Context, result *appDto.ListResponse, userID uint) {
 	if result == nil || result.Items == nil {
 		return
@@ -487,13 +491,32 @@ func (h *NotificationHandler) enrichAnnouncementsWithReadStatus(ctx context.Cont
 		return
 	}
 
+	// Collect announcement IDs for batch query
+	announcementIDs := make([]uint, 0, len(items))
+	for _, item := range items {
+		if item != nil {
+			announcementIDs = append(announcementIDs, item.InternalID)
+		}
+	}
+
+	// Get read status for only the current page announcements (optimized query)
+	readStatusMap, err := h.serviceDDD.GetReadStatusByIDs(ctx, userID, announcementIDs)
+	if err != nil {
+		h.logger.Warnw("failed to get read status", "user_id", userID, "error", err)
+		readStatusMap = make(map[uint]bool) // Continue with empty map
+	}
+
 	for _, item := range items {
 		if item == nil {
 			continue
 		}
-		// Use UpdatedAt to compare because it reflects the publish time
-		// CreatedAt is when the draft was created, UpdatedAt is updated when published
-		isRead := userReadAt != nil && !item.UpdatedAt.After(*userReadAt)
+
+		// An announcement is read if:
+		// 1. It was published before user's global read timestamp, OR
+		// 2. It was individually marked as read
+		globalRead := userReadAt != nil && !item.UpdatedAt.After(*userReadAt)
+		individualRead := readStatusMap[item.InternalID]
+		isRead := globalRead || individualRead
 		item.IsRead = &isRead
 	}
 }
@@ -537,4 +560,72 @@ func (h *NotificationHandler) MarkAnnouncementsAsRead(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "Announcements marked as read", nil)
+}
+
+// GetAnnouncementUnreadCount returns the count of unread announcements for the current user.
+func (h *NotificationHandler) GetAnnouncementUnreadCount(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		utils.ErrorResponseWithError(c, errors.NewUnauthorizedError("User not authenticated"))
+		return
+	}
+
+	uid, ok := userID.(uint)
+	if !ok {
+		h.logger.Errorw("invalid user_id type", "user_id", userID)
+		utils.ErrorResponseWithError(c, errors.NewInternalError("Internal error"))
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	u, err := h.userRepo.GetByID(ctx, uid)
+	if err != nil {
+		h.logger.Errorw("failed to get user", "user_id", uid, "error", err)
+		utils.ErrorResponseWithError(c, errors.NewInternalError("Failed to get user"))
+		return
+	}
+
+	if u == nil {
+		utils.ErrorResponseWithError(c, errors.NewNotFoundError("User not found"))
+		return
+	}
+
+	count, err := h.serviceDDD.GetAnnouncementUnreadCount(ctx, uid, u.AnnouncementsReadAt())
+	if err != nil {
+		h.logger.Errorw("failed to get announcement unread count", "user_id", uid, "error", err)
+		utils.ErrorResponseWithError(c, errors.NewInternalError("Failed to get unread count"))
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Success", dto.UnreadCountResponse{Count: int(count)})
+}
+
+// MarkAnnouncementAsRead marks a specific announcement as read for the current user.
+func (h *NotificationHandler) MarkAnnouncementAsRead(c *gin.Context) {
+	sid, err := dto.ParseAnnouncementSID(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		utils.ErrorResponseWithError(c, errors.NewUnauthorizedError("User not authenticated"))
+		return
+	}
+
+	uid, ok := userID.(uint)
+	if !ok {
+		h.logger.Errorw("invalid user_id type", "user_id", userID)
+		utils.ErrorResponseWithError(c, errors.NewInternalError("Internal error"))
+		return
+	}
+
+	if err := h.serviceDDD.MarkAnnouncementAsRead(c.Request.Context(), uid, sid); err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Announcement marked as read", nil)
 }

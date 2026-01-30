@@ -2,6 +2,7 @@ package notification
 
 import (
 	"context"
+	"time"
 
 	vo "github.com/orris-inc/orris/internal/domain/notification/valueobjects"
 )
@@ -18,6 +19,8 @@ type AnnouncementRepository interface {
 	IncrementViewCount(ctx context.Context, id uint) error
 	IncrementViewCountBySID(ctx context.Context, sid string) error
 	FindByStatus(ctx context.Context, status vo.AnnouncementStatus, limit, offset int) ([]*Announcement, int64, error)
+	CountPublished(ctx context.Context) (int64, error)
+	CountPublishedAfter(ctx context.Context, after time.Time) (int64, error)
 }
 
 type NotificationRepository interface {

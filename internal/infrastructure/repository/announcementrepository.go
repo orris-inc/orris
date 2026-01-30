@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -249,4 +250,39 @@ func (r *AnnouncementRepositoryImpl) FindByStatus(
 	}
 
 	return entities, total, nil
+}
+
+func (r *AnnouncementRepositoryImpl) CountPublished(ctx context.Context) (int64, error) {
+	var count int64
+	now := time.Now().UTC()
+
+	err := r.db.WithContext(ctx).Model(&models.AnnouncementModel{}).
+		Where("status = ?", vo.AnnouncementStatusPublished.String()).
+		Where("expires_at IS NULL OR expires_at > ?", now).
+		Count(&count).Error
+
+	if err != nil {
+		return 0, fmt.Errorf("failed to count published announcements: %w", err)
+	}
+
+	return count, nil
+}
+
+func (r *AnnouncementRepositoryImpl) CountPublishedAfter(ctx context.Context, after time.Time) (int64, error) {
+	var count int64
+	now := time.Now().UTC()
+
+	// Use updated_at to match the logic in enrichAnnouncementsWithReadStatus
+	// which compares user's read time with announcement's UpdatedAt
+	err := r.db.WithContext(ctx).Model(&models.AnnouncementModel{}).
+		Where("status = ?", vo.AnnouncementStatusPublished.String()).
+		Where("updated_at > ?", after.UTC()).
+		Where("expires_at IS NULL OR expires_at > ?", now).
+		Count(&count).Error
+
+	if err != nil {
+		return 0, fmt.Errorf("failed to count published announcements after time: %w", err)
+	}
+
+	return count, nil
 }

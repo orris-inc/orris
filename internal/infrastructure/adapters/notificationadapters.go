@@ -139,6 +139,14 @@ func (a *AnnouncementRepositoryAdapter) DeleteBySID(ctx context.Context, sid str
 	return a.repo.DeleteBySID(ctx, sid)
 }
 
+func (a *AnnouncementRepositoryAdapter) CountPublished(ctx context.Context) (int64, error) {
+	return a.repo.CountPublished(ctx)
+}
+
+func (a *AnnouncementRepositoryAdapter) CountPublishedAfter(ctx context.Context, after time.Time) (int64, error) {
+	return a.repo.CountPublishedAfter(ctx, after)
+}
+
 type NotificationRepositoryAdapter struct {
 	repo notification.NotificationRepository
 }
@@ -431,4 +439,44 @@ func (f *TemplateFactoryAdapter) CreateTemplate(templateType, name, title, conte
 	}
 
 	return &templateAdapter{tmpl}, nil
+}
+
+type UserAnnouncementReadRepositoryAdapter struct {
+	repo interface {
+		MarkAsRead(ctx context.Context, userID, announcementID uint) error
+		IsRead(ctx context.Context, userID, announcementID uint) (bool, error)
+		GetReadAnnouncementIDs(ctx context.Context, userID uint) ([]uint, error)
+		GetReadStatusByIDs(ctx context.Context, userID uint, announcementIDs []uint) (map[uint]bool, error)
+		CountUnreadByUser(ctx context.Context, userID uint, userReadAt *time.Time) (int64, error)
+	}
+}
+
+func NewUserAnnouncementReadRepositoryAdapter(repo interface {
+	MarkAsRead(ctx context.Context, userID, announcementID uint) error
+	IsRead(ctx context.Context, userID, announcementID uint) (bool, error)
+	GetReadAnnouncementIDs(ctx context.Context, userID uint) ([]uint, error)
+	GetReadStatusByIDs(ctx context.Context, userID uint, announcementIDs []uint) (map[uint]bool, error)
+	CountUnreadByUser(ctx context.Context, userID uint, userReadAt *time.Time) (int64, error)
+}) usecases.UserAnnouncementReadRepository {
+	return &UserAnnouncementReadRepositoryAdapter{repo: repo}
+}
+
+func (a *UserAnnouncementReadRepositoryAdapter) MarkAsRead(ctx context.Context, userID, announcementID uint) error {
+	return a.repo.MarkAsRead(ctx, userID, announcementID)
+}
+
+func (a *UserAnnouncementReadRepositoryAdapter) IsRead(ctx context.Context, userID, announcementID uint) (bool, error) {
+	return a.repo.IsRead(ctx, userID, announcementID)
+}
+
+func (a *UserAnnouncementReadRepositoryAdapter) GetReadAnnouncementIDs(ctx context.Context, userID uint) ([]uint, error) {
+	return a.repo.GetReadAnnouncementIDs(ctx, userID)
+}
+
+func (a *UserAnnouncementReadRepositoryAdapter) GetReadStatusByIDs(ctx context.Context, userID uint, announcementIDs []uint) (map[uint]bool, error) {
+	return a.repo.GetReadStatusByIDs(ctx, userID, announcementIDs)
+}
+
+func (a *UserAnnouncementReadRepositoryAdapter) CountUnreadByUser(ctx context.Context, userID uint, userReadAt *time.Time) (int64, error) {
+	return a.repo.CountUnreadByUser(ctx, userID, userReadAt)
 }
