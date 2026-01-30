@@ -129,10 +129,14 @@ func SetupNodeRoutes(engine *gin.Engine, config *NodeRouteConfig) {
 	}
 
 	// Subscription routes - public access with token validation
+	// Support both GET and HEAD methods for subscription clients that check headers first
 	sub := engine.Group("/s")
 	{
 		// Base64 subscription format (default)
 		sub.GET("/:token",
+			config.RateLimiter.Limit(),
+			config.SubscriptionHandler.GetSubscription)
+		sub.HEAD("/:token",
 			config.RateLimiter.Limit(),
 			config.SubscriptionHandler.GetSubscription)
 
@@ -140,9 +144,15 @@ func SetupNodeRoutes(engine *gin.Engine, config *NodeRouteConfig) {
 		sub.GET("/:token/clash",
 			config.RateLimiter.Limit(),
 			config.SubscriptionHandler.GetClashSubscription)
+		sub.HEAD("/:token/clash",
+			config.RateLimiter.Limit(),
+			config.SubscriptionHandler.GetClashSubscription)
 
 		// V2Ray subscription format
 		sub.GET("/:token/v2ray",
+			config.RateLimiter.Limit(),
+			config.SubscriptionHandler.GetV2RaySubscription)
+		sub.HEAD("/:token/v2ray",
 			config.RateLimiter.Limit(),
 			config.SubscriptionHandler.GetV2RaySubscription)
 
@@ -150,9 +160,15 @@ func SetupNodeRoutes(engine *gin.Engine, config *NodeRouteConfig) {
 		sub.GET("/:token/sip008",
 			config.RateLimiter.Limit(),
 			config.SubscriptionHandler.GetSIP008Subscription)
+		sub.HEAD("/:token/sip008",
+			config.RateLimiter.Limit(),
+			config.SubscriptionHandler.GetSIP008Subscription)
 
 		// Surge subscription format
 		sub.GET("/:token/surge",
+			config.RateLimiter.Limit(),
+			config.SubscriptionHandler.GetSurgeSubscription)
+		sub.HEAD("/:token/surge",
 			config.RateLimiter.Limit(),
 			config.SubscriptionHandler.GetSurgeSubscription)
 	}

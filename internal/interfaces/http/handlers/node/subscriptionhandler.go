@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -56,7 +57,7 @@ func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 	}
 
 	c.Header("Content-Type", result.ContentType)
-	c.Header("Subscription-Userinfo", "upload=0; download=0; total=0; expire=0")
+	c.Header("Subscription-Userinfo", h.formatUserInfo(result.UserInfo))
 
 	// Set filename header based on format
 	if format == "clash" {
@@ -64,6 +65,19 @@ func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 	}
 
 	c.String(http.StatusOK, result.Content)
+}
+
+// formatUserInfo formats SubscriptionUserInfo into the standard Subscription-Userinfo header format.
+func (h *SubscriptionHandler) formatUserInfo(userInfo *usecases.SubscriptionUserInfo) string {
+	if userInfo == nil {
+		return "upload=0; download=0; total=0; expire=0"
+	}
+	return fmt.Sprintf("upload=%d; download=%d; total=%d; expire=%d",
+		userInfo.Upload,
+		userInfo.Download,
+		userInfo.Total,
+		userInfo.Expire,
+	)
 }
 
 // GetClashSubscription handles GET /s/:token/clash
@@ -87,6 +101,7 @@ func (h *SubscriptionHandler) GetClashSubscription(c *gin.Context) {
 	}
 
 	c.Header("Content-Type", result.ContentType)
+	c.Header("Subscription-Userinfo", h.formatUserInfo(result.UserInfo))
 	c.Header("Content-Disposition", "attachment; filename=clash.yaml")
 	c.String(http.StatusOK, result.Content)
 }
@@ -112,6 +127,7 @@ func (h *SubscriptionHandler) GetV2RaySubscription(c *gin.Context) {
 	}
 
 	c.Header("Content-Type", result.ContentType)
+	c.Header("Subscription-Userinfo", h.formatUserInfo(result.UserInfo))
 	c.String(http.StatusOK, result.Content)
 }
 
@@ -136,6 +152,7 @@ func (h *SubscriptionHandler) GetSIP008Subscription(c *gin.Context) {
 	}
 
 	c.Header("Content-Type", result.ContentType)
+	c.Header("Subscription-Userinfo", h.formatUserInfo(result.UserInfo))
 	c.String(http.StatusOK, result.Content)
 }
 
@@ -160,6 +177,7 @@ func (h *SubscriptionHandler) GetSurgeSubscription(c *gin.Context) {
 	}
 
 	c.Header("Content-Type", result.ContentType)
+	c.Header("Subscription-Userinfo", h.formatUserInfo(result.UserInfo))
 	c.String(http.StatusOK, result.Content)
 }
 

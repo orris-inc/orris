@@ -14,6 +14,11 @@ import (
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
+// EmailConfigChecker checks if email service is configured
+type EmailConfigChecker interface {
+	IsConfigured() bool
+}
+
 type AuthHandler struct {
 	registerUseCase      *usecases.RegisterWithPasswordUseCase
 	loginUseCase         *usecases.LoginWithPasswordUseCase
@@ -30,6 +35,7 @@ type AuthHandler struct {
 	jwtConfig            config.JWTConfig
 	frontendCallbackURL  string
 	allowedOrigins       []string
+	emailChecker         EmailConfigChecker
 }
 
 func NewAuthHandler(
@@ -48,6 +54,7 @@ func NewAuthHandler(
 	jwtConfig config.JWTConfig,
 	frontendCallbackURL string,
 	allowedOrigins []string,
+	emailChecker EmailConfigChecker,
 ) *AuthHandler {
 	return &AuthHandler{
 		registerUseCase:      registerUC,
@@ -65,6 +72,7 @@ func NewAuthHandler(
 		jwtConfig:            jwtConfig,
 		frontendCallbackURL:  frontendCallbackURL,
 		allowedOrigins:       allowedOrigins,
+		emailChecker:         emailChecker,
 	}
 }
 
@@ -117,9 +125,18 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusCreated, "registration successful, please verify your email", gin.H{
-		"user_id": newUser.SID(),
-		"email":   newUser.Email().String(),
+	// Check if email verification is required (SMTP configured)
+	requiresEmailVerification := h.emailChecker != nil && h.emailChecker.IsConfigured()
+
+	message := "registration successful"
+	if requiresEmailVerification {
+		message = "registration successful, please verify your email"
+	}
+
+	utils.SuccessResponse(c, http.StatusCreated, message, gin.H{
+		"user_id":                     newUser.SID(),
+		"email":                       newUser.Email().String(),
+		"requires_email_verification": requiresEmailVerification,
 	})
 }
 

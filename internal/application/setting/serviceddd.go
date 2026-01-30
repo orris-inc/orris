@@ -707,3 +707,29 @@ func (s *ServiceDDD) getSettingWithSourceStringArray(ctx context.Context, catego
 		Source: dto.SourceDefault,
 	}
 }
+
+// GetSubscriptionSettings retrieves subscription settings
+func (s *ServiceDDD) GetSubscriptionSettings(ctx context.Context) (*dto.SubscriptionSettingsResponse, error) {
+	return &dto.SubscriptionSettingsResponse{
+		ShowInfoNodes: s.getSettingWithSourceBool(ctx, "subscription", "show_info_nodes"),
+	}, nil
+}
+
+// UpdateSubscriptionSettings updates subscription settings
+func (s *ServiceDDD) UpdateSubscriptionSettings(ctx context.Context, req dto.UpdateSubscriptionSettingsRequest, updatedBy uint) error {
+	changes := make(map[string]any)
+
+	if req.ShowInfoNodes != nil {
+		if err := s.upsertSettingBool(ctx, "subscription", "show_info_nodes", *req.ShowInfoNodes, updatedBy); err != nil {
+			return err
+		}
+		changes["show_info_nodes"] = *req.ShowInfoNodes
+	}
+
+	if len(changes) > 0 {
+		if err := s.settingProvider.NotifyChange(ctx, "subscription", changes); err != nil {
+			s.logger.Warnw("failed to notify subscription setting changes", "error", err)
+		}
+	}
+	return nil
+}

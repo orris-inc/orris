@@ -48,6 +48,10 @@ func SetupSettingRoutes(engine *gin.Engine, config *SettingRouteConfig) {
 		settings.GET("/usdt", config.Handler.GetUSDTSettings)
 		settings.PUT("/usdt", config.Handler.UpdateUSDTSettings)
 
+		// Subscription settings
+		settings.GET("/subscription", config.Handler.GetSubscriptionSettings)
+		settings.PUT("/subscription", config.Handler.UpdateSubscriptionSettings)
+
 		// Category-based settings (parameterized routes last)
 		settings.GET("/:category", config.Handler.GetCategorySettings)
 		settings.PUT("/:category", config.Handler.UpdateCategorySettings)

@@ -108,6 +108,11 @@ func (v *SubscriptionTokenValidatorAdapter) ValidateAndGetSubscription(ctx conte
 	}
 
 	return &nodeusecases.SubscriptionValidationResult{
-		SubscriptionUUID: subscriptionModel.UUID,
+		SubscriptionID:     subscriptionModel.ID,
+		SubscriptionUUID:   subscriptionModel.UUID,
+		PlanID:             subscriptionModel.PlanID,
+		EndDate:            subscriptionModel.EndDate,
+		CurrentPeriodStart: subscriptionModel.CurrentPeriodStart,
+		CurrentPeriodEnd:   subscriptionModel.CurrentPeriodEnd,
 	}, nil
 }

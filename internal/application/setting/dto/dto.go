@@ -183,3 +183,19 @@ type EmailTestResponse struct {
 	Success bool   `json:"success"`
 	Error   string `json:"error,omitempty"`
 }
+
+// SubscriptionSettingsResponse represents subscription settings response
+// Controls how subscription output is displayed to end users
+type SubscriptionSettingsResponse struct {
+	// ShowInfoNodes controls whether to show info nodes (expire/traffic) in subscription output
+	// When enabled, subscription clients will see two info nodes at the top:
+	// - "📅 到期: YYYY-MM-DD" (expiration date)
+	// - "📊 流量: X.XXG / Y.YYG" (traffic usage)
+	ShowInfoNodes SettingWithSource `json:"show_info_nodes"`
+}
+
+// UpdateSubscriptionSettingsRequest represents the request to update subscription settings
+type UpdateSubscriptionSettingsRequest struct {
+	// ShowInfoNodes enables/disables info nodes in subscription output
+	ShowInfoNodes *bool `json:"show_info_nodes"`
+}

@@ -355,9 +355,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		log.Warnw("failed to load subscription templates, using defaults", "error", err)
 	}
 
-	generateSubscriptionUC := nodeUsecases.NewGenerateSubscriptionUseCase(
-		nodeRepo, tokenValidator, templateLoader, log,
-	)
+	// Note: generateSubscriptionUC is created later after settingProvider is initialized
+	// to support admin-configurable subscription settings
 
 	// Initialize node system status querier adapter
 	nodeStatusQuerier := adapters.NewNodeSystemStatusQuerierAdapter(redisClient, log)
@@ -413,7 +412,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// API URL for node install script generation
 	apiBaseURL := cfg.Server.GetBaseURL()
 	nodeHandler := handlers.NewNodeHandler(createNodeUC, getNodeUC, updateNodeUC, deleteNodeUC, listNodesUC, generateNodeTokenUC, generateNodeInstallScriptUC, apiBaseURL)
-	nodeSubscriptionHandler := handlers.NewNodeSubscriptionHandler(generateSubscriptionUC)
+	// Note: nodeSubscriptionHandler is created later after settingProvider is initialized
+	var nodeSubscriptionHandler *handlers.NodeSubscriptionHandler
 	userNodeHandler := nodeHandlers.NewUserNodeHandler(
 		createUserNodeUC,
 		listUserNodesUC,
@@ -471,6 +471,17 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	settingHandler := adminHandlers.NewSettingHandler(settingServiceDDD, log)
 	settingProvider := settingServiceDDD.GetSettingProvider()
 
+	// Initialize subscription setting provider adapter for admin-configurable settings
+	subscriptionSettingAdapter := adapters.NewSubscriptionSettingProviderAdapter(settingProvider)
+
+	// Initialize generateSubscriptionUC (moved here to use settingProvider)
+	generateSubscriptionUC := nodeUsecases.NewGenerateSubscriptionUseCase(
+		nodeRepo, tokenValidator, templateLoader,
+		subscriptionPlanRepo, subscriptionUsageStatsRepo, hourlyTrafficCache,
+		subscriptionSettingAdapter, log,
+	)
+	nodeSubscriptionHandler = handlers.NewNodeSubscriptionHandler(generateSubscriptionUC)
+
 	// Initialize OAuthServiceManager for hot-reload support
 	// Note: Initial failure is acceptable - will be re-initialized on setting changes
 	oauthManager := auth.NewOAuthServiceManager(settingProvider, log)
@@ -514,6 +525,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		initiateOAuthUC, handleOAuthUC, refreshTokenUC, logoutUC, userRepo, log,
 		cfg.Auth.Cookie, cfg.Auth.JWT,
 		cfg.Server.FrontendCallbackURL, cfg.Server.AllowedOrigins,
+		emailManager,
 	)
 
 	// Initialize Passkey (WebAuthn) components if configured

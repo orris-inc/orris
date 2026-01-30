@@ -21,6 +21,7 @@ var validCategories = map[string]bool{
 	"oauth_github": true,
 	"email":        true,
 	"usdt":         true,
+	"subscription": true,
 }
 
 // isValidCategory checks if the category is in the whitelist
@@ -413,4 +414,49 @@ func (h *SettingHandler) UpdateUSDTSettings(c *gin.Context) {
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "USDT settings updated successfully", nil)
+}
+
+// GetSubscriptionSettings retrieves subscription settings
+// GET /admin/settings/subscription
+func (h *SettingHandler) GetSubscriptionSettings(c *gin.Context) {
+	result, err := h.service.GetSubscriptionSettings(c.Request.Context())
+	if err != nil {
+		h.logger.Errorw("failed to get subscription settings", "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+	utils.SuccessResponse(c, http.StatusOK, "", result)
+}
+
+// UpdateSubscriptionSettings updates subscription settings
+// PUT /admin/settings/subscription
+func (h *SettingHandler) UpdateSubscriptionSettings(c *gin.Context) {
+	var req dto.UpdateSubscriptionSettingsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	// Get user ID from context
+	userID, exists := c.Get("user_id")
+	if !exists {
+		h.logger.Errorw("user_id not found in context")
+		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+		return
+	}
+
+	uid, ok := userID.(uint)
+	if !ok {
+		h.logger.Errorw("invalid user_id type", "user_id", userID)
+		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if err := h.service.UpdateSubscriptionSettings(c.Request.Context(), req, uid); err != nil {
+		h.logger.Errorw("failed to update subscription settings", "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Subscription settings updated successfully", nil)
 }
