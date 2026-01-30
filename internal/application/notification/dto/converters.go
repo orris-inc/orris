@@ -42,6 +42,7 @@ type NotificationTemplate interface {
 	Title() string
 	Content() string
 	Variables() []string
+	Enabled() bool
 	CreatedAt() time.Time
 	UpdatedAt() time.Time
 }
@@ -125,6 +126,7 @@ func ToTemplateResponse(template NotificationTemplate) *TemplateResponse {
 		Title:        template.Title(),
 		Content:      template.Content(),
 		Variables:    template.Variables(),
+		Enabled:      template.Enabled(),
 		CreatedAt:    template.CreatedAt(),
 		UpdatedAt:    template.UpdatedAt(),
 	}

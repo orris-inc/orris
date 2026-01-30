@@ -65,6 +65,7 @@ type CreatePlanRequest struct {
 	Description string                      `json:"description"`
 	PlanType    string                      `json:"plan_type" binding:"required,oneof=node forward hybrid"`
 	Limits      map[string]interface{}      `json:"limits"`
+	NodeLimit   *int                        `json:"node_limit"` // Maximum number of user nodes (nil or 0 = unlimited)
 	IsPublic    bool                        `json:"is_public"`
 	SortOrder   int                         `json:"sort_order"`
 	Pricings    []subdto.PricingOptionInput `json:"pricings" binding:"required,min=1"`
@@ -73,6 +74,7 @@ type CreatePlanRequest struct {
 type UpdatePlanRequest struct {
 	Description *string                      `json:"description"`
 	Limits      *map[string]interface{}      `json:"limits"`
+	NodeLimit   *int                         `json:"node_limit"` // Maximum number of user nodes (nil or 0 = unlimited)
 	IsPublic    *bool                        `json:"is_public"`
 	SortOrder   *int                         `json:"sort_order"`
 	Pricings    *[]subdto.PricingOptionInput `json:"pricings"` // Optional: update pricing options
@@ -97,6 +99,7 @@ func (h *PlanHandler) CreatePlan(c *gin.Context) {
 		Description: req.Description,
 		PlanType:    req.PlanType,
 		Limits:      req.Limits,
+		NodeLimit:   req.NodeLimit,
 		IsPublic:    req.IsPublic,
 		SortOrder:   req.SortOrder,
 		Pricings:    req.Pricings,
@@ -131,6 +134,7 @@ func (h *PlanHandler) UpdatePlan(c *gin.Context) {
 		PlanSID:     planSID,
 		Description: req.Description,
 		Limits:      req.Limits,
+		NodeLimit:   req.NodeLimit,
 		IsPublic:    req.IsPublic,
 		SortOrder:   req.SortOrder,
 		Pricings:    req.Pricings,

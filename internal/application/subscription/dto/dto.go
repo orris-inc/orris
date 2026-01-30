@@ -46,6 +46,7 @@ type PlanDTO struct {
 	Status      string                 `json:"status"`
 	PlanType    string                 `json:"plan_type"` // Plan type: node or forward
 	Limits      map[string]interface{} `json:"limits"`
+	NodeLimit   *int                   `json:"node_limit,omitempty"` // Maximum number of user nodes (nil or 0 = unlimited)
 	IsPublic    bool                   `json:"is_public"`
 	SortOrder   int                    `json:"sort_order"`
 	Pricings    []*PricingOptionDTO    `json:"pricings"` // Multiple pricing options for different billing cycles
@@ -195,6 +196,7 @@ func ToPlanDTO(plan *subscription.Plan) *PlanDTO {
 		Status:      string(plan.Status()),
 		PlanType:    plan.PlanType().String(),
 		Limits:      limits,
+		NodeLimit:   plan.NodeLimit(),
 		IsPublic:    plan.IsPublic(),
 		SortOrder:   plan.SortOrder(),
 		CreatedAt:   plan.CreatedAt(),

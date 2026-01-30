@@ -70,8 +70,14 @@ type BatchOperationErr struct {
 	Reason string `json:"reason"`
 }
 
-// ListGroupMembersRequest represents a request to list members in a group
+// ListGroupMembersRequest represents a request to list members in a group (nodes, agents)
 type ListGroupMembersRequest struct {
+	Page     int `form:"page,default=1" binding:"min=1"`
+	PageSize int `form:"page_size,default=20" binding:"min=1,max=100"`
+}
+
+// ListGroupRulesRequest represents a request to list forward rules in a group with sorting
+type ListGroupRulesRequest struct {
 	Page     int    `form:"page,default=1" binding:"min=1"`
 	PageSize int    `form:"page_size,default=20" binding:"min=1,max=100"`
 	OrderBy  string `form:"order_by"`

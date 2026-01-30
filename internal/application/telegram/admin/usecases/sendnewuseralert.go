@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/orris-inc/orris/internal/application/telegram/admin/dto"
 	"github.com/orris-inc/orris/internal/domain/telegram/admin"
 	"github.com/orris-inc/orris/internal/domain/user"
-	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -30,14 +30,6 @@ func NewSendNewUserAlertUseCase(
 	}
 }
 
-// NewUserInfo contains information about a new user for alert
-type NewUserInfo struct {
-	SID       string
-	Email     string
-	Name      string
-	CreatedAt string
-}
-
 // SendAlert sends new user registration alert to all subscribed admins
 func (uc *SendNewUserAlertUseCase) SendAlert(ctx context.Context, newUser *user.User) error {
 	if uc.botService == nil {
@@ -58,14 +50,15 @@ func (uc *SendNewUserAlertUseCase) SendAlert(ctx context.Context, newUser *user.
 	}
 
 	// Build user info
-	userInfo := NewUserInfo{
+	userInfo := dto.NewUserInfo{
 		SID:       newUser.SID(),
 		Email:     newUser.Email().String(),
 		Name:      newUser.Name().DisplayName(),
-		CreatedAt: biztime.FormatInBizTimezone(newUser.CreatedAt(), "2006-01-02 15:04:05"),
+		Source:    "registration",
+		CreatedAt: newUser.CreatedAt(),
 	}
 
-	message := uc.buildNewUserMessage(userInfo)
+	message := BuildNewUserMessage(userInfo.SID, userInfo.Email, userInfo.Name, userInfo.Source, userInfo.CreatedAt)
 
 	sentCount := 0
 	errorCount := 0
@@ -97,7 +90,7 @@ func (uc *SendNewUserAlertUseCase) SendAlert(ctx context.Context, newUser *user.
 }
 
 // SendAlertWithInfo sends new user registration alert using pre-built user info
-func (uc *SendNewUserAlertUseCase) SendAlertWithInfo(ctx context.Context, userInfo NewUserInfo) error {
+func (uc *SendNewUserAlertUseCase) SendAlertWithInfo(ctx context.Context, userInfo dto.NewUserInfo) error {
 	if uc.botService == nil {
 		uc.logger.Debugw("new user alert skipped: bot service not available")
 		return nil
@@ -115,7 +108,7 @@ func (uc *SendNewUserAlertUseCase) SendAlertWithInfo(ctx context.Context, userIn
 		return nil
 	}
 
-	message := uc.buildNewUserMessage(userInfo)
+	message := BuildNewUserMessage(userInfo.SID, userInfo.Email, userInfo.Name, userInfo.Source, userInfo.CreatedAt)
 
 	sentCount := 0
 	errorCount := 0
@@ -144,16 +137,4 @@ func (uc *SendNewUserAlertUseCase) SendAlertWithInfo(ctx context.Context, userIn
 	)
 
 	return nil
-}
-
-func (uc *SendNewUserAlertUseCase) buildNewUserMessage(userInfo NewUserInfo) string {
-	return fmt.Sprintf(`🆕 <b>New User Registration / 新用户注册</b>
-
-User 用户: <code>%s</code>
-Email 邮箱: <code>%s</code>
-Name 名称: %s
-Registered at 注册时间: %s
-
-🎉 Welcome new user!
-欢迎新用户！`, userInfo.SID, escapeHTML(userInfo.Email), escapeHTML(userInfo.Name), userInfo.CreatedAt)
 }

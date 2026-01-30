@@ -11,49 +11,17 @@ import (
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
-// ReportStatusRequest represents status report request from forward client
+// ReportStatusRequest represents status report request from forward client.
+// Uses embedded SystemStatus for common system metrics shared with Node Agent.
 type ReportStatusRequest struct {
-	// System resources
-	CPUPercent    float64 `json:"cpu_percent"`
-	MemoryPercent float64 `json:"memory_percent"`
-	MemoryUsed    uint64  `json:"memory_used"`
-	MemoryTotal   uint64  `json:"memory_total"`
-	MemoryAvail   uint64  `json:"memory_avail"`
-	DiskPercent   float64 `json:"disk_percent"`
-	DiskUsed      uint64  `json:"disk_used"`
-	DiskTotal     uint64  `json:"disk_total"`
-	UptimeSeconds int64   `json:"uptime_seconds"`
+	commondto.SystemStatus
 
-	// System load average
-	LoadAvg1  float64 `json:"load_avg_1"`
-	LoadAvg5  float64 `json:"load_avg_5"`
-	LoadAvg15 float64 `json:"load_avg_15"`
-
-	// Network statistics
-	NetworkRxBytes uint64 `json:"network_rx_bytes"` // Total received bytes
-	NetworkTxBytes uint64 `json:"network_tx_bytes"` // Total transmitted bytes
-	NetworkRxRate  uint64 `json:"network_rx_rate"`  // Current receive rate (bytes/sec)
-	NetworkTxRate  uint64 `json:"network_tx_rate"`  // Current transmit rate (bytes/sec)
-
-	// Network connections
-	TCPConnections int `json:"tcp_connections"`
-	UDPConnections int `json:"udp_connections"`
-
-	// Public IP addresses
-	PublicIPv4 string `json:"public_ipv4,omitempty"`
-	PublicIPv6 string `json:"public_ipv6,omitempty"`
-
-	// Forward status
+	// Forward-specific status fields
 	ActiveRules       int               `json:"active_rules"`
 	ActiveConnections int               `json:"active_connections"`
 	TunnelStatus      map[string]string `json:"tunnel_status,omitempty"`   // Key is Stripe-style rule ID (e.g., "fr_xK9mP2vL3nQ")
 	WsListenPort      uint16            `json:"ws_listen_port,omitempty"`  // WebSocket listen port for exit agent tunnel connections
 	TlsListenPort     uint16            `json:"tls_listen_port,omitempty"` // TLS listen port for exit agent tunnel connections
-
-	// Agent info
-	AgentVersion string `json:"agent_version,omitempty"` // Agent software version (e.g., "1.2.3")
-	Platform     string `json:"platform,omitempty"`      // OS platform (linux, darwin, windows)
-	Arch         string `json:"arch,omitempty"`          // CPU architecture (amd64, arm64, arm, 386)
 }
 
 // ReportRuleSyncStatusRequest represents rule sync status report request from forward client
@@ -95,33 +63,9 @@ func (h *Handler) ReportStatus(c *gin.Context) {
 		"ip", c.ClientIP(),
 	)
 
-	// Convert request to DTO
+	// Convert request to DTO (SystemStatus is embedded, so copy directly)
 	statusDTO := &dto.AgentStatusDTO{
-		SystemStatus: commondto.SystemStatus{
-			CPUPercent:     req.CPUPercent,
-			MemoryPercent:  req.MemoryPercent,
-			MemoryUsed:     req.MemoryUsed,
-			MemoryTotal:    req.MemoryTotal,
-			MemoryAvail:    req.MemoryAvail,
-			DiskPercent:    req.DiskPercent,
-			DiskUsed:       req.DiskUsed,
-			DiskTotal:      req.DiskTotal,
-			UptimeSeconds:  req.UptimeSeconds,
-			LoadAvg1:       req.LoadAvg1,
-			LoadAvg5:       req.LoadAvg5,
-			LoadAvg15:      req.LoadAvg15,
-			NetworkRxBytes: req.NetworkRxBytes,
-			NetworkTxBytes: req.NetworkTxBytes,
-			NetworkRxRate:  req.NetworkRxRate,
-			NetworkTxRate:  req.NetworkTxRate,
-			TCPConnections: req.TCPConnections,
-			UDPConnections: req.UDPConnections,
-			PublicIPv4:     req.PublicIPv4,
-			PublicIPv6:     req.PublicIPv6,
-			AgentVersion:   req.AgentVersion,
-			Platform:       req.Platform,
-			Arch:           req.Arch,
-		},
+		SystemStatus:      req.SystemStatus,
 		ActiveRules:       req.ActiveRules,
 		ActiveConnections: req.ActiveConnections,
 		TunnelStatus:      req.TunnelStatus,

@@ -7,7 +7,7 @@ import (
 	"unicode/utf8"
 )
 
-// FuzzEscapeHTML tests the escapeHTML function with random inputs
+// FuzzEscapeHTML tests the EscapeHTML function with random inputs
 func FuzzEscapeHTML(f *testing.F) {
 	// Seed corpus with interesting cases
 	seeds := []string{
@@ -37,29 +37,29 @@ func FuzzEscapeHTML(f *testing.F) {
 			return
 		}
 
-		result := escapeHTML(input)
+		result := EscapeHTML(input)
 
 		// Verify: HTML special chars should be escaped
 		if strings.Contains(input, "<") && !strings.Contains(result, "&lt;") {
-			t.Errorf("escapeHTML(%q) = %q, expected < to be escaped", input, result)
+			t.Errorf("EscapeHTML(%q) = %q, expected < to be escaped", input, result)
 		}
 		if strings.Contains(input, ">") && !strings.Contains(result, "&gt;") {
-			t.Errorf("escapeHTML(%q) = %q, expected > to be escaped", input, result)
+			t.Errorf("EscapeHTML(%q) = %q, expected > to be escaped", input, result)
 		}
 		if strings.Contains(input, "&") && !strings.Contains(result, "&amp;") {
-			t.Errorf("escapeHTML(%q) = %q, expected & to be escaped", input, result)
+			t.Errorf("EscapeHTML(%q) = %q, expected & to be escaped", input, result)
 		}
 
 		// Verify: output should be valid UTF-8
 		if !utf8.ValidString(result) {
-			t.Errorf("escapeHTML(%q) produced invalid UTF-8: %q", input, result)
+			t.Errorf("EscapeHTML(%q) produced invalid UTF-8: %q", input, result)
 		}
 
 		// Verify: no panic occurred (implicit)
 	})
 }
 
-// FuzzFormatAmount tests the formatAmount function
+// FuzzFormatAmount tests the FormatAmount function
 func FuzzFormatAmount(f *testing.F) {
 	// Seed with edge cases
 	amounts := []float64{0, 0.01, 0.99, 1.0, 99.99, 100.0, 1000.50, 999999.99, -1.0, -0.01}
@@ -72,22 +72,22 @@ func FuzzFormatAmount(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, amount float64, currency string) {
-		result := formatAmount(amount, currency)
+		result := FormatAmount(amount, currency)
 
 		// Should not panic and should return non-empty string
 		if result == "" {
-			t.Errorf("formatAmount(%f, %q) returned empty string", amount, currency)
+			t.Errorf("FormatAmount(%f, %q) returned empty string", amount, currency)
 		}
 
 		// Should contain the amount (at least partially)
 		// For JPY, should not have decimals
 		if currency == "JPY" && strings.Contains(result, ".") {
-			t.Errorf("formatAmount(%f, JPY) = %q, should not contain decimal point", amount, result)
+			t.Errorf("FormatAmount(%f, JPY) = %q, should not contain decimal point", amount, result)
 		}
 	})
 }
 
-// FuzzFormatPercentChange tests the formatPercentChange function
+// FuzzFormatPercentChange tests the FormatPercentChange function
 func FuzzFormatPercentChange(f *testing.F) {
 	// Seed with edge cases
 	percents := []float64{
@@ -100,22 +100,22 @@ func FuzzFormatPercentChange(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, percent float64) {
-		result := formatPercentChange(percent)
+		result := FormatPercentChange(percent)
 
 		// Should not panic and should return non-empty string
 		if result == "" {
-			t.Errorf("formatPercentChange(%f) returned empty string", percent)
+			t.Errorf("FormatPercentChange(%f) returned empty string", percent)
 		}
 
 		// Should contain appropriate indicator
 		if percent > 0 && !strings.Contains(result, "📈") {
-			t.Errorf("formatPercentChange(%f) = %q, expected 📈 for positive", percent, result)
+			t.Errorf("FormatPercentChange(%f) = %q, expected 📈 for positive", percent, result)
 		}
 		if percent < 0 && !strings.Contains(result, "📉") {
-			t.Errorf("formatPercentChange(%f) = %q, expected 📉 for negative", percent, result)
+			t.Errorf("FormatPercentChange(%f) = %q, expected 📉 for negative", percent, result)
 		}
 		if percent == 0 && !strings.Contains(result, "➡️") {
-			t.Errorf("formatPercentChange(%f) = %q, expected ➡️ for zero", percent, result)
+			t.Errorf("FormatPercentChange(%f) = %q, expected ➡️ for zero", percent, result)
 		}
 	})
 }

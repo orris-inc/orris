@@ -598,7 +598,7 @@ func (h *NotificationHandler) GetAnnouncementUnreadCount(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "Success", dto.UnreadCountResponse{Count: int(count)})
+	utils.SuccessResponse(c, http.StatusOK, "Success", appDto.UnreadCountResponse{Count: count})
 }
 
 // MarkAnnouncementAsRead marks a specific announcement as read for the current user.

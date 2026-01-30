@@ -6,6 +6,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/domain/resource"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/version"
 )
@@ -36,24 +37,27 @@ type ListForwardAgentsResult struct {
 
 // ListForwardAgentsUseCase handles listing forward agents.
 type ListForwardAgentsUseCase struct {
-	repo           forward.AgentRepository
-	statusQuerier  AgentStatusQuerier
-	versionQuerier LatestVersionQuerier
-	logger         logger.Interface
+	repo              forward.AgentRepository
+	resourceGroupRepo resource.Repository
+	statusQuerier     AgentStatusQuerier
+	versionQuerier    LatestVersionQuerier
+	logger            logger.Interface
 }
 
 // NewListForwardAgentsUseCase creates a new ListForwardAgentsUseCase.
 func NewListForwardAgentsUseCase(
 	repo forward.AgentRepository,
+	resourceGroupRepo resource.Repository,
 	statusQuerier AgentStatusQuerier,
 	versionQuerier LatestVersionQuerier,
 	logger logger.Interface,
 ) *ListForwardAgentsUseCase {
 	return &ListForwardAgentsUseCase{
-		repo:           repo,
-		statusQuerier:  statusQuerier,
-		versionQuerier: versionQuerier,
-		logger:         logger,
+		repo:              repo,
+		resourceGroupRepo: resourceGroupRepo,
+		statusQuerier:     statusQuerier,
+		versionQuerier:    versionQuerier,
+		logger:            logger,
 	}
 }
 
@@ -93,7 +97,39 @@ func (uc *ListForwardAgentsUseCase) Execute(ctx context.Context, query ListForwa
 		pages++
 	}
 
-	dtos := dto.ToForwardAgentDTOs(agents)
+	// Collect unique group IDs for batch query
+	groupIDSet := make(map[uint]struct{})
+	for _, agent := range agents {
+		if agent.GroupID() != nil {
+			groupIDSet[*agent.GroupID()] = struct{}{}
+		}
+	}
+
+	// Query resource groups and build GroupInfoMap
+	var groupInfoMap dto.GroupInfoMap
+	if len(groupIDSet) > 0 && uc.resourceGroupRepo != nil {
+		groupIDs := make([]uint, 0, len(groupIDSet))
+		for id := range groupIDSet {
+			groupIDs = append(groupIDs, id)
+		}
+
+		groups, err := uc.resourceGroupRepo.GetByIDs(ctx, groupIDs)
+		if err != nil {
+			uc.logger.Warnw("failed to get resource groups, continuing without group info",
+				"error", err,
+			)
+		} else {
+			groupInfoMap = make(dto.GroupInfoMap, len(groups))
+			for _, group := range groups {
+				groupInfoMap[group.ID()] = &dto.GroupInfo{
+					SID:  group.SID(),
+					Name: group.Name(),
+				}
+			}
+		}
+	}
+
+	dtos := dto.ToForwardAgentDTOs(agents, groupInfoMap)
 
 	// Collect agent IDs for batch status query and create ID mapping
 	agentIDs := make([]uint, 0, len(agents))

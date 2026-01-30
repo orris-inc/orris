@@ -124,11 +124,12 @@ func (s *ServiceDDD) GetBindingStatus(ctx context.Context, userID uint) (*dto.Ad
 		return nil, fmt.Errorf("failed to generate verify code: %w", err)
 	}
 
+	expiresAt := biztime.NowUTC().Add(10 * time.Minute)
 	return &dto.AdminBindingStatusResponse{
 		IsBound:    false,
 		VerifyCode: verifyCode,
 		BotLink:    botLink,
-		ExpiresAt:  biztime.NowUTC().Add(10 * time.Minute),
+		ExpiresAt:  &expiresAt,
 	}, nil
 }
 
@@ -405,7 +406,7 @@ func (s *ServiceDDD) NotifyNodeOnline(ctx context.Context, cmd NotifyNodeOnlineC
 	}
 
 	message := usecases.BuildNodeOnlineMessage(cmd.NodeSID, cmd.NodeName, biztime.NowUTC())
-	keyboard := buildMuteKeyboard("node", cmd.NodeSID)
+	keyboard := usecases.BuildMuteKeyboard("node", cmd.NodeSID)
 
 	for i, binding := range bindings {
 		if err := s.botService.SendMessageWithInlineKeyboard(binding.TelegramUserID(), message, keyboard); err != nil {
@@ -451,7 +452,7 @@ func (s *ServiceDDD) NotifyNodeOffline(ctx context.Context, cmd NotifyNodeOfflin
 	}
 
 	message := usecases.BuildNodeOfflineMessage(cmd.NodeSID, cmd.NodeName, cmd.LastSeenAt, cmd.OfflineMinutes)
-	keyboard := buildMuteKeyboard("node", cmd.NodeSID)
+	keyboard := usecases.BuildMuteKeyboard("node", cmd.NodeSID)
 
 	for i, binding := range bindings {
 		if err := s.botService.SendMessageWithInlineKeyboard(binding.TelegramUserID(), message, keyboard); err != nil {
@@ -508,7 +509,7 @@ func (s *ServiceDDD) NotifyAgentOnline(ctx context.Context, cmd NotifyAgentOnlin
 	}
 
 	message := usecases.BuildAgentOnlineMessage(cmd.AgentSID, cmd.AgentName, biztime.NowUTC())
-	keyboard := buildMuteKeyboard("agent", cmd.AgentSID)
+	keyboard := usecases.BuildMuteKeyboard("agent", cmd.AgentSID)
 
 	for i, binding := range bindings {
 		if err := s.botService.SendMessageWithInlineKeyboard(binding.TelegramUserID(), message, keyboard); err != nil {
@@ -554,7 +555,7 @@ func (s *ServiceDDD) NotifyAgentOffline(ctx context.Context, cmd NotifyAgentOffl
 	}
 
 	message := usecases.BuildAgentOfflineMessage(cmd.AgentSID, cmd.AgentName, cmd.LastSeenAt, cmd.OfflineMinutes)
-	keyboard := buildMuteKeyboard("agent", cmd.AgentSID)
+	keyboard := usecases.BuildMuteKeyboard("agent", cmd.AgentSID)
 
 	for i, binding := range bindings {
 		if err := s.botService.SendMessageWithInlineKeyboard(binding.TelegramUserID(), message, keyboard); err != nil {
@@ -571,31 +572,4 @@ func (s *ServiceDDD) NotifyAgentOffline(ctx context.Context, cmd NotifyAgentOffl
 	}
 
 	return nil
-}
-
-// inlineKeyboardMarkup represents a Telegram inline keyboard
-type inlineKeyboardMarkup struct {
-	InlineKeyboard [][]inlineKeyboardButton `json:"inline_keyboard"`
-}
-
-// inlineKeyboardButton represents a button in an inline keyboard
-type inlineKeyboardButton struct {
-	Text         string `json:"text"`
-	CallbackData string `json:"callback_data,omitempty"`
-}
-
-// buildMuteKeyboard builds an inline keyboard with mute button
-// resourceType is "node" or "agent", resourceSID is the SID of the resource
-func buildMuteKeyboard(resourceType, resourceSID string) *inlineKeyboardMarkup {
-	callbackData := fmt.Sprintf("mute:%s:%s", resourceType, resourceSID)
-	return &inlineKeyboardMarkup{
-		InlineKeyboard: [][]inlineKeyboardButton{
-			{
-				{
-					Text:         "🔕 静默此通知 / Mute",
-					CallbackData: callbackData,
-				},
-			},
-		},
-	}
 }

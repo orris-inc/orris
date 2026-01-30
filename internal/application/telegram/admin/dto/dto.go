@@ -23,7 +23,7 @@ type AdminBindingStatusResponse struct {
 	Binding    *AdminTelegramBindingResponse `json:"binding,omitempty"`
 	VerifyCode string                        `json:"verify_code,omitempty"` // Shown when not bound
 	BotLink    string                        `json:"bot_link,omitempty"`    // Telegram bot link (https://t.me/username)
-	ExpiresAt  time.Time                     `json:"expires_at,omitempty"`  // Verify code expiration time
+	ExpiresAt  *time.Time                    `json:"expires_at,omitempty"` // Verify code expiration time
 }
 
 // UpdateAdminPreferencesRequest represents the request to update admin notification preferences

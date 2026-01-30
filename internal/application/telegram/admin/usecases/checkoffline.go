@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/orris-inc/orris/internal/application/telegram/admin/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/domain/telegram/admin"
@@ -17,17 +18,6 @@ const (
 	// AlertCooldownMinutes is the cooldown period for alert deduplication
 	AlertCooldownMinutes = 30
 )
-
-// InlineKeyboardMarkup represents a Telegram inline keyboard
-type InlineKeyboardMarkup struct {
-	InlineKeyboard [][]InlineKeyboardButton `json:"inline_keyboard"`
-}
-
-// InlineKeyboardButton represents a button in an inline keyboard
-type InlineKeyboardButton struct {
-	Text         string `json:"text"`
-	CallbackData string `json:"callback_data,omitempty"`
-}
 
 // TelegramMessageSender sends messages via Telegram (HTML format)
 type TelegramMessageSender interface {
@@ -74,26 +64,6 @@ func NewCheckOfflineUseCase(
 		botService:        botService,
 		logger:            logger,
 	}
-}
-
-// OfflineNodeInfo contains information about an offline node
-type OfflineNodeInfo struct {
-	ID               uint
-	SID              string
-	Name             string
-	LastSeenAt       *time.Time
-	OfflineMinutes   int64
-	MuteNotification bool
-}
-
-// OfflineAgentInfo contains information about an offline agent
-type OfflineAgentInfo struct {
-	ID               uint
-	SID              string
-	Name             string
-	LastSeenAt       *time.Time
-	OfflineMinutes   int64
-	MuteNotification bool
 }
 
 // CheckAndNotify checks for offline nodes and agents, then sends alerts
@@ -173,8 +143,8 @@ func (uc *CheckOfflineUseCase) checkNodeOffline(ctx context.Context) (int, int) 
 		}
 
 		// Build message and keyboard once for this node
-		message := uc.buildNodeOfflineMessage(nodeInfo)
-		keyboard := uc.buildMuteKeyboard("node", nodeInfo.SID)
+		message := BuildNodeOfflineMessageFromDTO(nodeInfo)
+		keyboard := BuildMuteKeyboard("node", nodeInfo.SID)
 		sentToAny := false
 
 		// Send to ALL bindings whose threshold is met by this node's offline duration
@@ -274,8 +244,8 @@ func (uc *CheckOfflineUseCase) checkAgentOffline(ctx context.Context) (int, int)
 		}
 
 		// Build message and keyboard once for this agent
-		message := uc.buildAgentOfflineMessage(agentInfo)
-		keyboard := uc.buildMuteKeyboard("agent", agentInfo.SID)
+		message := BuildAgentOfflineMessageFromDTO(agentInfo)
+		keyboard := BuildMuteKeyboard("agent", agentInfo.SID)
 		sentToAny := false
 
 		// Send to ALL bindings whose threshold is met by this agent's offline duration
@@ -318,7 +288,7 @@ func (uc *CheckOfflineUseCase) checkAgentOffline(ctx context.Context) (int, int)
 	return alertsSent, errors
 }
 
-func (uc *CheckOfflineUseCase) findOfflineNodes(ctx context.Context, threshold time.Duration) ([]OfflineNodeInfo, error) {
+func (uc *CheckOfflineUseCase) findOfflineNodes(ctx context.Context, threshold time.Duration) ([]dto.OfflineNodeInfo, error) {
 	now := biztime.NowUTC()
 	cutoff := now.Add(-threshold)
 
@@ -328,7 +298,7 @@ func (uc *CheckOfflineUseCase) findOfflineNodes(ctx context.Context, threshold t
 		return nil, fmt.Errorf("failed to list nodes: %w", err)
 	}
 
-	var offlineNodes []OfflineNodeInfo
+	var offlineNodes []dto.OfflineNodeInfo
 	for _, n := range nodes {
 		// Only check nodes that have reported at least once
 		lastSeen := n.LastSeenAt()
@@ -339,7 +309,7 @@ func (uc *CheckOfflineUseCase) findOfflineNodes(ctx context.Context, threshold t
 		// Check if last seen is before cutoff
 		if lastSeen.Before(cutoff) {
 			offlineMinutes := int64(now.Sub(*lastSeen).Minutes())
-			offlineNodes = append(offlineNodes, OfflineNodeInfo{
+			offlineNodes = append(offlineNodes, dto.OfflineNodeInfo{
 				ID:               n.ID(),
 				SID:              n.SID(),
 				Name:             n.Name(),
@@ -353,7 +323,7 @@ func (uc *CheckOfflineUseCase) findOfflineNodes(ctx context.Context, threshold t
 	return offlineNodes, nil
 }
 
-func (uc *CheckOfflineUseCase) findOfflineAgents(ctx context.Context, threshold time.Duration) ([]OfflineAgentInfo, error) {
+func (uc *CheckOfflineUseCase) findOfflineAgents(ctx context.Context, threshold time.Duration) ([]dto.OfflineAgentInfo, error) {
 	now := biztime.NowUTC()
 	cutoff := now.Add(-threshold)
 
@@ -363,7 +333,7 @@ func (uc *CheckOfflineUseCase) findOfflineAgents(ctx context.Context, threshold 
 		return nil, fmt.Errorf("failed to list agents: %w", err)
 	}
 
-	var offlineAgents []OfflineAgentInfo
+	var offlineAgents []dto.OfflineAgentInfo
 	for _, a := range agents {
 		// Only check enabled agents
 		if !a.IsEnabled() {
@@ -379,7 +349,7 @@ func (uc *CheckOfflineUseCase) findOfflineAgents(ctx context.Context, threshold 
 		// Check if last seen is before cutoff
 		if lastSeen.Before(cutoff) {
 			offlineMinutes := int64(now.Sub(*lastSeen).Minutes())
-			offlineAgents = append(offlineAgents, OfflineAgentInfo{
+			offlineAgents = append(offlineAgents, dto.OfflineAgentInfo{
 				ID:               a.ID(),
 				SID:              a.SID(),
 				Name:             a.Name(),
@@ -391,78 +361,4 @@ func (uc *CheckOfflineUseCase) findOfflineAgents(ctx context.Context, threshold 
 	}
 
 	return offlineAgents, nil
-}
-
-func (uc *CheckOfflineUseCase) buildNodeOfflineMessage(nodeInfo OfflineNodeInfo) string {
-	lastSeenStr := "N/A"
-	if nodeInfo.LastSeenAt != nil {
-		lastSeenStr = biztime.FormatInBizTimezone(*nodeInfo.LastSeenAt, "2006-01-02 15:04:05")
-	}
-
-	return fmt.Sprintf(`🔴 <b>Node Agent 离线告警</b>
-
-Node Agent：<code>%s</code>
-ID：<code>%s</code>
-最后在线：%s
-离线时长：%d 分钟
-
-⚠️ 请检查 Node Agent 状态
-
-―――――――――――――
-
-🔴 <b>Node Agent Offline Alert</b>
-
-Node Agent: <code>%s</code>
-ID: <code>%s</code>
-Last seen: %s
-Offline: %d min
-
-⚠️ Please check Node Agent status`,
-		escapeHTML(nodeInfo.Name), nodeInfo.SID, lastSeenStr, nodeInfo.OfflineMinutes,
-		escapeHTML(nodeInfo.Name), nodeInfo.SID, lastSeenStr, nodeInfo.OfflineMinutes)
-}
-
-func (uc *CheckOfflineUseCase) buildAgentOfflineMessage(agentInfo OfflineAgentInfo) string {
-	lastSeenStr := "N/A"
-	if agentInfo.LastSeenAt != nil {
-		lastSeenStr = biztime.FormatInBizTimezone(*agentInfo.LastSeenAt, "2006-01-02 15:04:05")
-	}
-
-	return fmt.Sprintf(`🔴 <b>转发代理离线告警</b>
-
-转发代理：<code>%s</code>
-ID：<code>%s</code>
-最后在线：%s
-离线时长：%d 分钟
-
-⚠️ 请检查转发代理状态
-
-―――――――――――――
-
-🔴 <b>Forward Agent Offline Alert</b>
-
-Forward Agent: <code>%s</code>
-ID: <code>%s</code>
-Last seen: %s
-Offline: %d min
-
-⚠️ Please check forward agent status`,
-		escapeHTML(agentInfo.Name), agentInfo.SID, lastSeenStr, agentInfo.OfflineMinutes,
-		escapeHTML(agentInfo.Name), agentInfo.SID, lastSeenStr, agentInfo.OfflineMinutes)
-}
-
-// buildMuteKeyboard builds an inline keyboard with mute button
-// resourceType is "node" or "agent", resourceSID is the SID of the resource
-func (uc *CheckOfflineUseCase) buildMuteKeyboard(resourceType, resourceSID string) *InlineKeyboardMarkup {
-	callbackData := fmt.Sprintf("mute:%s:%s", resourceType, resourceSID)
-	return &InlineKeyboardMarkup{
-		InlineKeyboard: [][]InlineKeyboardButton{
-			{
-				{
-					Text:         "🔕 静默此通知 / Mute",
-					CallbackData: callbackData,
-				},
-			},
-		},
-	}
 }

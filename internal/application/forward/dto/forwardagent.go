@@ -31,7 +31,8 @@ type ForwardAgentDTO struct {
 }
 
 // ToForwardAgentDTO converts a domain forward agent to DTO.
-func ToForwardAgentDTO(agent *forward.ForwardAgent) *ForwardAgentDTO {
+// groupInfo is optional, can be nil if group information is not available.
+func ToForwardAgentDTO(agent *forward.ForwardAgent, groupInfo *GroupInfo) *ForwardAgentDTO {
 	if agent == nil {
 		return nil
 	}
@@ -41,7 +42,7 @@ func ToForwardAgentDTO(agent *forward.ForwardAgent) *ForwardAgentDTO {
 		allowedPortRange = agent.AllowedPortRange().String()
 	}
 
-	return &ForwardAgentDTO{
+	dto := &ForwardAgentDTO{
 		ID:               agent.SID(),
 		Name:             agent.Name(),
 		PublicAddress:    agent.PublicAddress(),
@@ -58,13 +59,24 @@ func ToForwardAgentDTO(agent *forward.ForwardAgent) *ForwardAgentDTO {
 		CreatedAt:        agent.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:        agent.UpdatedAt().Format("2006-01-02T15:04:05Z07:00"),
 	}
+
+	if groupInfo != nil {
+		dto.GroupSID = &groupInfo.SID
+	}
+
+	return dto
 }
 
 // ToForwardAgentDTOs converts a slice of domain forward agents to DTOs.
-func ToForwardAgentDTOs(agents []*forward.ForwardAgent) []*ForwardAgentDTO {
+// groupInfoMap is optional, can be nil if group information is not available.
+func ToForwardAgentDTOs(agents []*forward.ForwardAgent, groupInfoMap GroupInfoMap) []*ForwardAgentDTO {
 	dtos := make([]*ForwardAgentDTO, len(agents))
 	for i, agent := range agents {
-		dtos[i] = ToForwardAgentDTO(agent)
+		var groupInfo *GroupInfo
+		if groupInfoMap != nil && agent.GroupID() != nil {
+			groupInfo = groupInfoMap[*agent.GroupID()]
+		}
+		dtos[i] = ToForwardAgentDTO(agent, groupInfo)
 	}
 	return dtos
 }

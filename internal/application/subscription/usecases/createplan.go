@@ -16,6 +16,7 @@ type CreatePlanCommand struct {
 	Description string
 	PlanType    string // Required: "node" or "forward"
 	Limits      map[string]interface{}
+	NodeLimit   *int // Maximum number of user nodes (nil or 0 = unlimited)
 	IsPublic    bool
 	SortOrder   int
 	Pricings    []dto.PricingOptionInput // Required: multiple pricing options
@@ -91,6 +92,10 @@ func (uc *CreatePlanUseCase) Execute(
 
 	if cmd.SortOrder != 0 {
 		plan.SetSortOrder(cmd.SortOrder)
+	}
+
+	if cmd.NodeLimit != nil {
+		plan.SetNodeLimit(cmd.NodeLimit)
 	}
 
 	if err := uc.planRepo.Create(ctx, plan); err != nil {

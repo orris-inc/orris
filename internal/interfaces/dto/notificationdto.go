@@ -44,12 +44,10 @@ func (r *CreateAnnouncementRequest) ToApplicationDTO(creatorID uint) appDto.Crea
 }
 
 type UpdateAnnouncementRequest struct {
-	Title       *string    `json:"title,omitempty" validate:"omitempty,min=1,max=255"`
-	Content     *string    `json:"content,omitempty" validate:"omitempty,min=1"`
-	Type        *string    `json:"type,omitempty" validate:"omitempty,oneof=system maintenance feature promotion"`
-	Priority    *int       `json:"priority,omitempty" validate:"omitempty,min=1,max=5"`
-	ScheduledAt *time.Time `json:"scheduled_at,omitempty"`
-	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
+	Title     *string    `json:"title,omitempty" validate:"omitempty,min=1,max=255"`
+	Content   *string    `json:"content,omitempty" validate:"omitempty,min=1"`
+	Priority  *int       `json:"priority,omitempty" validate:"omitempty,min=1,max=5"`
+	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 }
 
 func (r *UpdateAnnouncementRequest) ToApplicationDTO() appDto.UpdateAnnouncementRequest {
@@ -61,44 +59,12 @@ func (r *UpdateAnnouncementRequest) ToApplicationDTO() appDto.UpdateAnnouncement
 	}
 }
 
-type AnnouncementResponse struct {
-	ID          string     `json:"id"`
-	Title       string     `json:"title"`
-	Content     string     `json:"content"`
-	Type        string     `json:"type"`
-	Status      string     `json:"status"`
-	Priority    int        `json:"priority"`
-	ScheduledAt *time.Time `json:"scheduled_at,omitempty"`
-	ExpiresAt   *time.Time `json:"expires_at,omitempty"`
-	ViewCount   int        `json:"view_count"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-}
-
-type NotificationResponse struct {
-	ID         uint       `json:"id"`
-	UserID     uint       `json:"user_id"`
-	Type       string     `json:"type"`
-	Title      string     `json:"title"`
-	Content    string     `json:"content"`
-	RelatedID  *uint      `json:"related_id,omitempty"`
-	ReadStatus string     `json:"read_status"`
-	ArchivedAt *time.Time `json:"archived_at,omitempty"`
-	CreatedAt  time.Time  `json:"created_at"`
-	UpdatedAt  time.Time  `json:"updated_at"`
-}
-
-type UnreadCountResponse struct {
-	Count int `json:"count"`
-}
-
 type CreateTemplateRequest struct {
 	TemplateType string   `json:"template_type" binding:"required" validate:"required,min=1,max=50"`
 	Name         string   `json:"name" binding:"required" validate:"required,min=1,max=100"`
 	Title        string   `json:"title" binding:"required" validate:"required,min=1,max=255"`
 	Content      string   `json:"content" binding:"required" validate:"required,min=1"`
 	Variables    []string `json:"variables,omitempty"`
-	Enabled      *bool    `json:"enabled,omitempty"`
 }
 
 func (r *CreateTemplateRequest) ToApplicationDTO() appDto.CreateTemplateRequest {
@@ -111,18 +77,6 @@ func (r *CreateTemplateRequest) ToApplicationDTO() appDto.CreateTemplateRequest 
 	}
 }
 
-type TemplateResponse struct {
-	ID           uint      `json:"id"`
-	TemplateType string    `json:"template_type"`
-	Name         string    `json:"name"`
-	Title        string    `json:"title"`
-	Content      string    `json:"content"`
-	Variables    []string  `json:"variables,omitempty"`
-	Enabled      bool      `json:"enabled"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-}
-
 type RenderTemplateRequest struct {
 	TemplateType string                 `json:"template_type" binding:"required"`
 	Variables    map[string]interface{} `json:"variables"`
@@ -133,11 +87,6 @@ func (r *RenderTemplateRequest) ToApplicationDTO() appDto.RenderTemplateRequest 
 		TemplateType: r.TemplateType,
 		Data:         r.Variables,
 	}
-}
-
-type RenderTemplateResponse struct {
-	Title   string `json:"title"`
-	Content string `json:"content"`
 }
 
 // ParseAnnouncementSID parses the announcement SID from the request path.

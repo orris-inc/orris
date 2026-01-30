@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/orris-inc/orris/internal/application/telegram/admin/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/domain/subscription"
@@ -51,45 +52,6 @@ func NewSendWeeklySummaryUseCase(
 		botService:       botService,
 		logger:           logger,
 	}
-}
-
-// WeeklySummaryData contains aggregated weekly business data with comparison
-type WeeklySummaryData struct {
-	// Period info
-	WeekStart string // Week start date
-	WeekEnd   string // Week end date
-
-	// Current week stats
-	NewUsers         int64
-	ActiveUsers      int64
-	NewSubscriptions int64
-	TotalRevenue     float64
-	Currency         string
-
-	// Previous week stats for comparison
-	PrevNewUsers         int64
-	PrevNewSubscriptions int64
-	PrevTotalRevenue     float64
-
-	// Change percentages
-	UserChangePercent    float64
-	SubChangePercent     float64
-	RevenueChangePercent float64
-
-	// Node status
-	TotalNodes   int64
-	OnlineNodes  int64
-	OfflineNodes int64
-
-	// Agent status
-	TotalAgents   int64
-	OnlineAgents  int64
-	OfflineAgents int64
-
-	// Traffic stats
-	TotalTrafficBytes     uint64
-	PrevTotalTrafficBytes uint64
-	TrafficChangePercent  float64
 }
 
 // SendSummary sends weekly summary to all subscribed admins
@@ -200,8 +162,8 @@ func (uc *SendWeeklySummaryUseCase) getPreviousWeekRange(now time.Time) (time.Ti
 	return prevWeekStart.UTC(), prevWeekEnd.UTC()
 }
 
-func (uc *SendWeeklySummaryUseCase) gatherWeeklyStats(ctx context.Context, lastStart, lastEnd, prevStart, prevEnd time.Time) (*WeeklySummaryData, error) {
-	summary := &WeeklySummaryData{
+func (uc *SendWeeklySummaryUseCase) gatherWeeklyStats(ctx context.Context, lastStart, lastEnd, prevStart, prevEnd time.Time) (*dto.WeeklySummaryData, error) {
+	summary := &dto.WeeklySummaryData{
 		WeekStart: biztime.FormatInBizTimezone(lastStart, "2006-01-02"),
 		WeekEnd:   biztime.FormatInBizTimezone(lastEnd, "2006-01-02"),
 		Currency:  "USD",
@@ -271,8 +233,8 @@ func (uc *SendWeeklySummaryUseCase) gatherWeeklyStats(ctx context.Context, lastS
 	}
 
 	// Calculate change percentages
-	summary.UserChangePercent = calculateChangePercent(summary.NewUsers, summary.PrevNewUsers)
-	summary.SubChangePercent = calculateChangePercent(summary.NewSubscriptions, summary.PrevNewSubscriptions)
+	summary.UserChangePercent = CalculateChangePercent(summary.NewUsers, summary.PrevNewUsers)
+	summary.SubChangePercent = CalculateChangePercent(summary.NewSubscriptions, summary.PrevNewSubscriptions)
 
 	// Get node status
 	nodes, total, err := uc.nodeRepo.List(ctx, node.NodeFilter{})
@@ -304,7 +266,7 @@ func (uc *SendWeeklySummaryUseCase) gatherWeeklyStats(ctx context.Context, lastS
 	// Get traffic for previous week
 	summary.PrevTotalTrafficBytes = uc.getPlatformTrafficForPeriod(ctx, prevStart, prevEnd)
 
-	summary.TrafficChangePercent = calculateChangePercentUint64(summary.TotalTrafficBytes, summary.PrevTotalTrafficBytes)
+	summary.TrafficChangePercent = CalculateChangePercentUint64(summary.TotalTrafficBytes, summary.PrevTotalTrafficBytes)
 
 	return summary, nil
 }
@@ -386,9 +348,9 @@ func (uc *SendWeeklySummaryUseCase) getTrafficFromHourlyCache(ctx context.Contex
 	return total
 }
 
-func (uc *SendWeeklySummaryUseCase) buildWeeklySummaryMessage(summary *WeeklySummaryData) string {
+func (uc *SendWeeklySummaryUseCase) buildWeeklySummaryMessage(summary *dto.WeeklySummaryData) string {
 	// Format traffic
-	trafficStr := formatBytesHuman(summary.TotalTrafficBytes)
+	trafficStr := FormatBytes(summary.TotalTrafficBytes)
 
 	// Node status indicator
 	nodeStatus := "🟢"
@@ -432,51 +394,15 @@ func (uc *SendWeeklySummaryUseCase) buildWeeklySummaryMessage(summary *WeeklySum
 ━━━━━━━━━━━━━━━
 Generated at %s`,
 		summary.WeekStart, summary.WeekEnd,
-		summary.NewUsers, formatChangeIndicator(summary.UserChangePercent),
+		summary.NewUsers, FormatPercentChangeCompact(summary.UserChangePercent),
 		summary.ActiveUsers,
-		summary.NewSubscriptions, formatChangeIndicator(summary.SubChangePercent),
+		summary.NewSubscriptions, FormatPercentChangeCompact(summary.SubChangePercent),
 		nodeStatus,
 		summary.OnlineNodes, summary.TotalNodes,
 		summary.OfflineNodes,
 		agentStatus,
 		summary.OnlineAgents, summary.TotalAgents,
 		summary.OfflineAgents,
-		trafficStr, formatChangeIndicator(summary.TrafficChangePercent),
+		trafficStr, FormatPercentChangeCompact(summary.TrafficChangePercent),
 		biztime.FormatInBizTimezone(biztime.NowUTC(), "2006-01-02 15:04:05"))
-}
-
-// calculateChangePercent calculates the percentage change between two values
-func calculateChangePercent(current, previous int64) float64 {
-	if previous == 0 {
-		if current == 0 {
-			return 0
-		}
-		return 100 // New from zero
-	}
-	return float64(current-previous) / float64(previous) * 100
-}
-
-// calculateChangePercentUint64 calculates the percentage change for uint64 values
-// Uses safe conversion to prevent integer overflow when values exceed math.MaxInt64
-func calculateChangePercentUint64(current, previous uint64) float64 {
-	if previous == 0 {
-		if current == 0 {
-			return 0
-		}
-		return 100
-	}
-	// Safe conversion: use float64 directly to avoid int64 overflow
-	// when current or previous exceeds math.MaxInt64
-	return (float64(current) - float64(previous)) / float64(previous) * 100
-}
-
-// formatChangeIndicator formats the change percentage with trend indicator
-func formatChangeIndicator(percent float64) string {
-	if percent == 0 {
-		return "(--)"
-	}
-	if percent > 0 {
-		return fmt.Sprintf("(📈+%.1f%%)", percent)
-	}
-	return fmt.Sprintf("(📉%.1f%%)", percent)
 }

@@ -3,10 +3,17 @@ package usecases
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/orris-inc/orris/internal/application/telegram/admin/dto"
 	"github.com/orris-inc/orris/internal/domain/telegram/admin"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
+)
+
+const (
+	// verifyCodeTTL is the TTL for admin verify codes
+	verifyCodeTTL = 10 * time.Minute
 )
 
 // AdminVerifyCodeGenerator generates verification codes for admin binding
@@ -58,10 +65,12 @@ func (uc *GetAdminBindingStatusUseCase) Execute(ctx context.Context, userID uint
 				uc.logger.Errorw("failed to generate verify code for admin", "user_id", userID, "error", err)
 				return nil, err
 			}
+			expiresAt := biztime.NowUTC().Add(verifyCodeTTL)
 			return &dto.AdminBindingStatusResponse{
 				IsBound:    false,
 				VerifyCode: code,
 				BotLink:    botLink,
+				ExpiresAt:  &expiresAt,
 			}, nil
 		}
 		return nil, err

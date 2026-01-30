@@ -2,17 +2,11 @@ package usecases
 
 import (
 	"fmt"
-	"html"
 	"time"
 
+	"github.com/orris-inc/orris/internal/application/telegram/admin/dto"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 )
-
-// escapeHTML escapes HTML special characters
-// to prevent format injection from user-provided data
-func escapeHTML(s string) string {
-	return html.EscapeString(s)
-}
 
 // BuildNewUserMessage builds a new user notification message (HTML format)
 func BuildNewUserMessage(userSID, email, name, source string, createdAt time.Time) string {
@@ -28,17 +22,22 @@ func BuildNewUserMessage(userSID, email, name, source string, createdAt time.Tim
 ID：<code>%s</code>
 来源：%s
 注册时间：%s`,
-		escapeHTML(email),
-		escapeHTML(name),
+		EscapeHTML(email),
+		EscapeHTML(name),
 		userSID,
-		escapeHTML(sourceTextZH),
+		EscapeHTML(sourceTextZH),
 		biztime.FormatInBizTimezone(createdAt, "2006-01-02 15:04:05"),
 	)
 }
 
+// BuildNewUserMessageFromDTO builds a new user notification message from DTO (HTML format)
+func BuildNewUserMessageFromDTO(info dto.NewUserInfo) string {
+	return BuildNewUserMessage(info.SID, info.Email, info.Name, info.Source, info.CreatedAt)
+}
+
 // BuildPaymentSuccessMessage builds a payment success notification message (HTML format)
 func BuildPaymentSuccessMessage(paymentSID, userSID, userEmail, planName string, amount float64, currency, paymentMethod, transactionID string, paidAt time.Time) string {
-	amountStr := formatAmount(amount, currency)
+	amountStr := FormatAmount(amount, currency)
 
 	return fmt.Sprintf(`💰 <b>支付成功</b>
 
@@ -51,11 +50,26 @@ func BuildPaymentSuccessMessage(paymentSID, userSID, userEmail, planName string,
 支付时间：%s`,
 		amountStr,
 		userSID,
-		escapeHTML(userEmail),
-		escapeHTML(planName),
-		escapeHTML(paymentMethod),
-		escapeHTML(transactionID),
+		EscapeHTML(userEmail),
+		EscapeHTML(planName),
+		EscapeHTML(paymentMethod),
+		EscapeHTML(transactionID),
 		biztime.FormatInBizTimezone(paidAt, "2006-01-02 15:04:05"),
+	)
+}
+
+// BuildPaymentSuccessMessageFromDTO builds a payment success notification message from DTO (HTML format)
+func BuildPaymentSuccessMessageFromDTO(info dto.PaymentInfo) string {
+	return BuildPaymentSuccessMessage(
+		info.PaymentSID,
+		info.UserSID,
+		info.UserEmail,
+		info.PlanName,
+		info.Amount,
+		info.Currency,
+		info.PaymentMethod,
+		info.TransactionID,
+		info.PaidAt,
 	)
 }
 
@@ -68,7 +82,7 @@ ID：<code>%s</code>
 上线时间：%s
 
 ✅ Node Agent 已恢复连接`,
-		escapeHTML(nodeName),
+		EscapeHTML(nodeName),
 		nodeSID,
 		biztime.FormatInBizTimezone(onlineAt, "2006-01-02 15:04:05"),
 	)
@@ -76,19 +90,61 @@ ID：<code>%s</code>
 
 // BuildNodeOfflineMessage builds a node offline notification message (HTML format)
 func BuildNodeOfflineMessage(nodeSID, nodeName string, lastSeenAt time.Time, offlineMinutes int) string {
+	lastSeenStr := biztime.FormatInBizTimezone(lastSeenAt, "2006-01-02 15:04:05")
+
 	return fmt.Sprintf(`🔴 <b>Node Agent 离线告警</b>
 
-Node Agent：%s
+Node Agent：<code>%s</code>
 ID：<code>%s</code>
 最后在线：%s
 离线时长：%d 分钟
 
-⚠️ 请检查 Node Agent 状态`,
-		escapeHTML(nodeName),
-		nodeSID,
-		biztime.FormatInBizTimezone(lastSeenAt, "2006-01-02 15:04:05"),
-		offlineMinutes,
+⚠️ 请检查 Node Agent 状态
+
+―――――――――――――
+
+🔴 <b>Node Agent Offline Alert</b>
+
+Node Agent: <code>%s</code>
+ID: <code>%s</code>
+Last seen: %s
+Offline: %d min
+
+⚠️ Please check Node Agent status`,
+		EscapeHTML(nodeName), nodeSID, lastSeenStr, offlineMinutes,
+		EscapeHTML(nodeName), nodeSID, lastSeenStr, offlineMinutes,
 	)
+}
+
+// BuildNodeOfflineMessageFromDTO builds a node offline notification message from DTO (HTML format)
+// Handles nil LastSeenAt by displaying "N/A"
+func BuildNodeOfflineMessageFromDTO(info dto.OfflineNodeInfo) string {
+	lastSeenStr := "N/A"
+	if info.LastSeenAt != nil {
+		lastSeenStr = biztime.FormatInBizTimezone(*info.LastSeenAt, "2006-01-02 15:04:05")
+	}
+
+	return fmt.Sprintf(`🔴 <b>Node Agent 离线告警</b>
+
+Node Agent：<code>%s</code>
+ID：<code>%s</code>
+最后在线：%s
+离线时长：%d 分钟
+
+⚠️ 请检查 Node Agent 状态
+
+―――――――――――――
+
+🔴 <b>Node Agent Offline Alert</b>
+
+Node Agent: <code>%s</code>
+ID: <code>%s</code>
+Last seen: %s
+Offline: %d min
+
+⚠️ Please check Node Agent status`,
+		EscapeHTML(info.Name), info.SID, lastSeenStr, info.OfflineMinutes,
+		EscapeHTML(info.Name), info.SID, lastSeenStr, info.OfflineMinutes)
 }
 
 // BuildAgentOnlineMessage builds a forward agent online notification message (HTML format)
@@ -100,7 +156,7 @@ ID：<code>%s</code>
 上线时间：%s
 
 ✅ 转发代理已恢复连接`,
-		escapeHTML(agentName),
+		EscapeHTML(agentName),
 		agentSID,
 		biztime.FormatInBizTimezone(onlineAt, "2006-01-02 15:04:05"),
 	)
@@ -108,19 +164,61 @@ ID：<code>%s</code>
 
 // BuildAgentOfflineMessage builds a forward agent offline notification message (HTML format)
 func BuildAgentOfflineMessage(agentSID, agentName string, lastSeenAt time.Time, offlineMinutes int) string {
+	lastSeenStr := biztime.FormatInBizTimezone(lastSeenAt, "2006-01-02 15:04:05")
+
 	return fmt.Sprintf(`🔴 <b>转发代理离线告警</b>
 
-转发代理：%s
+转发代理：<code>%s</code>
 ID：<code>%s</code>
 最后在线：%s
 离线时长：%d 分钟
 
-⚠️ 请检查转发代理状态`,
-		escapeHTML(agentName),
-		agentSID,
-		biztime.FormatInBizTimezone(lastSeenAt, "2006-01-02 15:04:05"),
-		offlineMinutes,
+⚠️ 请检查转发代理状态
+
+―――――――――――――
+
+🔴 <b>Forward Agent Offline Alert</b>
+
+Forward Agent: <code>%s</code>
+ID: <code>%s</code>
+Last seen: %s
+Offline: %d min
+
+⚠️ Please check forward agent status`,
+		EscapeHTML(agentName), agentSID, lastSeenStr, offlineMinutes,
+		EscapeHTML(agentName), agentSID, lastSeenStr, offlineMinutes,
 	)
+}
+
+// BuildAgentOfflineMessageFromDTO builds a forward agent offline notification message from DTO (HTML format)
+// Handles nil LastSeenAt by displaying "N/A"
+func BuildAgentOfflineMessageFromDTO(info dto.OfflineAgentInfo) string {
+	lastSeenStr := "N/A"
+	if info.LastSeenAt != nil {
+		lastSeenStr = biztime.FormatInBizTimezone(*info.LastSeenAt, "2006-01-02 15:04:05")
+	}
+
+	return fmt.Sprintf(`🔴 <b>转发代理离线告警</b>
+
+转发代理：<code>%s</code>
+ID：<code>%s</code>
+最后在线：%s
+离线时长：%d 分钟
+
+⚠️ 请检查转发代理状态
+
+―――――――――――――
+
+🔴 <b>Forward Agent Offline Alert</b>
+
+Forward Agent: <code>%s</code>
+ID: <code>%s</code>
+Last seen: %s
+Offline: %d min
+
+⚠️ Please check forward agent status`,
+		EscapeHTML(info.Name), info.SID, lastSeenStr, info.OfflineMinutes,
+		EscapeHTML(info.Name), info.SID, lastSeenStr, info.OfflineMinutes)
 }
 
 // BuildDailySummaryMessage builds a daily summary message (HTML format)
@@ -135,7 +233,7 @@ func BuildDailySummaryMessage(
 	uploadGB, downloadGB, totalGB float64,
 ) string {
 	dateStr := biztime.FormatInBizTimezone(date, "2006-01-02")
-	amountStr := formatAmount(revenue, currency)
+	amountStr := FormatAmount(revenue, currency)
 
 	return fmt.Sprintf(`📊 <b>每日业务摘要</b>
 📅 %s
@@ -178,10 +276,10 @@ func BuildWeeklySummaryMessage(
 ) string {
 	startStr := biztime.FormatInBizTimezone(weekStart, "2006-01-02")
 	endStr := biztime.FormatInBizTimezone(weekEnd, "2006-01-02")
-	amountStr := formatAmount(revenue, currency)
-	userChange := formatPercentChange(userChangePercent)
-	orderChange := formatPercentChange(orderChangePercent)
-	revenueChange := formatPercentChange(revenueChangePercent)
+	amountStr := FormatAmount(revenue, currency)
+	userChange := FormatPercentChange(userChangePercent)
+	orderChange := FormatPercentChange(orderChangePercent)
+	revenueChange := FormatPercentChange(revenueChangePercent)
 
 	return fmt.Sprintf(`📊 <b>每周业务摘要</b>
 📅 %s ~ %s
@@ -213,36 +311,4 @@ func BuildWeeklySummaryMessage(
 		onlineAgents, offlineAgents,
 		totalGB,
 	)
-}
-
-// formatAmount formats amount to display string
-// amount is in main currency unit (e.g., 99.00), not cents
-func formatAmount(amount float64, currency string) string {
-	if currency == "" {
-		currency = "CNY"
-	}
-
-	symbol := "¥"
-	switch currency {
-	case "USD":
-		symbol = "$"
-	case "EUR":
-		symbol = "€"
-	case "GBP":
-		symbol = "£"
-	case "JPY":
-		return fmt.Sprintf("¥%.0f", amount) // JPY doesn't use decimals
-	}
-
-	return fmt.Sprintf("%s%.2f", symbol, amount)
-}
-
-// formatPercentChange formats percent change with color indicator
-func formatPercentChange(percent float64) string {
-	if percent > 0 {
-		return fmt.Sprintf("📈 +%.1f%%", percent)
-	} else if percent < 0 {
-		return fmt.Sprintf("📉 %.1f%%", percent)
-	}
-	return "➡️ 0%"
 }

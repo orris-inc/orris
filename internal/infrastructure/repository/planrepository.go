@@ -130,6 +130,7 @@ func (r *PlanRepositoryImpl) Update(ctx context.Context, plan *subscription.Plan
 			"description": model.Description,
 			"status":      model.Status,
 			"limits":      model.Limits,
+			"node_limit":  model.NodeLimit,
 			"is_public":   model.IsPublic,
 			"sort_order":  model.SortOrder,
 			"metadata":    model.Metadata,

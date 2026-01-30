@@ -14,6 +14,7 @@ type UpdatePlanCommand struct {
 	PlanSID     string
 	Description *string
 	Limits      *map[string]interface{}
+	NodeLimit   *int // Maximum number of user nodes (nil or 0 = unlimited)
 	SortOrder   *int
 	IsPublic    *bool
 	Pricings    *[]dto.PricingOptionInput // Optional: update pricing options
@@ -72,6 +73,10 @@ func (uc *UpdatePlanUseCase) Execute(
 
 	if cmd.IsPublic != nil {
 		plan.SetPublic(*cmd.IsPublic)
+	}
+
+	if cmd.NodeLimit != nil {
+		plan.SetNodeLimit(cmd.NodeLimit)
 	}
 
 	if err := uc.planRepo.Update(ctx, plan); err != nil {

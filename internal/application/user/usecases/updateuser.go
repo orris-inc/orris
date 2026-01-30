@@ -137,14 +137,23 @@ func (uc *UpdateUserUseCase) Execute(ctx context.Context, sid string, request dt
 	}
 
 	// Map to response DTO with external SID
+	displayInfo := userEntity.GetDisplayInfo()
 	response := &dto.UserResponse{
-		ID:        userEntity.SID(),
-		Email:     userEntity.Email().String(),
-		Name:      userEntity.Name().String(),
-		Role:      string(userEntity.Role()),
-		Status:    userEntity.Status().String(),
-		CreatedAt: userEntity.CreatedAt(),
-		UpdatedAt: userEntity.UpdatedAt(),
+		ID:          userEntity.SID(),
+		Email:       userEntity.Email().String(),
+		Name:        userEntity.Name().String(),
+		DisplayName: displayInfo.DisplayName,
+		Initials:    displayInfo.Initials,
+		Role:        string(userEntity.Role()),
+		Status:      userEntity.Status().String(),
+		CreatedAt:   userEntity.CreatedAt(),
+		UpdatedAt:   userEntity.UpdatedAt(),
+		Metadata: dto.UserMetadata{
+			IsBusinessEmail:      userEntity.IsBusinessEmail(),
+			CanPerformActions:    userEntity.CanPerformActions(),
+			RequiresVerification: userEntity.RequiresVerification(),
+			EmailDomain:          userEntity.Email().Domain(),
+		},
 	}
 
 	uc.logger.Infow("user updated successfully", "id", response.ID)

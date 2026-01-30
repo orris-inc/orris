@@ -44,6 +44,7 @@ type NotificationTemplate interface {
 	Title() string
 	Content() string
 	Variables() []string
+	Enabled() bool
 	CreatedAt() time.Time
 	UpdatedAt() time.Time
 	Render(data map[string]interface{}) (title string, content string, err error)

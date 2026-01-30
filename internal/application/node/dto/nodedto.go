@@ -20,7 +20,6 @@ type NodeDTO struct {
 	Status           string                 `json:"status" example:"active" enums:"active,inactive,maintenance" description:"Current operational status of the node"`
 	Region           string                 `json:"region,omitempty" example:"us-west" description:"Geographic region or location identifier"`
 	Tags             []string               `json:"tags,omitempty" example:"premium,fast" description:"Custom tags for categorization"`
-	CustomFields     map[string]interface{} `json:"custom_fields,omitempty" description:"Additional custom metadata fields"`
 	SortOrder        int                    `json:"sort_order" example:"100" description:"Display order for sorting nodes"`
 	MuteNotification bool                   `json:"mute_notification" example:"false" description:"Mute online/offline notifications for this node"`
 	// Trojan specific fields
@@ -217,7 +216,6 @@ type CreateNodeDTO struct {
 	PluginOpts       map[string]string      `json:"plugin_opts,omitempty" example:"obfs:http,obfs-host:example.com" description:"Plugin configuration options"`
 	Region           string                 `json:"region,omitempty" example:"us-west" description:"Geographic region or location identifier"`
 	Tags             []string               `json:"tags,omitempty" example:"premium,fast" description:"Custom tags for categorization"`
-	CustomFields     map[string]interface{} `json:"custom_fields,omitempty" description:"Additional custom metadata fields"`
 	SortOrder        int                    `json:"sort_order" example:"100" description:"Display order for sorting nodes"`
 	Route            *RouteConfigDTO        `json:"route,omitempty" description:"Routing configuration for traffic splitting (sing-box compatible)"`
 }
@@ -233,7 +231,6 @@ type UpdateNodeDTO struct {
 	PluginOpts       map[string]string      `json:"plugin_opts,omitempty" example:"obfs:http,obfs-host:example.com" description:"Plugin configuration options"`
 	Region           *string                `json:"region,omitempty" example:"us-west" description:"Geographic region or location identifier"`
 	Tags             []string               `json:"tags,omitempty" example:"premium,fast" description:"Custom tags for categorization"`
-	CustomFields     map[string]interface{} `json:"custom_fields,omitempty" description:"Additional custom metadata fields"`
 	SortOrder        *int                   `json:"sort_order,omitempty" example:"100" description:"Display order for sorting nodes"`
 	MuteNotification *bool                  `json:"mute_notification,omitempty" example:"false" description:"Mute online/offline notifications for this node"`
 	Route            *RouteConfigDTO        `json:"route,omitempty" description:"Routing configuration for traffic splitting (sing-box compatible, null to clear)"`

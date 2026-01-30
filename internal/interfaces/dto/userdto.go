@@ -83,6 +83,7 @@ func ParseListUsersRequest(c *gin.Context) (*dto.ListUsersRequest, error) {
 	req.Email = c.Query("email")
 	req.Name = c.Query("name")
 	req.Status = c.Query("status")
+	req.Role = c.Query("role")
 	req.OrderBy = c.Query("order_by")
 	req.Order = c.Query("order")
 

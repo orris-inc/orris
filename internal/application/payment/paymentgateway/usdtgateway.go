@@ -10,7 +10,6 @@ import (
 	"github.com/orris-inc/orris/internal/application/payment/exchangerate"
 	"github.com/orris-inc/orris/internal/application/payment/suffixalloc"
 	vo "github.com/orris-inc/orris/internal/domain/payment/valueobjects"
-	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -27,10 +26,6 @@ type USDTPaymentInfo struct {
 	USDTAmountRaw    uint64 // USDT amount in smallest unit (1 USDT = 1000000)
 	ReceivingAddress string
 	ExchangeRate     float64 // Exchange rate at time of payment (for display only)
-	ExpiredAt        time.Time
-	// Internal fields for suffix management
-	BaseAmountRaw uint64 // Base amount in smallest unit before suffix
-	Suffix        uint   // Allocated suffix
 }
 
 // USDTAmountFloat returns the USDT amount as float64 for display purposes
@@ -152,18 +147,7 @@ func (g *USDTGateway) CreateUSDTPayment(ctx context.Context, paymentID uint, cny
 		USDTAmountRaw:    allocation.FullAmountRaw,
 		ReceivingAddress: allocation.ReceivingAddress,
 		ExchangeRate:     rate,
-		ExpiredAt:        biztime.NowUTC().Add(ttl),
-		BaseAmountRaw:    baseAmountRaw,
-		Suffix:           allocation.Suffix,
 	}, nil
-}
-
-// ReleaseSuffix releases an allocated suffix when payment creation fails
-func (g *USDTGateway) ReleaseSuffix(ctx context.Context, info *USDTPaymentInfo) error {
-	if info == nil {
-		return nil
-	}
-	return g.suffixAllocator.Release(ctx, info.ChainType, info.ReceivingAddress, info.BaseAmountRaw, info.Suffix)
 }
 
 // getReceivingAddresses returns the receiving addresses for a chain type (multi-wallet support)

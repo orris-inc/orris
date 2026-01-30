@@ -2,87 +2,112 @@ package dto
 
 import "time"
 
-// NewUserAlertData represents data for new user alert
-type NewUserAlertData struct {
-	UserID    string    `json:"user_id"`
-	UserEmail string    `json:"user_email"`
-	UserName  string    `json:"user_name"`
-	Source    string    `json:"source"`
-	CreatedAt time.Time `json:"created_at"`
+// NewUserInfo contains information about a new user for alert notification.
+// Used internally for building Telegram messages, not for JSON serialization.
+type NewUserInfo struct {
+	SID       string
+	Email     string
+	Name      string
+	Source    string    // e.g., "registration", "oauth"
+	CreatedAt time.Time // Registration timestamp
 }
 
-// PaymentSuccessAlertData represents data for payment success alert
-type PaymentSuccessAlertData struct {
-	OrderID          string    `json:"order_id"`
-	UserID           string    `json:"user_id"`
-	UserEmail        string    `json:"user_email"`
-	PlanName         string    `json:"plan_name"`
-	Amount           int64     `json:"amount"`
-	Currency         string    `json:"currency"`
-	PaymentMethod    string    `json:"payment_method"`
-	SubscriptionType string    `json:"subscription_type"`
-	PaidAt           time.Time `json:"paid_at"`
+// PaymentInfo contains information about a successful payment for alert notification.
+// Used internally for building Telegram messages, not for JSON serialization.
+type PaymentInfo struct {
+	PaymentSID    string
+	UserSID       string
+	UserEmail     string
+	PlanName      string
+	Amount        float64
+	Currency      string
+	PaymentMethod string
+	TransactionID string    // Transaction ID from payment gateway
+	PaidAt        time.Time // Payment timestamp
 }
 
-// NodeOfflineAlertData represents data for node offline alert
-type NodeOfflineAlertData struct {
-	NodeID       string    `json:"node_id"`
-	NodeName     string    `json:"node_name"`
-	NodeIP       string    `json:"node_ip"`
-	LastSeenAt   time.Time `json:"last_seen_at"`
-	OfflineSince time.Time `json:"offline_since"`
-	Duration     int64     `json:"duration"`
+// OfflineNodeInfo contains information about an offline node for alert notification.
+// Used internally for building Telegram messages, not for JSON serialization.
+type OfflineNodeInfo struct {
+	ID               uint
+	SID              string
+	Name             string
+	LastSeenAt       *time.Time
+	OfflineMinutes   int64
+	MuteNotification bool
 }
 
-// AgentOfflineAlertData represents data for agent offline alert
-type AgentOfflineAlertData struct {
-	AgentID      string    `json:"agent_id"`
-	AgentName    string    `json:"agent_name"`
-	AgentIP      string    `json:"agent_ip"`
-	LastSeenAt   time.Time `json:"last_seen_at"`
-	OfflineSince time.Time `json:"offline_since"`
-	Duration     int64     `json:"duration"`
+// OfflineAgentInfo contains information about an offline agent for alert notification.
+// Used internally for building Telegram messages, not for JSON serialization.
+type OfflineAgentInfo struct {
+	ID               uint
+	SID              string
+	Name             string
+	LastSeenAt       *time.Time
+	OfflineMinutes   int64
+	MuteNotification bool
 }
 
-// DailySummaryData represents daily summary report data
+// DailySummaryData contains aggregated daily business data for summary notification.
+// Used internally for building Telegram messages, not for JSON serialization.
 type DailySummaryData struct {
-	Date          string `json:"date"`
-	NewUserCount  int64  `json:"new_user_count"`
-	OrderCount    int64  `json:"order_count"`
-	Revenue       int64  `json:"revenue"`
-	Currency      string `json:"currency"`
-	OnlineNodes   int64  `json:"online_nodes"`
-	OfflineNodes  int64  `json:"offline_nodes"`
-	TotalNodes    int64  `json:"total_nodes"`
-	OnlineAgents  int64  `json:"online_agents"`
-	OfflineAgents int64  `json:"offline_agents"`
-	TotalAgents   int64  `json:"total_agents"`
-	UploadBytes   uint64 `json:"upload_bytes"`
-	DownloadBytes uint64 `json:"download_bytes"`
-	TotalBytes    uint64 `json:"total_bytes"`
+	Date             string // Report date (business timezone)
+	NewUsers         int64
+	ActiveUsers      int64
+	NewSubscriptions int64
+	TotalRevenue     float64
+	Currency         string
+
+	// Node status
+	TotalNodes   int64
+	OnlineNodes  int64
+	OfflineNodes int64
+
+	// Agent status
+	TotalAgents   int64
+	OnlineAgents  int64
+	OfflineAgents int64
+
+	// Traffic stats
+	TotalTrafficBytes uint64
 }
 
-// WeeklySummaryData represents weekly summary report data with comparison
+// WeeklySummaryData contains aggregated weekly business data with comparison for summary notification.
+// Used internally for building Telegram messages, not for JSON serialization.
 type WeeklySummaryData struct {
-	WeekStart          string  `json:"week_start"`
-	WeekEnd            string  `json:"week_end"`
-	NewUserCount       int64   `json:"new_user_count"`
-	NewUserCountChange float64 `json:"new_user_count_change"`
-	OrderCount         int64   `json:"order_count"`
-	OrderCountChange   float64 `json:"order_count_change"`
-	Revenue            int64   `json:"revenue"`
-	RevenueChange      float64 `json:"revenue_change"`
-	Currency           string  `json:"currency"`
-	OnlineNodes        int64   `json:"online_nodes"`
-	OfflineNodes       int64   `json:"offline_nodes"`
-	TotalNodes         int64   `json:"total_nodes"`
-	TotalNodesChange   float64 `json:"total_nodes_change"`
-	OnlineAgents       int64   `json:"online_agents"`
-	OfflineAgents      int64   `json:"offline_agents"`
-	TotalAgents        int64   `json:"total_agents"`
-	TotalAgentsChange  float64 `json:"total_agents_change"`
-	UploadBytes        uint64  `json:"upload_bytes"`
-	DownloadBytes      uint64  `json:"download_bytes"`
-	TotalBytes         uint64  `json:"total_bytes"`
-	TotalBytesChange   float64 `json:"total_bytes_change"`
+	// Period info
+	WeekStart string
+	WeekEnd   string
+
+	// Current week stats
+	NewUsers         int64
+	ActiveUsers      int64
+	NewSubscriptions int64
+	TotalRevenue     float64
+	Currency         string
+
+	// Previous week stats for comparison
+	PrevNewUsers         int64
+	PrevNewSubscriptions int64
+	PrevTotalRevenue     float64
+
+	// Change percentages
+	UserChangePercent    float64
+	SubChangePercent     float64
+	RevenueChangePercent float64
+
+	// Node status
+	TotalNodes   int64
+	OnlineNodes  int64
+	OfflineNodes int64
+
+	// Agent status
+	TotalAgents   int64
+	OnlineAgents  int64
+	OfflineAgents int64
+
+	// Traffic stats
+	TotalTrafficBytes     uint64
+	PrevTotalTrafficBytes uint64
+	TrafficChangePercent  float64
 }

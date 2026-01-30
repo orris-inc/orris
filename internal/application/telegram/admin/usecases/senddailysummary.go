@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/orris-inc/orris/internal/application/telegram/admin/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/domain/subscription"
@@ -51,29 +52,6 @@ func NewSendDailySummaryUseCase(
 		botService:       botService,
 		logger:           logger,
 	}
-}
-
-// DailySummaryData contains aggregated daily business data
-type DailySummaryData struct {
-	Date             string  // Report date (business timezone)
-	NewUsers         int64   // New user registrations
-	ActiveUsers      int64   // Total active users
-	NewSubscriptions int64   // New subscriptions
-	TotalRevenue     float64 // Total revenue for the day
-	Currency         string  // Revenue currency
-
-	// Node status
-	TotalNodes   int64
-	OnlineNodes  int64
-	OfflineNodes int64
-
-	// Agent status
-	TotalAgents   int64
-	OnlineAgents  int64
-	OfflineAgents int64
-
-	// Traffic stats
-	TotalTrafficBytes uint64 // Total traffic in bytes
 }
 
 // SendSummary sends daily summary to all subscribed admins
@@ -162,8 +140,8 @@ func (uc *SendDailySummaryUseCase) getYesterdayRange(now time.Time) (time.Time, 
 	return startOfDay.UTC(), endOfDay.UTC()
 }
 
-func (uc *SendDailySummaryUseCase) gatherDailyStats(ctx context.Context, start, end time.Time) (*DailySummaryData, error) {
-	summary := &DailySummaryData{
+func (uc *SendDailySummaryUseCase) gatherDailyStats(ctx context.Context, start, end time.Time) (*dto.DailySummaryData, error) {
+	summary := &dto.DailySummaryData{
 		Date:     biztime.FormatInBizTimezone(start, "2006-01-02"),
 		Currency: "USD", // Default currency
 	}
@@ -332,9 +310,9 @@ func (uc *SendDailySummaryUseCase) getTrafficFromHourlyCache(ctx context.Context
 	return total
 }
 
-func (uc *SendDailySummaryUseCase) buildDailySummaryMessage(summary *DailySummaryData) string {
+func (uc *SendDailySummaryUseCase) buildDailySummaryMessage(summary *dto.DailySummaryData) string {
 	// Format traffic
-	trafficStr := formatBytesHuman(summary.TotalTrafficBytes)
+	trafficStr := FormatBytes(summary.TotalTrafficBytes)
 
 	// Node status indicator
 	nodeStatus := "🟢"
@@ -389,18 +367,4 @@ Generated at %s`,
 		summary.OfflineAgents,
 		trafficStr,
 		biztime.FormatInBizTimezone(biztime.NowUTC(), "2006-01-02 15:04:05"))
-}
-
-// formatBytesHuman formats bytes into human readable format
-func formatBytesHuman(bytes uint64) string {
-	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
-	}
-	div, exp := uint64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.2f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }

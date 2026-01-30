@@ -349,21 +349,14 @@ func (h *ResourceGroupHandler) ListNodes(c *gin.Context) {
 		return
 	}
 
-	page := 1
-	if pageStr := c.Query("page"); pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
+	var req dto.ListGroupMembersRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		h.logger.Warnw("invalid request query for list nodes", "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
 	}
 
-	pageSize := constants.DefaultPageSize
-	if pageSizeStr := c.Query("page_size"); pageSizeStr != "" {
-		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 && ps <= constants.MaxPageSize {
-			pageSize = ps
-		}
-	}
-
-	result, err := h.manageNodesUseCase.ListNodesBySID(c.Request.Context(), sid, page, pageSize)
+	result, err := h.manageNodesUseCase.ListNodesBySID(c.Request.Context(), sid, req.Page, req.PageSize)
 	if err != nil {
 		if err == resource.ErrGroupNotFound {
 			utils.ErrorResponse(c, http.StatusNotFound, "resource group not found")
@@ -443,21 +436,14 @@ func (h *ResourceGroupHandler) ListForwardAgents(c *gin.Context) {
 		return
 	}
 
-	page := 1
-	if pageStr := c.Query("page"); pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
+	var req dto.ListGroupMembersRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		h.logger.Warnw("invalid request query for list forward agents", "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
 	}
 
-	pageSize := constants.DefaultPageSize
-	if pageSizeStr := c.Query("page_size"); pageSizeStr != "" {
-		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 && ps <= constants.MaxPageSize {
-			pageSize = ps
-		}
-	}
-
-	result, err := h.manageAgentsUseCase.ListAgentsBySID(c.Request.Context(), sid, page, pageSize)
+	result, err := h.manageAgentsUseCase.ListAgentsBySID(c.Request.Context(), sid, req.Page, req.PageSize)
 	if err != nil {
 		if err == resource.ErrGroupNotFound {
 			utils.ErrorResponse(c, http.StatusNotFound, "resource group not found")
@@ -541,24 +527,14 @@ func (h *ResourceGroupHandler) ListForwardRules(c *gin.Context) {
 		return
 	}
 
-	page := 1
-	if pageStr := c.Query("page"); pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
+	var req dto.ListGroupRulesRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		h.logger.Warnw("invalid request query for list forward rules", "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
 	}
 
-	pageSize := constants.DefaultPageSize
-	if pageSizeStr := c.Query("page_size"); pageSizeStr != "" {
-		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 && ps <= constants.MaxPageSize {
-			pageSize = ps
-		}
-	}
-
-	orderBy := c.Query("order_by")
-	order := c.Query("order")
-
-	result, err := h.manageRulesUseCase.ListRulesBySID(c.Request.Context(), sid, page, pageSize, orderBy, order)
+	result, err := h.manageRulesUseCase.ListRulesBySID(c.Request.Context(), sid, req.Page, req.PageSize, req.OrderBy, req.Order)
 	if err != nil {
 		if err == resource.ErrGroupNotFound {
 			utils.ErrorResponse(c, http.StatusNotFound, "resource group not found")
