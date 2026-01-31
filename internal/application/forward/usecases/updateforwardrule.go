@@ -340,12 +340,28 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 
 			nodeID := targetNode.ID()
 			targetNodeID = &nodeID
+		} else {
+			// Attempting to clear targetNodeID - check if this is allowed for the rule type
+			// External rules require targetNodeID (protocol is derived from target node)
+			if rule.RuleType().IsExternal() {
+				uc.logger.Warnw("cannot clear target_node_id for external rules",
+					"rule_sid", cmd.ShortID,
+				)
+				return errors.NewValidationError("target_node_id is required for external rules (protocol info is derived from target node)")
+			}
 		}
 		// Update targetNodeID (will clear targetAddress and targetPort if set, or clear nodeID if empty)
 		if err := rule.UpdateTargetNodeID(targetNodeID); err != nil {
 			return errors.NewValidationError(err.Error())
 		}
 	} else if cmd.TargetAddress != nil || cmd.TargetPort != nil {
+		// External rules cannot use static target address/port
+		if rule.RuleType().IsExternal() {
+			uc.logger.Warnw("external rules cannot use static target address/port",
+				"rule_sid", cmd.ShortID,
+			)
+			return errors.NewValidationError("external rules must use target_node_id, not static target address/port")
+		}
 		// Update static target address/port (will clear targetNodeID)
 		targetAddr := rule.TargetAddress()
 		targetPort := rule.TargetPort()

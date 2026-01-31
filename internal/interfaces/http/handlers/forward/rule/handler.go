@@ -63,7 +63,7 @@ func NewHandler(
 // - entry: agent_id, exit_agent_id, listen_port, (target_address+target_port OR target_node_id)
 // - chain: agent_id, chain_agent_ids, listen_port, (target_address+target_port OR target_node_id)
 // - direct_chain: agent_id, chain_agent_ids, chain_port_config, (target_address+target_port OR target_node_id)
-// - external: server_address, external_source, listen_port, target_node_id (protocol from target_node)
+// - external: server_address, listen_port, target_node_id (required, protocol is derived from target_node)
 type CreateForwardRuleRequest struct {
 	AgentID           string            `json:"agent_id,omitempty" example:"fa_xK9mP2vL3nQ"`
 	RuleType          string            `json:"rule_type" binding:"required,oneof=direct entry chain direct_chain external" example:"direct"`

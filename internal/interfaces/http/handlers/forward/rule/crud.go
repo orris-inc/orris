@@ -60,6 +60,11 @@ func (h *Handler) CreateRule(c *gin.Context) {
 			utils.ErrorResponseWithError(c, errors.NewValidationError("listen_port is required for external rules"))
 			return
 		}
+		if req.TargetNodeID == "" {
+			h.logger.Warnw("target_node_id is required for external rules", "ip", c.ClientIP())
+			utils.ErrorResponseWithError(c, errors.NewValidationError("target_node_id is required for external rules (protocol info is derived from target node)"))
+			return
+		}
 		// external_source is optional
 	}
 

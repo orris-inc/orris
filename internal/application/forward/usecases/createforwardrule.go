@@ -26,13 +26,13 @@ type CreateForwardRuleCommand struct {
 	TunnelHops         *int              // number of hops using tunnel (nil=full tunnel, N=first N hops use tunnel) - for chain type only
 	TunnelType         string            // tunnel type: ws or tls (default: ws)
 	Name               string
-	ListenPort         uint16 // listen port (0 = auto-assign from agent's allowed range, required for external type)
-	TargetAddress      string // required for all types except external (mutually exclusive with TargetNodeSID)
-	TargetPort         uint16 // required for all types except external (mutually exclusive with TargetNodeSID)
-	TargetNodeSID      string // optional for all types (Stripe-style short ID without prefix)
-	BindIP             string // optional bind IP address for outbound connections
-	IPVersion          string // auto, ipv4, ipv6 (default: auto)
-	Protocol           string // not required for external type (protocol derived from target_node)
+	ListenPort         uint16   // listen port (0 = auto-assign from agent's allowed range, required for external type)
+	TargetAddress      string   // required for all types except external (mutually exclusive with TargetNodeSID)
+	TargetPort         uint16   // required for all types except external (mutually exclusive with TargetNodeSID)
+	TargetNodeSID      string   // optional for all types (Stripe-style short ID without prefix)
+	BindIP             string   // optional bind IP address for outbound connections
+	IPVersion          string   // auto, ipv4, ipv6 (default: auto)
+	Protocol           string   // not required for external type (protocol derived from target_node)
 	TrafficMultiplier  *float64 // optional traffic multiplier (nil for auto-calculation, 0-1000000)
 	SortOrder          *int     // optional sort order (nil defaults to 0)
 	Remark             string
@@ -566,6 +566,9 @@ func (uc *CreateForwardRuleUseCase) executeExternalRule(ctx context.Context, cmd
 	}
 	if cmd.ListenPort == 0 {
 		return nil, errors.NewValidationError("listen_port is required for external rules")
+	}
+	if cmd.TargetNodeSID == "" {
+		return nil, errors.NewValidationError("target_node_id is required for external rules (protocol info is derived from target node)")
 	}
 	// external_source is optional
 

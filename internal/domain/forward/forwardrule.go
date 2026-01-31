@@ -329,7 +329,7 @@ func NewForwardRule(
 // Parameters:
 //   - userID: optional user ID (nil for admin-created rules distributed via resource groups)
 //   - subscriptionID: optional subscription ID (nil for admin-created rules)
-//   - targetNodeID: optional for protocol information
+//   - targetNodeID: required for protocol information (protocol is derived from target node)
 //   - name: rule name
 //   - serverAddress: required server address for subscription delivery
 //   - listenPort: listen port
@@ -361,6 +361,9 @@ func NewExternalForwardRule(
 	}
 	if listenPort == 0 {
 		return nil, fmt.Errorf("listen port is required for external forward")
+	}
+	if targetNodeID == nil || *targetNodeID == 0 {
+		return nil, fmt.Errorf("target node ID is required for external forward (protocol is derived from target node)")
 	}
 	// externalSource is optional
 
@@ -453,6 +456,9 @@ func ReconstructForwardRule(
 	if ruleType.IsExternal() {
 		if serverAddress == "" {
 			return nil, fmt.Errorf("server address is required for external forward")
+		}
+		if targetNodeID == nil || *targetNodeID == 0 {
+			return nil, fmt.Errorf("target node ID is required for external forward (protocol is derived from target node)")
 		}
 		// externalSource is optional
 	}
@@ -1669,6 +1675,9 @@ func (r *ForwardRule) Validate() error {
 		}
 		if r.serverAddress == "" {
 			return fmt.Errorf("server address is required for external forward")
+		}
+		if r.targetNodeID == nil || *r.targetNodeID == 0 {
+			return fmt.Errorf("target node ID is required for external forward (protocol is derived from target node)")
 		}
 		// externalSource is optional
 	}

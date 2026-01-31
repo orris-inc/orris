@@ -20,7 +20,7 @@ const (
 	ForwardRuleTypeDirectChain ForwardRuleType = "direct_chain"
 	// ForwardRuleTypeExternal is for external/third-party forward rules.
 	// External rules do not require an agent (agentID=0), instead they use serverAddress
-	// directly for subscription delivery. Protocol info is obtained from targetNodeID.
+	// directly for subscription delivery. Protocol info is derived from targetNodeID (required).
 	ForwardRuleTypeExternal ForwardRuleType = "external"
 )
 
