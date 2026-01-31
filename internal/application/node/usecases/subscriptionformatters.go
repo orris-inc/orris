@@ -251,12 +251,12 @@ func (f *ClashFormatter) FormatWithPassword(nodes []*Node, password string) (str
 
 		case vo.ProtocolHysteria2:
 			if node.Hysteria2Config != nil {
-				proxy = f.buildHysteria2Proxy(node)
+				proxy = f.buildHysteria2Proxy(node, password)
 			}
 
 		case vo.ProtocolTUIC:
 			if node.TUICConfig != nil {
-				proxy = f.buildTUICProxy(node)
+				proxy = f.buildTUICProxy(node, password)
 			}
 
 		default:
@@ -412,14 +412,20 @@ func (f *ClashFormatter) buildVMessProxy(node *Node, uuid string) clashProxy {
 }
 
 // buildHysteria2Proxy builds a Clash Meta Hysteria2 proxy configuration
-func (f *ClashFormatter) buildHysteria2Proxy(node *Node) clashProxy {
+// password is the subscription-derived credential
+func (f *ClashFormatter) buildHysteria2Proxy(node *Node, password string) clashProxy {
 	cfg := node.Hysteria2Config
+	// Use subscription-derived password, fallback to config password if empty
+	pwd := password
+	if pwd == "" {
+		pwd = cfg.Password()
+	}
 	proxy := clashProxy{
 		Name:           node.Name,
 		Type:           "hysteria2",
 		Server:         node.ServerAddress,
 		Port:           node.SubscriptionPort,
-		Password:       cfg.Password(),
+		Password:       pwd,
 		SkipCertVerify: cfg.AllowInsecure(),
 	}
 
@@ -450,15 +456,26 @@ func (f *ClashFormatter) buildHysteria2Proxy(node *Node) clashProxy {
 }
 
 // buildTUICProxy builds a Clash Meta TUIC proxy configuration
-func (f *ClashFormatter) buildTUICProxy(node *Node) clashProxy {
+// password is the subscription-derived credential (used as both uuid and password)
+func (f *ClashFormatter) buildTUICProxy(node *Node, password string) clashProxy {
 	cfg := node.TUICConfig
+	// Use subscription-derived password as both uuid and password,
+	// fallback to config values if empty
+	uuid := password
+	if uuid == "" {
+		uuid = cfg.UUID()
+	}
+	pwd := password
+	if pwd == "" {
+		pwd = cfg.Password()
+	}
 	proxy := clashProxy{
 		Name:                 node.Name,
 		Type:                 "tuic",
 		Server:               node.ServerAddress,
 		Port:                 node.SubscriptionPort,
-		UUID:                 cfg.UUID(),
-		Password:             cfg.Password(),
+		UUID:                 uuid,
+		Password:             pwd,
 		CongestionController: cfg.CongestionControl(),
 		UDPRelayMode:         cfg.UDPRelayMode(),
 		SkipCertVerify:       cfg.AllowInsecure(),
@@ -681,12 +698,12 @@ func (f *SurgeFormatter) FormatWithPassword(nodes []*Node, password string) (str
 
 		case vo.ProtocolHysteria2:
 			if node.Hysteria2Config != nil {
-				line = f.buildHysteria2Line(node)
+				line = f.buildHysteria2Line(node, password)
 			}
 
 		case vo.ProtocolTUIC:
 			if node.TUICConfig != nil {
-				line = f.buildTUICLine(node)
+				line = f.buildTUICLine(node, password)
 			}
 
 		default:
@@ -758,15 +775,21 @@ func (f *SurgeFormatter) buildVMessLine(node *Node, uuid string) string {
 }
 
 // buildHysteria2Line builds a Surge 5 Hysteria2 proxy line
-func (f *SurgeFormatter) buildHysteria2Line(node *Node) string {
+// password is the subscription-derived credential
+func (f *SurgeFormatter) buildHysteria2Line(node *Node, password string) string {
 	cfg := node.Hysteria2Config
+	// Use subscription-derived password, fallback to config password if empty
+	pwd := password
+	if pwd == "" {
+		pwd = cfg.Password()
+	}
 
 	// Surge Hysteria2 format: name = hysteria2, server, port, password=xxx
 	line := fmt.Sprintf("%s = hysteria2, %s, %d, password=%s",
 		node.Name,
 		node.ServerAddress,
 		node.SubscriptionPort,
-		cfg.Password())
+		pwd)
 
 	if cfg.SNI() != "" {
 		line += fmt.Sprintf(", sni=%s", cfg.SNI())
@@ -785,18 +808,29 @@ func (f *SurgeFormatter) buildHysteria2Line(node *Node) string {
 }
 
 // buildTUICLine builds a Surge 5 TUIC proxy line
-func (f *SurgeFormatter) buildTUICLine(node *Node) string {
+// password is the subscription-derived credential (used as both token/uuid and password)
+func (f *SurgeFormatter) buildTUICLine(node *Node, password string) string {
 	cfg := node.TUICConfig
+	// Use subscription-derived password as both token and password,
+	// fallback to config values if empty
+	token := password
+	if token == "" {
+		token = cfg.UUID()
+	}
+	pwd := password
+	if pwd == "" {
+		pwd = cfg.Password()
+	}
 
 	// Surge TUIC format: name = tuic, server, port, token=uuid, password=xxx
 	line := fmt.Sprintf("%s = tuic, %s, %d, token=%s",
 		node.Name,
 		node.ServerAddress,
 		node.SubscriptionPort,
-		cfg.UUID())
+		token)
 
-	if cfg.Password() != "" {
-		line += fmt.Sprintf(", password=%s", cfg.Password())
+	if pwd != "" {
+		line += fmt.Sprintf(", password=%s", pwd)
 	}
 
 	if cfg.SNI() != "" {

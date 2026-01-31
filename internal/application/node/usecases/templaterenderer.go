@@ -50,67 +50,23 @@ func (r *TemplateRenderer) RenderClash(nodes []*Node, password string) (string, 
 }
 
 // generateClashProxies generates YAML for proxies section
+// Delegates to ClashFormatter for consistent proxy generation across all protocols
 func (r *TemplateRenderer) generateClashProxies(nodes []*Node, password string) (string, error) {
-	proxies := make([]clashProxy, 0, len(nodes))
-
-	for _, node := range nodes {
-		var proxy clashProxy
-
-		if node.Protocol == "trojan" {
-			proxy = clashProxy{
-				Name:           node.Name,
-				Type:           "trojan",
-				Server:         node.ServerAddress,
-				Port:           node.SubscriptionPort,
-				Password:       password,
-				UDP:            true,
-				SNI:            node.SNI,
-				SkipCertVerify: node.AllowInsecure,
-			}
-
-			// Handle transport
-			switch node.TransportProtocol {
-			case "ws":
-				proxy.Network = "ws"
-				proxy.WSOpts = &clashWSOpts{
-					Path: node.Path,
-				}
-				if node.Host != "" {
-					proxy.WSOpts.Headers = map[string]string{
-						"Host": node.Host,
-					}
-				}
-			case "grpc":
-				proxy.Network = "grpc"
-				proxy.GRPCOpts = &clashGRPCOpts{
-					GRPCServiceName: node.Host,
-				}
-			}
-		} else {
-			// Adjust password for SS2022 methods
-			nodePassword := adjustPasswordForMethod(password, node.EncryptionMethod, node.TokenHash)
-
-			proxy = clashProxy{
-				Name:     node.Name,
-				Type:     "ss",
-				Server:   node.ServerAddress,
-				Port:     node.SubscriptionPort,
-				Cipher:   node.EncryptionMethod,
-				Password: nodePassword,
-				UDP:      true,
-			}
-
-			if node.Plugin != "" {
-				proxy.Plugin = node.Plugin
-				proxy.PluginOpts = node.PluginOpts
-			}
-		}
-
-		proxies = append(proxies, proxy)
+	// Use ClashFormatter to generate proxies with full protocol support
+	formatter := NewClashFormatter()
+	content, err := formatter.FormatWithPassword(nodes, password)
+	if err != nil {
+		return "", fmt.Errorf("failed to generate proxies: %w", err)
 	}
 
-	// Marshal to YAML
-	yamlBytes, err := yaml.Marshal(proxies)
+	// Parse the generated YAML to extract just the proxies array
+	var config clashConfig
+	if err := yaml.Unmarshal([]byte(content), &config); err != nil {
+		return "", fmt.Errorf("failed to parse proxies YAML: %w", err)
+	}
+
+	// Marshal proxies back to YAML
+	yamlBytes, err := yaml.Marshal(config.Proxies)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal proxies: %w", err)
 	}
