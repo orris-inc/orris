@@ -252,8 +252,8 @@ func (vc VLESSConfig) ToURI(uuid string, serverAddr string, serverPort uint16, r
 		}
 	}
 
-	// Add TLS-specific parameters
-	if vc.security == VLESSSecurityTLS {
+	// Add allowInsecure parameter for TLS and Reality
+	if vc.security == VLESSSecurityTLS || vc.security == VLESSSecurityReality {
 		if vc.allowInsecure {
 			params = append(params, "allowInsecure=1")
 		}
@@ -327,8 +327,9 @@ func (vc VLESSConfig) String() string {
 	}
 
 	if vc.security == VLESSSecurityReality {
+		// Note: privateKey is intentionally NOT included in String() output for security reasons
 		if vc.privateKey != "" {
-			parts = append(parts, fmt.Sprintf("privateKey=%s", vc.privateKey))
+			parts = append(parts, "privateKey=[REDACTED]")
 		}
 		parts = append(parts, fmt.Sprintf("publicKey=%s", vc.publicKey))
 		parts = append(parts, fmt.Sprintf("shortID=%s", vc.shortID))

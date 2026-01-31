@@ -89,6 +89,33 @@ type NodeConfigData struct {
 	AllowInsecure     bool            `json:"allow_insecure"`
 	Route             *RouteConfigDTO `json:"route,omitempty"`     // Routing configuration for traffic splitting
 	Outbounds         []OutboundDTO   `json:"outbounds,omitempty"` // Outbound configs for nodes referenced in route rules
+
+	// VLESS specific fields
+	Flow        string `json:"flow,omitempty"`         // VLESS flow control (xtls-rprx-vision)
+	Security    string `json:"security,omitempty"`     // Security type (none, tls, reality)
+	Fingerprint string `json:"fingerprint,omitempty"`  // TLS fingerprint
+	PrivateKey  string `json:"private_key,omitempty"`  // Reality private key
+	PublicKey   string `json:"public_key,omitempty"`   // Reality public key
+	ShortID     string `json:"short_id,omitempty"`     // Reality short ID
+	SpiderX     string `json:"spider_x,omitempty"`     // Reality spider X
+
+	// VMess specific fields
+	AlterID      int  `json:"alter_id,omitempty"`      // VMess alter ID
+	TLS          bool `json:"tls,omitempty"`           // Enable TLS (VMess)
+
+	// Hysteria2 specific fields
+	Password          string `json:"password,omitempty"`           // Hysteria2/TUIC password
+	CongestionControl string `json:"congestion_control,omitempty"` // Congestion control algorithm
+	Obfs              string `json:"obfs,omitempty"`               // Obfuscation type
+	ObfsPassword      string `json:"obfs_password,omitempty"`      // Obfuscation password
+	UpMbps            *int   `json:"up_mbps,omitempty"`            // Upstream bandwidth limit
+	DownMbps          *int   `json:"down_mbps,omitempty"`          // Downstream bandwidth limit
+
+	// TUIC specific fields
+	UUID         string `json:"uuid,omitempty"`           // TUIC UUID
+	UDPRelayMode string `json:"udp_relay_mode,omitempty"` // UDP relay mode (native, quic)
+	ALPN         string `json:"alpn,omitempty"`           // ALPN protocols
+	DisableSNI   bool   `json:"disable_sni,omitempty"`    // Disable SNI
 }
 
 // ToNodeConfigData converts a domain node entity to NodeConfigData for Hub sync.
@@ -152,6 +179,91 @@ func ToNodeConfigData(n *node.Node, referencedNodes []*node.Node, serverKeyFunc 
 			case "grpc":
 				config.ServiceName = tc.Host() // In TrojanConfig, host is used as service name for gRPC
 			}
+		}
+	} else if n.Protocol().IsVLESS() {
+		config.Protocol = "vless"
+
+		// Extract VLESS-specific configuration
+		if n.VLESSConfig() != nil {
+			vc := n.VLESSConfig()
+			config.TransportProtocol = vc.TransportType()
+			config.Flow = vc.Flow()
+			config.Security = vc.Security()
+			config.SNI = vc.SNI()
+			config.Fingerprint = vc.Fingerprint()
+			config.AllowInsecure = vc.AllowInsecure()
+
+			// Handle transport-specific fields
+			switch vc.TransportType() {
+			case "ws", "h2":
+				config.Host = vc.Host()
+				config.Path = vc.Path()
+			case "grpc":
+				config.ServiceName = vc.ServiceName()
+			}
+
+			// Handle Reality-specific fields
+			if vc.Security() == vo.VLESSSecurityReality {
+				config.PrivateKey = vc.PrivateKey()
+				config.PublicKey = vc.PublicKey()
+				config.ShortID = vc.ShortID()
+				config.SpiderX = vc.SpiderX()
+			}
+		}
+	} else if n.Protocol().IsVMess() {
+		config.Protocol = "vmess"
+
+		// Extract VMess-specific configuration
+		if n.VMessConfig() != nil {
+			vc := n.VMessConfig()
+			config.TransportProtocol = vc.TransportType()
+			config.AlterID = vc.AlterID()
+			config.EncryptionMethod = vc.Security() // VMess security is encryption method
+			config.TLS = vc.TLS()
+			config.SNI = vc.SNI()
+			config.AllowInsecure = vc.AllowInsecure()
+
+			// Handle transport-specific fields
+			switch vc.TransportType() {
+			case "ws", "http":
+				config.Host = vc.Host()
+				config.Path = vc.Path()
+			case "grpc":
+				config.ServiceName = vc.ServiceName()
+			}
+		}
+	} else if n.Protocol().IsHysteria2() {
+		config.Protocol = "hysteria2"
+		config.TransportProtocol = "udp" // Hysteria2 uses QUIC (UDP-based)
+
+		// Extract Hysteria2-specific configuration
+		if n.Hysteria2Config() != nil {
+			hc := n.Hysteria2Config()
+			config.Password = hc.Password()
+			config.CongestionControl = hc.CongestionControl()
+			config.Obfs = hc.Obfs()
+			config.ObfsPassword = hc.ObfsPassword()
+			config.UpMbps = hc.UpMbps()
+			config.DownMbps = hc.DownMbps()
+			config.SNI = hc.SNI()
+			config.AllowInsecure = hc.AllowInsecure()
+			config.Fingerprint = hc.Fingerprint()
+		}
+	} else if n.Protocol().IsTUIC() {
+		config.Protocol = "tuic"
+		config.TransportProtocol = "udp" // TUIC uses QUIC (UDP-based)
+
+		// Extract TUIC-specific configuration
+		if n.TUICConfig() != nil {
+			tc := n.TUICConfig()
+			config.UUID = tc.UUID()
+			config.Password = tc.Password()
+			config.CongestionControl = tc.CongestionControl()
+			config.UDPRelayMode = tc.UDPRelayMode()
+			config.ALPN = tc.ALPN()
+			config.SNI = tc.SNI()
+			config.AllowInsecure = tc.AllowInsecure()
+			config.DisableSNI = tc.DisableSNI()
 		}
 	}
 

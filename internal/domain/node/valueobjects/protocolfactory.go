@@ -166,9 +166,9 @@ func (hc Hysteria2ProtocolConfig) String() string {
 }
 
 // ToSubscriptionURI generates a subscription URI for Hysteria2
-// Note: password is already stored in the config, this method ignores the password parameter
-func (hc Hysteria2ProtocolConfig) ToSubscriptionURI(serverAddr string, serverPort uint16, remarks string) string {
-	return hc.config.ToURI(serverAddr, serverPort, remarks)
+// Password is derived from subscription UUID and passed as parameter
+func (hc Hysteria2ProtocolConfig) ToSubscriptionURI(serverAddr string, serverPort uint16, remarks string, password string) string {
+	return hc.config.ToURI(serverAddr, serverPort, remarks, password)
 }
 
 // TUICProtocolConfig wraps TUICConfig for TUIC protocol
@@ -194,9 +194,9 @@ func (tc TUICProtocolConfig) String() string {
 }
 
 // ToSubscriptionURI generates a subscription URI for TUIC
-// Note: uuid and password are already stored in the config
-func (tc TUICProtocolConfig) ToSubscriptionURI(serverAddr string, serverPort uint16, remarks string) string {
-	return tc.config.ToURI(serverAddr, serverPort, remarks)
+// UUID and password are derived from subscription and passed as parameters
+func (tc TUICProtocolConfig) ToSubscriptionURI(serverAddr string, serverPort uint16, remarks string, uuid string, password string) string {
+	return tc.config.ToURI(serverAddr, serverPort, remarks, uuid, password)
 }
 
 // ProtocolConfigFactory creates protocol configurations based on protocol type
@@ -369,13 +369,14 @@ func (f *ProtocolConfigFactory) GenerateSubscriptionURI(
 
 	case ProtocolHysteria2:
 		if hysteria2Config, ok := config.(Hysteria2ProtocolConfig); ok {
-			return hysteria2Config.ToSubscriptionURI(serverAddr, serverPort, remarks), nil
+			return hysteria2Config.ToSubscriptionURI(serverAddr, serverPort, remarks, password), nil
 		}
 		return "", fmt.Errorf("invalid config type for Hysteria2 protocol")
 
 	case ProtocolTUIC:
 		if tuicConfig, ok := config.(TUICProtocolConfig); ok {
-			return tuicConfig.ToSubscriptionURI(serverAddr, serverPort, remarks), nil
+			// For TUIC, use password as both uuid and password (derived from subscription)
+			return tuicConfig.ToSubscriptionURI(serverAddr, serverPort, remarks, password, password), nil
 		}
 		return "", fmt.Errorf("invalid config type for TUIC protocol")
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/orris-inc/orris/internal/application/node/usecases"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 )
 
@@ -24,6 +25,10 @@ type NodeSource struct {
 type ProtocolConfigs struct {
 	Trojan      map[uint]*models.TrojanConfigModel
 	Shadowsocks map[uint]*models.ShadowsocksConfigModel
+	VLESS       map[uint]*models.VLESSConfigModel
+	VMess       map[uint]*models.VMessConfigModel
+	Hysteria2   map[uint]*models.Hysteria2ConfigModel
+	TUIC        map[uint]*models.TUICConfigModel
 }
 
 // NewProtocolConfigs creates an empty ProtocolConfigs instance.
@@ -31,6 +36,10 @@ func NewProtocolConfigs() ProtocolConfigs {
 	return ProtocolConfigs{
 		Trojan:      make(map[uint]*models.TrojanConfigModel),
 		Shadowsocks: make(map[uint]*models.ShadowsocksConfigModel),
+		VLESS:       make(map[uint]*models.VLESSConfigModel),
+		VMess:       make(map[uint]*models.VMessConfigModel),
+		Hysteria2:   make(map[uint]*models.Hysteria2ConfigModel),
+		TUIC:        make(map[uint]*models.TUICConfigModel),
 	}
 }
 
@@ -68,6 +77,14 @@ func ApplyProtocolConfig(node *usecases.Node, protocol string, nodeID uint, conf
 		applyShadowsocksConfig(node, nodeID, configs.Shadowsocks)
 	case "trojan":
 		applyTrojanConfig(node, nodeID, configs.Trojan)
+	case "vless":
+		applyVLESSConfig(node, nodeID, configs.VLESS)
+	case "vmess":
+		applyVMessConfig(node, nodeID, configs.VMess)
+	case "hysteria2":
+		applyHysteria2Config(node, nodeID, configs.Hysteria2)
+	case "tuic":
+		applyTUICConfig(node, nodeID, configs.TUIC)
 	}
 }
 
@@ -118,6 +135,69 @@ func applyTrojanConfig(node *usecases.Node, nodeID uint, configs map[uint]*model
 	node.AllowInsecure = tc.AllowInsecure
 }
 
+// applyVLESSConfig applies VLESS-specific configuration to a node.
+func applyVLESSConfig(node *usecases.Node, nodeID uint, configs map[uint]*models.VLESSConfigModel) {
+	vc, ok := configs[nodeID]
+	if !ok {
+		return
+	}
+
+	mapper := mappers.NewVLESSConfigMapper()
+	config, err := mapper.ToValueObject(vc)
+	if err != nil {
+		return
+	}
+	node.VLESSConfig = config
+}
+
+// applyVMessConfig applies VMess-specific configuration to a node.
+func applyVMessConfig(node *usecases.Node, nodeID uint, configs map[uint]*models.VMessConfigModel) {
+	vc, ok := configs[nodeID]
+	if !ok {
+		return
+	}
+
+	mapper := mappers.NewVMessConfigMapper()
+	// UUID is passed during subscription formatting, use empty string here
+	config, err := mapper.ToValueObject(vc, "")
+	if err != nil {
+		return
+	}
+	node.VMessConfig = config
+}
+
+// applyHysteria2Config applies Hysteria2-specific configuration to a node.
+func applyHysteria2Config(node *usecases.Node, nodeID uint, configs map[uint]*models.Hysteria2ConfigModel) {
+	hc, ok := configs[nodeID]
+	if !ok {
+		return
+	}
+
+	mapper := mappers.NewHysteria2ConfigMapper()
+	// Password is passed during subscription formatting, use placeholder here
+	config, err := mapper.ToValueObject(hc, mappers.PlaceholderPassword)
+	if err != nil {
+		return
+	}
+	node.Hysteria2Config = config
+}
+
+// applyTUICConfig applies TUIC-specific configuration to a node.
+func applyTUICConfig(node *usecases.Node, nodeID uint, configs map[uint]*models.TUICConfigModel) {
+	tc, ok := configs[nodeID]
+	if !ok {
+		return
+	}
+
+	mapper := mappers.NewTUICConfigMapper()
+	// UUID and password are passed during subscription formatting, use placeholders here
+	config, err := mapper.ToValueObject(tc, mappers.PlaceholderUUID, mappers.PlaceholderPassword)
+	if err != nil {
+		return
+	}
+	node.TUICConfig = config
+}
+
 // ResolveServerAddress returns the effective server address for subscription.
 // If server address is configured, use it; otherwise fall back to agent's reported public IP.
 func ResolveServerAddress(configuredAddr string, publicIPv4, publicIPv6 *string) string {
@@ -166,4 +246,9 @@ func CopyProtocolFieldsFromNode(dst, src *usecases.Node) {
 	dst.Path = src.Path
 	dst.SNI = src.SNI
 	dst.AllowInsecure = src.AllowInsecure
+	// Copy new protocol configs (shallow copy - configs are read-only in subscription context)
+	dst.VLESSConfig = src.VLESSConfig
+	dst.VMessConfig = src.VMessConfig
+	dst.Hysteria2Config = src.Hysteria2Config
+	dst.TUICConfig = src.TUICConfig
 }

@@ -126,9 +126,20 @@ func (tc TUICConfig) DisableSNI() bool {
 
 // ToURI generates a TUIC URI string for subscription
 // Format: tuic://uuid:password@host:port?congestion_control=bbr&udp_relay_mode=native&alpn=h3&sni=xxx#remarks
-func (tc TUICConfig) ToURI(serverAddr string, serverPort uint16, remarks string) string {
+// If uuid or password is empty, it uses the values stored in config (for backward compatibility)
+func (tc TUICConfig) ToURI(serverAddr string, serverPort uint16, remarks string, uuid string, password string) string {
+	// Use provided values, fallback to config values if empty
+	u := uuid
+	if u == "" {
+		u = tc.uuid
+	}
+	p := password
+	if p == "" {
+		p = tc.password
+	}
+
 	// Build base URI with uuid:password (URL encoded to handle special characters)
-	uri := fmt.Sprintf("tuic://%s:%s@%s:%d", url.QueryEscape(tc.uuid), url.QueryEscape(tc.password), serverAddr, serverPort)
+	uri := fmt.Sprintf("tuic://%s:%s@%s:%d", url.QueryEscape(u), url.QueryEscape(p), serverAddr, serverPort)
 
 	// Build query parameters
 	var params []string

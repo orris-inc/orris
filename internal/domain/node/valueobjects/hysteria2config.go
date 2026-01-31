@@ -141,9 +141,16 @@ func (hc Hysteria2Config) Fingerprint() string {
 
 // ToURI generates a Hysteria2 URI string for subscription
 // Format: hysteria2://password@host:port?sni=xxx&obfs=salamander&obfs-password=xxx&up=100&down=100#remarks
-func (hc Hysteria2Config) ToURI(serverAddr string, serverPort uint16, remarks string) string {
+// If password is empty, it uses the password stored in config (for backward compatibility)
+func (hc Hysteria2Config) ToURI(serverAddr string, serverPort uint16, remarks string, password string) string {
+	// Use provided password, fallback to config password if empty
+	pwd := password
+	if pwd == "" {
+		pwd = hc.password
+	}
+
 	// Build base URI
-	uri := fmt.Sprintf("hysteria2://%s@%s:%d", url.QueryEscape(hc.password), serverAddr, serverPort)
+	uri := fmt.Sprintf("hysteria2://%s@%s:%d", url.QueryEscape(pwd), serverAddr, serverPort)
 
 	// Build query parameters
 	var params []string

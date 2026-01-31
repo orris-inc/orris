@@ -85,13 +85,13 @@ func (f *Base64Formatter) FormatWithPassword(nodes []*Node, password string) (st
 			}
 		case vo.ProtocolHysteria2:
 			if node.Hysteria2Config != nil {
-				// Hysteria2 password is already in the config
-				link = node.Hysteria2Config.ToURI(node.ServerAddress, node.SubscriptionPort, node.Name)
+				// Use password derived from subscription UUID
+				link = node.Hysteria2Config.ToURI(node.ServerAddress, node.SubscriptionPort, node.Name, password)
 			}
 		case vo.ProtocolTUIC:
 			if node.TUICConfig != nil {
-				// TUIC uuid/password are already in the config
-				link = node.TUICConfig.ToURI(node.ServerAddress, node.SubscriptionPort, node.Name)
+				// For TUIC, use password as both uuid and password (derived from subscription)
+				link = node.TUICConfig.ToURI(node.ServerAddress, node.SubscriptionPort, node.Name, password, password)
 			}
 		default:
 			// Shadowsocks: adjust password for SS2022 methods
