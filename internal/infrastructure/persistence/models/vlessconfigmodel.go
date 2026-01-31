@@ -22,7 +22,8 @@ type VLESSConfigModel struct {
 	Host          string `gorm:"size:255"`                      // WebSocket/H2 host header
 	Path          string `gorm:"size:255"`                      // WebSocket/H2 path
 	ServiceName   string `gorm:"size:255"`                      // gRPC service name
-	PublicKey     string `gorm:"size:255"`                      // Reality public key
+	PrivateKey    string `gorm:"size:255"`                      // Reality private key (for server inbound)
+	PublicKey     string `gorm:"size:255"`                      // Reality public key (for client outbound)
 	ShortID       string `gorm:"size:32"`                       // Reality short ID
 	SpiderX       string `gorm:"size:255"`                      // Reality spider X parameter
 	CreatedAt     time.Time

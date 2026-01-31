@@ -40,18 +40,19 @@ type UpdateNodeCommand struct {
 	ClearRoute bool                // If true, clear the route config
 
 	// VLESS specific fields
-	VLESSTransportType    *string
-	VLESSFlow             *string
-	VLESSSecurity         *string
-	VLESSSni              *string
-	VLESSFingerprint      *string
-	VLESSAllowInsecure    *bool
-	VLESSHost             *string
-	VLESSPath             *string
-	VLESSServiceName      *string
-	VLESSRealityPublicKey *string
-	VLESSRealityShortID   *string
-	VLESSRealitySpiderX   *string
+	VLESSTransportType     *string
+	VLESSFlow              *string
+	VLESSSecurity          *string
+	VLESSSni               *string
+	VLESSFingerprint       *string
+	VLESSAllowInsecure     *bool
+	VLESSHost              *string
+	VLESSPath              *string
+	VLESSServiceName       *string
+	VLESSRealityPrivateKey *string // Optional: auto-generated if empty when switching to Reality
+	VLESSRealityPublicKey  *string // Optional: auto-generated if empty when switching to Reality
+	VLESSRealityShortID    *string // Optional: auto-generated if empty when switching to Reality
+	VLESSRealitySpiderX    *string
 
 	// VMess specific fields
 	VMessAlterID       *int
@@ -479,7 +480,8 @@ func (uc *UpdateNodeUseCase) validateCommand(cmd UpdateNodeCommand) error {
 		cmd.VLESSTransportType != nil || cmd.VLESSFlow != nil || cmd.VLESSSecurity != nil ||
 		cmd.VLESSSni != nil || cmd.VLESSFingerprint != nil || cmd.VLESSAllowInsecure != nil ||
 		cmd.VLESSHost != nil || cmd.VLESSPath != nil || cmd.VLESSServiceName != nil ||
-		cmd.VLESSRealityPublicKey != nil || cmd.VLESSRealityShortID != nil || cmd.VLESSRealitySpiderX != nil ||
+		cmd.VLESSRealityPrivateKey != nil || cmd.VLESSRealityPublicKey != nil ||
+		cmd.VLESSRealityShortID != nil || cmd.VLESSRealitySpiderX != nil ||
 		// VMess fields
 		cmd.VMessAlterID != nil || cmd.VMessSecurity != nil || cmd.VMessTransportType != nil ||
 		cmd.VMessHost != nil || cmd.VMessPath != nil || cmd.VMessServiceName != nil ||
@@ -600,8 +602,9 @@ func (uc *UpdateNodeUseCase) applyVLESSUpdates(n *node.Node, cmd UpdateNodeComma
 	hasVLESSUpdate := cmd.VLESSTransportType != nil || cmd.VLESSFlow != nil ||
 		cmd.VLESSSecurity != nil || cmd.VLESSSni != nil || cmd.VLESSFingerprint != nil ||
 		cmd.VLESSAllowInsecure != nil || cmd.VLESSHost != nil || cmd.VLESSPath != nil ||
-		cmd.VLESSServiceName != nil || cmd.VLESSRealityPublicKey != nil ||
-		cmd.VLESSRealityShortID != nil || cmd.VLESSRealitySpiderX != nil
+		cmd.VLESSServiceName != nil || cmd.VLESSRealityPrivateKey != nil ||
+		cmd.VLESSRealityPublicKey != nil || cmd.VLESSRealityShortID != nil ||
+		cmd.VLESSRealitySpiderX != nil
 
 	if !hasVLESSUpdate {
 		return nil
@@ -617,7 +620,7 @@ func (uc *UpdateNodeUseCase) applyVLESSUpdates(n *node.Node, cmd UpdateNodeComma
 
 	// Build new config with updated values
 	var transportType, flow, security, sni, fingerprint, host, path, serviceName string
-	var publicKey, shortID, spiderX string
+	var privateKey, publicKey, shortID, spiderX string
 	var allowInsecure bool
 
 	if currentConfig != nil {
@@ -630,6 +633,7 @@ func (uc *UpdateNodeUseCase) applyVLESSUpdates(n *node.Node, cmd UpdateNodeComma
 		host = currentConfig.Host()
 		path = currentConfig.Path()
 		serviceName = currentConfig.ServiceName()
+		privateKey = currentConfig.PrivateKey()
 		publicKey = currentConfig.PublicKey()
 		shortID = currentConfig.ShortID()
 		spiderX = currentConfig.SpiderX()
@@ -666,6 +670,9 @@ func (uc *UpdateNodeUseCase) applyVLESSUpdates(n *node.Node, cmd UpdateNodeComma
 	if cmd.VLESSServiceName != nil {
 		serviceName = *cmd.VLESSServiceName
 	}
+	if cmd.VLESSRealityPrivateKey != nil {
+		privateKey = *cmd.VLESSRealityPrivateKey
+	}
 	if cmd.VLESSRealityPublicKey != nil {
 		publicKey = *cmd.VLESSRealityPublicKey
 	}
@@ -674,6 +681,28 @@ func (uc *UpdateNodeUseCase) applyVLESSUpdates(n *node.Node, cmd UpdateNodeComma
 	}
 	if cmd.VLESSRealitySpiderX != nil {
 		spiderX = *cmd.VLESSRealitySpiderX
+	}
+
+	// Auto-generate Reality key pair and short ID if security is reality and all keys are empty
+	if security == vo.VLESSSecurityReality && privateKey == "" && publicKey == "" && shortID == "" {
+		// Auto-generate key pair
+		keyPair, err := vo.GenerateRealityKeyPair()
+		if err != nil {
+			return errors.NewValidationError("failed to generate Reality key pair: " + err.Error())
+		}
+		privateKey = keyPair.PrivateKey
+		publicKey = keyPair.PublicKey
+
+		// Auto-generate short ID
+		shortID, err = vo.GenerateRealityShortID()
+		if err != nil {
+			return errors.NewValidationError("failed to generate Reality short ID: " + err.Error())
+		}
+
+		uc.logger.Infow("auto-generated Reality key pair and short ID for VLESS node update",
+			"node_sid", n.SID(),
+			"public_key_prefix", publicKey[:8]+"...",
+		)
 	}
 
 	// Create new VLESS config
@@ -687,6 +716,7 @@ func (uc *UpdateNodeUseCase) applyVLESSUpdates(n *node.Node, cmd UpdateNodeComma
 		host,
 		path,
 		serviceName,
+		privateKey,
 		publicKey,
 		shortID,
 		spiderX,

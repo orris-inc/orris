@@ -248,6 +248,7 @@ func (f *ProtocolConfigFactory) CreateVLESSConfig(
 	host string,
 	path string,
 	serviceName string,
+	realityPrivateKey string,
 	realityPublicKey string,
 	realityShortID string,
 	realitySpiderX string,
@@ -255,7 +256,7 @@ func (f *ProtocolConfigFactory) CreateVLESSConfig(
 	config, err := NewVLESSConfig(
 		transportType, flow, security, sni, fingerprint, allowInsecure,
 		host, path, serviceName,
-		realityPublicKey, realityShortID, realitySpiderX,
+		realityPrivateKey, realityPublicKey, realityShortID, realitySpiderX,
 	)
 	if err != nil {
 		return VLESSProtocolConfig{}, fmt.Errorf("failed to create VLESS config: %w", err)

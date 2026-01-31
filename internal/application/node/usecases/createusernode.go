@@ -29,18 +29,19 @@ type CreateUserNodeCommand struct {
 	AllowInsecure     bool
 
 	// VLESS specific fields
-	VLESSTransportType    string
-	VLESSFlow             string
-	VLESSSecurity         string
-	VLESSSni              string
-	VLESSFingerprint      string
-	VLESSAllowInsecure    bool
-	VLESSHost             string
-	VLESSPath             string
-	VLESSServiceName      string
-	VLESSRealityPublicKey string
-	VLESSRealityShortID   string
-	VLESSRealitySpiderX   string
+	VLESSTransportType     string
+	VLESSFlow              string
+	VLESSSecurity          string
+	VLESSSni               string
+	VLESSFingerprint       string
+	VLESSAllowInsecure     bool
+	VLESSHost              string
+	VLESSPath              string
+	VLESSServiceName       string
+	VLESSRealityPrivateKey string // Optional: auto-generated if empty for Reality security
+	VLESSRealityPublicKey  string // Optional: auto-generated if empty for Reality security
+	VLESSRealityShortID    string // Optional: auto-generated if empty for Reality security
+	VLESSRealitySpiderX    string
 
 	// VMess specific fields
 	VMessAlterID       int
@@ -215,6 +216,35 @@ func (uc *CreateUserNodeUseCase) Execute(ctx context.Context, cmd CreateUserNode
 			security = "tls"
 		}
 
+		// Auto-generate Reality key pair and short ID if security is reality and not provided
+		privateKey := cmd.VLESSRealityPrivateKey
+		publicKey := cmd.VLESSRealityPublicKey
+		shortID := cmd.VLESSRealityShortID
+
+		if security == vo.VLESSSecurityReality && privateKey == "" && publicKey == "" && shortID == "" {
+			// Auto-generate key pair
+			keyPair, err := vo.GenerateRealityKeyPair()
+			if err != nil {
+				uc.logger.Errorw("failed to generate Reality key pair", "error", err)
+				return nil, fmt.Errorf("failed to generate Reality key pair: %w", err)
+			}
+			privateKey = keyPair.PrivateKey
+			publicKey = keyPair.PublicKey
+
+			// Auto-generate short ID
+			shortID, err = vo.GenerateRealityShortID()
+			if err != nil {
+				uc.logger.Errorw("failed to generate Reality short ID", "error", err)
+				return nil, fmt.Errorf("failed to generate Reality short ID: %w", err)
+			}
+
+			uc.logger.Infow("auto-generated Reality key pair and short ID for user VLESS node",
+				"user_id", cmd.UserID,
+				"name", cmd.Name,
+				"public_key_prefix", publicKey[:8]+"...",
+			)
+		}
+
 		vc, err := vo.NewVLESSConfig(
 			transportType,
 			cmd.VLESSFlow,
@@ -225,8 +255,9 @@ func (uc *CreateUserNodeUseCase) Execute(ctx context.Context, cmd CreateUserNode
 			cmd.VLESSHost,
 			cmd.VLESSPath,
 			cmd.VLESSServiceName,
-			cmd.VLESSRealityPublicKey,
-			cmd.VLESSRealityShortID,
+			privateKey,
+			publicKey,
+			shortID,
 			cmd.VLESSRealitySpiderX,
 		)
 		if err != nil {
@@ -476,13 +507,16 @@ func (uc *CreateUserNodeUseCase) validateVLESSCommand(cmd CreateUserNodeCommand)
 		return errors.NewValidationError("invalid VLESS flow (must be empty or xtls-rprx-vision)")
 	}
 
-	// Reality requires public key and short ID
+	// Reality key validation: if any key is provided, all must be provided
+	// If none provided, they will be auto-generated
 	if cmd.VLESSSecurity == "reality" {
-		if cmd.VLESSRealityPublicKey == "" {
-			return errors.NewValidationError("reality public key is required for VLESS Reality security")
-		}
-		if cmd.VLESSRealityShortID == "" {
-			return errors.NewValidationError("reality short ID is required for VLESS Reality security")
+		hasPrivateKey := cmd.VLESSRealityPrivateKey != ""
+		hasPublicKey := cmd.VLESSRealityPublicKey != ""
+		hasShortID := cmd.VLESSRealityShortID != ""
+
+		// Partial configuration is not allowed
+		if (hasPrivateKey || hasPublicKey || hasShortID) && !(hasPrivateKey && hasPublicKey && hasShortID) {
+			return errors.NewValidationError("for VLESS Reality security, either provide all of private_key, public_key, and short_id, or leave all empty for auto-generation")
 		}
 	}
 

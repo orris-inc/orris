@@ -276,18 +276,19 @@ type CreateNodeRequest struct {
 	Route *dto.RouteConfigDTO `json:"route,omitempty" comment:"Route configuration for traffic splitting"`
 
 	// VLESS specific fields
-	VLESSTransportType    string `json:"vless_transport_type,omitempty" binding:"omitempty,oneof=tcp ws grpc h2" example:"tcp" comment:"VLESS transport type"`
-	VLESSFlow             string `json:"vless_flow,omitempty" example:"xtls-rprx-vision" comment:"VLESS flow control"`
-	VLESSSecurity         string `json:"vless_security,omitempty" binding:"omitempty,oneof=none tls reality" example:"tls" comment:"VLESS security type"`
-	VLESSSni              string `json:"vless_sni,omitempty" example:"example.com" comment:"VLESS TLS SNI"`
-	VLESSFingerprint      string `json:"vless_fingerprint,omitempty" example:"chrome" comment:"VLESS TLS fingerprint"`
-	VLESSAllowInsecure    bool   `json:"vless_allow_insecure,omitempty" comment:"VLESS allow insecure TLS"`
-	VLESSHost             string `json:"vless_host,omitempty" comment:"VLESS WS/H2 host header"`
-	VLESSPath             string `json:"vless_path,omitempty" comment:"VLESS WS/H2 path"`
-	VLESSServiceName      string `json:"vless_service_name,omitempty" comment:"VLESS gRPC service name"`
-	VLESSRealityPublicKey string `json:"vless_reality_public_key,omitempty" comment:"VLESS Reality public key"`
-	VLESSRealityShortID   string `json:"vless_reality_short_id,omitempty" comment:"VLESS Reality short ID"`
-	VLESSRealitySpiderX   string `json:"vless_reality_spider_x,omitempty" comment:"VLESS Reality spider X"`
+	VLESSTransportType     string `json:"vless_transport_type,omitempty" binding:"omitempty,oneof=tcp ws grpc h2" example:"tcp" comment:"VLESS transport type"`
+	VLESSFlow              string `json:"vless_flow,omitempty" example:"xtls-rprx-vision" comment:"VLESS flow control"`
+	VLESSSecurity          string `json:"vless_security,omitempty" binding:"omitempty,oneof=none tls reality" example:"tls" comment:"VLESS security type"`
+	VLESSSni               string `json:"vless_sni,omitempty" example:"example.com" comment:"VLESS TLS SNI"`
+	VLESSFingerprint       string `json:"vless_fingerprint,omitempty" example:"chrome" comment:"VLESS TLS fingerprint"`
+	VLESSAllowInsecure     bool   `json:"vless_allow_insecure,omitempty" comment:"VLESS allow insecure TLS"`
+	VLESSHost              string `json:"vless_host,omitempty" comment:"VLESS WS/H2 host header"`
+	VLESSPath              string `json:"vless_path,omitempty" comment:"VLESS WS/H2 path"`
+	VLESSServiceName       string `json:"vless_service_name,omitempty" comment:"VLESS gRPC service name"`
+	VLESSRealityPrivateKey string `json:"vless_reality_private_key,omitempty" comment:"VLESS Reality private key (optional, auto-generated if empty)"`
+	VLESSRealityPublicKey  string `json:"vless_reality_public_key,omitempty" comment:"VLESS Reality public key (optional, auto-generated if empty)"`
+	VLESSRealityShortID    string `json:"vless_reality_short_id,omitempty" comment:"VLESS Reality short ID (optional, auto-generated if empty)"`
+	VLESSRealitySpiderX    string `json:"vless_reality_spider_x,omitempty" comment:"VLESS Reality spider X"`
 
 	// VMess specific fields
 	VMessAlterID       int    `json:"vmess_alter_id,omitempty" example:"0" comment:"VMess alter ID"`
@@ -340,18 +341,19 @@ func (r *CreateNodeRequest) ToCommand() usecases.CreateNodeCommand {
 		AllowInsecure:     r.AllowInsecure,
 		Route:             r.Route,
 		// VLESS
-		VLESSTransportType:    r.VLESSTransportType,
-		VLESSFlow:             r.VLESSFlow,
-		VLESSSecurity:         r.VLESSSecurity,
-		VLESSSni:              r.VLESSSni,
-		VLESSFingerprint:      r.VLESSFingerprint,
-		VLESSAllowInsecure:    r.VLESSAllowInsecure,
-		VLESSHost:             r.VLESSHost,
-		VLESSPath:             r.VLESSPath,
-		VLESSServiceName:      r.VLESSServiceName,
-		VLESSRealityPublicKey: r.VLESSRealityPublicKey,
-		VLESSRealityShortID:   r.VLESSRealityShortID,
-		VLESSRealitySpiderX:   r.VLESSRealitySpiderX,
+		VLESSTransportType:     r.VLESSTransportType,
+		VLESSFlow:              r.VLESSFlow,
+		VLESSSecurity:          r.VLESSSecurity,
+		VLESSSni:               r.VLESSSni,
+		VLESSFingerprint:       r.VLESSFingerprint,
+		VLESSAllowInsecure:     r.VLESSAllowInsecure,
+		VLESSHost:              r.VLESSHost,
+		VLESSPath:              r.VLESSPath,
+		VLESSServiceName:       r.VLESSServiceName,
+		VLESSRealityPrivateKey: r.VLESSRealityPrivateKey,
+		VLESSRealityPublicKey:  r.VLESSRealityPublicKey,
+		VLESSRealityShortID:    r.VLESSRealityShortID,
+		VLESSRealitySpiderX:    r.VLESSRealitySpiderX,
 		// VMess
 		VMessAlterID:       r.VMessAlterID,
 		VMessSecurity:      r.VMessSecurity,
@@ -407,18 +409,19 @@ type UpdateNodeRequest struct {
 	ClearRoute bool                `json:"clear_route,omitempty" comment:"Set to true to clear route configuration"`
 
 	// VLESS specific fields
-	VLESSTransportType    *string `json:"vless_transport_type,omitempty" binding:"omitempty,oneof=tcp ws grpc h2" comment:"VLESS transport type"`
-	VLESSFlow             *string `json:"vless_flow,omitempty" comment:"VLESS flow control"`
-	VLESSSecurity         *string `json:"vless_security,omitempty" binding:"omitempty,oneof=none tls reality" comment:"VLESS security type"`
-	VLESSSni              *string `json:"vless_sni,omitempty" comment:"VLESS TLS SNI"`
-	VLESSFingerprint      *string `json:"vless_fingerprint,omitempty" comment:"VLESS TLS fingerprint"`
-	VLESSAllowInsecure    *bool   `json:"vless_allow_insecure,omitempty" comment:"VLESS allow insecure TLS"`
-	VLESSHost             *string `json:"vless_host,omitempty" comment:"VLESS WS/H2 host header"`
-	VLESSPath             *string `json:"vless_path,omitempty" comment:"VLESS WS/H2 path"`
-	VLESSServiceName      *string `json:"vless_service_name,omitempty" comment:"VLESS gRPC service name"`
-	VLESSRealityPublicKey *string `json:"vless_reality_public_key,omitempty" comment:"VLESS Reality public key"`
-	VLESSRealityShortID   *string `json:"vless_reality_short_id,omitempty" comment:"VLESS Reality short ID"`
-	VLESSRealitySpiderX   *string `json:"vless_reality_spider_x,omitempty" comment:"VLESS Reality spider X"`
+	VLESSTransportType     *string `json:"vless_transport_type,omitempty" binding:"omitempty,oneof=tcp ws grpc h2" comment:"VLESS transport type"`
+	VLESSFlow              *string `json:"vless_flow,omitempty" comment:"VLESS flow control"`
+	VLESSSecurity          *string `json:"vless_security,omitempty" binding:"omitempty,oneof=none tls reality" comment:"VLESS security type"`
+	VLESSSni               *string `json:"vless_sni,omitempty" comment:"VLESS TLS SNI"`
+	VLESSFingerprint       *string `json:"vless_fingerprint,omitempty" comment:"VLESS TLS fingerprint"`
+	VLESSAllowInsecure     *bool   `json:"vless_allow_insecure,omitempty" comment:"VLESS allow insecure TLS"`
+	VLESSHost              *string `json:"vless_host,omitempty" comment:"VLESS WS/H2 host header"`
+	VLESSPath              *string `json:"vless_path,omitempty" comment:"VLESS WS/H2 path"`
+	VLESSServiceName       *string `json:"vless_service_name,omitempty" comment:"VLESS gRPC service name"`
+	VLESSRealityPrivateKey *string `json:"vless_reality_private_key,omitempty" comment:"VLESS Reality private key (optional, auto-generated if empty)"`
+	VLESSRealityPublicKey  *string `json:"vless_reality_public_key,omitempty" comment:"VLESS Reality public key (optional, auto-generated if empty)"`
+	VLESSRealityShortID    *string `json:"vless_reality_short_id,omitempty" comment:"VLESS Reality short ID (optional, auto-generated if empty)"`
+	VLESSRealitySpiderX    *string `json:"vless_reality_spider_x,omitempty" comment:"VLESS Reality spider X"`
 
 	// VMess specific fields
 	VMessAlterID       *int    `json:"vmess_alter_id,omitempty" comment:"VMess alter ID"`
@@ -475,18 +478,19 @@ func (r *UpdateNodeRequest) ToCommand(sid string) usecases.UpdateNodeCommand {
 		Route:                   r.Route,
 		ClearRoute:              r.ClearRoute,
 		// VLESS
-		VLESSTransportType:    r.VLESSTransportType,
-		VLESSFlow:             r.VLESSFlow,
-		VLESSSecurity:         r.VLESSSecurity,
-		VLESSSni:              r.VLESSSni,
-		VLESSFingerprint:      r.VLESSFingerprint,
-		VLESSAllowInsecure:    r.VLESSAllowInsecure,
-		VLESSHost:             r.VLESSHost,
-		VLESSPath:             r.VLESSPath,
-		VLESSServiceName:      r.VLESSServiceName,
-		VLESSRealityPublicKey: r.VLESSRealityPublicKey,
-		VLESSRealityShortID:   r.VLESSRealityShortID,
-		VLESSRealitySpiderX:   r.VLESSRealitySpiderX,
+		VLESSTransportType:     r.VLESSTransportType,
+		VLESSFlow:              r.VLESSFlow,
+		VLESSSecurity:          r.VLESSSecurity,
+		VLESSSni:               r.VLESSSni,
+		VLESSFingerprint:       r.VLESSFingerprint,
+		VLESSAllowInsecure:     r.VLESSAllowInsecure,
+		VLESSHost:              r.VLESSHost,
+		VLESSPath:              r.VLESSPath,
+		VLESSServiceName:       r.VLESSServiceName,
+		VLESSRealityPrivateKey: r.VLESSRealityPrivateKey,
+		VLESSRealityPublicKey:  r.VLESSRealityPublicKey,
+		VLESSRealityShortID:    r.VLESSRealityShortID,
+		VLESSRealitySpiderX:    r.VLESSRealitySpiderX,
 		// VMess
 		VMessAlterID:       r.VMessAlterID,
 		VMessSecurity:      r.VMessSecurity,

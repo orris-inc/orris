@@ -44,12 +44,13 @@ type NodeConfigResponse struct {
 	Outbounds         []OutboundDTO   `json:"outbounds,omitempty"`                                                             // Outbound configs for nodes referenced in route rules
 
 	// VLESS specific fields
-	VLESSFlow             string `json:"vless_flow,omitempty"`               // VLESS flow control (xtls-rprx-vision)
-	VLESSSecurity         string `json:"vless_security,omitempty"`           // VLESS security type (none, tls, reality)
-	VLESSFingerprint      string `json:"vless_fingerprint,omitempty"`        // TLS fingerprint for VLESS
-	VLESSRealityPublicKey string `json:"vless_reality_public_key,omitempty"` // Reality public key
-	VLESSRealityShortID   string `json:"vless_reality_short_id,omitempty"`   // Reality short ID
-	VLESSRealitySpiderX   string `json:"vless_reality_spider_x,omitempty"`   // Reality spider X parameter
+	VLESSFlow              string `json:"vless_flow,omitempty"`                // VLESS flow control (xtls-rprx-vision)
+	VLESSSecurity          string `json:"vless_security,omitempty"`            // VLESS security type (none, tls, reality)
+	VLESSFingerprint       string `json:"vless_fingerprint,omitempty"`         // TLS fingerprint for VLESS
+	VLESSRealityPrivateKey string `json:"vless_reality_private_key,omitempty"` // Reality private key (for server inbound)
+	VLESSRealityPublicKey  string `json:"vless_reality_public_key,omitempty"`  // Reality public key (for client outbound)
+	VLESSRealityShortID    string `json:"vless_reality_short_id,omitempty"`    // Reality short ID
+	VLESSRealitySpiderX    string `json:"vless_reality_spider_x,omitempty"`    // Reality spider X parameter
 
 	// VMess specific fields
 	VMessAlterID  int    `json:"vmess_alter_id,omitempty"` // VMess alter ID (usually 0)
@@ -306,7 +307,8 @@ func ToNodeConfigResponse(n *node.Node, referencedNodes []*node.Node, serverKeyF
 			config.VLESSSecurity = vc.Security()
 			config.VLESSFingerprint = vc.Fingerprint()
 
-			// Reality specific fields
+			// Reality specific fields (private key for server inbound, public key for client reference)
+			config.VLESSRealityPrivateKey = vc.PrivateKey()
 			config.VLESSRealityPublicKey = vc.PublicKey()
 			config.VLESSRealityShortID = vc.ShortID()
 			config.VLESSRealitySpiderX = vc.SpiderX()
