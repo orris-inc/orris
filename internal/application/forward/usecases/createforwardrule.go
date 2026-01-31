@@ -17,26 +17,30 @@ import (
 
 // CreateForwardRuleCommand represents the input for creating a forward rule.
 type CreateForwardRuleCommand struct {
-	AgentShortID       string            // Stripe-style short ID (without prefix, e.g., "xK9mP2vL3nQ")
+	AgentShortID       string            // Stripe-style short ID (without prefix, e.g., "xK9mP2vL3nQ") - not required for external type
 	UserID             *uint             // user ID for user-owned rules (nil for admin-created rules)
-	RuleType           string            // direct, entry, chain, direct_chain
+	RuleType           string            // direct, entry, chain, direct_chain, external
 	ExitAgentShortID   string            // required for entry type (Stripe-style short ID without prefix)
 	ChainAgentShortIDs []string          // required for chain type (ordered list of Stripe-style short IDs without prefix)
 	ChainPortConfig    map[string]uint16 // required for direct_chain type or hybrid chain direct hops (agent short_id -> listen port)
 	TunnelHops         *int              // number of hops using tunnel (nil=full tunnel, N=first N hops use tunnel) - for chain type only
 	TunnelType         string            // tunnel type: ws or tls (default: ws)
 	Name               string
-	ListenPort         uint16 // listen port (0 = auto-assign from agent's allowed range)
-	TargetAddress      string // required for all types (mutually exclusive with TargetNodeSID)
-	TargetPort         uint16 // required for all types (mutually exclusive with TargetNodeSID)
+	ListenPort         uint16 // listen port (0 = auto-assign from agent's allowed range, required for external type)
+	TargetAddress      string // required for all types except external (mutually exclusive with TargetNodeSID)
+	TargetPort         uint16 // required for all types except external (mutually exclusive with TargetNodeSID)
 	TargetNodeSID      string // optional for all types (Stripe-style short ID without prefix)
 	BindIP             string // optional bind IP address for outbound connections
 	IPVersion          string // auto, ipv4, ipv6 (default: auto)
-	Protocol           string
+	Protocol           string // not required for external type (protocol derived from target_node)
 	TrafficMultiplier  *float64 // optional traffic multiplier (nil for auto-calculation, 0-1000000)
 	SortOrder          *int     // optional sort order (nil defaults to 0)
 	Remark             string
 	GroupSIDs          []string // optional resource group SIDs (admin only)
+	// External rule fields (only for rule_type=external)
+	ServerAddress  string // required for external type - server address for subscription delivery
+	ExternalSource string // required for external type - source identifier
+	ExternalRuleID string // optional for external type - external reference ID
 }
 
 // CreateForwardRuleResult represents the output of creating a forward rule.
@@ -90,9 +94,16 @@ func NewCreateForwardRuleUseCase(
 
 // Execute creates a new forward rule.
 func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwardRuleCommand) (*CreateForwardRuleResult, error) {
-	uc.logger.Infow("executing create forward rule use case", "name", cmd.Name, "listen_port", cmd.ListenPort)
+	uc.logger.Infow("executing create forward rule use case", "name", cmd.Name, "listen_port", cmd.ListenPort, "rule_type", cmd.RuleType)
 
-	// Resolve AgentShortID to internal ID
+	ruleType := vo.ForwardRuleType(cmd.RuleType)
+
+	// Handle external rules separately (they don't require agent)
+	if ruleType.IsExternal() {
+		return uc.executeExternalRule(ctx, cmd)
+	}
+
+	// Resolve AgentShortID to internal ID (required for non-external rules)
 	if cmd.AgentShortID == "" {
 		return nil, errors.NewValidationError("agent_id is required")
 	}
@@ -289,7 +300,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 
 	// Create domain entity
 	protocol := vo.ForwardProtocol(cmd.Protocol)
-	ruleType := vo.ForwardRuleType(cmd.RuleType)
+	// ruleType already defined at the beginning of Execute
 	ipVersion := vo.IPVersion(cmd.IPVersion)
 	tunnelType := vo.TunnelType(cmd.TunnelType)
 	rule, err := forward.NewForwardRule(
@@ -396,10 +407,10 @@ func (uc *CreateForwardRuleUseCase) validateCommand(_ context.Context, cmd Creat
 		return errors.NewValidationError("protocol is required")
 	}
 
-	// Validate rule type
+	// Validate rule type (external rules are handled separately in executeExternalRule)
 	ruleType := vo.ForwardRuleType(cmd.RuleType)
 	if !ruleType.IsValid() {
-		return errors.NewValidationError(fmt.Sprintf("invalid rule_type: %s, must be direct, entry, chain, or direct_chain", cmd.RuleType))
+		return errors.NewValidationError(fmt.Sprintf("invalid rule_type: %s, must be direct, entry, chain, direct_chain, or external", cmd.RuleType))
 	}
 
 	// Validate protocol
@@ -476,8 +487,12 @@ func (uc *CreateForwardRuleUseCase) validateCommand(_ context.Context, cmd Creat
 		if hasTarget && hasTargetNode {
 			return errors.NewValidationError("target_address+target_port and target_node_id are mutually exclusive for direct_chain forward")
 		}
+	case vo.ForwardRuleTypeExternal:
+		// External rules are handled in executeExternalRule, not here
+		// This case should not be reached, but handle it gracefully
+		return nil
 	default:
-		return errors.NewValidationError(fmt.Sprintf("invalid rule_type: %s, must be direct, entry, chain, or direct_chain", cmd.RuleType))
+		return errors.NewValidationError(fmt.Sprintf("invalid rule_type: %s, must be direct, entry, chain, direct_chain, or external", cmd.RuleType))
 	}
 
 	return nil
@@ -535,4 +550,140 @@ func (uc *CreateForwardRuleUseCase) assignAvailablePort(ctx context.Context, age
 	}
 
 	return 0, errors.NewValidationError("failed to find available port after maximum attempts")
+}
+
+// executeExternalRule handles external rule creation.
+// External rules don't require an agent; they use serverAddress for subscription delivery.
+func (uc *CreateForwardRuleUseCase) executeExternalRule(ctx context.Context, cmd CreateForwardRuleCommand) (*CreateForwardRuleResult, error) {
+	uc.logger.Infow("executing create external forward rule use case", "name", cmd.Name, "server_address", cmd.ServerAddress)
+
+	// Validate required fields for external rules
+	if cmd.Name == "" {
+		return nil, errors.NewValidationError("name is required")
+	}
+	if cmd.ServerAddress == "" {
+		return nil, errors.NewValidationError("server_address is required for external rules")
+	}
+	if cmd.ListenPort == 0 {
+		return nil, errors.NewValidationError("listen_port is required for external rules")
+	}
+	// external_source is optional
+
+	// Resolve TargetNodeSID to internal ID (optional for external rules, used for protocol info)
+	var targetNodeID *uint
+	if cmd.TargetNodeSID != "" {
+		targetNode, err := uc.nodeRepo.GetBySID(ctx, cmd.TargetNodeSID)
+		if err != nil {
+			uc.logger.Errorw("failed to get target node", "target_node_sid", cmd.TargetNodeSID, "error", err)
+			return nil, fmt.Errorf("failed to validate target node: %w", err)
+		}
+		if targetNode == nil {
+			return nil, errors.NewNotFoundError("target node", cmd.TargetNodeSID)
+		}
+
+		// Ownership constraint for external rules
+		if cmd.UserID != nil && *cmd.UserID != 0 {
+			if !targetNode.IsOwnedBy(*cmd.UserID) {
+				uc.logger.Warnw("user rule cannot target node not owned by user",
+					"user_id", *cmd.UserID,
+					"target_node_sid", cmd.TargetNodeSID,
+				)
+				return nil, errors.NewForbiddenError("user rules can only target nodes owned by the same user")
+			}
+		} else {
+			if targetNode.IsUserOwned() {
+				uc.logger.Warnw("system rule cannot target user-owned node",
+					"target_node_sid", cmd.TargetNodeSID,
+				)
+				return nil, errors.NewForbiddenError("system rules cannot target user-owned nodes")
+			}
+		}
+
+		nodeID := targetNode.ID()
+		targetNodeID = &nodeID
+	}
+
+	// Resolve GroupSIDs to internal IDs and validate plan types (if provided)
+	var groupIDs []uint
+	if len(cmd.GroupSIDs) > 0 {
+		groupIDs = make([]uint, 0, len(cmd.GroupSIDs))
+		for _, groupSID := range cmd.GroupSIDs {
+			if err := id.ValidatePrefix(groupSID, id.PrefixResourceGroup); err != nil {
+				return nil, errors.NewValidationError(fmt.Sprintf("invalid resource group ID format: %s", groupSID))
+			}
+
+			group, err := uc.resourceGroupRepo.GetBySID(ctx, groupSID)
+			if err != nil {
+				uc.logger.Errorw("failed to get resource group", "group_sid", groupSID, "error", err)
+				return nil, fmt.Errorf("failed to validate resource group: %w", err)
+			}
+			if group == nil {
+				return nil, errors.NewNotFoundError("resource group", groupSID)
+			}
+
+			// Verify the plan type supports forward rules binding
+			plan, err := uc.planRepo.GetByID(ctx, group.PlanID())
+			if err != nil {
+				uc.logger.Errorw("failed to get plan for resource group", "plan_id", group.PlanID(), "error", err)
+				return nil, fmt.Errorf("failed to validate resource group plan: %w", err)
+			}
+			if plan == nil {
+				return nil, fmt.Errorf("plan not found for resource group %s", groupSID)
+			}
+			if plan.PlanType().IsForward() {
+				uc.logger.Warnw("attempted to bind forward rule to forward plan resource group",
+					"group_sid", groupSID,
+					"plan_id", group.PlanID(),
+					"plan_type", plan.PlanType().String())
+				return nil, errors.NewValidationError(
+					fmt.Sprintf("resource group %s belongs to a forward plan and cannot bind forward rules", groupSID))
+			}
+
+			groupIDs = append(groupIDs, group.ID())
+		}
+	}
+
+	// Create external forward rule domain entity
+	rule, err := forward.NewExternalForwardRule(
+		cmd.UserID,
+		nil, // subscriptionID is nil for admin-created rules
+		targetNodeID,
+		cmd.Name,
+		cmd.ServerAddress,
+		cmd.ListenPort,
+		cmd.ExternalSource,
+		cmd.ExternalRuleID,
+		cmd.Remark,
+		derefIntOrDefault(cmd.SortOrder, 0),
+		groupIDs,
+		id.NewForwardRuleID,
+	)
+	if err != nil {
+		uc.logger.Errorw("failed to create external forward rule entity", "error", err)
+		return nil, errors.NewValidationError(err.Error())
+	}
+
+	// Persist
+	if err := uc.repo.Create(ctx, rule); err != nil {
+		uc.logger.Errorw("failed to persist external forward rule", "error", err)
+		return nil, fmt.Errorf("failed to save forward rule: %w", err)
+	}
+
+	result := &CreateForwardRuleResult{
+		ID:           rule.SID(),
+		AgentID:      0, // External rules don't have agents
+		RuleType:     rule.RuleType().String(),
+		Name:         rule.Name(),
+		ListenPort:   rule.ListenPort(),
+		TargetNodeID: rule.TargetNodeID(),
+		IPVersion:    rule.IPVersion().String(),
+		Protocol:     rule.Protocol().String(),
+		Status:       rule.Status().String(),
+		CreatedAt:    rule.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
+	}
+
+	uc.logger.Infow("external forward rule created successfully", "id", result.ID, "name", cmd.Name)
+
+	// External rules don't need config sync notification (no agents)
+	return result, nil
 }

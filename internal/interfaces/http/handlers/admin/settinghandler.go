@@ -22,6 +22,10 @@ var validCategories = map[string]bool{
 	"email":        true,
 	"usdt":         true,
 	"subscription": true,
+	"branding":     true,
+	"security":     true,
+	"registration": true,
+	"legal":        true,
 }
 
 // isValidCategory checks if the category is in the whitelist

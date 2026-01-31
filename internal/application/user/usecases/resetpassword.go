@@ -15,11 +15,12 @@ type ResetPasswordCommand struct {
 }
 
 type ResetPasswordUseCase struct {
-	userRepo       user.Repository
-	sessionRepo    user.SessionRepository
-	passwordHasher user.PasswordHasher
-	emailService   EmailService
-	logger         logger.Interface
+	userRepo               user.Repository
+	sessionRepo            user.SessionRepository
+	passwordHasher         user.PasswordHasher
+	emailService           EmailService
+	passwordPolicyProvider PasswordPolicyProvider
+	logger                 logger.Interface
 }
 
 func NewResetPasswordUseCase(
@@ -27,14 +28,16 @@ func NewResetPasswordUseCase(
 	sessionRepo user.SessionRepository,
 	hasher user.PasswordHasher,
 	emailService EmailService,
+	passwordPolicyProvider PasswordPolicyProvider,
 	logger logger.Interface,
 ) *ResetPasswordUseCase {
 	return &ResetPasswordUseCase{
-		userRepo:       userRepo,
-		sessionRepo:    sessionRepo,
-		passwordHasher: hasher,
-		emailService:   emailService,
-		logger:         logger,
+		userRepo:               userRepo,
+		sessionRepo:            sessionRepo,
+		passwordHasher:         hasher,
+		emailService:           emailService,
+		passwordPolicyProvider: passwordPolicyProvider,
+		logger:                 logger,
 	}
 }
 
@@ -48,7 +51,13 @@ func (uc *ResetPasswordUseCase) Execute(ctx context.Context, cmd ResetPasswordCo
 		return fmt.Errorf("invalid or expired reset token")
 	}
 
-	newPassword, err := vo.NewPassword(cmd.NewPassword)
+	// Get password policy from settings
+	var passwordPolicy *vo.PasswordPolicy
+	if uc.passwordPolicyProvider != nil {
+		passwordPolicy = uc.passwordPolicyProvider.GetPasswordPolicy(ctx)
+	}
+
+	newPassword, err := vo.NewPasswordWithPolicy(cmd.NewPassword, passwordPolicy)
 	if err != nil {
 		return fmt.Errorf("invalid password: %w", err)
 	}

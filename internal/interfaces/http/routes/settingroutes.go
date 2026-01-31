@@ -23,6 +23,23 @@ func SetupSettingRoutes(engine *gin.Engine, config *SettingRouteConfig) {
 	{
 		// IMPORTANT: Register specific paths BEFORE parameterized paths to avoid route conflicts
 
+		// Branding settings
+		settings.GET("/branding", config.Handler.GetBrandingSettings)
+		settings.PUT("/branding", config.Handler.UpdateBrandingSettings)
+		settings.POST("/branding/upload", config.Handler.UploadBrandingImage)
+
+		// Security settings
+		settings.GET("/security", config.Handler.GetSecuritySettings)
+		settings.PUT("/security", config.Handler.UpdateSecuritySettings)
+
+		// Registration settings
+		settings.GET("/registration", config.Handler.GetRegistrationSettings)
+		settings.PUT("/registration", config.Handler.UpdateRegistrationSettings)
+
+		// Legal settings
+		settings.GET("/legal", config.Handler.GetLegalSettings)
+		settings.PUT("/legal", config.Handler.UpdateLegalSettings)
+
 		// System settings
 		settings.GET("/system", config.Handler.GetSystemSettings)
 		settings.PUT("/system", config.Handler.UpdateSystemSettings)

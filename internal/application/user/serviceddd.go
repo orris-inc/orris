@@ -31,11 +31,11 @@ func NewServiceDDD(
 ) *ServiceDDD {
 	return &ServiceDDD{
 		userRepo:         userRepo,
-		createUserUC:     usecases.NewCreateUserUseCase(userRepo, passwordHasher, logger),
+		createUserUC:     usecases.NewCreateUserUseCase(userRepo, passwordHasher, nil, logger),
 		updateUserUC:     usecases.NewUpdateUserUseCase(userRepo, logger),
 		getUserUC:        usecases.NewGetUserUseCase(userRepo, logger),
 		updateProfileUC:  usecases.NewUpdateProfileUseCase(userRepo, logger),
-		changePasswordUC: usecases.NewChangePasswordUseCase(userRepo, sessionRepo, passwordHasher, logger),
+		changePasswordUC: usecases.NewChangePasswordUseCase(userRepo, sessionRepo, passwordHasher, nil, logger),
 		logger:           logger,
 	}
 }

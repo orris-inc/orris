@@ -13,10 +13,11 @@ import (
 
 // ChangePasswordUseCase handles changing a user's password
 type ChangePasswordUseCase struct {
-	userRepo       domainUser.Repository
-	sessionRepo    domainUser.SessionRepository
-	passwordHasher domainUser.PasswordHasher
-	logger         logger.Interface
+	userRepo               domainUser.Repository
+	sessionRepo            domainUser.SessionRepository
+	passwordHasher         domainUser.PasswordHasher
+	passwordPolicyProvider PasswordPolicyProvider
+	logger                 logger.Interface
 }
 
 // NewChangePasswordUseCase creates a new instance of ChangePasswordUseCase
@@ -24,13 +25,15 @@ func NewChangePasswordUseCase(
 	userRepo domainUser.Repository,
 	sessionRepo domainUser.SessionRepository,
 	passwordHasher domainUser.PasswordHasher,
+	passwordPolicyProvider PasswordPolicyProvider,
 	logger logger.Interface,
 ) *ChangePasswordUseCase {
 	return &ChangePasswordUseCase{
-		userRepo:       userRepo,
-		sessionRepo:    sessionRepo,
-		passwordHasher: passwordHasher,
-		logger:         logger,
+		userRepo:               userRepo,
+		sessionRepo:            sessionRepo,
+		passwordHasher:         passwordHasher,
+		passwordPolicyProvider: passwordPolicyProvider,
+		logger:                 logger,
 	}
 }
 
@@ -49,15 +52,21 @@ func (uc *ChangePasswordUseCase) Execute(ctx context.Context, userID uint, reque
 		return errors.NewNotFoundError("user not found")
 	}
 
-	// Validate old password
-	oldPassword, err := vo.NewPassword(request.OldPassword)
+	// Get password policy from settings
+	var passwordPolicy *vo.PasswordPolicy
+	if uc.passwordPolicyProvider != nil {
+		passwordPolicy = uc.passwordPolicyProvider.GetPasswordPolicy(ctx)
+	}
+
+	// Validate old password (use default policy for old password validation)
+	oldPassword, err := vo.NewPasswordWithPolicy(request.OldPassword, vo.DefaultPasswordPolicy())
 	if err != nil {
 		uc.logger.Warnw("invalid old password format", "error", err)
 		return errors.NewValidationError("invalid old password format")
 	}
 
-	// Validate new password
-	newPassword, err := vo.NewPassword(request.NewPassword)
+	// Validate new password with current policy
+	newPassword, err := vo.NewPasswordWithPolicy(request.NewPassword, passwordPolicy)
 	if err != nil {
 		uc.logger.Warnw("invalid new password format", "error", err)
 		return errors.NewValidationError(fmt.Sprintf("invalid new password: %v", err))
@@ -91,6 +100,7 @@ func (uc *ChangePasswordUseCase) Execute(ctx context.Context, userID uint, reque
 }
 
 // ValidateRequest validates the change password request
+// Note: Detailed password policy validation is done in Execute() using PasswordPolicyProvider
 func (uc *ChangePasswordUseCase) ValidateRequest(request dto.ChangePasswordRequest) error {
 	// Validate old password is provided
 	if request.OldPassword == "" {
@@ -100,11 +110,6 @@ func (uc *ChangePasswordUseCase) ValidateRequest(request dto.ChangePasswordReque
 	// Validate new password is provided
 	if request.NewPassword == "" {
 		return errors.NewValidationError("new password is required")
-	}
-
-	// Validate password meets minimum requirements
-	if len(request.NewPassword) < 8 {
-		return errors.NewValidationError("new password must be at least 8 characters long")
 	}
 
 	// Validate new password is different from old password

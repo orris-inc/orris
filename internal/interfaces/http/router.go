@@ -509,12 +509,12 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	dynamicGitHubClient := &dynamicOAuthClientAdapter{manager: oauthManager, provider: "github"}
 
 	// Initialize auth-related use cases with dynamic services for hot-reload support
-	registerUC := usecases.NewRegisterWithPasswordUseCase(userRepo, hasher, dynamicEmailSvc, authHelper, log)
-	loginUC := usecases.NewLoginWithPasswordUseCase(userRepo, sessionRepo, hasher, jwtService, authHelper, cfg.Auth.Session, log)
+	registerUC := usecases.NewRegisterWithPasswordUseCase(userRepo, hasher, dynamicEmailSvc, authHelper, settingServiceDDD, log)
+	loginUC := usecases.NewLoginWithPasswordUseCase(userRepo, sessionRepo, hasher, jwtService, authHelper, settingServiceDDD, cfg.Auth.Session, log)
 	verifyEmailUC := usecases.NewVerifyEmailUseCase(userRepo, log)
 	requestResetUC := usecases.NewRequestPasswordResetUseCase(userRepo, dynamicEmailSvc, log)
-	resetPasswordUC := usecases.NewResetPasswordUseCase(userRepo, sessionRepo, hasher, dynamicEmailSvc, log)
-	adminResetPasswordUC := usecases.NewAdminResetPasswordUseCase(userRepo, sessionRepo, hasher, dynamicEmailSvc, log)
+	resetPasswordUC := usecases.NewResetPasswordUseCase(userRepo, sessionRepo, hasher, dynamicEmailSvc, settingServiceDDD, log)
+	adminResetPasswordUC := usecases.NewAdminResetPasswordUseCase(userRepo, sessionRepo, hasher, dynamicEmailSvc, settingServiceDDD, log)
 	initiateOAuthUC := usecases.NewInitiateOAuthLoginUseCase(dynamicGoogleClient, dynamicGitHubClient, log, stateStore)
 	handleOAuthUC := usecases.NewHandleOAuthCallbackUseCase(userRepo, oauthRepo, sessionRepo, dynamicGoogleClient, dynamicGitHubClient, jwtService, initiateOAuthUC, authHelper, cfg.Auth.Session, log)
 	refreshTokenUC := usecases.NewRefreshTokenUseCase(userRepo, sessionRepo, jwtService, authHelper, cfg.Auth.Session, log)

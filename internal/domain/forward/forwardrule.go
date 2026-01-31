@@ -329,11 +329,11 @@ func NewForwardRule(
 // Parameters:
 //   - userID: optional user ID (nil for admin-created rules distributed via resource groups)
 //   - subscriptionID: optional subscription ID (nil for admin-created rules)
-//   - targetNodeID: required for protocol information
+//   - targetNodeID: optional for protocol information
 //   - name: rule name
 //   - serverAddress: required server address for subscription delivery
 //   - listenPort: listen port
-//   - externalSource: required source identifier
+//   - externalSource: optional source identifier
 //   - externalRuleID: optional external reference ID
 //   - remark: optional description
 //   - sortOrder: display sort order
@@ -362,9 +362,7 @@ func NewExternalForwardRule(
 	if listenPort == 0 {
 		return nil, fmt.Errorf("listen port is required for external forward")
 	}
-	if externalSource == "" {
-		return nil, fmt.Errorf("external source is required for external forward")
-	}
+	// externalSource is optional
 
 	// Generate SID for external API use
 	sid, err := shortIDGenerator()
@@ -456,9 +454,7 @@ func ReconstructForwardRule(
 		if serverAddress == "" {
 			return nil, fmt.Errorf("server address is required for external forward")
 		}
-		if externalSource == "" {
-			return nil, fmt.Errorf("external source is required for external forward")
-		}
+		// externalSource is optional
 	}
 
 	// Validate traffic multiplier
@@ -1674,9 +1670,7 @@ func (r *ForwardRule) Validate() error {
 		if r.serverAddress == "" {
 			return fmt.Errorf("server address is required for external forward")
 		}
-		if r.externalSource == "" {
-			return fmt.Errorf("external source is required for external forward")
-		}
+		// externalSource is optional
 	}
 
 	return nil

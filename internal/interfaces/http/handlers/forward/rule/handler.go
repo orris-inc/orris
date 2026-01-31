@@ -63,9 +63,10 @@ func NewHandler(
 // - entry: agent_id, exit_agent_id, listen_port, (target_address+target_port OR target_node_id)
 // - chain: agent_id, chain_agent_ids, listen_port, (target_address+target_port OR target_node_id)
 // - direct_chain: agent_id, chain_agent_ids, chain_port_config, (target_address+target_port OR target_node_id)
+// - external: server_address, external_source, listen_port, target_node_id (protocol from target_node)
 type CreateForwardRuleRequest struct {
-	AgentID           string            `json:"agent_id" binding:"required" example:"fa_xK9mP2vL3nQ"`
-	RuleType          string            `json:"rule_type" binding:"required,oneof=direct entry chain direct_chain" example:"direct"`
+	AgentID           string            `json:"agent_id,omitempty" example:"fa_xK9mP2vL3nQ"`
+	RuleType          string            `json:"rule_type" binding:"required,oneof=direct entry chain direct_chain external" example:"direct"`
 	ExitAgentID       string            `json:"exit_agent_id,omitempty" example:"fa_yL8nQ3wM4oR"`
 	ChainAgentIDs     []string          `json:"chain_agent_ids,omitempty" example:"[\"fa_aaa\",\"fa_bbb\"]"`
 	ChainPortConfig   map[string]uint16 `json:"chain_port_config,omitempty" example:"{\"fa_xK9mP2vL3nQ\":8080,\"fa_yL8nQ3wM4oR\":9090}"`
@@ -78,11 +79,15 @@ type CreateForwardRuleRequest struct {
 	TargetNodeID      string            `json:"target_node_id,omitempty" example:"node_xK9mP2vL3nQ"`
 	BindIP            string            `json:"bind_ip,omitempty" example:"192.168.1.1"`
 	IPVersion         string            `json:"ip_version,omitempty" binding:"omitempty,oneof=auto ipv4 ipv6" example:"auto"`
-	Protocol          string            `json:"protocol" binding:"required,oneof=tcp udp both" example:"tcp"`
+	Protocol          string            `json:"protocol,omitempty" binding:"omitempty,oneof=tcp udp both" example:"tcp"`
 	TrafficMultiplier *float64          `json:"traffic_multiplier,omitempty" binding:"omitempty,gte=0,lte=1000000" example:"1.5"`
 	SortOrder         *int              `json:"sort_order,omitempty" binding:"omitempty,gte=0" example:"100"`
 	Remark            string            `json:"remark,omitempty" example:"Forward to internal MySQL server"`
 	GroupSIDs         []string          `json:"group_sids,omitempty" example:"[\"rg_xxx\",\"rg_yyy\"]"`
+	// External rule fields (only for rule_type=external)
+	ServerAddress  string `json:"server_address,omitempty" example:"example.com"`
+	ExternalSource string `json:"external_source,omitempty" example:"third-party-provider"`
+	ExternalRuleID string `json:"external_rule_id,omitempty" example:"ext_123"`
 }
 
 // UpdateForwardRuleRequest represents a request to update a forward rule.

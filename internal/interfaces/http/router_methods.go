@@ -2,6 +2,8 @@ package http
 
 import (
 	"context"
+	"net/http"
+	"regexp"
 
 	"github.com/gin-gonic/gin"
 
@@ -15,6 +17,15 @@ import (
 	"github.com/orris-inc/orris/internal/interfaces/http/routes"
 	"github.com/orris-inc/orris/internal/shared/authorization"
 )
+
+// brandingFilenameRegex validates branding upload filenames
+// Format: 32 hex chars + extension (.png, .jpg, .ico, .svg)
+var brandingFilenameRegex = regexp.MustCompile(`^[a-f0-9]{32}\.(png|jpg|ico|svg)$`)
+
+// isValidBrandingFilename checks if a filename matches the expected format
+func isValidBrandingFilename(filename string) bool {
+	return brandingFilenameRegex.MatchString(filename)
+}
 
 // SetupRoutes configures all HTTP routes
 func (r *Router) SetupRoutes(cfg *config.Config) {
@@ -327,6 +338,31 @@ func (r *Router) setupExternalRoutes() {
 		routes.SetupSettingRoutes(r.engine, &routes.SettingRouteConfig{
 			Handler:        r.settingHandler,
 			AuthMiddleware: r.authMiddleware,
+		})
+
+		// Public endpoints (no auth required, with rate limiting to prevent abuse)
+		r.engine.GET("/branding", r.rateLimiter.Limit(), r.settingHandler.GetPublicBranding)
+		r.engine.GET("/legal", r.rateLimiter.Limit(), r.settingHandler.GetPublicLegal)
+		r.engine.GET("/registration-settings", r.rateLimiter.Limit(), r.settingHandler.GetPublicRegistration)
+		r.engine.GET("/password-policy", r.rateLimiter.Limit(), r.settingHandler.GetPublicPasswordPolicy)
+
+		// Static file serving for branding uploads with security headers
+		r.engine.GET("/uploads/branding/:filename", func(c *gin.Context) {
+			filename := c.Param("filename")
+
+			// Validate filename format (hex string + extension only)
+			if !isValidBrandingFilename(filename) {
+				c.AbortWithStatus(http.StatusNotFound)
+				return
+			}
+
+			// Set security headers to prevent MIME sniffing and XSS
+			c.Header("X-Content-Type-Options", "nosniff")
+			c.Header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'")
+			c.Header("X-Frame-Options", "DENY")
+			c.Header("Cache-Control", "public, max-age=86400") // 24 hours cache
+
+			c.File("./uploads/branding/" + filename)
 		})
 	}
 }

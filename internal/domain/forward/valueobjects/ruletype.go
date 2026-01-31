@@ -104,7 +104,8 @@ func (t ForwardRuleType) RequiresServerAddress() bool {
 	return t == ForwardRuleTypeExternal
 }
 
-// RequiresExternalSource checks if this rule type requires external source.
+// RequiresExternalSource checks if this rule type supports external source field.
+// Note: externalSource is optional for external rules.
 func (t ForwardRuleType) RequiresExternalSource() bool {
 	return t == ForwardRuleTypeExternal
 }

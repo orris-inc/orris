@@ -71,13 +71,13 @@ func MaskSensitiveValue(value string) string {
 
 // SensitiveKeys defines keys that should be masked in responses
 var SensitiveKeys = map[string]bool{
-	"bot_token":          true,
-	"webhook_secret":     true,
-	"api_key":            true,
-	"secret_key":         true,
-	"password":           true,
-	"client_secret":      true, // OAuth
-	"smtp_password":      true, // Email
+	"bot_token":           true,
+	"webhook_secret":      true,
+	"api_key":             true,
+	"secret_key":          true,
+	"password":            true,
+	"client_secret":       true, // OAuth
+	"smtp_password":       true, // Email
 	"polygonscan_api_key": true, // USDT - PolygonScan API
 	"trongrid_api_key":    true, // USDT - TronGrid API
 }
@@ -198,4 +198,127 @@ type SubscriptionSettingsResponse struct {
 type UpdateSubscriptionSettingsRequest struct {
 	// ShowInfoNodes enables/disables info nodes in subscription output
 	ShowInfoNodes *bool `json:"show_info_nodes"`
+}
+
+// BrandingSettingsResponse represents branding settings response (admin)
+type BrandingSettingsResponse struct {
+	AppName    SettingWithSource `json:"app_name"`
+	LogoURL    SettingWithSource `json:"logo_url"`
+	FaviconURL SettingWithSource `json:"favicon_url"`
+}
+
+// UpdateBrandingSettingsRequest represents the request to update branding settings
+type UpdateBrandingSettingsRequest struct {
+	AppName    *string `json:"app_name" binding:"omitempty,max=50"`
+	LogoURL    *string `json:"logo_url" binding:"omitempty,max=500"`
+	FaviconURL *string `json:"favicon_url" binding:"omitempty,max=500"`
+}
+
+// PublicBrandingResponse represents public branding response (simplified, no source tracking)
+type PublicBrandingResponse struct {
+	AppName    string `json:"app_name"`
+	LogoURL    string `json:"logo_url"`
+	FaviconURL string `json:"favicon_url"`
+}
+
+// BrandingUploadResponse represents the response after uploading a branding image
+type BrandingUploadResponse struct {
+	URL string `json:"url"`
+}
+
+// SecuritySettingsResponse represents security settings response
+type SecuritySettingsResponse struct {
+	// Password policy
+	PasswordMinLength        SettingWithSource `json:"password_min_length"`        // Minimum password length (default: 8)
+	PasswordRequireUppercase SettingWithSource `json:"password_require_uppercase"` // Require uppercase letter (default: false)
+	PasswordRequireLowercase SettingWithSource `json:"password_require_lowercase"` // Require lowercase letter (default: false)
+	PasswordRequireNumber    SettingWithSource `json:"password_require_number"`    // Require number (default: false)
+	PasswordRequireSpecial   SettingWithSource `json:"password_require_special"`   // Require special character (default: false)
+	PasswordExpiryDays       SettingWithSource `json:"password_expiry_days"`       // Password expiry in days, 0 = never (default: 0)
+
+	// Session settings
+	SessionTimeoutMinutes SettingWithSource `json:"session_timeout_minutes"` // Session timeout in minutes (default: 1440 = 24 hours)
+
+	// Login protection
+	MaxLoginAttempts       SettingWithSource `json:"max_login_attempts"`       // Max login attempts before lockout (default: 5)
+	LockoutDurationMinutes SettingWithSource `json:"lockout_duration_minutes"` // Lockout duration after max attempts (default: 15)
+}
+
+// UpdateSecuritySettingsRequest represents the request to update security settings
+type UpdateSecuritySettingsRequest struct {
+	// Password policy
+	PasswordMinLength        *int  `json:"password_min_length" binding:"omitempty,min=8,max=32"`
+	PasswordRequireUppercase *bool `json:"password_require_uppercase"`
+	PasswordRequireLowercase *bool `json:"password_require_lowercase"`
+	PasswordRequireNumber    *bool `json:"password_require_number"`
+	PasswordRequireSpecial   *bool `json:"password_require_special"`
+	PasswordExpiryDays       *int  `json:"password_expiry_days" binding:"omitempty,min=0,max=365"`
+
+	// Session settings
+	SessionTimeoutMinutes *int `json:"session_timeout_minutes" binding:"omitempty,min=5,max=43200"`
+
+	// Login protection
+	MaxLoginAttempts       *int `json:"max_login_attempts" binding:"omitempty,min=3,max=20"`
+	LockoutDurationMinutes *int `json:"lockout_duration_minutes" binding:"omitempty,min=1,max=1440"`
+}
+
+// RegistrationSettingsResponse represents registration settings response
+type RegistrationSettingsResponse struct {
+	// RegistrationEnabled controls whether new user registration is allowed
+	RegistrationEnabled SettingWithSource `json:"registration_enabled"`
+	// EmailVerificationRequired controls whether email verification is required
+	EmailVerificationRequired SettingWithSource `json:"email_verification_required"`
+}
+
+// UpdateRegistrationSettingsRequest represents the request to update registration settings
+type UpdateRegistrationSettingsRequest struct {
+	RegistrationEnabled       *bool `json:"registration_enabled"`
+	EmailVerificationRequired *bool `json:"email_verification_required"`
+}
+
+// LegalSettingsResponse represents legal settings response
+type LegalSettingsResponse struct {
+	// TermsOfServiceURL is the URL to the terms of service page
+	TermsOfServiceURL SettingWithSource `json:"terms_of_service_url"`
+	// PrivacyPolicyURL is the URL to the privacy policy page
+	PrivacyPolicyURL SettingWithSource `json:"privacy_policy_url"`
+}
+
+// UpdateLegalSettingsRequest represents the request to update legal settings
+type UpdateLegalSettingsRequest struct {
+	TermsOfServiceURL *string `json:"terms_of_service_url" binding:"omitempty,max=500"`
+	PrivacyPolicyURL  *string `json:"privacy_policy_url" binding:"omitempty,max=500"`
+}
+
+// PublicLegalResponse represents public legal URLs (no auth required)
+type PublicLegalResponse struct {
+	TermsOfServiceURL string `json:"terms_of_service_url"`
+	PrivacyPolicyURL  string `json:"privacy_policy_url"`
+}
+
+// PublicRegistrationResponse represents public registration settings (no auth required)
+type PublicRegistrationResponse struct {
+	RegistrationEnabled       bool `json:"registration_enabled"`
+	EmailVerificationRequired bool `json:"email_verification_required"`
+}
+
+// PasswordPolicyRule represents a single password policy rule for frontend display
+type PasswordPolicyRule struct {
+	Type     string `json:"type"`               // Rule type: min_length, max_length, uppercase, lowercase, number, special
+	Value    any    `json:"value,omitempty"`    // Value for length rules (int)
+	Required bool   `json:"required,omitempty"` // Whether this rule is required (for character rules)
+	Message  string `json:"message"`            // Human-readable description
+}
+
+// PublicPasswordPolicyResponse represents public password policy (no auth required)
+// Used by frontend to display password requirements during registration/password change
+type PublicPasswordPolicyResponse struct {
+	MinLength         int                  `json:"min_length"`
+	MaxLength         int                  `json:"max_length"`
+	RequireUppercase  bool                 `json:"require_uppercase"`
+	RequireLowercase  bool                 `json:"require_lowercase"`
+	RequireNumber     bool                 `json:"require_number"`
+	RequireSpecial    bool                 `json:"require_special"`
+	Rules             []PasswordPolicyRule `json:"rules"`
+	SpecialCharacters string               `json:"special_characters"`
 }

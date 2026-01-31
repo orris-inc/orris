@@ -2,8 +2,10 @@ package utils
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 
 	"github.com/orris-inc/orris/internal/shared/errors"
 )
@@ -76,17 +78,23 @@ func ErrorResponse(c *gin.Context, statusCode int, message string) {
 
 // ErrorResponseWithError sends an error response based on error type
 func ErrorResponseWithError(c *gin.Context, err error) {
-	var appErr *errors.AppError
 	var statusCode int
 	var errorInfo ErrorInfo
 
 	if appError := errors.GetAppError(err); appError != nil {
-		appErr = appError
-		statusCode = appErr.Code
+		statusCode = appError.Code
 		errorInfo = ErrorInfo{
-			Type:    string(appErr.Type),
-			Message: appErr.Message,
-			Details: appErr.Details,
+			Type:    string(appError.Type),
+			Message: appError.Message,
+			Details: appError.Details,
+		}
+	} else if validationErrs, ok := err.(validator.ValidationErrors); ok {
+		// Handle Gin binding validation errors as 400 Bad Request
+		statusCode = http.StatusBadRequest
+		errorInfo = ErrorInfo{
+			Type:    string(errors.ErrorTypeValidation),
+			Message: "Request validation failed",
+			Details: formatValidationErrors(validationErrs),
 		}
 	} else {
 		// For non-AppError, do not expose internal error details to prevent information leakage
@@ -135,4 +143,59 @@ func ListSuccessResponse(c *gin.Context, items interface{}, total int64, page, p
 // NoContentResponse sends a no content response
 func NoContentResponse(c *gin.Context) {
 	c.Status(http.StatusNoContent)
+}
+
+// formatValidationErrors formats validator.ValidationErrors into a readable string.
+func formatValidationErrors(errs validator.ValidationErrors) string {
+	if len(errs) == 0 {
+		return ""
+	}
+
+	messages := make([]string, 0, len(errs))
+	for _, err := range errs {
+		messages = append(messages, formatFieldError(err))
+	}
+
+	if len(messages) == 1 {
+		return messages[0]
+	}
+	return strings.Join(messages, "; ")
+}
+
+// formatFieldError formats a single field validation error.
+func formatFieldError(fe validator.FieldError) string {
+	field := toSnakeCase(fe.Field())
+
+	switch fe.Tag() {
+	case "required":
+		return field + " is required"
+	case "oneof":
+		return field + " must be one of: " + fe.Param()
+	case "min":
+		return field + " must be at least " + fe.Param()
+	case "max":
+		return field + " must be at most " + fe.Param()
+	case "gte":
+		return field + " must be greater than or equal to " + fe.Param()
+	case "lte":
+		return field + " must be less than or equal to " + fe.Param()
+	case "email":
+		return field + " must be a valid email address"
+	case "url":
+		return field + " must be a valid URL"
+	default:
+		return field + " failed validation: " + fe.Tag()
+	}
+}
+
+// toSnakeCase converts PascalCase or camelCase to snake_case.
+func toSnakeCase(s string) string {
+	var result strings.Builder
+	for i, r := range s {
+		if i > 0 && r >= 'A' && r <= 'Z' {
+			result.WriteByte('_')
+		}
+		result.WriteRune(r)
+	}
+	return strings.ToLower(result.String())
 }

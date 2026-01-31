@@ -17,6 +17,11 @@ type EmailService interface {
 	SendPasswordChangedEmail(to string) error
 }
 
+// PasswordPolicyProvider provides password policy configuration
+type PasswordPolicyProvider interface {
+	GetPasswordPolicy(ctx context.Context) *vo.PasswordPolicy
+}
+
 type RegisterWithPasswordCommand struct {
 	Email    string
 	Name     string
@@ -24,11 +29,12 @@ type RegisterWithPasswordCommand struct {
 }
 
 type RegisterWithPasswordUseCase struct {
-	userRepo       user.Repository
-	passwordHasher user.PasswordHasher
-	emailService   EmailService
-	authHelper     *helpers.AuthHelper
-	logger         logger.Interface
+	userRepo               user.Repository
+	passwordHasher         user.PasswordHasher
+	emailService           EmailService
+	authHelper             *helpers.AuthHelper
+	passwordPolicyProvider PasswordPolicyProvider
+	logger                 logger.Interface
 }
 
 func NewRegisterWithPasswordUseCase(
@@ -36,14 +42,16 @@ func NewRegisterWithPasswordUseCase(
 	hasher user.PasswordHasher,
 	emailService EmailService,
 	authHelper *helpers.AuthHelper,
+	passwordPolicyProvider PasswordPolicyProvider,
 	logger logger.Interface,
 ) *RegisterWithPasswordUseCase {
 	return &RegisterWithPasswordUseCase{
-		userRepo:       userRepo,
-		passwordHasher: hasher,
-		emailService:   emailService,
-		authHelper:     authHelper,
-		logger:         logger,
+		userRepo:               userRepo,
+		passwordHasher:         hasher,
+		emailService:           emailService,
+		authHelper:             authHelper,
+		passwordPolicyProvider: passwordPolicyProvider,
+		logger:                 logger,
 	}
 }
 
@@ -69,7 +77,13 @@ func (uc *RegisterWithPasswordUseCase) Execute(ctx context.Context, cmd Register
 		return nil, fmt.Errorf("invalid name: %w", err)
 	}
 
-	password, err := vo.NewPassword(cmd.Password)
+	// Get password policy from settings
+	var passwordPolicy *vo.PasswordPolicy
+	if uc.passwordPolicyProvider != nil {
+		passwordPolicy = uc.passwordPolicyProvider.GetPasswordPolicy(ctx)
+	}
+
+	password, err := vo.NewPasswordWithPolicy(cmd.Password, passwordPolicy)
 	if err != nil {
 		return nil, fmt.Errorf("invalid password: %w", err)
 	}

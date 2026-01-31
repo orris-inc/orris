@@ -22,13 +22,46 @@ func (h *Handler) CreateRule(c *gin.Context) {
 		return
 	}
 
-	// Validate Stripe-style IDs (database stores full SID with prefix)
-	if err := id.ValidatePrefix(req.AgentID, id.PrefixForwardAgent); err != nil {
-		h.logger.Warnw("invalid agent_id format", "agent_id", req.AgentID, "error", err, "ip", c.ClientIP())
-		utils.ErrorResponseWithError(c, errors.NewValidationError("invalid agent_id format, expected fa_xxxxx"))
+	// External rules have different validation requirements
+	isExternalRule := req.RuleType == "external"
+
+	// Validate agent_id for non-external rules (external rules don't require agent)
+	var agentShortID string
+	if !isExternalRule {
+		if req.AgentID == "" {
+			h.logger.Warnw("agent_id is required for non-external rules", "rule_type", req.RuleType, "ip", c.ClientIP())
+			utils.ErrorResponseWithError(c, errors.NewValidationError("agent_id is required"))
+			return
+		}
+		if err := id.ValidatePrefix(req.AgentID, id.PrefixForwardAgent); err != nil {
+			h.logger.Warnw("invalid agent_id format", "agent_id", req.AgentID, "error", err, "ip", c.ClientIP())
+			utils.ErrorResponseWithError(c, errors.NewValidationError("invalid agent_id format, expected fa_xxxxx"))
+			return
+		}
+		agentShortID = req.AgentID
+	}
+
+	// Validate protocol for non-external rules (external rules get protocol from target_node)
+	if !isExternalRule && req.Protocol == "" {
+		h.logger.Warnw("protocol is required for non-external rules", "rule_type", req.RuleType, "ip", c.ClientIP())
+		utils.ErrorResponseWithError(c, errors.NewValidationError("protocol is required"))
 		return
 	}
-	agentShortID := req.AgentID
+
+	// Validate external rule specific fields
+	if isExternalRule {
+		if req.ServerAddress == "" {
+			h.logger.Warnw("server_address is required for external rules", "ip", c.ClientIP())
+			utils.ErrorResponseWithError(c, errors.NewValidationError("server_address is required for external rules"))
+			return
+		}
+		if req.ListenPort == 0 {
+			h.logger.Warnw("listen_port is required for external rules", "ip", c.ClientIP())
+			utils.ErrorResponseWithError(c, errors.NewValidationError("listen_port is required for external rules"))
+			return
+		}
+		// external_source is optional
+	}
 
 	var exitAgentShortID string
 	if req.ExitAgentID != "" {
@@ -99,6 +132,10 @@ func (h *Handler) CreateRule(c *gin.Context) {
 		SortOrder:          req.SortOrder,
 		Remark:             req.Remark,
 		GroupSIDs:          req.GroupSIDs,
+		// External rule fields
+		ServerAddress:  req.ServerAddress,
+		ExternalSource: req.ExternalSource,
+		ExternalRuleID: req.ExternalRuleID,
 	}
 
 	result, err := h.createRuleUC.Execute(c.Request.Context(), cmd)

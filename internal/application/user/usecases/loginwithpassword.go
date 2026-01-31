@@ -12,6 +12,11 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
+// SecurityPolicyProvider provides security policy configuration
+type SecurityPolicyProvider interface {
+	GetSecurityPolicy(ctx context.Context) *user.SecurityPolicy
+}
+
 type TokenPair struct {
 	AccessToken  string
 	RefreshToken string
@@ -41,13 +46,14 @@ type LoginWithPasswordResult struct {
 }
 
 type LoginWithPasswordUseCase struct {
-	userRepo       user.Repository
-	sessionRepo    user.SessionRepository
-	passwordHasher user.PasswordHasher
-	jwtService     JWTService
-	authHelper     *helpers.AuthHelper
-	sessionConfig  config.SessionConfig
-	logger         logger.Interface
+	userRepo               user.Repository
+	sessionRepo            user.SessionRepository
+	passwordHasher         user.PasswordHasher
+	jwtService             JWTService
+	authHelper             *helpers.AuthHelper
+	securityPolicyProvider SecurityPolicyProvider
+	sessionConfig          config.SessionConfig
+	logger                 logger.Interface
 }
 
 func NewLoginWithPasswordUseCase(
@@ -56,17 +62,19 @@ func NewLoginWithPasswordUseCase(
 	hasher user.PasswordHasher,
 	jwtService JWTService,
 	authHelper *helpers.AuthHelper,
+	securityPolicyProvider SecurityPolicyProvider,
 	sessionConfig config.SessionConfig,
 	logger logger.Interface,
 ) *LoginWithPasswordUseCase {
 	return &LoginWithPasswordUseCase{
-		userRepo:       userRepo,
-		sessionRepo:    sessionRepo,
-		passwordHasher: hasher,
-		jwtService:     jwtService,
-		authHelper:     authHelper,
-		sessionConfig:  sessionConfig,
-		logger:         logger,
+		userRepo:               userRepo,
+		sessionRepo:            sessionRepo,
+		passwordHasher:         hasher,
+		jwtService:             jwtService,
+		authHelper:             authHelper,
+		securityPolicyProvider: securityPolicyProvider,
+		sessionConfig:          sessionConfig,
+		logger:                 logger,
 	}
 }
 
@@ -89,8 +97,12 @@ func (uc *LoginWithPasswordUseCase) Execute(ctx context.Context, cmd LoginWithPa
 
 	// Verify password
 	if err := existingUser.VerifyPassword(cmd.Password, uc.passwordHasher); err != nil {
-		// Record failed login and save (non-critical operation)
-		uc.authHelper.RecordFailedLoginAndSave(ctx, existingUser)
+		// Record failed login and save with security policy (non-critical operation)
+		var securityPolicy *user.SecurityPolicy
+		if uc.securityPolicyProvider != nil {
+			securityPolicy = uc.securityPolicyProvider.GetSecurityPolicy(ctx)
+		}
+		uc.authHelper.RecordFailedLoginWithPolicyAndSave(ctx, existingUser, securityPolicy)
 		return nil, fmt.Errorf("invalid email or password")
 	}
 

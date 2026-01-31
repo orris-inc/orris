@@ -33,22 +33,25 @@ type AdminNewUserCommand struct {
 
 // CreateUserUseCase handles the business logic for creating a user
 type CreateUserUseCase struct {
-	userRepo       domainUser.Repository
-	passwordHasher PasswordHasher
-	adminNotifier  AdminNewUserNotifier // Optional, can be nil
-	logger         logger.Interface
+	userRepo               domainUser.Repository
+	passwordHasher         PasswordHasher
+	passwordPolicyProvider PasswordPolicyProvider
+	adminNotifier          AdminNewUserNotifier // Optional, can be nil
+	logger                 logger.Interface
 }
 
 // NewCreateUserUseCase creates a new create user use case
 func NewCreateUserUseCase(
 	userRepo domainUser.Repository,
 	passwordHasher PasswordHasher,
+	passwordPolicyProvider PasswordPolicyProvider,
 	logger logger.Interface,
 ) *CreateUserUseCase {
 	return &CreateUserUseCase{
-		userRepo:       userRepo,
-		passwordHasher: passwordHasher,
-		logger:         logger,
+		userRepo:               userRepo,
+		passwordHasher:         passwordHasher,
+		passwordPolicyProvider: passwordPolicyProvider,
+		logger:                 logger,
 	}
 }
 
@@ -87,7 +90,13 @@ func (uc *CreateUserUseCase) Execute(ctx context.Context, request dto.CreateUser
 		return nil, errors.NewValidationError("invalid name", err.Error())
 	}
 
-	password, err := vo.NewPassword(request.Password)
+	// Get password policy from settings
+	var passwordPolicy *vo.PasswordPolicy
+	if uc.passwordPolicyProvider != nil {
+		passwordPolicy = uc.passwordPolicyProvider.GetPasswordPolicy(ctx)
+	}
+
+	password, err := vo.NewPasswordWithPolicy(request.Password, passwordPolicy)
 	if err != nil {
 		uc.logger.Errorw("invalid password", "error", err)
 		return nil, errors.NewValidationError("invalid password", err.Error())
