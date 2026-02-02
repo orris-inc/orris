@@ -19,11 +19,12 @@ type ForwardRule struct {
 	userID            *uint // user ID for user-owned rules (nil for admin-created rules)
 	subscriptionID    *uint // subscription ID for subscription-bound rules (nil for admin-created rules)
 	ruleType          vo.ForwardRuleType
-	exitAgentID       uint            // exit agent ID (required for entry type)
-	chainAgentIDs     []uint          // ordered array of intermediate agent IDs for chain forwarding
-	chainPortConfig   map[uint]uint16 // map of agent_id -> listen_port for direct_chain type or hybrid chain direct hops
-	tunnelHops        *int            // number of hops using tunnel (nil=full tunnel, N=first N hops use tunnel)
-	tunnelType        vo.TunnelType   // tunnel type: ws or tls (default: ws)
+	exitAgentID       uint             // exit agent ID (required for entry type, mutually exclusive with exitAgents)
+	exitAgents        []vo.AgentWeight // multiple exit agents with weights for load balancing (mutually exclusive with exitAgentID)
+	chainAgentIDs     []uint           // ordered array of intermediate agent IDs for chain forwarding
+	chainPortConfig   map[uint]uint16  // map of agent_id -> listen_port for direct_chain type or hybrid chain direct hops
+	tunnelHops        *int             // number of hops using tunnel (nil=full tunnel, N=first N hops use tunnel)
+	tunnelType        vo.TunnelType    // tunnel type: ws or tls (default: ws)
 	name              string
 	listenPort        uint16
 	targetAddress     string // final target address (required for direct and exit types if targetNodeID is not set)
@@ -50,10 +51,11 @@ type ForwardRule struct {
 // NewForwardRule creates a new forward rule aggregate.
 // Parameters depend on ruleType:
 // - direct: requires agentID, listenPort, (targetAddress+targetPort OR targetNodeID)
-// - entry: requires agentID, listenPort, exitAgentID, (targetAddress+targetPort OR targetNodeID)
+// - entry: requires agentID, listenPort, (exitAgentID OR exitAgents), (targetAddress+targetPort OR targetNodeID)
 // - chain: requires agentID, listenPort, chainAgentIDs (at least 1), (targetAddress+targetPort OR targetNodeID)
 //   - optionally tunnelHops to create hybrid chain (first N hops tunnel, rest direct)
 //   - if tunnelHops > 0, chainPortConfig required for direct hops
+//   - optionally exitAgents for last hop load balancing
 //
 // - direct_chain: requires agentID, listenPort, chainAgentIDs (at least 1), chainPortConfig, (targetAddress+targetPort OR targetNodeID)
 func NewForwardRule(
@@ -62,6 +64,7 @@ func NewForwardRule(
 	subscriptionID *uint,
 	ruleType vo.ForwardRuleType,
 	exitAgentID uint,
+	exitAgents []vo.AgentWeight,
 	chainAgentIDs []uint,
 	chainPortConfig map[uint]uint16,
 	tunnelHops *int,
@@ -127,8 +130,30 @@ func NewForwardRule(
 		if listenPort == 0 {
 			return nil, fmt.Errorf("listen port is required for entry forward")
 		}
-		if exitAgentID == 0 {
-			return nil, fmt.Errorf("exit agent ID is required for entry forward")
+		// Validate exit agent configuration: either exitAgentID OR exitAgents, not both
+		hasExitAgent := exitAgentID != 0
+		hasExitAgents := len(exitAgents) > 0
+		if !hasExitAgent && !hasExitAgents {
+			return nil, fmt.Errorf("either exit agent ID or exit agents is required for entry forward")
+		}
+		if hasExitAgent && hasExitAgents {
+			return nil, fmt.Errorf("exit agent ID and exit agents are mutually exclusive for entry forward")
+		}
+		// Validate single exit agent is not the same as entry agent
+		if hasExitAgent && exitAgentID == agentID {
+			return nil, fmt.Errorf("exit agent cannot be the same as entry agent")
+		}
+		// Validate exitAgents if provided
+		if hasExitAgents {
+			if err := vo.ValidateAgentWeights(exitAgents); err != nil {
+				return nil, fmt.Errorf("invalid exit agents: %w", err)
+			}
+			// Validate no exit agent is the same as entry agent
+			for _, aw := range exitAgents {
+				if aw.AgentID() == agentID {
+					return nil, fmt.Errorf("exit agent cannot be the same as entry agent")
+				}
+			}
 		}
 		// Entry rules now also require target information (to be passed to exit agent)
 		hasTarget := targetAddress != "" && targetPort != 0
@@ -301,6 +326,7 @@ func NewForwardRule(
 		subscriptionID:    subscriptionID,
 		ruleType:          ruleType,
 		exitAgentID:       exitAgentID,
+		exitAgents:        exitAgents,
 		chainAgentIDs:     chainAgentIDs,
 		chainPortConfig:   chainPortConfig,
 		tunnelHops:        tunnelHops,
@@ -406,6 +432,7 @@ func ReconstructForwardRule(
 	subscriptionID *uint,
 	ruleType vo.ForwardRuleType,
 	exitAgentID uint,
+	exitAgents []vo.AgentWeight,
 	chainAgentIDs []uint,
 	chainPortConfig map[uint]uint16,
 	tunnelHops *int,
@@ -486,6 +513,7 @@ func ReconstructForwardRule(
 		subscriptionID:    subscriptionID,
 		ruleType:          ruleType,
 		exitAgentID:       exitAgentID,
+		exitAgents:        exitAgents,
 		chainAgentIDs:     chainAgentIDs,
 		chainPortConfig:   chainPortConfig,
 		tunnelHops:        tunnelHops,
@@ -601,6 +629,27 @@ func (r *ForwardRule) RuleType() vo.ForwardRuleType {
 // ExitAgentID returns the exit agent ID (for entry type rules).
 func (r *ForwardRule) ExitAgentID() uint {
 	return r.exitAgentID
+}
+
+// ExitAgents returns the exit agents with weights for load balancing.
+func (r *ForwardRule) ExitAgents() []vo.AgentWeight {
+	return r.exitAgents
+}
+
+// HasMultipleExitAgents returns true if the rule has multiple exit agents configured.
+func (r *ForwardRule) HasMultipleExitAgents() bool {
+	return len(r.exitAgents) > 0
+}
+
+// GetAllExitAgentIDs returns all exit agent IDs (single exitAgentID or all from exitAgents).
+func (r *ForwardRule) GetAllExitAgentIDs() []uint {
+	if len(r.exitAgents) > 0 {
+		return vo.GetAgentIDs(r.exitAgents)
+	}
+	if r.exitAgentID != 0 {
+		return []uint{r.exitAgentID}
+	}
+	return nil
 }
 
 // ChainAgentIDs returns the chain agent IDs (for chain type rules).
@@ -1012,7 +1061,9 @@ func (r *ForwardRule) CalculateNodeCount() int {
 	case vo.ForwardRuleTypeDirect:
 		return 1 // Only entry agent
 	case vo.ForwardRuleTypeEntry:
-		return 2 // Entry + Exit
+		// Entry + Exit: load balancing selects one exit agent per connection
+		// So the actual node count in the forwarding path is always 2
+		return 2 // Entry + one Exit (load balancing selects one at a time)
 	case vo.ForwardRuleTypeChain:
 		// Chain: Entry -> Chain[0] -> ... -> Chain[n-1] -> Target
 		chainCount := 0
@@ -1271,10 +1322,42 @@ func (r *ForwardRule) UpdateExitAgentID(exitAgentID uint) error {
 	if exitAgentID == 0 {
 		return fmt.Errorf("exit agent ID cannot be zero")
 	}
+	if exitAgentID == r.agentID {
+		return fmt.Errorf("exit agent cannot be the same as entry agent")
+	}
+	// If exitAgents is set, clear it when switching to single exit agent
+	if len(r.exitAgents) > 0 {
+		r.exitAgents = nil
+	}
 	if r.exitAgentID == exitAgentID {
 		return nil
 	}
 	r.exitAgentID = exitAgentID
+	r.updatedAt = biztime.NowUTC()
+	return nil
+}
+
+// UpdateExitAgents updates the exit agents for load balancing.
+// This clears the single exitAgentID when setting multiple exit agents.
+func (r *ForwardRule) UpdateExitAgents(exitAgents []vo.AgentWeight) error {
+	if !r.ruleType.IsEntry() {
+		return fmt.Errorf("exit agents can only be updated for entry type rules")
+	}
+	if len(exitAgents) == 0 {
+		return fmt.Errorf("exit agents cannot be empty")
+	}
+	if err := vo.ValidateAgentWeights(exitAgents); err != nil {
+		return fmt.Errorf("invalid exit agents: %w", err)
+	}
+	// Validate no exit agent is the same as entry agent
+	for _, aw := range exitAgents {
+		if aw.AgentID() == r.agentID {
+			return fmt.Errorf("exit agent cannot be the same as entry agent")
+		}
+	}
+	// Clear single exitAgentID when switching to multiple exit agents
+	r.exitAgentID = 0
+	r.exitAgents = exitAgents
 	r.updatedAt = biztime.NowUTC()
 	return nil
 }
@@ -1594,8 +1677,30 @@ func (r *ForwardRule) Validate() error {
 		if r.listenPort == 0 {
 			return fmt.Errorf("listen port is required for entry forward")
 		}
-		if r.exitAgentID == 0 {
-			return fmt.Errorf("exit agent ID is required for entry forward")
+		// Validate exit agent configuration: either exitAgentID OR exitAgents, not both
+		hasExitAgent := r.exitAgentID != 0
+		hasExitAgents := len(r.exitAgents) > 0
+		if !hasExitAgent && !hasExitAgents {
+			return fmt.Errorf("either exit agent ID or exit agents is required for entry forward")
+		}
+		if hasExitAgent && hasExitAgents {
+			return fmt.Errorf("exit agent ID and exit agents are mutually exclusive for entry forward")
+		}
+		// Validate single exit agent is not the same as entry agent
+		if hasExitAgent && r.exitAgentID == r.agentID {
+			return fmt.Errorf("exit agent cannot be the same as entry agent")
+		}
+		// Validate exitAgents if provided
+		if hasExitAgents {
+			if err := vo.ValidateAgentWeights(r.exitAgents); err != nil {
+				return fmt.Errorf("invalid exit agents: %w", err)
+			}
+			// Validate no exit agent is the same as entry agent
+			for _, aw := range r.exitAgents {
+				if aw.AgentID() == r.agentID {
+					return fmt.Errorf("exit agent cannot be the same as entry agent")
+				}
+			}
 		}
 		// Entry rules now also require target information (to be passed to exit agent)
 		hasTarget := r.targetAddress != "" && r.targetPort != 0

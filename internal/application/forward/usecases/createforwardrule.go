@@ -15,12 +15,19 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
+// ExitAgentInput represents input for exit agent with weight.
+type ExitAgentInput struct {
+	AgentSID string // Stripe-style ID (e.g., "fa_xK9mP2vL3nQ")
+	Weight   uint16 // Load balancing weight (1-100)
+}
+
 // CreateForwardRuleCommand represents the input for creating a forward rule.
 type CreateForwardRuleCommand struct {
 	AgentShortID       string            // Stripe-style short ID (without prefix, e.g., "xK9mP2vL3nQ") - not required for external type
 	UserID             *uint             // user ID for user-owned rules (nil for admin-created rules)
 	RuleType           string            // direct, entry, chain, direct_chain, external
-	ExitAgentShortID   string            // required for entry type (Stripe-style short ID without prefix)
+	ExitAgentShortID   string            // for entry type (Stripe-style short ID, mutually exclusive with ExitAgents)
+	ExitAgents         []ExitAgentInput  // for entry type with load balancing (mutually exclusive with ExitAgentShortID)
 	ChainAgentShortIDs []string          // required for chain type (ordered list of Stripe-style short IDs without prefix)
 	ChainPortConfig    map[string]uint16 // required for direct_chain type or hybrid chain direct hops (agent short_id -> listen port)
 	TunnelHops         *int              // number of hops using tunnel (nil=full tunnel, N=first N hops use tunnel) - for chain type only
@@ -135,8 +142,12 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 				cmd.ListenPort, agent.AllowedPortRange().String()))
 	}
 
-	// Resolve ExitAgentShortID to internal ID (if provided)
+	// Resolve exit agent configuration (single exitAgentID OR multiple exitAgents)
 	var exitAgentID uint
+	var exitAgents []vo.AgentWeight
+	if cmd.ExitAgentShortID != "" && len(cmd.ExitAgents) > 0 {
+		return nil, errors.NewValidationError("exit_agent_id and exit_agents are mutually exclusive")
+	}
 	if cmd.ExitAgentShortID != "" {
 		exitAgent, err := uc.agentRepo.GetBySID(ctx, cmd.ExitAgentShortID)
 		if err != nil {
@@ -147,6 +158,33 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 			return nil, errors.NewNotFoundError("exit forward agent", cmd.ExitAgentShortID)
 		}
 		exitAgentID = exitAgent.ID()
+	} else if len(cmd.ExitAgents) > 0 {
+		// Resolve multiple exit agents with weights
+		exitAgents = make([]vo.AgentWeight, 0, len(cmd.ExitAgents))
+		for _, input := range cmd.ExitAgents {
+			exitAgent, err := uc.agentRepo.GetBySID(ctx, input.AgentSID)
+			if err != nil {
+				uc.logger.Errorw("failed to get exit agent", "exit_agent_sid", input.AgentSID, "error", err)
+				return nil, fmt.Errorf("failed to validate exit agent: %w", err)
+			}
+			if exitAgent == nil {
+				return nil, errors.NewNotFoundError("exit forward agent", input.AgentSID)
+			}
+			// Use provided weight or default
+			weight := input.Weight
+			if weight == 0 {
+				weight = vo.DefaultAgentWeight
+			}
+			aw, err := vo.NewAgentWeight(exitAgent.ID(), weight)
+			if err != nil {
+				return nil, errors.NewValidationError(fmt.Sprintf("invalid exit agent weight: %s", err.Error()))
+			}
+			exitAgents = append(exitAgents, aw)
+		}
+		// Validate exit agents
+		if err := vo.ValidateAgentWeights(exitAgents); err != nil {
+			return nil, errors.NewValidationError(fmt.Sprintf("invalid exit agents: %s", err.Error()))
+		}
 	}
 
 	// Resolve ChainAgentShortIDs to internal IDs (if provided)
@@ -309,6 +347,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		nil, // subscriptionID is nil for admin-created rules
 		ruleType,
 		exitAgentID,
+		exitAgents,
 		chainAgentIDs,
 		chainPortConfig,
 		cmd.TunnelHops,
@@ -372,13 +411,14 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		// Notify additional agents based on rule type
 		switch rule.RuleType().String() {
 		case "entry":
-			// Notify exit agent for entry type rules
-			if rule.ExitAgentID() != 0 {
-				go func() {
-					if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), rule.ExitAgentID(), rule.SID(), "added"); err != nil {
-						uc.logger.Debugw("config sync notification skipped for exit agent", "rule_id", rule.SID(), "agent_id", rule.ExitAgentID(), "reason", err.Error())
+			// Notify exit agent(s) for entry type rules
+			exitAgentIDs := rule.GetAllExitAgentIDs()
+			for _, exitAgentID := range exitAgentIDs {
+				go func(aid uint) {
+					if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), aid, rule.SID(), "added"); err != nil {
+						uc.logger.Debugw("config sync notification skipped for exit agent", "rule_id", rule.SID(), "agent_id", aid, "reason", err.Error())
 					}
-				}()
+				}(exitAgentID)
 			}
 		case "chain", "direct_chain":
 			// Notify all chain agents for chain and direct_chain type rules
@@ -432,8 +472,14 @@ func (uc *CreateForwardRuleUseCase) validateCommand(_ context.Context, cmd Creat
 			return errors.NewValidationError("target_address+target_port and target_node_id are mutually exclusive for direct forward")
 		}
 	case vo.ForwardRuleTypeEntry:
-		if cmd.ExitAgentShortID == "" {
-			return errors.NewValidationError("exit_agent_id is required for entry forward")
+		// Either exit_agent_id OR exit_agents is required (mutually exclusive)
+		hasExitAgent := cmd.ExitAgentShortID != ""
+		hasExitAgents := len(cmd.ExitAgents) > 0
+		if !hasExitAgent && !hasExitAgents {
+			return errors.NewValidationError("either exit_agent_id or exit_agents is required for entry forward")
+		}
+		if hasExitAgent && hasExitAgents {
+			return errors.NewValidationError("exit_agent_id and exit_agents are mutually exclusive for entry forward")
 		}
 		// Entry rules now also require target information (to be passed to exit agent)
 		hasTarget := cmd.TargetAddress != "" && cmd.TargetPort != 0

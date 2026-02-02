@@ -20,7 +20,8 @@ type UpdateForwardRuleCommand struct {
 	UserID             *uint  // optional: for agent access validation (user endpoint only)
 	Name               *string
 	AgentShortID       *string           // entry agent ID (for all rule types)
-	ExitAgentShortID   *string           // exit agent ID (for entry type rules only)
+	ExitAgentShortID   *string           // exit agent ID (for entry type, mutually exclusive with ExitAgents)
+	ExitAgents         []ExitAgentInput  // exit agents for load balancing (for entry type, mutually exclusive with ExitAgentShortID), nil means no update
 	ChainAgentShortIDs []string          // chain agent IDs (for chain type rules only), nil means no update
 	ChainPortConfig    map[string]uint16 // chain port config (for direct_chain type rules only), nil means no update
 	TunnelHops         *int              // number of tunnel hops for hybrid chain (nil means no update)
@@ -91,7 +92,7 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 
 	// Track original agent IDs for config sync notification
 	originalAgentID := rule.AgentID()
-	originalExitAgentID := rule.ExitAgentID()
+	originalExitAgentIDs := rule.GetAllExitAgentIDs() // Includes both single and multiple exit agents
 	originalChainAgentIDs := rule.ChainAgentIDs()
 
 	// Update fields
@@ -150,7 +151,13 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 		}
 	}
 
-	// Update exit agent ID (for entry type rules)
+	// Update exit agent configuration (single exitAgentID OR multiple exitAgents)
+	// These are mutually exclusive - setting one clears the other
+	if cmd.ExitAgentShortID != nil && len(cmd.ExitAgents) > 0 {
+		return errors.NewValidationError("exit_agent_id and exit_agents are mutually exclusive")
+	}
+
+	// Update single exit agent ID (for entry type rules)
 	if cmd.ExitAgentShortID != nil {
 		exitAgent, err := uc.agentRepo.GetBySID(ctx, *cmd.ExitAgentShortID)
 		if err != nil {
@@ -169,6 +176,43 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 		}
 
 		if err := rule.UpdateExitAgentID(exitAgent.ID()); err != nil {
+			return errors.NewValidationError(err.Error())
+		}
+	}
+
+	// Update multiple exit agents for load balancing (for entry type rules)
+	if len(cmd.ExitAgents) > 0 {
+		exitAgents := make([]vo.AgentWeight, 0, len(cmd.ExitAgents))
+		for _, input := range cmd.ExitAgents {
+			exitAgent, err := uc.agentRepo.GetBySID(ctx, input.AgentSID)
+			if err != nil {
+				uc.logger.Errorw("failed to get exit agent", "exit_agent_sid", input.AgentSID, "error", err)
+				return fmt.Errorf("failed to validate exit agent: %w", err)
+			}
+			if exitAgent == nil {
+				return errors.NewNotFoundError("exit forward agent", input.AgentSID)
+			}
+
+			// Validate user access to exit agent (user endpoint only)
+			if cmd.UserID != nil {
+				if err := uc.validateUserAgentAccess(ctx, *cmd.UserID, exitAgent); err != nil {
+					return err
+				}
+			}
+
+			// Use provided weight or default
+			weight := input.Weight
+			if weight == 0 {
+				weight = vo.DefaultAgentWeight
+			}
+			aw, err := vo.NewAgentWeight(exitAgent.ID(), weight)
+			if err != nil {
+				return errors.NewValidationError(fmt.Sprintf("invalid exit agent weight: %s", err.Error()))
+			}
+			exitAgents = append(exitAgents, aw)
+		}
+
+		if err := rule.UpdateExitAgents(exitAgents); err != nil {
 			return errors.NewValidationError(err.Error())
 		}
 	}
@@ -477,7 +521,7 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 	// Notify config sync asynchronously if rule is enabled (failure only logs warning, doesn't block)
 	if rule.IsEnabled() && uc.configSyncSvc != nil {
 		newAgentID := rule.AgentID()
-		newExitAgentID := rule.ExitAgentID()
+		newExitAgentIDs := rule.GetAllExitAgentIDs() // Includes both single and multiple exit agents
 		newChainAgentIDs := rule.ChainAgentIDs()
 		ruleType := rule.RuleType().String()
 
@@ -494,19 +538,27 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 				}
 			}
 
-			// For entry type rules, notify exit agent
+			// For entry type rules, notify exit agent(s)
 			if ruleType == "entry" {
-				// Notify new exit agent
-				if newExitAgentID > 0 {
-					if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), newExitAgentID, cmd.ShortID, "updated"); err != nil {
-						uc.logger.Debugw("config sync notification skipped for exit agent", "rule_id", cmd.ShortID, "agent_id", newExitAgentID, "reason", err.Error())
-					}
+				// Create map of original exit agents for quick lookup
+				originalExitAgentMap := make(map[uint]bool)
+				for _, agentID := range originalExitAgentIDs {
+					originalExitAgentMap[agentID] = true
 				}
 
-				// If exit agent changed, notify original exit agent to remove the rule
-				if originalExitAgentID > 0 && originalExitAgentID != newExitAgentID {
-					if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), originalExitAgentID, cmd.ShortID, "deleted"); err != nil {
-						uc.logger.Debugw("config sync notification skipped for original exit agent", "rule_id", cmd.ShortID, "agent_id", originalExitAgentID, "reason", err.Error())
+				// Notify new exit agents
+				for _, agentID := range newExitAgentIDs {
+					if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), agentID, cmd.ShortID, "updated"); err != nil {
+						uc.logger.Debugw("config sync notification skipped for exit agent", "rule_id", cmd.ShortID, "agent_id", agentID, "reason", err.Error())
+					}
+					// Remove from original map (we'll notify remaining agents for deletion)
+					delete(originalExitAgentMap, agentID)
+				}
+
+				// Notify removed exit agents
+				for agentID := range originalExitAgentMap {
+					if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), agentID, cmd.ShortID, "deleted"); err != nil {
+						uc.logger.Debugw("config sync notification skipped for removed exit agent", "rule_id", cmd.ShortID, "agent_id", agentID, "reason", err.Error())
 					}
 				}
 			}

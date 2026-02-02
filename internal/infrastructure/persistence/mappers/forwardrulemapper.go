@@ -73,6 +73,22 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 		targetNodeID = model.TargetNodeID
 	}
 
+	// Parse exit_agents JSON
+	var exitAgents []vo.AgentWeight
+	if len(model.ExitAgents) > 0 {
+		var rawExitAgents []struct {
+			AgentID uint   `json:"agent_id"`
+			Weight  uint16 `json:"weight"`
+		}
+		if err := json.Unmarshal(model.ExitAgents, &rawExitAgents); err != nil {
+			return nil, fmt.Errorf("failed to parse exit_agents: %w", err)
+		}
+		exitAgents = make([]vo.AgentWeight, len(rawExitAgents))
+		for i, raw := range rawExitAgents {
+			exitAgents[i] = vo.ReconstructAgentWeight(raw.AgentID, raw.Weight)
+		}
+	}
+
 	// Parse chain_agent_ids JSON
 	var chainAgentIDs []uint
 	if len(model.ChainAgentIDs) > 0 {
@@ -133,6 +149,7 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 		subscriptionID,
 		ruleType,
 		exitAgentID,
+		exitAgents,
 		chainAgentIDs,
 		chainPortConfig,
 		model.TunnelHops,
@@ -191,6 +208,24 @@ func (m *ForwardRuleMapperImpl) ToModel(entity *forward.ForwardRule) (*models.Fo
 	var targetNodeID *uint
 	if entity.TargetNodeID() != nil {
 		targetNodeID = entity.TargetNodeID()
+	}
+
+	// Serialize exit_agents to JSON
+	var exitAgentsJSON datatypes.JSON
+	if len(entity.ExitAgents()) > 0 {
+		rawExitAgents := make([]struct {
+			AgentID uint   `json:"agent_id"`
+			Weight  uint16 `json:"weight"`
+		}, len(entity.ExitAgents()))
+		for i, aw := range entity.ExitAgents() {
+			rawExitAgents[i].AgentID = aw.AgentID()
+			rawExitAgents[i].Weight = aw.Weight()
+		}
+		jsonBytes, err := json.Marshal(rawExitAgents)
+		if err != nil {
+			return nil, fmt.Errorf("failed to serialize exit_agents: %w", err)
+		}
+		exitAgentsJSON = jsonBytes
 	}
 
 	// Serialize chain_agent_ids to JSON
@@ -253,6 +288,7 @@ func (m *ForwardRuleMapperImpl) ToModel(entity *forward.ForwardRule) (*models.Fo
 		SubscriptionID:    subscriptionID,
 		RuleType:          entity.RuleType().String(),
 		ExitAgentID:       exitAgentID,
+		ExitAgents:        exitAgentsJSON,
 		ChainAgentIDs:     chainAgentIDsJSON,
 		ChainPortConfig:   chainPortConfigJSON,
 		TunnelHops:        entity.TunnelHops(),

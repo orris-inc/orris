@@ -1000,6 +1000,10 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	)
 	agentHub.RegisterMessageHandler(trafficMessageHandler)
 
+	// Initialize and register tunnel health handler for health status reporting
+	tunnelHealthHandler := forwardServices.NewTunnelHealthHandler(log)
+	agentHub.RegisterMessageHandler(tunnelHealthHandler)
+
 	// Create done channel for rule traffic flush scheduler
 	ruleTrafficFlushDone := make(chan struct{})
 
@@ -1380,6 +1384,15 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 			)
 		}
 
+		// Notify entry agents that this exit agent is now online
+		// This allows entry agents to update their load balancing configuration
+		if err := configSyncService.NotifyExitPortChange(ctx, agentID); err != nil {
+			log.Warnw("failed to notify entry agents of exit agent online",
+				"agent_id", agentID,
+				"error", err,
+			)
+		}
+
 		// Get agent info
 		agent, err := forwardAgentRepo.GetByID(ctx, agentID)
 		if err != nil {
@@ -1438,6 +1451,15 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// to avoid duplicate notifications and support threshold-based alerting
 	agentHub.SetOnAgentOffline(func(agentID uint) {
 		ctx := context.Background()
+
+		// Notify entry agents that this exit agent is now offline
+		// This allows entry agents to immediately failover to other exit agents
+		if err := configSyncService.NotifyExitPortChange(ctx, agentID); err != nil {
+			log.Warnw("failed to notify entry agents of exit agent offline",
+				"agent_id", agentID,
+				"error", err,
+			)
+		}
 
 		// Get agent info
 		agent, err := forwardAgentRepo.GetByID(ctx, agentID)

@@ -73,13 +73,13 @@ func (uc *DisableForwardRuleUseCase) Execute(ctx context.Context, cmd DisableFor
 		// Notify additional agents based on rule type
 		switch rule.RuleType().String() {
 		case "entry":
-			// Notify exit agent for entry type rules
-			if rule.ExitAgentID() != 0 {
-				go func() {
-					if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), rule.ExitAgentID(), cmd.ShortID, "removed"); err != nil {
-						uc.logger.Debugw("config sync notification skipped for exit agent", "rule_id", cmd.ShortID, "agent_id", rule.ExitAgentID(), "reason", err.Error())
+			// Notify all exit agents for entry type rules (supports load balancing)
+			for _, exitAgentID := range rule.GetAllExitAgentIDs() {
+				go func(aid uint) {
+					if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), aid, cmd.ShortID, "removed"); err != nil {
+						uc.logger.Debugw("config sync notification skipped for exit agent", "rule_id", cmd.ShortID, "agent_id", aid, "reason", err.Error())
 					}
-				}()
+				}(exitAgentID)
 			}
 		case "chain", "direct_chain":
 			// Notify all chain agents for chain and direct_chain type rules

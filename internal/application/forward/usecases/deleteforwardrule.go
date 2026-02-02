@@ -59,7 +59,7 @@ func (uc *DeleteForwardRuleUseCase) Execute(ctx context.Context, cmd DeleteForwa
 	ruleShortID := rule.SID()
 	wasEnabled := rule.IsEnabled()
 	ruleType := rule.RuleType().String()
-	exitAgentID := rule.ExitAgentID()
+	exitAgentIDs := rule.GetAllExitAgentIDs() // Get all exit agents (single or multiple)
 	chainAgentIDs := rule.ChainAgentIDs()
 
 	// Store rule ID for cache cleanup
@@ -96,13 +96,13 @@ func (uc *DeleteForwardRuleUseCase) Execute(ctx context.Context, cmd DeleteForwa
 		// Notify additional agents based on rule type
 		switch ruleType {
 		case "entry":
-			// Notify exit agent for entry type rules
-			if exitAgentID != 0 {
-				go func() {
+			// Notify all exit agents for entry type rules (supports load balancing)
+			for _, aid := range exitAgentIDs {
+				go func(exitAgentID uint) {
 					if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), exitAgentID, ruleShortID, "removed"); err != nil {
 						uc.logger.Debugw("config sync notification skipped for exit agent", "rule_id", ruleShortID, "agent_id", exitAgentID, "reason", err.Error())
 					}
-				}()
+				}(aid)
 			}
 		case "chain", "direct_chain":
 			// Notify all chain agents for chain and direct_chain type rules

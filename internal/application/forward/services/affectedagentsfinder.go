@@ -64,11 +64,18 @@ func (f *AffectedAgentsFinder) FindByNodeChange(ctx context.Context, nodeID uint
 			agentRulesMap[rule.AgentID()] = append(agentRulesMap[rule.AgentID()], rule)
 
 		case "entry":
-			// Entry rule: exit agent connects to target node
-			if rule.ExitAgentID() != 0 {
+			// Entry rule: exit agent(s) connect to target node
+			// Check for multiple exit agents first
+			exitAgents := rule.ExitAgents()
+			if len(exitAgents) > 0 {
+				for _, aw := range exitAgents {
+					agentRulesMap[aw.AgentID()] = append(agentRulesMap[aw.AgentID()], rule)
+				}
+			} else if rule.ExitAgentID() != 0 {
+				// Single exit agent
 				agentRulesMap[rule.ExitAgentID()] = append(agentRulesMap[rule.ExitAgentID()], rule)
 			} else {
-				f.logger.Warnw("entry rule has no exit_agent_id, cannot determine affected agent",
+				f.logger.Warnw("entry rule has no exit_agent_id or exit_agents, cannot determine affected agent",
 					"rule_id", rule.ID(),
 					"node_id", nodeID,
 				)
@@ -161,9 +168,16 @@ func (f *AffectedAgentsFinder) FindByRuleChange(ctx context.Context, rule *forwa
 		agentIDs[rule.AgentID()] = true
 
 	case "entry":
-		// Both entry and exit agents need to be notified
+		// Entry agent and all exit agents need to be notified
 		agentIDs[rule.AgentID()] = true
-		if rule.ExitAgentID() != 0 {
+		// Check for multiple exit agents first
+		exitAgents := rule.ExitAgents()
+		if len(exitAgents) > 0 {
+			for _, aw := range exitAgents {
+				agentIDs[aw.AgentID()] = true
+			}
+		} else if rule.ExitAgentID() != 0 {
+			// Single exit agent
 			agentIDs[rule.ExitAgentID()] = true
 		}
 
@@ -218,8 +232,17 @@ func (f *AffectedAgentsFinder) GetEntryRulesForExitAgent(ctx context.Context, ag
 	for _, rule := range ruleMap {
 		switch rule.RuleType().String() {
 		case "entry":
+			// Check single exit agent
 			if rule.ExitAgentID() == exitAgentID {
 				result = append(result, rule)
+				continue
+			}
+			// Check multiple exit agents
+			for _, aw := range rule.ExitAgents() {
+				if aw.AgentID() == exitAgentID {
+					result = append(result, rule)
+					break
+				}
 			}
 		case "chain":
 			// Check if this agent has exitAgentID as its next hop

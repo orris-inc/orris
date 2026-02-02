@@ -242,6 +242,7 @@ func (uc *CreateUserForwardRuleUseCase) Execute(ctx context.Context, cmd CreateU
 		nil, // subscriptionID is nil for user-created rules (not subscription-bound)
 		ruleType,
 		exitAgentID,
+		nil, // exitAgents: user rules don't support load balancing yet
 		chainAgentIDs,
 		chainPortConfig,
 		cmd.TunnelHops,
@@ -300,13 +301,13 @@ func (uc *CreateUserForwardRuleUseCase) Execute(ctx context.Context, cmd CreateU
 		// Notify additional agents based on rule type
 		switch rule.RuleType().String() {
 		case "entry":
-			// Notify exit agent for entry type rules
-			if rule.ExitAgentID() != 0 {
-				go func() {
-					if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), rule.ExitAgentID(), rule.SID(), "added"); err != nil {
-						uc.logger.Debugw("config sync notification skipped for exit agent", "rule_id", rule.SID(), "user_id", cmd.UserID, "agent_id", rule.ExitAgentID(), "reason", err.Error())
+			// Notify all exit agents for entry type rules (supports load balancing)
+			for _, exitAgentID := range rule.GetAllExitAgentIDs() {
+				go func(aid uint) {
+					if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), aid, rule.SID(), "added"); err != nil {
+						uc.logger.Debugw("config sync notification skipped for exit agent", "rule_id", rule.SID(), "user_id", cmd.UserID, "agent_id", aid, "reason", err.Error())
 					}
-				}()
+				}(exitAgentID)
 			}
 		case "chain", "direct_chain":
 			// Notify all chain agents for chain and direct_chain type rules

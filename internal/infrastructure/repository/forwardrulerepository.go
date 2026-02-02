@@ -231,6 +231,7 @@ func (r *ForwardRuleRepositoryImpl) Update(ctx context.Context, rule *forward.Fo
 			"download_bytes":     model.DownloadBytes,
 			"rule_type":          model.RuleType,
 			"exit_agent_id":      model.ExitAgentID,
+			"exit_agents":        model.ExitAgents,
 			"chain_agent_ids":    model.ChainAgentIDs,
 			"chain_port_config":  model.ChainPortConfig,
 			"tunnel_type":        model.TunnelType,
@@ -530,13 +531,70 @@ func (r *ForwardRuleRepositoryImpl) ListByExitAgentID(ctx context.Context, exitA
 }
 
 // ListEnabledByExitAgentID returns all enabled entry rules for a specific exit agent.
+// This includes rules where exit_agent_id matches OR exit_agents JSON contains the agent.
 func (r *ForwardRuleRepositoryImpl) ListEnabledByExitAgentID(ctx context.Context, exitAgentID uint) ([]*forward.ForwardRule, error) {
 	var ruleModels []*models.ForwardRuleModel
 
 	tx := db.GetTxFromContext(ctx, r.db)
-	if err := tx.Where("exit_agent_id = ? AND status = ? AND rule_type = ?", exitAgentID, "enabled", "entry").Find(&ruleModels).Error; err != nil {
+	// Query rules where:
+	// 1. exit_agent_id matches (single exit agent), OR
+	// 2. exit_agents JSON array contains an object with matching agent_id
+	// Note: JSON_CONTAINS returns NULL when exit_agents is NULL, so we need explicit NULL check
+	if err := tx.Where(
+		"status = ? AND rule_type = ? AND (exit_agent_id = ? OR (exit_agents IS NOT NULL AND JSON_CONTAINS(exit_agents, JSON_OBJECT('agent_id', ?))))",
+		"enabled", "entry", exitAgentID, exitAgentID,
+	).Find(&ruleModels).Error; err != nil {
 		r.logger.Errorw("failed to list enabled entry rules by exit agent ID", "exit_agent_id", exitAgentID, "error", err)
 		return nil, fmt.Errorf("failed to list enabled entry rules by exit agent ID: %w", err)
+	}
+
+	entities, err := r.mapper.ToEntities(ruleModels)
+	if err != nil {
+		r.logger.Errorw("failed to map forward rule models to entities", "error", err)
+		return nil, fmt.Errorf("failed to map forward rules: %w", err)
+	}
+
+	return entities, nil
+}
+
+// ListEnabledByExitAgentIDs returns all enabled entry rules for multiple exit agents.
+// This includes rules where exit_agent_id is in the list OR exit_agents JSON contains any of the agents.
+func (r *ForwardRuleRepositoryImpl) ListEnabledByExitAgentIDs(ctx context.Context, exitAgentIDs []uint) ([]*forward.ForwardRule, error) {
+	if len(exitAgentIDs) == 0 {
+		return []*forward.ForwardRule{}, nil
+	}
+
+	var ruleModels []*models.ForwardRuleModel
+
+	tx := db.GetTxFromContext(ctx, r.db)
+
+	// Build OR conditions for exit_agents JSON check
+	// We need to check if any of the exit agent IDs exist in the exit_agents array
+	// Note: JSON_CONTAINS returns NULL when exit_agents is NULL, so we need explicit NULL check
+	jsonConditions := make([]string, len(exitAgentIDs))
+	jsonArgs := make([]interface{}, len(exitAgentIDs))
+	for i, id := range exitAgentIDs {
+		jsonConditions[i] = "JSON_CONTAINS(exit_agents, JSON_OBJECT('agent_id', ?))"
+		jsonArgs[i] = id
+	}
+	jsonOrCondition := strings.Join(jsonConditions, " OR ")
+
+	// Build query with proper parameter ordering
+	// GORM requires the slice to be passed directly for IN clause expansion
+	query := fmt.Sprintf(
+		"status = ? AND rule_type = ? AND (exit_agent_id IN ? OR (exit_agents IS NOT NULL AND (%s)))",
+		jsonOrCondition,
+	)
+
+	// Build args: status, rule_type, exitAgentIDs (for IN), jsonArgs (for JSON_CONTAINS)
+	args := make([]interface{}, 0, 2+1+len(jsonArgs))
+	args = append(args, "enabled", "entry")
+	args = append(args, exitAgentIDs) // GORM will expand this for IN clause
+	args = append(args, jsonArgs...)
+
+	if err := tx.Where(query, args...).Find(&ruleModels).Error; err != nil {
+		r.logger.Errorw("failed to list enabled entry rules by exit agent IDs", "exit_agent_ids", exitAgentIDs, "error", err)
+		return nil, fmt.Errorf("failed to list enabled entry rules by exit agent IDs: %w", err)
 	}
 
 	entities, err := r.mapper.ToEntities(ruleModels)

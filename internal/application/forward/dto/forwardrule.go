@@ -3,8 +3,21 @@ package dto
 
 import (
 	"github.com/orris-inc/orris/internal/domain/forward"
+	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
 	"github.com/orris-inc/orris/internal/shared/mapper"
 )
+
+// ExitAgentDTO represents an exit agent with weight for load balancing.
+type ExitAgentDTO struct {
+	AgentID string `json:"agent_id"` // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
+	Weight  uint16 `json:"weight"`   // Weight for load balancing (1-100)
+}
+
+// ExitAgentInput represents input for creating/updating exit agents.
+type ExitAgentInput struct {
+	AgentID uint   // Internal agent ID (resolved from SID)
+	Weight  uint16 // Weight for load balancing
+}
 
 // ForwardRuleDTO represents the data transfer object for forward rules.
 // Note: ws_listen_port field has been removed (exit type deprecated).
@@ -14,7 +27,8 @@ type ForwardRuleDTO struct {
 	AgentID         string            `json:"agent_id"`                    // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
 	UserID          *uint             `json:"user_id,omitempty"`           // user ID for user-owned rules (nil for admin-created rules)
 	RuleType        string            `json:"rule_type"`                   // direct, entry, chain, direct_chain
-	ExitAgentID     string            `json:"exit_agent_id,omitempty"`     // for entry type (Stripe-style prefixed ID)
+	ExitAgentID     string            `json:"exit_agent_id,omitempty"`     // for entry type (Stripe-style prefixed ID, mutually exclusive with ExitAgents)
+	ExitAgents      []ExitAgentDTO    `json:"exit_agents,omitempty"`       // for entry type with load balancing (mutually exclusive with ExitAgentID)
 	ChainAgentIDs   []string          `json:"chain_agent_ids,omitempty"`   // for chain and direct_chain types (ordered Stripe-style prefixed IDs)
 	ChainPortConfig map[string]uint16 `json:"chain_port_config,omitempty"` // for direct_chain type (Stripe-style agent ID -> listen port)
 	Name            string            `json:"name"`
@@ -86,12 +100,13 @@ type ForwardRuleDTO struct {
 	ExternalRuleID string `json:"external_rule_id,omitempty"` // external rule reference ID
 
 	// Internal fields for mapping (not exposed in JSON)
-	internalAgentID         uint            `json:"-"`
-	internalExitAgentID     uint            `json:"-"`
-	internalChainAgents     []uint          `json:"-"` // internal chain agent IDs for lookup
-	internalChainPortConfig map[uint]uint16 `json:"-"` // internal chain port config for lookup
-	internalTargetNode      *uint           `json:"-"` // internal node ID for lookup
-	internalGroupIDs        []uint          `json:"-"` // internal resource group IDs for lookup
+	internalAgentID         uint             `json:"-"`
+	internalExitAgentID     uint             `json:"-"`
+	internalExitAgents      []vo.AgentWeight `json:"-"` // internal exit agents for lookup
+	internalChainAgents     []uint           `json:"-"` // internal chain agent IDs for lookup
+	internalChainPortConfig map[uint]uint16  `json:"-"` // internal chain port config for lookup
+	internalTargetNode      *uint            `json:"-"` // internal node ID for lookup
+	internalGroupIDs        []uint           `json:"-"` // internal resource group IDs for lookup
 }
 
 // ToForwardRuleDTO converts a domain forward rule to DTO.
@@ -148,6 +163,7 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 		ExternalRuleID:             rule.ExternalRuleID(),
 		internalAgentID:            rule.AgentID(),
 		internalExitAgentID:        rule.ExitAgentID(),
+		internalExitAgents:         rule.ExitAgents(),
 		internalChainAgents:        rule.ChainAgentIDs(),
 		internalChainPortConfig:    rule.ChainPortConfig(),
 		internalTargetNode:         rule.TargetNodeID(),
@@ -180,9 +196,22 @@ func (d *ForwardRuleDTO) PopulateAgentInfo(agentMap AgentSIDMap) {
 	if sid, ok := agentMap[d.internalAgentID]; ok {
 		d.AgentID = sid
 	}
+	// Populate single exit agent ID (mutually exclusive with exit agents)
 	if d.internalExitAgentID != 0 {
 		if sid, ok := agentMap[d.internalExitAgentID]; ok {
 			d.ExitAgentID = sid
+		}
+	}
+	// Populate multiple exit agents with weights
+	if len(d.internalExitAgents) > 0 {
+		d.ExitAgents = make([]ExitAgentDTO, len(d.internalExitAgents))
+		for i, aw := range d.internalExitAgents {
+			d.ExitAgents[i] = ExitAgentDTO{
+				Weight: aw.Weight(),
+			}
+			if sid, ok := agentMap[aw.AgentID()]; ok {
+				d.ExitAgents[i].AgentID = sid
+			}
 		}
 	}
 	// Populate chain agent IDs
@@ -229,6 +258,26 @@ func (d *ForwardRuleDTO) InternalAgentID() uint {
 // InternalExitAgentID returns the internal exit agent ID for repository lookups.
 func (d *ForwardRuleDTO) InternalExitAgentID() uint {
 	return d.internalExitAgentID
+}
+
+// InternalExitAgents returns the internal exit agents for repository lookups.
+func (d *ForwardRuleDTO) InternalExitAgents() []vo.AgentWeight {
+	return d.internalExitAgents
+}
+
+// InternalAllExitAgentIDs returns all exit agent IDs (single or multiple) for repository lookups.
+func (d *ForwardRuleDTO) InternalAllExitAgentIDs() []uint {
+	if len(d.internalExitAgents) > 0 {
+		ids := make([]uint, len(d.internalExitAgents))
+		for i, aw := range d.internalExitAgents {
+			ids[i] = aw.AgentID()
+		}
+		return ids
+	}
+	if d.internalExitAgentID != 0 {
+		return []uint{d.internalExitAgentID}
+	}
+	return nil
 }
 
 // InternalTargetNodeID returns the internal target node ID for repository lookups.
@@ -280,6 +329,12 @@ func CollectAgentIDs(dtos []*ForwardRuleDTO) []uint {
 		if dto.internalExitAgentID != 0 {
 			idSet[dto.internalExitAgentID] = struct{}{}
 		}
+		// Collect exit agents IDs (for load balancing)
+		for _, aw := range dto.internalExitAgents {
+			if aw.AgentID() != 0 {
+				idSet[aw.AgentID()] = struct{}{}
+			}
+		}
 		// Collect chain agent IDs
 		for _, chainAgentID := range dto.internalChainAgents {
 			if chainAgentID != 0 {
@@ -329,6 +384,12 @@ func CollectAllAgentIDsForRules(dtos []*ForwardRuleDTO) map[string][]uint {
 		case "entry":
 			if dto.internalExitAgentID != 0 {
 				agentIDs = append(agentIDs, dto.internalExitAgentID)
+			}
+			// Also include all exit agents for load balancing
+			for _, aw := range dto.internalExitAgents {
+				if aw.AgentID() != 0 {
+					agentIDs = append(agentIDs, aw.AgentID())
+				}
 			}
 		case "chain", "direct_chain":
 			agentIDs = append(agentIDs, dto.internalChainAgents...)

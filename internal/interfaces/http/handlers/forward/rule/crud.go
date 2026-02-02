@@ -69,6 +69,12 @@ func (h *Handler) CreateRule(c *gin.Context) {
 	}
 
 	var exitAgentShortID string
+	var exitAgents []usecases.ExitAgentInput
+	if req.ExitAgentID != "" && len(req.ExitAgents) > 0 {
+		h.logger.Warnw("exit_agent_id and exit_agents are mutually exclusive", "ip", c.ClientIP())
+		utils.ErrorResponseWithError(c, errors.NewValidationError("exit_agent_id and exit_agents are mutually exclusive"))
+		return
+	}
 	if req.ExitAgentID != "" {
 		if err := id.ValidatePrefix(req.ExitAgentID, id.PrefixForwardAgent); err != nil {
 			h.logger.Warnw("invalid exit_agent_id format", "exit_agent_id", req.ExitAgentID, "error", err, "ip", c.ClientIP())
@@ -76,6 +82,25 @@ func (h *Handler) CreateRule(c *gin.Context) {
 			return
 		}
 		exitAgentShortID = req.ExitAgentID
+	} else if len(req.ExitAgents) > 0 {
+		// Validate exit_agents array length (max 10)
+		if len(req.ExitAgents) > 10 {
+			h.logger.Warnw("too many exit_agents", "count", len(req.ExitAgents), "ip", c.ClientIP())
+			utils.ErrorResponseWithError(c, errors.NewValidationError("exit_agents cannot exceed 10 entries"))
+			return
+		}
+		exitAgents = make([]usecases.ExitAgentInput, 0, len(req.ExitAgents))
+		for _, ea := range req.ExitAgents {
+			if err := id.ValidatePrefix(ea.AgentID, id.PrefixForwardAgent); err != nil {
+				h.logger.Warnw("invalid exit_agent_id format in exit_agents", "exit_agent_id", ea.AgentID, "error", err, "ip", c.ClientIP())
+				utils.ErrorResponseWithError(c, errors.NewValidationError("invalid exit_agent_id format in exit_agents, expected fa_xxxxx"))
+				return
+			}
+			exitAgents = append(exitAgents, usecases.ExitAgentInput{
+				AgentSID: ea.AgentID,
+				Weight:   ea.Weight,
+			})
+		}
 	}
 
 	// Validate chain agent IDs
@@ -121,6 +146,7 @@ func (h *Handler) CreateRule(c *gin.Context) {
 		AgentShortID:       agentShortID,
 		RuleType:           req.RuleType,
 		ExitAgentShortID:   exitAgentShortID,
+		ExitAgents:         exitAgents,
 		ChainAgentShortIDs: chainAgentShortIDs,
 		ChainPortConfig:    chainPortConfig,
 		TunnelHops:         req.TunnelHops,
@@ -196,8 +222,14 @@ func (h *Handler) UpdateRule(c *gin.Context) {
 		agentShortID = req.AgentID
 	}
 
-	// Validate exit_agent_id if provided
+	// Validate exit_agent_id and exit_agents (mutually exclusive)
 	var exitAgentShortID *string
+	var exitAgents []usecases.ExitAgentInput
+	if req.ExitAgentID != nil && len(req.ExitAgents) > 0 {
+		h.logger.Warnw("exit_agent_id and exit_agents are mutually exclusive", "ip", c.ClientIP())
+		utils.ErrorResponseWithError(c, errors.NewValidationError("exit_agent_id and exit_agents are mutually exclusive"))
+		return
+	}
 	if req.ExitAgentID != nil {
 		if err := id.ValidatePrefix(*req.ExitAgentID, id.PrefixForwardAgent); err != nil {
 			h.logger.Warnw("invalid exit_agent_id format", "exit_agent_id", *req.ExitAgentID, "error", err, "ip", c.ClientIP())
@@ -205,6 +237,26 @@ func (h *Handler) UpdateRule(c *gin.Context) {
 			return
 		}
 		exitAgentShortID = req.ExitAgentID
+	}
+	if len(req.ExitAgents) > 0 {
+		// Validate exit_agents array length (max 10)
+		if len(req.ExitAgents) > 10 {
+			h.logger.Warnw("too many exit_agents", "count", len(req.ExitAgents), "ip", c.ClientIP())
+			utils.ErrorResponseWithError(c, errors.NewValidationError("exit_agents cannot exceed 10 entries"))
+			return
+		}
+		exitAgents = make([]usecases.ExitAgentInput, 0, len(req.ExitAgents))
+		for _, ea := range req.ExitAgents {
+			if err := id.ValidatePrefix(ea.AgentID, id.PrefixForwardAgent); err != nil {
+				h.logger.Warnw("invalid exit_agent_id format in exit_agents", "exit_agent_id", ea.AgentID, "error", err, "ip", c.ClientIP())
+				utils.ErrorResponseWithError(c, errors.NewValidationError("invalid exit_agent_id format in exit_agents, expected fa_xxxxx"))
+				return
+			}
+			exitAgents = append(exitAgents, usecases.ExitAgentInput{
+				AgentSID: ea.AgentID,
+				Weight:   ea.Weight,
+			})
+		}
 	}
 
 	// Validate chain_agent_ids if provided
@@ -259,6 +311,7 @@ func (h *Handler) UpdateRule(c *gin.Context) {
 		Name:               req.Name,
 		AgentShortID:       agentShortID,
 		ExitAgentShortID:   exitAgentShortID,
+		ExitAgents:         exitAgents,
 		ChainAgentShortIDs: chainAgentShortIDs,
 		ChainPortConfig:    chainPortConfig,
 		TunnelHops:         req.TunnelHops,

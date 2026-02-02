@@ -67,7 +67,12 @@ type Repository interface {
 	ListByExitAgentID(ctx context.Context, exitAgentID uint) ([]*ForwardRule, error)
 
 	// ListEnabledByExitAgentID returns all enabled entry rules for a specific exit agent.
+	// This includes rules where exit_agent_id matches OR exit_agents JSON contains the agent.
 	ListEnabledByExitAgentID(ctx context.Context, exitAgentID uint) ([]*ForwardRule, error)
+
+	// ListEnabledByExitAgentIDs returns all enabled entry rules for multiple exit agents.
+	// This includes rules where exit_agent_id is in the list OR exit_agents JSON contains any of the agents.
+	ListEnabledByExitAgentIDs(ctx context.Context, exitAgentIDs []uint) ([]*ForwardRule, error)
 
 	// ListEnabledByChainAgentID returns all enabled chain rules where the agent participates.
 	// This includes rules where the agent is in the chain_agent_ids array.

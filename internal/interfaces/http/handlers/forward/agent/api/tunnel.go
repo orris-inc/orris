@@ -103,9 +103,17 @@ func (h *Handler) GetExitEndpoint(c *gin.Context) {
 	hasAccess := false
 	for _, rule := range entryRules {
 		// Entry rule: entry agent connects to exit agent
-		if rule.RuleType().String() == "entry" && rule.ExitAgentID() == exitAgentID {
-			hasAccess = true
-			break
+		// Supports both single exit agent (exitAgentID) and load balancing (exitAgents)
+		if rule.RuleType().String() == "entry" {
+			for _, id := range rule.GetAllExitAgentIDs() {
+				if id == exitAgentID {
+					hasAccess = true
+					break
+				}
+			}
+			if hasAccess {
+				break
+			}
 		}
 		// Chain rule: agent connects to its next hop in the chain
 		if rule.RuleType().String() == "chain" {
@@ -264,9 +272,13 @@ func (h *Handler) VerifyTunnelHandshake(c *gin.Context) {
 
 	switch ruleType {
 	case "entry":
-		// For entry rules, exit agent must be the exit_agent_id
-		if rule.ExitAgentID() == exitAgentID {
-			hasExitAccess = true
+		// For entry rules, exit agent must be in the exit agent list
+		// This supports both single exit agent (exitAgentID) and load balancing (exitAgents)
+		for _, id := range rule.GetAllExitAgentIDs() {
+			if id == exitAgentID {
+				hasExitAccess = true
+				break
+			}
 		}
 	case "chain", "direct_chain":
 		// For chain rules, exit agent must be in the chain

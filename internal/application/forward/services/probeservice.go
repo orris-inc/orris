@@ -21,8 +21,9 @@ import (
 )
 
 const (
-	probeTimeout        = 10 * time.Second
-	probeSessionTimeout = 30 * time.Second
+	probeTimeout            = 10 * time.Second
+	probeSessionTimeout     = 30 * time.Second
+	maxConcurrentExitProbes = 10 // max concurrent exit agent probes to prevent resource exhaustion
 )
 
 // ProbeService handles probe operations for forward rules.
@@ -238,14 +239,21 @@ func (s *ProbeService) probeDirectRule(ctx context.Context, rule *forward.Forwar
 
 // probeEntryRule probes an entry rule (entry → exit → target).
 // Uses tunnel_ping to measure actual tunnel RTT instead of simple TCP connection test.
+// For rules with multiple exit agents (load balancing), probes all exit agents.
 func (s *ProbeService) probeEntryRule(ctx context.Context, rule *forward.ForwardRule, ipVersion vo.IPVersion, response *dto.RuleProbeResponse) (*dto.RuleProbeResponse, error) {
 	entryAgentID := rule.AgentID()
-	exitAgentID := rule.ExitAgentID()
+
+	// Get all exit agent IDs
+	exitAgentIDs := rule.GetAllExitAgentIDs()
+	if len(exitAgentIDs) == 0 {
+		response.Error = "no exit agent configured"
+		return response, nil
+	}
 
 	s.logger.Infow("probing entry rule",
 		"rule_id", rule.ID(),
 		"entry_agent_id", entryAgentID,
-		"exit_agent_id", exitAgentID,
+		"total_exit_agents", len(exitAgentIDs),
 	)
 
 	// Check if entry agent is online
@@ -265,109 +273,208 @@ func (s *ProbeService) probeEntryRule(ctx context.Context, rule *forward.Forward
 		return response, nil
 	}
 
-	// Get exit agent info
-	exitAgent, err := s.agentRepo.GetByID(ctx, exitAgentID)
-	if err != nil || exitAgent == nil {
-		response.Error = "exit agent not found"
-		return response, nil
-	}
-
-	// Get tunnel port from exit agent status cache based on rule's tunnel type
-	exitStatus, err := s.statusQuerier.GetStatus(ctx, exitAgentID)
-	if err != nil || exitStatus == nil {
-		response.Error = "exit agent status not found"
-		return response, nil
-	}
-
-	// Select port based on tunnel type
-	var tunnelPort uint16
-	tunnelType := rule.TunnelType().String()
-	if rule.TunnelType().IsTLS() {
-		tunnelPort = exitStatus.TlsListenPort
-		if tunnelPort == 0 {
-			response.Error = "exit agent has no tls_listen_port configured"
-			return response, nil
-		}
-	} else {
-		tunnelPort = exitStatus.WsListenPort
-		if tunnelPort == 0 {
-			response.Error = "exit agent has no ws_listen_port configured"
-			return response, nil
-		}
-	}
-
-	// Use GetEffectiveTunnelAddress for tunnel connections (prefers tunnel_address over public_address)
-	tunnelAddr := exitAgent.GetEffectiveTunnelAddress()
-	if tunnelAddr == "" {
-		response.Error = "exit agent has no tunnel address"
-		return response, nil
-	}
-
 	// Generate tunnel token for entry agent
 	tunnelToken, _ := s.agentTokenService.Generate(entryAgent.SID())
-
+	tunnelType := rule.TunnelType().String()
 	ruleStripeID := rule.SID()
 
-	// Step 1: Probe tunnel using tunnel_ping (measures actual tunnel RTT)
-	tunnelPingResult, err := s.sendTunnelPingTask(ctx, entryAgentID, ruleStripeID,
-		tunnelAddr, tunnelPort, tunnelType, tunnelToken, 3)
-	if err != nil {
-		response.Error = "tunnel ping failed: " + err.Error()
-		return response, nil
-	}
-
-	// Set tunnel latency results
-	response.TunnelLatencyMs = &tunnelPingResult.AvgLatencyMs
-	response.TunnelMinLatencyMs = &tunnelPingResult.MinLatencyMs
-	response.TunnelMaxLatencyMs = &tunnelPingResult.MaxLatencyMs
-	response.TunnelPacketLoss = &tunnelPingResult.PacketLoss
-
-	// Step 2: Probe target from exit agent (exit → target)
-	if !s.hub.IsAgentOnline(exitAgentID) {
-		response.Error = "exit agent not connected, cannot probe target"
-		return response, nil
-	}
-
-	// Resolve target address and port
+	// Resolve target address and port once (shared by all exit agents)
 	targetAddress := rule.TargetAddress()
 	targetPort := rule.TargetPort()
-
-	// If rule has target node, get address from node
 	if rule.HasTargetNode() {
 		targetNode, err := s.nodeRepo.GetByID(ctx, *rule.TargetNodeID())
 		if err != nil {
-			response.Error = "failed to get target node: " + err.Error()
+			s.logger.Errorw("failed to get target node for probe",
+				"rule_id", ruleStripeID,
+				"target_node_id", *rule.TargetNodeID(),
+				"error", err,
+			)
+			response.Error = "failed to get target node"
 			return response, nil
 		}
 		if targetNode == nil {
 			response.Error = "target node not found"
 			return response, nil
 		}
-		// Resolve target address based on IP version preference
 		targetAddress = s.resolveNodeAddress(targetNode, ipVersion)
 		if targetAddress == "" {
 			response.Error = "target node has no available address for ip_version: " + ipVersion.String()
 			return response, nil
 		}
-		// Use node's agent port if rule's target port is not set
 		if targetPort == 0 {
 			targetPort = targetNode.AgentPort()
 		}
 	}
 
-	// Probe target using TCP for reliable connectivity check
+	// Probe all exit agents concurrently with limited concurrency
+	exitResults := make([]*dto.ExitAgentProbeResult, len(exitAgentIDs))
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, maxConcurrentExitProbes)
+
+	for i, exitAgentID := range exitAgentIDs {
+		wg.Add(1)
+		go func(idx int, agentID uint) {
+			defer wg.Done()
+			sem <- struct{}{}        // acquire
+			defer func() { <-sem }() // release
+			exitResults[idx] = s.probeExitAgent(ctx, entryAgentID, agentID, ruleStripeID,
+				tunnelType, tunnelToken, targetAddress, targetPort, rule)
+		}(i, exitAgentID)
+	}
+	wg.Wait()
+
+	// Check context cancellation
+	if ctx.Err() != nil {
+		response.Error = "probe cancelled"
+		return response, ctx.Err()
+	}
+
+	// Find best result
+	var bestResult *dto.ExitAgentProbeResult
+	hasAnySuccess := false
+	for _, exitResult := range exitResults {
+		if exitResult.Success {
+			hasAnySuccess = true
+			if bestResult == nil || (exitResult.TotalLatencyMs != nil && bestResult.TotalLatencyMs != nil &&
+				*exitResult.TotalLatencyMs < *bestResult.TotalLatencyMs) {
+				bestResult = exitResult
+			}
+		}
+	}
+
+	response.ExitAgentResults = exitResults
+	response.Success = hasAnySuccess
+
+	// Populate top-level fields with best result for backward compatibility
+	if bestResult != nil {
+		response.TunnelLatencyMs = bestResult.TunnelLatencyMs
+		response.TunnelMinLatencyMs = bestResult.TunnelMinLatencyMs
+		response.TunnelMaxLatencyMs = bestResult.TunnelMaxLatencyMs
+		response.TunnelPacketLoss = bestResult.TunnelPacketLoss
+		response.TargetLatencyMs = bestResult.TargetLatencyMs
+		response.TotalLatencyMs = bestResult.TotalLatencyMs
+	} else if len(exitResults) > 0 {
+		// If no success, use the first result's error
+		response.Error = exitResults[0].Error
+	}
+
+	return response, nil
+}
+
+// probeExitAgent probes a single exit agent and returns the result.
+func (s *ProbeService) probeExitAgent(
+	ctx context.Context,
+	entryAgentID uint,
+	exitAgentID uint,
+	ruleStripeID string,
+	tunnelType string,
+	tunnelToken string,
+	targetAddress string,
+	targetPort uint16,
+	rule *forward.ForwardRule,
+) *dto.ExitAgentProbeResult {
+	result := &dto.ExitAgentProbeResult{}
+
+	// Get exit agent info
+	exitAgent, err := s.agentRepo.GetByID(ctx, exitAgentID)
+	if err != nil || exitAgent == nil {
+		s.logger.Warnw("exit agent not found for probe",
+			"exit_agent_id", exitAgentID,
+			"rule_id", ruleStripeID,
+		)
+		result.Error = "exit agent not found"
+		return result
+	}
+	result.AgentID = exitAgent.SID()
+
+	// Check if exit agent is online
+	result.Online = s.hub.IsAgentOnline(exitAgentID)
+	if !result.Online {
+		s.logger.Debugw("exit agent not connected for probe",
+			"exit_agent_id", result.AgentID,
+			"rule_id", ruleStripeID,
+		)
+		result.Error = "exit agent not connected"
+		return result
+	}
+
+	// Get tunnel port from exit agent status cache
+	exitStatus, err := s.statusQuerier.GetStatus(ctx, exitAgentID)
+	if err != nil || exitStatus == nil {
+		result.Error = "exit agent status not found"
+		return result
+	}
+
+	// Select port based on tunnel type
+	var tunnelPort uint16
+	if rule.TunnelType().IsTLS() {
+		tunnelPort = exitStatus.TlsListenPort
+		if tunnelPort == 0 {
+			result.Error = "exit agent has no tls_listen_port configured"
+			return result
+		}
+	} else {
+		tunnelPort = exitStatus.WsListenPort
+		if tunnelPort == 0 {
+			result.Error = "exit agent has no ws_listen_port configured"
+			return result
+		}
+	}
+
+	// Get tunnel address
+	tunnelAddr := exitAgent.GetEffectiveTunnelAddress()
+	if tunnelAddr == "" {
+		result.Error = "exit agent has no tunnel address"
+		return result
+	}
+
+	// Step 1: Probe tunnel using tunnel_ping
+	tunnelPingResult, err := s.sendTunnelPingTask(ctx, entryAgentID, ruleStripeID,
+		tunnelAddr, tunnelPort, tunnelType, tunnelToken, 3)
+	if err != nil {
+		s.logger.Debugw("tunnel ping failed",
+			"exit_agent_id", result.AgentID,
+			"rule_id", ruleStripeID,
+			"error", err,
+		)
+		result.Error = "tunnel ping failed"
+		return result
+	}
+
+	result.TunnelLatencyMs = &tunnelPingResult.AvgLatencyMs
+	result.TunnelMinLatencyMs = &tunnelPingResult.MinLatencyMs
+	result.TunnelMaxLatencyMs = &tunnelPingResult.MaxLatencyMs
+	result.TunnelPacketLoss = &tunnelPingResult.PacketLoss
+
+	// Step 2: Probe target from exit agent
 	targetLatency, err := s.sendProbeTask(ctx, exitAgentID, ruleStripeID, dto.ProbeTaskTypeTarget,
 		targetAddress, targetPort, "tcp")
 	if err != nil {
-		response.Error = "target probe failed: " + err.Error()
-		return response, nil
+		s.logger.Debugw("target probe failed",
+			"exit_agent_id", result.AgentID,
+			"rule_id", ruleStripeID,
+			"target", targetAddress,
+			"port", targetPort,
+			"error", err,
+		)
+		result.Error = "target probe failed"
+		return result
 	}
 
-	response.Success = true
-	response.TargetLatencyMs = &targetLatency
+	result.TargetLatencyMs = &targetLatency
 	totalLatency := tunnelPingResult.AvgLatencyMs + targetLatency
-	response.TotalLatencyMs = &totalLatency
-	return response, nil
+	result.TotalLatencyMs = &totalLatency
+	result.Success = true
+
+	s.logger.Debugw("exit agent probe completed",
+		"exit_agent_id", result.AgentID,
+		"rule_id", ruleStripeID,
+		"tunnel_latency_ms", tunnelPingResult.AvgLatencyMs,
+		"target_latency_ms", targetLatency,
+		"total_latency_ms", totalLatency,
+	)
+
+	return result
 }
 
 // probeChainRule probes a chain rule (entry → relay1 → relay2 → ... → lastAgent → target).

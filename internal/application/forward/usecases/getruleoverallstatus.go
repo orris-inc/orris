@@ -126,10 +126,8 @@ func (uc *GetRuleOverallStatusUseCase) collectAgentIDs(rule *forward.ForwardRule
 
 	switch rule.RuleType().String() {
 	case "entry":
-		// Add exit agent
-		if rule.ExitAgentID() != 0 {
-			agentIDs = append(agentIDs, rule.ExitAgentID())
-		}
+		// Add all exit agents (supports load balancing with multiple exit agents)
+		agentIDs = append(agentIDs, rule.GetAllExitAgentIDs()...)
 	case "chain", "direct_chain":
 		// Add all chain agents
 		agentIDs = append(agentIDs, rule.ChainAgentIDs()...)

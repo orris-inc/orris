@@ -21,6 +21,9 @@ const (
 
 	// Rule sync status message types (Forward domain specific, routed through AgentHub).
 	MsgTypeRuleSyncStatus = "rule_sync_status" // Agent -> Server
+
+	// Tunnel health report message types (Agent reports exit agent health status).
+	MsgTypeTunnelHealthReport = "tunnel_health_report" // Agent -> Server
 )
 
 // HubMessage is the unified WebSocket message envelope.
@@ -83,6 +86,22 @@ type ConfigSyncData struct {
 	// Agents should verify tokens via the server API, not using local HMAC verification.
 }
 
+// ExitAgentSyncData represents an exit agent with connection info for load balancing.
+type ExitAgentSyncData struct {
+	AgentID string `json:"agent_id"` // Stripe-style prefixed ID
+	Weight  uint16 `json:"weight"`   // Load balancing weight (1-100)
+	Address string `json:"address"`  // Exit agent public address
+	WsPort  uint16 `json:"ws_port"`  // Exit agent WebSocket port
+	TlsPort uint16 `json:"tls_port"` // Exit agent TLS port
+	Online  bool   `json:"online"`   // Exit agent online status
+}
+
+// HealthCheckConfig represents health check configuration for load balancing failover.
+type HealthCheckConfig struct {
+	UnhealthyThreshold uint32 `json:"unhealthy_threshold"` // Number of failures before marking unhealthy (default: 2)
+	HealthyThreshold   uint32 `json:"healthy_threshold"`   // Number of successes before marking healthy (default: 1)
+}
+
 // RuleSyncData represents rule sync data for config sync.
 type RuleSyncData struct {
 	ID                     string   `json:"id"`       // Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ")
@@ -109,6 +128,9 @@ type RuleSyncData struct {
 	ChainAgentIDs          []string `json:"chain_agent_ids,omitempty"`
 	ChainPosition          int      `json:"chain_position,omitempty"`
 	IsLastInChain          bool     `json:"is_last_in_chain,omitempty"`
+	// Multiple exit agents for load balancing (entry rules only, mutually exclusive with NextHop* fields)
+	ExitAgents  []ExitAgentSyncData `json:"exit_agents,omitempty"`
+	HealthCheck *HealthCheckConfig  `json:"health_check,omitempty"` // Health check config for load balancing failover
 }
 
 // ConfigAckData represents agent acknowledgment of config sync.
@@ -116,4 +138,16 @@ type ConfigAckData struct {
 	Version uint64 `json:"version"`
 	Success bool   `json:"success"`
 	Error   string `json:"error,omitempty"`
+}
+
+// TunnelHealthReport represents a tunnel health status report from entry agent.
+// Entry agents periodically check tunnel connectivity to exit agents and report failures.
+type TunnelHealthReport struct {
+	RuleID      string `json:"rule_id"`                // Rule ID (Stripe-style prefixed, e.g., "fr_xxx")
+	ExitAgentID string `json:"exit_agent_id"`          // Exit agent ID (Stripe-style prefixed, e.g., "fa_xxx")
+	Healthy     bool   `json:"healthy"`                // Whether the tunnel is healthy
+	FailCount   int    `json:"fail_count,omitempty"`   // Consecutive failure count (when unhealthy)
+	Error       string `json:"error,omitempty"`        // Error message (when unhealthy)
+	LatencyMs   *int64 `json:"latency_ms,omitempty"`   // Last measured latency in milliseconds (when healthy)
+	CheckedAt   int64  `json:"checked_at"`             // Health check timestamp (Unix seconds)
 }

@@ -31,6 +31,7 @@ type RuleParams struct {
 	SubscriptionID    *uint
 	RuleType          vo.ForwardRuleType
 	ExitAgentID       uint
+	ExitAgents        []vo.AgentWeight
 	ChainAgentIDs     []uint
 	ChainPortConfig   map[uint]uint16
 	TunnelHops        *int
@@ -232,6 +233,7 @@ func NewTestForwardRule(params RuleParams) (*forward.ForwardRule, error) {
 		params.SubscriptionID,
 		params.RuleType,
 		params.ExitAgentID,
+		params.ExitAgents,
 		params.ChainAgentIDs,
 		params.ChainPortConfig,
 		params.TunnelHops,

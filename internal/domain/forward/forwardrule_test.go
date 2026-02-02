@@ -24,6 +24,7 @@ type ruleParams struct {
 	AgentID           uint
 	RuleType          vo.ForwardRuleType
 	ExitAgentID       uint
+	ExitAgents        []vo.AgentWeight
 	ChainAgentIDs     []uint
 	ChainPortConfig   map[uint]uint16
 	TunnelType        vo.TunnelType
@@ -196,6 +197,7 @@ func newTestForwardRule(params ruleParams) (*ForwardRule, error) {
 		nil, // subscriptionID is nil for test cases
 		params.RuleType,
 		params.ExitAgentID,
+		params.ExitAgents,
 		params.ChainAgentIDs,
 		params.ChainPortConfig,
 		nil, // tunnelHops
@@ -1709,7 +1711,9 @@ func TestForwardRule_Validate_RejectsInvalidRuleType(t *testing.T) {
 	_, err := ReconstructForwardRule(
 		1, shortID, 1, nil, nil, // id, shortID, agentID, userID, subscriptionID
 		vo.ForwardRuleType("invalid"),
-		0, nil, nil,
+		0,        // exitAgentID
+		nil,      // exitAgents
+		nil, nil, // chainAgentIDs, chainPortConfig
 		nil,             // tunnelHops
 		vo.TunnelTypeWS, // tunnelType
 		"test", 8080,
@@ -1717,8 +1721,8 @@ func TestForwardRule_Validate_RejectsInvalidRuleType(t *testing.T) {
 		"", vo.IPVersionAuto, vo.ForwardProtocolTCP,
 		vo.ForwardStatusDisabled,
 		"", 0, 0, nil,
-		0,   // sortOrder
-		nil, // groupIDs
+		0,          // sortOrder
+		nil,        // groupIDs
 		"", "", "", // serverAddress, externalSource, externalRuleID
 		time.Now(), time.Now(),
 	)
@@ -2045,6 +2049,7 @@ func TestGetEffectiveMultiplier(t *testing.T) {
 				nil, // subscriptionID
 				tt.params.RuleType,
 				tt.params.ExitAgentID,
+				tt.params.ExitAgents,
 				tt.params.ChainAgentIDs,
 				tt.params.ChainPortConfig,
 				nil, // tunnelHops
@@ -2139,6 +2144,7 @@ func TestTrafficBytesWithMultiplier(t *testing.T) {
 				nil, // subscriptionID
 				tt.params.RuleType,
 				tt.params.ExitAgentID,
+				tt.params.ExitAgents,
 				tt.params.ChainAgentIDs,
 				tt.params.ChainPortConfig,
 				nil, // tunnelHops
@@ -2223,6 +2229,7 @@ func TestTrafficMultiplierValidation(t *testing.T) {
 				nil, // subscriptionID
 				params.RuleType,
 				params.ExitAgentID,
+				params.ExitAgents,
 				params.ChainAgentIDs,
 				params.ChainPortConfig,
 				nil, // tunnelHops
@@ -2273,6 +2280,7 @@ func TestGetRawBytes(t *testing.T) {
 		nil, // subscriptionID
 		params.RuleType,
 		params.ExitAgentID,
+		params.ExitAgents,
 		params.ChainAgentIDs,
 		params.ChainPortConfig,
 		nil, // tunnelHops

@@ -47,6 +47,7 @@ func NewConfigSyncService(
 		nodeRepo,
 		statusQuerier,
 		agentTokenService,
+		hub,
 		log,
 	)
 

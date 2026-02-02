@@ -59,22 +59,39 @@ type ChainHopLatency struct {
 	Online    bool   `json:"online"`          // whether the source agent is online
 }
 
+// ExitAgentProbeResult represents the probe result for a single exit agent in entry rules.
+type ExitAgentProbeResult struct {
+	AgentID            string   `json:"agent_id"`                        // Stripe-style prefixed ID
+	Success            bool     `json:"success"`                         // whether probe succeeded
+	Error              string   `json:"error,omitempty"`                 // error message if failed
+	Online             bool     `json:"online"`                          // whether exit agent is online
+	TunnelLatencyMs    *int64   `json:"tunnel_latency_ms,omitempty"`     // entry→exit (avg)
+	TunnelMinLatencyMs *int64   `json:"tunnel_min_latency_ms,omitempty"` // minimum tunnel RTT
+	TunnelMaxLatencyMs *int64   `json:"tunnel_max_latency_ms,omitempty"` // maximum tunnel RTT
+	TunnelPacketLoss   *float64 `json:"tunnel_packet_loss,omitempty"`    // packet loss percentage
+	TargetLatencyMs    *int64   `json:"target_latency_ms,omitempty"`     // exit→target
+	TotalLatencyMs     *int64   `json:"total_latency_ms,omitempty"`      // total: tunnel + target
+}
+
 // RuleProbeResponse represents the probe result for a single rule.
 // For direct rules: only targetLatencyMs is set.
-// For entry rules: both tunnelLatencyMs and targetLatencyMs are set.
+// For entry rules: both tunnelLatencyMs and targetLatencyMs are set, plus exitAgentResults for multi-exit rules.
 // For chain/direct_chain rules: chainLatencies contains per-hop latencies.
 type RuleProbeResponse struct {
 	RuleID          string             `json:"rule_id"`   // Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ")
 	RuleType        string             `json:"rule_type"` // direct, entry, chain, direct_chain
 	Success         bool               `json:"success"`
-	TunnelLatencyMs *int64             `json:"tunnel_latency_ms,omitempty"` // entry only: entry→exit (avg)
-	TargetLatencyMs *int64             `json:"target_latency_ms,omitempty"` // agent→target
+	TunnelLatencyMs *int64             `json:"tunnel_latency_ms,omitempty"` // entry only: entry→exit (avg, best exit agent)
+	TargetLatencyMs *int64             `json:"target_latency_ms,omitempty"` // agent→target (best exit agent)
 	ChainLatencies  []*ChainHopLatency `json:"chain_latencies,omitempty"`   // chain/direct_chain: per-hop latencies
-	TotalLatencyMs  *int64             `json:"total_latency_ms,omitempty"`  // total round-trip
+	TotalLatencyMs  *int64             `json:"total_latency_ms,omitempty"`  // total round-trip (best exit agent)
 	Error           string             `json:"error,omitempty"`
 
-	// TunnelPing detailed results (when tunnel_ping probe is used)
+	// TunnelPing detailed results (when tunnel_ping probe is used, best exit agent)
 	TunnelMinLatencyMs *int64   `json:"tunnel_min_latency_ms,omitempty"` // minimum tunnel RTT
 	TunnelMaxLatencyMs *int64   `json:"tunnel_max_latency_ms,omitempty"` // maximum tunnel RTT
 	TunnelPacketLoss   *float64 `json:"tunnel_packet_loss,omitempty"`    // tunnel packet loss percentage
+
+	// Per-exit-agent results for entry rules with multiple exit agents
+	ExitAgentResults []*ExitAgentProbeResult `json:"exit_agent_results,omitempty"` // entry: all exit agents probe results
 }

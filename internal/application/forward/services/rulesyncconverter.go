@@ -20,6 +20,7 @@ type RuleSyncConverter struct {
 	nodeRepo          node.NodeRepository
 	statusQuerier     usecases.AgentStatusQuerier
 	agentTokenService *auth.AgentTokenService
+	hub               SyncHub // Hub for checking agent online status
 	logger            logger.Interface
 }
 
@@ -29,6 +30,7 @@ func NewRuleSyncConverter(
 	nodeRepo node.NodeRepository,
 	statusQuerier usecases.AgentStatusQuerier,
 	agentTokenService *auth.AgentTokenService,
+	hub SyncHub,
 	log logger.Interface,
 ) *RuleSyncConverter {
 	return &RuleSyncConverter{
@@ -36,6 +38,7 @@ func NewRuleSyncConverter(
 		nodeRepo:          nodeRepo,
 		statusQuerier:     statusQuerier,
 		agentTokenService: agentTokenService,
+		hub:               hub,
 		logger:            log,
 	}
 }
@@ -124,19 +127,31 @@ func (c *RuleSyncConverter) convertEntryRule(
 	if rule.AgentID() == agentID {
 		// This agent is the entry point
 		data.Role = "entry"
-		// Entry agent needs to know the exit agent info to establish tunnel
-		exitAgentID := rule.ExitAgentID()
-		if exitAgentID != 0 {
-			if err := c.populateNextHopInfo(ctx, data, exitAgentID, "tunnel", rule); err != nil {
-				c.logger.Warnw("failed to populate next hop info for entry rule",
+
+		// Check if multiple exit agents are configured for load balancing
+		if rule.HasMultipleExitAgents() {
+			// Populate exit agents with connection info
+			if err := c.populateExitAgentsInfo(ctx, rule, data); err != nil {
+				c.logger.Warnw("failed to populate exit agents info for entry rule",
 					"rule_id", rule.ID(),
-					"exit_agent_id", exitAgentID,
 					"error", err,
 				)
 			}
+		} else {
+			// Single exit agent mode (backward compatible)
+			exitAgentID := rule.ExitAgentID()
+			if exitAgentID != 0 {
+				if err := c.populateNextHopInfo(ctx, data, exitAgentID, "tunnel", rule); err != nil {
+					c.logger.Warnw("failed to populate next hop info for entry rule",
+						"rule_id", rule.ID(),
+						"exit_agent_id", exitAgentID,
+						"error", err,
+					)
+				}
+			}
 		}
-	} else if rule.ExitAgentID() == agentID {
-		// This agent is the exit point
+	} else if c.isExitAgentForRule(rule, agentID) {
+		// This agent is one of the exit points
 		data.Role = "exit"
 		data.TargetAddress = targetAddress
 		data.TargetPort = targetPort
@@ -155,6 +170,88 @@ func (c *RuleSyncConverter) convertEntryRule(
 				data.AgentID = entryAgent.SID()
 			}
 		}
+	}
+
+	return nil
+}
+
+// isExitAgentForRule checks if the given agent ID is an exit agent for the rule.
+// This includes both single exit agent (exitAgentID) and multiple exit agents.
+func (c *RuleSyncConverter) isExitAgentForRule(rule *forward.ForwardRule, agentID uint) bool {
+	// Check single exit agent
+	if rule.ExitAgentID() == agentID {
+		return true
+	}
+	// Check multiple exit agents
+	for _, aw := range rule.ExitAgents() {
+		if aw.AgentID() == agentID {
+			return true
+		}
+	}
+	return false
+}
+
+// populateExitAgentsInfo populates multiple exit agents with connection info for load balancing.
+func (c *RuleSyncConverter) populateExitAgentsInfo(
+	ctx context.Context,
+	rule *forward.ForwardRule,
+	data *dto.RuleSyncData,
+) error {
+	exitAgents := rule.ExitAgents()
+	if len(exitAgents) == 0 {
+		return nil
+	}
+
+	// Collect all exit agent IDs
+	exitAgentIDs := make([]uint, len(exitAgents))
+	for i, aw := range exitAgents {
+		exitAgentIDs[i] = aw.AgentID()
+	}
+
+	// Batch fetch agents
+	agentMap, err := c.agentRepo.GetByIDs(ctx, exitAgentIDs)
+	if err != nil {
+		return fmt.Errorf("get exit agents: %w", err)
+	}
+
+	data.ExitAgents = make([]dto.ExitAgentSyncData, 0, len(exitAgents))
+	missingAgents := 0
+	for _, aw := range exitAgents {
+		agent, ok := agentMap[aw.AgentID()]
+		if !ok || agent == nil {
+			c.logger.Warnw("exit agent not found",
+				"rule_id", rule.ID(),
+				"exit_agent_id", aw.AgentID(),
+			)
+			missingAgents++
+			continue
+		}
+
+		exitAgentData := dto.ExitAgentSyncData{
+			AgentID: agent.SID(),
+			Weight:  aw.Weight(),
+			Address: agent.GetEffectiveTunnelAddress(),
+			Online:  c.hub.IsAgentOnline(aw.AgentID()),
+		}
+
+		// Get tunnel ports from cached agent status
+		status, err := c.statusQuerier.GetStatus(ctx, aw.AgentID())
+		if err != nil {
+			c.logger.Warnw("failed to get exit agent status",
+				"exit_agent_id", aw.AgentID(),
+				"error", err,
+			)
+		} else if status != nil {
+			exitAgentData.WsPort = status.WsListenPort
+			exitAgentData.TlsPort = status.TlsListenPort
+		}
+
+		data.ExitAgents = append(data.ExitAgents, exitAgentData)
+	}
+
+	// Return error if no exit agents were found
+	if len(data.ExitAgents) == 0 && missingAgents > 0 {
+		return fmt.Errorf("all %d exit agents not found for rule %d", missingAgents, rule.ID())
 	}
 
 	return nil

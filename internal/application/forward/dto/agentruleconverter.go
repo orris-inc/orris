@@ -255,11 +255,28 @@ func (c *AgentRuleConverter) populateEntryRuleInfo(ctx context.Context, rule *fo
 		// This agent is the entry point
 		ruleDTO.Role = "entry"
 		c.populateEntryNextHopInfo(ctx, rule, ruleDTO)
-	} else if rule.ExitAgentID() == agentID {
-		// This agent is the exit point - clear exit_agent_id (minimum info principle)
+	} else if c.isExitAgent(rule, agentID) {
+		// This agent is one of the exit points - clear exit_agent_id and exit_agents (minimum info principle)
 		ruleDTO.Role = "exit"
 		ruleDTO.ExitAgentID = ""
+		ruleDTO.ExitAgents = nil
 	}
+}
+
+// isExitAgent checks if the given agent is an exit agent for this entry rule.
+// Supports both single exit agent (exitAgentID) and load balancing (exitAgents).
+func (c *AgentRuleConverter) isExitAgent(rule *forward.ForwardRule, agentID uint) bool {
+	// Check single exit agent
+	if rule.ExitAgentID() == agentID {
+		return true
+	}
+	// Check multiple exit agents (load balancing)
+	for _, id := range rule.GetAllExitAgentIDs() {
+		if id == agentID {
+			return true
+		}
+	}
+	return false
 }
 
 // populateEntryNextHopInfo populates next hop info for entry agent.

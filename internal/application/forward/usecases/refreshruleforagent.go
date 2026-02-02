@@ -134,10 +134,14 @@ func (uc *RefreshRuleForAgentUseCase) hasAccess(rule *forward.ForwardRule, agent
 		return true
 	}
 
-	// Check if agent is the exit agent (for entry type rules)
+	// Check if agent is one of the exit agents (for entry type rules, supports load balancing)
 	ruleType := rule.RuleType().String()
-	if ruleType == "entry" && rule.ExitAgentID() == agentID {
-		return true
+	if ruleType == "entry" {
+		for _, exitAgentID := range rule.GetAllExitAgentIDs() {
+			if exitAgentID == agentID {
+				return true
+			}
+		}
 	}
 
 	// Check if agent is in the chain (for chain and direct_chain type rules)
