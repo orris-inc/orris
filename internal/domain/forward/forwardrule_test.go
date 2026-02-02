@@ -21,23 +21,24 @@ func mockShortIDGenerator() func() (string, error) {
 
 // ruleParams holds parameters for creating a test forward rule.
 type ruleParams struct {
-	AgentID           uint
-	RuleType          vo.ForwardRuleType
-	ExitAgentID       uint
-	ExitAgents        []vo.AgentWeight
-	ChainAgentIDs     []uint
-	ChainPortConfig   map[uint]uint16
-	TunnelType        vo.TunnelType
-	Name              string
-	ListenPort        uint16
-	TargetAddress     string
-	TargetPort        uint16
-	TargetNodeID      *uint
-	BindIP            string
-	IPVersion         vo.IPVersion
-	Protocol          vo.ForwardProtocol
-	Remark            string
-	TrafficMultiplier *float64
+	AgentID             uint
+	RuleType            vo.ForwardRuleType
+	ExitAgentID         uint
+	ExitAgents          []vo.AgentWeight
+	LoadBalanceStrategy vo.LoadBalanceStrategy
+	ChainAgentIDs       []uint
+	ChainPortConfig     map[uint]uint16
+	TunnelType          vo.TunnelType
+	Name                string
+	ListenPort          uint16
+	TargetAddress       string
+	TargetPort          uint16
+	TargetNodeID        *uint
+	BindIP              string
+	IPVersion           vo.IPVersion
+	Protocol            vo.ForwardProtocol
+	Remark              string
+	TrafficMultiplier   *float64
 }
 
 // ruleOption is a function that modifies ruleParams.
@@ -191,6 +192,11 @@ func validDirectChainRuleParams(opts ...ruleOption) ruleParams {
 // newTestForwardRule creates a test forward rule with the given parameters.
 func newTestForwardRule(params ruleParams) (*ForwardRule, error) {
 	generator := mockShortIDGenerator()
+	// Default to failover if not set
+	loadBalanceStrategy := params.LoadBalanceStrategy
+	if loadBalanceStrategy == "" {
+		loadBalanceStrategy = vo.DefaultLoadBalanceStrategy
+	}
 	return NewForwardRule(
 		params.AgentID,
 		nil, // userID is nil for test cases
@@ -198,6 +204,7 @@ func newTestForwardRule(params ruleParams) (*ForwardRule, error) {
 		params.RuleType,
 		params.ExitAgentID,
 		params.ExitAgents,
+		loadBalanceStrategy,
 		params.ChainAgentIDs,
 		params.ChainPortConfig,
 		nil, // tunnelHops
@@ -1711,9 +1718,10 @@ func TestForwardRule_Validate_RejectsInvalidRuleType(t *testing.T) {
 	_, err := ReconstructForwardRule(
 		1, shortID, 1, nil, nil, // id, shortID, agentID, userID, subscriptionID
 		vo.ForwardRuleType("invalid"),
-		0,        // exitAgentID
-		nil,      // exitAgents
-		nil, nil, // chainAgentIDs, chainPortConfig
+		0,                             // exitAgentID
+		nil,                           // exitAgents
+		vo.DefaultLoadBalanceStrategy, // loadBalanceStrategy
+		nil, nil,                      // chainAgentIDs, chainPortConfig
 		nil,             // tunnelHops
 		vo.TunnelTypeWS, // tunnelType
 		"test", 8080,
@@ -2050,6 +2058,7 @@ func TestGetEffectiveMultiplier(t *testing.T) {
 				tt.params.RuleType,
 				tt.params.ExitAgentID,
 				tt.params.ExitAgents,
+				vo.DefaultLoadBalanceStrategy, // loadBalanceStrategy
 				tt.params.ChainAgentIDs,
 				tt.params.ChainPortConfig,
 				nil, // tunnelHops
@@ -2145,6 +2154,7 @@ func TestTrafficBytesWithMultiplier(t *testing.T) {
 				tt.params.RuleType,
 				tt.params.ExitAgentID,
 				tt.params.ExitAgents,
+				vo.DefaultLoadBalanceStrategy, // loadBalanceStrategy
 				tt.params.ChainAgentIDs,
 				tt.params.ChainPortConfig,
 				nil, // tunnelHops
@@ -2230,6 +2240,7 @@ func TestTrafficMultiplierValidation(t *testing.T) {
 				params.RuleType,
 				params.ExitAgentID,
 				params.ExitAgents,
+				vo.DefaultLoadBalanceStrategy, // loadBalanceStrategy
 				params.ChainAgentIDs,
 				params.ChainPortConfig,
 				nil, // tunnelHops
@@ -2281,6 +2292,7 @@ func TestGetRawBytes(t *testing.T) {
 		params.RuleType,
 		params.ExitAgentID,
 		params.ExitAgents,
+		vo.DefaultLoadBalanceStrategy, // loadBalanceStrategy
 		params.ChainAgentIDs,
 		params.ChainPortConfig,
 		nil, // tunnelHops

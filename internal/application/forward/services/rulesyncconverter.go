@@ -191,6 +191,12 @@ func (c *RuleSyncConverter) isExitAgentForRule(rule *forward.ForwardRule, agentI
 	return false
 }
 
+// Default health check thresholds for failover load balancing.
+const (
+	defaultUnhealthyThreshold uint32 = 2 // Number of failures before marking unhealthy
+	defaultHealthyThreshold   uint32 = 1 // Number of successes before marking healthy
+)
+
 // populateExitAgentsInfo populates multiple exit agents with connection info for load balancing.
 func (c *RuleSyncConverter) populateExitAgentsInfo(
 	ctx context.Context,
@@ -252,6 +258,15 @@ func (c *RuleSyncConverter) populateExitAgentsInfo(
 	// Return error if no exit agents were found
 	if len(data.ExitAgents) == 0 && missingAgents > 0 {
 		return fmt.Errorf("all %d exit agents not found for rule %d", missingAgents, rule.ID())
+	}
+
+	// Populate load balance strategy
+	data.LoadBalanceStrategy = rule.LoadBalanceStrategy().String()
+
+	// Populate health check config with default values for failover strategy
+	data.HealthCheck = &dto.HealthCheckConfig{
+		UnhealthyThreshold: defaultUnhealthyThreshold,
+		HealthyThreshold:   defaultHealthyThreshold,
 	}
 
 	return nil

@@ -26,26 +26,27 @@ func MockTokenGenerator(shortID string) (string, string) {
 
 // RuleParams holds parameters for creating a test forward rule.
 type RuleParams struct {
-	AgentID           uint
-	UserID            *uint
-	SubscriptionID    *uint
-	RuleType          vo.ForwardRuleType
-	ExitAgentID       uint
-	ExitAgents        []vo.AgentWeight
-	ChainAgentIDs     []uint
-	ChainPortConfig   map[uint]uint16
-	TunnelHops        *int
-	TunnelType        vo.TunnelType
-	Name              string
-	ListenPort        uint16
-	TargetAddress     string
-	TargetPort        uint16
-	TargetNodeID      *uint
-	BindIP            string
-	IPVersion         vo.IPVersion
-	Protocol          vo.ForwardProtocol
-	Remark            string
-	TrafficMultiplier *float64
+	AgentID             uint
+	UserID              *uint
+	SubscriptionID      *uint
+	RuleType            vo.ForwardRuleType
+	ExitAgentID         uint
+	ExitAgents          []vo.AgentWeight
+	LoadBalanceStrategy vo.LoadBalanceStrategy
+	ChainAgentIDs       []uint
+	ChainPortConfig     map[uint]uint16
+	TunnelHops          *int
+	TunnelType          vo.TunnelType
+	Name                string
+	ListenPort          uint16
+	TargetAddress       string
+	TargetPort          uint16
+	TargetNodeID        *uint
+	BindIP              string
+	IPVersion           vo.IPVersion
+	Protocol            vo.ForwardProtocol
+	Remark              string
+	TrafficMultiplier   *float64
 }
 
 // RuleOption is a function that modifies RuleParams.
@@ -227,6 +228,11 @@ func ValidDirectChainRuleParams(opts ...RuleOption) RuleParams {
 // NewTestForwardRule creates a test forward rule with the given parameters.
 func NewTestForwardRule(params RuleParams) (*forward.ForwardRule, error) {
 	generator := MockShortIDGenerator()
+	// Default to failover if not set
+	loadBalanceStrategy := params.LoadBalanceStrategy
+	if loadBalanceStrategy == "" {
+		loadBalanceStrategy = vo.DefaultLoadBalanceStrategy
+	}
 	return forward.NewForwardRule(
 		params.AgentID,
 		params.UserID,
@@ -234,6 +240,7 @@ func NewTestForwardRule(params RuleParams) (*forward.ForwardRule, error) {
 		params.RuleType,
 		params.ExitAgentID,
 		params.ExitAgents,
+		loadBalanceStrategy,
 		params.ChainAgentIDs,
 		params.ChainPortConfig,
 		params.TunnelHops,

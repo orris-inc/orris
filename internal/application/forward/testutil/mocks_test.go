@@ -22,12 +22,13 @@ func TestMockForwardRuleRepository(t *testing.T) {
 		nil, // userID
 		nil, // subscriptionID
 		vo.ForwardRuleTypeDirect,
-		0,               // exitAgentID
-		nil,             // exitAgents
-		nil,             // chainAgentIDs
-		nil,             // chainPortConfig
-		nil,             // tunnelHops
-		vo.TunnelTypeWS, // tunnelType
+		0,                             // exitAgentID
+		nil,                           // exitAgents
+		vo.DefaultLoadBalanceStrategy, // loadBalanceStrategy
+		nil,                           // chainAgentIDs
+		nil,                           // chainPortConfig
+		nil,                           // tunnelHops
+		vo.TunnelTypeWS,               // tunnelType
 		"test-rule",
 		8080,
 		"192.168.1.1",
@@ -119,12 +120,13 @@ func TestMockForwardRuleRepository_ErrorInjection(t *testing.T) {
 		nil, // userID
 		nil, // subscriptionID
 		vo.ForwardRuleTypeDirect,
-		0,               // exitAgentID
-		nil,             // exitAgents
-		nil,             // chainAgentIDs
-		nil,             // chainPortConfig
-		nil,             // tunnelHops
-		vo.TunnelTypeWS, // tunnelType
+		0,                             // exitAgentID
+		nil,                           // exitAgents
+		vo.DefaultLoadBalanceStrategy, // loadBalanceStrategy
+		nil,                           // chainAgentIDs
+		nil,                           // chainPortConfig
+		nil,                           // tunnelHops
+		vo.TunnelTypeWS,               // tunnelType
 		"test-rule",
 		8080,
 		"192.168.1.1",

@@ -10,7 +10,7 @@ import (
 // ExitAgentDTO represents an exit agent with weight for load balancing.
 type ExitAgentDTO struct {
 	AgentID string `json:"agent_id"` // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
-	Weight  uint16 `json:"weight"`   // Weight for load balancing (1-100)
+	Weight  uint16 `json:"weight"`   // Weight for load balancing (0-100, 0=backup)
 }
 
 // ExitAgentInput represents input for creating/updating exit agents.
@@ -23,14 +23,15 @@ type ExitAgentInput struct {
 // Note: ws_listen_port field has been removed (exit type deprecated).
 // Database column is kept for backward compatibility but not exposed in API.
 type ForwardRuleDTO struct {
-	ID              string            `json:"id"`                          // Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ")
-	AgentID         string            `json:"agent_id"`                    // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
-	UserID          *uint             `json:"user_id,omitempty"`           // user ID for user-owned rules (nil for admin-created rules)
-	RuleType        string            `json:"rule_type"`                   // direct, entry, chain, direct_chain
-	ExitAgentID     string            `json:"exit_agent_id,omitempty"`     // for entry type (Stripe-style prefixed ID, mutually exclusive with ExitAgents)
-	ExitAgents      []ExitAgentDTO    `json:"exit_agents,omitempty"`       // for entry type with load balancing (mutually exclusive with ExitAgentID)
-	ChainAgentIDs   []string          `json:"chain_agent_ids,omitempty"`   // for chain and direct_chain types (ordered Stripe-style prefixed IDs)
-	ChainPortConfig map[string]uint16 `json:"chain_port_config,omitempty"` // for direct_chain type (Stripe-style agent ID -> listen port)
+	ID                  string            `json:"id"`                                      // Stripe-style prefixed ID (e.g., "fr_xK9mP2vL3nQ")
+	AgentID             string            `json:"agent_id"`                                // Stripe-style prefixed ID (e.g., "fa_xK9mP2vL3nQ")
+	UserID              *uint             `json:"user_id,omitempty"`                       // user ID for user-owned rules (nil for admin-created rules)
+	RuleType            string            `json:"rule_type"`                               // direct, entry, chain, direct_chain
+	ExitAgentID         string            `json:"exit_agent_id,omitempty"`                 // for entry type (Stripe-style prefixed ID, mutually exclusive with ExitAgents)
+	ExitAgents          []ExitAgentDTO    `json:"exit_agents,omitempty"`                   // for entry type with load balancing (mutually exclusive with ExitAgentID)
+	LoadBalanceStrategy string            `json:"load_balance_strategy,omitempty"`         // failover (default), weighted
+	ChainAgentIDs       []string          `json:"chain_agent_ids,omitempty"`               // for chain and direct_chain types (ordered Stripe-style prefixed IDs)
+	ChainPortConfig     map[string]uint16 `json:"chain_port_config,omitempty"`             // for direct_chain type (Stripe-style agent ID -> listen port)
 	Name            string            `json:"name"`
 	ListenPort      uint16            `json:"listen_port"`
 	TargetAddress   string            `json:"target_address,omitempty"` // for all types (exit role only for chain/direct_chain)
@@ -129,6 +130,12 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 		tunnelType = rule.TunnelType().String()
 	}
 
+	// Only include load balance strategy for entry rules with multiple exit agents
+	loadBalanceStrategy := ""
+	if rule.RuleType().IsEntry() && rule.HasMultipleExitAgents() {
+		loadBalanceStrategy = rule.LoadBalanceStrategy().String()
+	}
+
 	return &ForwardRuleDTO{
 		ID:                         rule.SID(),
 		AgentID:                    "", // populated later via PopulateAgentInfo
@@ -136,6 +143,7 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 		RuleType:                   rule.RuleType().String(),
 		ExitAgentID:                "",  // populated later via PopulateAgentInfo
 		ChainAgentIDs:              nil, // populated later via PopulateAgentInfo
+		LoadBalanceStrategy:        loadBalanceStrategy,
 		Name:                       rule.Name(),
 		ListenPort:                 rule.ListenPort(),
 		TargetAddress:              rule.TargetAddress(),

@@ -89,7 +89,7 @@ type ConfigSyncData struct {
 // ExitAgentSyncData represents an exit agent with connection info for load balancing.
 type ExitAgentSyncData struct {
 	AgentID string `json:"agent_id"` // Stripe-style prefixed ID
-	Weight  uint16 `json:"weight"`   // Load balancing weight (1-100)
+	Weight  uint16 `json:"weight"`   // Load balancing weight (0-100, 0=backup)
 	Address string `json:"address"`  // Exit agent public address
 	WsPort  uint16 `json:"ws_port"`  // Exit agent WebSocket port
 	TlsPort uint16 `json:"tls_port"` // Exit agent TLS port
@@ -129,8 +129,9 @@ type RuleSyncData struct {
 	ChainPosition          int      `json:"chain_position,omitempty"`
 	IsLastInChain          bool     `json:"is_last_in_chain,omitempty"`
 	// Multiple exit agents for load balancing (entry rules only, mutually exclusive with NextHop* fields)
-	ExitAgents  []ExitAgentSyncData `json:"exit_agents,omitempty"`
-	HealthCheck *HealthCheckConfig  `json:"health_check,omitempty"` // Health check config for load balancing failover
+	ExitAgents          []ExitAgentSyncData `json:"exit_agents,omitempty"`
+	LoadBalanceStrategy string              `json:"load_balance_strategy,omitempty"` // Load balance strategy: "failover" (default), "weighted"
+	HealthCheck         *HealthCheckConfig  `json:"health_check,omitempty"`          // Health check config for load balancing failover
 }
 
 // ConfigAckData represents agent acknowledgment of config sync.

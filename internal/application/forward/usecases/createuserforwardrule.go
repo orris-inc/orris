@@ -242,7 +242,8 @@ func (uc *CreateUserForwardRuleUseCase) Execute(ctx context.Context, cmd CreateU
 		nil, // subscriptionID is nil for user-created rules (not subscription-bound)
 		ruleType,
 		exitAgentID,
-		nil, // exitAgents: user rules don't support load balancing yet
+		nil,                           // exitAgents: user rules don't support load balancing yet
+		vo.DefaultLoadBalanceStrategy, // loadBalanceStrategy
 		chainAgentIDs,
 		chainPortConfig,
 		cmd.TunnelHops,

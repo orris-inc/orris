@@ -16,27 +16,28 @@ import (
 
 // UpdateForwardRuleCommand represents the input for updating a forward rule.
 type UpdateForwardRuleCommand struct {
-	ShortID            string // External API identifier
-	UserID             *uint  // optional: for agent access validation (user endpoint only)
-	Name               *string
-	AgentShortID       *string           // entry agent ID (for all rule types)
-	ExitAgentShortID   *string           // exit agent ID (for entry type, mutually exclusive with ExitAgents)
-	ExitAgents         []ExitAgentInput  // exit agents for load balancing (for entry type, mutually exclusive with ExitAgentShortID), nil means no update
-	ChainAgentShortIDs []string          // chain agent IDs (for chain type rules only), nil means no update
-	ChainPortConfig    map[string]uint16 // chain port config (for direct_chain type rules only), nil means no update
-	TunnelHops         *int              // number of tunnel hops for hybrid chain (nil means no update)
-	TunnelType         *string           // tunnel type: ws or tls (nil means no update)
-	ListenPort         *uint16
-	TargetAddress      *string
-	TargetPort         *uint16
-	TargetNodeSID      *string // nil means no update, empty string means clear, non-empty means set to this node
-	BindIP             *string // nil means no update, empty string means clear
-	IPVersion          *string // auto, ipv4, ipv6
-	Protocol           *string
-	TrafficMultiplier  *float64 // nil means no update (0-1000000)
-	SortOrder          *int     // nil means no update
-	Remark             *string
-	GroupSIDs          *[]string // nil means no update, empty slice means clear, non-nil means set
+	ShortID             string // External API identifier
+	UserID              *uint  // optional: for agent access validation (user endpoint only)
+	Name                *string
+	AgentShortID        *string           // entry agent ID (for all rule types)
+	ExitAgentShortID    *string           // exit agent ID (for entry type, mutually exclusive with ExitAgents)
+	ExitAgents          []ExitAgentInput  // exit agents for load balancing (for entry type, mutually exclusive with ExitAgentShortID), nil means no update
+	LoadBalanceStrategy *string           // load balance strategy: failover, weighted (nil means no update)
+	ChainAgentShortIDs  []string          // chain agent IDs (for chain type rules only), nil means no update
+	ChainPortConfig     map[string]uint16 // chain port config (for direct_chain type rules only), nil means no update
+	TunnelHops          *int              // number of tunnel hops for hybrid chain (nil means no update)
+	TunnelType          *string           // tunnel type: ws or tls (nil means no update)
+	ListenPort          *uint16
+	TargetAddress       *string
+	TargetPort          *uint16
+	TargetNodeSID       *string // nil means no update, empty string means clear, non-empty means set to this node
+	BindIP              *string // nil means no update, empty string means clear
+	IPVersion           *string // auto, ipv4, ipv6
+	Protocol            *string
+	TrafficMultiplier   *float64 // nil means no update (0-1000000)
+	SortOrder           *int     // nil means no update
+	Remark              *string
+	GroupSIDs           *[]string // nil means no update, empty slice means clear, non-nil means set
 }
 
 // UpdateForwardRuleUseCase handles forward rule updates.
@@ -200,12 +201,8 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 				}
 			}
 
-			// Use provided weight or default
-			weight := input.Weight
-			if weight == 0 {
-				weight = vo.DefaultAgentWeight
-			}
-			aw, err := vo.NewAgentWeight(exitAgent.ID(), weight)
+			// Weight of 0 means backup agent, create directly
+			aw, err := vo.NewAgentWeight(exitAgent.ID(), input.Weight)
 			if err != nil {
 				return errors.NewValidationError(fmt.Sprintf("invalid exit agent weight: %s", err.Error()))
 			}
@@ -213,6 +210,14 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 		}
 
 		if err := rule.UpdateExitAgents(exitAgents); err != nil {
+			return errors.NewValidationError(err.Error())
+		}
+	}
+
+	// Update load balance strategy
+	if cmd.LoadBalanceStrategy != nil {
+		strategy := vo.ParseLoadBalanceStrategy(*cmd.LoadBalanceStrategy)
+		if err := rule.UpdateLoadBalanceStrategy(strategy); err != nil {
 			return errors.NewValidationError(err.Error())
 		}
 	}

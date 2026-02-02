@@ -23,27 +23,28 @@ type ExitAgentInput struct {
 
 // CreateForwardRuleCommand represents the input for creating a forward rule.
 type CreateForwardRuleCommand struct {
-	AgentShortID       string            // Stripe-style short ID (without prefix, e.g., "xK9mP2vL3nQ") - not required for external type
-	UserID             *uint             // user ID for user-owned rules (nil for admin-created rules)
-	RuleType           string            // direct, entry, chain, direct_chain, external
-	ExitAgentShortID   string            // for entry type (Stripe-style short ID, mutually exclusive with ExitAgents)
-	ExitAgents         []ExitAgentInput  // for entry type with load balancing (mutually exclusive with ExitAgentShortID)
-	ChainAgentShortIDs []string          // required for chain type (ordered list of Stripe-style short IDs without prefix)
-	ChainPortConfig    map[string]uint16 // required for direct_chain type or hybrid chain direct hops (agent short_id -> listen port)
-	TunnelHops         *int              // number of hops using tunnel (nil=full tunnel, N=first N hops use tunnel) - for chain type only
-	TunnelType         string            // tunnel type: ws or tls (default: ws)
-	Name               string
-	ListenPort         uint16   // listen port (0 = auto-assign from agent's allowed range, required for external type)
-	TargetAddress      string   // required for all types except external (mutually exclusive with TargetNodeSID)
-	TargetPort         uint16   // required for all types except external (mutually exclusive with TargetNodeSID)
-	TargetNodeSID      string   // optional for all types (Stripe-style short ID without prefix)
-	BindIP             string   // optional bind IP address for outbound connections
-	IPVersion          string   // auto, ipv4, ipv6 (default: auto)
-	Protocol           string   // not required for external type (protocol derived from target_node)
-	TrafficMultiplier  *float64 // optional traffic multiplier (nil for auto-calculation, 0-1000000)
-	SortOrder          *int     // optional sort order (nil defaults to 0)
-	Remark             string
-	GroupSIDs          []string // optional resource group SIDs (admin only)
+	AgentShortID        string            // Stripe-style short ID (without prefix, e.g., "xK9mP2vL3nQ") - not required for external type
+	UserID              *uint             // user ID for user-owned rules (nil for admin-created rules)
+	RuleType            string            // direct, entry, chain, direct_chain, external
+	ExitAgentShortID    string            // for entry type (Stripe-style short ID, mutually exclusive with ExitAgents)
+	ExitAgents          []ExitAgentInput  // for entry type with load balancing (mutually exclusive with ExitAgentShortID)
+	LoadBalanceStrategy string            // load balance strategy: failover (default), weighted
+	ChainAgentShortIDs  []string          // required for chain type (ordered list of Stripe-style short IDs without prefix)
+	ChainPortConfig     map[string]uint16 // required for direct_chain type or hybrid chain direct hops (agent short_id -> listen port)
+	TunnelHops          *int              // number of hops using tunnel (nil=full tunnel, N=first N hops use tunnel) - for chain type only
+	TunnelType          string            // tunnel type: ws or tls (default: ws)
+	Name                string
+	ListenPort          uint16   // listen port (0 = auto-assign from agent's allowed range, required for external type)
+	TargetAddress       string   // required for all types except external (mutually exclusive with TargetNodeSID)
+	TargetPort          uint16   // required for all types except external (mutually exclusive with TargetNodeSID)
+	TargetNodeSID       string   // optional for all types (Stripe-style short ID without prefix)
+	BindIP              string   // optional bind IP address for outbound connections
+	IPVersion           string   // auto, ipv4, ipv6 (default: auto)
+	Protocol            string   // not required for external type (protocol derived from target_node)
+	TrafficMultiplier   *float64 // optional traffic multiplier (nil for auto-calculation, 0-1000000)
+	SortOrder           *int     // optional sort order (nil defaults to 0)
+	Remark              string
+	GroupSIDs           []string // optional resource group SIDs (admin only)
 	// External rule fields (only for rule_type=external)
 	ServerAddress  string // required for external type - server address for subscription delivery
 	ExternalSource string // required for external type - source identifier
@@ -341,6 +342,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	// ruleType already defined at the beginning of Execute
 	ipVersion := vo.IPVersion(cmd.IPVersion)
 	tunnelType := vo.TunnelType(cmd.TunnelType)
+	loadBalanceStrategy := vo.ParseLoadBalanceStrategy(cmd.LoadBalanceStrategy)
 	rule, err := forward.NewForwardRule(
 		agentID,
 		cmd.UserID,
@@ -348,6 +350,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		ruleType,
 		exitAgentID,
 		exitAgents,
+		loadBalanceStrategy,
 		chainAgentIDs,
 		chainPortConfig,
 		cmd.TunnelHops,

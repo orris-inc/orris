@@ -9,7 +9,8 @@ const (
 	// DefaultAgentWeight is the default weight for an exit agent.
 	DefaultAgentWeight uint16 = 50
 	// MinAgentWeight is the minimum allowed weight.
-	MinAgentWeight uint16 = 1
+	// 0 is allowed and indicates a backup agent (only used when all other agents are unavailable).
+	MinAgentWeight uint16 = 0
 	// MaxAgentWeight is the maximum allowed weight.
 	MaxAgentWeight uint16 = 100
 	// MaxExitAgents is the maximum number of exit agents allowed per rule.
@@ -23,11 +24,12 @@ type AgentWeight struct {
 }
 
 // NewAgentWeight creates a new AgentWeight with validation.
+// Weight of 0 indicates a backup agent (only used when all other agents are unavailable).
 func NewAgentWeight(agentID uint, weight uint16) (AgentWeight, error) {
 	if agentID == 0 {
 		return AgentWeight{}, fmt.Errorf("agent ID cannot be zero")
 	}
-	if weight < MinAgentWeight || weight > MaxAgentWeight {
+	if weight > MaxAgentWeight {
 		return AgentWeight{}, fmt.Errorf("weight must be between %d and %d, got %d", MinAgentWeight, MaxAgentWeight, weight)
 	}
 	return AgentWeight{
@@ -58,6 +60,12 @@ func (aw AgentWeight) AgentID() uint {
 // Weight returns the weight.
 func (aw AgentWeight) Weight() uint16 {
 	return aw.weight
+}
+
+// IsBackup returns true if this agent is a backup agent (weight = 0).
+// Backup agents are only used when all other agents are unavailable.
+func (aw AgentWeight) IsBackup() bool {
+	return aw.weight == 0
 }
 
 // ValidateAgentWeights validates a slice of AgentWeight values.

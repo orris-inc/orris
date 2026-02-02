@@ -325,7 +325,8 @@ func (uc *CreateSubscriptionForwardRuleUseCase) createRuleWithRetry(
 			subscriptionIDPtr, // Bind to subscription
 			ruleType,
 			exitAgentID,
-			nil, // exitAgents: subscription rules don't support load balancing yet
+			nil,                           // exitAgents: subscription rules don't support load balancing yet
+			vo.DefaultLoadBalanceStrategy, // loadBalanceStrategy
 			chainAgentIDs,
 			chainPortConfig,
 			cmd.TunnelHops,

@@ -13,18 +13,19 @@ import (
 
 // ForwardRule represents the forward rule aggregate root.
 type ForwardRule struct {
-	id                uint
-	sid               string // Stripe-style prefixed ID (fr_xxx)
-	agentID           uint
-	userID            *uint // user ID for user-owned rules (nil for admin-created rules)
-	subscriptionID    *uint // subscription ID for subscription-bound rules (nil for admin-created rules)
-	ruleType          vo.ForwardRuleType
-	exitAgentID       uint             // exit agent ID (required for entry type, mutually exclusive with exitAgents)
-	exitAgents        []vo.AgentWeight // multiple exit agents with weights for load balancing (mutually exclusive with exitAgentID)
-	chainAgentIDs     []uint           // ordered array of intermediate agent IDs for chain forwarding
-	chainPortConfig   map[uint]uint16  // map of agent_id -> listen_port for direct_chain type or hybrid chain direct hops
-	tunnelHops        *int             // number of hops using tunnel (nil=full tunnel, N=first N hops use tunnel)
-	tunnelType        vo.TunnelType    // tunnel type: ws or tls (default: ws)
+	id                  uint
+	sid                 string // Stripe-style prefixed ID (fr_xxx)
+	agentID             uint
+	userID              *uint // user ID for user-owned rules (nil for admin-created rules)
+	subscriptionID      *uint // subscription ID for subscription-bound rules (nil for admin-created rules)
+	ruleType            vo.ForwardRuleType
+	exitAgentID         uint                   // exit agent ID (required for entry type, mutually exclusive with exitAgents)
+	exitAgents          []vo.AgentWeight       // multiple exit agents with weights for load balancing (mutually exclusive with exitAgentID)
+	loadBalanceStrategy vo.LoadBalanceStrategy // load balance strategy for multi-exit rules (default: failover)
+	chainAgentIDs       []uint                 // ordered array of intermediate agent IDs for chain forwarding
+	chainPortConfig     map[uint]uint16        // map of agent_id -> listen_port for direct_chain type or hybrid chain direct hops
+	tunnelHops          *int                   // number of hops using tunnel (nil=full tunnel, N=first N hops use tunnel)
+	tunnelType          vo.TunnelType          // tunnel type: ws or tls (default: ws)
 	name              string
 	listenPort        uint16
 	targetAddress     string // final target address (required for direct and exit types if targetNodeID is not set)
@@ -52,6 +53,8 @@ type ForwardRule struct {
 // Parameters depend on ruleType:
 // - direct: requires agentID, listenPort, (targetAddress+targetPort OR targetNodeID)
 // - entry: requires agentID, listenPort, (exitAgentID OR exitAgents), (targetAddress+targetPort OR targetNodeID)
+//   - optionally loadBalanceStrategy for multi-exit rules (default: failover)
+//
 // - chain: requires agentID, listenPort, chainAgentIDs (at least 1), (targetAddress+targetPort OR targetNodeID)
 //   - optionally tunnelHops to create hybrid chain (first N hops tunnel, rest direct)
 //   - if tunnelHops > 0, chainPortConfig required for direct hops
@@ -65,6 +68,7 @@ func NewForwardRule(
 	ruleType vo.ForwardRuleType,
 	exitAgentID uint,
 	exitAgents []vo.AgentWeight,
+	loadBalanceStrategy vo.LoadBalanceStrategy,
 	chainAgentIDs []uint,
 	chainPortConfig map[uint]uint16,
 	tunnelHops *int,
@@ -152,6 +156,23 @@ func NewForwardRule(
 			for _, aw := range exitAgents {
 				if aw.AgentID() == agentID {
 					return nil, fmt.Errorf("exit agent cannot be the same as entry agent")
+				}
+			}
+			// Validate weighted strategy requires at least one non-backup agent
+			effectiveStrategy := loadBalanceStrategy
+			if effectiveStrategy == "" {
+				effectiveStrategy = vo.DefaultLoadBalanceStrategy
+			}
+			if effectiveStrategy.IsWeighted() {
+				hasNonBackup := false
+				for _, aw := range exitAgents {
+					if !aw.IsBackup() {
+						hasNonBackup = true
+						break
+					}
+				}
+				if !hasNonBackup {
+					return nil, fmt.Errorf("weighted strategy requires at least one exit agent with non-zero weight")
 				}
 			}
 		}
@@ -312,6 +333,14 @@ func NewForwardRule(
 		return nil, fmt.Errorf("invalid tunnel type: %s", tunnelType)
 	}
 
+	// Default loadBalanceStrategy to failover if not set or invalid
+	if loadBalanceStrategy == "" {
+		loadBalanceStrategy = vo.DefaultLoadBalanceStrategy
+	}
+	if !loadBalanceStrategy.IsValid() {
+		return nil, fmt.Errorf("invalid load balance strategy: %s", loadBalanceStrategy)
+	}
+
 	// Generate SID for external API use
 	sid, err := shortIDGenerator()
 	if err != nil {
@@ -320,33 +349,34 @@ func NewForwardRule(
 
 	now := biztime.NowUTC()
 	return &ForwardRule{
-		sid:               sid,
-		agentID:           agentID,
-		userID:            userID,
-		subscriptionID:    subscriptionID,
-		ruleType:          ruleType,
-		exitAgentID:       exitAgentID,
-		exitAgents:        exitAgents,
-		chainAgentIDs:     chainAgentIDs,
-		chainPortConfig:   chainPortConfig,
-		tunnelHops:        tunnelHops,
-		tunnelType:        tunnelType,
-		name:              name,
-		listenPort:        listenPort,
-		targetAddress:     targetAddress,
-		targetPort:        targetPort,
-		targetNodeID:      targetNodeID,
-		bindIP:            bindIP,
-		ipVersion:         ipVersion,
-		protocol:          protocol,
-		status:            vo.ForwardStatusDisabled,
-		remark:            remark,
-		uploadBytes:       0,
-		downloadBytes:     0,
-		trafficMultiplier: trafficMultiplier,
-		sortOrder:         sortOrder,
-		createdAt:         now,
-		updatedAt:         now,
+		sid:                 sid,
+		agentID:             agentID,
+		userID:              userID,
+		subscriptionID:      subscriptionID,
+		ruleType:            ruleType,
+		exitAgentID:         exitAgentID,
+		exitAgents:          exitAgents,
+		loadBalanceStrategy: loadBalanceStrategy,
+		chainAgentIDs:       chainAgentIDs,
+		chainPortConfig:     chainPortConfig,
+		tunnelHops:          tunnelHops,
+		tunnelType:          tunnelType,
+		name:                name,
+		listenPort:          listenPort,
+		targetAddress:       targetAddress,
+		targetPort:          targetPort,
+		targetNodeID:        targetNodeID,
+		bindIP:              bindIP,
+		ipVersion:           ipVersion,
+		protocol:            protocol,
+		status:              vo.ForwardStatusDisabled,
+		remark:              remark,
+		uploadBytes:         0,
+		downloadBytes:       0,
+		trafficMultiplier:   trafficMultiplier,
+		sortOrder:           sortOrder,
+		createdAt:           now,
+		updatedAt:           now,
 	}, nil
 }
 
@@ -433,6 +463,7 @@ func ReconstructForwardRule(
 	ruleType vo.ForwardRuleType,
 	exitAgentID uint,
 	exitAgents []vo.AgentWeight,
+	loadBalanceStrategy vo.LoadBalanceStrategy,
 	chainAgentIDs []uint,
 	chainPortConfig map[uint]uint16,
 	tunnelHops *int,
@@ -505,39 +536,45 @@ func ReconstructForwardRule(
 		ipVersion = vo.IPVersionAuto
 	}
 
+	// Default loadBalanceStrategy to failover if not set
+	if loadBalanceStrategy == "" {
+		loadBalanceStrategy = vo.DefaultLoadBalanceStrategy
+	}
+
 	rule := &ForwardRule{
-		id:                id,
-		sid:               sid,
-		agentID:           agentID,
-		userID:            userID,
-		subscriptionID:    subscriptionID,
-		ruleType:          ruleType,
-		exitAgentID:       exitAgentID,
-		exitAgents:        exitAgents,
-		chainAgentIDs:     chainAgentIDs,
-		chainPortConfig:   chainPortConfig,
-		tunnelHops:        tunnelHops,
-		tunnelType:        tunnelType,
-		name:              name,
-		listenPort:        listenPort,
-		targetAddress:     targetAddress,
-		targetPort:        targetPort,
-		targetNodeID:      targetNodeID,
-		bindIP:            bindIP,
-		ipVersion:         ipVersion,
-		protocol:          protocol,
-		status:            status,
-		remark:            remark,
-		uploadBytes:       uploadBytes,
-		downloadBytes:     downloadBytes,
-		trafficMultiplier: trafficMultiplier,
-		sortOrder:         sortOrder,
-		groupIDs:          groupIDs,
-		serverAddress:     serverAddress,
-		externalSource:    externalSource,
-		externalRuleID:    externalRuleID,
-		createdAt:         createdAt,
-		updatedAt:         updatedAt,
+		id:                  id,
+		sid:                 sid,
+		agentID:             agentID,
+		userID:              userID,
+		subscriptionID:      subscriptionID,
+		ruleType:            ruleType,
+		exitAgentID:         exitAgentID,
+		exitAgents:          exitAgents,
+		loadBalanceStrategy: loadBalanceStrategy,
+		chainAgentIDs:       chainAgentIDs,
+		chainPortConfig:     chainPortConfig,
+		tunnelHops:          tunnelHops,
+		tunnelType:          tunnelType,
+		name:                name,
+		listenPort:          listenPort,
+		targetAddress:       targetAddress,
+		targetPort:          targetPort,
+		targetNodeID:        targetNodeID,
+		bindIP:              bindIP,
+		ipVersion:           ipVersion,
+		protocol:            protocol,
+		status:              status,
+		remark:              remark,
+		uploadBytes:         uploadBytes,
+		downloadBytes:       downloadBytes,
+		trafficMultiplier:   trafficMultiplier,
+		sortOrder:           sortOrder,
+		groupIDs:            groupIDs,
+		serverAddress:       serverAddress,
+		externalSource:      externalSource,
+		externalRuleID:      externalRuleID,
+		createdAt:           createdAt,
+		updatedAt:           updatedAt,
 	}
 
 	// Perform full validation to catch data corruption or manual DB modifications
@@ -639,6 +676,11 @@ func (r *ForwardRule) ExitAgents() []vo.AgentWeight {
 // HasMultipleExitAgents returns true if the rule has multiple exit agents configured.
 func (r *ForwardRule) HasMultipleExitAgents() bool {
 	return len(r.exitAgents) > 0
+}
+
+// LoadBalanceStrategy returns the load balance strategy for multi-exit rules.
+func (r *ForwardRule) LoadBalanceStrategy() vo.LoadBalanceStrategy {
+	return r.loadBalanceStrategy
 }
 
 // GetAllExitAgentIDs returns all exit agent IDs (single exitAgentID or all from exitAgents).
@@ -1355,9 +1397,51 @@ func (r *ForwardRule) UpdateExitAgents(exitAgents []vo.AgentWeight) error {
 			return fmt.Errorf("exit agent cannot be the same as entry agent")
 		}
 	}
+	// Validate weighted strategy requires at least one non-backup agent
+	if r.loadBalanceStrategy.IsWeighted() {
+		hasNonBackup := false
+		for _, aw := range exitAgents {
+			if !aw.IsBackup() {
+				hasNonBackup = true
+				break
+			}
+		}
+		if !hasNonBackup {
+			return fmt.Errorf("weighted strategy requires at least one exit agent with non-zero weight")
+		}
+	}
 	// Clear single exitAgentID when switching to multiple exit agents
 	r.exitAgentID = 0
 	r.exitAgents = exitAgents
+	r.updatedAt = biztime.NowUTC()
+	return nil
+}
+
+// UpdateLoadBalanceStrategy updates the load balance strategy for multi-exit rules.
+func (r *ForwardRule) UpdateLoadBalanceStrategy(strategy vo.LoadBalanceStrategy) error {
+	if !r.ruleType.IsEntry() {
+		return fmt.Errorf("load balance strategy can only be updated for entry type rules")
+	}
+	if !strategy.IsValid() {
+		return fmt.Errorf("invalid load balance strategy: %s", strategy)
+	}
+	if r.loadBalanceStrategy == strategy {
+		return nil
+	}
+	// Validate weighted strategy requires at least one non-backup agent
+	if strategy.IsWeighted() && len(r.exitAgents) > 0 {
+		hasNonBackup := false
+		for _, aw := range r.exitAgents {
+			if !aw.IsBackup() {
+				hasNonBackup = true
+				break
+			}
+		}
+		if !hasNonBackup {
+			return fmt.Errorf("weighted strategy requires at least one exit agent with non-zero weight")
+		}
+	}
+	r.loadBalanceStrategy = strategy
 	r.updatedAt = biztime.NowUTC()
 	return nil
 }
@@ -1699,6 +1783,19 @@ func (r *ForwardRule) Validate() error {
 			for _, aw := range r.exitAgents {
 				if aw.AgentID() == r.agentID {
 					return fmt.Errorf("exit agent cannot be the same as entry agent")
+				}
+			}
+			// Validate weighted strategy requires at least one non-backup agent
+			if r.loadBalanceStrategy.IsWeighted() {
+				hasNonBackup := false
+				for _, aw := range r.exitAgents {
+					if !aw.IsBackup() {
+						hasNonBackup = true
+						break
+					}
+				}
+				if !hasNonBackup {
+					return fmt.Errorf("weighted strategy requires at least one exit agent with non-zero weight")
 				}
 			}
 		}
