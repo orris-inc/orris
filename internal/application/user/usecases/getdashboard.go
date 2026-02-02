@@ -94,13 +94,16 @@ func (uc *GetDashboardUseCase) Execute(
 		}
 	}
 
+	// Batch fetch usage data for all subscriptions
+	usageMap := uc.batchGetUsageBySubscriptions(ctx, subscriptions)
+
 	// Process each subscription
 	for _, sub := range subscriptions {
-		// Get usage for current period combining Redis (recent 24h) and MySQL stats (historical)
-		periodStart := sub.CurrentPeriodStart()
-		periodEnd := biztime.EndOfDayUTC(sub.CurrentPeriodEnd())
-
-		usageSummary := uc.getTotalUsageBySubscriptionID(ctx, sub.ID(), periodStart, periodEnd)
+		// Get usage from batch result
+		usageSummary := usageMap[sub.ID()]
+		if usageSummary == nil {
+			usageSummary = &cache.TrafficSummary{}
+		}
 
 		// Calculate subscription usage summary
 		subUsage := &dto.UsageSummary{
@@ -149,70 +152,111 @@ func (uc *GetDashboardUseCase) Execute(
 	return response, nil
 }
 
-// getTotalUsageBySubscriptionID retrieves total usage by combining Redis (recent 24h) and MySQL stats (historical).
+// batchGetUsageBySubscriptions retrieves usage for all subscriptions in batch.
 // This method uses a graceful degradation strategy: if any data source fails, it logs a warning
 // and continues with available data rather than failing the entire request.
-func (uc *GetDashboardUseCase) getTotalUsageBySubscriptionID(
+func (uc *GetDashboardUseCase) batchGetUsageBySubscriptions(
 	ctx context.Context,
-	subscriptionID uint,
-	from, to time.Time,
-) *cache.TrafficSummary {
+	subscriptions []*subscription.Subscription,
+) map[uint]*cache.TrafficSummary {
+	result := make(map[uint]*cache.TrafficSummary, len(subscriptions))
+
+	if len(subscriptions) == 0 {
+		return result
+	}
+
 	now := biztime.NowUTC()
 	dayAgo := now.Add(-24 * time.Hour)
 
-	result := &cache.TrafficSummary{}
-	subscriptionIDs := []uint{subscriptionID}
+	// Collect all subscription IDs and find the widest time range
+	subscriptionIDs := make([]uint, 0, len(subscriptions))
+	var earliestFrom, latestTo time.Time
 
-	// Determine time boundaries for recent data (last 24h from Redis)
-	recentFrom := from
+	for _, sub := range subscriptions {
+		subscriptionIDs = append(subscriptionIDs, sub.ID())
+		periodStart := sub.CurrentPeriodStart()
+		periodEnd := biztime.EndOfDayUTC(sub.CurrentPeriodEnd())
+
+		if earliestFrom.IsZero() || periodStart.Before(earliestFrom) {
+			earliestFrom = periodStart
+		}
+		if latestTo.IsZero() || periodEnd.After(latestTo) {
+			latestTo = periodEnd
+		}
+	}
+
+	// Calculate recent time range (last 24h from Redis)
+	recentFrom := earliestFrom
 	if recentFrom.Before(dayAgo) {
 		recentFrom = dayAgo
 	}
+	recentTo := latestTo
+	if recentTo.After(now) {
+		recentTo = now
+	}
 
-	// Get recent traffic from Redis (last 24h)
-	if recentFrom.Before(to) && recentFrom.Before(now) {
-		recentTo := to
-		if recentTo.After(now) {
-			recentTo = now
-		}
-		recentTraffic, err := uc.hourlyCache.GetTotalTrafficBySubscriptionIDs(
+	// Batch get recent traffic from Redis (last 24h) for all subscriptions
+	var recentTraffic map[uint]*cache.TrafficSummary
+	if recentFrom.Before(recentTo) && recentFrom.Before(now) {
+		var err error
+		recentTraffic, err = uc.hourlyCache.GetTotalTrafficBySubscriptionIDs(
 			ctx, subscriptionIDs, "", recentFrom, recentTo,
 		)
 		if err != nil {
 			uc.logger.Warnw("failed to get recent traffic from Redis",
-				"subscription_id", subscriptionID,
+				"subscription_ids_count", len(subscriptionIDs),
 				"from", recentFrom,
 				"to", recentTo,
 				"error", err,
 			)
-		} else if t, ok := recentTraffic[subscriptionID]; ok {
-			result.Upload += t.Upload
-			result.Download += t.Download
-			result.Total += t.Total
 		}
 	}
 
-	// Get historical traffic from MySQL stats (before 24h ago)
-	if from.Before(dayAgo) {
+	// Batch get historical traffic from MySQL stats (before 24h ago) for all subscriptions
+	var historicalTraffic map[uint]*subscription.UsageSummary
+	if earliestFrom.Before(dayAgo) {
 		historicalTo := dayAgo
-		if historicalTo.After(to) {
-			historicalTo = to
+		if historicalTo.After(latestTo) {
+			historicalTo = latestTo
 		}
-		historicalTraffic, err := uc.usageStatsRepo.GetTotalBySubscriptionIDs(
-			ctx, subscriptionIDs, nil, subscription.GranularityDaily, from, historicalTo,
+		var err error
+		historicalTraffic, err = uc.usageStatsRepo.GetTotalBySubscriptionIDsGrouped(
+			ctx, subscriptionIDs, nil, subscription.GranularityDaily, earliestFrom, historicalTo,
 		)
 		if err != nil {
 			uc.logger.Warnw("failed to get historical traffic from stats",
-				"subscription_id", subscriptionID,
-				"from", from,
+				"subscription_ids_count", len(subscriptionIDs),
+				"from", earliestFrom,
 				"to", historicalTo,
 				"error", err,
 			)
-		} else if historicalTraffic != nil {
-			result.Upload += historicalTraffic.Upload
-			result.Download += historicalTraffic.Download
-			result.Total += historicalTraffic.Total
 		}
+	}
+
+	// Merge results for each subscription
+	for _, sub := range subscriptions {
+		subID := sub.ID()
+		usage := &cache.TrafficSummary{}
+
+		// Add recent traffic if available
+		if recentTraffic != nil {
+			if t, ok := recentTraffic[subID]; ok {
+				usage.Upload += t.Upload
+				usage.Download += t.Download
+				usage.Total += t.Total
+			}
+		}
+
+		// Add historical traffic if available and subscription period started before 24h ago
+		if historicalTraffic != nil && sub.CurrentPeriodStart().Before(dayAgo) {
+			if t, ok := historicalTraffic[subID]; ok {
+				usage.Upload += t.Upload
+				usage.Download += t.Download
+				usage.Total += t.Total
+			}
+		}
+
+		result[subID] = usage
 	}
 
 	return result

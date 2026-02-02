@@ -18,6 +18,12 @@ type SubscriptionUsageStatsRepository interface {
 	// If resourceType is specified, returns usage only for that resource type (used for Forward/Node plans).
 	GetTotalBySubscriptionIDs(ctx context.Context, subscriptionIDs []uint, resourceType *string, granularity Granularity, from, to time.Time) (*UsageSummary, error)
 
+	// GetTotalBySubscriptionIDsGrouped retrieves total aggregated usage for multiple subscriptions,
+	// returning results grouped by subscription ID. This is more efficient than calling
+	// GetTotalBySubscriptionIDs multiple times when you need per-subscription usage.
+	// If resourceType is nil, returns usage for all resource types.
+	GetTotalBySubscriptionIDsGrouped(ctx context.Context, subscriptionIDs []uint, resourceType *string, granularity Granularity, from, to time.Time) (map[uint]*UsageSummary, error)
+
 	// GetByResourceID retrieves aggregated usage stats for a specific resource within a time range
 	GetByResourceID(ctx context.Context, resourceType string, resourceID uint, granularity Granularity, from, to time.Time) ([]*SubscriptionUsageStats, error)
 

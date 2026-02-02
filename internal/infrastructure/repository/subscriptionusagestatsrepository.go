@@ -176,6 +176,68 @@ func (r *SubscriptionUsageStatsRepositoryImpl) GetTotalBySubscriptionIDs(
 	return summary, nil
 }
 
+// GetTotalBySubscriptionIDsGrouped retrieves total aggregated usage for multiple subscriptions,
+// returning results grouped by subscription ID. This is more efficient than calling
+// GetTotalBySubscriptionIDs multiple times when you need per-subscription usage.
+func (r *SubscriptionUsageStatsRepositoryImpl) GetTotalBySubscriptionIDsGrouped(
+	ctx context.Context,
+	subscriptionIDs []uint,
+	resourceType *string,
+	granularity subscription.Granularity,
+	from, to time.Time,
+) (map[uint]*subscription.UsageSummary, error) {
+	result := make(map[uint]*subscription.UsageSummary, len(subscriptionIDs))
+
+	if len(subscriptionIDs) == 0 {
+		return result, nil
+	}
+
+	var dbResults []struct {
+		SubscriptionID uint
+		TotalUpload    uint64
+		TotalDownload  uint64
+		TotalUsage     uint64
+	}
+
+	query := r.db.WithContext(ctx).Model(&models.SubscriptionUsageStatsModel{}).
+		Select("subscription_id, COALESCE(SUM(upload), 0) as total_upload, COALESCE(SUM(download), 0) as total_download, COALESCE(SUM(total), 0) as total_usage").
+		Where("subscription_id IN ? AND granularity = ?", subscriptionIDs, granularity.String()).
+		Group("subscription_id")
+
+	// Filter by resource type if specified
+	if resourceType != nil {
+		query = query.Where("resource_type = ?", *resourceType)
+	}
+
+	if !from.IsZero() {
+		query = query.Where("period >= ?", from)
+	}
+	if !to.IsZero() {
+		query = query.Where("period <= ?", to)
+	}
+
+	if err := query.Scan(&dbResults).Error; err != nil {
+		r.logger.Errorw("failed to get total usage grouped by subscription IDs",
+			"subscription_ids_count", len(subscriptionIDs),
+			"granularity", granularity,
+			"error", err,
+		)
+		return nil, fmt.Errorf("failed to get total usage grouped by subscription IDs: %w", err)
+	}
+
+	for _, res := range dbResults {
+		result[res.SubscriptionID] = &subscription.UsageSummary{
+			Upload:   res.TotalUpload,
+			Download: res.TotalDownload,
+			Total:    res.TotalUsage,
+			From:     from,
+			To:       to,
+		}
+	}
+
+	return result, nil
+}
+
 // GetByResourceID retrieves aggregated usage stats for a specific resource within a time range
 func (r *SubscriptionUsageStatsRepositoryImpl) GetByResourceID(
 	ctx context.Context,

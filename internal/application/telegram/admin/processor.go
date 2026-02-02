@@ -35,7 +35,7 @@ func NewAdminNotificationProcessor(
 	hourlyCache infraCache.HourlyTrafficCache,
 	nodeRepo node.NodeRepository,
 	agentRepo forward.AgentRepository,
-	alertDeduplicator *infraCache.AlertDeduplicator,
+	alertStateManager *infraCache.AlertStateManager,
 	botServiceProvider BotServiceProvider,
 	log logger.Interface,
 ) *AdminNotificationProcessor {
@@ -46,7 +46,7 @@ func NewAdminNotificationProcessor(
 		bindingRepo,
 		nodeRepo,
 		agentRepo,
-		alertDeduplicator,
+		alertStateManager,
 		botServiceWrapper,
 		log,
 	)

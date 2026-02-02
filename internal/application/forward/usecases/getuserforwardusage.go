@@ -75,6 +75,29 @@ func (uc *GetUserForwardUsageUseCase) Execute(ctx context.Context, query GetUser
 		return nil, fmt.Errorf("failed to get subscriptions: %w", err)
 	}
 
+	// Collect unique plan IDs for batch fetch
+	planIDSet := make(map[uint]struct{}, len(subscriptions))
+	for _, sub := range subscriptions {
+		planIDSet[sub.PlanID()] = struct{}{}
+	}
+	planIDs := make([]uint, 0, len(planIDSet))
+	for id := range planIDSet {
+		planIDs = append(planIDs, id)
+	}
+
+	// Batch fetch plans
+	planMap := make(map[uint]*subscription.Plan)
+	if len(planIDs) > 0 {
+		planList, err := uc.planRepo.GetByIDs(ctx, planIDs)
+		if err != nil {
+			uc.logger.Warnw("failed to batch get plans", "error", err)
+		} else {
+			for _, plan := range planList {
+				planMap[plan.ID()] = plan
+			}
+		}
+	}
+
 	// Initialize limits - use flags to track unlimited state
 	// maxRuleLimit: 0 means unlimited, >0 means limited
 	maxRuleLimit := 0
@@ -91,12 +114,7 @@ func (uc *GetUserForwardUsageUseCase) Execute(ctx context.Context, query GetUser
 
 	// Find the highest limits among all active subscriptions
 	for _, sub := range subscriptions {
-		plan, err := uc.planRepo.GetByID(ctx, sub.PlanID())
-		if err != nil {
-			uc.logger.Warnw("failed to get plan for subscription", "subscription_id", sub.ID(), "plan_id", sub.PlanID(), "error", err)
-			continue
-		}
-
+		plan := planMap[sub.PlanID()]
 		if plan == nil {
 			continue
 		}

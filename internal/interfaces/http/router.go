@@ -810,7 +810,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	// Initialize admin notification processor and scheduler for offline alerts
 	// (requires forwardAgentRepo, nodeRepoImpl, and other repos to be initialized)
-	alertDeduplicator := cache.NewAlertDeduplicator(redisClient)
+	alertStateManager := cache.NewAlertStateManager(redisClient)
 	adminNotificationProcessor := telegramAdminApp.NewAdminNotificationProcessor(
 		adminBindingRepo,
 		userRepo,
@@ -819,7 +819,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		hourlyTrafficCache,
 		nodeRepoImpl,
 		forwardAgentRepo,
-		alertDeduplicator,
+		alertStateManager,
 		&botServiceProviderAdapter{telegramBotManager},
 		log,
 	)
@@ -827,6 +827,11 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	if err := schedulerManager.RegisterAdminNotificationJobs(adminNotificationProcessor); err != nil {
 		log.Warnw("failed to register admin notification jobs", "error", err)
 	}
+
+	// Create alert state clearer adapter and inject into delete use cases
+	// This ensures alert states are cleaned up when resources are deleted
+	alertStateClearer := adapters.NewAlertStateClearerAdapter(alertStateManager)
+	deleteNodeUC.WithAlertStateClearer(alertStateClearer)
 
 	// Initialize mute notification service and inject into telegram handler
 	muteNotificationUC := telegramAdminUsecases.NewMuteNotificationUseCase(forwardAgentRepo, nodeRepoImpl, log)
@@ -906,7 +911,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	getForwardAgentUC := forwardUsecases.NewGetForwardAgentUseCase(forwardAgentRepo, forwardAgentStatusAdapter, log)
 	// updateForwardAgentUC will be initialized later after configSyncService is available
 	var updateForwardAgentUC *forwardUsecases.UpdateForwardAgentUseCase
-	deleteForwardAgentUC := forwardUsecases.NewDeleteForwardAgentUseCase(forwardAgentRepo, forwardRuleRepo, log)
+	deleteForwardAgentUC := forwardUsecases.NewDeleteForwardAgentUseCase(forwardAgentRepo, forwardRuleRepo, log).
+		WithAlertStateClearer(alertStateClearer)
 	listForwardAgentsUC := forwardUsecases.NewListForwardAgentsUseCase(forwardAgentRepo, resourceGroupRepo, forwardAgentStatusAdapter, forwardAgentReleaseService, log)
 	enableForwardAgentUC := forwardUsecases.NewEnableForwardAgentUseCase(forwardAgentRepo, log)
 	disableForwardAgentUC := forwardUsecases.NewDisableForwardAgentUseCase(forwardAgentRepo, log)
@@ -1271,7 +1277,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	nodeStatusQuerierAdapter := adapters.NewNodeStatusQuerierAdapter(nodeRepoImpl, nodeStatusQuerier, log)
 	adminHub.SetNodeStatusQuerier(nodeStatusQuerierAdapter)
 
-	// Set OnNodeOnline callback to sync config, broadcast SSE event, and send Telegram notification
+	// Set OnNodeOnline callback to sync config, broadcast SSE event, and send recovery notification if needed
 	agentHub.SetOnNodeOnline(func(nodeID uint) {
 		ctx := context.Background()
 
@@ -1299,29 +1305,53 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		// Broadcast SSE event
 		adminHub.BroadcastNodeOnline(n.SID(), n.Name())
 
-		// Send Telegram notification (real-time online alert)
-		cmd := telegramAdminApp.NotifyNodeOnlineCommand{
-			NodeID:           nodeID,
-			NodeSID:          n.SID(),
-			NodeName:         n.Name(),
-			MuteNotification: n.MuteNotification(),
-		}
-		if err := adminNotificationServiceDDD.NotifyNodeOnline(ctx, cmd); err != nil {
-			log.Errorw("failed to send node online notification",
-				"node_sid", n.SID(),
+		// Check if node was in Firing state (offline alert was sent)
+		// If so, send recovery notification
+		wasFiring, firedAt, err := alertStateManager.TransitionToNormal(ctx, cache.AlertResourceTypeNode, nodeID)
+		if err != nil {
+			log.Warnw("failed to transition node alert state to normal",
+				"node_id", nodeID,
 				"error", err,
 			)
 		}
+
+		if wasFiring {
+			// Calculate downtime
+			var downtimeMinutes int64
+			if firedAt != nil {
+				downtimeMinutes = int64(biztime.NowUTC().Sub(*firedAt).Minutes())
+			}
+
+			// Send recovery notification instead of online notification
+			cmd := telegramAdminApp.NotifyNodeRecoveryCommand{
+				NodeID:           nodeID,
+				NodeSID:          n.SID(),
+				NodeName:         n.Name(),
+				OnlineAt:         biztime.NowUTC(),
+				DowntimeMinutes:  downtimeMinutes,
+				MuteNotification: n.MuteNotification(),
+			}
+			if err := adminNotificationServiceDDD.NotifyNodeRecovery(ctx, cmd); err != nil {
+				log.Errorw("failed to send node recovery notification",
+					"node_sid", n.SID(),
+					"error", err,
+				)
+			}
+		}
+		// Note: We no longer send regular online notifications here
+		// The recovery notification serves as the "online" notification for nodes that had fired alerts
 	})
 
-	// Set OnNodeOffline callback to broadcast SSE event and send Telegram notification
+	// Set OnNodeOffline callback to broadcast SSE event only
+	// Note: Telegram offline notification is handled by the scheduled check (checkoffline.go)
+	// to avoid duplicate notifications and support threshold-based alerting
 	agentHub.SetOnNodeOffline(func(nodeID uint) {
 		ctx := context.Background()
 
 		// Get node info
 		n, err := nodeRepoImpl.GetByID(ctx, nodeID)
 		if err != nil {
-			log.Warnw("failed to get node for offline notification",
+			log.Warnw("failed to get node for offline broadcast",
 				"node_id", nodeID,
 				"error", err,
 			)
@@ -1331,33 +1361,14 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 			return
 		}
 
-		// Broadcast SSE event
+		// Broadcast SSE event only (for real-time UI updates)
 		adminHub.BroadcastNodeOffline(n.SID(), n.Name())
 
-		// Send Telegram notification (real-time offline alert)
-		var lastSeenAt time.Time
-		if n.LastSeenAt() != nil {
-			lastSeenAt = *n.LastSeenAt()
-		} else {
-			lastSeenAt = biztime.NowUTC()
-		}
-		cmd := telegramAdminApp.NotifyNodeOfflineCommand{
-			NodeID:           nodeID,
-			NodeSID:          n.SID(),
-			NodeName:         n.Name(),
-			LastSeenAt:       lastSeenAt,
-			OfflineMinutes:   0, // Just disconnected
-			MuteNotification: n.MuteNotification(),
-		}
-		if err := adminNotificationServiceDDD.NotifyNodeOffline(ctx, cmd); err != nil {
-			log.Errorw("failed to send node offline notification",
-				"node_sid", n.SID(),
-				"error", err,
-			)
-		}
+		// Note: No Telegram notification here - the scheduled offline check will
+		// send the notification once the node has been offline for the configured threshold
 	})
 
-	// Set OnAgentOnline callback to sync config, broadcast SSE event, and send Telegram notification
+	// Set OnAgentOnline callback to sync config, broadcast SSE event, and send recovery notification if needed
 	agentHub.SetOnAgentOnline(func(agentID uint) {
 		ctx := context.Background()
 
@@ -1385,29 +1396,53 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		// Broadcast SSE event
 		adminHub.BroadcastForwardAgentOnline(agent.SID(), agent.Name())
 
-		// Send Telegram notification (real-time online alert)
-		cmd := telegramAdminApp.NotifyAgentOnlineCommand{
-			AgentID:          agentID,
-			AgentSID:         agent.SID(),
-			AgentName:        agent.Name(),
-			MuteNotification: agent.MuteNotification(),
-		}
-		if err := adminNotificationServiceDDD.NotifyAgentOnline(ctx, cmd); err != nil {
-			log.Errorw("failed to send agent online notification",
-				"agent_sid", agent.SID(),
+		// Check if agent was in Firing state (offline alert was sent)
+		// If so, send recovery notification
+		wasFiring, firedAt, err := alertStateManager.TransitionToNormal(ctx, cache.AlertResourceTypeAgent, agentID)
+		if err != nil {
+			log.Warnw("failed to transition agent alert state to normal",
+				"agent_id", agentID,
 				"error", err,
 			)
 		}
+
+		if wasFiring {
+			// Calculate downtime
+			var downtimeMinutes int64
+			if firedAt != nil {
+				downtimeMinutes = int64(biztime.NowUTC().Sub(*firedAt).Minutes())
+			}
+
+			// Send recovery notification instead of online notification
+			cmd := telegramAdminApp.NotifyAgentRecoveryCommand{
+				AgentID:          agentID,
+				AgentSID:         agent.SID(),
+				AgentName:        agent.Name(),
+				OnlineAt:         biztime.NowUTC(),
+				DowntimeMinutes:  downtimeMinutes,
+				MuteNotification: agent.MuteNotification(),
+			}
+			if err := adminNotificationServiceDDD.NotifyAgentRecovery(ctx, cmd); err != nil {
+				log.Errorw("failed to send agent recovery notification",
+					"agent_sid", agent.SID(),
+					"error", err,
+				)
+			}
+		}
+		// Note: We no longer send regular online notifications here
+		// The recovery notification serves as the "online" notification for agents that had fired alerts
 	})
 
-	// Set OnAgentOffline callback to broadcast SSE event and send Telegram notification
+	// Set OnAgentOffline callback to broadcast SSE event only
+	// Note: Telegram offline notification is handled by the scheduled check (checkoffline.go)
+	// to avoid duplicate notifications and support threshold-based alerting
 	agentHub.SetOnAgentOffline(func(agentID uint) {
 		ctx := context.Background()
 
 		// Get agent info
 		agent, err := forwardAgentRepo.GetByID(ctx, agentID)
 		if err != nil {
-			log.Warnw("failed to get agent for offline notification",
+			log.Warnw("failed to get agent for offline broadcast",
 				"agent_id", agentID,
 				"error", err,
 			)
@@ -1417,24 +1452,11 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 			return
 		}
 
-		// Broadcast SSE event
+		// Broadcast SSE event only (for real-time UI updates)
 		adminHub.BroadcastForwardAgentOffline(agent.SID(), agent.Name())
 
-		// Send Telegram notification (real-time offline alert)
-		cmd := telegramAdminApp.NotifyAgentOfflineCommand{
-			AgentID:          agentID,
-			AgentSID:         agent.SID(),
-			AgentName:        agent.Name(),
-			LastSeenAt:       biztime.NowUTC(), // Use current time as agent doesn't track LastSeenAt
-			OfflineMinutes:   0,                // Just disconnected
-			MuteNotification: agent.MuteNotification(),
-		}
-		if err := adminNotificationServiceDDD.NotifyAgentOffline(ctx, cmd); err != nil {
-			log.Errorw("failed to send agent offline notification",
-				"agent_sid", agent.SID(),
-				"error", err,
-			)
-		}
+		// Note: No Telegram notification here - the scheduled offline check will
+		// send the notification once the agent has been offline for the configured threshold
 	})
 
 	// Set config change notifier for node update use case

@@ -22,10 +22,17 @@ type DeleteNodeResult struct {
 	DeletedAt string
 }
 
+// AlertStateClearer clears alert state for a resource when it is deleted.
+// This prevents stale alert states from causing incorrect recovery notifications.
+type AlertStateClearer interface {
+	ClearNodeAlertState(ctx context.Context, nodeID uint) error
+}
+
 type DeleteNodeUseCase struct {
-	nodeRepo node.NodeRepository
-	ruleRepo forward.Repository
-	logger   logger.Interface
+	nodeRepo          node.NodeRepository
+	ruleRepo          forward.Repository
+	alertStateClearer AlertStateClearer
+	logger            logger.Interface
 }
 
 func NewDeleteNodeUseCase(
@@ -38,6 +45,12 @@ func NewDeleteNodeUseCase(
 		ruleRepo: ruleRepo,
 		logger:   logger,
 	}
+}
+
+// WithAlertStateClearer sets the alert state clearer for cleanup on delete.
+func (uc *DeleteNodeUseCase) WithAlertStateClearer(clearer AlertStateClearer) *DeleteNodeUseCase {
+	uc.alertStateClearer = clearer
+	return uc
 }
 
 func (uc *DeleteNodeUseCase) Execute(ctx context.Context, cmd DeleteNodeCommand) (*DeleteNodeResult, error) {
@@ -70,6 +83,14 @@ func (uc *DeleteNodeUseCase) Execute(ctx context.Context, cmd DeleteNodeCommand)
 	if err := uc.nodeRepo.Delete(ctx, nodeID); err != nil {
 		uc.logger.Errorw("failed to delete node from database", "error", err, "sid", cmd.SID)
 		return nil, fmt.Errorf("failed to delete node: %w", err)
+	}
+
+	// Clean up alert state to prevent stale recovery notifications
+	if uc.alertStateClearer != nil {
+		if err := uc.alertStateClearer.ClearNodeAlertState(ctx, nodeID); err != nil {
+			// Log but don't fail the deletion - alert state has TTL as safety net
+			uc.logger.Warnw("failed to clear node alert state", "node_id", nodeID, "error", err)
+		}
 	}
 
 	uc.logger.Infow("node deleted successfully",

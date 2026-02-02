@@ -14,11 +14,18 @@ type DeleteForwardAgentCommand struct {
 	ShortID string // External API identifier
 }
 
+// AgentAlertStateClearer clears alert state for an agent when it is deleted.
+// This prevents stale alert states from causing incorrect recovery notifications.
+type AgentAlertStateClearer interface {
+	ClearAgentAlertState(ctx context.Context, agentID uint) error
+}
+
 // DeleteForwardAgentUseCase handles forward agent deletion.
 type DeleteForwardAgentUseCase struct {
-	agentRepo forward.AgentRepository
-	ruleRepo  forward.Repository
-	logger    logger.Interface
+	agentRepo         forward.AgentRepository
+	ruleRepo          forward.Repository
+	alertStateClearer AgentAlertStateClearer
+	logger            logger.Interface
 }
 
 // NewDeleteForwardAgentUseCase creates a new DeleteForwardAgentUseCase.
@@ -32,6 +39,12 @@ func NewDeleteForwardAgentUseCase(
 		ruleRepo:  ruleRepo,
 		logger:    logger,
 	}
+}
+
+// WithAlertStateClearer sets the alert state clearer for cleanup on delete.
+func (uc *DeleteForwardAgentUseCase) WithAlertStateClearer(clearer AgentAlertStateClearer) *DeleteForwardAgentUseCase {
+	uc.alertStateClearer = clearer
+	return uc
 }
 
 // Execute deletes a forward agent.
@@ -62,6 +75,14 @@ func (uc *DeleteForwardAgentUseCase) Execute(ctx context.Context, cmd DeleteForw
 	if err := uc.agentRepo.Delete(ctx, agentID); err != nil {
 		uc.logger.Errorw("failed to delete forward agent", "id", agentID, "short_id", agent.SID(), "error", err)
 		return fmt.Errorf("failed to delete forward agent: %w", err)
+	}
+
+	// Clean up alert state to prevent stale recovery notifications
+	if uc.alertStateClearer != nil {
+		if err := uc.alertStateClearer.ClearAgentAlertState(ctx, agentID); err != nil {
+			// Log but don't fail the deletion - alert state has TTL as safety net
+			uc.logger.Warnw("failed to clear agent alert state", "agent_id", agentID, "error", err)
+		}
 	}
 
 	uc.logger.Infow("forward agent deleted successfully", "id", agentID, "short_id", agent.SID())

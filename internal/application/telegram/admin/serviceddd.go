@@ -573,3 +573,97 @@ func (s *ServiceDDD) NotifyAgentOffline(ctx context.Context, cmd NotifyAgentOffl
 
 	return nil
 }
+
+// NotifyNodeRecovery implements AdminNotifier interface
+// This is called when a node transitions from Firing state back to Normal
+func (s *ServiceDDD) NotifyNodeRecovery(ctx context.Context, cmd NotifyNodeRecoveryCommand) error {
+	if s.botService == nil {
+		s.logger.Debugw("admin notification skipped: bot service not available", "type", "node_recovery")
+		return nil
+	}
+
+	// Skip if notification is muted for this node
+	if cmd.MuteNotification {
+		s.logger.Debugw("node recovery notification skipped: muted",
+			"node_sid", cmd.NodeSID,
+			"node_name", cmd.NodeName,
+		)
+		return nil
+	}
+
+	// Use the same bindings as offline notification (recovery is the counterpart)
+	bindings, err := s.bindingRepo.FindBindingsForNodeOfflineNotification(ctx)
+	if err != nil {
+		s.logger.Errorw("failed to find bindings for node recovery notification", "error", err)
+		return err
+	}
+
+	if len(bindings) == 0 {
+		return nil
+	}
+
+	message := usecases.BuildNodeRecoveryMessage(cmd.NodeSID, cmd.NodeName, cmd.OnlineAt, cmd.DowntimeMinutes)
+
+	for i, binding := range bindings {
+		if err := s.botService.SendMessage(binding.TelegramUserID(), message); err != nil {
+			s.logger.Errorw("failed to send node recovery notification",
+				"telegram_user_id", binding.TelegramUserID(),
+				"error", err,
+			)
+			continue
+		}
+		// Rate limiting: add delay between messages to avoid Telegram API throttling
+		if i < len(bindings)-1 {
+			time.Sleep(messageSendDelay)
+		}
+	}
+
+	return nil
+}
+
+// NotifyAgentRecovery implements AdminNotifier interface
+// This is called when an agent transitions from Firing state back to Normal
+func (s *ServiceDDD) NotifyAgentRecovery(ctx context.Context, cmd NotifyAgentRecoveryCommand) error {
+	if s.botService == nil {
+		s.logger.Debugw("admin notification skipped: bot service not available", "type", "agent_recovery")
+		return nil
+	}
+
+	// Skip if notification is muted for this agent
+	if cmd.MuteNotification {
+		s.logger.Debugw("agent recovery notification skipped: muted",
+			"agent_sid", cmd.AgentSID,
+			"agent_name", cmd.AgentName,
+		)
+		return nil
+	}
+
+	// Use the same bindings as offline notification (recovery is the counterpart)
+	bindings, err := s.bindingRepo.FindBindingsForAgentOfflineNotification(ctx)
+	if err != nil {
+		s.logger.Errorw("failed to find bindings for agent recovery notification", "error", err)
+		return err
+	}
+
+	if len(bindings) == 0 {
+		return nil
+	}
+
+	message := usecases.BuildAgentRecoveryMessage(cmd.AgentSID, cmd.AgentName, cmd.OnlineAt, cmd.DowntimeMinutes)
+
+	for i, binding := range bindings {
+		if err := s.botService.SendMessage(binding.TelegramUserID(), message); err != nil {
+			s.logger.Errorw("failed to send agent recovery notification",
+				"telegram_user_id", binding.TelegramUserID(),
+				"error", err,
+			)
+			continue
+		}
+		// Rate limiting: add delay between messages to avoid Telegram API throttling
+		if i < len(bindings)-1 {
+			time.Sleep(messageSendDelay)
+		}
+	}
+
+	return nil
+}

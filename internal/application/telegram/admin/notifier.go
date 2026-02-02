@@ -22,11 +22,19 @@ type AdminNotifier interface {
 	// NotifyNodeOffline sends a node offline notification to admins
 	NotifyNodeOffline(ctx context.Context, cmd NotifyNodeOfflineCommand) error
 
+	// NotifyNodeRecovery sends a node recovery notification to admins
+	// This is called when a node transitions from Firing state back to Normal
+	NotifyNodeRecovery(ctx context.Context, cmd NotifyNodeRecoveryCommand) error
+
 	// NotifyAgentOnline sends an agent online notification to admins
 	NotifyAgentOnline(ctx context.Context, cmd NotifyAgentOnlineCommand) error
 
 	// NotifyAgentOffline sends an agent offline notification to admins
 	NotifyAgentOffline(ctx context.Context, cmd NotifyAgentOfflineCommand) error
+
+	// NotifyAgentRecovery sends an agent recovery notification to admins
+	// This is called when an agent transitions from Firing state back to Normal
+	NotifyAgentRecovery(ctx context.Context, cmd NotifyAgentRecoveryCommand) error
 }
 
 // NotifyNewUserCommand contains data for new user notification
@@ -91,6 +99,28 @@ type NotifyAgentOfflineCommand struct {
 	MuteNotification bool // if true, skip sending notification
 }
 
+// NotifyNodeRecoveryCommand contains data for node recovery notification
+// This is sent when a node transitions from Firing state back to Normal
+type NotifyNodeRecoveryCommand struct {
+	NodeID           uint
+	NodeSID          string
+	NodeName         string
+	OnlineAt         time.Time
+	DowntimeMinutes  int64
+	MuteNotification bool // if true, skip sending notification
+}
+
+// NotifyAgentRecoveryCommand contains data for agent recovery notification
+// This is sent when an agent transitions from Firing state back to Normal
+type NotifyAgentRecoveryCommand struct {
+	AgentID          uint
+	AgentSID         string
+	AgentName        string
+	OnlineAt         time.Time
+	DowntimeMinutes  int64
+	MuteNotification bool // if true, skip sending notification
+}
+
 // NoopAdminNotifier is a no-op implementation of AdminNotifier
 // Used when admin notification is not configured
 type NoopAdminNotifier struct {
@@ -129,5 +159,15 @@ func (n *NoopAdminNotifier) NotifyAgentOnline(ctx context.Context, cmd NotifyAge
 
 func (n *NoopAdminNotifier) NotifyAgentOffline(ctx context.Context, cmd NotifyAgentOfflineCommand) error {
 	n.logger.Debugw("admin notification skipped (not configured)", "type", "agent_offline", "agent_sid", cmd.AgentSID)
+	return nil
+}
+
+func (n *NoopAdminNotifier) NotifyNodeRecovery(ctx context.Context, cmd NotifyNodeRecoveryCommand) error {
+	n.logger.Debugw("admin notification skipped (not configured)", "type", "node_recovery", "node_sid", cmd.NodeSID)
+	return nil
+}
+
+func (n *NoopAdminNotifier) NotifyAgentRecovery(ctx context.Context, cmd NotifyAgentRecoveryCommand) error {
+	n.logger.Debugw("admin notification skipped (not configured)", "type", "agent_recovery", "agent_sid", cmd.AgentSID)
 	return nil
 }

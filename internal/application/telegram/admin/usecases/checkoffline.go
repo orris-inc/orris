@@ -14,11 +14,6 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
-const (
-	// AlertCooldownMinutes is the cooldown period for alert deduplication
-	AlertCooldownMinutes = 30
-)
-
 // TelegramMessageSender sends messages via Telegram (HTML format)
 type TelegramMessageSender interface {
 	SendMessage(chatID int64, text string) error
@@ -42,7 +37,7 @@ type CheckOfflineUseCase struct {
 	bindingRepo       admin.AdminTelegramBindingRepository
 	nodeRepo          node.NodeRepository
 	agentRepo         forward.AgentRepository
-	alertDeduplicator *cache.AlertDeduplicator
+	alertStateManager *cache.AlertStateManager
 	botService        TelegramMessageSender
 	logger            logger.Interface
 }
@@ -52,7 +47,7 @@ func NewCheckOfflineUseCase(
 	bindingRepo admin.AdminTelegramBindingRepository,
 	nodeRepo node.NodeRepository,
 	agentRepo forward.AgentRepository,
-	alertDeduplicator *cache.AlertDeduplicator,
+	alertStateManager *cache.AlertStateManager,
 	botService TelegramMessageSender,
 	logger logger.Interface,
 ) *CheckOfflineUseCase {
@@ -60,7 +55,7 @@ func NewCheckOfflineUseCase(
 		bindingRepo:       bindingRepo,
 		nodeRepo:          nodeRepo,
 		agentRepo:         agentRepo,
-		alertDeduplicator: alertDeduplicator,
+		alertStateManager: alertStateManager,
 		botService:        botService,
 		logger:            logger,
 	}
@@ -117,7 +112,7 @@ func (uc *CheckOfflineUseCase) checkNodeOffline(ctx context.Context) (int, int) 
 		return 0, 1
 	}
 
-	cooldown := time.Duration(AlertCooldownMinutes) * time.Minute
+	now := biztime.NowUTC()
 
 	for _, nodeInfo := range offlineNodes {
 		// Skip if notification is muted for this node
@@ -129,17 +124,19 @@ func (uc *CheckOfflineUseCase) checkNodeOffline(ctx context.Context) (int, int) 
 			continue
 		}
 
-		// Atomically check and acquire alert lock to prevent duplicate alerts
-		// in multi-instance deployments (TOCTOU-safe)
-		acquired, err := uc.alertDeduplicator.TryAcquireAlertLock(ctx, cache.AlertTypeNodeOffline, nodeInfo.ID, cooldown)
+		// Atomically transition to Firing state
+		// Returns true only if this is a new firing (state changed from Normal to Firing)
+		isNewFiring, err := uc.alertStateManager.TransitionToFiring(ctx, cache.AlertResourceTypeNode, nodeInfo.ID, now)
 		if err != nil {
-			uc.logger.Errorw("failed to acquire alert lock", "error", err)
+			uc.logger.Errorw("failed to transition node alert state to firing", "error", err)
 			errors++
 			continue
 		}
 
-		if !acquired {
-			continue // Skip - already alerted recently or another instance is handling
+		if !isNewFiring {
+			// Already in firing state, no notification needed
+			// (repeat notifications not implemented in this version)
+			continue
 		}
 
 		// Build message and keyboard once for this node
@@ -178,9 +175,9 @@ func (uc *CheckOfflineUseCase) checkNodeOffline(ctx context.Context) (int, int) 
 			}
 		}
 
-		// If failed to send to any binding, clear the lock so it can be retried
+		// If failed to send to any binding, clear the state so it can be retried
 		if !sentToAny {
-			_ = uc.alertDeduplicator.ClearAlert(ctx, cache.AlertTypeNodeOffline, nodeInfo.ID)
+			_ = uc.alertStateManager.ClearState(ctx, cache.AlertResourceTypeNode, nodeInfo.ID)
 		}
 	}
 
@@ -218,7 +215,7 @@ func (uc *CheckOfflineUseCase) checkAgentOffline(ctx context.Context) (int, int)
 		return 0, 1
 	}
 
-	cooldown := time.Duration(AlertCooldownMinutes) * time.Minute
+	now := biztime.NowUTC()
 
 	for _, agentInfo := range offlineAgents {
 		// Skip if notification is muted for this agent
@@ -230,17 +227,19 @@ func (uc *CheckOfflineUseCase) checkAgentOffline(ctx context.Context) (int, int)
 			continue
 		}
 
-		// Atomically check and acquire alert lock to prevent duplicate alerts
-		// in multi-instance deployments (TOCTOU-safe)
-		acquired, err := uc.alertDeduplicator.TryAcquireAlertLock(ctx, cache.AlertTypeAgentOffline, agentInfo.ID, cooldown)
+		// Atomically transition to Firing state
+		// Returns true only if this is a new firing (state changed from Normal to Firing)
+		isNewFiring, err := uc.alertStateManager.TransitionToFiring(ctx, cache.AlertResourceTypeAgent, agentInfo.ID, now)
 		if err != nil {
-			uc.logger.Errorw("failed to acquire alert lock", "error", err)
+			uc.logger.Errorw("failed to transition agent alert state to firing", "error", err)
 			errors++
 			continue
 		}
 
-		if !acquired {
-			continue // Skip - already alerted recently or another instance is handling
+		if !isNewFiring {
+			// Already in firing state, no notification needed
+			// (repeat notifications not implemented in this version)
+			continue
 		}
 
 		// Build message and keyboard once for this agent
@@ -279,9 +278,9 @@ func (uc *CheckOfflineUseCase) checkAgentOffline(ctx context.Context) (int, int)
 			}
 		}
 
-		// If failed to send to any binding, clear the lock so it can be retried
+		// If failed to send to any binding, clear the state so it can be retried
 		if !sentToAny {
-			_ = uc.alertDeduplicator.ClearAlert(ctx, cache.AlertTypeAgentOffline, agentInfo.ID)
+			_ = uc.alertStateManager.ClearState(ctx, cache.AlertResourceTypeAgent, agentInfo.ID)
 		}
 	}
 

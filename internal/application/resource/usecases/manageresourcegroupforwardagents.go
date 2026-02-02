@@ -83,9 +83,9 @@ func (uc *ManageResourceGroupForwardAgentsUseCase) executeAddAgents(ctx context.
 		Failed:    make([]dto.BatchOperationErr, 0),
 	}
 
-	groupID := group.ID()
+	// Validate SID formats and collect valid SIDs for batch fetch
+	validSIDs := make([]string, 0, len(agentSIDs))
 	for _, agentSID := range agentSIDs {
-		// Validate the SID format (fa_xxx)
 		if err := id.ValidatePrefix(agentSID, id.PrefixForwardAgent); err != nil {
 			result.Failed = append(result.Failed, dto.BatchOperationErr{
 				ID:     agentSID,
@@ -93,18 +93,34 @@ func (uc *ManageResourceGroupForwardAgentsUseCase) executeAddAgents(ctx context.
 			})
 			continue
 		}
+		validSIDs = append(validSIDs, agentSID)
+	}
 
-		// Get agent by SID
-		agent, err := uc.agentRepo.GetBySID(ctx, agentSID)
+	// Batch fetch all valid agents
+	agentMap := make(map[string]*forward.ForwardAgent)
+	if len(validSIDs) > 0 {
+		agents, err := uc.agentRepo.GetBySIDs(ctx, validSIDs)
 		if err != nil {
-			uc.logger.Warnw("failed to get forward agent", "error", err, "agent_sid", agentSID)
-			result.Failed = append(result.Failed, dto.BatchOperationErr{
-				ID:     agentSID,
-				Reason: "failed to get forward agent",
-			})
-			continue
+			uc.logger.Errorw("failed to batch get forward agents", "error", err)
+			// Fall back to marking all as failed
+			for _, sid := range validSIDs {
+				result.Failed = append(result.Failed, dto.BatchOperationErr{
+					ID:     sid,
+					Reason: "failed to get forward agent",
+				})
+			}
+			return result, nil
 		}
-		if agent == nil {
+		for _, agent := range agents {
+			agentMap[agent.SID()] = agent
+		}
+	}
+
+	// Process each valid SID
+	groupID := group.ID()
+	for _, agentSID := range validSIDs {
+		agent, ok := agentMap[agentSID]
+		if !ok || agent == nil {
 			result.Failed = append(result.Failed, dto.BatchOperationErr{
 				ID:     agentSID,
 				Reason: "forward agent not found",
@@ -174,9 +190,9 @@ func (uc *ManageResourceGroupForwardAgentsUseCase) executeRemoveAgents(ctx conte
 		Failed:    make([]dto.BatchOperationErr, 0),
 	}
 
-	groupID := group.ID()
+	// Validate SID formats and collect valid SIDs for batch fetch
+	validSIDs := make([]string, 0, len(agentSIDs))
 	for _, agentSID := range agentSIDs {
-		// Validate the SID format (fa_xxx)
 		if err := id.ValidatePrefix(agentSID, id.PrefixForwardAgent); err != nil {
 			result.Failed = append(result.Failed, dto.BatchOperationErr{
 				ID:     agentSID,
@@ -184,18 +200,34 @@ func (uc *ManageResourceGroupForwardAgentsUseCase) executeRemoveAgents(ctx conte
 			})
 			continue
 		}
+		validSIDs = append(validSIDs, agentSID)
+	}
 
-		// Get agent by SID
-		agent, err := uc.agentRepo.GetBySID(ctx, agentSID)
+	// Batch fetch all valid agents
+	agentMap := make(map[string]*forward.ForwardAgent)
+	if len(validSIDs) > 0 {
+		agents, err := uc.agentRepo.GetBySIDs(ctx, validSIDs)
 		if err != nil {
-			uc.logger.Warnw("failed to get forward agent", "error", err, "agent_sid", agentSID)
-			result.Failed = append(result.Failed, dto.BatchOperationErr{
-				ID:     agentSID,
-				Reason: "failed to get forward agent",
-			})
-			continue
+			uc.logger.Errorw("failed to batch get forward agents", "error", err)
+			// Fall back to marking all as failed
+			for _, sid := range validSIDs {
+				result.Failed = append(result.Failed, dto.BatchOperationErr{
+					ID:     sid,
+					Reason: "failed to get forward agent",
+				})
+			}
+			return result, nil
 		}
-		if agent == nil {
+		for _, agent := range agents {
+			agentMap[agent.SID()] = agent
+		}
+	}
+
+	// Process each valid SID
+	groupID := group.ID()
+	for _, agentSID := range validSIDs {
+		agent, ok := agentMap[agentSID]
+		if !ok || agent == nil {
 			result.Failed = append(result.Failed, dto.BatchOperationErr{
 				ID:     agentSID,
 				Reason: "forward agent not found",

@@ -312,3 +312,61 @@ func BuildWeeklySummaryMessage(
 		totalGB,
 	)
 }
+
+// BuildNodeRecoveryMessage builds a node recovery notification message (HTML format)
+// This is sent when a node transitions from Firing state back to Normal
+func BuildNodeRecoveryMessage(nodeSID, nodeName string, onlineAt time.Time, downtimeMinutes int64) string {
+	onlineAtStr := biztime.FormatInBizTimezone(onlineAt, "2006-01-02 15:04:05")
+
+	return fmt.Sprintf(`🟢 <b>Node Agent 恢复通知</b>
+
+Node Agent：%s
+ID：<code>%s</code>
+恢复时间：%s
+离线时长：%d 分钟
+
+✅ Node Agent 已恢复正常运行
+
+―――――――――――――
+
+🟢 <b>Node Agent Recovery</b>
+
+Node Agent: %s
+ID: <code>%s</code>
+Recovered at: %s
+Downtime: %d min
+
+✅ Node Agent is back online`,
+		EscapeHTML(nodeName), nodeSID, onlineAtStr, downtimeMinutes,
+		EscapeHTML(nodeName), nodeSID, onlineAtStr, downtimeMinutes,
+	)
+}
+
+// BuildAgentRecoveryMessage builds a forward agent recovery notification message (HTML format)
+// This is sent when an agent transitions from Firing state back to Normal
+func BuildAgentRecoveryMessage(agentSID, agentName string, onlineAt time.Time, downtimeMinutes int64) string {
+	onlineAtStr := biztime.FormatInBizTimezone(onlineAt, "2006-01-02 15:04:05")
+
+	return fmt.Sprintf(`🟢 <b>转发代理恢复通知</b>
+
+转发代理：%s
+ID：<code>%s</code>
+恢复时间：%s
+离线时长：%d 分钟
+
+✅ 转发代理已恢复正常运行
+
+―――――――――――――
+
+🟢 <b>Forward Agent Recovery</b>
+
+Forward Agent: %s
+ID: <code>%s</code>
+Recovered at: %s
+Downtime: %d min
+
+✅ Forward Agent is back online`,
+		EscapeHTML(agentName), agentSID, onlineAtStr, downtimeMinutes,
+		EscapeHTML(agentName), agentSID, onlineAtStr, downtimeMinutes,
+	)
+}

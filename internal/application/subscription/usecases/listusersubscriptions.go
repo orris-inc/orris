@@ -98,40 +98,40 @@ func (uc *ListUserSubscriptionsUseCase) Execute(ctx context.Context, query ListU
 		return nil, fmt.Errorf("failed to list subscriptions: %w", err)
 	}
 
-	// Collect unique plan IDs
+	// Collect unique plan IDs and user IDs
 	planIDSet := setutil.NewUintSet()
-	for _, sub := range subscriptions {
-		planIDSet.Add(sub.PlanID())
-	}
-
-	// Fetch plans
-	plans := make(map[uint]*subscription.Plan)
-	for _, planID := range planIDSet.ToSlice() {
-		plan, err := uc.planRepo.GetByID(ctx, planID)
-		if err != nil {
-			uc.logger.Warnw("failed to get plan", "error", err, "plan_id", planID)
-			continue
-		}
-		plans[planID] = plan
-	}
-
-	// Collect unique user IDs
 	userIDSet := setutil.NewUintSet()
 	for _, sub := range subscriptions {
+		planIDSet.Add(sub.PlanID())
 		if sub.UserID() > 0 {
 			userIDSet.Add(sub.UserID())
 		}
 	}
 
-	// Fetch users
-	users := make(map[uint]*user.User)
-	for _, userID := range userIDSet.ToSlice() {
-		u, err := uc.userRepo.GetByID(ctx, userID)
+	// Batch fetch plans
+	plans := make(map[uint]*subscription.Plan)
+	if planIDs := planIDSet.ToSlice(); len(planIDs) > 0 {
+		planList, err := uc.planRepo.GetByIDs(ctx, planIDs)
 		if err != nil {
-			uc.logger.Warnw("failed to get user", "error", err, "user_id", userID)
-			continue
+			uc.logger.Warnw("failed to batch get plans", "error", err)
+		} else {
+			for _, plan := range planList {
+				plans[plan.ID()] = plan
+			}
 		}
-		users[userID] = u
+	}
+
+	// Batch fetch users
+	users := make(map[uint]*user.User)
+	if userIDs := userIDSet.ToSlice(); len(userIDs) > 0 {
+		userList, err := uc.userRepo.GetByIDs(ctx, userIDs)
+		if err != nil {
+			uc.logger.Warnw("failed to batch get users", "error", err)
+		} else {
+			for _, u := range userList {
+				users[u.ID()] = u
+			}
+		}
 	}
 
 	// Build DTOs with embedded user and plan info
