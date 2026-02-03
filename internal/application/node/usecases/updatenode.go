@@ -28,7 +28,7 @@ type UpdateNodeCommand struct {
 	SortOrder        *int
 	Status           *string
 	GroupSIDs        []string // Resource group SIDs (empty slice to remove all, nil means no change)
-	MuteNotification *bool   // nil: no update, non-nil: set mute notification flag
+	MuteNotification *bool    // nil: no update, non-nil: set mute notification flag
 	// Trojan specific fields
 	TrojanTransportProtocol *string
 	TrojanHost              *string
@@ -82,6 +82,12 @@ type UpdateNodeCommand struct {
 	TUICSni               *string
 	TUICAllowInsecure     *bool
 	TUICDisableSNI        *bool
+
+	// Expiration and renewal fields
+	ExpiresAt      *time.Time // nil: no update, set to update expiration time
+	ClearExpiresAt bool       // true: clear expiration time
+	RenewalAmount  *float64   // nil: no update, set to update renewal amount
+	ClearRenewal   bool       // true: clear renewal amount
 }
 
 type UpdateNodeResult struct {
@@ -463,6 +469,20 @@ func (uc *UpdateNodeUseCase) applyUpdates(n *node.Node, cmd UpdateNodeCommand) e
 		}
 	}
 
+	// Update expires_at
+	if cmd.ClearExpiresAt {
+		n.SetExpiresAt(nil)
+	} else if cmd.ExpiresAt != nil {
+		n.SetExpiresAt(cmd.ExpiresAt)
+	}
+
+	// Update renewal_amount
+	if cmd.ClearRenewal {
+		n.SetRenewalAmount(nil)
+	} else if cmd.RenewalAmount != nil {
+		n.SetRenewalAmount(cmd.RenewalAmount)
+	}
+
 	return nil
 }
 
@@ -496,7 +516,9 @@ func (uc *UpdateNodeUseCase) validateCommand(cmd UpdateNodeCommand) error {
 		cmd.Hysteria2AllowInsecure != nil || cmd.Hysteria2Fingerprint != nil ||
 		// TUIC fields
 		cmd.TUICCongestionControl != nil || cmd.TUICUDPRelayMode != nil || cmd.TUICAlpn != nil ||
-		cmd.TUICSni != nil || cmd.TUICAllowInsecure != nil || cmd.TUICDisableSNI != nil
+		cmd.TUICSni != nil || cmd.TUICAllowInsecure != nil || cmd.TUICDisableSNI != nil ||
+		// Expiration and renewal fields
+		cmd.ExpiresAt != nil || cmd.ClearExpiresAt || cmd.RenewalAmount != nil || cmd.ClearRenewal
 
 	if !hasUpdate {
 		return errors.NewValidationError("at least one field must be provided for update")

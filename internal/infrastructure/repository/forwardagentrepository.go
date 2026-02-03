@@ -230,6 +230,8 @@ func (r *ForwardAgentRepositoryImpl) Update(ctx context.Context, agent *forward.
 			"blocked_protocols":  model.BlockedProtocols,
 			"sort_order":         model.SortOrder,
 			"mute_notification":  model.MuteNotification,
+			"expires_at":         model.ExpiresAt,
+			"renewal_amount":     model.RenewalAmount,
 			"updated_at":         model.UpdatedAt,
 		})
 

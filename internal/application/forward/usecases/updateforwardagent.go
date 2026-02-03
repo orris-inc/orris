@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/orris-inc/orris/internal/domain/forward"
 	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
@@ -18,11 +19,15 @@ type UpdateForwardAgentCommand struct {
 	PublicAddress    *string
 	TunnelAddress    *string
 	Remark           *string
-	GroupSIDs        []string  // Resource group SIDs (empty slice to remove all associations)
-	AllowedPortRange *string   // nil: no update, empty string: clear (allow all), non-empty: set new range
-	BlockedProtocols *[]string // nil: no update, empty slice: clear (allow all), non-empty: set new protocols
-	SortOrder        *int      // nil: no update, non-nil: set new sort order
-	MuteNotification *bool     // nil: no update, non-nil: set mute notification flag
+	GroupSIDs        []string   // Resource group SIDs (empty slice to remove all associations)
+	AllowedPortRange *string    // nil: no update, empty string: clear (allow all), non-empty: set new range
+	BlockedProtocols *[]string  // nil: no update, empty slice: clear (allow all), non-empty: set new protocols
+	SortOrder        *int       // nil: no update, non-nil: set new sort order
+	MuteNotification *bool      // nil: no update, non-nil: set mute notification flag
+	ExpiresAt        *time.Time // nil: no update, set to update expiration time
+	ClearExpiresAt   bool       // true: clear expiration time
+	RenewalAmount    *float64   // nil: no update, set to update renewal amount
+	ClearRenewal     bool       // true: clear renewal amount
 }
 
 // UpdateForwardAgentUseCase handles forward agent updates.
@@ -203,6 +208,20 @@ func (uc *UpdateForwardAgentUseCase) Execute(ctx context.Context, cmd UpdateForw
 	// Handle MuteNotification update
 	if cmd.MuteNotification != nil {
 		agent.SetMuteNotification(*cmd.MuteNotification)
+	}
+
+	// Handle ExpiresAt update
+	if cmd.ClearExpiresAt {
+		agent.SetExpiresAt(nil)
+	} else if cmd.ExpiresAt != nil {
+		agent.SetExpiresAt(cmd.ExpiresAt)
+	}
+
+	// Handle RenewalAmount update
+	if cmd.ClearRenewal {
+		agent.SetRenewalAmount(nil)
+	} else if cmd.RenewalAmount != nil {
+		agent.SetRenewalAmount(cmd.RenewalAmount)
 	}
 
 	// Persist changes

@@ -27,7 +27,7 @@ type NodeSummaryResponse struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
 	Status    string    `json:"status"`
-	GroupSIDs []string  `json:"group_ids,omitempty"`
+	GroupSIDs []string  `json:"group_sids,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -36,7 +36,7 @@ type ForwardAgentSummaryResponse struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
 	Status    string    `json:"status"`
-	GroupSID  *string   `json:"group_id,omitempty"`
+	GroupSID  *string   `json:"group_sid,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 

@@ -3,6 +3,7 @@ package node
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -104,7 +105,42 @@ func (h *NodeHandler) UpdateNode(c *gin.Context) {
 		return
 	}
 
+	// Validate and parse expires_at if provided and non-empty
+	var parsedExpiresAt *time.Time
+	var clearExpiresAt bool
+	if req.ExpiresAt != nil {
+		if *req.ExpiresAt == "" {
+			// Empty string means clear
+			clearExpiresAt = true
+		} else {
+			t, err := time.Parse(time.RFC3339, *req.ExpiresAt)
+			if err != nil {
+				h.logger.Warnw("invalid expires_at format", "sid", sid, "expires_at", *req.ExpiresAt, "error", err)
+				utils.ErrorResponseWithError(c, errors.NewValidationError("invalid expires_at format, expected ISO8601 (RFC3339)"))
+				return
+			}
+			// Validate expires_at is in the future
+			if t.Before(time.Now().UTC()) {
+				h.logger.Warnw("expires_at must be in the future", "sid", sid, "expires_at", *req.ExpiresAt)
+				utils.ErrorResponseWithError(c, errors.NewValidationError("expires_at must be a future time"))
+				return
+			}
+			parsedExpiresAt = &t
+		}
+	}
+
+	// Validate renewal_amount is not negative
+	if req.RenewalAmount != nil && *req.RenewalAmount < 0 {
+		h.logger.Warnw("invalid renewal_amount: negative value", "sid", sid, "renewal_amount", *req.RenewalAmount)
+		utils.ErrorResponseWithError(c, errors.NewValidationError("renewal_amount cannot be negative"))
+		return
+	}
+
 	cmd := req.ToCommand(sid)
+
+	// Override expires_at with validated values (handler is the source of truth)
+	cmd.ExpiresAt = parsedExpiresAt
+	cmd.ClearExpiresAt = clearExpiresAt
 	result, err := h.updateNodeUC.Execute(c.Request.Context(), cmd)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
@@ -453,10 +489,14 @@ type UpdateNodeRequest struct {
 	TUICSni               *string `json:"tuic_sni,omitempty" comment:"TUIC TLS SNI"`
 	TUICAllowInsecure     *bool   `json:"tuic_allow_insecure,omitempty" comment:"TUIC allow insecure TLS"`
 	TUICDisableSNI        *bool   `json:"tuic_disable_sni,omitempty" comment:"TUIC disable SNI"`
+
+	// Expiration and renewal fields
+	ExpiresAt     *string  `json:"expires_at,omitempty" example:"2025-12-31T23:59:59Z" comment:"Expiration time in ISO8601 format (empty string to clear, omit to keep unchanged)"`
+	RenewalAmount *float64 `json:"renewal_amount,omitempty" example:"99.00" comment:"Renewal amount (0 to clear, omit to keep unchanged)"`
 }
 
 func (r *UpdateNodeRequest) ToCommand(sid string) usecases.UpdateNodeCommand {
-	return usecases.UpdateNodeCommand{
+	cmd := usecases.UpdateNodeCommand{
 		SID:                     sid,
 		Name:                    r.Name,
 		ServerAddress:           r.ServerAddress,
@@ -520,6 +560,23 @@ func (r *UpdateNodeRequest) ToCommand(sid string) usecases.UpdateNodeCommand {
 		TUICAllowInsecure:     r.TUICAllowInsecure,
 		TUICDisableSNI:        r.TUICDisableSNI,
 	}
+
+	// Note: ExpiresAt is handled by the handler layer after ToCommand returns.
+	// The handler parses, validates (format + future time), and sets cmd.ExpiresAt/cmd.ClearExpiresAt directly.
+	// This ensures all validation is done in one place and avoids silent failures.
+
+	// Handle RenewalAmount field
+	// Note: negative validation is done in handler layer before calling ToCommand
+	if r.RenewalAmount != nil {
+		if *r.RenewalAmount == 0 {
+			// 0 means clear
+			cmd.ClearRenewal = true
+		} else {
+			cmd.RenewalAmount = r.RenewalAmount
+		}
+	}
+
+	return cmd
 }
 
 type ListNodesRequest struct {

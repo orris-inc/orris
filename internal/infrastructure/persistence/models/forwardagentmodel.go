@@ -21,14 +21,16 @@ type ForwardAgentModel struct {
 	Status           string         `gorm:"not null;default:enabled;size:20;index:idx_forward_agent_status"`
 	Remark           string         `gorm:"size:500"`
 	GroupIDs         datatypes.JSON `gorm:"column:group_ids"` // resource group IDs (JSON array)
-	AgentVersion     string         `gorm:"size:50"`                          // agent software version (e.g., "1.2.3")
-	Platform         string         `gorm:"size:20"`                          // OS platform (linux, darwin, windows)
-	Arch             string         `gorm:"size:20"`                          // CPU architecture (amd64, arm64, arm, 386)
+	AgentVersion     string         `gorm:"size:50"`          // agent software version (e.g., "1.2.3")
+	Platform         string         `gorm:"size:20"`          // OS platform (linux, darwin, windows)
+	Arch             string         `gorm:"size:20"`          // CPU architecture (amd64, arm64, arm, 386)
 	AllowedPortRange *string        `gorm:"column:allowed_port_range;type:text"`
 	BlockedProtocols datatypes.JSON `gorm:"column:blocked_protocols;type:json"` // protocols blocked by this agent
 	SortOrder        int            `gorm:"not null;default:0"`
 	MuteNotification bool           `gorm:"not null;default:false"` // mute online/offline notifications
 	LastSeenAt       *time.Time
+	ExpiresAt        *time.Time `gorm:"column:expires_at"`                        // expiration time (null = never expires)
+	RenewalAmount    *float64   `gorm:"column:renewal_amount;type:decimal(10,2)"` // renewal amount for display
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 }

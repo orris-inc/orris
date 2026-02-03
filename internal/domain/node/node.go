@@ -46,6 +46,8 @@ type Node struct {
 	agentVersion      *string         // agent software version (e.g., "1.2.3")
 	platform          *string         // OS platform (linux, darwin, windows)
 	arch              *string         // CPU architecture (amd64, arm64, arm, 386)
+	expiresAt         *time.Time      // expiration time (nil = never expires)
+	renewalAmount     *float64        // renewal amount for display (nil = not set)
 	version           int
 	originalVersion   int // version when loaded from database, for optimistic locking
 	createdAt         time.Time
@@ -183,6 +185,8 @@ func ReconstructNode(
 	agentVersion *string,
 	platform *string,
 	arch *string,
+	expiresAt *time.Time,
+	renewalAmount *float64,
 	version int,
 	createdAt, updatedAt time.Time,
 ) (*Node, error) {
@@ -236,6 +240,8 @@ func ReconstructNode(
 		agentVersion:      agentVersion,
 		platform:          platform,
 		arch:              arch,
+		expiresAt:         expiresAt,
+		renewalAmount:     renewalAmount,
 		version:           version,
 		originalVersion:   version, // preserve original version for optimistic locking
 		createdAt:         createdAt,
@@ -900,6 +906,53 @@ func (n *Node) ClearAPIToken() {
 	defer n.mu.Unlock()
 
 	n.apiToken = ""
+}
+
+// ExpiresAt returns the expiration time (nil means never expires)
+func (n *Node) ExpiresAt() *time.Time {
+	return n.expiresAt
+}
+
+// SetExpiresAt sets the expiration time (nil to clear)
+func (n *Node) SetExpiresAt(t *time.Time) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	n.expiresAt = t
+	n.updatedAt = biztime.NowUTC()
+	n.version++
+}
+
+// RenewalAmount returns the renewal amount (nil means not set)
+func (n *Node) RenewalAmount() *float64 {
+	return n.renewalAmount
+}
+
+// SetRenewalAmount sets the renewal amount (nil to clear)
+func (n *Node) SetRenewalAmount(amount *float64) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	n.renewalAmount = amount
+	n.updatedAt = biztime.NowUTC()
+	n.version++
+}
+
+// IsExpired checks if the node has expired
+func (n *Node) IsExpired() bool {
+	if n.expiresAt == nil {
+		return false
+	}
+	return time.Now().UTC().After(*n.expiresAt)
+}
+
+// IsExpiringSoon checks if the node will expire within the specified number of days
+func (n *Node) IsExpiringSoon(days int) bool {
+	if n.expiresAt == nil {
+		return false
+	}
+	threshold := time.Now().UTC().AddDate(0, 0, days)
+	return n.expiresAt.Before(threshold)
 }
 
 // Validate performs domain-level validation

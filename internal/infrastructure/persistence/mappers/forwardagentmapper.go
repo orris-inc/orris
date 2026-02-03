@@ -87,6 +87,8 @@ func (m *ForwardAgentMapperImpl) ToEntity(model *models.ForwardAgentModel) (*for
 		model.SortOrder,
 		model.MuteNotification,
 		model.LastSeenAt,
+		model.ExpiresAt,
+		model.RenewalAmount,
 		model.CreatedAt,
 		model.UpdatedAt,
 	)
@@ -153,6 +155,8 @@ func (m *ForwardAgentMapperImpl) ToModel(entity *forward.ForwardAgent) (*models.
 		SortOrder:        entity.SortOrder(),
 		MuteNotification: entity.MuteNotification(),
 		LastSeenAt:       entity.LastSeenAt(),
+		ExpiresAt:        entity.ExpiresAt(),
+		RenewalAmount:    entity.RenewalAmount(),
 		CreatedAt:        entity.CreatedAt(),
 		UpdatedAt:        entity.UpdatedAt(),
 	}, nil

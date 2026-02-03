@@ -54,6 +54,8 @@ type ForwardAgent struct {
 	sortOrder        int                 // custom sort order for UI display
 	muteNotification bool                // mute online/offline notifications for this agent
 	lastSeenAt       *time.Time          // last time the agent reported status
+	expiresAt        *time.Time          // expiration time (nil = never expires)
+	renewalAmount    *float64            // renewal amount for display (nil = not set)
 	createdAt        time.Time
 	updatedAt        time.Time
 	tokenGenerator   services.TokenGenerator
@@ -130,6 +132,8 @@ func ReconstructForwardAgent(
 	sortOrder int,
 	muteNotification bool,
 	lastSeenAt *time.Time,
+	expiresAt *time.Time,
+	renewalAmount *float64,
 	createdAt, updatedAt time.Time,
 ) (*ForwardAgent, error) {
 	if id == 0 {
@@ -181,6 +185,8 @@ func ReconstructForwardAgent(
 		sortOrder:        sortOrder,
 		muteNotification: muteNotification,
 		lastSeenAt:       lastSeenAt,
+		expiresAt:        expiresAt,
+		renewalAmount:    renewalAmount,
 		createdAt:        createdAt,
 		updatedAt:        updatedAt,
 		tokenGenerator:   services.NewTokenGenerator(),
@@ -546,4 +552,43 @@ func (a *ForwardAgent) IsOnline() bool {
 func (a *ForwardAgent) UpdateLastSeen(t time.Time) {
 	a.lastSeenAt = &t
 	a.updatedAt = biztime.NowUTC()
+}
+
+// ExpiresAt returns the expiration time (nil means never expires)
+func (a *ForwardAgent) ExpiresAt() *time.Time {
+	return a.expiresAt
+}
+
+// SetExpiresAt sets the expiration time (nil to clear)
+func (a *ForwardAgent) SetExpiresAt(t *time.Time) {
+	a.expiresAt = t
+	a.updatedAt = biztime.NowUTC()
+}
+
+// RenewalAmount returns the renewal amount (nil means not set)
+func (a *ForwardAgent) RenewalAmount() *float64 {
+	return a.renewalAmount
+}
+
+// SetRenewalAmount sets the renewal amount (nil to clear)
+func (a *ForwardAgent) SetRenewalAmount(amount *float64) {
+	a.renewalAmount = amount
+	a.updatedAt = biztime.NowUTC()
+}
+
+// IsExpired checks if the agent has expired
+func (a *ForwardAgent) IsExpired() bool {
+	if a.expiresAt == nil {
+		return false
+	}
+	return time.Now().UTC().After(*a.expiresAt)
+}
+
+// IsExpiringSoon checks if the agent will expire within the specified number of days
+func (a *ForwardAgent) IsExpiringSoon(days int) bool {
+	if a.expiresAt == nil {
+		return false
+	}
+	threshold := time.Now().UTC().AddDate(0, 0, days)
+	return a.expiresAt.Before(threshold)
 }

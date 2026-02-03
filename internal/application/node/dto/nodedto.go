@@ -8,20 +8,20 @@ import (
 )
 
 type NodeDTO struct {
-	ID               string                 `json:"id" example:"node_xK9mP2vL3nQ" description:"Unique identifier for the node (Stripe-style prefixed ID)"`
-	Name             string                 `json:"name" example:"US-Node-01" description:"Display name of the node"`
-	ServerAddress    string                 `json:"server_address" example:"proxy.example.com" description:"Server hostname or IP address"`
-	AgentPort        uint16                 `json:"agent_port" example:"8388" description:"Port for agent connections"`
-	SubscriptionPort *uint16                `json:"subscription_port,omitempty" example:"8389" description:"Port for client subscriptions (if null, uses agent_port)"`
-	Protocol         string                 `json:"protocol" example:"shadowsocks" enums:"shadowsocks,trojan" description:"Proxy protocol type"`
-	EncryptionMethod string                 `json:"encryption_method" example:"aes-256-gcm" enums:"aes-256-gcm,aes-128-gcm,chacha20-ietf-poly1305" description:"Encryption method for the proxy connection"`
-	Plugin           string                 `json:"plugin,omitempty" example:"obfs-local" description:"Optional plugin name"`
-	PluginOpts       map[string]string      `json:"plugin_opts,omitempty" example:"obfs:http,obfs-host:example.com" description:"Plugin configuration options"`
-	Status           string                 `json:"status" example:"active" enums:"active,inactive,maintenance" description:"Current operational status of the node"`
-	Region           string                 `json:"region,omitempty" example:"us-west" description:"Geographic region or location identifier"`
-	Tags             []string               `json:"tags,omitempty" example:"premium,fast" description:"Custom tags for categorization"`
-	SortOrder        int                    `json:"sort_order" example:"100" description:"Display order for sorting nodes"`
-	MuteNotification bool                   `json:"mute_notification" example:"false" description:"Mute online/offline notifications for this node"`
+	ID               string            `json:"id" example:"node_xK9mP2vL3nQ" description:"Unique identifier for the node (Stripe-style prefixed ID)"`
+	Name             string            `json:"name" example:"US-Node-01" description:"Display name of the node"`
+	ServerAddress    string            `json:"server_address" example:"proxy.example.com" description:"Server hostname or IP address"`
+	AgentPort        uint16            `json:"agent_port" example:"8388" description:"Port for agent connections"`
+	SubscriptionPort *uint16           `json:"subscription_port,omitempty" example:"8389" description:"Port for client subscriptions (if null, uses agent_port)"`
+	Protocol         string            `json:"protocol" example:"shadowsocks" enums:"shadowsocks,trojan" description:"Proxy protocol type"`
+	EncryptionMethod string            `json:"encryption_method" example:"aes-256-gcm" enums:"aes-256-gcm,aes-128-gcm,chacha20-ietf-poly1305" description:"Encryption method for the proxy connection"`
+	Plugin           string            `json:"plugin,omitempty" example:"obfs-local" description:"Optional plugin name"`
+	PluginOpts       map[string]string `json:"plugin_opts,omitempty" example:"obfs:http,obfs-host:example.com" description:"Plugin configuration options"`
+	Status           string            `json:"status" example:"active" enums:"active,inactive,maintenance" description:"Current operational status of the node"`
+	Region           string            `json:"region,omitempty" example:"us-west" description:"Geographic region or location identifier"`
+	Tags             []string          `json:"tags,omitempty" example:"premium,fast" description:"Custom tags for categorization"`
+	SortOrder        int               `json:"sort_order" example:"100" description:"Display order for sorting nodes"`
+	MuteNotification bool              `json:"mute_notification" example:"false" description:"Mute online/offline notifications for this node"`
 	// Trojan specific fields
 	TransportProtocol string  `json:"transport_protocol,omitempty" example:"tcp" enums:"tcp,ws,grpc" description:"Transport protocol for Trojan (tcp, ws, grpc)"`
 	Host              string  `json:"host,omitempty" example:"cdn.example.com" description:"WebSocket host header or gRPC service name"`
@@ -74,11 +74,14 @@ type NodeDTO struct {
 	TUICDisableSNI        bool       `json:"tuic_disable_sni,omitempty" description:"TUIC disable SNI"`
 	IsOnline              bool       `json:"is_online" example:"true" description:"Indicates if the node agent is online (reported within 5 minutes)"`
 	LastSeenAt            *time.Time `json:"last_seen_at,omitempty" example:"2024-01-15T14:20:00Z" description:"Last time the node agent reported status"`
+	ExpiresAt             *string    `json:"expires_at,omitempty" example:"2025-12-31T23:59:59Z" description:"Expiration time in ISO8601 format (null = never expires)"`
+	RenewalAmount         *float64   `json:"renewal_amount,omitempty" example:"99.00" description:"Renewal amount for display"`
+	IsExpired             bool       `json:"is_expired" example:"false" description:"True if node has expired"`
 	AgentVersion          string     `json:"agent_version,omitempty" example:"1.2.0" description:"Agent software version, extracted from system_status for easy display"`
 	Platform              string     `json:"platform,omitempty" example:"linux" description:"OS platform (linux, darwin, windows)"`
 	Arch                  string     `json:"arch,omitempty" example:"amd64" description:"CPU architecture (amd64, arm64, arm, 386)"`
 	HasUpdate             bool       `json:"has_update" example:"true" description:"True if a newer agent version is available"`
-	GroupSIDs             []string   `json:"group_ids,omitempty" example:"[\"rg_xK9mP2vL3nQ\"]" description:"Resource group SIDs this node belongs to"`
+	GroupSIDs             []string   `json:"group_sids,omitempty" example:"[\"rg_xK9mP2vL3nQ\"]" description:"Resource group SIDs this node belongs to"`
 	Version               int        `json:"version" example:"1" description:"Version number for optimistic locking"`
 	CreatedAt             time.Time  `json:"created_at" example:"2024-01-15T10:30:00Z" description:"Timestamp when the node was created"`
 	UpdatedAt             time.Time  `json:"updated_at" example:"2024-01-15T14:20:00Z" description:"Timestamp when the node was last updated"`
@@ -206,34 +209,34 @@ type NodeSystemStatusDTO struct {
 }
 
 type CreateNodeDTO struct {
-	Name             string                 `json:"name" binding:"required,min=2,max=100" example:"US-Node-01" description:"Display name of the node (2-100 characters)"`
-	ServerAddress    string                 `json:"server_address,omitempty" example:"proxy.example.com" description:"Server hostname or IP address (optional, can be auto-detected from agent)"`
-	AgentPort        uint16                 `json:"agent_port" binding:"required,min=1,max=65535" example:"8388" description:"Port for agent connections (1-65535)"`
-	SubscriptionPort *uint16                `json:"subscription_port,omitempty" binding:"omitempty,min=1,max=65535" example:"8389" description:"Port for client subscriptions (if null, uses agent_port)"`
-	EncryptionMethod string                 `json:"encryption_method" binding:"required" example:"aes-256-gcm" enums:"aes-256-gcm,aes-128-gcm,chacha20-ietf-poly1305" description:"Encryption method for the proxy connection"`
-	Password         string                 `json:"password" binding:"required" example:"mySecurePassword123" description:"Authentication password"`
-	Plugin           string                 `json:"plugin,omitempty" example:"obfs-local" description:"Optional plugin name"`
-	PluginOpts       map[string]string      `json:"plugin_opts,omitempty" example:"obfs:http,obfs-host:example.com" description:"Plugin configuration options"`
-	Region           string                 `json:"region,omitempty" example:"us-west" description:"Geographic region or location identifier"`
-	Tags             []string               `json:"tags,omitempty" example:"premium,fast" description:"Custom tags for categorization"`
-	SortOrder        int                    `json:"sort_order" example:"100" description:"Display order for sorting nodes"`
-	Route            *RouteConfigDTO        `json:"route,omitempty" description:"Routing configuration for traffic splitting (sing-box compatible)"`
+	Name             string            `json:"name" binding:"required,min=2,max=100" example:"US-Node-01" description:"Display name of the node (2-100 characters)"`
+	ServerAddress    string            `json:"server_address,omitempty" example:"proxy.example.com" description:"Server hostname or IP address (optional, can be auto-detected from agent)"`
+	AgentPort        uint16            `json:"agent_port" binding:"required,min=1,max=65535" example:"8388" description:"Port for agent connections (1-65535)"`
+	SubscriptionPort *uint16           `json:"subscription_port,omitempty" binding:"omitempty,min=1,max=65535" example:"8389" description:"Port for client subscriptions (if null, uses agent_port)"`
+	EncryptionMethod string            `json:"encryption_method" binding:"required" example:"aes-256-gcm" enums:"aes-256-gcm,aes-128-gcm,chacha20-ietf-poly1305" description:"Encryption method for the proxy connection"`
+	Password         string            `json:"password" binding:"required" example:"mySecurePassword123" description:"Authentication password"`
+	Plugin           string            `json:"plugin,omitempty" example:"obfs-local" description:"Optional plugin name"`
+	PluginOpts       map[string]string `json:"plugin_opts,omitempty" example:"obfs:http,obfs-host:example.com" description:"Plugin configuration options"`
+	Region           string            `json:"region,omitempty" example:"us-west" description:"Geographic region or location identifier"`
+	Tags             []string          `json:"tags,omitempty" example:"premium,fast" description:"Custom tags for categorization"`
+	SortOrder        int               `json:"sort_order" example:"100" description:"Display order for sorting nodes"`
+	Route            *RouteConfigDTO   `json:"route,omitempty" description:"Routing configuration for traffic splitting (sing-box compatible)"`
 }
 
 type UpdateNodeDTO struct {
-	Name             *string                `json:"name,omitempty" binding:"omitempty,min=2,max=100" example:"US-Node-01" description:"Display name of the node (2-100 characters)"`
-	ServerAddress    *string                `json:"server_address,omitempty" example:"proxy.example.com" description:"Server hostname or IP address"`
-	AgentPort        *uint16                `json:"agent_port,omitempty" binding:"omitempty,min=1,max=65535" example:"8388" description:"Port for agent connections (1-65535)"`
-	SubscriptionPort *uint16                `json:"subscription_port,omitempty" binding:"omitempty,min=1,max=65535" example:"8389" description:"Port for client subscriptions"`
-	EncryptionMethod *string                `json:"encryption_method,omitempty" example:"aes-256-gcm" enums:"aes-256-gcm,aes-128-gcm,chacha20-ietf-poly1305" description:"Encryption method for the proxy connection"`
-	Password         *string                `json:"password,omitempty" example:"mySecurePassword123" description:"Authentication password"`
-	Plugin           *string                `json:"plugin,omitempty" example:"obfs-local" description:"Optional plugin name"`
-	PluginOpts       map[string]string      `json:"plugin_opts,omitempty" example:"obfs:http,obfs-host:example.com" description:"Plugin configuration options"`
-	Region           *string                `json:"region,omitempty" example:"us-west" description:"Geographic region or location identifier"`
-	Tags             []string               `json:"tags,omitempty" example:"premium,fast" description:"Custom tags for categorization"`
-	SortOrder        *int                   `json:"sort_order,omitempty" example:"100" description:"Display order for sorting nodes"`
-	MuteNotification *bool                  `json:"mute_notification,omitempty" example:"false" description:"Mute online/offline notifications for this node"`
-	Route            *RouteConfigDTO        `json:"route,omitempty" description:"Routing configuration for traffic splitting (sing-box compatible, null to clear)"`
+	Name             *string           `json:"name,omitempty" binding:"omitempty,min=2,max=100" example:"US-Node-01" description:"Display name of the node (2-100 characters)"`
+	ServerAddress    *string           `json:"server_address,omitempty" example:"proxy.example.com" description:"Server hostname or IP address"`
+	AgentPort        *uint16           `json:"agent_port,omitempty" binding:"omitempty,min=1,max=65535" example:"8388" description:"Port for agent connections (1-65535)"`
+	SubscriptionPort *uint16           `json:"subscription_port,omitempty" binding:"omitempty,min=1,max=65535" example:"8389" description:"Port for client subscriptions"`
+	EncryptionMethod *string           `json:"encryption_method,omitempty" example:"aes-256-gcm" enums:"aes-256-gcm,aes-128-gcm,chacha20-ietf-poly1305" description:"Encryption method for the proxy connection"`
+	Password         *string           `json:"password,omitempty" example:"mySecurePassword123" description:"Authentication password"`
+	Plugin           *string           `json:"plugin,omitempty" example:"obfs-local" description:"Optional plugin name"`
+	PluginOpts       map[string]string `json:"plugin_opts,omitempty" example:"obfs:http,obfs-host:example.com" description:"Plugin configuration options"`
+	Region           *string           `json:"region,omitempty" example:"us-west" description:"Geographic region or location identifier"`
+	Tags             []string          `json:"tags,omitempty" example:"premium,fast" description:"Custom tags for categorization"`
+	SortOrder        *int              `json:"sort_order,omitempty" example:"100" description:"Display order for sorting nodes"`
+	MuteNotification *bool             `json:"mute_notification,omitempty" example:"false" description:"Mute online/offline notifications for this node"`
+	Route            *RouteConfigDTO   `json:"route,omitempty" description:"Routing configuration for traffic splitting (sing-box compatible, null to clear)"`
 }
 
 type NodeListDTO struct {
@@ -263,6 +266,13 @@ func ToNodeDTO(n *node.Node) *NodeDTO {
 		return nil
 	}
 
+	// Format expires_at as ISO8601 string
+	var expiresAtStr *string
+	if n.ExpiresAt() != nil {
+		s := n.ExpiresAt().Format("2006-01-02T15:04:05Z07:00")
+		expiresAtStr = &s
+	}
+
 	dto := &NodeDTO{
 		ID:                n.SID(),
 		Name:              n.Name(),
@@ -277,6 +287,9 @@ func ToNodeDTO(n *node.Node) *NodeDTO {
 		MaintenanceReason: n.MaintenanceReason(),
 		IsOnline:          n.IsOnline(),
 		LastSeenAt:        n.LastSeenAt(),
+		ExpiresAt:         expiresAtStr,
+		RenewalAmount:     n.RenewalAmount(),
+		IsExpired:         n.IsExpired(),
 		Version:           n.Version(),
 		CreatedAt:         n.CreatedAt(),
 		UpdatedAt:         n.UpdatedAt(),

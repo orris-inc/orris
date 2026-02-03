@@ -556,7 +556,8 @@ func (r *NodeRepositoryImpl) Update(ctx context.Context, nodeEntity *node.Node) 
 			Select(
 				"name", "server_address", "agent_port", "subscription_port",
 				"protocol", "status", "region", "tags", "sort_order",
-				"maintenance_reason", "token_hash", "api_token", "group_ids", "route_config", "mute_notification", "version", "updated_at",
+				"maintenance_reason", "token_hash", "api_token", "group_ids", "route_config", "mute_notification",
+				"expires_at", "renewal_amount", "version", "updated_at",
 			).
 			Updates(model)
 

@@ -25,6 +25,9 @@ type ForwardAgentDTO struct {
 	MuteNotification bool            `json:"mute_notification"`           // Mute online/offline notifications for this agent
 	IsOnline         bool            `json:"is_online"`                   // Indicates if the agent is online (reported within 5 minutes)
 	LastSeenAt       *time.Time      `json:"last_seen_at,omitempty"`      // Last time the agent reported status
+	ExpiresAt        *string         `json:"expires_at,omitempty"`        // Expiration time in ISO8601 format (null = never expires)
+	RenewalAmount    *float64        `json:"renewal_amount,omitempty"`    // Renewal amount for display
+	IsExpired        bool            `json:"is_expired"`                  // True if agent has expired
 	CreatedAt        string          `json:"created_at"`
 	UpdatedAt        string          `json:"updated_at"`
 	SystemStatus     *AgentStatusDTO `json:"system_status,omitempty"`
@@ -43,6 +46,13 @@ func ToForwardAgentDTO(agent *forward.ForwardAgent) *ForwardAgentDTO {
 		allowedPortRange = agent.AllowedPortRange().String()
 	}
 
+	// Format expires_at as ISO8601 string
+	var expiresAtStr *string
+	if agent.ExpiresAt() != nil {
+		s := agent.ExpiresAt().Format("2006-01-02T15:04:05Z07:00")
+		expiresAtStr = &s
+	}
+
 	dto := &ForwardAgentDTO{
 		ID:               agent.SID(),
 		Name:             agent.Name(),
@@ -57,6 +67,9 @@ func ToForwardAgentDTO(agent *forward.ForwardAgent) *ForwardAgentDTO {
 		MuteNotification: agent.MuteNotification(),
 		IsOnline:         agent.IsOnline(),
 		LastSeenAt:       agent.LastSeenAt(),
+		ExpiresAt:        expiresAtStr,
+		RenewalAmount:    agent.RenewalAmount(),
+		IsExpired:        agent.IsExpired(),
 		CreatedAt:        agent.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:        agent.UpdatedAt().Format("2006-01-02T15:04:05Z07:00"),
 		internalGroupIDs: agent.GroupIDs(),
