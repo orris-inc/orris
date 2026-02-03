@@ -266,6 +266,7 @@ type CreateNodeRequest struct {
 	Tags             []string          `json:"tags,omitempty" example:"premium,fast"`
 	Description      string            `json:"description,omitempty" example:"High-speed US server"`
 	SortOrder        int               `json:"sort_order,omitempty" example:"1"`
+	GroupSIDs        []string          `json:"group_sids,omitempty" example:"[\"rg_xK9mP2vL3nQ\"]" comment:"Resource group SIDs to associate with"`
 	// Trojan specific fields
 	TransportProtocol string `json:"transport_protocol,omitempty" binding:"omitempty,oneof=tcp ws grpc" example:"tcp" comment:"Transport protocol for Trojan (tcp, ws, grpc)"`
 	Host              string `json:"host,omitempty" example:"cdn.example.com" comment:"WebSocket host header or gRPC service name"`
@@ -334,6 +335,7 @@ func (r *CreateNodeRequest) ToCommand() usecases.CreateNodeCommand {
 		Tags:              r.Tags,
 		Description:       r.Description,
 		SortOrder:         r.SortOrder,
+		GroupSIDs:         r.GroupSIDs,
 		TransportProtocol: r.TransportProtocol,
 		Host:              r.Host,
 		Path:              r.Path,

@@ -380,7 +380,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// ============================================================
 
 	// Initialize node use cases
-	createNodeUC := nodeUsecases.NewCreateNodeUseCase(nodeRepoImpl, log)
+	createNodeUC := nodeUsecases.NewCreateNodeUseCase(nodeRepoImpl, resourceGroupRepo, log)
 	getNodeUC := nodeUsecases.NewGetNodeUseCase(nodeRepoImpl, resourceGroupRepo, nodeStatusQuerier, log)
 	updateNodeUC := nodeUsecases.NewUpdateNodeUseCase(log, nodeRepoImpl, resourceGroupRepo)
 	deleteNodeUC := nodeUsecases.NewDeleteNodeUseCase(nodeRepoImpl, forwardRuleRepo, log)
@@ -904,7 +904,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	// Initialize forward agent components
 
-	createForwardAgentUC := forwardUsecases.NewCreateForwardAgentUseCase(forwardAgentRepo, agentTokenSvc, log)
+	createForwardAgentUC := forwardUsecases.NewCreateForwardAgentUseCase(forwardAgentRepo, resourceGroupRepo, agentTokenSvc, log)
 	// Initialize forward agent status adapter early for getForwardAgentUC
 	forwardAgentStatusAdapter := adapters.NewForwardAgentStatusAdapter(redisClient, log)
 	ruleSyncStatusAdapter := adapters.NewRuleSyncStatusAdapter(redisClient, log)

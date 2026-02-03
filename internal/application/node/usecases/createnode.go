@@ -7,6 +7,7 @@ import (
 	"github.com/orris-inc/orris/internal/application/node/dto"
 	"github.com/orris-inc/orris/internal/domain/node"
 	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
+	"github.com/orris-inc/orris/internal/domain/resource"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -25,6 +26,7 @@ type CreateNodeCommand struct {
 	Tags             []string
 	Description      string
 	SortOrder        int
+	GroupSIDs        []string // Resource group SIDs to associate with (empty means no association)
 	// Trojan specific fields
 	TransportProtocol string
 	Host              string
@@ -92,17 +94,20 @@ type CreateNodeResult struct {
 }
 
 type CreateNodeUseCase struct {
-	nodeRepo node.NodeRepository
-	logger   logger.Interface
+	nodeRepo          node.NodeRepository
+	resourceGroupRepo resource.Repository
+	logger            logger.Interface
 }
 
 func NewCreateNodeUseCase(
 	nodeRepo node.NodeRepository,
+	resourceGroupRepo resource.Repository,
 	logger logger.Interface,
 ) *CreateNodeUseCase {
 	return &CreateNodeUseCase{
-		nodeRepo: nodeRepo,
-		logger:   logger,
+		nodeRepo:          nodeRepo,
+		resourceGroupRepo: resourceGroupRepo,
+		logger:            logger,
 	}
 }
 
@@ -369,6 +374,36 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create node: %w", err)
+	}
+
+	// Handle GroupSIDs (resolve SIDs to internal IDs)
+	if len(cmd.GroupSIDs) > 0 {
+		seenSIDs := make(map[string]struct{}, len(cmd.GroupSIDs))
+		resolvedIDs := make([]uint, 0, len(cmd.GroupSIDs))
+		for _, sid := range cmd.GroupSIDs {
+			// Skip empty strings
+			if sid == "" {
+				continue
+			}
+			// Skip duplicate SIDs
+			if _, exists := seenSIDs[sid]; exists {
+				continue
+			}
+			seenSIDs[sid] = struct{}{}
+
+			group, err := uc.resourceGroupRepo.GetBySID(ctx, sid)
+			if err != nil {
+				uc.logger.Errorw("failed to get resource group by SID", "group_sid", sid, "error", err)
+				return nil, errors.NewNotFoundError(fmt.Sprintf("resource group not found: %s", sid))
+			}
+			if group == nil {
+				return nil, errors.NewNotFoundError(fmt.Sprintf("resource group not found: %s", sid))
+			}
+			resolvedIDs = append(resolvedIDs, group.ID())
+		}
+		if len(resolvedIDs) > 0 {
+			nodeEntity.SetGroupIDs(resolvedIDs)
+		}
 	}
 
 	// Get the API token before persisting (it will be cleared after)

@@ -6,6 +6,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/forward"
 	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
+	"github.com/orris-inc/orris/internal/domain/resource"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -17,6 +18,7 @@ type CreateForwardAgentCommand struct {
 	PublicAddress    string
 	TunnelAddress    string
 	Remark           string
+	GroupSID         string   // Resource group SID to associate with (empty means no association)
 	AllowedPortRange string   // Port range string (e.g., "80,443,8000-9000"), empty means all ports allowed
 	BlockedProtocols []string // Protocols to block (e.g., ["socks5", "http_connect"]), empty means no blocking
 	SortOrder        *int     // Custom sort order for UI display (nil: use default 0, non-nil: set explicitly)
@@ -36,21 +38,24 @@ type CreateForwardAgentResult struct {
 
 // CreateForwardAgentUseCase handles forward agent creation.
 type CreateForwardAgentUseCase struct {
-	repo     forward.AgentRepository
-	tokenGen AgentTokenGenerator
-	logger   logger.Interface
+	repo              forward.AgentRepository
+	resourceGroupRepo resource.Repository
+	tokenGen          AgentTokenGenerator
+	logger            logger.Interface
 }
 
 // NewCreateForwardAgentUseCase creates a new CreateForwardAgentUseCase.
 func NewCreateForwardAgentUseCase(
 	repo forward.AgentRepository,
+	resourceGroupRepo resource.Repository,
 	tokenGen AgentTokenGenerator,
 	logger logger.Interface,
 ) *CreateForwardAgentUseCase {
 	return &CreateForwardAgentUseCase{
-		repo:     repo,
-		tokenGen: tokenGen,
-		logger:   logger,
+		repo:              repo,
+		resourceGroupRepo: resourceGroupRepo,
+		tokenGen:          tokenGen,
+		logger:            logger,
 	}
 }
 
@@ -117,6 +122,20 @@ func (uc *CreateForwardAgentUseCase) Execute(ctx context.Context, cmd CreateForw
 	// Set sort order if explicitly provided
 	if cmd.SortOrder != nil {
 		agent.UpdateSortOrder(*cmd.SortOrder)
+	}
+
+	// Handle GroupSID (resolve SID to internal ID)
+	if cmd.GroupSID != "" {
+		group, err := uc.resourceGroupRepo.GetBySID(ctx, cmd.GroupSID)
+		if err != nil {
+			uc.logger.Errorw("failed to get resource group by SID", "group_sid", cmd.GroupSID, "error", err)
+			return nil, errors.NewNotFoundError("resource group", cmd.GroupSID)
+		}
+		if group == nil {
+			return nil, errors.NewNotFoundError("resource group", cmd.GroupSID)
+		}
+		groupID := group.ID()
+		agent.SetGroupID(&groupID)
 	}
 
 	// Persist
