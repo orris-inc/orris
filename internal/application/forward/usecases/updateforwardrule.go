@@ -96,6 +96,36 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 	originalExitAgentIDs := rule.GetAllExitAgentIDs() // Includes both single and multiple exit agents
 	originalChainAgentIDs := rule.ChainAgentIDs()
 
+	// Collect all agent SIDs that need to be fetched (to avoid N+1 queries)
+	allAgentSIDs := make([]string, 0)
+	if cmd.AgentShortID != nil {
+		allAgentSIDs = append(allAgentSIDs, *cmd.AgentShortID)
+	}
+	if cmd.ExitAgentShortID != nil {
+		allAgentSIDs = append(allAgentSIDs, *cmd.ExitAgentShortID)
+	}
+	for _, input := range cmd.ExitAgents {
+		allAgentSIDs = append(allAgentSIDs, input.AgentSID)
+	}
+	allAgentSIDs = append(allAgentSIDs, cmd.ChainAgentShortIDs...)
+	for shortID := range cmd.ChainPortConfig {
+		allAgentSIDs = append(allAgentSIDs, shortID)
+	}
+
+	// Batch fetch all agents to avoid N+1 queries
+	var agentMap map[string]*forward.ForwardAgent
+	if len(allAgentSIDs) > 0 {
+		agents, err := uc.agentRepo.GetBySIDs(ctx, allAgentSIDs)
+		if err != nil {
+			uc.logger.Errorw("failed to batch get agents", "error", err)
+			return fmt.Errorf("failed to get agents: %w", err)
+		}
+		agentMap = make(map[string]*forward.ForwardAgent, len(agents))
+		for _, a := range agents {
+			agentMap[a.SID()] = a
+		}
+	}
+
 	// Update fields
 	if cmd.Name != nil {
 		if err := rule.UpdateName(*cmd.Name); err != nil {
@@ -105,12 +135,8 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 
 	// Update entry agent ID
 	if cmd.AgentShortID != nil {
-		agent, err := uc.agentRepo.GetBySID(ctx, *cmd.AgentShortID)
-		if err != nil {
-			uc.logger.Errorw("failed to get agent", "agent_short_id", *cmd.AgentShortID, "error", err)
-			return fmt.Errorf("failed to validate agent: %w", err)
-		}
-		if agent == nil {
+		agent, ok := agentMap[*cmd.AgentShortID]
+		if !ok || agent == nil {
 			return errors.NewNotFoundError("forward agent", *cmd.AgentShortID)
 		}
 
@@ -160,12 +186,8 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 
 	// Update single exit agent ID (for entry type rules)
 	if cmd.ExitAgentShortID != nil {
-		exitAgent, err := uc.agentRepo.GetBySID(ctx, *cmd.ExitAgentShortID)
-		if err != nil {
-			uc.logger.Errorw("failed to get exit agent", "exit_agent_short_id", *cmd.ExitAgentShortID, "error", err)
-			return fmt.Errorf("failed to validate exit agent: %w", err)
-		}
-		if exitAgent == nil {
+		exitAgent, ok := agentMap[*cmd.ExitAgentShortID]
+		if !ok || exitAgent == nil {
 			return errors.NewNotFoundError("exit forward agent", *cmd.ExitAgentShortID)
 		}
 
@@ -185,12 +207,8 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 	if len(cmd.ExitAgents) > 0 {
 		exitAgents := make([]vo.AgentWeight, 0, len(cmd.ExitAgents))
 		for _, input := range cmd.ExitAgents {
-			exitAgent, err := uc.agentRepo.GetBySID(ctx, input.AgentSID)
-			if err != nil {
-				uc.logger.Errorw("failed to get exit agent", "exit_agent_sid", input.AgentSID, "error", err)
-				return fmt.Errorf("failed to validate exit agent: %w", err)
-			}
-			if exitAgent == nil {
+			exitAgent, ok := agentMap[input.AgentSID]
+			if !ok || exitAgent == nil {
 				return errors.NewNotFoundError("exit forward agent", input.AgentSID)
 			}
 
@@ -226,12 +244,8 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 	if cmd.ChainAgentShortIDs != nil {
 		chainAgentIDs := make([]uint, len(cmd.ChainAgentShortIDs))
 		for i, shortID := range cmd.ChainAgentShortIDs {
-			chainAgent, err := uc.agentRepo.GetBySID(ctx, shortID)
-			if err != nil {
-				uc.logger.Errorw("failed to get chain agent", "chain_agent_short_id", shortID, "error", err)
-				return fmt.Errorf("failed to validate chain agent: %w", err)
-			}
-			if chainAgent == nil {
+			chainAgent, ok := agentMap[shortID]
+			if !ok || chainAgent == nil {
 				return errors.NewNotFoundError("chain forward agent", shortID)
 			}
 
@@ -256,12 +270,8 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 		oldChainPortConfig := rule.ChainPortConfig()
 		chainPortConfig := make(map[uint]uint16, len(cmd.ChainPortConfig))
 		for shortID, port := range cmd.ChainPortConfig {
-			chainAgent, err := uc.agentRepo.GetBySID(ctx, shortID)
-			if err != nil {
-				uc.logger.Errorw("failed to get chain agent for port config", "chain_agent_short_id", shortID, "error", err)
-				return fmt.Errorf("failed to validate chain agent in chain_port_config: %w", err)
-			}
-			if chainAgent == nil {
+			chainAgent, ok := agentMap[shortID]
+			if !ok || chainAgent == nil {
 				return errors.NewNotFoundError("chain forward agent in chain_port_config", shortID)
 			}
 
@@ -474,29 +484,47 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 	if cmd.GroupSIDs != nil {
 		var groupIDs []uint
 		if len(*cmd.GroupSIDs) > 0 {
-			groupIDs = make([]uint, 0, len(*cmd.GroupSIDs))
+			// Validate SID formats first
 			for _, groupSID := range *cmd.GroupSIDs {
-				// Validate the SID format (rg_xxx)
 				if err := id.ValidatePrefix(groupSID, id.PrefixResourceGroup); err != nil {
 					return errors.NewValidationError(fmt.Sprintf("invalid resource group ID format: %s", groupSID))
 				}
+			}
 
-				group, err := uc.resourceGroupRepo.GetBySID(ctx, groupSID)
-				if err != nil {
-					uc.logger.Errorw("failed to get resource group", "group_sid", groupSID, "error", err)
-					return fmt.Errorf("failed to validate resource group: %w", err)
-				}
-				if group == nil {
+			// Batch fetch all groups to avoid N+1 queries
+			groupMap, err := uc.resourceGroupRepo.GetBySIDs(ctx, *cmd.GroupSIDs)
+			if err != nil {
+				uc.logger.Errorw("failed to batch get resource groups", "error", err)
+				return fmt.Errorf("failed to get resource groups: %w", err)
+			}
+
+			// Collect plan IDs for batch fetch
+			planIDs := make([]uint, 0, len(*cmd.GroupSIDs))
+			for _, groupSID := range *cmd.GroupSIDs {
+				group, ok := groupMap[groupSID]
+				if !ok || group == nil {
 					return errors.NewNotFoundError("resource group", groupSID)
 				}
+				planIDs = append(planIDs, group.PlanID())
+			}
 
-				// Verify the plan type supports forward rules binding (node and hybrid only, not forward)
-				plan, err := uc.planRepo.GetByID(ctx, group.PlanID())
-				if err != nil {
-					uc.logger.Errorw("failed to get plan for resource group", "plan_id", group.PlanID(), "error", err)
-					return fmt.Errorf("failed to validate resource group plan: %w", err)
-				}
-				if plan == nil {
+			// Batch fetch all plans to avoid N+1 queries
+			plans, err := uc.planRepo.GetByIDs(ctx, planIDs)
+			if err != nil {
+				uc.logger.Errorw("failed to batch get plans", "error", err)
+				return fmt.Errorf("failed to get plans: %w", err)
+			}
+			planMap := make(map[uint]*subscription.Plan, len(plans))
+			for _, p := range plans {
+				planMap[p.ID()] = p
+			}
+
+			// Validate each group and build groupIDs
+			groupIDs = make([]uint, 0, len(*cmd.GroupSIDs))
+			for _, groupSID := range *cmd.GroupSIDs {
+				group := groupMap[groupSID]
+				plan, ok := planMap[group.PlanID()]
+				if !ok || plan == nil {
 					return fmt.Errorf("plan not found for resource group %s", groupSID)
 				}
 				if plan.PlanType().IsForward() {
@@ -507,7 +535,6 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 					return errors.NewValidationError(
 						fmt.Sprintf("resource group %s belongs to a forward plan and cannot bind forward rules", groupSID))
 				}
-
 				groupIDs = append(groupIDs, group.ID())
 			}
 		}
@@ -632,14 +659,15 @@ func (uc *UpdateForwardRuleUseCase) getAccessibleGroupIDs(ctx context.Context, u
 		return nil, nil
 	}
 
-	// Step 4: Get active resource groups for these plans
+	// Step 4: Get active resource groups for these plans (batch query to avoid N+1)
+	groupsByPlan, err := uc.resourceGroupRepo.GetByPlanIDs(ctx, forwardPlanIDs)
+	if err != nil {
+		uc.logger.Warnw("failed to batch get resource groups for plans", "error", err)
+		return nil, nil
+	}
+
 	groupIDs := make([]uint, 0)
-	for _, planID := range forwardPlanIDs {
-		groups, err := uc.resourceGroupRepo.GetByPlanID(ctx, planID)
-		if err != nil {
-			uc.logger.Warnw("failed to get resource groups for plan", "plan_id", planID, "error", err)
-			continue
-		}
+	for _, groups := range groupsByPlan {
 		for _, group := range groups {
 			if group.IsActive() {
 				groupIDs = append(groupIDs, group.ID())
@@ -652,6 +680,7 @@ func (uc *UpdateForwardRuleUseCase) getAccessibleGroupIDs(ctx context.Context, u
 
 // validateUserAgentAccess checks if the user has access to the specified agent.
 // Returns nil if access is allowed, or an error if access is denied.
+// Access is granted if any of the agent's group IDs is in the user's accessible group IDs.
 func (uc *UpdateForwardRuleUseCase) validateUserAgentAccess(ctx context.Context, userID uint, agent *forward.ForwardAgent) error {
 	// Get user's accessible group IDs
 	accessibleGroupIDs, err := uc.getAccessibleGroupIDs(ctx, userID)
@@ -659,9 +688,9 @@ func (uc *UpdateForwardRuleUseCase) validateUserAgentAccess(ctx context.Context,
 		return fmt.Errorf("failed to get accessible groups: %w", err)
 	}
 
-	// Check if agent's group ID is in the accessible list
-	agentGroupID := agent.GroupID()
-	if agentGroupID == nil {
+	// Check if any of agent's group IDs is in the accessible list
+	agentGroupIDs := agent.GroupIDs()
+	if len(agentGroupIDs) == 0 {
 		// Agent has no group assigned, deny access for user endpoints
 		uc.logger.Warnw("user attempted to access agent without group",
 			"user_id", userID,
@@ -669,11 +698,20 @@ func (uc *UpdateForwardRuleUseCase) validateUserAgentAccess(ctx context.Context,
 		return errors.NewForbiddenError("agent is not accessible to user")
 	}
 
-	if !containsUint(accessibleGroupIDs, *agentGroupID) {
+	// Check if there's any intersection between agent's groups and user's accessible groups
+	hasAccess := false
+	for _, agentGroupID := range agentGroupIDs {
+		if containsUint(accessibleGroupIDs, agentGroupID) {
+			hasAccess = true
+			break
+		}
+	}
+
+	if !hasAccess {
 		uc.logger.Warnw("user attempted to access unauthorized agent",
 			"user_id", userID,
 			"agent_sid", agent.SID(),
-			"agent_group_id", *agentGroupID,
+			"agent_group_ids", agentGroupIDs,
 			"accessible_groups", accessibleGroupIDs)
 		return errors.NewForbiddenError("user does not have access to this agent")
 	}

@@ -42,6 +42,18 @@ func (uc *ExpirePaymentsUseCase) Execute(ctx context.Context) (int, error) {
 
 	uc.logger.Infow("processing expired payments", "count", len(expiredPayments))
 
+	// Batch fetch all subscriptions to avoid N+1 queries
+	subscriptionIDs := make([]uint, 0, len(expiredPayments))
+	for _, p := range expiredPayments {
+		subscriptionIDs = append(subscriptionIDs, p.SubscriptionID())
+	}
+	subscriptionMap, err := uc.subscriptionRepo.GetByIDs(ctx, subscriptionIDs)
+	if err != nil {
+		uc.logger.Warnw("failed to batch fetch subscriptions", "error", err)
+		// Continue with empty map, will log warnings for individual lookups
+		subscriptionMap = make(map[uint]*subscription.Subscription)
+	}
+
 	expiredCount := 0
 	for _, p := range expiredPayments {
 		if err := p.MarkAsExpired(); err != nil {
@@ -61,11 +73,19 @@ func (uc *ExpirePaymentsUseCase) Execute(ctx context.Context) (int, error) {
 		}
 
 		// Record payment expiration time on subscription for auto-cancel grace period
-		if err := uc.markSubscriptionPaymentExpired(ctx, p.SubscriptionID()); err != nil {
-			uc.logger.Warnw("failed to mark subscription payment expired",
-				"error", err,
+		sub, ok := subscriptionMap[p.SubscriptionID()]
+		if !ok || sub == nil {
+			uc.logger.Warnw("subscription not found for payment",
+				"payment_id", p.ID(),
 				"subscription_id", p.SubscriptionID())
-			// Continue processing other payments even if this fails
+		} else {
+			// Record the payment expiration time for grace period calculation
+			sub.SetMetadata("payment_expired_at", biztime.FormatMetadataTime(biztime.NowUTC()))
+			if err := uc.subscriptionRepo.Update(ctx, sub); err != nil {
+				uc.logger.Warnw("failed to update subscription payment_expired_at",
+					"error", err,
+					"subscription_id", p.SubscriptionID())
+			}
 		}
 
 		expiredCount++
@@ -80,25 +100,4 @@ func (uc *ExpirePaymentsUseCase) Execute(ctx context.Context) (int, error) {
 		"expired", expiredCount)
 
 	return expiredCount, nil
-}
-
-// markSubscriptionPaymentExpired records the payment expiration time on the subscription
-// This is used by the auto-cancel logic to determine the grace period
-func (uc *ExpirePaymentsUseCase) markSubscriptionPaymentExpired(ctx context.Context, subscriptionID uint) error {
-	sub, err := uc.subscriptionRepo.GetByID(ctx, subscriptionID)
-	if err != nil {
-		return fmt.Errorf("failed to get subscription: %w", err)
-	}
-	if sub == nil {
-		return fmt.Errorf("subscription not found: %d", subscriptionID)
-	}
-
-	// Record the payment expiration time for grace period calculation
-	sub.SetMetadata("payment_expired_at", biztime.FormatMetadataTime(biztime.NowUTC()))
-
-	if err := uc.subscriptionRepo.Update(ctx, sub); err != nil {
-		return fmt.Errorf("failed to update subscription: %w", err)
-	}
-
-	return nil
 }

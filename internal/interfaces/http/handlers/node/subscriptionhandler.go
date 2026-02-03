@@ -209,11 +209,15 @@ func detectFormatFromUserAgent(userAgent string) string {
 		return "base64"
 	}
 
-	// V2Ray clients
-	if strings.Contains(ua, "v2ray") {
-		return "v2ray"
+	// V2RayN/V2RayNG clients - use base64 format (supports all protocol URIs)
+	// These are general-purpose clients that parse base64-encoded URI lists
+	// (vmess://, vless://, trojan://, ss://, etc.)
+	if strings.Contains(ua, "v2rayn") || strings.Contains(ua, "v2rayng") {
+		return "base64"
 	}
 
 	// Default to base64 format for unknown clients
+	// Note: "v2ray" format (JSON) is only for Shadowsocks-only clients,
+	// accessible via explicit /s/:token/v2ray endpoint
 	return "base64"
 }

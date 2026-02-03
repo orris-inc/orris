@@ -69,15 +69,26 @@ func (uc *GetUserNodeUsageUseCase) Execute(ctx context.Context, query GetUserNod
 	maxNodeLimit := 0
 	hasUnlimitedNodes := false
 
+	// Batch fetch all plans to avoid N+1 queries
+	planIDs := make([]uint, 0, len(subscriptions))
+	for _, sub := range subscriptions {
+		planIDs = append(planIDs, sub.PlanID())
+	}
+	plans, err := uc.planRepo.GetByIDs(ctx, planIDs)
+	if err != nil {
+		uc.logger.Errorw("failed to batch fetch plans", "user_id", query.UserID, "error", err)
+		return nil, fmt.Errorf("failed to get plans: %w", err)
+	}
+	planMap := make(map[uint]*subscription.Plan, len(plans))
+	for _, plan := range plans {
+		planMap[plan.ID()] = plan
+	}
+
 	// Find the highest limit among all active subscriptions
 	for _, sub := range subscriptions {
-		plan, err := uc.planRepo.GetByID(ctx, sub.PlanID())
-		if err != nil {
-			uc.logger.Warnw("failed to get plan for subscription", "subscription_id", sub.ID(), "plan_id", sub.PlanID(), "error", err)
-			continue
-		}
-
-		if plan == nil {
+		plan, ok := planMap[sub.PlanID()]
+		if !ok {
+			uc.logger.Warnw("plan not found for subscription", "subscription_id", sub.ID(), "plan_id", sub.PlanID())
 			continue
 		}
 

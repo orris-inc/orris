@@ -225,6 +225,60 @@ func (r *ResourceGroupRepositoryImpl) GetByPlanID(ctx context.Context, planID ui
 	return entities, nil
 }
 
+// GetBySIDs retrieves resource groups by their Stripe-style IDs.
+// Returns a map from SID to ResourceGroup for efficient lookup.
+func (r *ResourceGroupRepositoryImpl) GetBySIDs(ctx context.Context, sids []string) (map[string]*resource.ResourceGroup, error) {
+	if len(sids) == 0 {
+		return make(map[string]*resource.ResourceGroup), nil
+	}
+
+	var modelList []*models.ResourceGroupModel
+
+	if err := r.db.WithContext(ctx).Where("sid IN ?", sids).Find(&modelList).Error; err != nil {
+		r.logger.Errorw("failed to get resource groups by SIDs", "sids", sids, "error", err)
+		return nil, fmt.Errorf("failed to get resource groups: %w", err)
+	}
+
+	result := make(map[string]*resource.ResourceGroup, len(modelList))
+	for _, model := range modelList {
+		entity, err := r.mapper.ToEntity(model)
+		if err != nil {
+			r.logger.Errorw("failed to map resource group model to entity", "sid", model.SID, "error", err)
+			return nil, fmt.Errorf("failed to map resource group: %w", err)
+		}
+		result[model.SID] = entity
+	}
+
+	return result, nil
+}
+
+// GetByPlanIDs retrieves all resource groups for multiple plans.
+// Returns a map from planID to list of ResourceGroups.
+func (r *ResourceGroupRepositoryImpl) GetByPlanIDs(ctx context.Context, planIDs []uint) (map[uint][]*resource.ResourceGroup, error) {
+	if len(planIDs) == 0 {
+		return make(map[uint][]*resource.ResourceGroup), nil
+	}
+
+	var modelList []*models.ResourceGroupModel
+
+	if err := r.db.WithContext(ctx).Where("plan_id IN ?", planIDs).Find(&modelList).Error; err != nil {
+		r.logger.Errorw("failed to get resource groups by plan IDs", "plan_ids", planIDs, "error", err)
+		return nil, fmt.Errorf("failed to get resource groups: %w", err)
+	}
+
+	result := make(map[uint][]*resource.ResourceGroup)
+	for _, model := range modelList {
+		entity, err := r.mapper.ToEntity(model)
+		if err != nil {
+			r.logger.Errorw("failed to map resource group model to entity", "id", model.ID, "error", err)
+			return nil, fmt.Errorf("failed to map resource group: %w", err)
+		}
+		result[model.PlanID] = append(result[model.PlanID], entity)
+	}
+
+	return result, nil
+}
+
 // List retrieves resource groups with optional filters.
 func (r *ResourceGroupRepositoryImpl) List(ctx context.Context, filter resource.ListFilter) ([]*resource.ResourceGroup, int64, error) {
 	query := r.db.WithContext(ctx).Model(&models.ResourceGroupModel{})

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -22,7 +23,6 @@ var allowedAgentOrderByFields = map[string]bool{
 	"sid":          true,
 	"name":         true,
 	"status":       true,
-	"group_id":     true,
 	"sort_order":   true,
 	"last_seen_at": true,
 	"created_at":   true,
@@ -225,7 +225,7 @@ func (r *ForwardAgentRepositoryImpl) Update(ctx context.Context, agent *forward.
 			"public_address":     model.PublicAddress,
 			"tunnel_address":     model.TunnelAddress,
 			"remark":             model.Remark,
-			"group_id":           model.GroupID,
+			"group_ids":          model.GroupIDs,
 			"allowed_port_range": model.AllowedPortRange,
 			"blocked_protocols":  model.BlockedProtocols,
 			"sort_order":         model.SortOrder,
@@ -277,7 +277,9 @@ func (r *ForwardAgentRepositoryImpl) List(ctx context.Context, filter forward.Ag
 		query = query.Where("status = ?", filter.Status)
 	}
 	if len(filter.GroupIDs) > 0 {
-		query = query.Where("group_id IN ?", filter.GroupIDs)
+		// Use JSON_OVERLAPS to check if group_ids array contains any of the filter group IDs
+		groupIDsJSON, _ := json.Marshal(filter.GroupIDs)
+		query = query.Where("JSON_OVERLAPS(group_ids, ?)", string(groupIDsJSON))
 	}
 
 	// Count total records

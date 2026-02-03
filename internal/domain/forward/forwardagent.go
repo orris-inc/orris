@@ -45,7 +45,7 @@ type ForwardAgent struct {
 	publicAddress    string // optional public address for Entry to obtain Exit connection information
 	tunnelAddress    string // IP or hostname only (no port), configure if agent may serve as relay/exit in any rule
 	remark           string
-	groupID          *uint               // resource group ID
+	groupIDs         []uint              // resource group IDs
 	agentVersion     string              // agent software version (e.g., "1.2.3")
 	platform         string              // OS platform (linux, darwin, windows)
 	arch             string              // CPU architecture (amd64, arm64, arm, 386)
@@ -121,7 +121,7 @@ func ReconstructForwardAgent(
 	publicAddress string,
 	tunnelAddress string,
 	remark string,
-	groupID *uint,
+	groupIDs []uint,
 	agentVersion string,
 	platform string,
 	arch string,
@@ -172,7 +172,7 @@ func ReconstructForwardAgent(
 		publicAddress:    publicAddress,
 		tunnelAddress:    tunnelAddress,
 		remark:           remark,
-		groupID:          groupID,
+		groupIDs:         groupIDs,
 		agentVersion:     agentVersion,
 		platform:         platform,
 		arch:             arch,
@@ -236,14 +236,14 @@ func (a *ForwardAgent) GetEffectiveTunnelAddress() string {
 	return a.publicAddress
 }
 
-// GroupID returns the resource group ID
-func (a *ForwardAgent) GroupID() *uint {
-	return a.groupID
+// GroupIDs returns the resource group IDs
+func (a *ForwardAgent) GroupIDs() []uint {
+	return a.groupIDs
 }
 
-// SetGroupID sets the resource group ID
-func (a *ForwardAgent) SetGroupID(groupID *uint) {
-	a.groupID = groupID
+// SetGroupIDs sets the resource group IDs
+func (a *ForwardAgent) SetGroupIDs(groupIDs []uint) {
+	a.groupIDs = groupIDs
 	a.updatedAt = biztime.NowUTC()
 }
 

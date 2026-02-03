@@ -165,6 +165,26 @@ func (r *PaymentRepository) HasPendingPaymentBySubscriptionID(ctx context.Contex
 	return count > 0, nil
 }
 
+// GetSubscriptionIDsWithPendingPayments returns subscription IDs that have pending payments
+// from the given list of subscription IDs
+func (r *PaymentRepository) GetSubscriptionIDsWithPendingPayments(ctx context.Context, subscriptionIDs []uint) ([]uint, error) {
+	if len(subscriptionIDs) == 0 {
+		return []uint{}, nil
+	}
+
+	var results []uint
+
+	if err := db.GetTxFromContext(ctx, r.db).
+		Model(&models.PaymentModel{}).
+		Select("DISTINCT subscription_id").
+		Where("subscription_id IN ? AND payment_status = ?", subscriptionIDs, vo.PaymentStatusPending).
+		Pluck("subscription_id", &results).Error; err != nil {
+		return nil, fmt.Errorf("failed to get subscription IDs with pending payments: %w", err)
+	}
+
+	return results, nil
+}
+
 func (r *PaymentRepository) GetExpiredPayments(ctx context.Context) ([]*payment.Payment, error) {
 	var paymentModels []models.PaymentModel
 

@@ -75,16 +75,25 @@ func (uc *CancelUnpaidSubscriptionsUseCase) Execute(ctx context.Context) (int, e
 	now := biztime.NowUTC()
 	cancelledCount := 0
 
+	// Batch fetch subscription IDs with pending payments to avoid N+1 queries
+	subscriptionIDs := make([]uint, 0, len(subscriptions))
+	for _, sub := range subscriptions {
+		subscriptionIDs = append(subscriptionIDs, sub.ID())
+	}
+	subsWithPendingPayments, err := uc.paymentRepo.GetSubscriptionIDsWithPendingPayments(ctx, subscriptionIDs)
+	if err != nil {
+		uc.logger.Errorw("failed to batch check pending payments", "error", err)
+		return 0, fmt.Errorf("failed to check pending payments: %w", err)
+	}
+	pendingPaymentSet := make(map[uint]bool, len(subsWithPendingPayments))
+	for _, subID := range subsWithPendingPayments {
+		pendingPaymentSet[subID] = true
+	}
+
 	for _, sub := range subscriptions {
 		// Check if there are any pending payments for this subscription first
 		// A new payment may have been created, skip cancellation
-		hasPending, err := uc.paymentRepo.HasPendingPaymentBySubscriptionID(ctx, sub.ID())
-		if err != nil {
-			uc.logger.Errorw("failed to check pending payments",
-				"subscription_id", sub.ID(),
-				"error", err)
-			continue
-		}
+		hasPending := pendingPaymentSet[sub.ID()]
 
 		if hasPending {
 			// New pending payment exists, skip cancellation

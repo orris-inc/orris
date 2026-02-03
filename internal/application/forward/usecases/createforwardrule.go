@@ -143,6 +143,33 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 				cmd.ListenPort, agent.AllowedPortRange().String()))
 	}
 
+	// Collect all agent SIDs that need to be fetched (to avoid N+1 queries)
+	allAgentSIDs := make([]string, 0)
+	if cmd.ExitAgentShortID != "" {
+		allAgentSIDs = append(allAgentSIDs, cmd.ExitAgentShortID)
+	}
+	for _, input := range cmd.ExitAgents {
+		allAgentSIDs = append(allAgentSIDs, input.AgentSID)
+	}
+	allAgentSIDs = append(allAgentSIDs, cmd.ChainAgentShortIDs...)
+	for shortID := range cmd.ChainPortConfig {
+		allAgentSIDs = append(allAgentSIDs, shortID)
+	}
+
+	// Batch fetch all agents
+	var agentMap map[string]*forward.ForwardAgent
+	if len(allAgentSIDs) > 0 {
+		agents, err := uc.agentRepo.GetBySIDs(ctx, allAgentSIDs)
+		if err != nil {
+			uc.logger.Errorw("failed to batch get agents", "error", err)
+			return nil, fmt.Errorf("failed to get agents: %w", err)
+		}
+		agentMap = make(map[string]*forward.ForwardAgent, len(agents))
+		for _, a := range agents {
+			agentMap[a.SID()] = a
+		}
+	}
+
 	// Resolve exit agent configuration (single exitAgentID OR multiple exitAgents)
 	var exitAgentID uint
 	var exitAgents []vo.AgentWeight
@@ -150,12 +177,8 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		return nil, errors.NewValidationError("exit_agent_id and exit_agents are mutually exclusive")
 	}
 	if cmd.ExitAgentShortID != "" {
-		exitAgent, err := uc.agentRepo.GetBySID(ctx, cmd.ExitAgentShortID)
-		if err != nil {
-			uc.logger.Errorw("failed to get exit agent", "exit_agent_short_id", cmd.ExitAgentShortID, "error", err)
-			return nil, fmt.Errorf("failed to validate exit agent: %w", err)
-		}
-		if exitAgent == nil {
+		exitAgent, ok := agentMap[cmd.ExitAgentShortID]
+		if !ok || exitAgent == nil {
 			return nil, errors.NewNotFoundError("exit forward agent", cmd.ExitAgentShortID)
 		}
 		exitAgentID = exitAgent.ID()
@@ -163,12 +186,8 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		// Resolve multiple exit agents with weights
 		exitAgents = make([]vo.AgentWeight, 0, len(cmd.ExitAgents))
 		for _, input := range cmd.ExitAgents {
-			exitAgent, err := uc.agentRepo.GetBySID(ctx, input.AgentSID)
-			if err != nil {
-				uc.logger.Errorw("failed to get exit agent", "exit_agent_sid", input.AgentSID, "error", err)
-				return nil, fmt.Errorf("failed to validate exit agent: %w", err)
-			}
-			if exitAgent == nil {
+			exitAgent, ok := agentMap[input.AgentSID]
+			if !ok || exitAgent == nil {
 				return nil, errors.NewNotFoundError("exit forward agent", input.AgentSID)
 			}
 			// Use provided weight or default
@@ -193,12 +212,8 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	if len(cmd.ChainAgentShortIDs) > 0 {
 		chainAgentIDs = make([]uint, len(cmd.ChainAgentShortIDs))
 		for i, shortID := range cmd.ChainAgentShortIDs {
-			chainAgent, err := uc.agentRepo.GetBySID(ctx, shortID)
-			if err != nil {
-				uc.logger.Errorw("failed to get chain agent", "chain_agent_short_id", shortID, "error", err)
-				return nil, fmt.Errorf("failed to validate chain agent: %w", err)
-			}
-			if chainAgent == nil {
+			chainAgent, ok := agentMap[shortID]
+			if !ok || chainAgent == nil {
 				return nil, errors.NewNotFoundError("chain forward agent", shortID)
 			}
 			chainAgentIDs[i] = chainAgent.ID()
@@ -212,12 +227,8 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	if len(cmd.ChainPortConfig) > 0 {
 		chainPortConfig = make(map[uint]uint16, len(cmd.ChainPortConfig))
 		for shortID, port := range cmd.ChainPortConfig {
-			chainAgent, err := uc.agentRepo.GetBySID(ctx, shortID)
-			if err != nil {
-				uc.logger.Errorw("failed to get chain agent for port config", "chain_agent_short_id", shortID, "error", err)
-				return nil, fmt.Errorf("failed to validate chain agent in chain_port_config: %w", err)
-			}
-			if chainAgent == nil {
+			chainAgent, ok := agentMap[shortID]
+			if !ok || chainAgent == nil {
 				return nil, errors.NewNotFoundError("chain forward agent in chain_port_config", shortID)
 			}
 			// Validate port against chain agent's allowed port range
@@ -299,29 +310,47 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	// Resolve GroupSIDs to internal IDs and validate plan types (if provided)
 	var groupIDs []uint
 	if len(cmd.GroupSIDs) > 0 {
-		groupIDs = make([]uint, 0, len(cmd.GroupSIDs))
+		// Validate SID formats first
 		for _, groupSID := range cmd.GroupSIDs {
-			// Validate the SID format (rg_xxx)
 			if err := id.ValidatePrefix(groupSID, id.PrefixResourceGroup); err != nil {
 				return nil, errors.NewValidationError(fmt.Sprintf("invalid resource group ID format: %s", groupSID))
 			}
+		}
 
-			group, err := uc.resourceGroupRepo.GetBySID(ctx, groupSID)
-			if err != nil {
-				uc.logger.Errorw("failed to get resource group", "group_sid", groupSID, "error", err)
-				return nil, fmt.Errorf("failed to validate resource group: %w", err)
-			}
-			if group == nil {
+		// Batch fetch all groups to avoid N+1 queries
+		groupMap, err := uc.resourceGroupRepo.GetBySIDs(ctx, cmd.GroupSIDs)
+		if err != nil {
+			uc.logger.Errorw("failed to batch get resource groups", "error", err)
+			return nil, fmt.Errorf("failed to get resource groups: %w", err)
+		}
+
+		// Collect plan IDs for batch fetch
+		planIDs := make([]uint, 0, len(cmd.GroupSIDs))
+		for _, groupSID := range cmd.GroupSIDs {
+			group, ok := groupMap[groupSID]
+			if !ok || group == nil {
 				return nil, errors.NewNotFoundError("resource group", groupSID)
 			}
+			planIDs = append(planIDs, group.PlanID())
+		}
 
-			// Verify the plan type supports forward rules binding (node and hybrid only, not forward)
-			plan, err := uc.planRepo.GetByID(ctx, group.PlanID())
-			if err != nil {
-				uc.logger.Errorw("failed to get plan for resource group", "plan_id", group.PlanID(), "error", err)
-				return nil, fmt.Errorf("failed to validate resource group plan: %w", err)
-			}
-			if plan == nil {
+		// Batch fetch all plans
+		plans, err := uc.planRepo.GetByIDs(ctx, planIDs)
+		if err != nil {
+			uc.logger.Errorw("failed to batch get plans", "error", err)
+			return nil, fmt.Errorf("failed to get plans: %w", err)
+		}
+		planMap := make(map[uint]*subscription.Plan, len(plans))
+		for _, p := range plans {
+			planMap[p.ID()] = p
+		}
+
+		// Validate each group and build groupIDs
+		groupIDs = make([]uint, 0, len(cmd.GroupSIDs))
+		for _, groupSID := range cmd.GroupSIDs {
+			group := groupMap[groupSID]
+			plan, ok := planMap[group.PlanID()]
+			if !ok || plan == nil {
 				return nil, fmt.Errorf("plan not found for resource group %s", groupSID)
 			}
 			if plan.PlanType().IsForward() {
@@ -332,7 +361,6 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 				return nil, errors.NewValidationError(
 					fmt.Sprintf("resource group %s belongs to a forward plan and cannot bind forward rules", groupSID))
 			}
-
 			groupIDs = append(groupIDs, group.ID())
 		}
 	}
@@ -658,28 +686,47 @@ func (uc *CreateForwardRuleUseCase) executeExternalRule(ctx context.Context, cmd
 	// Resolve GroupSIDs to internal IDs and validate plan types (if provided)
 	var groupIDs []uint
 	if len(cmd.GroupSIDs) > 0 {
-		groupIDs = make([]uint, 0, len(cmd.GroupSIDs))
+		// Validate SID formats first
 		for _, groupSID := range cmd.GroupSIDs {
 			if err := id.ValidatePrefix(groupSID, id.PrefixResourceGroup); err != nil {
 				return nil, errors.NewValidationError(fmt.Sprintf("invalid resource group ID format: %s", groupSID))
 			}
+		}
 
-			group, err := uc.resourceGroupRepo.GetBySID(ctx, groupSID)
-			if err != nil {
-				uc.logger.Errorw("failed to get resource group", "group_sid", groupSID, "error", err)
-				return nil, fmt.Errorf("failed to validate resource group: %w", err)
-			}
-			if group == nil {
+		// Batch fetch all groups to avoid N+1 queries
+		groupMap, err := uc.resourceGroupRepo.GetBySIDs(ctx, cmd.GroupSIDs)
+		if err != nil {
+			uc.logger.Errorw("failed to batch get resource groups", "error", err)
+			return nil, fmt.Errorf("failed to get resource groups: %w", err)
+		}
+
+		// Collect plan IDs for batch fetch
+		planIDs := make([]uint, 0, len(cmd.GroupSIDs))
+		for _, groupSID := range cmd.GroupSIDs {
+			group, ok := groupMap[groupSID]
+			if !ok || group == nil {
 				return nil, errors.NewNotFoundError("resource group", groupSID)
 			}
+			planIDs = append(planIDs, group.PlanID())
+		}
 
-			// Verify the plan type supports forward rules binding
-			plan, err := uc.planRepo.GetByID(ctx, group.PlanID())
-			if err != nil {
-				uc.logger.Errorw("failed to get plan for resource group", "plan_id", group.PlanID(), "error", err)
-				return nil, fmt.Errorf("failed to validate resource group plan: %w", err)
-			}
-			if plan == nil {
+		// Batch fetch all plans
+		plans, err := uc.planRepo.GetByIDs(ctx, planIDs)
+		if err != nil {
+			uc.logger.Errorw("failed to batch get plans", "error", err)
+			return nil, fmt.Errorf("failed to get plans: %w", err)
+		}
+		planMap := make(map[uint]*subscription.Plan, len(plans))
+		for _, p := range plans {
+			planMap[p.ID()] = p
+		}
+
+		// Validate each group and build groupIDs
+		groupIDs = make([]uint, 0, len(cmd.GroupSIDs))
+		for _, groupSID := range cmd.GroupSIDs {
+			group := groupMap[groupSID]
+			plan, ok := planMap[group.PlanID()]
+			if !ok || plan == nil {
 				return nil, fmt.Errorf("plan not found for resource group %s", groupSID)
 			}
 			if plan.PlanType().IsForward() {
@@ -690,7 +737,6 @@ func (uc *CreateForwardRuleUseCase) executeExternalRule(ctx context.Context, cmd
 				return nil, errors.NewValidationError(
 					fmt.Sprintf("resource group %s belongs to a forward plan and cannot bind forward rules", groupSID))
 			}
-
 			groupIDs = append(groupIDs, group.ID())
 		}
 	}

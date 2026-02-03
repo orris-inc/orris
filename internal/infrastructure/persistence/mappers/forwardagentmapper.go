@@ -60,6 +60,14 @@ func (m *ForwardAgentMapperImpl) ToEntity(model *models.ForwardAgentModel) (*for
 		blockedProtocols = vo.NewBlockedProtocols(protocols)
 	}
 
+	// Parse group_ids from JSON
+	var groupIDs []uint
+	if len(model.GroupIDs) > 0 {
+		if err := json.Unmarshal(model.GroupIDs, &groupIDs); err != nil {
+			return nil, fmt.Errorf("failed to parse group_ids: %w", err)
+		}
+	}
+
 	entity, err := forward.ReconstructForwardAgent(
 		model.ID,
 		model.SID,
@@ -70,7 +78,7 @@ func (m *ForwardAgentMapperImpl) ToEntity(model *models.ForwardAgentModel) (*for
 		model.PublicAddress,
 		model.TunnelAddress,
 		model.Remark,
-		model.GroupID,
+		groupIDs,
 		model.AgentVersion,
 		model.Platform,
 		model.Arch,
@@ -116,6 +124,16 @@ func (m *ForwardAgentMapperImpl) ToModel(entity *forward.ForwardAgent) (*models.
 		}
 	}
 
+	// Serialize group_ids to JSON
+	var groupIDsJSON []byte
+	if len(entity.GroupIDs()) > 0 {
+		var err error
+		groupIDsJSON, err = json.Marshal(entity.GroupIDs())
+		if err != nil {
+			return nil, fmt.Errorf("failed to serialize group_ids: %w", err)
+		}
+	}
+
 	return &models.ForwardAgentModel{
 		ID:               entity.ID(),
 		SID:              entity.SID(),
@@ -126,7 +144,7 @@ func (m *ForwardAgentMapperImpl) ToModel(entity *forward.ForwardAgent) (*models.
 		TunnelAddress:    entity.TunnelAddress(),
 		Status:           string(entity.Status()),
 		Remark:           entity.Remark(),
-		GroupID:          entity.GroupID(),
+		GroupIDs:         groupIDsJSON,
 		AgentVersion:     entity.AgentVersion(),
 		Platform:         entity.Platform(),
 		Arch:             entity.Arch(),

@@ -129,15 +129,23 @@ func (uc *ManageResourceGroupForwardAgentsUseCase) executeAddAgents(ctx context.
 		}
 
 		// Check if already in this group
-		if agent.GroupID() != nil && *agent.GroupID() == groupID {
+		currentGroupIDs := agent.GroupIDs()
+		alreadyInGroup := false
+		for _, gid := range currentGroupIDs {
+			if gid == groupID {
+				alreadyInGroup = true
+				break
+			}
+		}
+		if alreadyInGroup {
 			// Already in this group, count as success
 			result.Succeeded = append(result.Succeeded, agentSID)
 			continue
 		}
 
-		// Set group ID and update
-		gid := groupID
-		agent.SetGroupID(&gid)
+		// Add group ID to the list and update
+		newGroupIDs := append(currentGroupIDs, groupID)
+		agent.SetGroupIDs(newGroupIDs)
 		if err := uc.agentRepo.Update(ctx, agent); err != nil {
 			uc.logger.Errorw("failed to update forward agent", "error", err, "agent_sid", agentSID)
 			result.Failed = append(result.Failed, dto.BatchOperationErr{
@@ -236,7 +244,15 @@ func (uc *ManageResourceGroupForwardAgentsUseCase) executeRemoveAgents(ctx conte
 		}
 
 		// Check if the agent belongs to this group
-		if agent.GroupID() == nil || *agent.GroupID() != groupID {
+		currentGroupIDs := agent.GroupIDs()
+		foundIndex := -1
+		for i, gid := range currentGroupIDs {
+			if gid == groupID {
+				foundIndex = i
+				break
+			}
+		}
+		if foundIndex == -1 {
 			result.Failed = append(result.Failed, dto.BatchOperationErr{
 				ID:     agentSID,
 				Reason: "forward agent does not belong to this group",
@@ -244,8 +260,14 @@ func (uc *ManageResourceGroupForwardAgentsUseCase) executeRemoveAgents(ctx conte
 			continue
 		}
 
-		// Remove group ID
-		agent.SetGroupID(nil)
+		// Remove group ID from the list
+		newGroupIDs := make([]uint, 0, len(currentGroupIDs)-1)
+		for i, gid := range currentGroupIDs {
+			if i != foundIndex {
+				newGroupIDs = append(newGroupIDs, gid)
+			}
+		}
+		agent.SetGroupIDs(newGroupIDs)
 		if err := uc.agentRepo.Update(ctx, agent); err != nil {
 			uc.logger.Errorw("failed to update forward agent", "error", err, "agent_sid", agentSID)
 			result.Failed = append(result.Failed, dto.BatchOperationErr{

@@ -136,20 +136,21 @@ func (uc *ListUserForwardAgentsUseCase) Execute(ctx context.Context, query ListU
 		}, nil
 	}
 
-	// Step 4: Get active resource groups for these plans
+	// Step 4: Get active resource groups for these plans (batch query to avoid N+1)
+	groupsByPlan, err := uc.resourceGroupRepo.GetByPlanIDs(ctx, forwardPlanIDs)
+	if err != nil {
+		// Log warning but continue with empty result (consistent with original behavior)
+		uc.logger.Warnw("failed to batch get resource groups for plans",
+			"user_id", query.UserID,
+			"error", err,
+		)
+		groupsByPlan = make(map[uint][]*resource.ResourceGroup)
+	}
+
 	groupIDs := make([]uint, 0)
 	groupInfoMap := make(dto.GroupInfoMap)
 
-	for _, planID := range forwardPlanIDs {
-		groups, err := uc.resourceGroupRepo.GetByPlanID(ctx, planID)
-		if err != nil {
-			uc.logger.Warnw("failed to get resource groups for plan",
-				"plan_id", planID,
-				"error", err,
-			)
-			continue
-		}
-
+	for _, groups := range groupsByPlan {
 		for _, group := range groups {
 			if group.IsActive() {
 				groupIDs = append(groupIDs, group.ID())
@@ -197,8 +198,11 @@ func (uc *ListUserForwardAgentsUseCase) Execute(ctx context.Context, query ListU
 		pages++
 	}
 
-	// Step 6: Convert to user-facing DTOs
-	dtos := dto.ToUserForwardAgentDTOs(agents, groupInfoMap)
+	// Step 6: Convert to user-facing DTOs and populate groups
+	dtos := dto.ToUserForwardAgentDTOs(agents)
+	for _, d := range dtos {
+		d.PopulateGroups(groupInfoMap)
+	}
 
 	uc.logger.Infow("user forward agents listed successfully",
 		"user_id", query.UserID,

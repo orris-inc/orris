@@ -22,11 +22,19 @@ type Repository interface {
 	// GetBySID retrieves a resource group by Stripe-style ID
 	GetBySID(ctx context.Context, sid string) (*ResourceGroup, error)
 
+	// GetBySIDs retrieves resource groups by their Stripe-style IDs
+	// Returns a map from SID to ResourceGroup for efficient lookup
+	GetBySIDs(ctx context.Context, sids []string) (map[string]*ResourceGroup, error)
+
 	// GetSIDsByIDs retrieves a map of resource group IDs to their SIDs
 	GetSIDsByIDs(ctx context.Context, ids []uint) (map[uint]string, error)
 
 	// GetByPlanID retrieves all resource groups for a plan
 	GetByPlanID(ctx context.Context, planID uint) ([]*ResourceGroup, error)
+
+	// GetByPlanIDs retrieves all resource groups for multiple plans
+	// Returns a map from planID to list of ResourceGroups
+	GetByPlanIDs(ctx context.Context, planIDs []uint) (map[uint][]*ResourceGroup, error)
 
 	// List retrieves resource groups with optional filters
 	List(ctx context.Context, filter ListFilter) ([]*ResourceGroup, int64, error)

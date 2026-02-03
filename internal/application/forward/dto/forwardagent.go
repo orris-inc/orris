@@ -16,9 +16,9 @@ type ForwardAgentDTO struct {
 	TunnelAddress    string          `json:"tunnel_address,omitempty"` // IP or hostname only (no port), configure if agent may serve as relay/exit in any rule
 	Status           string          `json:"status"`
 	Remark           string          `json:"remark"`
-	GroupSID         *string         `json:"group_id,omitempty"` // Resource group SID this agent belongs to
-	AgentVersion     string          `json:"agent_version"`      // Agent software version (e.g., "1.2.3"), extracted from system_status for easy display
-	HasUpdate        bool            `json:"has_update"`         // True if a newer version is available
+	GroupSIDs        []string        `json:"group_sids,omitempty"` // Resource group SIDs this agent belongs to
+	AgentVersion     string          `json:"agent_version"`        // Agent software version (e.g., "1.2.3"), extracted from system_status for easy display
+	HasUpdate        bool            `json:"has_update"`           // True if a newer version is available
 	AllowedPortRange string          `json:"allowed_port_range,omitempty"`
 	BlockedProtocols []string        `json:"blocked_protocols,omitempty"` // Protocols blocked by this agent
 	SortOrder        int             `json:"sort_order"`                  // Custom sort order for UI display
@@ -28,11 +28,12 @@ type ForwardAgentDTO struct {
 	CreatedAt        string          `json:"created_at"`
 	UpdatedAt        string          `json:"updated_at"`
 	SystemStatus     *AgentStatusDTO `json:"system_status,omitempty"`
+
+	internalGroupIDs []uint `json:"-"` // internal resource group IDs for lookup
 }
 
 // ToForwardAgentDTO converts a domain forward agent to DTO.
-// groupInfo is optional, can be nil if group information is not available.
-func ToForwardAgentDTO(agent *forward.ForwardAgent, groupInfo *GroupInfo) *ForwardAgentDTO {
+func ToForwardAgentDTO(agent *forward.ForwardAgent) *ForwardAgentDTO {
 	if agent == nil {
 		return nil
 	}
@@ -58,25 +59,52 @@ func ToForwardAgentDTO(agent *forward.ForwardAgent, groupInfo *GroupInfo) *Forwa
 		LastSeenAt:       agent.LastSeenAt(),
 		CreatedAt:        agent.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:        agent.UpdatedAt().Format("2006-01-02T15:04:05Z07:00"),
-	}
-
-	if groupInfo != nil {
-		dto.GroupSID = &groupInfo.SID
+		internalGroupIDs: agent.GroupIDs(),
 	}
 
 	return dto
 }
 
 // ToForwardAgentDTOs converts a slice of domain forward agents to DTOs.
-// groupInfoMap is optional, can be nil if group information is not available.
-func ToForwardAgentDTOs(agents []*forward.ForwardAgent, groupInfoMap GroupInfoMap) []*ForwardAgentDTO {
+func ToForwardAgentDTOs(agents []*forward.ForwardAgent) []*ForwardAgentDTO {
 	dtos := make([]*ForwardAgentDTO, len(agents))
 	for i, agent := range agents {
-		var groupInfo *GroupInfo
-		if groupInfoMap != nil && agent.GroupID() != nil {
-			groupInfo = groupInfoMap[*agent.GroupID()]
-		}
-		dtos[i] = ToForwardAgentDTO(agent, groupInfo)
+		dtos[i] = ToForwardAgentDTO(agent)
 	}
 	return dtos
+}
+
+// PopulateGroupSIDs fills in the group SIDs field using the SID map.
+func (d *ForwardAgentDTO) PopulateGroupSIDs(groupMap GroupSIDMap) {
+	if len(d.internalGroupIDs) == 0 {
+		return
+	}
+	d.GroupSIDs = make([]string, 0, len(d.internalGroupIDs))
+	for _, groupID := range d.internalGroupIDs {
+		if sid, ok := groupMap[groupID]; ok && sid != "" {
+			d.GroupSIDs = append(d.GroupSIDs, sid)
+		}
+	}
+}
+
+// InternalGroupIDs returns the internal resource group IDs for repository lookups.
+func (d *ForwardAgentDTO) InternalGroupIDs() []uint {
+	return d.internalGroupIDs
+}
+
+// CollectAgentGroupIDs collects unique resource group IDs from agent DTOs for batch lookup.
+func CollectAgentGroupIDs(dtos []*ForwardAgentDTO) []uint {
+	idSet := make(map[uint]struct{})
+	for _, dto := range dtos {
+		for _, groupID := range dto.internalGroupIDs {
+			if groupID != 0 {
+				idSet[groupID] = struct{}{}
+			}
+		}
+	}
+	ids := make([]uint, 0, len(idSet))
+	for id := range idSet {
+		ids = append(ids, id)
+	}
+	return ids
 }

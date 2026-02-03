@@ -100,27 +100,46 @@ func (uc *ProcessReminderUseCase) processExpiringSubscriptions(ctx context.Conte
 		return 0, 1
 	}
 
+	// Collect unique expiringDays values to avoid N+1 queries
+	expiringDaysSet := make(map[int]struct{})
+	validBindings := make([]*telegram.TelegramBinding, 0, len(bindings))
 	for _, binding := range bindings {
 		if !binding.CanNotifyExpiring() {
 			continue
 		}
+		expiringDaysSet[binding.ExpiringDays()] = struct{}{}
+		validBindings = append(validBindings, binding)
+	}
 
-		// Find expiring subscriptions for this user
-		subs, err := uc.subscriptionRepo.FindExpiringSubscriptions(ctx, binding.ExpiringDays())
+	if len(validBindings) == 0 {
+		return 0, 0
+	}
+
+	// Batch fetch expiring subscriptions for each unique expiringDays value
+	// Key: expiringDays, Value: subscriptions grouped by userID
+	subscriptionsByDaysAndUser := make(map[int]map[uint][]*subscription.Subscription)
+	for days := range expiringDaysSet {
+		subs, err := uc.subscriptionRepo.FindExpiringSubscriptions(ctx, days)
 		if err != nil {
-			uc.logger.Errorw("failed to find expiring subscriptions", "user_id", binding.UserID(), "error", err)
+			uc.logger.Errorw("failed to find expiring subscriptions", "days", days, "error", err)
 			errors++
 			continue
 		}
-
-		// Filter to only this user's subscriptions
-		var userSubs []*subscription.Subscription
+		// Group subscriptions by userID
+		userSubsMap := make(map[uint][]*subscription.Subscription)
 		for _, sub := range subs {
-			if sub.UserID() == binding.UserID() {
-				userSubs = append(userSubs, sub)
-			}
+			userSubsMap[sub.UserID()] = append(userSubsMap[sub.UserID()], sub)
 		}
+		subscriptionsByDaysAndUser[days] = userSubsMap
+	}
 
+	for _, binding := range validBindings {
+		// Get pre-fetched subscriptions for this binding's expiringDays and userID
+		userSubsMap, ok := subscriptionsByDaysAndUser[binding.ExpiringDays()]
+		if !ok {
+			continue
+		}
+		userSubs := userSubsMap[binding.UserID()]
 		if len(userSubs) == 0 {
 			continue
 		}
@@ -185,9 +204,24 @@ func (uc *ProcessReminderUseCase) processTrafficUsage(ctx context.Context) (int,
 			planSubscriptions[sub.PlanID()] = append(planSubscriptions[sub.PlanID()], sub)
 		}
 
+		// Batch fetch all plans to avoid N+1 queries
+		planIDs := make([]uint, 0, len(planSubscriptions))
+		for planID := range planSubscriptions {
+			planIDs = append(planIDs, planID)
+		}
+		plans, err := uc.planRepo.GetByIDs(ctx, planIDs)
+		if err != nil {
+			uc.logger.Warnw("failed to batch fetch plans", "error", err)
+			continue
+		}
+		planMap := make(map[uint]*subscription.Plan, len(plans))
+		for _, plan := range plans {
+			planMap[plan.ID()] = plan
+		}
+
 		for planID, planSubs := range planSubscriptions {
-			plan, err := uc.planRepo.GetByID(ctx, planID)
-			if err != nil {
+			plan, ok := planMap[planID]
+			if !ok {
 				continue
 			}
 

@@ -186,33 +186,37 @@ func (uc *UpdateNodeUseCase) Execute(ctx context.Context, cmd UpdateNodeCommand)
 			// Empty slice means remove all group associations
 			existingNode.SetGroupIDs(nil)
 		} else {
-			// Resolve each group SID to internal ID (with deduplication)
+			// Deduplicate and filter empty SIDs
+			uniqueSIDs := make([]string, 0, len(cmd.GroupSIDs))
 			seenSIDs := make(map[string]struct{}, len(cmd.GroupSIDs))
-			resolvedIDs := make([]uint, 0, len(cmd.GroupSIDs))
 			for _, sid := range cmd.GroupSIDs {
-				// Skip empty strings
 				if sid == "" {
 					continue
 				}
-				// Skip duplicate SIDs
 				if _, exists := seenSIDs[sid]; exists {
 					continue
 				}
 				seenSIDs[sid] = struct{}{}
-
-				group, err := uc.resourceGroupRepo.GetBySID(ctx, sid)
-				if err != nil {
-					uc.logger.Errorw("failed to get resource group by SID", "group_sid", sid, "error", err)
-					return nil, errors.NewNotFoundError(fmt.Sprintf("resource group not found: %s", sid))
-				}
-				if group == nil {
-					return nil, errors.NewNotFoundError(fmt.Sprintf("resource group not found: %s", sid))
-				}
-				resolvedIDs = append(resolvedIDs, group.ID())
+				uniqueSIDs = append(uniqueSIDs, sid)
 			}
-			// Only update if we have valid SIDs after filtering
-			// (prevents accidental clear when all SIDs are empty strings)
-			if len(resolvedIDs) > 0 {
+
+			if len(uniqueSIDs) > 0 {
+				// Batch fetch all groups to avoid N+1 queries
+				groupMap, err := uc.resourceGroupRepo.GetBySIDs(ctx, uniqueSIDs)
+				if err != nil {
+					uc.logger.Errorw("failed to batch get resource groups", "error", err)
+					return nil, fmt.Errorf("failed to get resource groups: %w", err)
+				}
+
+				// Resolve SIDs to internal IDs
+				resolvedIDs := make([]uint, 0, len(uniqueSIDs))
+				for _, sid := range uniqueSIDs {
+					group, ok := groupMap[sid]
+					if !ok || group == nil {
+						return nil, errors.NewNotFoundError(fmt.Sprintf("resource group not found: %s", sid))
+					}
+					resolvedIDs = append(resolvedIDs, group.ID())
+				}
 				existingNode.SetGroupIDs(resolvedIDs)
 			}
 		}

@@ -56,14 +56,14 @@ func TestDetectFormatFromUserAgent(t *testing.T) {
 			expected:  "base64",
 		},
 		{
-			name:      "V2Ray client returns v2ray format",
+			name:      "V2RayN client returns base64 format (supports all protocols)",
 			userAgent: "v2rayN/1.0.0",
-			expected:  "v2ray",
+			expected:  "base64",
 		},
 		{
-			name:      "V2RayNG client returns v2ray format",
+			name:      "V2RayNG client returns base64 format (supports all protocols)",
 			userAgent: "V2RayNG/1.0.0",
-			expected:  "v2ray",
+			expected:  "base64",
 		},
 		{
 			name:      "Unknown browser returns base64 format",

@@ -97,39 +97,29 @@ func (uc *ListForwardAgentsUseCase) Execute(ctx context.Context, query ListForwa
 		pages++
 	}
 
-	// Collect unique group IDs for batch query
-	groupIDSet := make(map[uint]struct{})
-	for _, agent := range agents {
-		if agent.GroupID() != nil {
-			groupIDSet[*agent.GroupID()] = struct{}{}
-		}
-	}
+	// Convert to DTOs
+	dtos := dto.ToForwardAgentDTOs(agents)
 
-	// Query resource groups and build GroupInfoMap
-	var groupInfoMap dto.GroupInfoMap
-	if len(groupIDSet) > 0 && uc.resourceGroupRepo != nil {
-		groupIDs := make([]uint, 0, len(groupIDSet))
-		for id := range groupIDSet {
-			groupIDs = append(groupIDs, id)
-		}
+	// Collect unique group IDs from DTOs for batch query
+	groupIDs := dto.CollectAgentGroupIDs(dtos)
 
+	// Query resource groups and populate GroupSIDs
+	if len(groupIDs) > 0 && uc.resourceGroupRepo != nil {
 		groups, err := uc.resourceGroupRepo.GetByIDs(ctx, groupIDs)
 		if err != nil {
 			uc.logger.Warnw("failed to get resource groups, continuing without group info",
 				"error", err,
 			)
 		} else {
-			groupInfoMap = make(dto.GroupInfoMap, len(groups))
+			groupSIDMap := make(dto.GroupSIDMap, len(groups))
 			for _, group := range groups {
-				groupInfoMap[group.ID()] = &dto.GroupInfo{
-					SID:  group.SID(),
-					Name: group.Name(),
-				}
+				groupSIDMap[group.ID()] = group.SID()
+			}
+			for _, d := range dtos {
+				d.PopulateGroupSIDs(groupSIDMap)
 			}
 		}
 	}
-
-	dtos := dto.ToForwardAgentDTOs(agents, groupInfoMap)
 
 	// Collect agent IDs for batch status query and create ID mapping
 	agentIDs := make([]uint, 0, len(agents))

@@ -18,7 +18,7 @@ type CreateForwardAgentCommand struct {
 	PublicAddress    string
 	TunnelAddress    string
 	Remark           string
-	GroupSID         string   // Resource group SID to associate with (empty means no association)
+	GroupSIDs        []string // Resource group SIDs to associate with (empty means no association)
 	AllowedPortRange string   // Port range string (e.g., "80,443,8000-9000"), empty means all ports allowed
 	BlockedProtocols []string // Protocols to block (e.g., ["socks5", "http_connect"]), empty means no blocking
 	SortOrder        *int     // Custom sort order for UI display (nil: use default 0, non-nil: set explicitly)
@@ -124,18 +124,46 @@ func (uc *CreateForwardAgentUseCase) Execute(ctx context.Context, cmd CreateForw
 		agent.UpdateSortOrder(*cmd.SortOrder)
 	}
 
-	// Handle GroupSID (resolve SID to internal ID)
-	if cmd.GroupSID != "" {
-		group, err := uc.resourceGroupRepo.GetBySID(ctx, cmd.GroupSID)
-		if err != nil {
-			uc.logger.Errorw("failed to get resource group by SID", "group_sid", cmd.GroupSID, "error", err)
-			return nil, errors.NewNotFoundError("resource group", cmd.GroupSID)
+	// Handle GroupSIDs (resolve SIDs to internal IDs)
+	// Limit to 10 groups to prevent DoS attacks
+	const maxGroupSIDs = 10
+	if len(cmd.GroupSIDs) > maxGroupSIDs {
+		return nil, errors.NewValidationError(fmt.Sprintf("too many group_sids, maximum allowed is %d", maxGroupSIDs))
+	}
+	if len(cmd.GroupSIDs) > 0 {
+		// Deduplicate and filter empty SIDs
+		uniqueSIDs := make([]string, 0, len(cmd.GroupSIDs))
+		seenSIDs := make(map[string]struct{}, len(cmd.GroupSIDs))
+		for _, sid := range cmd.GroupSIDs {
+			if sid == "" {
+				continue
+			}
+			if _, exists := seenSIDs[sid]; exists {
+				continue
+			}
+			seenSIDs[sid] = struct{}{}
+			uniqueSIDs = append(uniqueSIDs, sid)
 		}
-		if group == nil {
-			return nil, errors.NewNotFoundError("resource group", cmd.GroupSID)
+
+		if len(uniqueSIDs) > 0 {
+			// Batch fetch all groups to avoid N+1 queries
+			groupMap, err := uc.resourceGroupRepo.GetBySIDs(ctx, uniqueSIDs)
+			if err != nil {
+				uc.logger.Errorw("failed to batch get resource groups", "error", err)
+				return nil, fmt.Errorf("failed to get resource groups: %w", err)
+			}
+
+			// Resolve SIDs to internal IDs
+			resolvedIDs := make([]uint, 0, len(uniqueSIDs))
+			for _, sid := range uniqueSIDs {
+				group, ok := groupMap[sid]
+				if !ok || group == nil {
+					return nil, errors.NewNotFoundError("resource group", sid)
+				}
+				resolvedIDs = append(resolvedIDs, group.ID())
+			}
+			agent.SetGroupIDs(resolvedIDs)
 		}
-		groupID := group.ID()
-		agent.SetGroupID(&groupID)
 	}
 
 	// Persist

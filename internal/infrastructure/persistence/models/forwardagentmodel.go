@@ -20,7 +20,7 @@ type ForwardAgentModel struct {
 	TunnelAddress    string         `gorm:"size:255"`                  // tunnel address for entry to connect to exit (nullable, overrides public_address)
 	Status           string         `gorm:"not null;default:enabled;size:20;index:idx_forward_agent_status"`
 	Remark           string         `gorm:"size:500"`
-	GroupID          *uint          `gorm:"index:idx_forward_agent_group_id"` // resource group ID
+	GroupIDs         datatypes.JSON `gorm:"column:group_ids"` // resource group IDs (JSON array)
 	AgentVersion     string         `gorm:"size:50"`                          // agent software version (e.g., "1.2.3")
 	Platform         string         `gorm:"size:20"`                          // OS platform (linux, darwin, windows)
 	Arch             string         `gorm:"size:20"`                          // CPU architecture (amd64, arm64, arm, 386)

@@ -85,18 +85,22 @@ func (uc *ManageResourceGroupNodesUseCase) executeAddNodes(ctx context.Context, 
 		Failed:    make([]dto.BatchOperationErr, 0),
 	}
 
+	// Batch fetch all nodes to avoid N+1 queries
+	nodes, err := uc.nodeRepo.GetBySIDs(ctx, nodeSIDs)
+	if err != nil {
+		uc.logger.Errorw("failed to batch get nodes", "error", err)
+		return nil, fmt.Errorf("failed to get nodes: %w", err)
+	}
+
+	// Build a map for quick lookup
+	nodeMap := make(map[string]*node.Node, len(nodes))
+	for _, n := range nodes {
+		nodeMap[n.SID()] = n
+	}
+
 	for _, nodeSID := range nodeSIDs {
-		// Get node by SID
-		n, err := uc.nodeRepo.GetBySID(ctx, nodeSID)
-		if err != nil {
-			uc.logger.Warnw("failed to get node", "error", err, "node_sid", nodeSID)
-			result.Failed = append(result.Failed, dto.BatchOperationErr{
-				ID:     nodeSID,
-				Reason: "failed to get node",
-			})
-			continue
-		}
-		if n == nil {
+		n, ok := nodeMap[nodeSID]
+		if !ok {
 			result.Failed = append(result.Failed, dto.BatchOperationErr{
 				ID:     nodeSID,
 				Reason: "node not found",
@@ -167,18 +171,22 @@ func (uc *ManageResourceGroupNodesUseCase) executeRemoveNodes(ctx context.Contex
 		Failed:    make([]dto.BatchOperationErr, 0),
 	}
 
+	// Batch fetch all nodes to avoid N+1 queries
+	nodes, err := uc.nodeRepo.GetBySIDs(ctx, nodeSIDs)
+	if err != nil {
+		uc.logger.Errorw("failed to batch get nodes", "error", err)
+		return nil, fmt.Errorf("failed to get nodes: %w", err)
+	}
+
+	// Build a map for quick lookup
+	nodeMap := make(map[string]*node.Node, len(nodes))
+	for _, n := range nodes {
+		nodeMap[n.SID()] = n
+	}
+
 	for _, nodeSID := range nodeSIDs {
-		// Get node by SID
-		n, err := uc.nodeRepo.GetBySID(ctx, nodeSID)
-		if err != nil {
-			uc.logger.Warnw("failed to get node", "error", err, "node_sid", nodeSID)
-			result.Failed = append(result.Failed, dto.BatchOperationErr{
-				ID:     nodeSID,
-				Reason: "failed to get node",
-			})
-			continue
-		}
-		if n == nil {
+		n, ok := nodeMap[nodeSID]
+		if !ok {
 			result.Failed = append(result.Failed, dto.BatchOperationErr{
 				ID:     nodeSID,
 				Reason: "node not found",
@@ -265,13 +273,23 @@ func (uc *ManageResourceGroupNodesUseCase) executeListNodes(ctx context.Context,
 	for _, n := range nodes {
 		groupIDSet.AddAll(n.GroupIDs())
 	}
+
+	// Batch fetch group SIDs to avoid N+1 queries
 	groupIDToSID := make(map[uint]string)
 	groupIDToSID[groupID] = group.SID() // Current group is already loaded
+	otherGroupIDs := make([]uint, 0)
 	for _, gid := range groupIDSet.ToSlice() {
 		if gid != groupID {
-			g, err := uc.resourceGroupRepo.GetByID(ctx, gid)
-			if err == nil && g != nil {
-				groupIDToSID[gid] = g.SID()
+			otherGroupIDs = append(otherGroupIDs, gid)
+		}
+	}
+	if len(otherGroupIDs) > 0 {
+		sidMap, err := uc.resourceGroupRepo.GetSIDsByIDs(ctx, otherGroupIDs)
+		if err != nil {
+			uc.logger.Warnw("failed to batch get group SIDs", "error", err)
+		} else {
+			for gid, sid := range sidMap {
+				groupIDToSID[gid] = sid
 			}
 		}
 	}

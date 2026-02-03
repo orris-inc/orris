@@ -12,6 +12,9 @@ type PaymentRepository interface {
 	GetPendingBySubscriptionID(ctx context.Context, subscriptionID uint) (*Payment, error)
 	// HasPendingPaymentBySubscriptionID checks if there are any pending payments for a subscription
 	HasPendingPaymentBySubscriptionID(ctx context.Context, subscriptionID uint) (bool, error)
+	// GetSubscriptionIDsWithPendingPayments returns subscription IDs that have pending payments
+	// from the given list of subscription IDs
+	GetSubscriptionIDsWithPendingPayments(ctx context.Context, subscriptionIDs []uint) ([]uint, error)
 	GetExpiredPayments(ctx context.Context) ([]*Payment, error)
 	GetPendingUSDTPayments(ctx context.Context) ([]*Payment, error)
 	// GetConfirmedUSDTPaymentsNeedingActivation returns confirmed USDT payments
