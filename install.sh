@@ -144,7 +144,7 @@ check_dependencies() {
     # Check if Docker is installed
     if ! check_command "docker"; then
         log_warn "Docker is not installed."
-        read -p "Would you like to install Docker automatically? [Y/n] " INSTALL_DOCKER
+        read -p "Would you like to install Docker automatically? [Y/n] " INSTALL_DOCKER < /dev/tty
         INSTALL_DOCKER="${INSTALL_DOCKER:-Y}"
         if [[ "$INSTALL_DOCKER" =~ ^[Yy]$ ]]; then
             install_docker
@@ -211,7 +211,7 @@ select_install_mode() {
     echo ""
 
     while true; do
-        read -p "Select mode [1/2] (default: 1): " MODE_CHOICE
+        read -p "Select mode [1/2] (default: 1): " MODE_CHOICE < /dev/tty
         MODE_CHOICE="${MODE_CHOICE:-1}"
         case "$MODE_CHOICE" in
             1)
@@ -245,7 +245,7 @@ select_components() {
     echo -e "${YELLOW}━━━ Reverse Proxy (Caddy) ━━━${NC}"
     echo "  1) Use built-in Caddy (automatic HTTPS, easy setup)"
     echo "  2) Use external reverse proxy (Nginx, Traefik, etc.)"
-    read -p "  Choice [1/2] (default: 1): " CADDY_CHOICE
+    read -p "  Choice [1/2] (default: 1): " CADDY_CHOICE < /dev/tty
     CADDY_CHOICE="${CADDY_CHOICE:-1}"
     if [ "$CADDY_CHOICE" == "2" ]; then
         USE_BUILTIN_CADDY="no"
@@ -259,7 +259,7 @@ select_components() {
     echo -e "${YELLOW}━━━ MySQL Database ━━━${NC}"
     echo "  1) Use built-in MySQL (Docker container)"
     echo "  2) Use external MySQL (existing server, RDS, etc.)"
-    read -p "  Choice [1/2] (default: 1): " MYSQL_CHOICE
+    read -p "  Choice [1/2] (default: 1): " MYSQL_CHOICE < /dev/tty
     MYSQL_CHOICE="${MYSQL_CHOICE:-1}"
     if [ "$MYSQL_CHOICE" == "2" ]; then
         USE_BUILTIN_MYSQL="no"
@@ -271,7 +271,7 @@ select_components() {
     echo -e "${YELLOW}━━━ Redis Cache ━━━${NC}"
     echo "  1) Use built-in Redis (Docker container)"
     echo "  2) Use external Redis (existing server, ElastiCache, etc.)"
-    read -p "  Choice [1/2] (default: 1): " REDIS_CHOICE
+    read -p "  Choice [1/2] (default: 1): " REDIS_CHOICE < /dev/tty
     REDIS_CHOICE="${REDIS_CHOICE:-1}"
     if [ "$REDIS_CHOICE" == "2" ]; then
         USE_BUILTIN_REDIS="no"
@@ -290,14 +290,14 @@ select_components() {
 prompt_external_mysql() {
     echo ""
     log_info "Configure External MySQL Connection"
-    read -p "  MySQL Host: " EXT_MYSQL_HOST
-    read -p "  MySQL Port [3306]: " EXT_MYSQL_PORT
+    read -p "  MySQL Host: " EXT_MYSQL_HOST < /dev/tty
+    read -p "  MySQL Port [3306]: " EXT_MYSQL_PORT < /dev/tty
     EXT_MYSQL_PORT="${EXT_MYSQL_PORT:-3306}"
-    read -p "  MySQL User [root]: " EXT_MYSQL_USER
+    read -p "  MySQL User [root]: " EXT_MYSQL_USER < /dev/tty
     EXT_MYSQL_USER="${EXT_MYSQL_USER:-root}"
-    read -s -p "  MySQL Password: " EXT_MYSQL_PASSWORD
+    read -s -p "  MySQL Password: " EXT_MYSQL_PASSWORD < /dev/tty
     echo ""
-    read -p "  MySQL Database [orris]: " EXT_MYSQL_DATABASE
+    read -p "  MySQL Database [orris]: " EXT_MYSQL_DATABASE < /dev/tty
     EXT_MYSQL_DATABASE="${EXT_MYSQL_DATABASE:-orris}"
 
     # Validate connection
@@ -317,10 +317,10 @@ prompt_external_mysql() {
 prompt_external_redis() {
     echo ""
     log_info "Configure External Redis Connection"
-    read -p "  Redis Host: " EXT_REDIS_HOST
-    read -p "  Redis Port [6379]: " EXT_REDIS_PORT
+    read -p "  Redis Host: " EXT_REDIS_HOST < /dev/tty
+    read -p "  Redis Port [6379]: " EXT_REDIS_PORT < /dev/tty
     EXT_REDIS_PORT="${EXT_REDIS_PORT:-6379}"
-    read -s -p "  Redis Password (leave empty if none): " EXT_REDIS_PASSWORD
+    read -s -p "  Redis Password (leave empty if none): " EXT_REDIS_PASSWORD < /dev/tty
     echo ""
 
     # Validate connection
@@ -350,17 +350,17 @@ prompt_config() {
 
     # Domain
     if [ -z "$DOMAIN" ]; then
-        read -p "Domain name (leave empty for localhost): " DOMAIN
+        read -p "Domain name (leave empty for localhost): " DOMAIN < /dev/tty
     fi
 
     # Admin email
     if [ -z "$ADMIN_EMAIL" ]; then
-        read -p "Admin email: " ADMIN_EMAIL
+        read -p "Admin email: " ADMIN_EMAIL < /dev/tty
     fi
 
     # Admin password
     if [ -z "$ADMIN_PASSWORD" ]; then
-        read -s -p "Admin password (min 8 chars): " ADMIN_PASSWORD
+        read -s -p "Admin password (min 8 chars): " ADMIN_PASSWORD < /dev/tty
         echo ""
     fi
 
@@ -1052,7 +1052,7 @@ do_uninstall() {
 
     echo -e "${YELLOW}WARNING: This will stop and remove all Orris services.${NC}"
     echo ""
-    read -p "Are you sure you want to uninstall Orris? [y/N] " CONFIRM
+    read -p "Are you sure you want to uninstall Orris? [y/N] " CONFIRM < /dev/tty
     if [[ ! "$CONFIRM" =~ ^[Yy]$ ]]; then
         log_info "Uninstall cancelled."
         exit 0
@@ -1064,7 +1064,7 @@ do_uninstall() {
 
     # Ask about removing volumes (Docker volumes)
     echo ""
-    read -p "Remove Docker volumes (caddy_data, caddy_config)? [y/N] " REMOVE_VOLUMES
+    read -p "Remove Docker volumes (caddy_data, caddy_config)? [y/N] " REMOVE_VOLUMES < /dev/tty
     if [[ "$REMOVE_VOLUMES" =~ ^[Yy]$ ]]; then
         log_info "Removing Docker volumes..."
         $DOCKER_COMPOSE down -v
@@ -1076,9 +1076,9 @@ do_uninstall() {
     echo "  - ./data/mysql  (database files)"
     echo "  - ./data/redis  (cache data)"
     echo ""
-    read -p "Remove data directories? This will DELETE ALL DATA! [y/N] " REMOVE_DATA
+    read -p "Remove data directories? This will DELETE ALL DATA! [y/N] " REMOVE_DATA < /dev/tty
     if [[ "$REMOVE_DATA" =~ ^[Yy]$ ]]; then
-        read -p "Type 'DELETE' to confirm data deletion: " CONFIRM_DELETE
+        read -p "Type 'DELETE' to confirm data deletion: " CONFIRM_DELETE < /dev/tty
         if [ "$CONFIRM_DELETE" == "DELETE" ]; then
             log_info "Removing data directories..."
             rm -rf ./data/mysql ./data/redis
@@ -1090,7 +1090,7 @@ do_uninstall() {
 
     # Ask about removing configuration files
     echo ""
-    read -p "Remove configuration files (.env, docker-compose.yml, Caddyfile)? [y/N] " REMOVE_CONFIG
+    read -p "Remove configuration files (.env, docker-compose.yml, Caddyfile)? [y/N] " REMOVE_CONFIG < /dev/tty
     if [[ "$REMOVE_CONFIG" =~ ^[Yy]$ ]]; then
         log_info "Removing configuration files..."
         rm -f .env docker-compose.yml Caddyfile .env.example
@@ -1101,9 +1101,9 @@ do_uninstall() {
     # Ask about removing the entire installation directory
     CURRENT_DIR=$(pwd)
     echo ""
-    read -p "Remove entire installation directory ($CURRENT_DIR)? [y/N] " REMOVE_ALL
+    read -p "Remove entire installation directory ($CURRENT_DIR)? [y/N] " REMOVE_ALL < /dev/tty
     if [[ "$REMOVE_ALL" =~ ^[Yy]$ ]]; then
-        read -p "Type 'REMOVE' to confirm directory deletion: " CONFIRM_REMOVE
+        read -p "Type 'REMOVE' to confirm directory deletion: " CONFIRM_REMOVE < /dev/tty
         if [ "$CONFIRM_REMOVE" == "REMOVE" ]; then
             log_info "Removing installation directory..."
             cd ..
@@ -1123,7 +1123,7 @@ do_uninstall() {
 
     # Check if Docker images should be removed
     echo ""
-    read -p "Remove Orris Docker images? [y/N] " REMOVE_IMAGES
+    read -p "Remove Orris Docker images? [y/N] " REMOVE_IMAGES < /dev/tty
     if [[ "$REMOVE_IMAGES" =~ ^[Yy]$ ]]; then
         log_info "Removing Docker images..."
         docker rmi ghcr.io/orris-inc/orris:latest 2>/dev/null || true
