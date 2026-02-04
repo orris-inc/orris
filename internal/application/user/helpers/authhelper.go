@@ -382,13 +382,6 @@ func (h *AuthHelper) SaveUserWithLogging(
 	return &SaveUserResult{Success: true, Error: nil}, nil
 }
 
-// RecordFailedLoginAndSave records a failed login attempt and persists the user state
-// This is always a non-critical operation to avoid information leakage
-// Deprecated: Use RecordFailedLoginWithPolicyAndSave for configurable security policy
-func (h *AuthHelper) RecordFailedLoginAndSave(ctx context.Context, u *user.User) *SaveUserResult {
-	return h.RecordFailedLoginWithPolicyAndSave(ctx, u, nil)
-}
-
 // RecordFailedLoginWithPolicyAndSave records a failed login attempt with custom security policy
 func (h *AuthHelper) RecordFailedLoginWithPolicyAndSave(ctx context.Context, u *user.User, policy *user.SecurityPolicy) *SaveUserResult {
 	if u == nil {

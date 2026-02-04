@@ -137,12 +137,6 @@ func (u *User) ResetPassword(plainToken string, newPassword *vo.Password, hasher
 	return nil
 }
 
-// RecordFailedLogin records a failed login attempt using default security policy
-// Deprecated: Use RecordFailedLoginWithPolicy for configurable security policy
-func (u *User) RecordFailedLogin() {
-	u.RecordFailedLoginWithPolicy(DefaultSecurityPolicy())
-}
-
 // RecordFailedLoginWithPolicy records a failed login attempt with custom security policy
 func (u *User) RecordFailedLoginWithPolicy(policy *SecurityPolicy) {
 	if policy == nil {

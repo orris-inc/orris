@@ -17,15 +17,16 @@ import (
 )
 
 type NodeHandler struct {
-	createNodeUC            usecases.CreateNodeExecutor
-	getNodeUC               usecases.GetNodeExecutor
-	updateNodeUC            usecases.UpdateNodeExecutor
-	deleteNodeUC            usecases.DeleteNodeExecutor
-	listNodesUC             usecases.ListNodesExecutor
-	generateTokenUC         usecases.GenerateNodeTokenExecutor
-	generateInstallScriptUC usecases.GenerateNodeInstallScriptExecutor
-	apiURL                  string
-	logger                  logger.Interface
+	createNodeUC                 usecases.CreateNodeExecutor
+	getNodeUC                    usecases.GetNodeExecutor
+	updateNodeUC                 usecases.UpdateNodeExecutor
+	deleteNodeUC                 usecases.DeleteNodeExecutor
+	listNodesUC                  usecases.ListNodesExecutor
+	generateTokenUC              usecases.GenerateNodeTokenExecutor
+	generateInstallScriptUC      usecases.GenerateNodeInstallScriptExecutor
+	generateBatchInstallScriptUC usecases.GenerateBatchInstallScriptExecutor
+	apiURL                       string
+	logger                       logger.Interface
 }
 
 func NewNodeHandler(
@@ -36,18 +37,20 @@ func NewNodeHandler(
 	listNodesUC usecases.ListNodesExecutor,
 	generateTokenUC usecases.GenerateNodeTokenExecutor,
 	generateInstallScriptUC usecases.GenerateNodeInstallScriptExecutor,
+	generateBatchInstallScriptUC usecases.GenerateBatchInstallScriptExecutor,
 	apiURL string,
 ) *NodeHandler {
 	return &NodeHandler{
-		createNodeUC:            createNodeUC,
-		getNodeUC:               getNodeUC,
-		updateNodeUC:            updateNodeUC,
-		deleteNodeUC:            deleteNodeUC,
-		listNodesUC:             listNodesUC,
-		generateTokenUC:         generateTokenUC,
-		generateInstallScriptUC: generateInstallScriptUC,
-		apiURL:                  apiURL,
-		logger:                  logger.NewLogger(),
+		createNodeUC:                 createNodeUC,
+		getNodeUC:                    getNodeUC,
+		updateNodeUC:                 updateNodeUC,
+		deleteNodeUC:                 deleteNodeUC,
+		listNodesUC:                  listNodesUC,
+		generateTokenUC:              generateTokenUC,
+		generateInstallScriptUC:      generateInstallScriptUC,
+		generateBatchInstallScriptUC: generateBatchInstallScriptUC,
+		apiURL:                       apiURL,
+		logger:                       logger.NewLogger(),
 	}
 }
 
@@ -628,4 +631,38 @@ func (r *ListNodesRequest) ToCommand() usecases.ListNodesQuery {
 		SortBy:           r.SortBy,
 		SortOrder:        r.SortOrder,
 	}
+}
+
+// BatchInstallScriptRequest represents the request body for generating batch install script.
+type BatchInstallScriptRequest struct {
+	NodeIDs []string `json:"node_ids" binding:"required,min=1,max=100"`
+}
+
+// GetBatchInstallScript handles POST /nodes/batch-install-script
+func (h *NodeHandler) GetBatchInstallScript(c *gin.Context) {
+	var req BatchInstallScriptRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Warnw("invalid request body for batch install script", "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	// Use query param to override API URL if provided
+	apiURL := c.Query("api_url")
+	if apiURL == "" {
+		apiURL = h.apiURL
+	}
+
+	query := usecases.GenerateBatchInstallScriptQuery{
+		SIDs:   req.NodeIDs,
+		APIURL: apiURL,
+	}
+
+	result, err := h.generateBatchInstallScriptUC.Execute(c.Request.Context(), query)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Batch install command generated successfully", result)
 }

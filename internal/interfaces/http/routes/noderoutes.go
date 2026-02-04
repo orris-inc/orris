@@ -41,6 +41,11 @@ func SetupNodeRoutes(engine *gin.Engine, config *NodeRouteConfig) {
 			authorization.RequireAdmin(),
 			config.NodeHandler.ListNodes)
 
+		// Batch install script endpoint (must come BEFORE /:id to avoid conflicts)
+		nodes.POST("/batch-install-script",
+			authorization.RequireAdmin(),
+			config.NodeHandler.GetBatchInstallScript)
+
 		// Specific action endpoints (must come BEFORE /:id to avoid conflicts)
 		// Using PATCH for state changes as per RESTful best practices
 		nodes.PATCH("/:id/status",
@@ -115,6 +120,9 @@ func SetupNodeRoutes(engine *gin.Engine, config *NodeRouteConfig) {
 
 		// Get user's node usage/quota - specific path must come BEFORE /:id
 		userNodes.GET("/usage", config.UserNodeHandler.GetUsage)
+
+		// Batch install script endpoint - specific path must come BEFORE /:id
+		userNodes.POST("/batch-install-script", config.UserNodeHandler.GetBatchInstallScript)
 
 		// Single node operations - require ownership check
 		nodeGroup := userNodes.Group("/:id")

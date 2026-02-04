@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	commondto "github.com/orris-inc/orris/internal/application/common/dto"
 	"github.com/orris-inc/orris/internal/application/node/dto"
 	domainNode "github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/domain/resource"
@@ -27,112 +28,10 @@ type NodeSystemStatusQuerier interface {
 	GetNodeSystemStatus(ctx context.Context, nodeID uint) (*NodeSystemStatus, error)
 }
 
-// NodeSystemStatus represents node system status metrics from Redis cache
+// NodeSystemStatus represents node system status metrics from Redis cache.
+// Embeds common SystemStatus for shared fields across all agent types.
 type NodeSystemStatus struct {
-	// System resources
-	CPUPercent    float64
-	MemoryPercent float64
-	MemoryUsed    uint64
-	MemoryTotal   uint64
-	MemoryAvail   uint64
-	DiskPercent   float64
-	DiskUsed      uint64
-	DiskTotal     uint64
-	UptimeSeconds int64
-
-	// System load
-	LoadAvg1  float64
-	LoadAvg5  float64
-	LoadAvg15 float64
-
-	// Network statistics
-	NetworkRxBytes uint64
-	NetworkTxBytes uint64
-	NetworkRxRate  uint64
-	NetworkTxRate  uint64
-
-	// Connection statistics
-	TCPConnections int
-	UDPConnections int
-
-	// Network info
-	PublicIPv4 string
-	PublicIPv6 string
-
-	// Agent info
-	AgentVersion string
-	Platform     string
-	Arch         string
-
-	// CPU details
-	CPUCores     int
-	CPUModelName string
-	CPUMHz       float64
-
-	// Swap memory
-	SwapTotal   uint64
-	SwapUsed    uint64
-	SwapPercent float64
-
-	// Disk I/O
-	DiskReadBytes  uint64
-	DiskWriteBytes uint64
-	DiskReadRate   uint64
-	DiskWriteRate  uint64
-	DiskIOPS       uint64
-
-	// Pressure Stall Information (PSI)
-	PSICPUSome    float64
-	PSICPUFull    float64
-	PSIMemorySome float64
-	PSIMemoryFull float64
-	PSIIOSome     float64
-	PSIIOFull     float64
-
-	// Network extended stats
-	NetworkRxPackets uint64
-	NetworkTxPackets uint64
-	NetworkRxErrors  uint64
-	NetworkTxErrors  uint64
-	NetworkRxDropped uint64
-	NetworkTxDropped uint64
-
-	// Socket statistics
-	SocketsUsed      int
-	SocketsTCPInUse  int
-	SocketsUDPInUse  int
-	SocketsTCPOrphan int
-	SocketsTCPTW     int
-
-	// Process statistics
-	ProcessesTotal   uint64
-	ProcessesRunning uint64
-	ProcessesBlocked uint64
-
-	// File descriptors
-	FileNrAllocated uint64
-	FileNrMax       uint64
-
-	// Context switches and interrupts
-	ContextSwitches uint64
-	Interrupts      uint64
-
-	// Kernel info
-	KernelVersion string
-	Hostname      string
-
-	// Virtual memory statistics
-	VMPageIn  uint64
-	VMPageOut uint64
-	VMSwapIn  uint64
-	VMSwapOut uint64
-	VMOOMKill uint64
-
-	// Entropy pool
-	EntropyAvailable uint64
-
-	// Metadata
-	UpdatedAt int64
+	commondto.SystemStatus
 }
 
 // GetNodeUseCase handles the business logic for retrieving a node
@@ -230,102 +129,13 @@ func (uc *GetNodeUseCase) validateQuery(query GetNodeQuery) error {
 	return nil
 }
 
-// toNodeSystemStatusDTO converts internal NodeSystemStatus to DTO
+// toNodeSystemStatusDTO converts internal NodeSystemStatus to DTO.
+// Both types embed commondto.SystemStatus, so direct assignment works.
 func toNodeSystemStatusDTO(status *NodeSystemStatus) *dto.NodeSystemStatusDTO {
 	if status == nil {
 		return nil
 	}
 	return &dto.NodeSystemStatusDTO{
-		CPUPercent:     status.CPUPercent,
-		MemoryPercent:  status.MemoryPercent,
-		MemoryUsed:     status.MemoryUsed,
-		MemoryTotal:    status.MemoryTotal,
-		MemoryAvail:    status.MemoryAvail,
-		DiskPercent:    status.DiskPercent,
-		DiskUsed:       status.DiskUsed,
-		DiskTotal:      status.DiskTotal,
-		UptimeSeconds:  status.UptimeSeconds,
-		LoadAvg1:       status.LoadAvg1,
-		LoadAvg5:       status.LoadAvg5,
-		LoadAvg15:      status.LoadAvg15,
-		NetworkRxBytes: status.NetworkRxBytes,
-		NetworkTxBytes: status.NetworkTxBytes,
-		NetworkRxRate:  status.NetworkRxRate,
-		NetworkTxRate:  status.NetworkTxRate,
-		TCPConnections: status.TCPConnections,
-		UDPConnections: status.UDPConnections,
-		PublicIPv4:     status.PublicIPv4,
-		PublicIPv6:     status.PublicIPv6,
-		AgentVersion:   status.AgentVersion,
-		Platform:       status.Platform,
-		Arch:           status.Arch,
-		CPUCores:       status.CPUCores,
-		CPUModelName:   status.CPUModelName,
-		CPUMHz:         status.CPUMHz,
-
-		// Swap memory
-		SwapTotal:   status.SwapTotal,
-		SwapUsed:    status.SwapUsed,
-		SwapPercent: status.SwapPercent,
-
-		// Disk I/O
-		DiskReadBytes:  status.DiskReadBytes,
-		DiskWriteBytes: status.DiskWriteBytes,
-		DiskReadRate:   status.DiskReadRate,
-		DiskWriteRate:  status.DiskWriteRate,
-		DiskIOPS:       status.DiskIOPS,
-
-		// Pressure Stall Information (PSI)
-		PSICPUSome:    status.PSICPUSome,
-		PSICPUFull:    status.PSICPUFull,
-		PSIMemorySome: status.PSIMemorySome,
-		PSIMemoryFull: status.PSIMemoryFull,
-		PSIIOSome:     status.PSIIOSome,
-		PSIIOFull:     status.PSIIOFull,
-
-		// Network extended stats
-		NetworkRxPackets: status.NetworkRxPackets,
-		NetworkTxPackets: status.NetworkTxPackets,
-		NetworkRxErrors:  status.NetworkRxErrors,
-		NetworkTxErrors:  status.NetworkTxErrors,
-		NetworkRxDropped: status.NetworkRxDropped,
-		NetworkTxDropped: status.NetworkTxDropped,
-
-		// Socket statistics
-		SocketsUsed:      status.SocketsUsed,
-		SocketsTCPInUse:  status.SocketsTCPInUse,
-		SocketsUDPInUse:  status.SocketsUDPInUse,
-		SocketsTCPOrphan: status.SocketsTCPOrphan,
-		SocketsTCPTW:     status.SocketsTCPTW,
-
-		// Process statistics
-		ProcessesTotal:   status.ProcessesTotal,
-		ProcessesRunning: status.ProcessesRunning,
-		ProcessesBlocked: status.ProcessesBlocked,
-
-		// File descriptors
-		FileNrAllocated: status.FileNrAllocated,
-		FileNrMax:       status.FileNrMax,
-
-		// Context switches and interrupts
-		ContextSwitches: status.ContextSwitches,
-		Interrupts:      status.Interrupts,
-
-		// Kernel info
-		KernelVersion: status.KernelVersion,
-		Hostname:      status.Hostname,
-
-		// Virtual memory statistics
-		VMPageIn:  status.VMPageIn,
-		VMPageOut: status.VMPageOut,
-		VMSwapIn:  status.VMSwapIn,
-		VMSwapOut: status.VMSwapOut,
-		VMOOMKill: status.VMOOMKill,
-
-		// Entropy pool
-		EntropyAvailable: status.EntropyAvailable,
-
-		// Metadata
-		UpdatedAt: status.UpdatedAt,
+		SystemStatus: status.SystemStatus,
 	}
 }

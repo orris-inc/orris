@@ -29,38 +29,6 @@ func (a *jwtServiceAdapter) Generate(userUUID string, sessionID string, role aut
 	}, nil
 }
 
-// oauthClientAdapter adapts OAuth client to usecases.OAuthClient interface.
-type oauthClientAdapter struct {
-	client interface {
-		GetAuthURL(state string) (authURL string, codeVerifier string, err error)
-		ExchangeCode(ctx context.Context, code string, codeVerifier string) (string, error)
-		GetUserInfo(ctx context.Context, accessToken string) (*auth.OAuthUserInfo, error)
-	}
-}
-
-func (a *oauthClientAdapter) GetAuthURL(state string) (string, string, error) {
-	return a.client.GetAuthURL(state)
-}
-
-func (a *oauthClientAdapter) ExchangeCode(ctx context.Context, code string, codeVerifier string) (string, error) {
-	return a.client.ExchangeCode(ctx, code, codeVerifier)
-}
-
-func (a *oauthClientAdapter) GetUserInfo(ctx context.Context, accessToken string) (*usecases.OAuthUserInfo, error) {
-	info, err := a.client.GetUserInfo(ctx, accessToken)
-	if err != nil {
-		return nil, err
-	}
-	return &usecases.OAuthUserInfo{
-		Email:         info.Email,
-		Name:          info.Name,
-		Picture:       info.Picture,
-		EmailVerified: info.EmailVerified,
-		Provider:      info.Provider,
-		ProviderID:    info.ProviderID,
-	}, nil
-}
-
 // dynamicOAuthClientAdapter wraps OAuthServiceManager to provide dynamic OAuth client access.
 // This adapter fetches the current OAuth client from manager on each call, enabling hot-reload support.
 type dynamicOAuthClientAdapter struct {

@@ -103,6 +103,12 @@ type Repository interface {
 	// This is used for Node Plan subscription delivery where user rules should be excluded.
 	ListSystemRulesByTargetNodes(ctx context.Context, nodeIDs []uint, groupIDs []uint) ([]*ForwardRule, error)
 
+	// ListSystemRulesByGroupIDs returns enabled system rules that belong to any of the specified groups.
+	// Unlike ListSystemRulesByTargetNodes, this does not require target nodes to be in the same resource groups.
+	// This allows rules to be delivered even when their target nodes are outside the resource groups.
+	// Only includes rules with system scope (user_id IS NULL or 0) and target_node_id set.
+	ListSystemRulesByGroupIDs(ctx context.Context, groupIDs []uint) ([]*ForwardRule, error)
+
 	// ListUserRulesForDelivery returns enabled user rules for subscription delivery.
 	// Only includes rules with user scope (user_id = userID) and target_node_id set.
 	// This is used for Forward Plan subscription delivery.

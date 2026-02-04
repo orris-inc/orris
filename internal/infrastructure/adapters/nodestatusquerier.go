@@ -122,104 +122,12 @@ func (a *NodeStatusQuerierAdapter) GetBatchStatus(nodeSIDs []string) (map[string
 }
 
 // toStatusResponse converts internal NodeSystemStatus to commondto.SystemStatus for consistent JSON output.
-// This ensures the SSE response uses snake_case field names matching the forward agent events.
+// NodeSystemStatus embeds commondto.SystemStatus, so direct access works.
 func (a *NodeStatusQuerierAdapter) toStatusResponse(status *nodeUsecases.NodeSystemStatus) *commondto.SystemStatus {
 	if status == nil {
 		return nil
 	}
-	return &commondto.SystemStatus{
-		CPUPercent:     status.CPUPercent,
-		MemoryPercent:  status.MemoryPercent,
-		MemoryUsed:     status.MemoryUsed,
-		MemoryTotal:    status.MemoryTotal,
-		MemoryAvail:    status.MemoryAvail,
-		DiskPercent:    status.DiskPercent,
-		DiskUsed:       status.DiskUsed,
-		DiskTotal:      status.DiskTotal,
-		UptimeSeconds:  status.UptimeSeconds,
-		LoadAvg1:       status.LoadAvg1,
-		LoadAvg5:       status.LoadAvg5,
-		LoadAvg15:      status.LoadAvg15,
-		NetworkRxBytes: status.NetworkRxBytes,
-		NetworkTxBytes: status.NetworkTxBytes,
-		NetworkRxRate:  status.NetworkRxRate,
-		NetworkTxRate:  status.NetworkTxRate,
-		TCPConnections: status.TCPConnections,
-		UDPConnections: status.UDPConnections,
-		PublicIPv4:     status.PublicIPv4,
-		PublicIPv6:     status.PublicIPv6,
-		AgentVersion:   status.AgentVersion,
-		Platform:       status.Platform,
-		Arch:           status.Arch,
-		CPUCores:       status.CPUCores,
-		CPUModelName:   status.CPUModelName,
-		CPUMHz:         status.CPUMHz,
-
-		// Swap memory
-		SwapTotal:   status.SwapTotal,
-		SwapUsed:    status.SwapUsed,
-		SwapPercent: status.SwapPercent,
-
-		// Disk I/O
-		DiskReadBytes:  status.DiskReadBytes,
-		DiskWriteBytes: status.DiskWriteBytes,
-		DiskReadRate:   status.DiskReadRate,
-		DiskWriteRate:  status.DiskWriteRate,
-		DiskIOPS:       status.DiskIOPS,
-
-		// Pressure Stall Information (PSI)
-		PSICPUSome:    status.PSICPUSome,
-		PSICPUFull:    status.PSICPUFull,
-		PSIMemorySome: status.PSIMemorySome,
-		PSIMemoryFull: status.PSIMemoryFull,
-		PSIIOSome:     status.PSIIOSome,
-		PSIIOFull:     status.PSIIOFull,
-
-		// Network extended stats
-		NetworkRxPackets: status.NetworkRxPackets,
-		NetworkTxPackets: status.NetworkTxPackets,
-		NetworkRxErrors:  status.NetworkRxErrors,
-		NetworkTxErrors:  status.NetworkTxErrors,
-		NetworkRxDropped: status.NetworkRxDropped,
-		NetworkTxDropped: status.NetworkTxDropped,
-
-		// Socket statistics
-		SocketsUsed:      status.SocketsUsed,
-		SocketsTCPInUse:  status.SocketsTCPInUse,
-		SocketsUDPInUse:  status.SocketsUDPInUse,
-		SocketsTCPOrphan: status.SocketsTCPOrphan,
-		SocketsTCPTW:     status.SocketsTCPTW,
-
-		// Process statistics
-		ProcessesTotal:   status.ProcessesTotal,
-		ProcessesRunning: status.ProcessesRunning,
-		ProcessesBlocked: status.ProcessesBlocked,
-
-		// File descriptors
-		FileNrAllocated: status.FileNrAllocated,
-		FileNrMax:       status.FileNrMax,
-
-		// Context switches and interrupts
-		ContextSwitches: status.ContextSwitches,
-		Interrupts:      status.Interrupts,
-
-		// Kernel info
-		KernelVersion: status.KernelVersion,
-		Hostname:      status.Hostname,
-
-		// Virtual memory statistics
-		VMPageIn:  status.VMPageIn,
-		VMPageOut: status.VMPageOut,
-		VMSwapIn:  status.VMSwapIn,
-		VMSwapOut: status.VMSwapOut,
-		VMOOMKill: status.VMOOMKill,
-
-		// Entropy pool
-		EntropyAvailable: status.EntropyAvailable,
-
-		// Metadata
-		UpdatedAt: status.UpdatedAt,
-	}
+	return &status.SystemStatus
 }
 
 // Ensure NodeStatusQuerierAdapter implements NodeStatusQuerier interface.

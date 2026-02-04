@@ -42,6 +42,8 @@ import (
 	"github.com/orris-inc/orris/internal/infrastructure/token"
 	"github.com/orris-inc/orris/internal/interfaces/http/handlers"
 	adminHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/admin"
+	adminResourceGroupHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/admin/resourcegroup"
+	adminSubscriptionHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/admin/subscription"
 	forwardAgentAPIHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward/agent/api"
 	forwardAgentCrudHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward/agent/crud"
 	forwardAgentHubHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/forward/agent/hub"
@@ -67,8 +69,8 @@ type Router struct {
 	profileHandler                 *handlers.ProfileHandler
 	dashboardHandler               *handlers.DashboardHandler
 	subscriptionHandler            *handlers.SubscriptionHandler
-	adminSubscriptionHandler       *adminHandlers.SubscriptionHandler
-	adminResourceGroupHandler      *adminHandlers.ResourceGroupHandler
+	adminSubscriptionHandler       *adminSubscriptionHandlers.Handler
+	adminResourceGroupHandler      *adminResourceGroupHandlers.Handler
 	adminTrafficStatsHandler       *adminHandlers.TrafficStatsHandler
 	adminTelegramHandler           *adminHandlers.AdminTelegramHandler
 	adminNotificationService       *telegramAdminApp.ServiceDDD
@@ -319,7 +321,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		cancelSubscriptionUC, deleteSubscriptionUC, changePlanUC, getSubscriptionUsageStatsUC,
 		resetSubscriptionLinkUC, log,
 	)
-	adminSubscriptionHandler := adminHandlers.NewSubscriptionHandler(
+	adminSubscriptionHandler := adminSubscriptionHandlers.NewHandler(
 		subscriptionRepo, createSubscriptionUC, getSubscriptionUC, listUserSubscriptionsUC,
 		cancelSubscriptionUC, deleteSubscriptionUC, renewSubscriptionUC, changePlanUC,
 		activateSubscriptionUC, suspendSubscriptionUC, unsuspendSubscriptionUC, resetSubscriptionUsageUC, log,
@@ -387,6 +389,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	listNodesUC := nodeUsecases.NewListNodesUseCase(nodeRepoImpl, resourceGroupRepo, userRepo, nodeStatusQuerier, nodeAgentReleaseService, log)
 	generateNodeTokenUC := nodeUsecases.NewGenerateNodeTokenUseCase(nodeRepoImpl, log)
 	generateNodeInstallScriptUC := nodeUsecases.NewGenerateNodeInstallScriptUseCase(nodeRepoImpl, log)
+	generateBatchInstallScriptUC := nodeUsecases.NewGenerateBatchInstallScriptUseCase(nodeRepoImpl, log)
 
 	// Initialize user node use cases
 	createUserNodeUC := nodeUsecases.NewCreateUserNodeUseCase(nodeRepoImpl, log)
@@ -397,6 +400,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	regenerateUserNodeTokenUC := nodeUsecases.NewRegenerateUserNodeTokenUseCase(nodeRepoImpl, log)
 	getUserNodeUsageUC := nodeUsecases.NewGetUserNodeUsageUseCase(nodeRepoImpl, subscriptionRepo, subscriptionPlanRepo, log)
 	getUserNodeInstallScriptUC := nodeUsecases.NewGetUserNodeInstallScriptUseCase(nodeRepoImpl, log)
+	getUserBatchInstallScriptUC := nodeUsecases.NewGetUserBatchInstallScriptUseCase(nodeRepoImpl, log)
 
 	// Initialize node authentication middleware using the same node repository adapter
 	validateNodeTokenUC := nodeUsecases.NewValidateNodeTokenUseCase(nodeRepo, log)
@@ -411,7 +415,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	// Initialize handlers
 	// API URL for node install script generation
 	apiBaseURL := cfg.Server.GetBaseURL()
-	nodeHandler := handlers.NewNodeHandler(createNodeUC, getNodeUC, updateNodeUC, deleteNodeUC, listNodesUC, generateNodeTokenUC, generateNodeInstallScriptUC, apiBaseURL)
+	nodeHandler := handlers.NewNodeHandler(createNodeUC, getNodeUC, updateNodeUC, deleteNodeUC, listNodesUC, generateNodeTokenUC, generateNodeInstallScriptUC, generateBatchInstallScriptUC, apiBaseURL)
 	// Note: nodeSubscriptionHandler is created later after settingProvider is initialized
 	var nodeSubscriptionHandler *handlers.NodeSubscriptionHandler
 	userNodeHandler := nodeHandlers.NewUserNodeHandler(
@@ -423,6 +427,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		regenerateUserNodeTokenUC,
 		getUserNodeUsageUC,
 		getUserNodeInstallScriptUC,
+		getUserBatchInstallScriptUC,
 		apiBaseURL,
 	)
 
@@ -848,7 +853,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	manageRulesUC := resourceUsecases.NewManageResourceGroupForwardRulesUseCase(resourceGroupRepo, forwardRuleRepo, subscriptionPlanRepo, log)
 
 	// Initialize admin resource group handler
-	adminResourceGroupHandler := adminHandlers.NewResourceGroupHandler(
+	adminResourceGroupHandler := adminResourceGroupHandlers.NewHandler(
 		createResourceGroupUC, getResourceGroupUC, listResourceGroupsUC,
 		updateResourceGroupUC, deleteResourceGroupUC, updateResourceGroupStatusUC,
 		manageNodesUC, manageAgentsUC, manageRulesUC,

@@ -7,7 +7,6 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	commondto "github.com/orris-inc/orris/internal/application/common/dto"
 	nodeUsecases "github.com/orris-inc/orris/internal/application/node/usecases"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/infrastructure/adapters/systemstatus"
@@ -159,100 +158,8 @@ func NewNodeSystemStatusUpdaterAdapter(
 func (a *NodeSystemStatusUpdaterAdapter) UpdateSystemStatus(ctx context.Context, nodeID uint, status *nodeUsecases.NodeStatusUpdate) error {
 	key := fmt.Sprintf("node:%d:status", nodeID)
 
-	// Convert NodeStatusUpdate to SystemStatus for shared serialization
-	sysStatus := &commondto.SystemStatus{
-		CPUPercent:     status.CPUPercent,
-		MemoryPercent:  status.MemoryPercent,
-		MemoryUsed:     status.MemoryUsed,
-		MemoryTotal:    status.MemoryTotal,
-		MemoryAvail:    status.MemoryAvail,
-		DiskPercent:    status.DiskPercent,
-		DiskUsed:       status.DiskUsed,
-		DiskTotal:      status.DiskTotal,
-		UptimeSeconds:  status.UptimeSeconds,
-		LoadAvg1:       status.LoadAvg1,
-		LoadAvg5:       status.LoadAvg5,
-		LoadAvg15:      status.LoadAvg15,
-		NetworkRxBytes: status.NetworkRxBytes,
-		NetworkTxBytes: status.NetworkTxBytes,
-		NetworkRxRate:  status.NetworkRxRate,
-		NetworkTxRate:  status.NetworkTxRate,
-		TCPConnections: status.TCPConnections,
-		UDPConnections: status.UDPConnections,
-		PublicIPv4:     status.PublicIPv4,
-		PublicIPv6:     status.PublicIPv6,
-		AgentVersion:   status.AgentVersion,
-		Platform:       status.Platform,
-		Arch:           status.Arch,
-		CPUCores:       status.CPUCores,
-		CPUModelName:   status.CPUModelName,
-		CPUMHz:         status.CPUMHz,
-
-		// Swap memory
-		SwapTotal:   status.SwapTotal,
-		SwapUsed:    status.SwapUsed,
-		SwapPercent: status.SwapPercent,
-
-		// Disk I/O
-		DiskReadBytes:  status.DiskReadBytes,
-		DiskWriteBytes: status.DiskWriteBytes,
-		DiskReadRate:   status.DiskReadRate,
-		DiskWriteRate:  status.DiskWriteRate,
-		DiskIOPS:       status.DiskIOPS,
-
-		// Pressure Stall Information (PSI)
-		PSICPUSome:    status.PSICPUSome,
-		PSICPUFull:    status.PSICPUFull,
-		PSIMemorySome: status.PSIMemorySome,
-		PSIMemoryFull: status.PSIMemoryFull,
-		PSIIOSome:     status.PSIIOSome,
-		PSIIOFull:     status.PSIIOFull,
-
-		// Network extended stats
-		NetworkRxPackets: status.NetworkRxPackets,
-		NetworkTxPackets: status.NetworkTxPackets,
-		NetworkRxErrors:  status.NetworkRxErrors,
-		NetworkTxErrors:  status.NetworkTxErrors,
-		NetworkRxDropped: status.NetworkRxDropped,
-		NetworkTxDropped: status.NetworkTxDropped,
-
-		// Socket statistics
-		SocketsUsed:      status.SocketsUsed,
-		SocketsTCPInUse:  status.SocketsTCPInUse,
-		SocketsUDPInUse:  status.SocketsUDPInUse,
-		SocketsTCPOrphan: status.SocketsTCPOrphan,
-		SocketsTCPTW:     status.SocketsTCPTW,
-
-		// Process statistics
-		ProcessesTotal:   status.ProcessesTotal,
-		ProcessesRunning: status.ProcessesRunning,
-		ProcessesBlocked: status.ProcessesBlocked,
-
-		// File descriptors
-		FileNrAllocated: status.FileNrAllocated,
-		FileNrMax:       status.FileNrMax,
-
-		// Context switches and interrupts
-		ContextSwitches: status.ContextSwitches,
-		Interrupts:      status.Interrupts,
-
-		// Kernel info
-		KernelVersion: status.KernelVersion,
-		Hostname:      status.Hostname,
-
-		// Virtual memory statistics
-		VMPageIn:  status.VMPageIn,
-		VMPageOut: status.VMPageOut,
-		VMSwapIn:  status.VMSwapIn,
-		VMSwapOut: status.VMSwapOut,
-		VMOOMKill: status.VMOOMKill,
-
-		// Entropy pool
-		EntropyAvailable: status.EntropyAvailable,
-	}
-
-	// Use shared helper to convert to Redis fields
-	data := systemstatus.ToRedisFields(sysStatus)
+	// NodeStatusUpdate embeds commondto.SystemStatus, use it directly
+	data := systemstatus.ToRedisFields(&status.SystemStatus)
 
 	// Add metadata
 	data[systemstatus.FieldUpdatedAt] = fmt.Sprintf("%d", biztime.NowUTC().Unix())
@@ -323,105 +230,11 @@ func (a *NodeSystemStatusQuerierAdapter) GetNodeSystemStatus(ctx context.Context
 
 // parseNodeSystemStatus parses Redis hash values into NodeSystemStatus
 // using the shared systemstatus parser for common fields.
+// NodeSystemStatus embeds commondto.SystemStatus, so direct assignment works.
 func parseNodeSystemStatus(values map[string]string) *nodeUsecases.NodeSystemStatus {
-	// Use shared parser for common system status fields
-	sysStatus := systemstatus.ParseSystemStatus(values)
-
-	status := &nodeUsecases.NodeSystemStatus{
-		CPUPercent:     sysStatus.CPUPercent,
-		MemoryPercent:  sysStatus.MemoryPercent,
-		MemoryUsed:     sysStatus.MemoryUsed,
-		MemoryTotal:    sysStatus.MemoryTotal,
-		MemoryAvail:    sysStatus.MemoryAvail,
-		DiskPercent:    sysStatus.DiskPercent,
-		DiskUsed:       sysStatus.DiskUsed,
-		DiskTotal:      sysStatus.DiskTotal,
-		UptimeSeconds:  sysStatus.UptimeSeconds,
-		LoadAvg1:       sysStatus.LoadAvg1,
-		LoadAvg5:       sysStatus.LoadAvg5,
-		LoadAvg15:      sysStatus.LoadAvg15,
-		NetworkRxBytes: sysStatus.NetworkRxBytes,
-		NetworkTxBytes: sysStatus.NetworkTxBytes,
-		NetworkRxRate:  sysStatus.NetworkRxRate,
-		NetworkTxRate:  sysStatus.NetworkTxRate,
-		TCPConnections: sysStatus.TCPConnections,
-		UDPConnections: sysStatus.UDPConnections,
-		PublicIPv4:     sysStatus.PublicIPv4,
-		PublicIPv6:     sysStatus.PublicIPv6,
-		AgentVersion:   sysStatus.AgentVersion,
-		Platform:       sysStatus.Platform,
-		Arch:           sysStatus.Arch,
-		CPUCores:       sysStatus.CPUCores,
-		CPUModelName:   sysStatus.CPUModelName,
-		CPUMHz:         sysStatus.CPUMHz,
-
-		// Swap memory
-		SwapTotal:   sysStatus.SwapTotal,
-		SwapUsed:    sysStatus.SwapUsed,
-		SwapPercent: sysStatus.SwapPercent,
-
-		// Disk I/O
-		DiskReadBytes:  sysStatus.DiskReadBytes,
-		DiskWriteBytes: sysStatus.DiskWriteBytes,
-		DiskReadRate:   sysStatus.DiskReadRate,
-		DiskWriteRate:  sysStatus.DiskWriteRate,
-		DiskIOPS:       sysStatus.DiskIOPS,
-
-		// Pressure Stall Information (PSI)
-		PSICPUSome:    sysStatus.PSICPUSome,
-		PSICPUFull:    sysStatus.PSICPUFull,
-		PSIMemorySome: sysStatus.PSIMemorySome,
-		PSIMemoryFull: sysStatus.PSIMemoryFull,
-		PSIIOSome:     sysStatus.PSIIOSome,
-		PSIIOFull:     sysStatus.PSIIOFull,
-
-		// Network extended stats
-		NetworkRxPackets: sysStatus.NetworkRxPackets,
-		NetworkTxPackets: sysStatus.NetworkTxPackets,
-		NetworkRxErrors:  sysStatus.NetworkRxErrors,
-		NetworkTxErrors:  sysStatus.NetworkTxErrors,
-		NetworkRxDropped: sysStatus.NetworkRxDropped,
-		NetworkTxDropped: sysStatus.NetworkTxDropped,
-
-		// Socket statistics
-		SocketsUsed:      sysStatus.SocketsUsed,
-		SocketsTCPInUse:  sysStatus.SocketsTCPInUse,
-		SocketsUDPInUse:  sysStatus.SocketsUDPInUse,
-		SocketsTCPOrphan: sysStatus.SocketsTCPOrphan,
-		SocketsTCPTW:     sysStatus.SocketsTCPTW,
-
-		// Process statistics
-		ProcessesTotal:   sysStatus.ProcessesTotal,
-		ProcessesRunning: sysStatus.ProcessesRunning,
-		ProcessesBlocked: sysStatus.ProcessesBlocked,
-
-		// File descriptors
-		FileNrAllocated: sysStatus.FileNrAllocated,
-		FileNrMax:       sysStatus.FileNrMax,
-
-		// Context switches and interrupts
-		ContextSwitches: sysStatus.ContextSwitches,
-		Interrupts:      sysStatus.Interrupts,
-
-		// Kernel info
-		KernelVersion: sysStatus.KernelVersion,
-		Hostname:      sysStatus.Hostname,
-
-		// Virtual memory statistics
-		VMPageIn:  sysStatus.VMPageIn,
-		VMPageOut: sysStatus.VMPageOut,
-		VMSwapIn:  sysStatus.VMSwapIn,
-		VMSwapOut: sysStatus.VMSwapOut,
-		VMOOMKill: sysStatus.VMOOMKill,
-
-		// Entropy pool
-		EntropyAvailable: sysStatus.EntropyAvailable,
-
-		// Metadata
-		UpdatedAt: sysStatus.UpdatedAt,
+	return &nodeUsecases.NodeSystemStatus{
+		SystemStatus: systemstatus.ParseSystemStatus(values),
 	}
-
-	return status
 }
 
 // GetMultipleNodeSystemStatus retrieves system status for multiple nodes in batch

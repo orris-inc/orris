@@ -108,7 +108,7 @@ install_docker() {
             log_info "Docker installed successfully."
             log_warn "You may need to log out and back in for docker group changes to take effect."
             ;;
-        centos|rhel|fedora|rocky|almalinux)
+        centos|rhel|fedora|rocky|almalinux|alinux)
             log_info "Installing Docker on $OS..."
             sudo yum install -y yum-utils
             sudo yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo

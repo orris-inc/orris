@@ -833,6 +833,43 @@ func (r *ForwardRuleRepositoryImpl) ListSystemRulesByTargetNodes(ctx context.Con
 	return entities, nil
 }
 
+// ListSystemRulesByGroupIDs returns enabled system rules that belong to any of the specified groups.
+// Unlike ListSystemRulesByTargetNodes, this does not require target nodes to be in the same resource groups.
+// This allows rules to be delivered even when their target nodes are outside the resource groups.
+// Only includes rules with system scope (user_id IS NULL or 0) and target_node_id set.
+func (r *ForwardRuleRepositoryImpl) ListSystemRulesByGroupIDs(ctx context.Context, groupIDs []uint) ([]*forward.ForwardRule, error) {
+	if len(groupIDs) == 0 {
+		return []*forward.ForwardRule{}, nil
+	}
+
+	var ruleModels []*models.ForwardRuleModel
+
+	tx := db.GetTxFromContext(ctx, r.db)
+	groupIDsJSON := jsonutil.UintSliceToJSONArray(groupIDs)
+
+	// Query enabled system rules (user_id IS NULL or 0) that belong to the specified groups
+	// Requires target_node_id to be set since rules without target nodes cannot generate subscription entries
+	if err := tx.
+		Where("status = ?", "enabled").
+		Where("rule_type IN ?", []string{"direct", "entry", "chain", "direct_chain", "external"}).
+		Where("user_id IS NULL OR user_id = 0").
+		Where("target_node_id IS NOT NULL").
+		Where("JSON_OVERLAPS(group_ids, ?)", groupIDsJSON).
+		Order("sort_order ASC").
+		Find(&ruleModels).Error; err != nil {
+		r.logger.Errorw("failed to list system rules by group IDs", "group_count", len(groupIDs), "error", err)
+		return nil, fmt.Errorf("failed to list system rules by group IDs: %w", err)
+	}
+
+	entities, err := r.mapper.ToEntities(ruleModels)
+	if err != nil {
+		r.logger.Errorw("failed to map forward rule models to entities", "error", err)
+		return nil, fmt.Errorf("failed to map forward rules: %w", err)
+	}
+
+	return entities, nil
+}
+
 // ListUserRulesForDelivery returns enabled user rules for subscription delivery.
 // Only includes rules with user scope (user_id = userID) and target_node_id set.
 // This is used for Forward Plan subscription delivery.
