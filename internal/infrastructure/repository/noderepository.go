@@ -557,7 +557,7 @@ func (r *NodeRepositoryImpl) Update(ctx context.Context, nodeEntity *node.Node) 
 				"name", "server_address", "agent_port", "subscription_port",
 				"protocol", "status", "region", "tags", "sort_order",
 				"maintenance_reason", "token_hash", "api_token", "group_ids", "route_config", "mute_notification",
-				"expires_at", "renewal_amount", "version", "updated_at",
+				"expires_at", "cost_label", "version", "updated_at",
 			).
 			Updates(model)
 
@@ -1484,4 +1484,48 @@ func (r *NodeRepositoryImpl) GetMetadataBySIDs(ctx context.Context, sids []strin
 	}
 
 	return metadata, nil
+}
+
+// FindExpiringNodes returns active nodes that will expire within the specified days.
+// Only returns nodes that have expires_at set, are active, and are not already expired.
+func (r *NodeRepositoryImpl) FindExpiringNodes(ctx context.Context, withinDays int) ([]*node.ExpiringNodeInfo, error) {
+	now := biztime.NowUTC()
+	threshold := now.AddDate(0, 0, withinDays)
+
+	var results []struct {
+		ID        uint       `gorm:"column:id"`
+		SID       string     `gorm:"column:sid"`
+		Name      string     `gorm:"column:name"`
+		ExpiresAt *time.Time `gorm:"column:expires_at"`
+		CostLabel *string    `gorm:"column:cost_label"`
+	}
+
+	if err := r.db.WithContext(ctx).
+		Model(&models.NodeModel{}).
+		Select("id, sid, name, expires_at, cost_label").
+		Where("status = ?", "active").       // Only active nodes need expiring notification
+		Where("expires_at IS NOT NULL").
+		Where("expires_at > ?", now).        // Not already expired
+		Where("expires_at <= ?", threshold). // Within threshold
+		Order("expires_at ASC").
+		Find(&results).Error; err != nil {
+		r.logger.Errorw("failed to find expiring nodes", "within_days", withinDays, "error", err)
+		return nil, fmt.Errorf("failed to find expiring nodes: %w", err)
+	}
+
+	nodes := make([]*node.ExpiringNodeInfo, 0, len(results))
+	for _, res := range results {
+		if res.ExpiresAt == nil {
+			continue
+		}
+		nodes = append(nodes, &node.ExpiringNodeInfo{
+			ID:        res.ID,
+			SID:       res.SID,
+			Name:      res.Name,
+			ExpiresAt: res.ExpiresAt.UTC(),
+			CostLabel: res.CostLabel,
+		})
+	}
+
+	return nodes, nil
 }

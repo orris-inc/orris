@@ -26,8 +26,8 @@ type UpdateForwardAgentCommand struct {
 	MuteNotification *bool      // nil: no update, non-nil: set mute notification flag
 	ExpiresAt        *time.Time // nil: no update, set to update expiration time
 	ClearExpiresAt   bool       // true: clear expiration time
-	RenewalAmount    *float64   // nil: no update, set to update renewal amount
-	ClearRenewal     bool       // true: clear renewal amount
+	CostLabel        *string    // nil: no update, set to update cost label
+	ClearCostLabel   bool       // true: clear cost label
 }
 
 // UpdateForwardAgentUseCase handles forward agent updates.
@@ -217,11 +217,11 @@ func (uc *UpdateForwardAgentUseCase) Execute(ctx context.Context, cmd UpdateForw
 		agent.SetExpiresAt(cmd.ExpiresAt)
 	}
 
-	// Handle RenewalAmount update
-	if cmd.ClearRenewal {
-		agent.SetRenewalAmount(nil)
-	} else if cmd.RenewalAmount != nil {
-		agent.SetRenewalAmount(cmd.RenewalAmount)
+	// Handle CostLabel update
+	if cmd.ClearCostLabel {
+		agent.SetCostLabel(nil)
+	} else if cmd.CostLabel != nil {
+		agent.SetCostLabel(cmd.CostLabel)
 	}
 
 	// Persist changes

@@ -112,6 +112,8 @@ func (s *ServiceDDD) GetBindingStatus(ctx context.Context, userID uint) (*dto.Ad
 				NotifyDailySummary:      binding.NotifyDailySummary(),
 				NotifyWeeklySummary:     binding.NotifyWeeklySummary(),
 				OfflineThresholdMinutes: binding.OfflineThresholdMinutes(),
+				NotifyResourceExpiring:  binding.NotifyResourceExpiring(),
+				ResourceExpiringDays:    binding.ResourceExpiringDays(),
 				CreatedAt:               binding.CreatedAt(),
 			},
 			BotLink: botLink,
@@ -258,6 +260,8 @@ func (s *ServiceDDD) UpdatePreferences(ctx context.Context, userID uint, req *dt
 		req.NotifyDailySummary,
 		req.NotifyWeeklySummary,
 		req.OfflineThresholdMinutes,
+		req.NotifyResourceExpiring,
+		req.ResourceExpiringDays,
 	); err != nil {
 		return nil, err
 	}
@@ -277,6 +281,8 @@ func (s *ServiceDDD) UpdatePreferences(ctx context.Context, userID uint, req *dt
 		NotifyDailySummary:      binding.NotifyDailySummary(),
 		NotifyWeeklySummary:     binding.NotifyWeeklySummary(),
 		OfflineThresholdMinutes: binding.OfflineThresholdMinutes(),
+		NotifyResourceExpiring:  binding.NotifyResourceExpiring(),
+		ResourceExpiringDays:    binding.ResourceExpiringDays(),
 		CreatedAt:               binding.CreatedAt(),
 	}, nil
 }

@@ -93,8 +93,8 @@ type UpdateForwardAgentRequest struct {
 	BlockedProtocols *[]string `json:"blocked_protocols,omitempty"`                         // Protocols to block (nil: no update, empty array: clear, non-empty: set new)
 	SortOrder        *int      `json:"sort_order,omitempty" example:"100"`                  // Custom sort order for UI display (lower values appear first)
 	MuteNotification *bool     `json:"mute_notification,omitempty"`                         // Mute online/offline notifications for this agent
-	ExpiresAt        *string   `json:"expires_at,omitempty" example:"2025-12-31T23:59:59Z"` // Expiration time in ISO8601 format (null to clear, omit to keep unchanged)
-	RenewalAmount    *float64  `json:"renewal_amount,omitempty" example:"99.00"`            // Renewal amount (null to clear, omit to keep unchanged)
+	ExpiresAt        *string   `json:"expires_at,omitempty" example:"2025-12-31T23:59:59Z"` // Expiration time in ISO8601 format (empty to clear, omit to keep unchanged)
+	CostLabel        *string   `json:"cost_label,omitempty" example:"35$/m"`                // Cost label for display (empty to clear, omit to keep unchanged)
 }
 
 // UpdateAgentStatusRequest represents a request to update forward agent status.
@@ -232,20 +232,18 @@ func (h *Handler) UpdateAgent(c *gin.Context) {
 		}
 	}
 
-	// Handle RenewalAmount field
-	// If renewal_amount is 0, treat it as clear (since we use *float64, 0 is a valid value but unlikely for renewal)
-	// Actually, let's check if it's explicitly null by checking the pointer
-	if req.RenewalAmount != nil {
-		if *req.RenewalAmount < 0 {
-			h.logger.Warnw("invalid renewal_amount: negative value", "short_id", shortID, "renewal_amount", *req.RenewalAmount)
-			utils.ErrorResponseWithError(c, errors.NewValidationError("renewal_amount cannot be negative"))
-			return
-		}
-		if *req.RenewalAmount == 0 {
-			// 0 means clear the renewal amount
-			cmd.ClearRenewal = true
+	// Handle CostLabel field
+	if req.CostLabel != nil {
+		if *req.CostLabel == "" {
+			// Empty string means clear the cost label
+			cmd.ClearCostLabel = true
 		} else {
-			cmd.RenewalAmount = req.RenewalAmount
+			if len(*req.CostLabel) > 50 {
+				h.logger.Warnw("cost_label exceeds max length", "short_id", shortID, "length", len(*req.CostLabel))
+				utils.ErrorResponseWithError(c, errors.NewValidationError("cost_label cannot exceed 50 characters"))
+				return
+			}
+			cmd.CostLabel = req.CostLabel
 		}
 	}
 

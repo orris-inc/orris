@@ -51,4 +51,8 @@ type AdminTelegramBindingRepository interface {
 
 	// FindBindingsForWeeklySummary finds bindings that want weekly summary
 	FindBindingsForWeeklySummary(ctx context.Context) ([]*AdminTelegramBinding, error)
+
+	// FindBindingsForResourceExpiringNotification finds bindings that want resource expiring notifications
+	// and haven't been notified today
+	FindBindingsForResourceExpiringNotification(ctx context.Context) ([]*AdminTelegramBinding, error)
 }

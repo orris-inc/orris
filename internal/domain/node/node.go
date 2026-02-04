@@ -47,7 +47,7 @@ type Node struct {
 	platform          *string         // OS platform (linux, darwin, windows)
 	arch              *string         // CPU architecture (amd64, arm64, arm, 386)
 	expiresAt         *time.Time      // expiration time (nil = never expires)
-	renewalAmount     *float64        // renewal amount for display (nil = not set)
+	costLabel         *string         // cost label for display (e.g., "35$/m", "35¥/y")
 	version           int
 	originalVersion   int // version when loaded from database, for optimistic locking
 	createdAt         time.Time
@@ -186,7 +186,7 @@ func ReconstructNode(
 	platform *string,
 	arch *string,
 	expiresAt *time.Time,
-	renewalAmount *float64,
+	costLabel *string,
 	version int,
 	createdAt, updatedAt time.Time,
 ) (*Node, error) {
@@ -241,7 +241,7 @@ func ReconstructNode(
 		platform:          platform,
 		arch:              arch,
 		expiresAt:         expiresAt,
-		renewalAmount:     renewalAmount,
+		costLabel:         costLabel,
 		version:           version,
 		originalVersion:   version, // preserve original version for optimistic locking
 		createdAt:         createdAt,
@@ -923,17 +923,17 @@ func (n *Node) SetExpiresAt(t *time.Time) {
 	n.version++
 }
 
-// RenewalAmount returns the renewal amount (nil means not set)
-func (n *Node) RenewalAmount() *float64 {
-	return n.renewalAmount
+// CostLabel returns the cost label for display (nil means not set)
+func (n *Node) CostLabel() *string {
+	return n.costLabel
 }
 
-// SetRenewalAmount sets the renewal amount (nil to clear)
-func (n *Node) SetRenewalAmount(amount *float64) {
+// SetCostLabel sets the cost label (nil to clear)
+func (n *Node) SetCostLabel(label *string) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	n.renewalAmount = amount
+	n.costLabel = label
 	n.updatedAt = biztime.NowUTC()
 	n.version++
 }

@@ -7,6 +7,15 @@ import (
 	"github.com/orris-inc/orris/internal/shared/query"
 )
 
+// ExpiringNodeInfo holds lightweight node info for expiring notifications.
+type ExpiringNodeInfo struct {
+	ID        uint
+	SID       string
+	Name      string
+	ExpiresAt time.Time
+	CostLabel *string
+}
+
 // NodeMetadata holds lightweight node metadata for SSE broadcasting.
 // This avoids loading full node entities with protocol configs.
 type NodeMetadata struct {
@@ -65,6 +74,10 @@ type NodeRepository interface {
 	// ValidateNodeSIDsExist checks if all given node SIDs exist (for admin nodes).
 	// Returns slice of invalid SIDs (not found).
 	ValidateNodeSIDsExist(ctx context.Context, sids []string) ([]string, error)
+
+	// FindExpiringNodes returns nodes that will expire within the specified days.
+	// Only returns nodes that have expires_at set and are not already expired.
+	FindExpiringNodes(ctx context.Context, withinDays int) ([]*ExpiringNodeInfo, error)
 }
 
 type NodeFilter struct {

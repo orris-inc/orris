@@ -108,6 +108,8 @@ func (uc *BindAdminUseCase) Execute(
 		NotifyDailySummary:      binding.NotifyDailySummary(),
 		NotifyWeeklySummary:     binding.NotifyWeeklySummary(),
 		OfflineThresholdMinutes: binding.OfflineThresholdMinutes(),
+		NotifyResourceExpiring:  binding.NotifyResourceExpiring(),
+		ResourceExpiringDays:    binding.ResourceExpiringDays(),
 		CreatedAt:               binding.CreatedAt(),
 	}, nil
 }

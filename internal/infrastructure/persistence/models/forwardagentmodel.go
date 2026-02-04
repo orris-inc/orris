@@ -29,8 +29,8 @@ type ForwardAgentModel struct {
 	SortOrder        int            `gorm:"not null;default:0"`
 	MuteNotification bool           `gorm:"not null;default:false"` // mute online/offline notifications
 	LastSeenAt       *time.Time
-	ExpiresAt        *time.Time `gorm:"column:expires_at"`                        // expiration time (null = never expires)
-	RenewalAmount    *float64   `gorm:"column:renewal_amount;type:decimal(10,2)"` // renewal amount for display
+	ExpiresAt        *time.Time `gorm:"column:expires_at"`         // expiration time (null = never expires)
+	CostLabel        *string    `gorm:"column:cost_label;size:50"` // cost label for display (e.g., "35$/m")
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 }

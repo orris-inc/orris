@@ -55,7 +55,7 @@ type ForwardAgent struct {
 	muteNotification bool                // mute online/offline notifications for this agent
 	lastSeenAt       *time.Time          // last time the agent reported status
 	expiresAt        *time.Time          // expiration time (nil = never expires)
-	renewalAmount    *float64            // renewal amount for display (nil = not set)
+	costLabel        *string             // cost label for display (e.g., "35$/m", "35¥/y")
 	createdAt        time.Time
 	updatedAt        time.Time
 	tokenGenerator   services.TokenGenerator
@@ -133,7 +133,7 @@ func ReconstructForwardAgent(
 	muteNotification bool,
 	lastSeenAt *time.Time,
 	expiresAt *time.Time,
-	renewalAmount *float64,
+	costLabel *string,
 	createdAt, updatedAt time.Time,
 ) (*ForwardAgent, error) {
 	if id == 0 {
@@ -186,7 +186,7 @@ func ReconstructForwardAgent(
 		muteNotification: muteNotification,
 		lastSeenAt:       lastSeenAt,
 		expiresAt:        expiresAt,
-		renewalAmount:    renewalAmount,
+		costLabel:        costLabel,
 		createdAt:        createdAt,
 		updatedAt:        updatedAt,
 		tokenGenerator:   services.NewTokenGenerator(),
@@ -565,14 +565,14 @@ func (a *ForwardAgent) SetExpiresAt(t *time.Time) {
 	a.updatedAt = biztime.NowUTC()
 }
 
-// RenewalAmount returns the renewal amount (nil means not set)
-func (a *ForwardAgent) RenewalAmount() *float64 {
-	return a.renewalAmount
+// CostLabel returns the cost label for display (nil means not set)
+func (a *ForwardAgent) CostLabel() *string {
+	return a.costLabel
 }
 
-// SetRenewalAmount sets the renewal amount (nil to clear)
-func (a *ForwardAgent) SetRenewalAmount(amount *float64) {
-	a.renewalAmount = amount
+// SetCostLabel sets the cost label (nil to clear)
+func (a *ForwardAgent) SetCostLabel(label *string) {
+	a.costLabel = label
 	a.updatedAt = biztime.NowUTC()
 }
 

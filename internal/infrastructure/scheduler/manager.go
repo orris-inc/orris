@@ -373,6 +373,8 @@ func (m *SchedulerManager) processReminders(ctx context.Context, processor Remin
 type AdminNotificationProcessor interface {
 	// CheckOffline checks for offline nodes and agents, sends alerts
 	CheckOffline(ctx context.Context) error
+	// CheckExpiring checks for expiring resources, sends alerts
+	CheckExpiring(ctx context.Context) error
 	// SendDailySummary sends daily business summary
 	SendDailySummary(ctx context.Context) error
 	// SendWeeklySummary sends weekly business summary
@@ -381,6 +383,7 @@ type AdminNotificationProcessor interface {
 
 // RegisterAdminNotificationJobs registers admin notification jobs:
 // - Offline check: every 2 minutes
+// - Expiring check: at 08:00 business timezone daily
 // - Daily summary: at 09:00 business timezone
 // - Weekly summary: Monday 09:00 business timezone
 func (m *SchedulerManager) RegisterAdminNotificationJobs(
@@ -396,6 +399,20 @@ func (m *SchedulerManager) RegisterAdminNotificationJobs(
 		gocron.WithStartAt(gocron.WithStartImmediately()),
 		gocron.WithTags("admin", "offline-check"),
 		gocron.WithName("admin-offline-check"),
+	)
+	if err != nil {
+		return err
+	}
+
+	// Expiring check at 08:00 daily (before daily summary)
+	_, err = m.scheduler.NewJob(
+		gocron.CronJob("0 8 * * *", false),
+		gocron.NewTask(func() {
+			ctx := context.Background()
+			m.checkExpiring(ctx, processor)
+		}),
+		gocron.WithTags("admin", "expiring-check"),
+		gocron.WithName("admin-expiring-check"),
 	)
 	if err != nil {
 		return err
@@ -431,6 +448,7 @@ func (m *SchedulerManager) RegisterAdminNotificationJobs(
 
 	m.logger.Infow("registered admin notification jobs",
 		"offline_check", "2m",
+		"expiring_check", "08:00",
 		"daily_summary", "09:00",
 		"weekly_summary", "Monday 09:00",
 	)
@@ -446,6 +464,17 @@ func (m *SchedulerManager) checkOffline(ctx context.Context, processor AdminNoti
 	}
 
 	m.logger.Debugw("offline check completed")
+}
+
+func (m *SchedulerManager) checkExpiring(ctx context.Context, processor AdminNotificationProcessor) {
+	m.logger.Infow("starting expiring check")
+
+	if err := processor.CheckExpiring(ctx); err != nil {
+		m.logger.Errorw("failed to check expiring", "error", err)
+		return
+	}
+
+	m.logger.Infow("expiring check completed")
 }
 
 func (m *SchedulerManager) sendDailySummary(ctx context.Context, processor AdminNotificationProcessor) {

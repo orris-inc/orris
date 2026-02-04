@@ -26,7 +26,7 @@ type ForwardAgentDTO struct {
 	IsOnline         bool            `json:"is_online"`                   // Indicates if the agent is online (reported within 5 minutes)
 	LastSeenAt       *time.Time      `json:"last_seen_at,omitempty"`      // Last time the agent reported status
 	ExpiresAt        *string         `json:"expires_at,omitempty"`        // Expiration time in ISO8601 format (null = never expires)
-	RenewalAmount    *float64        `json:"renewal_amount,omitempty"`    // Renewal amount for display
+	CostLabel        string          `json:"cost_label,omitempty"`        // Cost label for display (e.g., "35$/m", "35¥/y")
 	IsExpired        bool            `json:"is_expired"`                  // True if agent has expired
 	CreatedAt        string          `json:"created_at"`
 	UpdatedAt        string          `json:"updated_at"`
@@ -53,6 +53,12 @@ func ToForwardAgentDTO(agent *forward.ForwardAgent) *ForwardAgentDTO {
 		expiresAtStr = &s
 	}
 
+	// Get cost label
+	var costLabel string
+	if agent.CostLabel() != nil {
+		costLabel = *agent.CostLabel()
+	}
+
 	dto := &ForwardAgentDTO{
 		ID:               agent.SID(),
 		Name:             agent.Name(),
@@ -68,7 +74,7 @@ func ToForwardAgentDTO(agent *forward.ForwardAgent) *ForwardAgentDTO {
 		IsOnline:         agent.IsOnline(),
 		LastSeenAt:       agent.LastSeenAt(),
 		ExpiresAt:        expiresAtStr,
-		RenewalAmount:    agent.RenewalAmount(),
+		CostLabel:        costLabel,
 		IsExpired:        agent.IsExpired(),
 		CreatedAt:        agent.CreatedAt().Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt:        agent.UpdatedAt().Format("2006-01-02T15:04:05Z07:00"),

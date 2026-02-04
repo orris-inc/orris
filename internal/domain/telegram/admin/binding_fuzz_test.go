@@ -100,7 +100,7 @@ func FuzzUpdatePreferences(f *testing.F) {
 			t.Fatalf("Failed to create binding: %v", err)
 		}
 
-		err = binding.UpdatePreferences(nil, nil, nil, nil, nil, nil, &threshold)
+		err = binding.UpdatePreferences(nil, nil, nil, nil, nil, nil, &threshold, nil, nil)
 
 		// Threshold out of range should error
 		if threshold < MinOfflineThresholdMinutes || threshold > MaxOfflineThresholdMinutes {
@@ -152,6 +152,8 @@ func FuzzUpdatePreferencesBooleans(f *testing.F) {
 			&paymentSuccess,
 			&dailySummary,
 			&weeklySummary,
+			nil,
+			nil,
 			nil,
 		)
 

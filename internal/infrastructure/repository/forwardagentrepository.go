@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -231,7 +232,7 @@ func (r *ForwardAgentRepositoryImpl) Update(ctx context.Context, agent *forward.
 			"sort_order":         model.SortOrder,
 			"mute_notification":  model.MuteNotification,
 			"expires_at":         model.ExpiresAt,
-			"renewal_amount":     model.RenewalAmount,
+			"cost_label":         model.CostLabel,
 			"updated_at":         model.UpdatedAt,
 		})
 
@@ -472,4 +473,48 @@ func (r *ForwardAgentRepositoryImpl) GetMetadataBySIDs(ctx context.Context, sids
 	}
 
 	return metadata, nil
+}
+
+// FindExpiringAgents returns enabled agents that will expire within the specified days.
+// Only returns agents that have expires_at set and are not already expired.
+func (r *ForwardAgentRepositoryImpl) FindExpiringAgents(ctx context.Context, withinDays int) ([]*forward.ExpiringAgentInfo, error) {
+	now := biztime.NowUTC()
+	threshold := now.AddDate(0, 0, withinDays)
+
+	var results []struct {
+		ID        uint       `gorm:"column:id"`
+		SID       string     `gorm:"column:sid"`
+		Name      string     `gorm:"column:name"`
+		ExpiresAt *time.Time `gorm:"column:expires_at"`
+		CostLabel *string    `gorm:"column:cost_label"`
+	}
+
+	if err := r.db.WithContext(ctx).
+		Model(&models.ForwardAgentModel{}).
+		Select("id, sid, name, expires_at, cost_label").
+		Where("status = ?", "enabled").
+		Where("expires_at IS NOT NULL").
+		Where("expires_at > ?", now).        // Not already expired
+		Where("expires_at <= ?", threshold). // Within threshold
+		Order("expires_at ASC").
+		Find(&results).Error; err != nil {
+		r.logger.Errorw("failed to find expiring agents", "within_days", withinDays, "error", err)
+		return nil, fmt.Errorf("failed to find expiring agents: %w", err)
+	}
+
+	agents := make([]*forward.ExpiringAgentInfo, 0, len(results))
+	for _, res := range results {
+		if res.ExpiresAt == nil {
+			continue
+		}
+		agents = append(agents, &forward.ExpiringAgentInfo{
+			ID:        res.ID,
+			SID:       res.SID,
+			Name:      res.Name,
+			ExpiresAt: res.ExpiresAt.UTC(),
+			CostLabel: res.CostLabel,
+		})
+	}
+
+	return agents, nil
 }

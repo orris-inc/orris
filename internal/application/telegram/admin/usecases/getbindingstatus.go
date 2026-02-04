@@ -89,6 +89,8 @@ func (uc *GetAdminBindingStatusUseCase) Execute(ctx context.Context, userID uint
 			NotifyDailySummary:      binding.NotifyDailySummary(),
 			NotifyWeeklySummary:     binding.NotifyWeeklySummary(),
 			OfflineThresholdMinutes: binding.OfflineThresholdMinutes(),
+			NotifyResourceExpiring:  binding.NotifyResourceExpiring(),
+			ResourceExpiringDays:    binding.ResourceExpiringDays(),
 			CreatedAt:               binding.CreatedAt(),
 		},
 		BotLink: botLink,

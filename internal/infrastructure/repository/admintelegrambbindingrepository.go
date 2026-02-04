@@ -13,24 +13,27 @@ import (
 
 // AdminTelegramBindingModel is the GORM model for admin_telegram_bindings table
 type AdminTelegramBindingModel struct {
-	ID                       uint       `gorm:"primaryKey;autoIncrement"`
-	SID                      string     `gorm:"column:sid;type:varchar(50);not null;uniqueIndex"`
-	UserID                   uint       `gorm:"column:user_id;not null;uniqueIndex"`
-	TelegramUserID           int64      `gorm:"column:telegram_user_id;not null;uniqueIndex"`
-	TelegramUsername         string     `gorm:"column:telegram_username;type:varchar(100)"`
-	NotifyNodeOffline        bool       `gorm:"column:notify_node_offline;default:true"`
-	NotifyAgentOffline       bool       `gorm:"column:notify_agent_offline;default:true"`
-	NotifyNewUser            bool       `gorm:"column:notify_new_user;default:true"`
-	NotifyPaymentSuccess     bool       `gorm:"column:notify_payment_success;default:true"`
-	NotifyDailySummary       bool       `gorm:"column:notify_daily_summary;default:true"`
-	NotifyWeeklySummary      bool       `gorm:"column:notify_weekly_summary;default:true"`
-	OfflineThresholdMinutes  int        `gorm:"column:offline_threshold_minutes;default:5"`
-	LastNodeOfflineNotifyAt  *time.Time `gorm:"column:last_node_offline_notify_at"`
-	LastAgentOfflineNotifyAt *time.Time `gorm:"column:last_agent_offline_notify_at"`
-	LastDailySummaryAt       *time.Time `gorm:"column:last_daily_summary_at"`
-	LastWeeklySummaryAt      *time.Time `gorm:"column:last_weekly_summary_at"`
-	CreatedAt                time.Time  `gorm:"column:created_at;autoCreateTime"`
-	UpdatedAt                time.Time  `gorm:"column:updated_at;autoUpdateTime"`
+	ID                             uint       `gorm:"primaryKey;autoIncrement"`
+	SID                            string     `gorm:"column:sid;type:varchar(50);not null;uniqueIndex"`
+	UserID                         uint       `gorm:"column:user_id;not null;uniqueIndex"`
+	TelegramUserID                 int64      `gorm:"column:telegram_user_id;not null;uniqueIndex"`
+	TelegramUsername               string     `gorm:"column:telegram_username;type:varchar(100)"`
+	NotifyNodeOffline              bool       `gorm:"column:notify_node_offline;default:true"`
+	NotifyAgentOffline             bool       `gorm:"column:notify_agent_offline;default:true"`
+	NotifyNewUser                  bool       `gorm:"column:notify_new_user;default:true"`
+	NotifyPaymentSuccess           bool       `gorm:"column:notify_payment_success;default:true"`
+	NotifyDailySummary             bool       `gorm:"column:notify_daily_summary;default:true"`
+	NotifyWeeklySummary            bool       `gorm:"column:notify_weekly_summary;default:true"`
+	OfflineThresholdMinutes        int        `gorm:"column:offline_threshold_minutes;default:5"`
+	NotifyResourceExpiring         bool       `gorm:"column:notify_resource_expiring;default:true"`
+	ResourceExpiringDays           int        `gorm:"column:resource_expiring_days;default:7"`
+	LastNodeOfflineNotifyAt        *time.Time `gorm:"column:last_node_offline_notify_at"`
+	LastAgentOfflineNotifyAt       *time.Time `gorm:"column:last_agent_offline_notify_at"`
+	LastDailySummaryAt             *time.Time `gorm:"column:last_daily_summary_at"`
+	LastWeeklySummaryAt            *time.Time `gorm:"column:last_weekly_summary_at"`
+	LastResourceExpiringNotifyDate *time.Time `gorm:"column:last_resource_expiring_notify_date"`
+	CreatedAt                      time.Time  `gorm:"column:created_at;autoCreateTime"`
+	UpdatedAt                      time.Time  `gorm:"column:updated_at;autoUpdateTime"`
 }
 
 // TableName returns the table name for GORM
@@ -279,24 +282,27 @@ func (r *AdminTelegramBindingRepository) FindBindingsForWeeklySummary(ctx contex
 // toModel converts domain entity to GORM model
 func (r *AdminTelegramBindingRepository) toModel(binding *admin.AdminTelegramBinding) *AdminTelegramBindingModel {
 	return &AdminTelegramBindingModel{
-		ID:                       binding.ID(),
-		SID:                      binding.SID(),
-		UserID:                   binding.UserID(),
-		TelegramUserID:           binding.TelegramUserID(),
-		TelegramUsername:         binding.TelegramUsername(),
-		NotifyNodeOffline:        binding.NotifyNodeOffline(),
-		NotifyAgentOffline:       binding.NotifyAgentOffline(),
-		NotifyNewUser:            binding.NotifyNewUser(),
-		NotifyPaymentSuccess:     binding.NotifyPaymentSuccess(),
-		NotifyDailySummary:       binding.NotifyDailySummary(),
-		NotifyWeeklySummary:      binding.NotifyWeeklySummary(),
-		OfflineThresholdMinutes:  binding.OfflineThresholdMinutes(),
-		LastNodeOfflineNotifyAt:  binding.LastNodeOfflineNotifyAt(),
-		LastAgentOfflineNotifyAt: binding.LastAgentOfflineNotifyAt(),
-		LastDailySummaryAt:       binding.LastDailySummaryAt(),
-		LastWeeklySummaryAt:      binding.LastWeeklySummaryAt(),
-		CreatedAt:                binding.CreatedAt(),
-		UpdatedAt:                binding.UpdatedAt(),
+		ID:                             binding.ID(),
+		SID:                            binding.SID(),
+		UserID:                         binding.UserID(),
+		TelegramUserID:                 binding.TelegramUserID(),
+		TelegramUsername:               binding.TelegramUsername(),
+		NotifyNodeOffline:              binding.NotifyNodeOffline(),
+		NotifyAgentOffline:             binding.NotifyAgentOffline(),
+		NotifyNewUser:                  binding.NotifyNewUser(),
+		NotifyPaymentSuccess:           binding.NotifyPaymentSuccess(),
+		NotifyDailySummary:             binding.NotifyDailySummary(),
+		NotifyWeeklySummary:            binding.NotifyWeeklySummary(),
+		OfflineThresholdMinutes:        binding.OfflineThresholdMinutes(),
+		NotifyResourceExpiring:         binding.NotifyResourceExpiring(),
+		ResourceExpiringDays:           binding.ResourceExpiringDays(),
+		LastNodeOfflineNotifyAt:        binding.LastNodeOfflineNotifyAt(),
+		LastAgentOfflineNotifyAt:       binding.LastAgentOfflineNotifyAt(),
+		LastDailySummaryAt:             binding.LastDailySummaryAt(),
+		LastWeeklySummaryAt:            binding.LastWeeklySummaryAt(),
+		LastResourceExpiringNotifyDate: binding.LastResourceExpiringNotifyDate(),
+		CreatedAt:                      binding.CreatedAt(),
+		UpdatedAt:                      binding.UpdatedAt(),
 	}
 }
 
@@ -315,11 +321,35 @@ func (r *AdminTelegramBindingRepository) toDomain(model *AdminTelegramBindingMod
 		model.NotifyDailySummary,
 		model.NotifyWeeklySummary,
 		model.OfflineThresholdMinutes,
+		model.NotifyResourceExpiring,
+		model.ResourceExpiringDays,
 		model.LastNodeOfflineNotifyAt,
 		model.LastAgentOfflineNotifyAt,
 		model.LastDailySummaryAt,
 		model.LastWeeklySummaryAt,
+		model.LastResourceExpiringNotifyDate,
 		model.CreatedAt,
 		model.UpdatedAt,
 	)
+}
+
+// FindBindingsForResourceExpiringNotification finds bindings that want resource expiring notifications
+// and haven't been notified today
+func (r *AdminTelegramBindingRepository) FindBindingsForResourceExpiringNotification(ctx context.Context) ([]*admin.AdminTelegramBinding, error) {
+	var models []AdminTelegramBindingModel
+	today := biztime.NowUTC().Truncate(24 * time.Hour)
+
+	err := r.db.WithContext(ctx).
+		Where("notify_resource_expiring = ?", true).
+		Where("last_resource_expiring_notify_date IS NULL OR last_resource_expiring_notify_date < ?", today).
+		Find(&models).Error
+	if err != nil {
+		return nil, err
+	}
+
+	bindings := make([]*admin.AdminTelegramBinding, 0, len(models))
+	for _, model := range models {
+		bindings = append(bindings, r.toDomain(&model))
+	}
+	return bindings, nil
 }

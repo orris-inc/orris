@@ -75,7 +75,7 @@ type NodeDTO struct {
 	IsOnline              bool       `json:"is_online" example:"true" description:"Indicates if the node agent is online (reported within 5 minutes)"`
 	LastSeenAt            *time.Time `json:"last_seen_at,omitempty" example:"2024-01-15T14:20:00Z" description:"Last time the node agent reported status"`
 	ExpiresAt             *string    `json:"expires_at,omitempty" example:"2025-12-31T23:59:59Z" description:"Expiration time in ISO8601 format (null = never expires)"`
-	RenewalAmount         *float64   `json:"renewal_amount,omitempty" example:"99.00" description:"Renewal amount for display"`
+	CostLabel             string     `json:"cost_label,omitempty" example:"35$/m" description:"Cost label for display (e.g., '35$/m', '35¥/y')"`
 	IsExpired             bool       `json:"is_expired" example:"false" description:"True if node has expired"`
 	AgentVersion          string     `json:"agent_version,omitempty" example:"1.2.0" description:"Agent software version, extracted from system_status for easy display"`
 	Platform              string     `json:"platform,omitempty" example:"linux" description:"OS platform (linux, darwin, windows)"`
@@ -288,11 +288,15 @@ func ToNodeDTO(n *node.Node) *NodeDTO {
 		IsOnline:          n.IsOnline(),
 		LastSeenAt:        n.LastSeenAt(),
 		ExpiresAt:         expiresAtStr,
-		RenewalAmount:     n.RenewalAmount(),
 		IsExpired:         n.IsExpired(),
 		Version:           n.Version(),
 		CreatedAt:         n.CreatedAt(),
 		UpdatedAt:         n.UpdatedAt(),
+	}
+
+	// Map cost label
+	if n.CostLabel() != nil {
+		dto.CostLabel = *n.CostLabel()
 	}
 
 	// Map agent info fields

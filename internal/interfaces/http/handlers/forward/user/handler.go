@@ -89,7 +89,7 @@ type UpdateForwardRuleRequest struct {
 	ChainAgentIDs     []string          `json:"chain_agent_ids,omitempty" example:"[\"fa_aaa\",\"fa_bbb\"]"`
 	ChainPortConfig   map[string]uint16 `json:"chain_port_config,omitempty" example:"{\"fa_xK9mP2vL3nQ\":8080,\"fa_yL8nQ3wM4oR\":9090}"`
 	TunnelHops        *int              `json:"tunnel_hops,omitempty" binding:"omitempty,gte=0,lte=10" example:"2"`
-	TunnelType        *string           `json:"tunnel_type,omitempty" binding:"omitempty,oneof=ws tls" example:"ws"`
+	TunnelType        *string           `json:"tunnel_type,omitempty" binding:"omitempty,oneof=ws tls ws_smux tls_smux" example:"ws"`
 	ListenPort        *uint16           `json:"listen_port,omitempty" example:"13307"`
 	TargetAddress     *string           `json:"target_address,omitempty" example:"192.168.1.101"`
 	TargetPort        *uint16           `json:"target_port,omitempty" example:"3307"`

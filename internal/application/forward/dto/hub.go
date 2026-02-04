@@ -120,7 +120,7 @@ type RuleSyncData struct {
 	NextHopTlsPort         uint16   `json:"next_hop_tls_port,omitempty"`         // Next hop TLS listen port for tunnel connections
 	NextHopPort            uint16   `json:"next_hop_port,omitempty"`             // Next hop listen port (for direct_chain type)
 	NextHopConnectionToken string   `json:"next_hop_connection_token,omitempty"` // Short-term token for next hop authentication
-	TunnelType             string   `json:"tunnel_type,omitempty"`               // Tunnel type: "ws" or "tls"
+	TunnelType             string   `json:"tunnel_type,omitempty"`               // Tunnel type: "ws", "tls", "ws_smux", or "tls_smux"
 	TunnelHops             *int     `json:"tunnel_hops,omitempty"`               // Number of hops using tunnel (nil=full tunnel)
 	HopMode                string   `json:"hop_mode,omitempty"`                  // Hop mode: "tunnel", "direct", or "boundary"
 	InboundMode            string   `json:"inbound_mode,omitempty"`              // For boundary nodes: inbound mode

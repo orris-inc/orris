@@ -129,10 +129,10 @@ func (h *NodeHandler) UpdateNode(c *gin.Context) {
 		}
 	}
 
-	// Validate renewal_amount is not negative
-	if req.RenewalAmount != nil && *req.RenewalAmount < 0 {
-		h.logger.Warnw("invalid renewal_amount: negative value", "sid", sid, "renewal_amount", *req.RenewalAmount)
-		utils.ErrorResponseWithError(c, errors.NewValidationError("renewal_amount cannot be negative"))
+	// Validate cost_label length if provided and non-empty
+	if req.CostLabel != nil && *req.CostLabel != "" && len(*req.CostLabel) > 50 {
+		h.logger.Warnw("cost_label exceeds max length", "sid", sid, "length", len(*req.CostLabel))
+		utils.ErrorResponseWithError(c, errors.NewValidationError("cost_label cannot exceed 50 characters"))
 		return
 	}
 
@@ -490,9 +490,9 @@ type UpdateNodeRequest struct {
 	TUICAllowInsecure     *bool   `json:"tuic_allow_insecure,omitempty" comment:"TUIC allow insecure TLS"`
 	TUICDisableSNI        *bool   `json:"tuic_disable_sni,omitempty" comment:"TUIC disable SNI"`
 
-	// Expiration and renewal fields
-	ExpiresAt     *string  `json:"expires_at,omitempty" example:"2025-12-31T23:59:59Z" comment:"Expiration time in ISO8601 format (empty string to clear, omit to keep unchanged)"`
-	RenewalAmount *float64 `json:"renewal_amount,omitempty" example:"99.00" comment:"Renewal amount (0 to clear, omit to keep unchanged)"`
+	// Expiration and cost label fields
+	ExpiresAt *string `json:"expires_at,omitempty" example:"2025-12-31T23:59:59Z" comment:"Expiration time in ISO8601 format (empty string to clear, omit to keep unchanged)"`
+	CostLabel *string `json:"cost_label,omitempty" example:"35$/m" comment:"Cost label for display (empty string to clear, omit to keep unchanged)"`
 }
 
 func (r *UpdateNodeRequest) ToCommand(sid string) usecases.UpdateNodeCommand {
@@ -565,14 +565,14 @@ func (r *UpdateNodeRequest) ToCommand(sid string) usecases.UpdateNodeCommand {
 	// The handler parses, validates (format + future time), and sets cmd.ExpiresAt/cmd.ClearExpiresAt directly.
 	// This ensures all validation is done in one place and avoids silent failures.
 
-	// Handle RenewalAmount field
-	// Note: negative validation is done in handler layer before calling ToCommand
-	if r.RenewalAmount != nil {
-		if *r.RenewalAmount == 0 {
-			// 0 means clear
-			cmd.ClearRenewal = true
+	// Handle CostLabel field
+	// Note: length validation (max 50 chars) is done in handler layer before calling ToCommand
+	if r.CostLabel != nil {
+		if *r.CostLabel == "" {
+			// Empty string means clear
+			cmd.ClearCostLabel = true
 		} else {
-			cmd.RenewalAmount = r.RenewalAmount
+			cmd.CostLabel = r.CostLabel
 		}
 	}
 

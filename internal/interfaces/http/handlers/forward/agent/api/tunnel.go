@@ -16,6 +16,7 @@ type VerifyTunnelHandshakeRequest struct {
 	AgentToken string `json:"agent_token" binding:"required"` // Entry agent's token (fwd_xxx_xxx format)
 	RuleID     string `json:"rule_id" binding:"required"`     // Rule ID (Stripe-style, e.g., "fr_xK9mP2vL3nQ")
 	IsProbe    bool   `json:"is_probe,omitempty"`             // True if this is a probe connection (tunnel ping)
+	EnableSmux bool   `json:"enable_smux,omitempty"`          // True if SMUX multiplexing should be enabled for this connection
 }
 
 // VerifyTunnelHandshakeResponse represents the result of tunnel handshake verification.

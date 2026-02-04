@@ -16,6 +16,7 @@ import (
 // AdminNotificationProcessor implements the scheduler.AdminNotificationProcessor interface
 type AdminNotificationProcessor struct {
 	checkOfflineUC      *usecases.CheckOfflineUseCase
+	checkExpiringUC     *usecases.CheckExpiringUseCase
 	sendDailySummaryUC  *usecases.SendDailySummaryUseCase
 	sendWeeklySummaryUC *usecases.SendWeeklySummaryUseCase
 	logger              logger.Interface
@@ -51,6 +52,14 @@ func NewAdminNotificationProcessor(
 		log,
 	)
 
+	checkExpiringUC := usecases.NewCheckExpiringUseCase(
+		bindingRepo,
+		nodeRepo,
+		agentRepo,
+		botServiceWrapper,
+		log,
+	)
+
 	sendDailySummaryUC := usecases.NewSendDailySummaryUseCase(
 		bindingRepo,
 		userRepo,
@@ -77,6 +86,7 @@ func NewAdminNotificationProcessor(
 
 	return &AdminNotificationProcessor{
 		checkOfflineUC:      checkOfflineUC,
+		checkExpiringUC:     checkExpiringUC,
 		sendDailySummaryUC:  sendDailySummaryUC,
 		sendWeeklySummaryUC: sendWeeklySummaryUC,
 		logger:              log,
@@ -86,6 +96,11 @@ func NewAdminNotificationProcessor(
 // CheckOffline checks for offline nodes and agents, sends alerts
 func (p *AdminNotificationProcessor) CheckOffline(ctx context.Context) error {
 	return p.checkOfflineUC.CheckAndNotify(ctx)
+}
+
+// CheckExpiring checks for expiring resources, sends alerts
+func (p *AdminNotificationProcessor) CheckExpiring(ctx context.Context) error {
+	return p.checkExpiringUC.CheckAndNotify(ctx)
 }
 
 // SendDailySummary sends daily business summary

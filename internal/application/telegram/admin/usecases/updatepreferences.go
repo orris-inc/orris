@@ -48,6 +48,8 @@ func (uc *UpdateAdminPreferencesUseCase) Execute(
 		req.NotifyDailySummary,
 		req.NotifyWeeklySummary,
 		req.OfflineThresholdMinutes,
+		req.NotifyResourceExpiring,
+		req.ResourceExpiringDays,
 	); err != nil {
 		return nil, err
 	}
@@ -69,6 +71,8 @@ func (uc *UpdateAdminPreferencesUseCase) Execute(
 		NotifyDailySummary:      binding.NotifyDailySummary(),
 		NotifyWeeklySummary:     binding.NotifyWeeklySummary(),
 		OfflineThresholdMinutes: binding.OfflineThresholdMinutes(),
+		NotifyResourceExpiring:  binding.NotifyResourceExpiring(),
+		ResourceExpiringDays:    binding.ResourceExpiringDays(),
 		CreatedAt:               binding.CreatedAt(),
 	}, nil
 }

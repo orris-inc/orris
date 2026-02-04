@@ -2,6 +2,7 @@ package forward
 
 import (
 	"context"
+	"time"
 
 	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
 )
@@ -215,6 +216,10 @@ type AgentRepository interface {
 
 	// UpdateAgentInfo updates the agent info (version, platform, arch) for an agent.
 	UpdateAgentInfo(ctx context.Context, id uint, agentVersion, platform, arch string) error
+
+	// FindExpiringAgents returns enabled agents that will expire within the specified days.
+	// Only returns agents that have expires_at set and are not already expired.
+	FindExpiringAgents(ctx context.Context, withinDays int) ([]*ExpiringAgentInfo, error)
 }
 
 // AgentListFilter defines the filtering options for listing forward agents.
@@ -226,4 +231,13 @@ type AgentListFilter struct {
 	OrderBy  string
 	Order    string
 	GroupIDs []uint // Filter by resource group IDs
+}
+
+// ExpiringAgentInfo holds lightweight agent info for expiring notifications.
+type ExpiringAgentInfo struct {
+	ID        uint
+	SID       string
+	Name      string
+	ExpiresAt time.Time
+	CostLabel *string
 }

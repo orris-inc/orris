@@ -83,11 +83,11 @@ type UpdateNodeCommand struct {
 	TUICAllowInsecure     *bool
 	TUICDisableSNI        *bool
 
-	// Expiration and renewal fields
+	// Expiration and cost label fields
 	ExpiresAt      *time.Time // nil: no update, set to update expiration time
 	ClearExpiresAt bool       // true: clear expiration time
-	RenewalAmount  *float64   // nil: no update, set to update renewal amount
-	ClearRenewal   bool       // true: clear renewal amount
+	CostLabel      *string    // nil: no update, set to update cost label
+	ClearCostLabel bool       // true: clear cost label
 }
 
 type UpdateNodeResult struct {
@@ -476,11 +476,11 @@ func (uc *UpdateNodeUseCase) applyUpdates(n *node.Node, cmd UpdateNodeCommand) e
 		n.SetExpiresAt(cmd.ExpiresAt)
 	}
 
-	// Update renewal_amount
-	if cmd.ClearRenewal {
-		n.SetRenewalAmount(nil)
-	} else if cmd.RenewalAmount != nil {
-		n.SetRenewalAmount(cmd.RenewalAmount)
+	// Update cost_label
+	if cmd.ClearCostLabel {
+		n.SetCostLabel(nil)
+	} else if cmd.CostLabel != nil {
+		n.SetCostLabel(cmd.CostLabel)
 	}
 
 	return nil
@@ -517,8 +517,8 @@ func (uc *UpdateNodeUseCase) validateCommand(cmd UpdateNodeCommand) error {
 		// TUIC fields
 		cmd.TUICCongestionControl != nil || cmd.TUICUDPRelayMode != nil || cmd.TUICAlpn != nil ||
 		cmd.TUICSni != nil || cmd.TUICAllowInsecure != nil || cmd.TUICDisableSNI != nil ||
-		// Expiration and renewal fields
-		cmd.ExpiresAt != nil || cmd.ClearExpiresAt || cmd.RenewalAmount != nil || cmd.ClearRenewal
+		// Expiration and cost label fields
+		cmd.ExpiresAt != nil || cmd.ClearExpiresAt || cmd.CostLabel != nil || cmd.ClearCostLabel
 
 	if !hasUpdate {
 		return errors.NewValidationError("at least one field must be provided for update")
