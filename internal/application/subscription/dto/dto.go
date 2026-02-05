@@ -25,6 +25,7 @@ type SubscriptionDTO struct {
 	SubscribeURL       string               `json:"subscribe_url"`
 	Plan               *PlanDTO             `json:"plan,omitempty"`
 	Status             string               `json:"status"`
+	BillingCycle       *string              `json:"billing_cycle,omitempty"` // Billing cycle: weekly, monthly, quarterly, semi_annual, yearly, lifetime
 	StartDate          time.Time            `json:"start_date"`
 	EndDate            time.Time            `json:"end_date"`
 	AutoRenew          bool                 `json:"auto_renew"`
@@ -149,6 +150,13 @@ func toSubscriptionDTOInternal(sub *subscription.Subscription, plan *subscriptio
 		userDTO = ToSubscriptionUserDTO(u)
 	}
 
+	// Get billing cycle if available
+	var billingCycle *string
+	if sub.BillingCycle() != nil {
+		cycle := sub.BillingCycle().String()
+		billingCycle = &cycle
+	}
+
 	dto := &SubscriptionDTO{
 		SID:                sub.SID(),
 		UserSID:            userSID,
@@ -157,6 +165,7 @@ func toSubscriptionDTOInternal(sub *subscription.Subscription, plan *subscriptio
 		LinkToken:          sub.LinkToken(),
 		SubscribeURL:       subscribeURL,
 		Status:             sub.Status().String(),
+		BillingCycle:       billingCycle,
 		StartDate:          sub.StartDate(),
 		EndDate:            sub.EndDate(),
 		AutoRenew:          sub.AutoRenew(),

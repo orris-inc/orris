@@ -71,7 +71,11 @@ func (r *VLESSConfigRepository) GetByNodeIDs(ctx context.Context, nodeIDs []uint
 	}
 
 	var vlessModels []models.VLESSConfigModel
-	if err := r.db.WithContext(ctx).Where("node_id IN ?", nodeIDs).Find(&vlessModels).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Select("node_id", "transport_type", "flow", "security", "sni", "fingerprint",
+			"allow_insecure", "host", "path", "service_name", "private_key", "public_key", "short_id", "spider_x").
+		Where("node_id IN ?", nodeIDs).
+		Find(&vlessModels).Error; err != nil {
 		r.logger.Errorw("failed to get VLESS configs by node IDs", "node_ids", nodeIDs, "error", err)
 		return nil, fmt.Errorf("failed to get VLESS configs: %w", err)
 	}

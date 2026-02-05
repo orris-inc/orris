@@ -1075,6 +1075,83 @@ func (r *ForwardRuleRepositoryImpl) RemoveGroupIDFromAllRules(ctx context.Contex
 	return result.RowsAffected, nil
 }
 
+// BatchAddGroupID adds a group ID to multiple rules atomically in a single transaction.
+// Returns the number of rules that were updated (excludes rules that already had the group ID).
+func (r *ForwardRuleRepositoryImpl) BatchAddGroupID(ctx context.Context, ruleIDs []uint, groupID uint) (int, error) {
+	if len(ruleIDs) == 0 {
+		return 0, nil
+	}
+
+	updated := 0
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Single UPDATE statement that affects all matching rules
+		// Uses IN clause for efficiency
+		updateQuery := `
+			UPDATE forward_rules
+			SET group_ids = CASE
+				WHEN group_ids IS NULL THEN JSON_ARRAY(?)
+				ELSE JSON_ARRAY_APPEND(group_ids, '$', CAST(? AS UNSIGNED))
+			END,
+			updated_at = NOW()
+			WHERE id IN ? AND deleted_at IS NULL
+			AND (group_ids IS NULL OR NOT JSON_CONTAINS(group_ids, CAST(? AS JSON)))
+		`
+		result := tx.Exec(updateQuery, groupID, groupID, ruleIDs, groupID)
+		if result.Error != nil {
+			return fmt.Errorf("failed to batch add group ID: %w", result.Error)
+		}
+		updated = int(result.RowsAffected)
+		return nil
+	})
+
+	if err != nil {
+		r.logger.Errorw("failed to batch add group ID to rules", "group_id", groupID, "rule_count", len(ruleIDs), "error", err)
+		return 0, err
+	}
+
+	r.logger.Infow("batch added group ID to rules", "group_id", groupID, "updated_count", updated, "total_count", len(ruleIDs))
+	return updated, nil
+}
+
+// BatchRemoveGroupID removes a group ID from multiple rules atomically in a single transaction.
+// Returns the number of rules that were updated.
+func (r *ForwardRuleRepositoryImpl) BatchRemoveGroupID(ctx context.Context, ruleIDs []uint, groupID uint) (int, error) {
+	if len(ruleIDs) == 0 {
+		return 0, nil
+	}
+
+	updated := 0
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// Single UPDATE statement that affects all matching rules
+		updateQuery := `
+			UPDATE forward_rules fr
+			SET fr.group_ids = (
+				SELECT JSON_ARRAYAGG(jt.gid)
+				FROM JSON_TABLE(fr.group_ids, '$[*]' COLUMNS(gid INT PATH '$')) AS jt
+				WHERE jt.gid != ?
+			),
+			fr.updated_at = NOW()
+			WHERE fr.id IN ? AND fr.deleted_at IS NULL
+			AND fr.group_ids IS NOT NULL
+			AND JSON_CONTAINS(fr.group_ids, CAST(? AS JSON))
+		`
+		result := tx.Exec(updateQuery, groupID, ruleIDs, groupID)
+		if result.Error != nil {
+			return fmt.Errorf("failed to batch remove group ID: %w", result.Error)
+		}
+		updated = int(result.RowsAffected)
+		return nil
+	})
+
+	if err != nil {
+		r.logger.Errorw("failed to batch remove group ID from rules", "group_id", groupID, "rule_count", len(ruleIDs), "error", err)
+		return 0, err
+	}
+
+	r.logger.Infow("batch removed group ID from rules", "group_id", groupID, "updated_count", updated, "total_count", len(ruleIDs))
+	return updated, nil
+}
+
 // ListByExternalSource returns all forward rules with the given external source.
 func (r *ForwardRuleRepositoryImpl) ListByExternalSource(ctx context.Context, source string) ([]*forward.ForwardRule, error) {
 	if source == "" {

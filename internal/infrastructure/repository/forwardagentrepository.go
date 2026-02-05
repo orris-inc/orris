@@ -518,3 +518,52 @@ func (r *ForwardAgentRepositoryImpl) FindExpiringAgents(ctx context.Context, wit
 
 	return agents, nil
 }
+
+// BatchUpdateGroupIDs updates group_ids for multiple agents in a single transaction.
+// This is optimized for resource group membership changes where only group_ids needs to be updated.
+func (r *ForwardAgentRepositoryImpl) BatchUpdateGroupIDs(ctx context.Context, agentGroupIDs map[uint][]uint) (int, error) {
+	if len(agentGroupIDs) == 0 {
+		return 0, nil
+	}
+
+	updated := 0
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for agentID, groupIDs := range agentGroupIDs {
+			// Convert group IDs to JSON array
+			var groupIDsJSON []byte
+			var err error
+			if len(groupIDs) == 0 {
+				groupIDsJSON = []byte("[]")
+			} else {
+				groupIDsJSON, err = json.Marshal(groupIDs)
+				if err != nil {
+					return fmt.Errorf("failed to marshal group IDs for agent %d: %w", agentID, err)
+				}
+			}
+
+			result := tx.Model(&models.ForwardAgentModel{}).
+				Where("id = ?", agentID).
+				Updates(map[string]interface{}{
+					"group_ids":  groupIDsJSON,
+					"updated_at": biztime.NowUTC(),
+				})
+
+			if result.Error != nil {
+				return fmt.Errorf("failed to update agent %d: %w", agentID, result.Error)
+			}
+
+			if result.RowsAffected > 0 {
+				updated++
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		r.logger.Errorw("failed to batch update group IDs for agents", "error", err, "agent_count", len(agentGroupIDs))
+		return 0, err
+	}
+
+	r.logger.Infow("batch updated group IDs for agents", "updated_count", updated, "total_count", len(agentGroupIDs))
+	return updated, nil
+}

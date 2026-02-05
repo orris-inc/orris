@@ -71,7 +71,11 @@ func (r *Hysteria2ConfigRepository) GetByNodeIDs(ctx context.Context, nodeIDs []
 	}
 
 	var hysteria2Models []models.Hysteria2ConfigModel
-	if err := r.db.WithContext(ctx).Where("node_id IN ?", nodeIDs).Find(&hysteria2Models).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Select("node_id", "congestion_control", "obfs", "obfs_password", "up_mbps",
+			"down_mbps", "sni", "allow_insecure", "fingerprint").
+		Where("node_id IN ?", nodeIDs).
+		Find(&hysteria2Models).Error; err != nil {
 		r.logger.Errorw("failed to get hysteria2 configs by node IDs", "node_ids", nodeIDs, "error", err)
 		return nil, fmt.Errorf("failed to get hysteria2 configs: %w", err)
 	}

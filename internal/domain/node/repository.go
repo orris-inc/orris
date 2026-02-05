@@ -78,6 +78,11 @@ type NodeRepository interface {
 	// FindExpiringNodes returns nodes that will expire within the specified days.
 	// Only returns nodes that have expires_at set and are not already expired.
 	FindExpiringNodes(ctx context.Context, withinDays int) ([]*ExpiringNodeInfo, error)
+
+	// BatchUpdateGroupIDs updates group_ids for multiple nodes in a single transaction.
+	// nodeGroupIDs is a map of node ID to new group IDs slice.
+	// Returns the number of nodes updated and any error.
+	BatchUpdateGroupIDs(ctx context.Context, nodeGroupIDs map[uint][]uint) (int, error)
 }
 
 type NodeFilter struct {

@@ -77,8 +77,11 @@ func (uc *RenewSubscriptionUseCase) Execute(ctx context.Context, cmd RenewSubscr
 			"billing_cycle", billingCycle,
 		)
 	} else {
-		// No billing cycle available - this is a legacy subscription without billing cycle
-		return fmt.Errorf("billing cycle is required: subscription has no billing cycle set")
+		// Legacy subscription without billing cycle - default to monthly
+		billingCycle = vo.BillingCycleMonthly
+		uc.logger.Infow("using default monthly billing cycle for legacy subscription",
+			"subscription_id", cmd.SubscriptionID,
+		)
 	}
 
 	// Lifetime subscriptions cannot be renewed

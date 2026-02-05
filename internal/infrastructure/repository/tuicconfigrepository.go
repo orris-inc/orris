@@ -71,7 +71,10 @@ func (r *TUICConfigRepository) GetByNodeIDs(ctx context.Context, nodeIDs []uint)
 	}
 
 	var tuicModels []models.TUICConfigModel
-	if err := r.db.WithContext(ctx).Where("node_id IN ?", nodeIDs).Find(&tuicModels).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Select("node_id", "congestion_control", "udp_relay_mode", "alpn", "sni", "allow_insecure", "disable_sni").
+		Where("node_id IN ?", nodeIDs).
+		Find(&tuicModels).Error; err != nil {
 		r.logger.Errorw("failed to get TUIC configs by node IDs", "node_ids", nodeIDs, "error", err)
 		return nil, fmt.Errorf("failed to get TUIC configs: %w", err)
 	}

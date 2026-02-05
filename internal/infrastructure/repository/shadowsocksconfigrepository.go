@@ -72,7 +72,10 @@ func (r *ShadowsocksConfigRepository) GetByNodeIDs(ctx context.Context, nodeIDs 
 	}
 
 	var ssModels []models.ShadowsocksConfigModel
-	if err := r.db.WithContext(ctx).Where("node_id IN ?", nodeIDs).Find(&ssModels).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Select("node_id", "encryption_method", "plugin", "plugin_opts").
+		Where("node_id IN ?", nodeIDs).
+		Find(&ssModels).Error; err != nil {
 		r.logger.Errorw("failed to get shadowsocks configs by node IDs", "node_ids", nodeIDs, "error", err)
 		return nil, fmt.Errorf("failed to get shadowsocks configs: %w", err)
 	}

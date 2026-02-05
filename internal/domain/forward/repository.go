@@ -137,6 +137,14 @@ type Repository interface {
 	// This is used when deleting a resource group to clean up orphaned references.
 	RemoveGroupIDFromAllRules(ctx context.Context, groupID uint) (int64, error)
 
+	// BatchAddGroupID adds a group ID to multiple rules atomically in a single transaction.
+	// Returns the number of rules that were updated (excludes rules that already had the group ID).
+	BatchAddGroupID(ctx context.Context, ruleIDs []uint, groupID uint) (int, error)
+
+	// BatchRemoveGroupID removes a group ID from multiple rules atomically in a single transaction.
+	// Returns the number of rules that were updated.
+	BatchRemoveGroupID(ctx context.Context, ruleIDs []uint, groupID uint) (int, error)
+
 	// ListByExternalSource returns all forward rules with the given external source.
 	// Used for querying rules imported from a specific external system.
 	ListByExternalSource(ctx context.Context, source string) ([]*ForwardRule, error)
@@ -226,6 +234,11 @@ type AgentRepository interface {
 	// FindExpiringAgents returns enabled agents that will expire within the specified days.
 	// Only returns agents that have expires_at set and are not already expired.
 	FindExpiringAgents(ctx context.Context, withinDays int) ([]*ExpiringAgentInfo, error)
+
+	// BatchUpdateGroupIDs updates group_ids for multiple agents in a single transaction.
+	// agentGroupIDs is a map of agent ID to new group IDs slice.
+	// Returns the number of agents updated and any error.
+	BatchUpdateGroupIDs(ctx context.Context, agentGroupIDs map[uint][]uint) (int, error)
 }
 
 // AgentListFilter defines the filtering options for listing forward agents.

@@ -71,7 +71,11 @@ func (r *VMessConfigRepository) GetByNodeIDs(ctx context.Context, nodeIDs []uint
 	}
 
 	var vmessModels []models.VMessConfigModel
-	if err := r.db.WithContext(ctx).Where("node_id IN ?", nodeIDs).Find(&vmessModels).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Select("node_id", "alter_id", "security", "transport_type", "host", "path",
+			"service_name", "tls", "sni", "allow_insecure").
+		Where("node_id IN ?", nodeIDs).
+		Find(&vmessModels).Error; err != nil {
 		r.logger.Errorw("failed to get vmess configs by node IDs", "node_ids", nodeIDs, "error", err)
 		return nil, fmt.Errorf("failed to get vmess configs: %w", err)
 	}

@@ -93,6 +93,10 @@ func (uc *ManageResourceGroupForwardRulesUseCase) executeAddRules(ctx context.Co
 		return nil, fmt.Errorf("failed to get forward rules: %w", err)
 	}
 
+	// Collect valid rule IDs for batch update
+	validRuleIDs := make([]uint, 0, len(ruleSIDs))
+	sidToID := make(map[uint]string) // For mapping back to SIDs
+
 	for _, ruleSID := range ruleSIDs {
 		// Validate the SID format (fr_xxx)
 		if err := id.ValidatePrefix(ruleSID, id.PrefixForwardRule); err != nil {
@@ -112,20 +116,28 @@ func (uc *ManageResourceGroupForwardRulesUseCase) executeAddRules(ctx context.Co
 			continue
 		}
 
-		// Use atomic operation to add group ID
-		added, err := uc.ruleRepo.AddGroupIDAtomically(ctx, rule.ID(), groupID)
-		if err != nil {
-			uc.logger.Errorw("failed to add group ID to forward rule atomically", "error", err, "rule_sid", ruleSID, "group_id", groupID)
-			result.Failed = append(result.Failed, dto.BatchOperationErr{
-				ID:     ruleSID,
-				Reason: "failed to update forward rule",
-			})
-			continue
-		}
+		validRuleIDs = append(validRuleIDs, rule.ID())
+		sidToID[rule.ID()] = ruleSID
+	}
 
-		// added=false means it already had this group ID, still count as success
-		_ = added
-		result.Succeeded = append(result.Succeeded, ruleSID)
+	// Batch add group ID to all valid rules
+	if len(validRuleIDs) > 0 {
+		_, err := uc.ruleRepo.BatchAddGroupID(ctx, validRuleIDs, groupID)
+		if err != nil {
+			uc.logger.Errorw("failed to batch add group ID to forward rules", "error", err, "group_id", groupID)
+			// Mark all as failed
+			for _, ruleID := range validRuleIDs {
+				result.Failed = append(result.Failed, dto.BatchOperationErr{
+					ID:     sidToID[ruleID],
+					Reason: "failed to update forward rule",
+				})
+			}
+		} else {
+			// All valid rules succeeded (including those that already had the group ID)
+			for _, ruleID := range validRuleIDs {
+				result.Succeeded = append(result.Succeeded, sidToID[ruleID])
+			}
+		}
 	}
 
 	uc.logger.Infow("added forward rules to resource group",
@@ -177,6 +189,11 @@ func (uc *ManageResourceGroupForwardRulesUseCase) executeRemoveRules(ctx context
 		return nil, fmt.Errorf("failed to get forward rules: %w", err)
 	}
 
+	// Collect valid rule IDs for batch update
+	// Only include rules that actually belong to this group
+	validRuleIDs := make([]uint, 0, len(ruleSIDs))
+	sidToID := make(map[uint]string) // For mapping back to SIDs
+
 	for _, ruleSID := range ruleSIDs {
 		// Validate the SID format (fr_xxx)
 		if err := id.ValidatePrefix(ruleSID, id.PrefixForwardRule); err != nil {
@@ -196,19 +213,8 @@ func (uc *ManageResourceGroupForwardRulesUseCase) executeRemoveRules(ctx context
 			continue
 		}
 
-		// Use atomic operation to remove group ID
-		removed, err := uc.ruleRepo.RemoveGroupIDAtomically(ctx, rule.ID(), groupID)
-		if err != nil {
-			uc.logger.Errorw("failed to remove group ID from forward rule atomically", "error", err, "rule_sid", ruleSID, "group_id", groupID)
-			result.Failed = append(result.Failed, dto.BatchOperationErr{
-				ID:     ruleSID,
-				Reason: "failed to update forward rule",
-			})
-			continue
-		}
-
-		if !removed {
-			// The rule did not have this group ID
+		// Check if the rule belongs to this group before adding to batch
+		if !rule.HasGroupID(groupID) {
 			result.Failed = append(result.Failed, dto.BatchOperationErr{
 				ID:     ruleSID,
 				Reason: "forward rule does not belong to this group",
@@ -216,7 +222,28 @@ func (uc *ManageResourceGroupForwardRulesUseCase) executeRemoveRules(ctx context
 			continue
 		}
 
-		result.Succeeded = append(result.Succeeded, ruleSID)
+		validRuleIDs = append(validRuleIDs, rule.ID())
+		sidToID[rule.ID()] = ruleSID
+	}
+
+	// Batch remove group ID from all valid rules
+	if len(validRuleIDs) > 0 {
+		_, err := uc.ruleRepo.BatchRemoveGroupID(ctx, validRuleIDs, groupID)
+		if err != nil {
+			uc.logger.Errorw("failed to batch remove group ID from forward rules", "error", err, "group_id", groupID)
+			// Mark all as failed
+			for _, ruleID := range validRuleIDs {
+				result.Failed = append(result.Failed, dto.BatchOperationErr{
+					ID:     sidToID[ruleID],
+					Reason: "failed to update forward rule",
+				})
+			}
+		} else {
+			// All valid rules succeeded
+			for _, ruleID := range validRuleIDs {
+				result.Succeeded = append(result.Succeeded, sidToID[ruleID])
+			}
+		}
 	}
 
 	uc.logger.Infow("removed forward rules from resource group",

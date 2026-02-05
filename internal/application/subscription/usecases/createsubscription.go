@@ -240,12 +240,19 @@ func (uc *CreateSubscriptionUseCase) calculateEndDate(startDate time.Time, billi
 	// Use fixed days to ensure consistent subscription periods
 	// This prevents "drifting" when starting on month boundaries (e.g., Jan 31 -> Feb 28 -> Mar 28)
 	switch billingCycle {
+	case vo.BillingCycleWeekly:
+		return startDate.Add(7 * 24 * time.Hour) // 7 days
 	case vo.BillingCycleMonthly:
 		return startDate.Add(31 * 24 * time.Hour) // 31 days
 	case vo.BillingCycleQuarterly:
 		return startDate.Add(93 * 24 * time.Hour) // 93 days (31 * 3)
+	case vo.BillingCycleSemiAnnual:
+		return startDate.Add(180 * 24 * time.Hour) // 180 days
 	case vo.BillingCycleYearly:
 		return startDate.Add(365 * 24 * time.Hour) // 365 days
+	case vo.BillingCycleLifetime:
+		// For lifetime subscriptions, set a far future date (effectively never expires)
+		return time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC)
 	default:
 		return startDate.Add(31 * 24 * time.Hour) // Default to 31 days
 	}

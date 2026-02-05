@@ -116,8 +116,12 @@ func (uc *ManageResourceGroupForwardAgentsUseCase) executeAddAgents(ctx context.
 		}
 	}
 
-	// Process each valid SID
+	// Process each valid SID and collect agents that need to be updated
 	groupID := group.ID()
+	agentsToUpdate := make(map[uint][]uint) // agentID -> new groupIDs
+	sidToID := make(map[uint]string)        // For mapping back to SIDs
+	succeededSIDs := make([]string, 0)
+
 	for _, agentSID := range validSIDs {
 		agent, ok := agentMap[agentSID]
 		if !ok || agent == nil {
@@ -139,23 +143,40 @@ func (uc *ManageResourceGroupForwardAgentsUseCase) executeAddAgents(ctx context.
 		}
 		if alreadyInGroup {
 			// Already in this group, count as success
-			result.Succeeded = append(result.Succeeded, agentSID)
+			succeededSIDs = append(succeededSIDs, agentSID)
 			continue
 		}
 
-		// Add group ID to the list and update
+		// Add group ID to the list and collect for batch update
 		newGroupIDs := append(currentGroupIDs, groupID)
-		agent.SetGroupIDs(newGroupIDs)
-		if err := uc.agentRepo.Update(ctx, agent); err != nil {
-			uc.logger.Errorw("failed to update forward agent", "error", err, "agent_sid", agentSID)
-			result.Failed = append(result.Failed, dto.BatchOperationErr{
-				ID:     agentSID,
-				Reason: "failed to update forward agent",
-			})
-			continue
-		}
+		agentsToUpdate[agent.ID()] = newGroupIDs
+		sidToID[agent.ID()] = agentSID
+		succeededSIDs = append(succeededSIDs, agentSID)
+	}
 
-		result.Succeeded = append(result.Succeeded, agentSID)
+	// Batch update all agents that need changes
+	if len(agentsToUpdate) > 0 {
+		_, err := uc.agentRepo.BatchUpdateGroupIDs(ctx, agentsToUpdate)
+		if err != nil {
+			uc.logger.Errorw("failed to batch update forward agents", "error", err)
+			// Mark all pending updates as failed
+			for _, agentSID := range succeededSIDs {
+				if agent, ok := agentMap[agentSID]; ok && agentsToUpdate[agent.ID()] != nil {
+					result.Failed = append(result.Failed, dto.BatchOperationErr{
+						ID:     agentSID,
+						Reason: "failed to update forward agent",
+					})
+				} else {
+					// Agent was already in group, still succeeded
+					result.Succeeded = append(result.Succeeded, agentSID)
+				}
+			}
+		} else {
+			result.Succeeded = append(result.Succeeded, succeededSIDs...)
+		}
+	} else {
+		// All agents were already in the group
+		result.Succeeded = append(result.Succeeded, succeededSIDs...)
 	}
 
 	uc.logger.Infow("added forward agents to resource group",
@@ -231,8 +252,12 @@ func (uc *ManageResourceGroupForwardAgentsUseCase) executeRemoveAgents(ctx conte
 		}
 	}
 
-	// Process each valid SID
+	// Process each valid SID and collect agents that need to be updated
 	groupID := group.ID()
+	agentsToUpdate := make(map[uint][]uint) // agentID -> new groupIDs
+	sidToID := make(map[uint]string)        // For mapping back to SIDs
+	succeededSIDs := make([]string, 0)
+
 	for _, agentSID := range validSIDs {
 		agent, ok := agentMap[agentSID]
 		if !ok || agent == nil {
@@ -260,24 +285,33 @@ func (uc *ManageResourceGroupForwardAgentsUseCase) executeRemoveAgents(ctx conte
 			continue
 		}
 
-		// Remove group ID from the list
+		// Remove group ID from the list and collect for batch update
 		newGroupIDs := make([]uint, 0, len(currentGroupIDs)-1)
 		for i, gid := range currentGroupIDs {
 			if i != foundIndex {
 				newGroupIDs = append(newGroupIDs, gid)
 			}
 		}
-		agent.SetGroupIDs(newGroupIDs)
-		if err := uc.agentRepo.Update(ctx, agent); err != nil {
-			uc.logger.Errorw("failed to update forward agent", "error", err, "agent_sid", agentSID)
-			result.Failed = append(result.Failed, dto.BatchOperationErr{
-				ID:     agentSID,
-				Reason: "failed to update forward agent",
-			})
-			continue
-		}
+		agentsToUpdate[agent.ID()] = newGroupIDs
+		sidToID[agent.ID()] = agentSID
+		succeededSIDs = append(succeededSIDs, agentSID)
+	}
 
-		result.Succeeded = append(result.Succeeded, agentSID)
+	// Batch update all agents that need changes
+	if len(agentsToUpdate) > 0 {
+		_, err := uc.agentRepo.BatchUpdateGroupIDs(ctx, agentsToUpdate)
+		if err != nil {
+			uc.logger.Errorw("failed to batch update forward agents", "error", err)
+			// Mark all pending updates as failed
+			for _, agentSID := range succeededSIDs {
+				result.Failed = append(result.Failed, dto.BatchOperationErr{
+					ID:     agentSID,
+					Reason: "failed to update forward agent",
+				})
+			}
+		} else {
+			result.Succeeded = append(result.Succeeded, succeededSIDs...)
+		}
 	}
 
 	uc.logger.Infow("removed forward agents from resource group",

@@ -98,6 +98,10 @@ func (uc *ManageResourceGroupNodesUseCase) executeAddNodes(ctx context.Context, 
 		nodeMap[n.SID()] = n
 	}
 
+	// Collect nodes that need to be updated for batch operation
+	nodesToUpdate := make(map[uint][]uint) // nodeID -> new groupIDs
+	succeededSIDs := make([]string, 0)
+
 	for _, nodeSID := range nodeSIDs {
 		n, ok := nodeMap[nodeSID]
 		if !ok {
@@ -111,22 +115,40 @@ func (uc *ManageResourceGroupNodesUseCase) executeAddNodes(ctx context.Context, 
 		// Check if already in this group
 		if n.HasGroupID(groupID) {
 			// Already in this group, count as success
-			result.Succeeded = append(result.Succeeded, nodeSID)
+			succeededSIDs = append(succeededSIDs, nodeSID)
 			continue
 		}
 
-		// Add group ID and update
+		// Add group ID and collect for batch update
 		n.AddGroupID(groupID)
-		if err := uc.nodeRepo.Update(ctx, n); err != nil {
-			uc.logger.Errorw("failed to update node", "error", err, "node_sid", nodeSID)
-			result.Failed = append(result.Failed, dto.BatchOperationErr{
-				ID:     nodeSID,
-				Reason: "failed to update node",
-			})
-			continue
-		}
+		nodesToUpdate[n.ID()] = n.GroupIDs()
+		succeededSIDs = append(succeededSIDs, nodeSID)
+	}
 
-		result.Succeeded = append(result.Succeeded, nodeSID)
+	// Batch update all nodes that need changes
+	if len(nodesToUpdate) > 0 {
+		updated, err := uc.nodeRepo.BatchUpdateGroupIDs(ctx, nodesToUpdate)
+		if err != nil {
+			uc.logger.Errorw("failed to batch update nodes", "error", err)
+			// Mark all pending updates as failed
+			for _, nodeSID := range succeededSIDs {
+				if n, ok := nodeMap[nodeSID]; ok && nodesToUpdate[n.ID()] != nil {
+					result.Failed = append(result.Failed, dto.BatchOperationErr{
+						ID:     nodeSID,
+						Reason: "failed to update node",
+					})
+				} else {
+					// Node was already in group, still succeeded
+					result.Succeeded = append(result.Succeeded, nodeSID)
+				}
+			}
+		} else {
+			uc.logger.Infow("batch updated nodes", "updated_count", updated)
+			result.Succeeded = append(result.Succeeded, succeededSIDs...)
+		}
+	} else {
+		// All nodes were already in the group
+		result.Succeeded = append(result.Succeeded, succeededSIDs...)
 	}
 
 	uc.logger.Infow("added nodes to resource group",
@@ -184,6 +206,10 @@ func (uc *ManageResourceGroupNodesUseCase) executeRemoveNodes(ctx context.Contex
 		nodeMap[n.SID()] = n
 	}
 
+	// Collect nodes that need to be updated for batch operation
+	nodesToUpdate := make(map[uint][]uint) // nodeID -> new groupIDs
+	succeededSIDs := make([]string, 0)
+
 	for _, nodeSID := range nodeSIDs {
 		n, ok := nodeMap[nodeSID]
 		if !ok {
@@ -203,18 +229,28 @@ func (uc *ManageResourceGroupNodesUseCase) executeRemoveNodes(ctx context.Contex
 			continue
 		}
 
-		// Remove group ID
+		// Remove group ID and collect for batch update
 		n.RemoveGroupID(groupID)
-		if err := uc.nodeRepo.Update(ctx, n); err != nil {
-			uc.logger.Errorw("failed to update node", "error", err, "node_sid", nodeSID)
-			result.Failed = append(result.Failed, dto.BatchOperationErr{
-				ID:     nodeSID,
-				Reason: "failed to update node",
-			})
-			continue
-		}
+		nodesToUpdate[n.ID()] = n.GroupIDs()
+		succeededSIDs = append(succeededSIDs, nodeSID)
+	}
 
-		result.Succeeded = append(result.Succeeded, nodeSID)
+	// Batch update all nodes that need changes
+	if len(nodesToUpdate) > 0 {
+		updated, err := uc.nodeRepo.BatchUpdateGroupIDs(ctx, nodesToUpdate)
+		if err != nil {
+			uc.logger.Errorw("failed to batch update nodes", "error", err)
+			// Mark all pending updates as failed
+			for _, nodeSID := range succeededSIDs {
+				result.Failed = append(result.Failed, dto.BatchOperationErr{
+					ID:     nodeSID,
+					Reason: "failed to update node",
+				})
+			}
+		} else {
+			uc.logger.Infow("batch updated nodes", "updated_count", updated)
+			result.Succeeded = append(result.Succeeded, succeededSIDs...)
+		}
 	}
 
 	uc.logger.Infow("removed nodes from resource group",

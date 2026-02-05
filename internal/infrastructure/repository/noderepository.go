@@ -1486,6 +1486,55 @@ func (r *NodeRepositoryImpl) GetMetadataBySIDs(ctx context.Context, sids []strin
 	return metadata, nil
 }
 
+// BatchUpdateGroupIDs updates group_ids for multiple nodes in a single transaction.
+// This is optimized for resource group membership changes where only group_ids needs to be updated.
+func (r *NodeRepositoryImpl) BatchUpdateGroupIDs(ctx context.Context, nodeGroupIDs map[uint][]uint) (int, error) {
+	if len(nodeGroupIDs) == 0 {
+		return 0, nil
+	}
+
+	updated := 0
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for nodeID, groupIDs := range nodeGroupIDs {
+			// Convert group IDs to JSON array
+			var groupIDsJSON []byte
+			var err error
+			if len(groupIDs) == 0 {
+				groupIDsJSON = []byte("[]")
+			} else {
+				groupIDsJSON, err = json.Marshal(groupIDs)
+				if err != nil {
+					return fmt.Errorf("failed to marshal group IDs for node %d: %w", nodeID, err)
+				}
+			}
+
+			result := tx.Model(&models.NodeModel{}).
+				Where("id = ?", nodeID).
+				Updates(map[string]interface{}{
+					"group_ids":  groupIDsJSON,
+					"updated_at": biztime.NowUTC(),
+				})
+
+			if result.Error != nil {
+				return fmt.Errorf("failed to update node %d: %w", nodeID, result.Error)
+			}
+
+			if result.RowsAffected > 0 {
+				updated++
+			}
+		}
+		return nil
+	})
+
+	if err != nil {
+		r.logger.Errorw("failed to batch update group IDs", "error", err, "node_count", len(nodeGroupIDs))
+		return 0, err
+	}
+
+	r.logger.Infow("batch updated group IDs", "updated_count", updated, "total_count", len(nodeGroupIDs))
+	return updated, nil
+}
+
 // FindExpiringNodes returns active nodes that will expire within the specified days.
 // Only returns nodes that have expires_at set, are active, and are not already expired.
 func (r *NodeRepositoryImpl) FindExpiringNodes(ctx context.Context, withinDays int) ([]*node.ExpiringNodeInfo, error) {

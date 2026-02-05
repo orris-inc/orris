@@ -136,8 +136,7 @@ func (uc *GenerateSubscriptionUseCase) Execute(ctx context.Context, cmd Generate
 	}
 
 	if len(nodes) == 0 {
-		uc.logger.Warnw("no available nodes found", "token", cmd.SubscriptionToken)
-		return nil, fmt.Errorf("no available nodes")
+		uc.logger.Warnw("no available nodes found, returning empty subscription", "token", cmd.SubscriptionToken, "mode", nodeMode)
 	}
 
 	formatter, ok := uc.formatters[cmd.Format]

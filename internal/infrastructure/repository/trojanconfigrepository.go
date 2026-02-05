@@ -70,7 +70,10 @@ func (r *TrojanConfigRepository) GetByNodeIDs(ctx context.Context, nodeIDs []uin
 	}
 
 	var trojanModels []models.TrojanConfigModel
-	if err := r.db.WithContext(ctx).Where("node_id IN ?", nodeIDs).Find(&trojanModels).Error; err != nil {
+	if err := r.db.WithContext(ctx).
+		Select("node_id", "transport_protocol", "host", "path", "sni", "allow_insecure").
+		Where("node_id IN ?", nodeIDs).
+		Find(&trojanModels).Error; err != nil {
 		r.logger.Errorw("failed to get trojan configs by node IDs", "node_ids", nodeIDs, "error", err)
 		return nil, fmt.Errorf("failed to get trojan configs: %w", err)
 	}
