@@ -225,9 +225,20 @@ func (r *SubscriptionRepositoryImpl) GetActiveSubscriptionsByNodeID(ctx context.
 		}
 	}
 
-	// If node has no group_ids, no subscriptions available
+	// Also collect group_ids from system forward rules targeting this node.
+	// This handles the case where a resource group has only forward rules (no nodes)
+	// but those rules' target nodes still need to receive subscriptions.
+	forwardRuleGroupIDs, err := r.getGroupIDsFromForwardRules(ctx, nodeID)
+	if err != nil {
+		r.logger.Warnw("failed to query forward rule group_ids, continuing with node group_ids only",
+			"node_id", nodeID, "error", err)
+	}
+
+	// Merge and deduplicate group IDs from both sources
+	groupIDs = mergeUintSlice(groupIDs, forwardRuleGroupIDs)
+
 	if len(groupIDs) == 0 {
-		r.logger.Infow("node has no resource groups", "node_id", nodeID)
+		r.logger.Infow("node has no resource groups (direct or via forward rules)", "node_id", nodeID)
 		return []*subscription.Subscription{}, nil
 	}
 
@@ -272,6 +283,68 @@ func (r *SubscriptionRepositoryImpl) GetActiveSubscriptionsByNodeID(ctx context.
 	)
 
 	return entities, nil
+}
+
+// getGroupIDsFromForwardRules queries system forward rules targeting the specified node
+// and returns the deduplicated group IDs from those rules.
+// This ensures that nodes referenced by forward rules in a resource group
+// also receive subscriptions from that resource group's plan.
+func (r *SubscriptionRepositoryImpl) getGroupIDsFromForwardRules(ctx context.Context, nodeID uint) ([]uint, error) {
+	// Use a lightweight struct to read JSON column, consistent with how node's group_ids is read.
+	type ruleGroupIDs struct {
+		GroupIDs []byte `gorm:"column:group_ids"`
+	}
+	var rows []ruleGroupIDs
+	if err := r.db.WithContext(ctx).
+		Table("forward_rules").
+		Select("group_ids").
+		Where("target_node_id = ? AND status = ? AND (user_id IS NULL OR user_id = 0) AND deleted_at IS NULL",
+			nodeID, "enabled").
+		Where("group_ids IS NOT NULL AND JSON_LENGTH(group_ids) > 0").
+		Find(&rows).Error; err != nil {
+		return nil, fmt.Errorf("failed to query forward rules: %w", err)
+	}
+
+	// Parse and collect all group IDs from forward rules
+	seen := make(map[uint]struct{})
+	var result []uint
+	for _, row := range rows {
+		var ids []uint
+		if err := json.Unmarshal(row.GroupIDs, &ids); err != nil {
+			continue
+		}
+		for _, id := range ids {
+			if _, ok := seen[id]; !ok {
+				seen[id] = struct{}{}
+				result = append(result, id)
+			}
+		}
+	}
+
+	return result, nil
+}
+
+// mergeUintSlice merges two uint slices and returns a deduplicated result.
+func mergeUintSlice(a, b []uint) []uint {
+	if len(a) == 0 && len(b) == 0 {
+		return nil
+	}
+
+	seen := make(map[uint]struct{}, len(a)+len(b))
+	result := make([]uint, 0, len(a)+len(b))
+	for _, v := range a {
+		if _, ok := seen[v]; !ok {
+			seen[v] = struct{}{}
+			result = append(result, v)
+		}
+	}
+	for _, v := range b {
+		if _, ok := seen[v]; !ok {
+			seen[v] = struct{}{}
+			result = append(result, v)
+		}
+	}
+	return result
 }
 
 func (r *SubscriptionRepositoryImpl) Update(ctx context.Context, subscriptionEntity *subscription.Subscription) error {
