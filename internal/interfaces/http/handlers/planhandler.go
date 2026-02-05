@@ -3,15 +3,14 @@ package handlers
 import (
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 
 	subdto "github.com/orris-inc/orris/internal/application/subscription/dto"
 	"github.com/orris-inc/orris/internal/application/subscription/usecases"
 	"github.com/orris-inc/orris/internal/domain/subscription"
-	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
@@ -115,7 +114,7 @@ func (h *PlanHandler) CreatePlan(c *gin.Context) {
 }
 
 func (h *PlanHandler) UpdatePlan(c *gin.Context) {
-	planSID, err := parsePlanSID(c)
+	planSID, err := utils.ParseSIDParam(c, "id", id.PrefixPlan, "plan")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -150,7 +149,7 @@ func (h *PlanHandler) UpdatePlan(c *gin.Context) {
 }
 
 func (h *PlanHandler) GetPlan(c *gin.Context) {
-	planSID, err := parsePlanSID(c)
+	planSID, err := utils.ParseSIDParam(c, "id", id.PrefixPlan, "plan")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -192,7 +191,7 @@ func (h *PlanHandler) GetPublicPlans(c *gin.Context) {
 }
 
 func (h *PlanHandler) UpdatePlanStatus(c *gin.Context) {
-	planSID, err := parsePlanSID(c)
+	planSID, err := utils.ParseSIDParam(c, "id", id.PrefixPlan, "plan")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -226,7 +225,7 @@ func (h *PlanHandler) UpdatePlanStatus(c *gin.Context) {
 }
 
 func (h *PlanHandler) GetPlanPricings(c *gin.Context) {
-	planSID, err := parsePlanSID(c)
+	planSID, err := utils.ParseSIDParam(c, "id", id.PrefixPlan, "plan")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -247,7 +246,7 @@ func (h *PlanHandler) GetPlanPricings(c *gin.Context) {
 }
 
 func (h *PlanHandler) DeletePlan(c *gin.Context) {
-	planSID, err := parsePlanSID(c)
+	planSID, err := utils.ParseSIDParam(c, "id", id.PrefixPlan, "plan")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -261,43 +260,12 @@ func (h *PlanHandler) DeletePlan(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "Plan deleted successfully", nil)
 }
 
-func parsePlanSID(c *gin.Context) (string, error) {
-	sid := c.Param("id")
-	if sid == "" {
-		return "", errors.NewValidationError("Plan ID is required")
-	}
-
-	// Validate SID format (should start with "plan_")
-	if !strings.HasPrefix(sid, "plan_") {
-		return "", errors.NewValidationError("Invalid plan ID format")
-	}
-
-	return sid, nil
-}
 
 func parseListPlansQuery(c *gin.Context) (*usecases.ListPlansQuery, error) {
+	p := utils.ParsePagination(c)
 	query := &usecases.ListPlansQuery{
-		Page:     constants.DefaultPage,
-		PageSize: constants.DefaultPageSize,
-	}
-
-	if pageStr := c.Query("page"); pageStr != "" {
-		page, err := strconv.Atoi(pageStr)
-		if err != nil || page < 1 {
-			return nil, errors.NewValidationError("Invalid page parameter")
-		}
-		query.Page = page
-	}
-
-	if pageSizeStr := c.Query("page_size"); pageSizeStr != "" {
-		pageSize, err := strconv.Atoi(pageSizeStr)
-		if err != nil || pageSize < 1 {
-			return nil, errors.NewValidationError("Invalid page_size parameter")
-		}
-		if pageSize > constants.MaxPageSize {
-			pageSize = constants.MaxPageSize
-		}
-		query.PageSize = pageSize
+		Page:     p.Page,
+		PageSize: p.PageSize,
 	}
 
 	if status := c.Query("status"); status != "" {

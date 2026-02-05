@@ -1,12 +1,16 @@
-package trafficstatsutil
+package utils
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/orris-inc/orris/internal/shared/constants"
 )
 
-func TestGetPaginationParams(t *testing.T) {
+func TestValidatePagination(t *testing.T) {
 	tests := []struct {
 		name         string
 		page         int
@@ -81,12 +85,71 @@ func TestGetPaginationParams(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := GetPaginationParams(tt.page, tt.pageSize)
+			got := ValidatePagination(tt.page, tt.pageSize)
 			if got.Page != tt.wantPage {
-				t.Errorf("GetPaginationParams().Page = %v, want %v", got.Page, tt.wantPage)
+				t.Errorf("ValidatePagination().Page = %v, want %v", got.Page, tt.wantPage)
 			}
 			if got.PageSize != tt.wantPageSize {
-				t.Errorf("GetPaginationParams().PageSize = %v, want %v", got.PageSize, tt.wantPageSize)
+				t.Errorf("ValidatePagination().PageSize = %v, want %v", got.PageSize, tt.wantPageSize)
+			}
+		})
+	}
+}
+
+func TestParsePagination(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	tests := []struct {
+		name         string
+		queryParams  string
+		wantPage     int
+		wantPageSize int
+	}{
+		{
+			name:         "no params - use defaults",
+			queryParams:  "",
+			wantPage:     constants.DefaultPage,
+			wantPageSize: constants.DefaultPageSize,
+		},
+		{
+			name:         "valid page and page_size",
+			queryParams:  "page=3&page_size=25",
+			wantPage:     3,
+			wantPageSize: 25,
+		},
+		{
+			name:         "invalid page - use default",
+			queryParams:  "page=abc&page_size=20",
+			wantPage:     constants.DefaultPage,
+			wantPageSize: 20,
+		},
+		{
+			name:         "page_size exceeds max - capped",
+			queryParams:  "page=1&page_size=500",
+			wantPage:     1,
+			wantPageSize: constants.MaxPageSize,
+		},
+		{
+			name:         "zero page - use default",
+			queryParams:  "page=0&page_size=10",
+			wantPage:     constants.DefaultPage,
+			wantPageSize: 10,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/?"+tt.queryParams, nil)
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = req
+
+			got := ParsePagination(c)
+			if got.Page != tt.wantPage {
+				t.Errorf("ParsePagination().Page = %v, want %v", got.Page, tt.wantPage)
+			}
+			if got.PageSize != tt.wantPageSize {
+				t.Errorf("ParsePagination().PageSize = %v, want %v", got.PageSize, tt.wantPageSize)
 			}
 		})
 	}
@@ -165,36 +228,39 @@ func TestApplyPagination(t *testing.T) {
 			wantStart: 0,
 			wantEnd:   5,
 		},
-		{
-			name:      "page 0 treated as page -1 result",
-			total:     50,
-			page:      0,
-			pageSize:  10,
-			wantStart: -10, // (0-1)*10 = -10, but we test behavior
-			wantEnd:   0,
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Special handling for edge case where page=0 produces negative start
-			// In real usage, GetPaginationParams would prevent this
-			if tt.name == "page 0 treated as page -1 result" {
-				start, end := ApplyPagination(tt.total, tt.page, tt.pageSize)
-				// When start is negative (-10), the function doesn't clamp negative values
-				// This is acceptable as GetPaginationParams ensures page >= 1
-				if start != -10 || end != 0 {
-					t.Errorf("ApplyPagination() = (%v, %v), want (%v, %v)", start, end, -10, 0)
-				}
-				return
-			}
-
 			start, end := ApplyPagination(tt.total, tt.page, tt.pageSize)
 			if start != tt.wantStart {
 				t.Errorf("ApplyPagination() start = %v, want %v", start, tt.wantStart)
 			}
 			if end != tt.wantEnd {
 				t.Errorf("ApplyPagination() end = %v, want %v", end, tt.wantEnd)
+			}
+		})
+	}
+}
+
+func TestTotalPages(t *testing.T) {
+	tests := []struct {
+		name     string
+		total    int64
+		pageSize int
+		want     int
+	}{
+		{"empty", 0, 10, 1},
+		{"exact division", 30, 10, 3},
+		{"with remainder", 25, 10, 3},
+		{"single page", 5, 10, 1},
+		{"zero pageSize", 10, 0, 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := TotalPages(tt.total, tt.pageSize); got != tt.want {
+				t.Errorf("TotalPages() = %v, want %v", got, tt.want)
 			}
 		})
 	}

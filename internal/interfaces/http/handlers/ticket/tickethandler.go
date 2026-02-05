@@ -61,8 +61,12 @@ func (h *TicketHandler) CreateTicket(c *gin.Context) {
 		return
 	}
 
-	userID, _ := c.Get("user_id")
-	cmd := req.ToCommand(userID.(uint))
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+	cmd := req.ToCommand(userID)
 
 	result, err := h.createTicketUC.Execute(c.Request.Context(), cmd)
 	if err != nil {
@@ -81,10 +85,14 @@ func (h *TicketHandler) GetTicket(c *gin.Context) {
 		return
 	}
 
-	userID, _ := c.Get("user_id")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
 	cmd := usecases.GetTicketQuery{
 		TicketID: ticketID,
-		UserID:   userID.(uint),
+		UserID:   userID,
 	}
 
 	result, err := h.getTicketUC.Execute(c.Request.Context(), cmd)
@@ -104,8 +112,12 @@ func (h *TicketHandler) ListTickets(c *gin.Context) {
 		return
 	}
 
-	userID, _ := c.Get("user_id")
-	cmd := req.ToQuery(userID.(uint))
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+	cmd := req.ToQuery(userID)
 
 	result, err := h.listTicketsUC.Execute(c.Request.Context(), cmd)
 	if err != nil {
@@ -130,11 +142,15 @@ func (h *TicketHandler) AssignTicket(c *gin.Context) {
 		return
 	}
 
-	userID, _ := c.Get("user_id")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
 	cmd := usecases.AssignTicketCommand{
 		TicketID:   ticketID,
 		AssigneeID: req.AssigneeID,
-		AssignedBy: userID.(uint),
+		AssignedBy: userID,
 	}
 
 	result, err := h.assignTicketUC.Execute(c.Request.Context(), cmd)
@@ -160,11 +176,15 @@ func (h *TicketHandler) AddComment(c *gin.Context) {
 		return
 	}
 
-	userID, _ := c.Get("user_id")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
 	userRole := c.GetString(constants.ContextKeyUserRole)
 	cmd := usecases.AddCommentCommand{
 		TicketID:   ticketID,
-		UserID:     userID.(uint),
+		UserID:     userID,
 		UserRoles:  []string{userRole},
 		Content:    req.Content,
 		IsInternal: req.IsInternal,
@@ -199,7 +219,11 @@ func (h *TicketHandler) UpdateTicketStatus(c *gin.Context) {
 		return
 	}
 
-	userID, _ := c.Get("user_id")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
 	userRole := c.GetString(constants.ContextKeyUserRole)
 
 	// Map string status to vo.TicketStatus
@@ -223,7 +247,7 @@ func (h *TicketHandler) UpdateTicketStatus(c *gin.Context) {
 	cmd := usecases.ChangeStatusCommand{
 		TicketID:  ticketID,
 		NewStatus: newStatus,
-		ChangedBy: userID.(uint),
+		ChangedBy: userID,
 		UserRoles: []string{userRole},
 	}
 

@@ -6,8 +6,8 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/orris-inc/orris/internal/application/ticket/usecases"
-	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 type CreateTicketRequest struct {
@@ -70,19 +70,11 @@ func (r *ListTicketsRequest) ToQuery(userID uint) usecases.ListTicketsQuery {
 }
 
 func parseListTicketsRequest(c *gin.Context) (*ListTicketsRequest, error) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	if page < 1 {
-		page = 1
-	}
-
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", strconv.Itoa(constants.DefaultPageSize)))
-	if pageSize < 1 || pageSize > constants.MaxPageSize {
-		pageSize = constants.DefaultPageSize
-	}
+	pagination := utils.ParsePagination(c)
 
 	req := &ListTicketsRequest{
-		Page:     page,
-		PageSize: pageSize,
+		Page:     pagination.Page,
+		PageSize: pagination.PageSize,
 	}
 
 	if status := c.Query("status"); status != "" {

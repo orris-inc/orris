@@ -2,13 +2,11 @@ package user
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 
 	"github.com/orris-inc/orris/internal/application/forward/usecases"
-	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/utils"
@@ -16,18 +14,9 @@ import (
 
 // CreateRule handles POST /user/forward-rules
 func (h *Handler) CreateRule(c *gin.Context) {
-	// Get user_id from context (set by auth middleware)
-	userIDInterface, exists := c.Get("user_id")
-	if !exists {
-		h.logger.Warnw("user_id not found in context", "ip", c.ClientIP())
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
-		return
-	}
-
-	userID, ok := userIDInterface.(uint)
-	if !ok {
-		h.logger.Warnw("invalid user_id type in context", "user_id", userIDInterface, "ip", c.ClientIP())
-		utils.ErrorResponse(c, http.StatusInternalServerError, "invalid user ID type")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
@@ -127,36 +116,18 @@ func (h *Handler) CreateRule(c *gin.Context) {
 
 // ListRules handles GET /user/forward-rules
 func (h *Handler) ListRules(c *gin.Context) {
-	// Get user_id from context (set by auth middleware)
-	userIDInterface, exists := c.Get("user_id")
-	if !exists {
-		h.logger.Warnw("user_id not found in context", "ip", c.ClientIP())
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	userID, ok := userIDInterface.(uint)
-	if !ok {
-		h.logger.Warnw("invalid user_id type in context", "user_id", userIDInterface, "ip", c.ClientIP())
-		utils.ErrorResponse(c, http.StatusInternalServerError, "invalid user ID type")
-		return
-	}
-
-	// Parse pagination parameters
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	if page < 1 {
-		page = 1
-	}
-
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", strconv.Itoa(constants.DefaultPageSize)))
-	if pageSize < 1 || pageSize > constants.MaxPageSize {
-		pageSize = constants.DefaultPageSize
-	}
+	pagination := utils.ParsePagination(c)
 
 	query := usecases.ListUserForwardRulesQuery{
 		UserID:   userID,
-		Page:     page,
-		PageSize: pageSize,
+		Page:     pagination.Page,
+		PageSize: pagination.PageSize,
 		Name:     c.Query("name"),
 		Protocol: c.Query("protocol"),
 		Status:   c.Query("status"),
@@ -170,23 +141,14 @@ func (h *Handler) ListRules(c *gin.Context) {
 		return
 	}
 
-	utils.ListSuccessResponse(c, result.Rules, result.Total, page, pageSize)
+	utils.ListSuccessResponse(c, result.Rules, result.Total, pagination.Page, pagination.PageSize)
 }
 
 // GetUsage handles GET /user/forward-rules/usage
 func (h *Handler) GetUsage(c *gin.Context) {
-	// Get user_id from context (set by auth middleware)
-	userIDInterface, exists := c.Get("user_id")
-	if !exists {
-		h.logger.Warnw("user_id not found in context", "ip", c.ClientIP())
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
-		return
-	}
-
-	userID, ok := userIDInterface.(uint)
-	if !ok {
-		h.logger.Warnw("invalid user_id type in context", "user_id", userIDInterface, "ip", c.ClientIP())
-		utils.ErrorResponse(c, http.StatusInternalServerError, "invalid user ID type")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
@@ -206,7 +168,7 @@ func (h *Handler) GetUsage(c *gin.Context) {
 // GetRule handles GET /user/forward-rules/:id
 // Note: Ownership verification is handled by ForwardRuleOwnerMiddleware
 func (h *Handler) GetRule(c *gin.Context) {
-	shortID, err := parseRuleShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "id", id.PrefixForwardRule, "forward rule")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -225,7 +187,7 @@ func (h *Handler) GetRule(c *gin.Context) {
 // UpdateRule handles PUT /user/forward-rules/:id
 // Note: Ownership verification is handled by ForwardRuleOwnerMiddleware
 func (h *Handler) UpdateRule(c *gin.Context) {
-	shortID, err := parseRuleShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "id", id.PrefixForwardRule, "forward rule")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -337,7 +299,7 @@ func (h *Handler) UpdateRule(c *gin.Context) {
 // DeleteRule handles DELETE /user/forward-rules/:id
 // Note: Ownership verification is handled by ForwardRuleOwnerMiddleware
 func (h *Handler) DeleteRule(c *gin.Context) {
-	shortID, err := parseRuleShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "id", id.PrefixForwardRule, "forward rule")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -355,7 +317,7 @@ func (h *Handler) DeleteRule(c *gin.Context) {
 // EnableRule handles POST /user/forward-rules/:id/enable
 // Note: Ownership verification is handled by ForwardRuleOwnerMiddleware
 func (h *Handler) EnableRule(c *gin.Context) {
-	shortID, err := parseRuleShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "id", id.PrefixForwardRule, "forward rule")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -373,7 +335,7 @@ func (h *Handler) EnableRule(c *gin.Context) {
 // DisableRule handles POST /user/forward-rules/:id/disable
 // Note: Ownership verification is handled by ForwardRuleOwnerMiddleware
 func (h *Handler) DisableRule(c *gin.Context) {
-	shortID, err := parseRuleShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "id", id.PrefixForwardRule, "forward rule")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -390,18 +352,9 @@ func (h *Handler) DisableRule(c *gin.Context) {
 
 // ReorderRules handles PATCH /user/forward-rules/reorder
 func (h *Handler) ReorderRules(c *gin.Context) {
-	// Get user_id from context (set by auth middleware)
-	userIDInterface, exists := c.Get("user_id")
-	if !exists {
-		h.logger.Warnw("user_id not found in context", "ip", c.ClientIP())
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
-		return
-	}
-
-	userID, ok := userIDInterface.(uint)
-	if !ok {
-		h.logger.Warnw("invalid user_id type in context", "user_id", userIDInterface, "ip", c.ClientIP())
-		utils.ErrorResponse(c, http.StatusInternalServerError, "invalid user ID type")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 

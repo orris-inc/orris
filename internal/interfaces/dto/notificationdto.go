@@ -7,7 +7,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	appDto "github.com/orris-inc/orris/internal/application/notification/dto"
-	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/utils"
@@ -124,28 +123,10 @@ func ParseNotificationID(c *gin.Context) (uint, error) {
 }
 
 func ParseListAnnouncementsRequest(c *gin.Context) (*ListAnnouncementsRequest, error) {
+	p := utils.ParsePagination(c)
 	req := &ListAnnouncementsRequest{
-		Page:     constants.DefaultPage,
-		PageSize: constants.DefaultPageSize,
-	}
-
-	if pageStr := c.Query("page"); pageStr != "" {
-		page, err := strconv.Atoi(pageStr)
-		if err != nil || page < 1 {
-			return nil, errors.NewValidationError("Invalid page parameter")
-		}
-		req.Page = page
-	}
-
-	if pageSizeStr := c.Query("page_size"); pageSizeStr != "" {
-		pageSize, err := strconv.Atoi(pageSizeStr)
-		if err != nil || pageSize < 1 {
-			return nil, errors.NewValidationError("Invalid page_size parameter")
-		}
-		if pageSize > constants.MaxPageSize {
-			pageSize = constants.MaxPageSize
-		}
-		req.PageSize = pageSize
+		Page:     p.Page,
+		PageSize: p.PageSize,
 	}
 
 	req.Type = c.Query("type")
@@ -215,28 +196,10 @@ func (r *ListNotificationsRequest) ToApplicationDTO(userID uint) appDto.ListNoti
 }
 
 func ParseListTemplatesRequest(c *gin.Context) (*ListTemplatesRequest, error) {
+	p := utils.ParsePagination(c)
 	req := &ListTemplatesRequest{
-		Page:     constants.DefaultPage,
-		PageSize: constants.DefaultPageSize,
-	}
-
-	if pageStr := c.Query("page"); pageStr != "" {
-		page, err := strconv.Atoi(pageStr)
-		if err != nil || page < 1 {
-			return nil, errors.NewValidationError("Invalid page parameter")
-		}
-		req.Page = page
-	}
-
-	if pageSizeStr := c.Query("page_size"); pageSizeStr != "" {
-		pageSize, err := strconv.Atoi(pageSizeStr)
-		if err != nil || pageSize < 1 {
-			return nil, errors.NewValidationError("Invalid page_size parameter")
-		}
-		if pageSize > constants.MaxPageSize {
-			pageSize = constants.MaxPageSize
-		}
-		req.PageSize = pageSize
+		Page:     p.Page,
+		PageSize: p.PageSize,
 	}
 
 	if enabledStr := c.Query("enabled"); enabledStr != "" {

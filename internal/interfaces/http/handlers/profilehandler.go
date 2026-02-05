@@ -27,18 +27,9 @@ func NewProfileHandler(userService *user.ServiceDDD) *ProfileHandler {
 
 // UpdateProfile handles PATCH /users/me
 func (h *ProfileHandler) UpdateProfile(c *gin.Context) {
-	// Get current user ID from context
-	userIDInterface, exists := c.Get("user_id")
-	if !exists {
-		h.logger.Error("user_id not found in context")
-		utils.ErrorResponse(c, http.StatusUnauthorized, "authentication required")
-		return
-	}
-
-	userID, ok := userIDInterface.(uint)
-	if !ok {
-		h.logger.Error("invalid user_id type in context")
-		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
@@ -73,18 +64,9 @@ func (h *ProfileHandler) UpdateProfile(c *gin.Context) {
 
 // ChangePassword handles PUT /users/me/password
 func (h *ProfileHandler) ChangePassword(c *gin.Context) {
-	// Get current user ID from context
-	userIDInterface, exists := c.Get("user_id")
-	if !exists {
-		h.logger.Error("user_id not found in context")
-		utils.ErrorResponse(c, http.StatusUnauthorized, "authentication required")
-		return
-	}
-
-	userID, ok := userIDInterface.(uint)
-	if !ok {
-		h.logger.Error("invalid user_id type in context")
-		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
@@ -107,7 +89,7 @@ func (h *ProfileHandler) ChangePassword(c *gin.Context) {
 	appReq := req.ToApplicationRequest()
 
 	// Change password
-	err := h.userService.ChangePassword(c.Request.Context(), userID, *appReq)
+	err = h.userService.ChangePassword(c.Request.Context(), userID, *appReq)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return

@@ -2,14 +2,12 @@ package node
 
 import (
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/orris-inc/orris/internal/application/node/dto"
 	"github.com/orris-inc/orris/internal/application/node/usecases"
-	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -75,7 +73,7 @@ func (h *NodeHandler) CreateNode(c *gin.Context) {
 
 // GetNode handles GET /nodes/:id
 func (h *NodeHandler) GetNode(c *gin.Context) {
-	sid, err := parseNodeSID(c)
+	sid, err := utils.ParseSIDParam(c, "id", id.PrefixNode, "node")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -93,7 +91,7 @@ func (h *NodeHandler) GetNode(c *gin.Context) {
 
 // UpdateNode handles PUT /nodes/:id
 func (h *NodeHandler) UpdateNode(c *gin.Context) {
-	sid, err := parseNodeSID(c)
+	sid, err := utils.ParseSIDParam(c, "id", id.PrefixNode, "node")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -155,7 +153,7 @@ func (h *NodeHandler) UpdateNode(c *gin.Context) {
 
 // DeleteNode handles DELETE /nodes/:id
 func (h *NodeHandler) DeleteNode(c *gin.Context) {
-	sid, err := parseNodeSID(c)
+	sid, err := utils.ParseSIDParam(c, "id", id.PrefixNode, "node")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -191,7 +189,7 @@ func (h *NodeHandler) ListNodes(c *gin.Context) {
 
 // GenerateToken handles POST /nodes/:id/tokens
 func (h *NodeHandler) GenerateToken(c *gin.Context) {
-	sid, err := parseNodeSID(c)
+	sid, err := utils.ParseSIDParam(c, "id", id.PrefixNode, "node")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -212,7 +210,7 @@ func (h *NodeHandler) GenerateToken(c *gin.Context) {
 //   - token (optional): API token. If not provided, uses node's current stored token
 //   - api_url (optional): Override the default API URL
 func (h *NodeHandler) GetInstallScript(c *gin.Context) {
-	sid, err := parseNodeSID(c)
+	sid, err := utils.ParseSIDParam(c, "id", id.PrefixNode, "node")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -249,7 +247,7 @@ type UpdateNodeStatusRequest struct {
 
 // UpdateNodeStatus handles PATCH /nodes/:id/status
 func (h *NodeHandler) UpdateNodeStatus(c *gin.Context) {
-	sid, err := parseNodeSID(c)
+	sid, err := utils.ParseSIDParam(c, "id", id.PrefixNode, "node")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -275,22 +273,6 @@ func (h *NodeHandler) UpdateNodeStatus(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "Node status updated successfully", result)
 }
 
-// parseNodeSID validates and returns the full SID from a prefixed node ID (e.g., "node_xK9mP2vL3nQ").
-// The SID is stored with prefix in the database as per Stripe-style ID convention.
-func parseNodeSID(c *gin.Context) (string, error) {
-	prefixedID := c.Param("id")
-	if prefixedID == "" {
-		return "", errors.NewValidationError("node ID is required")
-	}
-
-	// Validate the prefix format, but return the full prefixed ID for database queries
-	// since sid field stores the complete Stripe-style ID with prefix
-	if err := id.ValidatePrefix(prefixedID, id.PrefixNode); err != nil {
-		return "", errors.NewValidationError("invalid node ID format, expected node_xxxxx")
-	}
-
-	return prefixedID, nil
-}
 
 type CreateNodeRequest struct {
 	Name             string            `json:"name" binding:"required" example:"US-Node-01"`
@@ -592,19 +574,11 @@ type ListNodesRequest struct {
 }
 
 func parseListNodesRequest(c *gin.Context) (*ListNodesRequest, error) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	if page < 1 {
-		page = 1
-	}
-
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", strconv.Itoa(constants.DefaultPageSize)))
-	if pageSize < 1 || pageSize > constants.MaxPageSize {
-		pageSize = constants.DefaultPageSize
-	}
+	pagination := utils.ParsePagination(c)
 
 	req := &ListNodesRequest{
-		Page:      page,
-		PageSize:  pageSize,
+		Page:      pagination.Page,
+		PageSize:  pagination.PageSize,
 		SortBy:    c.DefaultQuery("sort_by", "sort_order"),
 		SortOrder: c.DefaultQuery("sort_order", "asc"),
 	}

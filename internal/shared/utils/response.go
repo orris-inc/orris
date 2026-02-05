@@ -34,6 +34,40 @@ type ListResponse struct {
 	TotalPages int         `json:"total_pages"`
 }
 
+// NOTE: Pagination and ParsePagination have been moved to pagination.go
+
+// GetUserIDFromContext retrieves user_id from gin context (set by auth middleware).
+// Returns error if not found or invalid type.
+func GetUserIDFromContext(c *gin.Context) (uint, error) {
+	userIDInterface, exists := c.Get("user_id")
+	if !exists {
+		return 0, errors.NewUnauthorizedError("user not authenticated")
+	}
+
+	userID, ok := userIDInterface.(uint)
+	if !ok {
+		return 0, errors.NewInternalError("invalid user ID type in context")
+	}
+
+	return userID, nil
+}
+
+// GetSubscriptionIDFromContext retrieves subscription_id from gin context (set by middleware).
+// Returns error if not found or invalid type.
+func GetSubscriptionIDFromContext(c *gin.Context) (uint, error) {
+	subscriptionIDInterface, exists := c.Get("subscription_id")
+	if !exists {
+		return 0, errors.NewUnauthorizedError("subscription context not available")
+	}
+
+	subscriptionID, ok := subscriptionIDInterface.(uint)
+	if !ok {
+		return 0, errors.NewInternalError("invalid subscription ID type in context")
+	}
+
+	return subscriptionID, nil
+}
+
 // SuccessResponse sends a successful response with custom status code
 func SuccessResponse(c *gin.Context, statusCode int, message string, data interface{}) {
 	response := APIResponse{
@@ -115,17 +149,12 @@ func ErrorResponseWithError(c *gin.Context, err error) {
 
 // ListSuccessResponse sends a successful list response with pagination
 func ListSuccessResponse(c *gin.Context, items interface{}, total int64, page, pageSize int, message ...string) {
-	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
-	if totalPages == 0 {
-		totalPages = 1
-	}
-
 	listResponse := ListResponse{
 		Items:      items,
 		Total:      total,
 		Page:       page,
 		PageSize:   pageSize,
-		TotalPages: totalPages,
+		TotalPages: TotalPages(total, pageSize),
 	}
 
 	response := APIResponse{
@@ -163,29 +192,10 @@ func formatValidationErrors(errs validator.ValidationErrors) string {
 }
 
 // formatFieldError formats a single field validation error.
+// Uses snake_case for field names in API responses.
 func formatFieldError(fe validator.FieldError) string {
 	field := toSnakeCase(fe.Field())
-
-	switch fe.Tag() {
-	case "required":
-		return field + " is required"
-	case "oneof":
-		return field + " must be one of: " + fe.Param()
-	case "min":
-		return field + " must be at least " + fe.Param()
-	case "max":
-		return field + " must be at most " + fe.Param()
-	case "gte":
-		return field + " must be greater than or equal to " + fe.Param()
-	case "lte":
-		return field + " must be less than or equal to " + fe.Param()
-	case "email":
-		return field + " must be a valid email address"
-	case "url":
-		return field + " must be a valid URL"
-	default:
-		return field + " failed validation: " + fe.Tag()
-	}
+	return FormatFieldError(field, fe.Tag(), fe.Param(), fe.Kind())
 }
 
 // toSnakeCase converts PascalCase or camelCase to snake_case.

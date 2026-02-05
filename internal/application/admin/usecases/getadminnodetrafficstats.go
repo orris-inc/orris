@@ -12,6 +12,7 @@ import (
 	"github.com/orris-inc/orris/internal/infrastructure/cache"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 const (
@@ -69,7 +70,7 @@ func (uc *GetAdminNodeTrafficStatsUseCase) Execute(
 		return nil, err
 	}
 
-	pagination := trafficstatsutil.GetPaginationParams(query.Page, query.PageSize)
+	pagination := utils.ValidatePagination(query.Page, query.PageSize)
 	timeWindow := trafficstatsutil.CalculateTimeWindow(query.From, query.To)
 
 	// Resource type for nodes
@@ -169,7 +170,7 @@ func (uc *GetAdminNodeTrafficStatsUseCase) Execute(
 
 	// Apply pagination
 	total := int64(len(resourceUsages))
-	start, end := trafficstatsutil.ApplyPagination(len(resourceUsages), pagination.Page, pagination.PageSize)
+	start, end := utils.ApplyPagination(len(resourceUsages), pagination.Page, pagination.PageSize)
 	pagedUsages := resourceUsages[start:end]
 
 	// Extract node IDs
@@ -227,8 +228,5 @@ func (uc *GetAdminNodeTrafficStatsUseCase) Execute(
 }
 
 func (uc *GetAdminNodeTrafficStatsUseCase) validateQuery(query GetAdminNodeTrafficStatsQuery) error {
-	if err := trafficstatsutil.ValidateTimeRange(query.From, query.To); err != nil {
-		return err
-	}
-	return trafficstatsutil.ValidatePaginationInput(query.Page, query.PageSize)
+	return trafficstatsutil.ValidateTimeRange(query.From, query.To)
 }

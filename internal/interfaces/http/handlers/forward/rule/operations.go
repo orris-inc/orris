@@ -13,7 +13,7 @@ import (
 
 // EnableRule handles POST /forward-rules/:id/enable
 func (h *Handler) EnableRule(c *gin.Context) {
-	shortID, err := parseRuleShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "id", id.PrefixForwardRule, "forward rule")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -30,7 +30,7 @@ func (h *Handler) EnableRule(c *gin.Context) {
 
 // DisableRule handles POST /forward-rules/:id/disable
 func (h *Handler) DisableRule(c *gin.Context) {
-	shortID, err := parseRuleShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "id", id.PrefixForwardRule, "forward rule")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -63,7 +63,7 @@ func (h *Handler) UpdateStatus(c *gin.Context) {
 
 // ResetTraffic handles POST /forward-rules/:id/reset-traffic
 func (h *Handler) ResetTraffic(c *gin.Context) {
-	shortID, err := parseRuleShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "id", id.PrefixForwardRule, "forward rule")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -80,7 +80,7 @@ func (h *Handler) ResetTraffic(c *gin.Context) {
 
 // ProbeRule handles POST /forward-rules/:id/probe
 func (h *Handler) ProbeRule(c *gin.Context) {
-	shortID, err := parseRuleShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "id", id.PrefixForwardRule, "forward rule")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return

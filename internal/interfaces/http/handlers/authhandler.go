@@ -387,13 +387,13 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 }
 
 func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	currentUser, err := h.userRepo.GetByID(c.Request.Context(), userID.(uint))
+	currentUser, err := h.userRepo.GetByID(c.Request.Context(), userID)
 	if err != nil || currentUser == nil {
 		h.logger.Errorw("failed to get current user", "error", err, "user_id", userID)
 		utils.ErrorResponse(c, http.StatusNotFound, "user not found")

@@ -46,30 +46,11 @@ type BatchUpdateItem struct {
 	ExitAgentID *string `json:"exit_agent_id,omitempty"` // exit agent ID (for entry type rules)
 }
 
-// getUserIDFromContext extracts user ID from gin context.
-// Returns the user ID and true if successful, or 0 and false if failed (error response already sent).
-func (h *Handler) getUserIDFromContext(c *gin.Context) (uint, bool) {
-	userIDInterface, exists := c.Get("user_id")
-	if !exists {
-		h.logger.Warnw("user_id not found in context", "ip", c.ClientIP())
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
-		return 0, false
-	}
-
-	userID, ok := userIDInterface.(uint)
-	if !ok {
-		h.logger.Warnw("invalid user_id type in context", "user_id", userIDInterface, "ip", c.ClientIP())
-		utils.ErrorResponse(c, http.StatusInternalServerError, "invalid user ID type")
-		return 0, false
-	}
-
-	return userID, true
-}
-
 // BatchCreateRules handles POST /user/forward-rules/batch
 func (h *Handler) BatchCreateRules(c *gin.Context) {
-	userID, ok := h.getUserIDFromContext(c)
-	if !ok {
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
@@ -221,8 +202,9 @@ func (h *Handler) BatchCreateRules(c *gin.Context) {
 
 // BatchDeleteRules handles DELETE /user/forward-rules/batch
 func (h *Handler) BatchDeleteRules(c *gin.Context) {
-	userID, ok := h.getUserIDFromContext(c)
-	if !ok {
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
@@ -247,8 +229,9 @@ func (h *Handler) BatchDeleteRules(c *gin.Context) {
 
 // BatchToggleStatus handles PATCH /user/forward-rules/batch/status
 func (h *Handler) BatchToggleStatus(c *gin.Context) {
-	userID, ok := h.getUserIDFromContext(c)
-	if !ok {
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
@@ -275,8 +258,9 @@ func (h *Handler) BatchToggleStatus(c *gin.Context) {
 
 // BatchUpdateRules handles PATCH /user/forward-rules/batch
 func (h *Handler) BatchUpdateRules(c *gin.Context) {
-	userID, ok := h.getUserIDFromContext(c)
-	if !ok {
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 

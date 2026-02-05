@@ -2,12 +2,8 @@
 package rule
 
 import (
-	"github.com/gin-gonic/gin"
-
 	"github.com/orris-inc/orris/internal/application/forward/services"
 	"github.com/orris-inc/orris/internal/application/forward/usecases"
-	"github.com/orris-inc/orris/internal/shared/errors"
-	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -143,19 +139,3 @@ type ForwardRuleOrder struct {
 	SortOrder int    `json:"sort_order" binding:"gte=0" example:"100"`
 }
 
-// parseRuleShortID validates a prefixed rule ID and returns the SID (e.g., "fr_xK9mP2vL3nQ").
-// Note: Despite the name, this returns the full SID (with prefix) as stored in the database.
-func parseRuleShortID(c *gin.Context) (string, error) {
-	prefixedID := c.Param("id")
-	if prefixedID == "" {
-		return "", errors.NewValidationError("forward rule ID is required")
-	}
-
-	// Validate the prefix is correct, but return the full prefixed ID
-	// because the database stores SIDs with prefix (e.g., "fr_xxx")
-	if err := id.ValidatePrefix(prefixedID, id.PrefixForwardRule); err != nil {
-		return "", errors.NewValidationError("invalid forward rule ID format, expected fr_xxxxx")
-	}
-
-	return prefixedID, nil
-}

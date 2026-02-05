@@ -3,14 +3,12 @@ package crud
 
 import (
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/application/forward/usecases"
-	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -133,7 +131,7 @@ func (h *Handler) CreateAgent(c *gin.Context) {
 
 // GetAgent handles GET /forward-agents/:id
 func (h *Handler) GetAgent(c *gin.Context) {
-	shortID, err := parseAgentShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "id", id.PrefixForwardAgent, "forward agent")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -151,19 +149,11 @@ func (h *Handler) GetAgent(c *gin.Context) {
 
 // ListAgents handles GET /forward-agents
 func (h *Handler) ListAgents(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	if page < 1 {
-		page = 1
-	}
-
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", strconv.Itoa(constants.DefaultPageSize)))
-	if pageSize < 1 || pageSize > constants.MaxPageSize {
-		pageSize = constants.DefaultPageSize
-	}
+	pagination := utils.ParsePagination(c)
 
 	query := usecases.ListForwardAgentsQuery{
-		Page:     page,
-		PageSize: pageSize,
+		Page:     pagination.Page,
+		PageSize: pagination.PageSize,
 		Name:     c.Query("name"),
 		Status:   c.Query("status"),
 		OrderBy:  c.DefaultQuery("sort_by", "sort_order"),
@@ -176,12 +166,12 @@ func (h *Handler) ListAgents(c *gin.Context) {
 		return
 	}
 
-	utils.ListSuccessResponse(c, result.Agents, result.Total, page, pageSize)
+	utils.ListSuccessResponse(c, result.Agents, result.Total, pagination.Page, pagination.PageSize)
 }
 
 // UpdateAgent handles PUT /forward-agents/:id
 func (h *Handler) UpdateAgent(c *gin.Context) {
-	shortID, err := parseAgentShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "id", id.PrefixForwardAgent, "forward agent")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -257,7 +247,7 @@ func (h *Handler) UpdateAgent(c *gin.Context) {
 
 // DeleteAgent handles DELETE /forward-agents/:id
 func (h *Handler) DeleteAgent(c *gin.Context) {
-	shortID, err := parseAgentShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "id", id.PrefixForwardAgent, "forward agent")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -274,7 +264,7 @@ func (h *Handler) DeleteAgent(c *gin.Context) {
 
 // EnableAgent handles POST /forward-agents/:id/enable
 func (h *Handler) EnableAgent(c *gin.Context) {
-	shortID, err := parseAgentShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "id", id.PrefixForwardAgent, "forward agent")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -291,7 +281,7 @@ func (h *Handler) EnableAgent(c *gin.Context) {
 
 // DisableAgent handles POST /forward-agents/:id/disable
 func (h *Handler) DisableAgent(c *gin.Context) {
-	shortID, err := parseAgentShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "id", id.PrefixForwardAgent, "forward agent")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -324,7 +314,7 @@ func (h *Handler) UpdateStatus(c *gin.Context) {
 
 // RegenerateToken handles POST /forward-agents/:id/regenerate-token
 func (h *Handler) RegenerateToken(c *gin.Context) {
-	shortID, err := parseAgentShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "id", id.PrefixForwardAgent, "forward agent")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -342,7 +332,7 @@ func (h *Handler) RegenerateToken(c *gin.Context) {
 
 // GetToken handles GET /forward-agents/:id/token
 func (h *Handler) GetToken(c *gin.Context) {
-	shortID, err := parseAgentShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "id", id.PrefixForwardAgent, "forward agent")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -360,7 +350,7 @@ func (h *Handler) GetToken(c *gin.Context) {
 
 // GetAgentStatus handles GET /forward-agents/:id/status
 func (h *Handler) GetAgentStatus(c *gin.Context) {
-	shortID, err := parseAgentShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "id", id.PrefixForwardAgent, "forward agent")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -381,7 +371,7 @@ func (h *Handler) GetAgentStatus(c *gin.Context) {
 //   - token (optional): API token. If not provided, uses agent's current stored token
 //   - server_url (optional): Override the default server URL
 func (h *Handler) GetInstallScript(c *gin.Context) {
-	shortID, err := parseAgentShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "id", id.PrefixForwardAgent, "forward agent")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -414,7 +404,7 @@ func (h *Handler) GetInstallScript(c *gin.Context) {
 // GetRuleOverallStatus handles GET /forward-rules/:id/status
 func (h *Handler) GetRuleOverallStatus(c *gin.Context) {
 	// Parse rule ID from path parameter
-	ruleSID, err := parseRuleShortID(c)
+	ruleSID, err := utils.ParseSIDParam(c, "id", id.PrefixForwardRule, "forward rule")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -451,36 +441,3 @@ func (h *Handler) GetRuleOverallStatus(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "", result)
 }
 
-// parseAgentShortID validates a prefixed agent ID and returns the SID (e.g., "fa_xK9mP2vL3nQ").
-// Note: Despite the name, this returns the full SID (with prefix) as stored in the database.
-func parseAgentShortID(c *gin.Context) (string, error) {
-	prefixedID := c.Param("id")
-	if prefixedID == "" {
-		return "", errors.NewValidationError("forward agent ID is required")
-	}
-
-	// Validate the prefix is correct, but return the full prefixed ID
-	// because the database stores SIDs with prefix (e.g., "fa_xxx")
-	if err := id.ValidatePrefix(prefixedID, id.PrefixForwardAgent); err != nil {
-		return "", errors.NewValidationError("invalid forward agent ID format, expected fa_xxxxx")
-	}
-
-	return prefixedID, nil
-}
-
-// parseRuleShortID validates a prefixed rule ID and returns the SID (e.g., "fr_xK9mP2vL3nQ").
-// Note: Despite the name, this returns the full SID (with prefix) as stored in the database.
-func parseRuleShortID(c *gin.Context) (string, error) {
-	prefixedID := c.Param("id")
-	if prefixedID == "" {
-		return "", errors.NewValidationError("forward rule ID is required")
-	}
-
-	// Validate the prefix is correct, but return the full prefixed ID
-	// because the database stores SIDs with prefix (e.g., "fr_xxx")
-	if err := id.ValidatePrefix(prefixedID, id.PrefixForwardRule); err != nil {
-		return "", errors.NewValidationError("invalid forward rule ID format, expected fr_xxxxx")
-	}
-
-	return prefixedID, nil
-}

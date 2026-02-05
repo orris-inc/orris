@@ -53,9 +53,9 @@ type CreatePaymentResponse struct {
 }
 
 func (h *PaymentHandler) CreatePayment(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
@@ -76,7 +76,7 @@ func (h *PaymentHandler) CreatePayment(c *gin.Context) {
 
 	cmd := paymentUsecases.CreatePaymentCommand{
 		SubscriptionID: sub.ID(),
-		UserID:         userID.(uint),
+		UserID:         userID,
 		BillingCycle:   req.BillingCycle,
 		PaymentMethod:  req.PaymentMethod,
 		ReturnURL:      req.ReturnURL,

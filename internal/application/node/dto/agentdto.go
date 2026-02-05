@@ -13,12 +13,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/subscription"
 )
 
-// AgentResponse represents the standard response format for agent API
-type AgentResponse struct {
-	Data interface{} `json:"data,omitempty"` // Response payload, can be any type based on endpoint
-	Ret  int         `json:"ret,omitempty"`  // Return code: 1 = success, 0 = error
-	Msg  string      `json:"msg,omitempty"`  // Message describing the result or error
-}
+// NOTE: Agent API responses are handled by utils.AgentAPISuccess/AgentAPIError in shared/utils/agentresponse.go
 
 // NodeConfigResponse represents node configuration data for node agents
 // Compatible with sing-box inbound configuration
@@ -732,24 +727,6 @@ func ToNodeSubscriptionsResponse(subscriptions []*subscription.Subscription, hma
 
 	return &NodeSubscriptionsResponse{
 		Subscriptions: subscriptionInfos,
-	}
-}
-
-// NewSuccessResponse creates a success response for agent API
-func NewSuccessResponse(data interface{}) *AgentResponse {
-	return &AgentResponse{
-		Data: data,
-		Ret:  1,
-		Msg:  "success",
-	}
-}
-
-// NewErrorResponse creates an error response for agent API
-func NewErrorResponse(msg string) *AgentResponse {
-	return &AgentResponse{
-		Data: nil,
-		Ret:  0,
-		Msg:  msg,
 	}
 }
 

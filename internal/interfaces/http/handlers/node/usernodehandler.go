@@ -2,13 +2,11 @@ package node
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/orris-inc/orris/internal/application/node/usecases"
-	"github.com/orris-inc/orris/internal/shared/constants"
-	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
@@ -58,7 +56,7 @@ func NewUserNodeHandler(
 
 // CreateNode handles POST /user/nodes
 func (h *UserNodeHandler) CreateNode(c *gin.Context) {
-	userID, err := getUserID(c)
+	userID, err := utils.GetUserIDFromContext(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -83,7 +81,7 @@ func (h *UserNodeHandler) CreateNode(c *gin.Context) {
 
 // ListNodes handles GET /user/nodes
 func (h *UserNodeHandler) ListNodes(c *gin.Context) {
-	userID, err := getUserID(c)
+	userID, err := utils.GetUserIDFromContext(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -107,13 +105,13 @@ func (h *UserNodeHandler) ListNodes(c *gin.Context) {
 
 // GetNode handles GET /user/nodes/:id
 func (h *UserNodeHandler) GetNode(c *gin.Context) {
-	userID, err := getUserID(c)
+	userID, err := utils.GetUserIDFromContext(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	nodeSID, err := parseNodeSID(c)
+	nodeSID, err := utils.ParseSIDParam(c, "id", id.PrefixNode, "node")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -135,13 +133,13 @@ func (h *UserNodeHandler) GetNode(c *gin.Context) {
 
 // UpdateNode handles PUT /user/nodes/:id
 func (h *UserNodeHandler) UpdateNode(c *gin.Context) {
-	userID, err := getUserID(c)
+	userID, err := utils.GetUserIDFromContext(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	nodeSID, err := parseNodeSID(c)
+	nodeSID, err := utils.ParseSIDParam(c, "id", id.PrefixNode, "node")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -166,13 +164,13 @@ func (h *UserNodeHandler) UpdateNode(c *gin.Context) {
 
 // DeleteNode handles DELETE /user/nodes/:id
 func (h *UserNodeHandler) DeleteNode(c *gin.Context) {
-	userID, err := getUserID(c)
+	userID, err := utils.GetUserIDFromContext(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	nodeSID, err := parseNodeSID(c)
+	nodeSID, err := utils.ParseSIDParam(c, "id", id.PrefixNode, "node")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -193,13 +191,13 @@ func (h *UserNodeHandler) DeleteNode(c *gin.Context) {
 
 // RegenerateToken handles POST /user/nodes/:id/regenerate-token
 func (h *UserNodeHandler) RegenerateToken(c *gin.Context) {
-	userID, err := getUserID(c)
+	userID, err := utils.GetUserIDFromContext(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	nodeSID, err := parseNodeSID(c)
+	nodeSID, err := utils.ParseSIDParam(c, "id", id.PrefixNode, "node")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -221,7 +219,7 @@ func (h *UserNodeHandler) RegenerateToken(c *gin.Context) {
 
 // GetUsage handles GET /user/nodes/usage
 func (h *UserNodeHandler) GetUsage(c *gin.Context) {
-	userID, err := getUserID(c)
+	userID, err := utils.GetUserIDFromContext(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -242,13 +240,13 @@ func (h *UserNodeHandler) GetUsage(c *gin.Context) {
 
 // GetInstallScript handles GET /user/nodes/:id/install-script
 func (h *UserNodeHandler) GetInstallScript(c *gin.Context) {
-	userID, err := getUserID(c)
+	userID, err := utils.GetUserIDFromContext(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	nodeSID, err := parseNodeSID(c)
+	nodeSID, err := utils.ParseSIDParam(c, "id", id.PrefixNode, "node")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -275,18 +273,6 @@ func (h *UserNodeHandler) GetInstallScript(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "Install command generated successfully", result)
 }
 
-// getUserID extracts user ID from context
-func getUserID(c *gin.Context) (uint, error) {
-	userIDInterface, exists := c.Get("user_id")
-	if !exists {
-		return 0, errors.NewUnauthorizedError("user not authenticated")
-	}
-	userID, ok := userIDInterface.(uint)
-	if !ok {
-		return 0, errors.NewUnauthorizedError("invalid user ID in context")
-	}
-	return userID, nil
-}
 
 // CreateUserNodeRequest represents the request body for creating a user node
 type CreateUserNodeRequest struct {
@@ -355,20 +341,12 @@ type ListUserNodesRequest struct {
 }
 
 func parseListUserNodesRequest(c *gin.Context, userID uint) (*ListUserNodesRequest, error) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	if page < 1 {
-		page = 1
-	}
-
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", strconv.Itoa(constants.DefaultPageSize)))
-	if pageSize < 1 || pageSize > constants.MaxPageSize {
-		pageSize = constants.DefaultPageSize
-	}
+	pagination := utils.ParsePagination(c)
 
 	req := &ListUserNodesRequest{
 		UserID:    userID,
-		Page:      page,
-		PageSize:  pageSize,
+		Page:      pagination.Page,
+		PageSize:  pagination.PageSize,
 		SortBy:    c.DefaultQuery("sort_by", "created_at"),
 		SortOrder: c.DefaultQuery("sort_order", "desc"),
 	}
@@ -404,7 +382,7 @@ type UserBatchInstallScriptRequest struct {
 
 // GetBatchInstallScript handles POST /user/nodes/batch-install-script
 func (h *UserNodeHandler) GetBatchInstallScript(c *gin.Context) {
-	userID, err := getUserID(c)
+	userID, err := utils.GetUserIDFromContext(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return

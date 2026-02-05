@@ -17,6 +17,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/infrastructure/services"
 	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
@@ -715,7 +716,7 @@ type NotifyAPIURLChangedResponse struct {
 // NotifyAPIURLChanged handles POST /nodes/:id/url-change
 // Notifies a specific connected node that the API URL has changed.
 func (h *NodeHubHandler) NotifyAPIURLChanged(c *gin.Context) {
-	nodeSID, err := parseNodeSID(c)
+	nodeSID, err := utils.ParseSIDParam(c, "id", id.PrefixNode, "node")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return

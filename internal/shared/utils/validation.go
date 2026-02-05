@@ -52,54 +52,56 @@ func ValidateStruct(s interface{}) error {
 	)
 }
 
-// getFieldErrorMessage returns a user-friendly error message for a field validation error
-func getFieldErrorMessage(fe validator.FieldError) string {
-	field := fe.Field()
-	tag := fe.Tag()
-	param := fe.Param()
-
+// FormatFieldError formats a validation error into a user-friendly message.
+// The field parameter allows callers to customize the field name (e.g., snake_case).
+func FormatFieldError(field, tag, param string, kind reflect.Kind) string {
 	switch tag {
 	case "required":
-		return fmt.Sprintf("%s is required", field)
+		return field + " is required"
 	case "email":
-		return fmt.Sprintf("%s must be a valid email address", field)
+		return field + " must be a valid email address"
 	case "min":
-		if fe.Kind() == reflect.String {
-			return fmt.Sprintf("%s must be at least %s characters long", field, param)
+		if kind == reflect.String {
+			return field + " must be at least " + param + " characters long"
 		}
-		return fmt.Sprintf("%s must be at least %s", field, param)
+		return field + " must be at least " + param
 	case "max":
-		if fe.Kind() == reflect.String {
-			return fmt.Sprintf("%s must be at most %s characters long", field, param)
+		if kind == reflect.String {
+			return field + " must be at most " + param + " characters long"
 		}
-		return fmt.Sprintf("%s must be at most %s", field, param)
+		return field + " must be at most " + param
 	case "len":
-		return fmt.Sprintf("%s must be exactly %s characters long", field, param)
+		return field + " must be exactly " + param + " characters long"
 	case "gt":
-		return fmt.Sprintf("%s must be greater than %s", field, param)
+		return field + " must be greater than " + param
 	case "gte":
-		return fmt.Sprintf("%s must be greater than or equal to %s", field, param)
+		return field + " must be greater than or equal to " + param
 	case "lt":
-		return fmt.Sprintf("%s must be less than %s", field, param)
+		return field + " must be less than " + param
 	case "lte":
-		return fmt.Sprintf("%s must be less than or equal to %s", field, param)
+		return field + " must be less than or equal to " + param
 	case "oneof":
-		return fmt.Sprintf("%s must be one of [%s]", field, param)
+		return field + " must be one of: " + param
 	case "uuid":
-		return fmt.Sprintf("%s must be a valid UUID", field)
+		return field + " must be a valid UUID"
 	case "alphanum":
-		return fmt.Sprintf("%s must contain only alphanumeric characters", field)
+		return field + " must contain only alphanumeric characters"
 	case "alpha":
-		return fmt.Sprintf("%s must contain only alphabetic characters", field)
+		return field + " must contain only alphabetic characters"
 	case "numeric":
-		return fmt.Sprintf("%s must be a valid number", field)
+		return field + " must be a valid number"
 	case "url":
-		return fmt.Sprintf("%s must be a valid URL", field)
+		return field + " must be a valid URL"
 	case "uri":
-		return fmt.Sprintf("%s must be a valid URI", field)
+		return field + " must be a valid URI"
 	default:
-		return fmt.Sprintf("%s failed validation for '%s'", field, tag)
+		return field + " failed validation: " + tag
 	}
+}
+
+// getFieldErrorMessage returns a user-friendly error message for a field validation error.
+func getFieldErrorMessage(fe validator.FieldError) string {
+	return FormatFieldError(fe.Field(), fe.Tag(), fe.Param(), fe.Kind())
 }
 
 // ValidateID validates that an ID string is not empty and follows expected format

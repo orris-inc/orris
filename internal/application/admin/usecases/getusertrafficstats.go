@@ -12,6 +12,7 @@ import (
 	"github.com/orris-inc/orris/internal/infrastructure/cache"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 const (
@@ -73,7 +74,7 @@ func (uc *GetUserTrafficStatsUseCase) Execute(
 		return nil, err
 	}
 
-	pagination := trafficstatsutil.GetPaginationParams(query.Page, query.PageSize)
+	pagination := utils.ValidatePagination(query.Page, query.PageSize)
 	timeWindow := trafficstatsutil.CalculateTimeWindow(query.From, query.To)
 
 	// Prepare to merge subscription usage data from MySQL and Redis
@@ -211,7 +212,7 @@ func (uc *GetUserTrafficStatsUseCase) Execute(
 
 	// Apply pagination
 	total := int64(len(userUsages))
-	start, end := trafficstatsutil.ApplyPagination(len(userUsages), pagination.Page, pagination.PageSize)
+	start, end := utils.ApplyPagination(len(userUsages), pagination.Page, pagination.PageSize)
 	pagedUsages := userUsages[start:end]
 
 	// Fetch user details
@@ -267,10 +268,7 @@ func (uc *GetUserTrafficStatsUseCase) Execute(
 }
 
 func (uc *GetUserTrafficStatsUseCase) validateQuery(query GetUserTrafficStatsQuery) error {
-	if err := trafficstatsutil.ValidateTimeRange(query.From, query.To); err != nil {
-		return err
-	}
-	return trafficstatsutil.ValidatePaginationInput(query.Page, query.PageSize)
+	return trafficstatsutil.ValidateTimeRange(query.From, query.To)
 }
 
 // userUsageData holds aggregated usage data for a user

@@ -2,12 +2,10 @@ package rule
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/orris-inc/orris/internal/application/forward/usecases"
-	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/utils"
@@ -181,7 +179,7 @@ func (h *Handler) CreateRule(c *gin.Context) {
 
 // GetRule handles GET /forward-rules/:id
 func (h *Handler) GetRule(c *gin.Context) {
-	shortID, err := parseRuleShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "id", id.PrefixForwardRule, "forward rule")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -199,7 +197,7 @@ func (h *Handler) GetRule(c *gin.Context) {
 
 // UpdateRule handles PUT /forward-rules/:id
 func (h *Handler) UpdateRule(c *gin.Context) {
-	shortID, err := parseRuleShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "id", id.PrefixForwardRule, "forward rule")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -341,7 +339,7 @@ func (h *Handler) UpdateRule(c *gin.Context) {
 
 // DeleteRule handles DELETE /forward-rules/:id
 func (h *Handler) DeleteRule(c *gin.Context) {
-	shortID, err := parseRuleShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "id", id.PrefixForwardRule, "forward rule")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -358,22 +356,14 @@ func (h *Handler) DeleteRule(c *gin.Context) {
 
 // ListRules handles GET /forward-rules
 func (h *Handler) ListRules(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	if page < 1 {
-		page = 1
-	}
-
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", strconv.Itoa(constants.DefaultPageSize)))
-	if pageSize < 1 || pageSize > constants.MaxPageSize {
-		pageSize = constants.DefaultPageSize
-	}
+	pagination := utils.ParsePagination(c)
 
 	// Parse include_user_rules parameter (default: false)
 	includeUserRules := c.Query("include_user_rules") == "true"
 
 	query := usecases.ListForwardRulesQuery{
-		Page:             page,
-		PageSize:         pageSize,
+		Page:             pagination.Page,
+		PageSize:         pagination.PageSize,
 		Name:             c.Query("name"),
 		Protocol:         c.Query("protocol"),
 		Status:           c.Query("status"),
@@ -388,5 +378,5 @@ func (h *Handler) ListRules(c *gin.Context) {
 		return
 	}
 
-	utils.ListSuccessResponse(c, result.Rules, result.Total, page, pageSize)
+	utils.ListSuccessResponse(c, result.Rules, result.Total, pagination.Page, pagination.PageSize)
 }

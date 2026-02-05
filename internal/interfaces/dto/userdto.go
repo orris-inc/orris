@@ -1,12 +1,9 @@
 package dto
 
 import (
-	"strconv"
-
 	"github.com/gin-gonic/gin"
 
 	"github.com/orris-inc/orris/internal/application/user/dto"
-	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
@@ -53,30 +50,10 @@ func (r *UpdateUserRequest) ToApplicationRequest() *dto.UpdateUserRequest {
 
 // ParseListUsersRequest parses query parameters for listing users
 func ParseListUsersRequest(c *gin.Context) (*dto.ListUsersRequest, error) {
+	p := utils.ParsePagination(c)
 	req := &dto.ListUsersRequest{
-		Page:     constants.DefaultPage,
-		PageSize: constants.DefaultPageSize,
-	}
-
-	// Parse page
-	if pageStr := c.Query("page"); pageStr != "" {
-		page, err := strconv.Atoi(pageStr)
-		if err != nil || page < 1 {
-			return nil, errors.NewValidationError("Invalid page parameter")
-		}
-		req.Page = page
-	}
-
-	// Parse page_size
-	if pageSizeStr := c.Query("page_size"); pageSizeStr != "" {
-		pageSize, err := strconv.Atoi(pageSizeStr)
-		if err != nil || pageSize < 1 {
-			return nil, errors.NewValidationError("Invalid page_size parameter")
-		}
-		if pageSize > constants.MaxPageSize {
-			pageSize = constants.MaxPageSize
-		}
-		req.PageSize = pageSize
+		Page:     p.Page,
+		PageSize: p.PageSize,
 	}
 
 	// Parse filters

@@ -58,19 +58,13 @@ func (h *SettingHandler) UpdateBrandingSettings(c *gin.Context) {
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	uid, ok := userID.(uint)
-	if !ok {
-		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	if err := h.service.UpdateBrandingSettings(c.Request.Context(), req, uid); err != nil {
+	if err := h.service.UpdateBrandingSettings(c.Request.Context(), req, userID); err != nil {
 		h.logger.Errorw("failed to update branding settings", "error", err)
 		utils.ErrorResponseWithError(c, err)
 		return

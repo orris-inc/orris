@@ -30,17 +30,9 @@ func NewDashboardHandler(
 // GetDashboard handles GET /users/me/dashboard
 func (h *DashboardHandler) GetDashboard(c *gin.Context) {
 	// Get current user ID from context
-	userIDInterface, exists := c.Get("user_id")
-	if !exists {
-		h.logger.Error("user_id not found in context")
-		utils.ErrorResponse(c, http.StatusUnauthorized, "authentication required")
-		return
-	}
-
-	userID, ok := userIDInterface.(uint)
-	if !ok {
-		h.logger.Error("invalid user_id type in context")
-		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 

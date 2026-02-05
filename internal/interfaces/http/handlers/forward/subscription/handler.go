@@ -3,13 +3,11 @@ package subscription
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gin-gonic/gin/binding"
 
 	"github.com/orris-inc/orris/internal/application/forward/usecases"
-	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -108,64 +106,16 @@ type ForwardRuleOrder struct {
 	SortOrder int    `json:"sort_order" binding:"gte=0" example:"100"`
 }
 
-// parseRuleShortID validates a prefixed rule ID and returns the SID.
-// Gets rule ID from :rule_id URL parameter.
-func parseRuleShortID(c *gin.Context) (string, error) {
-	prefixedID := c.Param("rule_id")
-	if prefixedID == "" {
-		return "", errors.NewValidationError("forward rule ID is required")
-	}
-
-	if err := id.ValidatePrefix(prefixedID, id.PrefixForwardRule); err != nil {
-		return "", errors.NewValidationError("invalid forward rule ID format, expected fr_xxxxx")
-	}
-
-	return prefixedID, nil
-}
-
-// getSubscriptionIDFromContext retrieves subscription_id from context (set by SubscriptionOwnerMiddleware).
-func getSubscriptionIDFromContext(c *gin.Context, log logger.Interface) (uint, error) {
-	subscriptionIDInterface, exists := c.Get("subscription_id")
-	if !exists {
-		log.Warnw("subscription_id not found in context", "ip", c.ClientIP())
-		return 0, errors.NewUnauthorizedError("subscription context not available")
-	}
-
-	subscriptionID, ok := subscriptionIDInterface.(uint)
-	if !ok {
-		log.Warnw("invalid subscription_id type in context", "subscription_id", subscriptionIDInterface, "ip", c.ClientIP())
-		return 0, errors.NewInternalError("invalid subscription ID type")
-	}
-
-	return subscriptionID, nil
-}
-
-// getUserIDFromContext retrieves user_id from context (set by auth middleware).
-func getUserIDFromContext(c *gin.Context, log logger.Interface) (uint, error) {
-	userIDInterface, exists := c.Get("user_id")
-	if !exists {
-		log.Warnw("user_id not found in context", "ip", c.ClientIP())
-		return 0, errors.NewUnauthorizedError("user not authenticated")
-	}
-
-	userID, ok := userIDInterface.(uint)
-	if !ok {
-		log.Warnw("invalid user_id type in context", "user_id", userIDInterface, "ip", c.ClientIP())
-		return 0, errors.NewInternalError("invalid user ID type")
-	}
-
-	return userID, nil
-}
 
 // CreateRule handles POST /subscriptions/:sid/forward-rules
 func (h *Handler) CreateRule(c *gin.Context) {
-	userID, err := getUserIDFromContext(c, h.logger)
+	userID, err := utils.GetUserIDFromContext(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	subscriptionID, err := getSubscriptionIDFromContext(c, h.logger)
+	subscriptionID, err := utils.GetSubscriptionIDFromContext(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -278,27 +228,18 @@ func (h *Handler) CreateRule(c *gin.Context) {
 // Note: External rules are now part of the unified ForwardRule model with rule_type='external'.
 // They are returned together with other rules and can be identified by their rule_type field.
 func (h *Handler) ListRules(c *gin.Context) {
-	subscriptionID, err := getSubscriptionIDFromContext(c, h.logger)
+	subscriptionID, err := utils.GetSubscriptionIDFromContext(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	// Parse pagination parameters
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	if page < 1 {
-		page = 1
-	}
-
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", strconv.Itoa(constants.DefaultPageSize)))
-	if pageSize < 1 || pageSize > constants.MaxPageSize {
-		pageSize = constants.DefaultPageSize
-	}
+	pagination := utils.ParsePagination(c)
 
 	query := usecases.ListSubscriptionForwardRulesQuery{
 		SubscriptionID: subscriptionID,
-		Page:           page,
-		PageSize:       pageSize,
+		Page:           pagination.Page,
+		PageSize:       pagination.PageSize,
 		Name:           c.Query("name"),
 		Protocol:       c.Query("protocol"),
 		Status:         c.Query("status"),
@@ -312,12 +253,12 @@ func (h *Handler) ListRules(c *gin.Context) {
 		return
 	}
 
-	utils.ListSuccessResponse(c, result.Rules, result.Total, page, pageSize)
+	utils.ListSuccessResponse(c, result.Rules, result.Total, pagination.Page, pagination.PageSize)
 }
 
 // GetUsage handles GET /subscriptions/:sid/forward-rules/usage
 func (h *Handler) GetUsage(c *gin.Context) {
-	subscriptionID, err := getSubscriptionIDFromContext(c, h.logger)
+	subscriptionID, err := utils.GetSubscriptionIDFromContext(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -339,7 +280,7 @@ func (h *Handler) GetUsage(c *gin.Context) {
 // GetRule handles GET /subscriptions/:sid/forward-rules/:rule_id
 // Note: Ownership verification is handled by ForwardRuleOwnerMiddleware
 func (h *Handler) GetRule(c *gin.Context) {
-	shortID, err := parseRuleShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "rule_id", id.PrefixForwardRule, "forward rule")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -358,7 +299,7 @@ func (h *Handler) GetRule(c *gin.Context) {
 // UpdateRule handles PUT /subscriptions/:sid/forward-rules/:rule_id
 // Note: Ownership verification is handled by ForwardRuleOwnerMiddleware
 func (h *Handler) UpdateRule(c *gin.Context) {
-	shortID, err := parseRuleShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "rule_id", id.PrefixForwardRule, "forward rule")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -468,7 +409,7 @@ func (h *Handler) UpdateRule(c *gin.Context) {
 // DeleteRule handles DELETE /subscriptions/:sid/forward-rules/:rule_id
 // Note: Ownership verification is handled by ForwardRuleOwnerMiddleware
 func (h *Handler) DeleteRule(c *gin.Context) {
-	shortID, err := parseRuleShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "rule_id", id.PrefixForwardRule, "forward rule")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -486,7 +427,7 @@ func (h *Handler) DeleteRule(c *gin.Context) {
 // EnableRule handles POST /subscriptions/:sid/forward-rules/:rule_id/enable
 // Note: Ownership verification is handled by ForwardRuleOwnerMiddleware
 func (h *Handler) EnableRule(c *gin.Context) {
-	shortID, err := parseRuleShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "rule_id", id.PrefixForwardRule, "forward rule")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -504,7 +445,7 @@ func (h *Handler) EnableRule(c *gin.Context) {
 // DisableRule handles POST /subscriptions/:sid/forward-rules/:rule_id/disable
 // Note: Ownership verification is handled by ForwardRuleOwnerMiddleware
 func (h *Handler) DisableRule(c *gin.Context) {
-	shortID, err := parseRuleShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "rule_id", id.PrefixForwardRule, "forward rule")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -521,7 +462,7 @@ func (h *Handler) DisableRule(c *gin.Context) {
 
 // ReorderRules handles PATCH /subscriptions/:sid/forward-rules/reorder
 func (h *Handler) ReorderRules(c *gin.Context) {
-	subscriptionID, err := getSubscriptionIDFromContext(c, h.logger)
+	subscriptionID, err := utils.GetSubscriptionIDFromContext(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return

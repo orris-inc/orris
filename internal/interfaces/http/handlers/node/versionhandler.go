@@ -14,6 +14,7 @@ import (
 	"github.com/orris-inc/orris/internal/application/node/dto"
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/infrastructure/services"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
@@ -44,7 +45,7 @@ func NewNodeVersionHandler(
 // GetNodeVersion handles GET /nodes/:id/version
 // Returns current version, latest version, and whether an update is available.
 func (h *NodeVersionHandler) GetNodeVersion(c *gin.Context) {
-	sid, err := parseNodeSID(c)
+	sid, err := utils.ParseSIDParam(c, "id", id.PrefixNode, "node")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -129,7 +130,7 @@ type TriggerUpdateResponse struct {
 // TriggerUpdate handles POST /nodes/:id/update
 // Sends an update command to the node agent to trigger self-update.
 func (h *NodeVersionHandler) TriggerUpdate(c *gin.Context) {
-	sid, err := parseNodeSID(c)
+	sid, err := utils.ParseSIDParam(c, "id", id.PrefixNode, "node")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return

@@ -266,7 +266,7 @@ type NotifyAPIURLChangedResponse struct {
 // NotifyAPIURLChanged handles POST /forward-agents/:id/url-change
 // Notifies a specific connected forward agent that the API URL has changed.
 func (h *Handler) NotifyAPIURLChanged(c *gin.Context) {
-	agentSID, err := parseAgentSID(c)
+	agentSID, err := utils.ParseSIDParam(c, "id", id.PrefixForwardAgent, "forward agent")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -334,20 +334,6 @@ func (h *Handler) NotifyAPIURLChanged(c *gin.Context) {
 		AgentID:  agentSID,
 		Notified: true,
 	})
-}
-
-// parseAgentSID validates a prefixed agent ID and returns the SID (e.g., "fa_xK9mP2vL3nQ").
-func parseAgentSID(c *gin.Context) (string, error) {
-	prefixedID := c.Param("id")
-	if prefixedID == "" {
-		return "", errors.NewValidationError("forward agent ID is required")
-	}
-
-	if err := id.ValidatePrefix(prefixedID, id.PrefixForwardAgent); err != nil {
-		return "", errors.NewValidationError("invalid forward agent ID format, expected fa_xxxxx")
-	}
-
-	return prefixedID, nil
 }
 
 // extractURLHost extracts the host from a URL for safe logging (avoids leaking credentials).

@@ -44,20 +44,13 @@ func (h *NotificationHandler) CreateAnnouncement(c *gin.Context) {
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		utils.ErrorResponseWithError(c, errors.NewUnauthorizedError("User not authenticated"))
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	creatorID, ok := userID.(uint)
-	if !ok {
-		h.logger.Errorw("invalid user_id type", "user_id", userID)
-		utils.ErrorResponseWithError(c, errors.NewInternalError("Internal error"))
-		return
-	}
-
-	appReq := req.ToApplicationDTO(creatorID)
+	appReq := req.ToApplicationDTO(userID)
 
 	result, err := h.serviceDDD.CreateAnnouncement(c.Request.Context(), appReq)
 	if err != nil {
@@ -209,20 +202,13 @@ func (h *NotificationHandler) ListNotifications(c *gin.Context) {
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		utils.ErrorResponseWithError(c, errors.NewUnauthorizedError("User not authenticated"))
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	uid, ok := userID.(uint)
-	if !ok {
-		h.logger.Errorw("invalid user_id type", "user_id", userID)
-		utils.ErrorResponseWithError(c, errors.NewInternalError("Internal error"))
-		return
-	}
-
-	appReq := req.ToApplicationDTO(uid)
+	appReq := req.ToApplicationDTO(userID)
 
 	result, err := h.serviceDDD.ListNotifications(c.Request.Context(), appReq)
 	if err != nil {
@@ -234,20 +220,13 @@ func (h *NotificationHandler) ListNotifications(c *gin.Context) {
 }
 
 func (h *NotificationHandler) GetUnreadCount(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		utils.ErrorResponseWithError(c, errors.NewUnauthorizedError("User not authenticated"))
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	uid, ok := userID.(uint)
-	if !ok {
-		h.logger.Errorw("invalid user_id type", "user_id", userID)
-		utils.ErrorResponseWithError(c, errors.NewInternalError("Internal error"))
-		return
-	}
-
-	result, err := h.serviceDDD.GetUnreadCount(c.Request.Context(), uid)
+	result, err := h.serviceDDD.GetUnreadCount(c.Request.Context(), userID)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -268,16 +247,9 @@ func (h *NotificationHandler) UpdateNotificationStatus(c *gin.Context) {
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		utils.ErrorResponseWithError(c, errors.NewUnauthorizedError("User not authenticated"))
-		return
-	}
-
-	uid, ok := userID.(uint)
-	if !ok {
-		h.logger.Errorw("invalid user_id type", "user_id", userID)
-		utils.ErrorResponseWithError(c, errors.NewInternalError("Internal error"))
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
@@ -290,7 +262,7 @@ func (h *NotificationHandler) UpdateNotificationStatus(c *gin.Context) {
 
 	switch req.Status {
 	case "read":
-		err = h.serviceDDD.MarkNotificationAsRead(c.Request.Context(), notificationID, uid)
+		err = h.serviceDDD.MarkNotificationAsRead(c.Request.Context(), notificationID, userID)
 		if err != nil {
 			utils.ErrorResponseWithError(c, err)
 			return
@@ -298,7 +270,7 @@ func (h *NotificationHandler) UpdateNotificationStatus(c *gin.Context) {
 		utils.SuccessResponse(c, http.StatusOK, "Notification marked as read", nil)
 
 	case "archived":
-		err = h.serviceDDD.ArchiveNotification(c.Request.Context(), notificationID, uid)
+		err = h.serviceDDD.ArchiveNotification(c.Request.Context(), notificationID, userID)
 		if err != nil {
 			utils.ErrorResponseWithError(c, err)
 			return
@@ -316,16 +288,9 @@ type UpdateAllNotificationsStatusRequest struct {
 }
 
 func (h *NotificationHandler) UpdateAllNotificationsStatus(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		utils.ErrorResponseWithError(c, errors.NewUnauthorizedError("User not authenticated"))
-		return
-	}
-
-	uid, ok := userID.(uint)
-	if !ok {
-		h.logger.Errorw("invalid user_id type", "user_id", userID)
-		utils.ErrorResponseWithError(c, errors.NewInternalError("Internal error"))
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
@@ -338,7 +303,7 @@ func (h *NotificationHandler) UpdateAllNotificationsStatus(c *gin.Context) {
 
 	switch req.Status {
 	case "read":
-		err := h.serviceDDD.MarkAllNotificationsAsRead(c.Request.Context(), uid)
+		err := h.serviceDDD.MarkAllNotificationsAsRead(c.Request.Context(), userID)
 		if err != nil {
 			utils.ErrorResponseWithError(c, err)
 			return
@@ -357,20 +322,13 @@ func (h *NotificationHandler) DeleteNotification(c *gin.Context) {
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		utils.ErrorResponseWithError(c, errors.NewUnauthorizedError("User not authenticated"))
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	uid, ok := userID.(uint)
-	if !ok {
-		h.logger.Errorw("invalid user_id type", "user_id", userID)
-		utils.ErrorResponseWithError(c, errors.NewInternalError("Internal error"))
-		return
-	}
-
-	err = h.serviceDDD.DeleteNotification(c.Request.Context(), notificationID, uid)
+	err = h.serviceDDD.DeleteNotification(c.Request.Context(), notificationID, userID)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -524,24 +482,17 @@ func (h *NotificationHandler) enrichAnnouncementsWithReadStatus(ctx context.Cont
 // MarkAnnouncementsAsRead marks all announcements as read for the current user.
 // This updates the user's announcements_read_at timestamp to the current time.
 func (h *NotificationHandler) MarkAnnouncementsAsRead(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		utils.ErrorResponseWithError(c, errors.NewUnauthorizedError("User not authenticated"))
-		return
-	}
-
-	uid, ok := userID.(uint)
-	if !ok {
-		h.logger.Errorw("invalid user_id type", "user_id", userID)
-		utils.ErrorResponseWithError(c, errors.NewInternalError("Internal error"))
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
 	ctx := c.Request.Context()
 
-	u, err := h.userRepo.GetByID(ctx, uid)
+	u, err := h.userRepo.GetByID(ctx, userID)
 	if err != nil {
-		h.logger.Errorw("failed to get user", "user_id", uid, "error", err)
+		h.logger.Errorw("failed to get user", "user_id", userID, "error", err)
 		utils.ErrorResponseWithError(c, errors.NewInternalError("Failed to get user"))
 		return
 	}
@@ -554,7 +505,7 @@ func (h *NotificationHandler) MarkAnnouncementsAsRead(c *gin.Context) {
 	u.MarkAnnouncementsAsRead()
 
 	if err := h.userRepo.Update(ctx, u); err != nil {
-		h.logger.Errorw("failed to update user announcements read time", "user_id", uid, "error", err)
+		h.logger.Errorw("failed to update user announcements read time", "user_id", userID, "error", err)
 		utils.ErrorResponseWithError(c, errors.NewInternalError("Failed to mark announcements as read"))
 		return
 	}
@@ -564,24 +515,17 @@ func (h *NotificationHandler) MarkAnnouncementsAsRead(c *gin.Context) {
 
 // GetAnnouncementUnreadCount returns the count of unread announcements for the current user.
 func (h *NotificationHandler) GetAnnouncementUnreadCount(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		utils.ErrorResponseWithError(c, errors.NewUnauthorizedError("User not authenticated"))
-		return
-	}
-
-	uid, ok := userID.(uint)
-	if !ok {
-		h.logger.Errorw("invalid user_id type", "user_id", userID)
-		utils.ErrorResponseWithError(c, errors.NewInternalError("Internal error"))
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
 	ctx := c.Request.Context()
 
-	u, err := h.userRepo.GetByID(ctx, uid)
+	u, err := h.userRepo.GetByID(ctx, userID)
 	if err != nil {
-		h.logger.Errorw("failed to get user", "user_id", uid, "error", err)
+		h.logger.Errorw("failed to get user", "user_id", userID, "error", err)
 		utils.ErrorResponseWithError(c, errors.NewInternalError("Failed to get user"))
 		return
 	}
@@ -591,9 +535,9 @@ func (h *NotificationHandler) GetAnnouncementUnreadCount(c *gin.Context) {
 		return
 	}
 
-	count, err := h.serviceDDD.GetAnnouncementUnreadCount(ctx, uid, u.AnnouncementsReadAt())
+	count, err := h.serviceDDD.GetAnnouncementUnreadCount(ctx, userID, u.AnnouncementsReadAt())
 	if err != nil {
-		h.logger.Errorw("failed to get announcement unread count", "user_id", uid, "error", err)
+		h.logger.Errorw("failed to get announcement unread count", "user_id", userID, "error", err)
 		utils.ErrorResponseWithError(c, errors.NewInternalError("Failed to get unread count"))
 		return
 	}
@@ -609,20 +553,13 @@ func (h *NotificationHandler) MarkAnnouncementAsRead(c *gin.Context) {
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		utils.ErrorResponseWithError(c, errors.NewUnauthorizedError("User not authenticated"))
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	uid, ok := userID.(uint)
-	if !ok {
-		h.logger.Errorw("invalid user_id type", "user_id", userID)
-		utils.ErrorResponseWithError(c, errors.NewInternalError("Internal error"))
-		return
-	}
-
-	if err := h.serviceDDD.MarkAnnouncementAsRead(c.Request.Context(), uid, sid); err != nil {
+	if err := h.serviceDDD.MarkAnnouncementAsRead(c.Request.Context(), userID, sid); err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}

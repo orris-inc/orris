@@ -30,19 +30,13 @@ func (h *SettingHandler) UpdateSecuritySettings(c *gin.Context) {
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	uid, ok := userID.(uint)
-	if !ok {
-		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	if err := h.service.UpdateSecuritySettings(c.Request.Context(), req, uid); err != nil {
+	if err := h.service.UpdateSecuritySettings(c.Request.Context(), req, userID); err != nil {
 		h.logger.Errorw("failed to update security settings", "error", err)
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -72,19 +66,13 @@ func (h *SettingHandler) UpdateRegistrationSettings(c *gin.Context) {
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	uid, ok := userID.(uint)
-	if !ok {
-		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	if err := h.service.UpdateRegistrationSettings(c.Request.Context(), req, uid); err != nil {
+	if err := h.service.UpdateRegistrationSettings(c.Request.Context(), req, userID); err != nil {
 		h.logger.Errorw("failed to update registration settings", "error", err)
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -126,19 +114,13 @@ func (h *SettingHandler) UpdateLegalSettings(c *gin.Context) {
 		return
 	}
 
-	userID, exists := c.Get("user_id")
-	if !exists {
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	uid, ok := userID.(uint)
-	if !ok {
-		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	if err := h.service.UpdateLegalSettings(c.Request.Context(), req, uid); err != nil {
+	if err := h.service.UpdateLegalSettings(c.Request.Context(), req, userID); err != nil {
 		h.logger.Errorw("failed to update legal settings", "error", err)
 		utils.ErrorResponseWithError(c, err)
 		return

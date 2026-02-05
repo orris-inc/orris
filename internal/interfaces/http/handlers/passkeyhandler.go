@@ -32,19 +32,6 @@ type PasskeyHandler struct {
 	jwtConfig              config.JWTConfig
 }
 
-// getUserID safely extracts user ID from gin context
-func (h *PasskeyHandler) getUserID(c *gin.Context) (uint, bool) {
-	userIDVal, exists := c.Get("user_id")
-	if !exists {
-		return 0, false
-	}
-	userID, ok := userIDVal.(uint)
-	if !ok {
-		h.logger.Errorw("invalid user_id type in context", "type", fmt.Sprintf("%T", userIDVal))
-		return 0, false
-	}
-	return userID, true
-}
 
 // NewPasskeyHandler creates a new PasskeyHandler
 func NewPasskeyHandler(
@@ -93,9 +80,9 @@ type StartRegistrationRequest struct {
 // @Failure 500 {object} utils.ErrorResponse
 // @Router /auth/passkey/register/start [post]
 func (h *PasskeyHandler) StartRegistration(c *gin.Context) {
-	userID, ok := h.getUserID(c)
-	if !ok {
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
@@ -149,9 +136,9 @@ type AuthenticatorAttestationResponseJSON struct {
 // @Failure 500 {object} utils.ErrorResponse
 // @Router /auth/passkey/register/finish [post]
 func (h *PasskeyHandler) FinishRegistration(c *gin.Context) {
-	userID, ok := h.getUserID(c)
-	if !ok {
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
@@ -499,9 +486,9 @@ func (h *PasskeyHandler) FinishAuthentication(c *gin.Context) {
 // @Failure 500 {object} utils.ErrorResponse
 // @Router /users/me/passkeys [get]
 func (h *PasskeyHandler) ListPasskeys(c *gin.Context) {
-	userID, ok := h.getUserID(c)
-	if !ok {
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
@@ -534,9 +521,9 @@ func (h *PasskeyHandler) ListPasskeys(c *gin.Context) {
 // @Failure 404 {object} utils.ErrorResponse
 // @Router /users/me/passkeys/{id} [delete]
 func (h *PasskeyHandler) DeletePasskey(c *gin.Context) {
-	userID, ok := h.getUserID(c)
-	if !ok {
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 

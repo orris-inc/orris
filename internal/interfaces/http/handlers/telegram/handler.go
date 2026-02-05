@@ -11,7 +11,6 @@ import (
 	telegramApp "github.com/orris-inc/orris/internal/application/telegram"
 	"github.com/orris-inc/orris/internal/application/telegram/dto"
 	telegramInfra "github.com/orris-inc/orris/internal/infrastructure/telegram"
-	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
@@ -96,22 +95,15 @@ func (h *Handler) SetCallbackAnswerer(answerer CallbackAnswerer) {
 // GetBindingStatus returns the current telegram binding status
 // GET /telegram/binding
 func (h *Handler) GetBindingStatus(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		utils.ErrorResponseWithError(c, errors.NewUnauthorizedError("User not authenticated"))
-		return
-	}
-
-	uid, ok := userID.(uint)
-	if !ok {
-		h.logger.Errorw("invalid user_id type", "user_id", userID)
-		utils.ErrorResponseWithError(c, errors.NewInternalError("Internal error"))
-		return
-	}
-
-	resp, err := h.service.GetBindingStatus(c.Request.Context(), uid)
+	userID, err := utils.GetUserIDFromContext(c)
 	if err != nil {
-		h.logger.Errorw("failed to get binding status", "user_id", uid, "error", err)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	resp, err := h.service.GetBindingStatus(c.Request.Context(), userID)
+	if err != nil {
+		h.logger.Errorw("failed to get binding status", "user_id", userID, "error", err)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
@@ -122,21 +114,14 @@ func (h *Handler) GetBindingStatus(c *gin.Context) {
 // Unbind removes the telegram binding
 // DELETE /telegram/binding
 func (h *Handler) Unbind(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		utils.ErrorResponseWithError(c, errors.NewUnauthorizedError("User not authenticated"))
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	uid, ok := userID.(uint)
-	if !ok {
-		h.logger.Errorw("invalid user_id type", "user_id", userID)
-		utils.ErrorResponseWithError(c, errors.NewInternalError("Internal error"))
-		return
-	}
-
-	if err := h.service.Unbind(c.Request.Context(), uid); err != nil {
-		h.logger.Errorw("failed to unbind telegram", "user_id", uid, "error", err)
+	if err := h.service.Unbind(c.Request.Context(), userID); err != nil {
+		h.logger.Errorw("failed to unbind telegram", "user_id", userID, "error", err)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
@@ -147,29 +132,22 @@ func (h *Handler) Unbind(c *gin.Context) {
 // UpdatePreferences updates notification preferences
 // PATCH /telegram/preferences
 func (h *Handler) UpdatePreferences(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		utils.ErrorResponseWithError(c, errors.NewUnauthorizedError("User not authenticated"))
-		return
-	}
-
-	uid, ok := userID.(uint)
-	if !ok {
-		h.logger.Errorw("invalid user_id type", "user_id", userID)
-		utils.ErrorResponseWithError(c, errors.NewInternalError("Internal error"))
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
 	var req dto.UpdatePreferencesRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.logger.Warnw("invalid request body for update preferences", "user_id", uid, "error", err)
+		h.logger.Warnw("invalid request body for update preferences", "user_id", userID, "error", err)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	resp, err := h.service.UpdatePreferences(c.Request.Context(), uid, req)
+	resp, err := h.service.UpdatePreferences(c.Request.Context(), userID, req)
 	if err != nil {
-		h.logger.Errorw("failed to update preferences", "user_id", uid, "error", err)
+		h.logger.Errorw("failed to update preferences", "user_id", userID, "error", err)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}

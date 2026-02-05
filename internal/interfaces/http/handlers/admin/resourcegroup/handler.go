@@ -3,7 +3,6 @@ package resourcegroup
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -11,7 +10,6 @@ import (
 	"github.com/orris-inc/orris/internal/application/resource/usecases"
 	"github.com/orris-inc/orris/internal/domain/resource"
 	"github.com/orris-inc/orris/internal/domain/subscription"
-	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
@@ -109,19 +107,7 @@ func (h *Handler) Create(c *gin.Context) {
 
 // List lists resource groups with pagination
 func (h *Handler) List(c *gin.Context) {
-	page := 1
-	if pageStr := c.Query("page"); pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
-	}
-
-	pageSize := constants.DefaultPageSize
-	if pageSizeStr := c.Query("page_size"); pageSizeStr != "" {
-		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 && ps <= constants.MaxPageSize {
-			pageSize = ps
-		}
-	}
+	p := utils.ParsePagination(c)
 
 	var status *string
 	if statusStr := c.Query("status"); statusStr != "" {
@@ -136,8 +122,8 @@ func (h *Handler) List(c *gin.Context) {
 	query := dto.ListResourceGroupsRequest{
 		PlanSID:  planSID,
 		Status:   status,
-		Page:     page,
-		PageSize: pageSize,
+		Page:     p.Page,
+		PageSize: p.PageSize,
 	}
 
 	result, err := h.listUseCase.Execute(c.Request.Context(), query)

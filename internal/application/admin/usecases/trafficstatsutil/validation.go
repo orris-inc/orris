@@ -24,17 +24,3 @@ func ValidateTimeRange(from, to time.Time) error {
 
 	return nil
 }
-
-// ValidatePaginationInput validates page and pageSize values.
-// Returns error if either value is negative.
-func ValidatePaginationInput(page, pageSize int) error {
-	if page < 0 {
-		return errors.NewValidationError("page must be non-negative")
-	}
-
-	if pageSize < 0 {
-		return errors.NewValidationError("page_size must be non-negative")
-	}
-
-	return nil
-}

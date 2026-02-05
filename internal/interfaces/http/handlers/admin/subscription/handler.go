@@ -14,7 +14,6 @@ import (
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
 	"github.com/orris-inc/orris/internal/shared/biztime"
-	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
@@ -170,19 +169,7 @@ func (h *Handler) Create(c *gin.Context) {
 }
 
 func (h *Handler) List(c *gin.Context) {
-	page := 1
-	if pageStr := c.Query("page"); pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
-	}
-
-	pageSize := constants.DefaultPageSize
-	if pageSizeStr := c.Query("page_size"); pageSizeStr != "" {
-		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 && ps <= constants.MaxPageSize {
-			pageSize = ps
-		}
-	}
+	p := utils.ParsePagination(c)
 
 	// Validate status parameter against allowed values
 	var status *string
@@ -282,8 +269,8 @@ func (h *Handler) List(c *gin.Context) {
 		CreatedFrom:   createdFrom,
 		CreatedTo:     createdTo,
 		ExpiresBefore: expiresBefore,
-		Page:          page,
-		PageSize:      pageSize,
+		Page:          p.Page,
+		PageSize:      p.PageSize,
 		SortBy:        sortBy,
 		SortDesc:      sortDesc,
 	}

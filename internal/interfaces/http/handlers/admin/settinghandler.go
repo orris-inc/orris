@@ -101,21 +101,13 @@ func (h *SettingHandler) UpdateCategorySettings(c *gin.Context) {
 	}
 
 	// Get user ID from context
-	userID, exists := c.Get("user_id")
-	if !exists {
-		h.logger.Errorw("user_id not found in context")
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	uid, ok := userID.(uint)
-	if !ok {
-		h.logger.Errorw("invalid user_id type", "user_id", userID)
-		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	if err := h.service.UpdateCategorySettings(c.Request.Context(), category, req, uid); err != nil {
+	if err := h.service.UpdateCategorySettings(c.Request.Context(), category, req, userID); err != nil {
 		if err == setting.ErrSettingNotFound {
 			utils.ErrorResponse(c, http.StatusNotFound, "setting not found")
 			return
@@ -160,21 +152,13 @@ func (h *SettingHandler) UpdateTelegramConfig(c *gin.Context) {
 	}
 
 	// Get user ID from context
-	userID, exists := c.Get("user_id")
-	if !exists {
-		h.logger.Errorw("user_id not found in context")
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	uid, ok := userID.(uint)
-	if !ok {
-		h.logger.Errorw("invalid user_id type", "user_id", userID)
-		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	if err := h.service.UpdateTelegramConfig(c.Request.Context(), req, uid); err != nil {
+	if err := h.service.UpdateTelegramConfig(c.Request.Context(), req, userID); err != nil {
 		if err == setting.ErrInvalidValueType {
 			utils.ErrorResponse(c, http.StatusBadRequest, "invalid value type")
 			return
@@ -231,21 +215,13 @@ func (h *SettingHandler) UpdateSystemSettings(c *gin.Context) {
 	}
 
 	// Get user ID from context
-	userID, exists := c.Get("user_id")
-	if !exists {
-		h.logger.Errorw("user_id not found in context")
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	uid, ok := userID.(uint)
-	if !ok {
-		h.logger.Errorw("invalid user_id type", "user_id", userID)
-		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	if err := h.service.UpdateSystemSettings(c.Request.Context(), req, uid); err != nil {
+	if err := h.service.UpdateSystemSettings(c.Request.Context(), req, userID); err != nil {
 		h.logger.Errorw("failed to update system settings", "error", err)
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -276,21 +252,13 @@ func (h *SettingHandler) UpdateOAuthSettings(c *gin.Context) {
 	}
 
 	// Get user ID from context
-	userID, exists := c.Get("user_id")
-	if !exists {
-		h.logger.Errorw("user_id not found in context")
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	uid, ok := userID.(uint)
-	if !ok {
-		h.logger.Errorw("invalid user_id type", "user_id", userID)
-		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	if err := h.service.UpdateOAuthSettings(c.Request.Context(), req, uid); err != nil {
+	if err := h.service.UpdateOAuthSettings(c.Request.Context(), req, userID); err != nil {
 		h.logger.Errorw("failed to update oauth settings", "error", err)
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -321,21 +289,13 @@ func (h *SettingHandler) UpdateEmailSettings(c *gin.Context) {
 	}
 
 	// Get user ID from context
-	userID, exists := c.Get("user_id")
-	if !exists {
-		h.logger.Errorw("user_id not found in context")
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	uid, ok := userID.(uint)
-	if !ok {
-		h.logger.Errorw("invalid user_id type", "user_id", userID)
-		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	if err := h.service.UpdateEmailSettings(c.Request.Context(), req, uid); err != nil {
+	if err := h.service.UpdateEmailSettings(c.Request.Context(), req, userID); err != nil {
 		h.logger.Errorw("failed to update email settings", "error", err)
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -397,21 +357,13 @@ func (h *SettingHandler) UpdateUSDTSettings(c *gin.Context) {
 	}
 
 	// Get user ID from context
-	userID, exists := c.Get("user_id")
-	if !exists {
-		h.logger.Errorw("user_id not found in context")
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	uid, ok := userID.(uint)
-	if !ok {
-		h.logger.Errorw("invalid user_id type", "user_id", userID)
-		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	if err := h.service.UpdateUSDTSettings(c.Request.Context(), req, uid); err != nil {
+	if err := h.service.UpdateUSDTSettings(c.Request.Context(), req, userID); err != nil {
 		h.logger.Errorw("failed to update USDT settings", "error", err)
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -442,21 +394,13 @@ func (h *SettingHandler) UpdateSubscriptionSettings(c *gin.Context) {
 	}
 
 	// Get user ID from context
-	userID, exists := c.Get("user_id")
-	if !exists {
-		h.logger.Errorw("user_id not found in context")
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	uid, ok := userID.(uint)
-	if !ok {
-		h.logger.Errorw("invalid user_id type", "user_id", userID)
-		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error")
-		return
-	}
-
-	if err := h.service.UpdateSubscriptionSettings(c.Request.Context(), req, uid); err != nil {
+	if err := h.service.UpdateSubscriptionSettings(c.Request.Context(), req, userID); err != nil {
 		h.logger.Errorw("failed to update subscription settings", "error", err)
 		utils.ErrorResponseWithError(c, err)
 		return

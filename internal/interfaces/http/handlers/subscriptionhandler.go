@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -90,9 +89,9 @@ type CreateSubscriptionResponse struct {
 }
 
 func (h *SubscriptionHandler) CreateSubscription(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
@@ -121,7 +120,7 @@ func (h *SubscriptionHandler) CreateSubscription(c *gin.Context) {
 	}
 
 	cmd := usecases.CreateSubscriptionCommand{
-		UserID:       userID.(uint),
+		UserID:       userID,
 		PlanSID:      req.PlanID,
 		BillingCycle: req.BillingCycle,
 		StartDate:    startDate,
@@ -148,8 +147,8 @@ func (h *SubscriptionHandler) CreateSubscription(c *gin.Context) {
 
 func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 	// Ownership already verified by middleware, subscription stored in context
-	subscriptionID, exists := c.Get("subscription_id")
-	if !exists {
+	subscriptionID, err := utils.GetSubscriptionIDFromContext(c)
+	if err != nil {
 		// Fallback: parse SID from URL parameter
 		sidStr := c.Param("id")
 		if err := id.ValidatePrefix(sidStr, id.PrefixSubscription); err != nil {
@@ -168,7 +167,7 @@ func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 	}
 
 	query := usecases.GetSubscriptionQuery{
-		SubscriptionID: subscriptionID.(uint),
+		SubscriptionID: subscriptionID,
 	}
 
 	subscription, err := h.getUseCase.Execute(c.Request.Context(), query)
@@ -182,42 +181,29 @@ func (h *SubscriptionHandler) GetSubscription(c *gin.Context) {
 }
 
 func (h *SubscriptionHandler) ListUserSubscriptions(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		utils.ErrorResponse(c, http.StatusUnauthorized, "user not authenticated")
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	page := 1
-	if pageStr := c.Query("page"); pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
-	}
-
-	pageSize := constants.DefaultPageSize
-	if pageSizeStr := c.Query("page_size"); pageSizeStr != "" {
-		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 && ps <= constants.MaxPageSize {
-			pageSize = ps
-		}
-	}
+	pg := utils.ParsePagination(c)
 
 	var status *string
 	if statusStr := c.Query("status"); statusStr != "" {
 		status = &statusStr
 	}
 
-	uid := userID.(uint)
 	query := usecases.ListUserSubscriptionsQuery{
-		UserID:   &uid,
+		UserID:   &userID,
 		Status:   status,
-		Page:     page,
-		PageSize: pageSize,
+		Page:     pg.Page,
+		PageSize: pg.PageSize,
 	}
 
 	result, err := h.listUserUseCase.Execute(c.Request.Context(), query)
 	if err != nil {
-		h.logger.Errorw("failed to list subscriptions", "error", err, "user_id", uid)
+		h.logger.Errorw("failed to list subscriptions", "error", err, "user_id", userID)
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
@@ -226,18 +212,9 @@ func (h *SubscriptionHandler) ListUserSubscriptions(c *gin.Context) {
 }
 
 func (h *SubscriptionHandler) UpdateStatus(c *gin.Context) {
-	// Ownership already verified by middleware
-	subscriptionID, exists := c.Get("subscription_id")
-	if !exists {
-		// Fallback: parse SID from URL parameter
-		sidStr := c.Param("id")
-		if err := id.ValidatePrefix(sidStr, id.PrefixSubscription); err != nil {
-			utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID format, expected sub_xxxxx")
-			return
-		}
-		// We need to resolve the internal ID from SID for the use case
-		h.logger.Warnw("subscription ownership middleware not applied, falling back to SID resolution", "sid", sidStr)
-		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error: ownership middleware required")
+	subscriptionID, err := utils.GetSubscriptionIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
@@ -265,7 +242,7 @@ func (h *SubscriptionHandler) UpdateStatus(c *gin.Context) {
 		}
 
 		cmd := usecases.CancelSubscriptionCommand{
-			SubscriptionID: subscriptionID.(uint),
+			SubscriptionID: subscriptionID,
 			Reason:         reason,
 			Immediate:      immediate,
 		}
@@ -283,17 +260,9 @@ func (h *SubscriptionHandler) UpdateStatus(c *gin.Context) {
 }
 
 func (h *SubscriptionHandler) ChangePlan(c *gin.Context) {
-	// Ownership already verified by middleware
-	subscriptionID, exists := c.Get("subscription_id")
-	if !exists {
-		// Fallback: parse SID from URL parameter
-		sidStr := c.Param("id")
-		if err := id.ValidatePrefix(sidStr, id.PrefixSubscription); err != nil {
-			utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID format, expected sub_xxxxx")
-			return
-		}
-		h.logger.Warnw("subscription ownership middleware not applied, falling back to SID resolution", "sid", sidStr)
-		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error: ownership middleware required")
+	subscriptionID, err := utils.GetSubscriptionIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
@@ -312,7 +281,7 @@ func (h *SubscriptionHandler) ChangePlan(c *gin.Context) {
 	}
 
 	cmd := usecases.ChangePlanCommand{
-		SubscriptionID: subscriptionID.(uint),
+		SubscriptionID: subscriptionID,
 		NewPlanSID:     req.NewPlanID,
 		ChangeType:     usecases.ChangeType(req.ChangeType),
 		EffectiveDate:  usecases.EffectiveDate(req.EffectiveDate),
@@ -329,17 +298,9 @@ func (h *SubscriptionHandler) ChangePlan(c *gin.Context) {
 
 // GetTrafficStats handles GET /subscriptions/:sid/traffic-stats
 func (h *SubscriptionHandler) GetTrafficStats(c *gin.Context) {
-	// Ownership already verified by middleware
-	subscriptionID, exists := c.Get("subscription_id")
-	if !exists {
-		// Fallback: parse SID from URL parameter
-		sidStr := c.Param("sid")
-		if err := id.ValidatePrefix(sidStr, id.PrefixSubscription); err != nil {
-			utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID format, expected sub_xxxxx")
-			return
-		}
-		h.logger.Warnw("subscription ownership middleware not applied, falling back to SID resolution", "sid", sidStr)
-		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error: ownership middleware required")
+	subscriptionID, err := utils.GetSubscriptionIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
@@ -366,27 +327,16 @@ func (h *SubscriptionHandler) GetTrafficStats(c *gin.Context) {
 
 	granularity := c.Query("granularity")
 
-	page := 1
-	if pageStr := c.Query("page"); pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
-	}
-
-	pageSize := constants.MaxPageSize
-	if pageSizeStr := c.Query("page_size"); pageSizeStr != "" {
-		if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 && ps <= 1000 {
-			pageSize = ps
-		}
-	}
+	// Traffic stats: default page size is MaxPageSize, upper limit is 1000
+	pg := utils.ParsePaginationWithLimits(c, constants.MaxPageSize, 1000)
 
 	query := usecases.GetSubscriptionUsageStatsQuery{
-		SubscriptionID: subscriptionID.(uint),
+		SubscriptionID: subscriptionID,
 		From:           from,
 		To:             to,
 		Granularity:    granularity,
-		Page:           page,
-		PageSize:       pageSize,
+		Page:           pg.Page,
+		PageSize:       pg.PageSize,
 	}
 
 	result, err := h.getUsageStatsUseCase.Execute(c.Request.Context(), query)
@@ -402,22 +352,14 @@ func (h *SubscriptionHandler) GetTrafficStats(c *gin.Context) {
 // ResetLink handles PUT /subscriptions/:sid/link
 // Resets the subscription link by generating a new UUID
 func (h *SubscriptionHandler) ResetLink(c *gin.Context) {
-	// Ownership already verified by middleware
-	subscriptionID, exists := c.Get("subscription_id")
-	if !exists {
-		// Fallback: parse SID from URL parameter
-		sidStr := c.Param("sid")
-		if err := id.ValidatePrefix(sidStr, id.PrefixSubscription); err != nil {
-			utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID format, expected sub_xxxxx")
-			return
-		}
-		h.logger.Warnw("subscription ownership middleware not applied, falling back to SID resolution", "sid", sidStr)
-		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error: ownership middleware required")
+	subscriptionID, err := utils.GetSubscriptionIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
 	cmd := usecases.ResetSubscriptionLinkCommand{
-		SubscriptionID: subscriptionID.(uint),
+		SubscriptionID: subscriptionID,
 	}
 
 	result, err := h.resetLinkUseCase.Execute(c.Request.Context(), cmd)
@@ -432,20 +374,13 @@ func (h *SubscriptionHandler) ResetLink(c *gin.Context) {
 
 // DeleteSubscription handles DELETE /subscriptions/:sid
 func (h *SubscriptionHandler) DeleteSubscription(c *gin.Context) {
-	// Ownership already verified by middleware
-	subscriptionID, exists := c.Get("subscription_id")
-	if !exists {
-		sidStr := c.Param("sid")
-		if err := id.ValidatePrefix(sidStr, id.PrefixSubscription); err != nil {
-			utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID format, expected sub_xxxxx")
-			return
-		}
-		h.logger.Warnw("subscription ownership middleware not applied, falling back to SID resolution", "sid", sidStr)
-		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error: ownership middleware required")
+	subscriptionID, err := utils.GetSubscriptionIDFromContext(c)
+	if err != nil {
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	if err := h.deleteUseCase.Execute(c.Request.Context(), subscriptionID.(uint)); err != nil {
+	if err := h.deleteUseCase.Execute(c.Request.Context(), subscriptionID); err != nil {
 		h.logger.Errorw("failed to delete subscription", "error", err, "subscription_id", subscriptionID)
 		utils.ErrorResponseWithError(c, err)
 		return

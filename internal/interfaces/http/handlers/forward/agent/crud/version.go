@@ -14,6 +14,7 @@ import (
 	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/infrastructure/services"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
@@ -44,7 +45,7 @@ func NewVersionHandler(
 // GetAgentVersion handles GET /forward-agents/:id/version
 // Returns current version, latest version, and whether an update is available.
 func (h *VersionHandler) GetAgentVersion(c *gin.Context) {
-	shortID, err := parseAgentShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "id", id.PrefixForwardAgent, "forward agent")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -115,7 +116,7 @@ type TriggerUpdateResponse struct {
 // TriggerUpdate handles POST /forward-agents/:id/update
 // Sends an update command to the agent to trigger self-update.
 func (h *VersionHandler) TriggerUpdate(c *gin.Context) {
-	shortID, err := parseAgentShortID(c)
+	shortID, err := utils.ParseSIDParam(c, "id", id.PrefixForwardAgent, "forward agent")
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
