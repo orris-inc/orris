@@ -61,20 +61,35 @@ func (uc *SendDailySummaryUseCase) SendSummary(ctx context.Context) error {
 		return nil
 	}
 
-	// Get bindings that want daily summary
-	bindings, err := uc.bindingRepo.FindBindingsForDailySummary(ctx)
+	// Calculate current business timezone hour
+	now := biztime.NowUTC()
+	bizNow := biztime.ToBizTimezone(now)
+	currentBizHour := bizNow.Hour()
+
+	// Get bindings that want daily summary at the current business hour
+	bindings, err := uc.bindingRepo.FindBindingsForDailySummary(ctx, currentBizHour)
 	if err != nil {
 		uc.logger.Errorw("failed to find bindings for daily summary", "error", err)
 		return fmt.Errorf("failed to find bindings: %w", err)
 	}
 
 	if len(bindings) == 0 {
-		uc.logger.Debugw("no bindings configured for daily summary")
+		return nil
+	}
+
+	// Calendar-based dedup: filter bindings not yet sent today
+	var matchedBindings []*admin.AdminTelegramBinding
+	for _, binding := range bindings {
+		if binding.CanSendDailySummary() {
+			matchedBindings = append(matchedBindings, binding)
+		}
+	}
+
+	if len(matchedBindings) == 0 {
 		return nil
 	}
 
 	// Calculate yesterday's date range in business timezone
-	now := biztime.NowUTC()
 	yesterdayStart, yesterdayEnd := uc.getYesterdayRange(now)
 
 	// Gather statistics
@@ -89,11 +104,7 @@ func (uc *SendDailySummaryUseCase) SendSummary(ctx context.Context) error {
 	sentCount := 0
 	errorCount := 0
 
-	for _, binding := range bindings {
-		if !binding.CanSendDailySummary() {
-			continue
-		}
-
+	for _, binding := range matchedBindings {
 		if err := uc.botService.SendMessage(binding.TelegramUserID(), message); err != nil {
 			uc.logger.Errorw("failed to send daily summary",
 				"telegram_user_id", binding.TelegramUserID(),

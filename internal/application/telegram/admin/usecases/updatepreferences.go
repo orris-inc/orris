@@ -50,6 +50,10 @@ func (uc *UpdateAdminPreferencesUseCase) Execute(
 		req.OfflineThresholdMinutes,
 		req.NotifyResourceExpiring,
 		req.ResourceExpiringDays,
+		req.DailySummaryHour,
+		req.WeeklySummaryHour,
+		req.WeeklySummaryWeekday,
+		req.OfflineCheckIntervalMinutes,
 	); err != nil {
 		return nil, err
 	}
@@ -61,18 +65,22 @@ func (uc *UpdateAdminPreferencesUseCase) Execute(
 	uc.logger.Infow("admin telegram preferences updated", "user_id", userID)
 
 	return &dto.AdminTelegramBindingResponse{
-		SID:                     binding.SID(),
-		TelegramUserID:          binding.TelegramUserID(),
-		TelegramUsername:        binding.TelegramUsername(),
-		NotifyNodeOffline:       binding.NotifyNodeOffline(),
-		NotifyAgentOffline:      binding.NotifyAgentOffline(),
-		NotifyNewUser:           binding.NotifyNewUser(),
-		NotifyPaymentSuccess:    binding.NotifyPaymentSuccess(),
-		NotifyDailySummary:      binding.NotifyDailySummary(),
-		NotifyWeeklySummary:     binding.NotifyWeeklySummary(),
-		OfflineThresholdMinutes: binding.OfflineThresholdMinutes(),
-		NotifyResourceExpiring:  binding.NotifyResourceExpiring(),
-		ResourceExpiringDays:    binding.ResourceExpiringDays(),
-		CreatedAt:               binding.CreatedAt(),
+		SID:                         binding.SID(),
+		TelegramUserID:              binding.TelegramUserID(),
+		TelegramUsername:            binding.TelegramUsername(),
+		NotifyNodeOffline:           binding.NotifyNodeOffline(),
+		NotifyAgentOffline:          binding.NotifyAgentOffline(),
+		NotifyNewUser:               binding.NotifyNewUser(),
+		NotifyPaymentSuccess:        binding.NotifyPaymentSuccess(),
+		NotifyDailySummary:          binding.NotifyDailySummary(),
+		NotifyWeeklySummary:         binding.NotifyWeeklySummary(),
+		OfflineThresholdMinutes:     binding.OfflineThresholdMinutes(),
+		NotifyResourceExpiring:      binding.NotifyResourceExpiring(),
+		ResourceExpiringDays:        binding.ResourceExpiringDays(),
+		DailySummaryHour:            binding.DailySummaryHour(),
+		WeeklySummaryHour:           binding.WeeklySummaryHour(),
+		WeeklySummaryWeekday:        binding.WeeklySummaryWeekday(),
+		OfflineCheckIntervalMinutes: binding.OfflineCheckIntervalMinutes(),
+		CreatedAt:                   binding.CreatedAt(),
 	}, nil
 }

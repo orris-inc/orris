@@ -19,6 +19,19 @@ const (
 	DefaultResourceExpiringDays = 7
 	MinResourceExpiringDays     = 1
 	MaxResourceExpiringDays     = 30
+
+	// Schedule configuration defaults and ranges
+	DefaultDailySummaryHour     = 9
+	DefaultWeeklySummaryHour    = 9
+	DefaultWeeklySummaryWeekday = 1 // Monday
+	MinSummaryHour              = 0
+	MaxSummaryHour              = 23
+	MinWeekday                  = 0 // Sunday
+	MaxWeekday                  = 6 // Saturday
+
+	DefaultOfflineCheckIntervalMinutes = 5
+	MinOfflineCheckIntervalMinutes     = 1
+	MaxOfflineCheckIntervalMinutes     = 30
 )
 
 // AdminTelegramBinding represents the admin telegram binding aggregate root
@@ -44,6 +57,12 @@ type AdminTelegramBinding struct {
 	notifyResourceExpiring         bool       // Resource expiring alert
 	resourceExpiringDays           int        // Days before expiration to start notifying
 	lastResourceExpiringNotifyDate *time.Time // Date of last expiring notification (for daily deduplication)
+
+	// Schedule configuration
+	dailySummaryHour            int // Hour to send daily summary (0-23, business timezone)
+	weeklySummaryHour           int // Hour to send weekly summary (0-23, business timezone)
+	weeklySummaryWeekday        int // Weekday to send weekly summary (0=Sunday, 1=Monday...6=Saturday)
+	offlineCheckIntervalMinutes int // Interval for offline re-check in minutes (1-30)
 
 	// Time window deduplication
 	lastNodeOfflineNotifyAt  *time.Time
@@ -71,21 +90,25 @@ func NewAdminTelegramBinding(userID uint, telegramUserID int64, telegramUsername
 
 	now := biztime.NowUTC()
 	return &AdminTelegramBinding{
-		sid:                     sid,
-		userID:                  userID,
-		telegramUserID:          telegramUserID,
-		telegramUsername:        telegramUsername,
-		notifyNodeOffline:       true, // Default enabled
-		notifyAgentOffline:      true, // Default enabled
-		notifyNewUser:           true, // Default enabled
-		notifyPaymentSuccess:    true, // Default enabled
-		notifyDailySummary:      true, // Default enabled
-		notifyWeeklySummary:     true, // Default enabled
-		offlineThresholdMinutes: DefaultOfflineThresholdMinutes,
-		notifyResourceExpiring:  true, // Default enabled
-		resourceExpiringDays:    DefaultResourceExpiringDays,
-		createdAt:               now,
-		updatedAt:               now,
+		sid:                         sid,
+		userID:                      userID,
+		telegramUserID:              telegramUserID,
+		telegramUsername:            telegramUsername,
+		notifyNodeOffline:           true, // Default enabled
+		notifyAgentOffline:          true, // Default enabled
+		notifyNewUser:               true, // Default enabled
+		notifyPaymentSuccess:        true, // Default enabled
+		notifyDailySummary:          true, // Default enabled
+		notifyWeeklySummary:         true, // Default enabled
+		offlineThresholdMinutes:     DefaultOfflineThresholdMinutes,
+		notifyResourceExpiring:      true, // Default enabled
+		resourceExpiringDays:        DefaultResourceExpiringDays,
+		dailySummaryHour:            DefaultDailySummaryHour,
+		weeklySummaryHour:           DefaultWeeklySummaryHour,
+		weeklySummaryWeekday:        DefaultWeeklySummaryWeekday,
+		offlineCheckIntervalMinutes: DefaultOfflineCheckIntervalMinutes,
+		createdAt:                   now,
+		updatedAt:                   now,
 	}, nil
 }
 
@@ -105,6 +128,10 @@ func ReconstructAdminTelegramBinding(
 	offlineThresholdMinutes int,
 	notifyResourceExpiring bool,
 	resourceExpiringDays int,
+	dailySummaryHour int,
+	weeklySummaryHour int,
+	weeklySummaryWeekday int,
+	offlineCheckIntervalMinutes int,
 	lastNodeOfflineNotifyAt *time.Time,
 	lastAgentOfflineNotifyAt *time.Time,
 	lastDailySummaryAt *time.Time,
@@ -127,6 +154,10 @@ func ReconstructAdminTelegramBinding(
 		offlineThresholdMinutes:        offlineThresholdMinutes,
 		notifyResourceExpiring:         notifyResourceExpiring,
 		resourceExpiringDays:           resourceExpiringDays,
+		dailySummaryHour:               dailySummaryHour,
+		weeklySummaryHour:              weeklySummaryHour,
+		weeklySummaryWeekday:           weeklySummaryWeekday,
+		offlineCheckIntervalMinutes:    offlineCheckIntervalMinutes,
 		lastNodeOfflineNotifyAt:        lastNodeOfflineNotifyAt,
 		lastAgentOfflineNotifyAt:       lastAgentOfflineNotifyAt,
 		lastDailySummaryAt:             lastDailySummaryAt,
@@ -158,6 +189,12 @@ func (b *AdminTelegramBinding) LastDailySummaryAt() *time.Time  { return b.lastD
 func (b *AdminTelegramBinding) LastWeeklySummaryAt() *time.Time { return b.lastWeeklySummaryAt }
 func (b *AdminTelegramBinding) NotifyResourceExpiring() bool    { return b.notifyResourceExpiring }
 func (b *AdminTelegramBinding) ResourceExpiringDays() int       { return b.resourceExpiringDays }
+func (b *AdminTelegramBinding) DailySummaryHour() int           { return b.dailySummaryHour }
+func (b *AdminTelegramBinding) WeeklySummaryHour() int          { return b.weeklySummaryHour }
+func (b *AdminTelegramBinding) WeeklySummaryWeekday() int       { return b.weeklySummaryWeekday }
+func (b *AdminTelegramBinding) OfflineCheckIntervalMinutes() int {
+	return b.offlineCheckIntervalMinutes
+}
 func (b *AdminTelegramBinding) LastResourceExpiringNotifyDate() *time.Time {
 	return b.lastResourceExpiringNotifyDate
 }
@@ -180,6 +217,10 @@ func (b *AdminTelegramBinding) UpdatePreferences(
 	offlineThresholdMinutes *int,
 	notifyResourceExpiring *bool,
 	resourceExpiringDays *int,
+	dailySummaryHour *int,
+	weeklySummaryHour *int,
+	weeklySummaryWeekday *int,
+	offlineCheckIntervalMinutes *int,
 ) error {
 	if offlineThresholdMinutes != nil {
 		if *offlineThresholdMinutes < MinOfflineThresholdMinutes || *offlineThresholdMinutes > MaxOfflineThresholdMinutes {
@@ -193,6 +234,34 @@ func (b *AdminTelegramBinding) UpdatePreferences(
 			return fmt.Errorf("resource expiring days must be between %d and %d", MinResourceExpiringDays, MaxResourceExpiringDays)
 		}
 		b.resourceExpiringDays = *resourceExpiringDays
+	}
+
+	if dailySummaryHour != nil {
+		if *dailySummaryHour < MinSummaryHour || *dailySummaryHour > MaxSummaryHour {
+			return fmt.Errorf("daily summary hour must be between %d and %d", MinSummaryHour, MaxSummaryHour)
+		}
+		b.dailySummaryHour = *dailySummaryHour
+	}
+
+	if weeklySummaryHour != nil {
+		if *weeklySummaryHour < MinSummaryHour || *weeklySummaryHour > MaxSummaryHour {
+			return fmt.Errorf("weekly summary hour must be between %d and %d", MinSummaryHour, MaxSummaryHour)
+		}
+		b.weeklySummaryHour = *weeklySummaryHour
+	}
+
+	if weeklySummaryWeekday != nil {
+		if *weeklySummaryWeekday < MinWeekday || *weeklySummaryWeekday > MaxWeekday {
+			return fmt.Errorf("weekly summary weekday must be between %d and %d", MinWeekday, MaxWeekday)
+		}
+		b.weeklySummaryWeekday = *weeklySummaryWeekday
+	}
+
+	if offlineCheckIntervalMinutes != nil {
+		if *offlineCheckIntervalMinutes < MinOfflineCheckIntervalMinutes || *offlineCheckIntervalMinutes > MaxOfflineCheckIntervalMinutes {
+			return fmt.Errorf("offline check interval must be between %d and %d minutes", MinOfflineCheckIntervalMinutes, MaxOfflineCheckIntervalMinutes)
+		}
+		b.offlineCheckIntervalMinutes = *offlineCheckIntervalMinutes
 	}
 
 	if notifyNodeOffline != nil {
@@ -243,7 +312,9 @@ func (b *AdminTelegramBinding) CanNotifyAgentOffline() bool {
 	return biztime.NowUTC().Sub(*b.lastAgentOfflineNotifyAt).Hours() >= NotifyWindowHours
 }
 
-// CanSendDailySummary checks if daily summary can be sent (once per day)
+// CanSendDailySummary checks if daily summary can be sent (once per business day).
+// Uses calendar-based dedup: compares business dates instead of elapsed time
+// to avoid timing races between cron trigger and recording.
 func (b *AdminTelegramBinding) CanSendDailySummary() bool {
 	if !b.notifyDailySummary {
 		return false
@@ -251,10 +322,14 @@ func (b *AdminTelegramBinding) CanSendDailySummary() bool {
 	if b.lastDailySummaryAt == nil {
 		return true
 	}
-	return biztime.NowUTC().Sub(*b.lastDailySummaryAt).Hours() >= NotifyWindowHours
+	lastBizDate := biztime.ToBizTimezone(*b.lastDailySummaryAt).Format("2006-01-02")
+	todayBizDate := biztime.ToBizTimezone(biztime.NowUTC()).Format("2006-01-02")
+	return lastBizDate != todayBizDate
 }
 
-// CanSendWeeklySummary checks if weekly summary can be sent (once per week)
+// CanSendWeeklySummary checks if weekly summary can be sent (once per weekly period).
+// Uses calendar-based dedup: the period starts at midnight of the configured weekday
+// in business timezone. If last sent time is before the current period start, allow sending.
 func (b *AdminTelegramBinding) CanSendWeeklySummary() bool {
 	if !b.notifyWeeklySummary {
 		return false
@@ -262,8 +337,10 @@ func (b *AdminTelegramBinding) CanSendWeeklySummary() bool {
 	if b.lastWeeklySummaryAt == nil {
 		return true
 	}
-	// Weekly = 7 days
-	return biztime.NowUTC().Sub(*b.lastWeeklySummaryAt).Hours() >= 7*24
+	bizNow := biztime.ToBizTimezone(biztime.NowUTC())
+	periodStart := mostRecentWeekdayMidnight(bizNow, b.weeklySummaryWeekday)
+	lastSentBiz := biztime.ToBizTimezone(*b.lastWeeklySummaryAt)
+	return lastSentBiz.Before(periodStart)
 }
 
 // RecordNodeOfflineNotification records that a node offline notification was sent
@@ -315,6 +392,18 @@ func (b *AdminTelegramBinding) RecordResourceExpiringNotification() {
 	now := biztime.NowUTC()
 	b.lastResourceExpiringNotifyDate = &now
 	b.updatedAt = now
+}
+
+// mostRecentWeekdayMidnight returns midnight of the most recent occurrence
+// of the given weekday (0=Sunday..6=Saturday) in the same timezone as t.
+// If today IS the target weekday, returns today's midnight.
+func mostRecentWeekdayMidnight(t time.Time, targetWeekday int) time.Time {
+	daysSince := int(t.Weekday()) - targetWeekday
+	if daysSince < 0 {
+		daysSince += 7
+	}
+	d := t.AddDate(0, 0, -daysSince)
+	return time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, t.Location())
 }
 
 // UpdateTelegramUsername updates the telegram username

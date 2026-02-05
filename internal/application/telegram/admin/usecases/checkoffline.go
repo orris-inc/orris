@@ -61,7 +61,9 @@ func NewCheckOfflineUseCase(
 	}
 }
 
-// CheckAndNotify checks for offline nodes and agents, then sends alerts
+// CheckAndNotify checks for offline nodes and agents, then sends alerts.
+// Uses per-binding OfflineCheckIntervalMinutes for repeated notifications
+// while a resource remains offline.
 func (uc *CheckOfflineUseCase) CheckAndNotify(ctx context.Context) error {
 	if uc.botService == nil {
 		uc.logger.Debugw("offline check skipped: bot service not available")
@@ -134,9 +136,17 @@ func (uc *CheckOfflineUseCase) checkNodeOffline(ctx context.Context) (int, int) 
 		}
 
 		if !isNewFiring {
-			// Already in firing state, no notification needed
-			// (repeat notifications not implemented in this version)
-			continue
+			// Already firing — check if repeat notification is due
+			repeatInterval := minOfflineCheckInterval(bindings)
+			shouldRepeat, err := uc.alertStateManager.ShouldRepeatNotify(ctx, cache.AlertResourceTypeNode, nodeInfo.ID, repeatInterval)
+			if err != nil {
+				uc.logger.Errorw("failed to check repeat notify for node", "error", err)
+				errors++
+				continue
+			}
+			if !shouldRepeat {
+				continue
+			}
 		}
 
 		// Build message and keyboard once for this node
@@ -175,8 +185,13 @@ func (uc *CheckOfflineUseCase) checkNodeOffline(ctx context.Context) (int, int) 
 			}
 		}
 
-		// If failed to send to any binding, clear the state so it can be retried
-		if !sentToAny {
+		if sentToAny && !isNewFiring {
+			// Update last notified time for repeat notification tracking
+			_ = uc.alertStateManager.MarkNotified(ctx, cache.AlertResourceTypeNode, nodeInfo.ID, now)
+		}
+
+		// If failed to send to any binding on initial firing, clear the state so it can be retried
+		if !sentToAny && isNewFiring {
 			_ = uc.alertStateManager.ClearState(ctx, cache.AlertResourceTypeNode, nodeInfo.ID)
 		}
 	}
@@ -237,9 +252,17 @@ func (uc *CheckOfflineUseCase) checkAgentOffline(ctx context.Context) (int, int)
 		}
 
 		if !isNewFiring {
-			// Already in firing state, no notification needed
-			// (repeat notifications not implemented in this version)
-			continue
+			// Already firing — check if repeat notification is due
+			repeatInterval := minOfflineCheckInterval(bindings)
+			shouldRepeat, err := uc.alertStateManager.ShouldRepeatNotify(ctx, cache.AlertResourceTypeAgent, agentInfo.ID, repeatInterval)
+			if err != nil {
+				uc.logger.Errorw("failed to check repeat notify for agent", "error", err)
+				errors++
+				continue
+			}
+			if !shouldRepeat {
+				continue
+			}
 		}
 
 		// Build message and keyboard once for this agent
@@ -278,13 +301,30 @@ func (uc *CheckOfflineUseCase) checkAgentOffline(ctx context.Context) (int, int)
 			}
 		}
 
-		// If failed to send to any binding, clear the state so it can be retried
-		if !sentToAny {
+		if sentToAny && !isNewFiring {
+			// Update last notified time for repeat notification tracking
+			_ = uc.alertStateManager.MarkNotified(ctx, cache.AlertResourceTypeAgent, agentInfo.ID, now)
+		}
+
+		// If failed to send to any binding on initial firing, clear the state so it can be retried
+		if !sentToAny && isNewFiring {
 			_ = uc.alertStateManager.ClearState(ctx, cache.AlertResourceTypeAgent, agentInfo.ID)
 		}
 	}
 
 	return alertsSent, errors
+}
+
+// minOfflineCheckInterval returns the minimum OfflineCheckIntervalMinutes
+// across all bindings as a time.Duration.
+func minOfflineCheckInterval(bindings []*admin.AdminTelegramBinding) time.Duration {
+	min := bindings[0].OfflineCheckIntervalMinutes()
+	for _, b := range bindings[1:] {
+		if v := b.OfflineCheckIntervalMinutes(); v < min {
+			min = v
+		}
+	}
+	return time.Duration(min) * time.Minute
 }
 
 func (uc *CheckOfflineUseCase) findOfflineNodes(ctx context.Context, threshold time.Duration) ([]dto.OfflineNodeInfo, error) {

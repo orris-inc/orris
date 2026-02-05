@@ -418,9 +418,9 @@ func (m *SchedulerManager) RegisterAdminNotificationJobs(
 		return err
 	}
 
-	// Daily summary at 09:00
+	// Daily summary: hourly trigger, UseCase filters by per-binding configured hour
 	_, err = m.scheduler.NewJob(
-		gocron.CronJob("0 9 * * *", false),
+		gocron.CronJob("0 * * * *", false),
 		gocron.NewTask(func() {
 			ctx := context.Background()
 			m.sendDailySummary(ctx, processor)
@@ -432,9 +432,9 @@ func (m *SchedulerManager) RegisterAdminNotificationJobs(
 		return err
 	}
 
-	// Weekly summary at Monday 09:00
+	// Weekly summary: hourly trigger, UseCase filters by per-binding configured hour and weekday
 	_, err = m.scheduler.NewJob(
-		gocron.CronJob("0 9 * * 1", false),
+		gocron.CronJob("0 * * * *", false),
 		gocron.NewTask(func() {
 			ctx := context.Background()
 			m.sendWeeklySummary(ctx, processor)
@@ -449,8 +449,8 @@ func (m *SchedulerManager) RegisterAdminNotificationJobs(
 	m.logger.Infow("registered admin notification jobs",
 		"offline_check", "2m",
 		"expiring_check", "08:00",
-		"daily_summary", "09:00",
-		"weekly_summary", "Monday 09:00",
+		"daily_summary", "hourly (per-binding hour config)",
+		"weekly_summary", "hourly (per-binding hour/weekday config)",
 	)
 	return nil
 }

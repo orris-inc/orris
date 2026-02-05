@@ -27,6 +27,10 @@ type AdminTelegramBindingModel struct {
 	OfflineThresholdMinutes        int        `gorm:"column:offline_threshold_minutes;default:5"`
 	NotifyResourceExpiring         bool       `gorm:"column:notify_resource_expiring;default:true"`
 	ResourceExpiringDays           int        `gorm:"column:resource_expiring_days;default:7"`
+	DailySummaryHour               int        `gorm:"column:daily_summary_hour;default:9"`
+	WeeklySummaryHour              int        `gorm:"column:weekly_summary_hour;default:9"`
+	WeeklySummaryWeekday           int        `gorm:"column:weekly_summary_weekday;default:1"`
+	OfflineCheckIntervalMinutes    int        `gorm:"column:offline_check_interval_minutes;default:5"`
 	LastNodeOfflineNotifyAt        *time.Time `gorm:"column:last_node_offline_notify_at"`
 	LastAgentOfflineNotifyAt       *time.Time `gorm:"column:last_agent_offline_notify_at"`
 	LastDailySummaryAt             *time.Time `gorm:"column:last_daily_summary_at"`
@@ -239,14 +243,12 @@ func (r *AdminTelegramBindingRepository) FindBindingsForPaymentSuccessNotificati
 	return bindings, nil
 }
 
-// FindBindingsForDailySummary finds bindings that want daily summary
-func (r *AdminTelegramBindingRepository) FindBindingsForDailySummary(ctx context.Context) ([]*admin.AdminTelegramBinding, error) {
+// FindBindingsForDailySummary finds bindings that want daily summary at the given business hour
+func (r *AdminTelegramBindingRepository) FindBindingsForDailySummary(ctx context.Context, bizHour int) ([]*admin.AdminTelegramBinding, error) {
 	var models []AdminTelegramBindingModel
-	threshold := biztime.NowUTC().Add(-24 * time.Hour)
 
 	err := r.db.WithContext(ctx).
-		Where("notify_daily_summary = ?", true).
-		Where("last_daily_summary_at IS NULL OR last_daily_summary_at < ?", threshold).
+		Where("notify_daily_summary = ? AND daily_summary_hour = ?", true, bizHour).
 		Find(&models).Error
 	if err != nil {
 		return nil, err
@@ -259,14 +261,12 @@ func (r *AdminTelegramBindingRepository) FindBindingsForDailySummary(ctx context
 	return bindings, nil
 }
 
-// FindBindingsForWeeklySummary finds bindings that want weekly summary
-func (r *AdminTelegramBindingRepository) FindBindingsForWeeklySummary(ctx context.Context) ([]*admin.AdminTelegramBinding, error) {
+// FindBindingsForWeeklySummary finds bindings that want weekly summary at the given business hour and weekday
+func (r *AdminTelegramBindingRepository) FindBindingsForWeeklySummary(ctx context.Context, bizHour int, bizWeekday int) ([]*admin.AdminTelegramBinding, error) {
 	var models []AdminTelegramBindingModel
-	threshold := biztime.NowUTC().Add(-7 * 24 * time.Hour)
 
 	err := r.db.WithContext(ctx).
-		Where("notify_weekly_summary = ?", true).
-		Where("last_weekly_summary_at IS NULL OR last_weekly_summary_at < ?", threshold).
+		Where("notify_weekly_summary = ? AND weekly_summary_hour = ? AND weekly_summary_weekday = ?", true, bizHour, bizWeekday).
 		Find(&models).Error
 	if err != nil {
 		return nil, err
@@ -296,6 +296,10 @@ func (r *AdminTelegramBindingRepository) toModel(binding *admin.AdminTelegramBin
 		OfflineThresholdMinutes:        binding.OfflineThresholdMinutes(),
 		NotifyResourceExpiring:         binding.NotifyResourceExpiring(),
 		ResourceExpiringDays:           binding.ResourceExpiringDays(),
+		DailySummaryHour:               binding.DailySummaryHour(),
+		WeeklySummaryHour:              binding.WeeklySummaryHour(),
+		WeeklySummaryWeekday:           binding.WeeklySummaryWeekday(),
+		OfflineCheckIntervalMinutes:    binding.OfflineCheckIntervalMinutes(),
 		LastNodeOfflineNotifyAt:        binding.LastNodeOfflineNotifyAt(),
 		LastAgentOfflineNotifyAt:       binding.LastAgentOfflineNotifyAt(),
 		LastDailySummaryAt:             binding.LastDailySummaryAt(),
@@ -323,6 +327,10 @@ func (r *AdminTelegramBindingRepository) toDomain(model *AdminTelegramBindingMod
 		model.OfflineThresholdMinutes,
 		model.NotifyResourceExpiring,
 		model.ResourceExpiringDays,
+		model.DailySummaryHour,
+		model.WeeklySummaryHour,
+		model.WeeklySummaryWeekday,
+		model.OfflineCheckIntervalMinutes,
 		model.LastNodeOfflineNotifyAt,
 		model.LastAgentOfflineNotifyAt,
 		model.LastDailySummaryAt,

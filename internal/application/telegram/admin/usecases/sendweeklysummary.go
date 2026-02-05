@@ -61,20 +61,36 @@ func (uc *SendWeeklySummaryUseCase) SendSummary(ctx context.Context) error {
 		return nil
 	}
 
-	// Get bindings that want weekly summary
-	bindings, err := uc.bindingRepo.FindBindingsForWeeklySummary(ctx)
+	// Calculate current business timezone hour and weekday
+	now := biztime.NowUTC()
+	bizNow := biztime.ToBizTimezone(now)
+	currentBizHour := bizNow.Hour()
+	currentBizWeekday := int(bizNow.Weekday()) // 0=Sunday, 1=Monday...6=Saturday
+
+	// Get bindings that want weekly summary at the current business hour and weekday
+	bindings, err := uc.bindingRepo.FindBindingsForWeeklySummary(ctx, currentBizHour, currentBizWeekday)
 	if err != nil {
 		uc.logger.Errorw("failed to find bindings for weekly summary", "error", err)
 		return fmt.Errorf("failed to find bindings: %w", err)
 	}
 
 	if len(bindings) == 0 {
-		uc.logger.Debugw("no bindings configured for weekly summary")
+		return nil
+	}
+
+	// Calendar-based dedup: filter bindings not yet sent this weekly period
+	var matchedBindings []*admin.AdminTelegramBinding
+	for _, binding := range bindings {
+		if binding.CanSendWeeklySummary() {
+			matchedBindings = append(matchedBindings, binding)
+		}
+	}
+
+	if len(matchedBindings) == 0 {
 		return nil
 	}
 
 	// Calculate last week and week before that
-	now := biztime.NowUTC()
 	lastWeekStart, lastWeekEnd := uc.getLastWeekRange(now)
 	prevWeekStart, prevWeekEnd := uc.getPreviousWeekRange(now)
 
@@ -90,11 +106,7 @@ func (uc *SendWeeklySummaryUseCase) SendSummary(ctx context.Context) error {
 	sentCount := 0
 	errorCount := 0
 
-	for _, binding := range bindings {
-		if !binding.CanSendWeeklySummary() {
-			continue
-		}
-
+	for _, binding := range matchedBindings {
 		if err := uc.botService.SendMessage(binding.TelegramUserID(), message); err != nil {
 			uc.logger.Errorw("failed to send weekly summary",
 				"telegram_user_id", binding.TelegramUserID(),

@@ -46,11 +46,11 @@ type AdminTelegramBindingRepository interface {
 	// FindBindingsForPaymentSuccessNotification finds bindings that want payment success notifications
 	FindBindingsForPaymentSuccessNotification(ctx context.Context) ([]*AdminTelegramBinding, error)
 
-	// FindBindingsForDailySummary finds bindings that want daily summary
-	FindBindingsForDailySummary(ctx context.Context) ([]*AdminTelegramBinding, error)
+	// FindBindingsForDailySummary finds bindings that want daily summary at the given business hour
+	FindBindingsForDailySummary(ctx context.Context, bizHour int) ([]*AdminTelegramBinding, error)
 
-	// FindBindingsForWeeklySummary finds bindings that want weekly summary
-	FindBindingsForWeeklySummary(ctx context.Context) ([]*AdminTelegramBinding, error)
+	// FindBindingsForWeeklySummary finds bindings that want weekly summary at the given business hour and weekday
+	FindBindingsForWeeklySummary(ctx context.Context, bizHour int, bizWeekday int) ([]*AdminTelegramBinding, error)
 
 	// FindBindingsForResourceExpiringNotification finds bindings that want resource expiring notifications
 	// and haven't been notified today

@@ -77,6 +77,18 @@ func FuzzNewAdminTelegramBinding(f *testing.F) {
 		if binding.OfflineThresholdMinutes() != DefaultOfflineThresholdMinutes {
 			t.Errorf("OfflineThresholdMinutes() = %d, expected %d", binding.OfflineThresholdMinutes(), DefaultOfflineThresholdMinutes)
 		}
+		if binding.DailySummaryHour() != DefaultDailySummaryHour {
+			t.Errorf("DailySummaryHour() = %d, expected %d", binding.DailySummaryHour(), DefaultDailySummaryHour)
+		}
+		if binding.WeeklySummaryHour() != DefaultWeeklySummaryHour {
+			t.Errorf("WeeklySummaryHour() = %d, expected %d", binding.WeeklySummaryHour(), DefaultWeeklySummaryHour)
+		}
+		if binding.WeeklySummaryWeekday() != DefaultWeeklySummaryWeekday {
+			t.Errorf("WeeklySummaryWeekday() = %d, expected %d", binding.WeeklySummaryWeekday(), DefaultWeeklySummaryWeekday)
+		}
+		if binding.OfflineCheckIntervalMinutes() != DefaultOfflineCheckIntervalMinutes {
+			t.Errorf("OfflineCheckIntervalMinutes() = %d, expected %d", binding.OfflineCheckIntervalMinutes(), DefaultOfflineCheckIntervalMinutes)
+		}
 	})
 }
 
@@ -100,7 +112,7 @@ func FuzzUpdatePreferences(f *testing.F) {
 			t.Fatalf("Failed to create binding: %v", err)
 		}
 
-		err = binding.UpdatePreferences(nil, nil, nil, nil, nil, nil, &threshold, nil, nil)
+		err = binding.UpdatePreferences(nil, nil, nil, nil, nil, nil, &threshold, nil, nil, nil, nil, nil, nil)
 
 		// Threshold out of range should error
 		if threshold < MinOfflineThresholdMinutes || threshold > MaxOfflineThresholdMinutes {
@@ -152,6 +164,10 @@ func FuzzUpdatePreferencesBooleans(f *testing.F) {
 			&paymentSuccess,
 			&dailySummary,
 			&weeklySummary,
+			nil,
+			nil,
+			nil,
+			nil,
 			nil,
 			nil,
 			nil,
