@@ -223,14 +223,17 @@ func (s *NodeTrafficLimitEnforcementService) CheckAndEnforceLimitForNode(ctx con
 // - Before 24 hours: from MySQL subscription_usage_stats table
 func (s *NodeTrafficLimitEnforcementService) getTotalTrafficForSubscription(ctx context.Context, subscriptionID uint) (uint64, error) {
 	now := biztime.NowUTC()
-	dayAgo := now.Add(-24 * time.Hour)
+
+	// Use start of yesterday's business day as batch/speed boundary (Lambda architecture)
+	// MySQL: complete days before yesterday; Redis: yesterday + today (within 48h TTL)
+	recentBoundary := biztime.StartOfDayUTC(now.AddDate(0, 0, -1))
 
 	var total uint64
 
-	// Get recent 24h traffic from Redis (filter by node type)
+	// Get recent traffic from Redis (yesterday + today, filter by node type)
 	resourceType := subscription.ResourceTypeNode.String()
 	recentTraffic, err := s.hourlyTrafficCache.GetTotalTrafficBySubscriptionIDs(
-		ctx, []uint{subscriptionID}, resourceType, dayAgo, now,
+		ctx, []uint{subscriptionID}, resourceType, recentBoundary, now,
 	)
 	if err != nil {
 		// Log warning but don't fail - Redis unavailability shouldn't block limit checks
@@ -250,10 +253,10 @@ func (s *NodeTrafficLimitEnforcementService) getTotalTrafficForSubscription(ctx 
 		)
 	}
 
-	// Get historical traffic from MySQL subscription_usage_stats (before 24 hours ago)
+	// Get historical traffic from MySQL subscription_usage_stats (complete days before yesterday)
 	// Use daily granularity for historical aggregation, filter by node type
 	historicalTraffic, err := s.usageStatsRepo.GetTotalBySubscriptionIDs(
-		ctx, []uint{subscriptionID}, &resourceType, subscription.GranularityDaily, time.Time{}, dayAgo,
+		ctx, []uint{subscriptionID}, &resourceType, subscription.GranularityDaily, time.Time{}, recentBoundary.Add(-time.Second),
 	)
 	if err != nil {
 		s.logger.Warnw("failed to get historical traffic from stats, using Redis data only",

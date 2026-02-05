@@ -166,67 +166,63 @@ func (uc *GetDashboardUseCase) batchGetUsageBySubscriptions(
 	}
 
 	now := biztime.NowUTC()
-	dayAgo := now.Add(-24 * time.Hour)
 
-	// Collect all subscription IDs and find the widest time range
+	// Use start of yesterday's business day as batch/speed boundary (Lambda architecture)
+	// MySQL: complete days before yesterday; Redis: yesterday + today (within 48h TTL)
+	recentBoundary := biztime.StartOfDayUTC(now.AddDate(0, 0, -1))
+
+	// Calculate month boundaries in business timezone, matching checkTrafficLimit logic
+	bizNow := biztime.ToBizTimezone(now)
+	periodStart := biztime.StartOfMonthUTC(bizNow.Year(), bizNow.Month())
+	periodEnd := biztime.EndOfMonthUTC(bizNow.Year(), bizNow.Month())
+	if periodEnd.After(now) {
+		periodEnd = now
+	}
+
+	// Collect all subscription IDs
 	subscriptionIDs := make([]uint, 0, len(subscriptions))
-	var earliestFrom, latestTo time.Time
-
 	for _, sub := range subscriptions {
 		subscriptionIDs = append(subscriptionIDs, sub.ID())
-		periodStart := sub.CurrentPeriodStart()
-		periodEnd := biztime.EndOfDayUTC(sub.CurrentPeriodEnd())
-
-		if earliestFrom.IsZero() || periodStart.Before(earliestFrom) {
-			earliestFrom = periodStart
-		}
-		if latestTo.IsZero() || periodEnd.After(latestTo) {
-			latestTo = periodEnd
-		}
 	}
 
-	// Calculate recent time range (last 24h from Redis)
-	recentFrom := earliestFrom
-	if recentFrom.Before(dayAgo) {
-		recentFrom = dayAgo
-	}
-	recentTo := latestTo
-	if recentTo.After(now) {
-		recentTo = now
+	// Calculate recent time range (yesterday + today from Redis)
+	recentFrom := periodStart
+	if recentFrom.Before(recentBoundary) {
+		recentFrom = recentBoundary
 	}
 
-	// Batch get recent traffic from Redis (last 24h) for all subscriptions
+	// Batch get recent traffic from Redis (yesterday + today) for all subscriptions
 	var recentTraffic map[uint]*cache.TrafficSummary
-	if recentFrom.Before(recentTo) && recentFrom.Before(now) {
+	if recentFrom.Before(periodEnd) && recentFrom.Before(now) {
 		var err error
 		recentTraffic, err = uc.hourlyCache.GetTotalTrafficBySubscriptionIDs(
-			ctx, subscriptionIDs, "", recentFrom, recentTo,
+			ctx, subscriptionIDs, "", recentFrom, periodEnd,
 		)
 		if err != nil {
 			uc.logger.Warnw("failed to get recent traffic from Redis",
 				"subscription_ids_count", len(subscriptionIDs),
 				"from", recentFrom,
-				"to", recentTo,
+				"to", periodEnd,
 				"error", err,
 			)
 		}
 	}
 
-	// Batch get historical traffic from MySQL stats (before 24h ago) for all subscriptions
+	// Batch get historical traffic from MySQL stats (complete days before yesterday) for all subscriptions
 	var historicalTraffic map[uint]*subscription.UsageSummary
-	if earliestFrom.Before(dayAgo) {
-		historicalTo := dayAgo
-		if historicalTo.After(latestTo) {
-			historicalTo = latestTo
+	if periodStart.Before(recentBoundary) {
+		historicalTo := recentBoundary.Add(-time.Second)
+		if historicalTo.After(periodEnd) {
+			historicalTo = periodEnd
 		}
 		var err error
 		historicalTraffic, err = uc.usageStatsRepo.GetTotalBySubscriptionIDsGrouped(
-			ctx, subscriptionIDs, nil, subscription.GranularityDaily, earliestFrom, historicalTo,
+			ctx, subscriptionIDs, nil, subscription.GranularityDaily, periodStart, historicalTo,
 		)
 		if err != nil {
 			uc.logger.Warnw("failed to get historical traffic from stats",
 				"subscription_ids_count", len(subscriptionIDs),
-				"from", earliestFrom,
+				"from", periodStart,
 				"to", historicalTo,
 				"error", err,
 			)
@@ -247,8 +243,8 @@ func (uc *GetDashboardUseCase) batchGetUsageBySubscriptions(
 			}
 		}
 
-		// Add historical traffic if available and subscription period started before 24h ago
-		if historicalTraffic != nil && sub.CurrentPeriodStart().Before(dayAgo) {
+		// Add historical traffic if available
+		if historicalTraffic != nil && periodStart.Before(recentBoundary) {
 			if t, ok := historicalTraffic[subID]; ok {
 				usage.Upload += t.Upload
 				usage.Download += t.Download

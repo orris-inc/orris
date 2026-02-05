@@ -395,17 +395,20 @@ func (uc *ProcessReminderUseCase) getTotalUsageBySubscriptionIDs(
 	}
 
 	now := biztime.NowUTC()
-	dayAgo := now.Add(-24 * time.Hour)
+
+	// Use start of yesterday's business day as batch/speed boundary (Lambda architecture)
+	// MySQL: complete days before yesterday; Redis: yesterday + today (within 48h TTL)
+	recentBoundary := biztime.StartOfDayUTC(now.AddDate(0, 0, -1))
 
 	var total uint64
 
-	// Determine time boundaries for recent data (last 24h from Redis)
+	// Determine time boundaries for recent data (yesterday + today from Redis)
 	recentFrom := from
-	if recentFrom.Before(dayAgo) {
-		recentFrom = dayAgo
+	if recentFrom.Before(recentBoundary) {
+		recentFrom = recentBoundary
 	}
 
-	// Get recent traffic from Redis (last 24h)
+	// Get recent traffic from Redis (yesterday + today)
 	if recentFrom.Before(to) && recentFrom.Before(now) {
 		recentTo := to
 		if recentTo.After(now) {
@@ -432,9 +435,9 @@ func (uc *ProcessReminderUseCase) getTotalUsageBySubscriptionIDs(
 		}
 	}
 
-	// Get historical traffic from MySQL stats (before 24 hours ago)
-	if from.Before(dayAgo) {
-		historicalTo := dayAgo
+	// Get historical traffic from MySQL stats (complete days before yesterday)
+	if from.Before(recentBoundary) {
+		historicalTo := recentBoundary.Add(-time.Second)
 		if historicalTo.After(to) {
 			historicalTo = to
 		}

@@ -171,21 +171,24 @@ func (uc *CheckTrafficLimitUseCase) getTotalUsageByResource(
 	from, to time.Time,
 ) (uint64, error) {
 	now := biztime.NowUTC()
-	dayAgo := now.Add(-24 * time.Hour)
+
+	// Use start of yesterday's business day as batch/speed boundary (Lambda architecture)
+	// MySQL: complete days before yesterday; Redis: yesterday + today (within 48h TTL)
+	recentBoundary := biztime.StartOfDayUTC(now.AddDate(0, 0, -1))
 
 	var total uint64
 
-	// Determine time boundaries for Redis query (only last 24 hours)
+	// Determine time boundaries for Redis query (yesterday + today)
 	recentFrom := from
-	if recentFrom.Before(dayAgo) {
-		recentFrom = dayAgo
+	if recentFrom.Before(recentBoundary) {
+		recentFrom = recentBoundary
 	}
 	recentTo := to
 	if recentTo.After(now) {
 		recentTo = now
 	}
 
-	// Get recent traffic from Redis (last 24h)
+	// Get recent traffic from Redis (yesterday + today)
 	if recentFrom.Before(recentTo) {
 		hourlyPoints, err := uc.hourlyCache.GetHourlyTrafficRange(
 			ctx, subscriptionID, resourceType, resourceID, recentFrom, recentTo,
@@ -217,9 +220,9 @@ func (uc *CheckTrafficLimitUseCase) getTotalUsageByResource(
 		}
 	}
 
-	// Get historical traffic from MySQL stats (before 24 hours ago)
-	if from.Before(dayAgo) {
-		historicalTo := dayAgo
+	// Get historical traffic from MySQL stats (complete days before yesterday)
+	if from.Before(recentBoundary) {
+		historicalTo := recentBoundary.Add(-time.Second)
 		if historicalTo.After(to) {
 			historicalTo = to
 		}

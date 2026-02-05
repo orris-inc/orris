@@ -217,15 +217,18 @@ func (uc *GetUserForwardUsageUseCase) Execute(ctx context.Context, query GetUser
 		resourceType := string(subscription.ResourceTypeForwardRule)
 
 		now := biztime.NowUTC()
-		dayAgo := now.Add(-24 * time.Hour)
 
-		// Determine time boundary for recent data (last 24 hours)
+		// Use start of yesterday's business day as batch/speed boundary (Lambda architecture)
+		// MySQL: complete days before yesterday; Redis: yesterday + today (within 48h TTL)
+		recentBoundary := biztime.StartOfDayUTC(now.AddDate(0, 0, -1))
+
+		// Determine time boundary for recent data (yesterday + today)
 		recentFrom := earliestFrom
-		if recentFrom.Before(dayAgo) {
-			recentFrom = dayAgo
+		if recentFrom.Before(recentBoundary) {
+			recentFrom = recentBoundary
 		}
 
-		// Get recent traffic from Redis (last 24h)
+		// Get recent traffic from Redis (yesterday + today)
 		if recentFrom.Before(latestTo) {
 			recentTraffic, err := uc.hourlyCache.GetTotalTrafficBySubscriptionIDs(
 				ctx, forwardSubscriptionIDs, resourceType, recentFrom, latestTo,
@@ -239,9 +242,9 @@ func (uc *GetUserForwardUsageUseCase) Execute(ctx context.Context, query GetUser
 			}
 		}
 
-		// Get historical traffic from MySQL stats (before 24h ago)
-		if earliestFrom.Before(dayAgo) {
-			historicalTo := dayAgo
+		// Get historical traffic from MySQL stats (complete days before yesterday)
+		if earliestFrom.Before(recentBoundary) {
+			historicalTo := recentBoundary.Add(-time.Second)
 			if historicalTo.After(latestTo) {
 				historicalTo = latestTo
 			}

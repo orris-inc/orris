@@ -343,29 +343,30 @@ func (uc *GenerateSubscriptionUseCase) buildUserInfo(ctx context.Context, valida
 	}
 }
 
-// calculatePeriodTraffic calculates upload and download traffic for the current billing period.
+// calculatePeriodTraffic calculates upload and download traffic for the current billing month.
+// Uses calendar month boundaries in business timezone, matching checkTrafficLimit logic
+// to ensure displayed traffic is consistent with limit enforcement.
 // Uses Redis for recent data (last 24h) and MySQL stats for historical data.
 func (uc *GenerateSubscriptionUseCase) calculatePeriodTraffic(ctx context.Context, validation *SubscriptionValidationResult) (upload, download uint64) {
-	periodStart := validation.CurrentPeriodStart
-	periodEnd := validation.CurrentPeriodEnd
 	now := biztime.NowUTC()
+
+	// Calculate month boundaries in business timezone, then convert to UTC for query
+	bizNow := biztime.ToBizTimezone(now)
+	periodStart := biztime.StartOfMonthUTC(bizNow.Year(), bizNow.Month())
+	periodEnd := biztime.EndOfMonthUTC(bizNow.Year(), bizNow.Month())
 
 	// If period end is in the future, use current time
 	if periodEnd.After(now) {
 		periodEnd = now
 	}
 
-	// If period hasn't started yet or invalid range, return zero
-	if periodStart.After(now) || !periodStart.Before(periodEnd) {
-		return 0, 0
-	}
+	// Use start of yesterday's business day as batch/speed boundary (Lambda architecture)
+	// MySQL: complete days before yesterday; Redis: yesterday + today (within 48h TTL)
+	recentBoundary := biztime.StartOfDayUTC(now.AddDate(0, 0, -1))
 
-	// Define the 24-hour boundary for Redis data
-	dayAgo := now.Add(-24 * time.Hour)
-
-	// Get historical traffic from MySQL stats (before 24h ago)
-	if periodStart.Before(dayAgo) {
-		historicalTo := dayAgo
+	// Get historical traffic from MySQL stats (complete days before yesterday)
+	if periodStart.Before(recentBoundary) {
+		historicalTo := recentBoundary.Add(-time.Second)
 		if historicalTo.After(periodEnd) {
 			historicalTo = periodEnd
 		}
@@ -386,10 +387,10 @@ func (uc *GenerateSubscriptionUseCase) calculatePeriodTraffic(ctx context.Contex
 		}
 	}
 
-	// Get recent traffic from Redis (last 24h)
+	// Get recent traffic from Redis (yesterday + today)
 	recentFrom := periodStart
-	if recentFrom.Before(dayAgo) {
-		recentFrom = dayAgo
+	if recentFrom.Before(recentBoundary) {
+		recentFrom = recentBoundary
 	}
 
 	if recentFrom.Before(periodEnd) && recentFrom.Before(now) {

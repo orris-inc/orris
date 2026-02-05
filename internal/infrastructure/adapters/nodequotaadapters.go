@@ -159,14 +159,17 @@ func (a *NodeSubscriptionUsageReaderAdapter) GetCurrentPeriodUsage(
 	periodStart, periodEnd time.Time,
 ) (int64, error) {
 	now := biztime.NowUTC()
-	dayAgo := now.Add(-24 * time.Hour)
+
+	// Use start of yesterday's business day as batch/speed boundary (Lambda architecture)
+	// MySQL: complete days before yesterday; Redis: yesterday + today (within 48h TTL)
+	recentBoundary := biztime.StartOfDayUTC(now.AddDate(0, 0, -1))
 
 	var total int64
 
-	// Get recent 24h traffic from Redis (filter by node type)
+	// Get recent traffic from Redis (yesterday + today, filter by node type)
 	resourceType := subscription.ResourceTypeNode.String()
 	recentTraffic, err := a.hourlyTrafficCache.GetTotalTrafficBySubscriptionIDs(
-		ctx, []uint{subscriptionID}, resourceType, dayAgo, now,
+		ctx, []uint{subscriptionID}, resourceType, recentBoundary, now,
 	)
 	if err != nil {
 		a.logger.Warnw("failed to get recent traffic from Redis",
@@ -180,11 +183,11 @@ func (a *NodeSubscriptionUsageReaderAdapter) GetCurrentPeriodUsage(
 		}
 	}
 
-	// Get historical traffic from MySQL (before 24 hours ago, within billing period)
+	// Get historical traffic from MySQL (complete days before yesterday, within billing period)
 	historicalStart := periodStart
-	historicalEnd := dayAgo
+	historicalEnd := recentBoundary.Add(-time.Second)
 	if historicalEnd.Before(historicalStart) {
-		// If billing period is less than 24h, no historical data needed
+		// If billing period started after recentBoundary, no historical data needed
 		return total, nil
 	}
 

@@ -369,16 +369,16 @@ func (s *QuotaServiceImpl) calculatePeriodUsage(
 		periodEnd = now
 	}
 
-	// Define the 24-hour boundary for Redis data
-	// Redis hourly traffic cache retains data for approximately 25 hours
-	dayAgo := now.Add(-24 * time.Hour)
+	// Use start of yesterday's business day as batch/speed boundary (Lambda architecture)
+	// MySQL: complete days before yesterday; Redis: yesterday + today (within 48h TTL)
+	recentBoundary := biztime.StartOfDayUTC(now.AddDate(0, 0, -1))
 
 	var total uint64
 
-	// Determine time boundaries for recent data (last 24 hours from Redis)
+	// Determine time boundaries for recent data (yesterday + today from Redis)
 	recentFrom := periodStart
-	if recentFrom.Before(dayAgo) {
-		recentFrom = dayAgo
+	if recentFrom.Before(recentBoundary) {
+		recentFrom = recentBoundary
 	}
 
 	// Convert resourceType for Redis call (nil -> "", non-nil -> *resourceType)
@@ -414,11 +414,11 @@ func (s *QuotaServiceImpl) calculatePeriodUsage(
 		}
 	}
 
-	// Get historical traffic from MySQL stats (before 24h ago)
+	// Get historical traffic from MySQL stats (complete days before yesterday)
 	// resourceType: nil = aggregate all resource types (for Hybrid plans)
 	// resourceType: non-nil = filter by specific type (for Node/Forward plans)
-	if periodStart.Before(dayAgo) {
-		historicalTo := dayAgo
+	if periodStart.Before(recentBoundary) {
+		historicalTo := recentBoundary.Add(-time.Second)
 		if historicalTo.After(periodEnd) {
 			historicalTo = periodEnd
 		}

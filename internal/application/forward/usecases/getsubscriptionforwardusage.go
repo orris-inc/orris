@@ -139,18 +139,21 @@ func (uc *GetSubscriptionForwardUsageUseCase) Execute(ctx context.Context, query
 	periodStart := sub.CurrentPeriodStart()
 	periodEnd := biztime.EndOfDayUTC(sub.CurrentPeriodEnd())
 	now := biztime.NowUTC()
-	dayAgo := now.Add(-24 * time.Hour)
+
+	// Use start of yesterday's business day as batch/speed boundary (Lambda architecture)
+	// MySQL: complete days before yesterday; Redis: yesterday + today (within 48h TTL)
+	recentBoundary := biztime.StartOfDayUTC(now.AddDate(0, 0, -1))
 
 	subscriptionIDs := []uint{query.SubscriptionID}
 	resourceType := string(subscription.ResourceTypeForwardRule)
 
-	// Determine time boundaries for recent data (last 24h from Redis)
+	// Determine time boundaries for recent data (yesterday + today from Redis)
 	recentFrom := periodStart
-	if recentFrom.Before(dayAgo) {
-		recentFrom = dayAgo
+	if recentFrom.Before(recentBoundary) {
+		recentFrom = recentBoundary
 	}
 
-	// Get recent traffic from Redis (last 24h)
+	// Get recent traffic from Redis (yesterday + today)
 	if recentFrom.Before(periodEnd) && recentFrom.Before(now) {
 		recentTo := periodEnd
 		if recentTo.After(now) {
@@ -168,9 +171,9 @@ func (uc *GetSubscriptionForwardUsageUseCase) Execute(ctx context.Context, query
 		}
 	}
 
-	// Get historical traffic from MySQL stats (before 24h ago)
-	if periodStart.Before(dayAgo) {
-		historicalTo := dayAgo
+	// Get historical traffic from MySQL stats (complete days before yesterday)
+	if periodStart.Before(recentBoundary) {
+		historicalTo := recentBoundary.Add(-time.Second)
 		if historicalTo.After(periodEnd) {
 			historicalTo = periodEnd
 		}

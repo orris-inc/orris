@@ -252,7 +252,8 @@ func (uc *CreateSubscriptionUseCase) calculateEndDate(startDate time.Time, billi
 		return startDate.Add(365 * 24 * time.Hour) // 365 days
 	case vo.BillingCycleLifetime:
 		// For lifetime subscriptions, set a far future date (effectively never expires)
-		return time.Date(9999, 12, 31, 23, 59, 59, 0, time.UTC)
+		// Use Jan 1 instead of Dec 31 23:59:59 to avoid year overflow when converting to eastern timezones
+		return time.Date(9999, 1, 1, 0, 0, 0, 0, time.UTC)
 	default:
 		return startDate.Add(31 * 24 * time.Hour) // Default to 31 days
 	}
