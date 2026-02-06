@@ -3,6 +3,7 @@ package usecases
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/orris-inc/orris/internal/domain/subscription"
@@ -238,8 +239,10 @@ func (s *QuotaServiceImpl) buildQuotaResult(
 	sub *subscription.Subscription,
 	plan *subscription.Plan,
 ) (*QuotaCheckResult, error) {
-	periodStart := sub.CurrentPeriodStart()
-	periodEnd := sub.CurrentPeriodEnd()
+	// Resolve traffic period based on plan's reset mode (calendar_month or billing_cycle)
+	period := subscription.ResolveTrafficPeriod(plan, sub)
+	periodStart := period.Start
+	periodEnd := period.End
 
 	// Get traffic limit from plan
 	limitBytes, err := plan.GetTrafficLimit()
@@ -374,6 +377,7 @@ func (s *QuotaServiceImpl) calculatePeriodUsage(
 	recentBoundary := biztime.StartOfDayUTC(now.AddDate(0, 0, -1))
 
 	var total uint64
+	var redisErr, mysqlErr error
 
 	// Determine time boundaries for recent data (yesterday + today from Redis)
 	recentFrom := periodStart
@@ -399,6 +403,7 @@ func (s *QuotaServiceImpl) calculatePeriodUsage(
 			ctx, subscriptionIDs, redisResourceType, recentFrom, recentTo,
 		)
 		if err != nil {
+			redisErr = err
 			s.logger.Warnw("failed to get recent traffic from Redis",
 				"subscription_ids", subscriptionIDs,
 				"resource_type", resourceType,
@@ -426,6 +431,7 @@ func (s *QuotaServiceImpl) calculatePeriodUsage(
 			ctx, subscriptionIDs, resourceType, subscription.GranularityDaily, periodStart, historicalTo,
 		)
 		if err != nil {
+			mysqlErr = err
 			s.logger.Warnw("failed to get historical traffic from stats",
 				"subscription_ids", subscriptionIDs,
 				"resource_type", resourceType,
@@ -437,6 +443,11 @@ func (s *QuotaServiceImpl) calculatePeriodUsage(
 		} else if historicalTraffic != nil {
 			total += historicalTraffic.Total
 		}
+	}
+
+	// If both data sources failed, return error to prevent false zero-usage
+	if redisErr != nil && mysqlErr != nil {
+		return 0, fmt.Errorf("both traffic data sources failed: redis=%w, mysql=%v", redisErr, mysqlErr)
 	}
 
 	return total, nil

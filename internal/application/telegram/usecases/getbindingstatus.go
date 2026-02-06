@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/orris-inc/orris/internal/application/telegram/dto"
 	"github.com/orris-inc/orris/internal/domain/telegram"
@@ -64,11 +65,15 @@ func (uc *GetBindingStatusUseCase) Execute(ctx context.Context, userID uint) (*d
 				uc.logger.Errorw("failed to generate verify code", "user_id", userID, "error", err)
 				return nil, err
 			}
-			return &dto.BindingStatusResponse{
+			resp := &dto.BindingStatusResponse{
 				IsBound:    false,
 				VerifyCode: code,
 				BotLink:    botLink,
-			}, nil
+			}
+			if botLink != "" {
+				resp.DeepBindLink = fmt.Sprintf("%s?start=bind_%s", botLink, code)
+			}
+			return resp, nil
 		}
 		return nil, err
 	}

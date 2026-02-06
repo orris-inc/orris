@@ -18,6 +18,7 @@ type TelegramBindingModel struct {
 	UserID               uint       `gorm:"column:user_id;not null;uniqueIndex"`
 	TelegramUserID       int64      `gorm:"column:telegram_user_id;not null;uniqueIndex"`
 	TelegramUsername     string     `gorm:"column:telegram_username;type:varchar(100)"`
+	Language             string     `gorm:"column:language;type:varchar(5);default:zh"`
 	NotifyExpiring       bool       `gorm:"column:notify_expiring;default:true"`
 	NotifyTraffic        bool       `gorm:"column:notify_traffic;default:true"`
 	ExpiringDays         int        `gorm:"column:expiring_days;default:3"`
@@ -170,6 +171,7 @@ func (r *TelegramBindingRepository) toModel(binding *telegram.TelegramBinding) *
 		UserID:               binding.UserID(),
 		TelegramUserID:       binding.TelegramUserID(),
 		TelegramUsername:     binding.TelegramUsername(),
+		Language:             binding.Language(),
 		NotifyExpiring:       binding.NotifyExpiring(),
 		NotifyTraffic:        binding.NotifyTraffic(),
 		ExpiringDays:         binding.ExpiringDays(),
@@ -189,6 +191,7 @@ func (r *TelegramBindingRepository) toDomain(model *TelegramBindingModel) *teleg
 		model.UserID,
 		model.TelegramUserID,
 		model.TelegramUsername,
+		model.Language,
 		model.NotifyExpiring,
 		model.NotifyTraffic,
 		model.ExpiringDays,

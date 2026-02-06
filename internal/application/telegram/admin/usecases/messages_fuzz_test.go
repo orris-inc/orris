@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 	"unicode/utf8"
+
+	"github.com/orris-inc/orris/internal/infrastructure/telegram/i18n"
 )
 
 // FuzzEscapeHTML tests the EscapeHTML function with random inputs
@@ -134,23 +136,28 @@ func FuzzBuildNewUserMessage(f *testing.F) {
 			return
 		}
 
-		result := BuildNewUserMessage(userSID, email, name, source, time.Now())
+		// Test both languages
+		resultZH := i18n.BuildNewUserMessage(i18n.ZH, userSID, email, name, source, time.Now())
+		resultEN := i18n.BuildNewUserMessage(i18n.EN, userSID, email, name, source, time.Now())
 
-		// Should not panic and should return non-empty string
-		if result == "" {
-			t.Errorf("BuildNewUserMessage returned empty string")
+		// Should not panic and should return non-empty strings
+		if resultZH == "" {
+			t.Errorf("BuildNewUserMessage (ZH) returned empty string")
+		}
+		if resultEN == "" {
+			t.Errorf("BuildNewUserMessage (EN) returned empty string")
 		}
 
-		// Should contain header
-		if !strings.Contains(result, "新用户注册") {
-			t.Errorf("BuildNewUserMessage should contain header")
+		// Should contain headers
+		if !strings.Contains(resultZH, "新用户注册") {
+			t.Errorf("BuildNewUserMessage (ZH) should contain Chinese header")
+		}
+		if !strings.Contains(resultEN, "New User Registration") {
+			t.Errorf("BuildNewUserMessage (EN) should contain English header")
 		}
 
-		// User-provided data should be escaped (no raw special chars in result)
-		// This is a simplified check
-		if strings.Contains(email, "*") && !strings.Contains(result, "\\*") {
-			// Note: This check is simplified; the actual escaping may vary
-		}
+		// User-provided data should be HTML-escaped
+		// The actual escaping is done by html.EscapeString() which converts < to &lt; etc.
 	})
 }
 
@@ -169,16 +176,24 @@ func FuzzBuildPaymentSuccessMessage(f *testing.F) {
 			return
 		}
 
-		result := BuildPaymentSuccessMessage(paymentSID, userSID, userEmail, planName, amount, currency, paymentMethod, transactionID, time.Now())
+		// Test both languages
+		resultZH := i18n.BuildPaymentSuccessMessage(i18n.ZH, paymentSID, userSID, userEmail, planName, amount, currency, paymentMethod, transactionID, time.Now())
+		resultEN := i18n.BuildPaymentSuccessMessage(i18n.EN, paymentSID, userSID, userEmail, planName, amount, currency, paymentMethod, transactionID, time.Now())
 
-		// Should not panic and should return non-empty string
-		if result == "" {
-			t.Errorf("BuildPaymentSuccessMessage returned empty string")
+		// Should not panic and should return non-empty strings
+		if resultZH == "" {
+			t.Errorf("BuildPaymentSuccessMessage (ZH) returned empty string")
+		}
+		if resultEN == "" {
+			t.Errorf("BuildPaymentSuccessMessage (EN) returned empty string")
 		}
 
-		// Should contain header
-		if !strings.Contains(result, "支付成功") {
-			t.Errorf("BuildPaymentSuccessMessage should contain header")
+		// Should contain headers
+		if !strings.Contains(resultZH, "支付成功") {
+			t.Errorf("BuildPaymentSuccessMessage (ZH) should contain Chinese header")
+		}
+		if !strings.Contains(resultEN, "Payment Successful") {
+			t.Errorf("BuildPaymentSuccessMessage (EN) should contain English header")
 		}
 	})
 }

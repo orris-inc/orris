@@ -3,6 +3,7 @@ package valueobjects
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 )
 
 type PlanFeatures struct {
@@ -120,11 +121,27 @@ func (p *PlanFeatures) GetBoolLimit(key string) (bool, error) {
 func (p *PlanFeatures) Clone() *PlanFeatures {
 	limits := make(map[string]interface{})
 	for k, v := range p.Limits {
-		limits[k] = v
+		limits[k] = cloneLimitValue(v)
 	}
 
 	return &PlanFeatures{
 		Limits: limits,
+	}
+}
+
+// cloneLimitValue deep copies slice values to prevent shared state.
+func cloneLimitValue(v interface{}) interface{} {
+	switch val := v.(type) {
+	case []interface{}:
+		cp := make([]interface{}, len(val))
+		copy(cp, val)
+		return cp
+	case []string:
+		cp := make([]string, len(val))
+		copy(cp, val)
+		return cp
+	default:
+		return v
 	}
 }
 
@@ -150,7 +167,7 @@ func (p *PlanFeatures) Equals(other *PlanFeatures) bool {
 		if !exists {
 			return false
 		}
-		if v != otherV {
+		if !reflect.DeepEqual(v, otherV) {
 			return false
 		}
 	}
@@ -198,6 +215,8 @@ const (
 	LimitKeyRuleCount = "rule_limit"
 	// LimitKeyRuleTypes represents allowed rule types (unified for both forward and node)
 	LimitKeyRuleTypes = "rule_types"
+	// LimitKeyTrafficResetMode represents the traffic reset mode (calendar_month or billing_cycle)
+	LimitKeyTrafficResetMode = "traffic_reset_mode"
 )
 
 // validLimitKeys contains all valid limit keys
@@ -206,8 +225,9 @@ var validLimitKeys = map[string]bool{
 	LimitKeyDeviceCount:     true,
 	LimitKeySpeedLimit:      true,
 	LimitKeyConnectionLimit: true,
-	LimitKeyRuleCount:       true,
-	LimitKeyRuleTypes:       true,
+	LimitKeyRuleCount:        true,
+	LimitKeyRuleTypes:        true,
+	LimitKeyTrafficResetMode: true,
 }
 
 // legacyKeyMapping maps deprecated keys to their standard equivalents
@@ -251,13 +271,23 @@ func NormalizeLimits(limits map[string]interface{}) map[string]interface{} {
 	}
 
 	normalized := make(map[string]interface{}, len(limits))
+
+	// First pass: copy all standard (non-legacy) keys so they take priority
 	for key, value := range limits {
-		if standardKey, converted := NormalizeLimitKey(key); converted {
-			normalized[standardKey] = value
-		} else {
+		if _, isLegacy := legacyKeyMapping[key]; !isLegacy {
 			normalized[key] = value
 		}
 	}
+
+	// Second pass: copy legacy keys only if the standard key is not already present
+	for key, value := range limits {
+		if standardKey, isLegacy := legacyKeyMapping[key]; isLegacy {
+			if _, exists := normalized[standardKey]; !exists {
+				normalized[standardKey] = value
+			}
+		}
+	}
+
 	return normalized
 }
 
@@ -505,6 +535,36 @@ func (p *PlanFeatures) GetRuleTypes() ([]string, error) {
 // Use empty slice for all types allowed
 func (p *PlanFeatures) SetRuleTypes(types []string) {
 	p.SetLimit(LimitKeyRuleTypes, types)
+}
+
+// GetTrafficResetMode returns the traffic reset mode for the plan.
+// Returns "calendar_month" if not set or invalid.
+func (p *PlanFeatures) GetTrafficResetMode() string {
+	value, exists := p.GetLimit(LimitKeyTrafficResetMode)
+	if !exists {
+		return "calendar_month"
+	}
+
+	strValue, ok := value.(string)
+	if !ok {
+		return "calendar_month"
+	}
+
+	if strValue != "calendar_month" && strValue != "billing_cycle" {
+		return "calendar_month"
+	}
+
+	return strValue
+}
+
+// SetTrafficResetMode sets the traffic reset mode for the plan.
+// Only accepts "calendar_month" or "billing_cycle".
+func (p *PlanFeatures) SetTrafficResetMode(mode string) error {
+	if mode != "calendar_month" && mode != "billing_cycle" {
+		return fmt.Errorf("invalid traffic reset mode: %s, must be calendar_month or billing_cycle", mode)
+	}
+	p.SetLimit(LimitKeyTrafficResetMode, mode)
+	return nil
 }
 
 // IsRuleTypeAllowed checks if the given rule type is allowed in the plan

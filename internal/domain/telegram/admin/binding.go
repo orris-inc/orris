@@ -41,6 +41,7 @@ type AdminTelegramBinding struct {
 	userID           uint   // Internal user ID reference (must be admin role)
 	telegramUserID   int64  // Telegram user_id
 	telegramUsername string // @username (optional)
+	language         string // User's preferred language (e.g., "zh", "en")
 
 	// Notification preferences
 	notifyNodeOffline    bool // Node offline alert
@@ -75,7 +76,7 @@ type AdminTelegramBinding struct {
 }
 
 // NewAdminTelegramBinding creates a new admin telegram binding
-func NewAdminTelegramBinding(userID uint, telegramUserID int64, telegramUsername string) (*AdminTelegramBinding, error) {
+func NewAdminTelegramBinding(userID uint, telegramUserID int64, telegramUsername, language string) (*AdminTelegramBinding, error) {
 	if userID == 0 {
 		return nil, fmt.Errorf("user ID is required")
 	}
@@ -88,12 +89,16 @@ func NewAdminTelegramBinding(userID uint, telegramUserID int64, telegramUsername
 		return nil, fmt.Errorf("failed to generate SID: %w", err)
 	}
 
+	if language == "" {
+		language = "zh"
+	}
 	now := biztime.NowUTC()
 	return &AdminTelegramBinding{
 		sid:                         sid,
 		userID:                      userID,
 		telegramUserID:              telegramUserID,
 		telegramUsername:            telegramUsername,
+		language:                    language,
 		notifyNodeOffline:           true, // Default enabled
 		notifyAgentOffline:          true, // Default enabled
 		notifyNewUser:               true, // Default enabled
@@ -119,6 +124,7 @@ func ReconstructAdminTelegramBinding(
 	userID uint,
 	telegramUserID int64,
 	telegramUsername string,
+	language string,
 	notifyNodeOffline bool,
 	notifyAgentOffline bool,
 	notifyNewUser bool,
@@ -145,6 +151,7 @@ func ReconstructAdminTelegramBinding(
 		userID:                         userID,
 		telegramUserID:                 telegramUserID,
 		telegramUsername:               telegramUsername,
+		language:                       language,
 		notifyNodeOffline:              notifyNodeOffline,
 		notifyAgentOffline:             notifyAgentOffline,
 		notifyNewUser:                  notifyNewUser,
@@ -174,6 +181,7 @@ func (b *AdminTelegramBinding) SID() string                         { return b.s
 func (b *AdminTelegramBinding) UserID() uint                        { return b.userID }
 func (b *AdminTelegramBinding) TelegramUserID() int64               { return b.telegramUserID }
 func (b *AdminTelegramBinding) TelegramUsername() string            { return b.telegramUsername }
+func (b *AdminTelegramBinding) Language() string                    { return b.language }
 func (b *AdminTelegramBinding) NotifyNodeOffline() bool             { return b.notifyNodeOffline }
 func (b *AdminTelegramBinding) NotifyAgentOffline() bool            { return b.notifyAgentOffline }
 func (b *AdminTelegramBinding) NotifyNewUser() bool                 { return b.notifyNewUser }
@@ -380,11 +388,11 @@ func (b *AdminTelegramBinding) CanNotifyResourceExpiring() bool {
 	if b.lastResourceExpiringNotifyDate == nil {
 		return true
 	}
-	// Check if last notification was on a different date (using UTC date comparison)
+	// Check if last notification was on a different date (using business timezone date comparison)
 	now := biztime.NowUTC()
-	lastDate := b.lastResourceExpiringNotifyDate.UTC().Truncate(24 * time.Hour)
-	today := now.Truncate(24 * time.Hour)
-	return !lastDate.Equal(today)
+	lastBizDate := biztime.ToBizTimezone(*b.lastResourceExpiringNotifyDate).Format("2006-01-02")
+	todayBizDate := biztime.ToBizTimezone(now).Format("2006-01-02")
+	return lastBizDate != todayBizDate
 }
 
 // RecordResourceExpiringNotification records that a resource expiring notification was sent
@@ -409,5 +417,11 @@ func mostRecentWeekdayMidnight(t time.Time, targetWeekday int) time.Time {
 // UpdateTelegramUsername updates the telegram username
 func (b *AdminTelegramBinding) UpdateTelegramUsername(username string) {
 	b.telegramUsername = username
+	b.updatedAt = biztime.NowUTC()
+}
+
+// UpdateLanguage updates the user's preferred language
+func (b *AdminTelegramBinding) UpdateLanguage(lang string) {
+	b.language = lang
 	b.updatedAt = biztime.NowUTC()
 }

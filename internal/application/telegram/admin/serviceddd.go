@@ -2,12 +2,14 @@ package admin
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/orris-inc/orris/internal/application/telegram/admin/dto"
-	"github.com/orris-inc/orris/internal/application/telegram/admin/usecases"
 	telegramAdmin "github.com/orris-inc/orris/internal/domain/telegram/admin"
+	telegram "github.com/orris-inc/orris/internal/infrastructure/telegram"
+	"github.com/orris-inc/orris/internal/infrastructure/telegram/i18n"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -27,6 +29,7 @@ const (
 type TelegramMessageSender interface {
 	SendMessage(chatID int64, text string) error
 	SendMessageWithInlineKeyboard(chatID int64, text string, keyboard any) error
+	SendChatAction(chatID int64, action string) error
 }
 
 // BotLinkProvider provides the Telegram bot link
@@ -89,7 +92,7 @@ func (s *ServiceDDD) GetBindingStatus(ctx context.Context, userID uint) (*dto.Ad
 	}
 
 	binding, err := s.bindingRepo.GetByUserID(ctx, userID)
-	if err != nil && err != telegramAdmin.ErrBindingNotFound {
+	if err != nil && !errors.Is(err, telegramAdmin.ErrBindingNotFound) {
 		return nil, err
 	}
 
@@ -131,12 +134,16 @@ func (s *ServiceDDD) GetBindingStatus(ctx context.Context, userID uint) (*dto.Ad
 	}
 
 	expiresAt := biztime.NowUTC().Add(10 * time.Minute)
-	return &dto.AdminBindingStatusResponse{
+	resp := &dto.AdminBindingStatusResponse{
 		IsBound:    false,
 		VerifyCode: verifyCode,
 		BotLink:    botLink,
 		ExpiresAt:  &expiresAt,
-	}, nil
+	}
+	if botLink != "" {
+		resp.DeepBindLink = fmt.Sprintf("%s?start=adminbind_%s", botLink, verifyCode)
+	}
+	return resp, nil
 }
 
 // BindFromWebhook binds an admin telegram account from webhook
@@ -158,7 +165,7 @@ func (s *ServiceDDD) BindFromWebhook(ctx context.Context, verifyCode string, tel
 
 	// Check if user already has a binding
 	existing, err := s.bindingRepo.GetByUserID(ctx, userID)
-	if err != nil && err != telegramAdmin.ErrBindingNotFound {
+	if err != nil && !errors.Is(err, telegramAdmin.ErrBindingNotFound) {
 		return nil, err
 	}
 	if existing != nil {
@@ -167,7 +174,7 @@ func (s *ServiceDDD) BindFromWebhook(ctx context.Context, verifyCode string, tel
 
 	// Check if telegram account is already used
 	existingTg, err := s.bindingRepo.GetByTelegramUserID(ctx, telegramUserID)
-	if err != nil && err != telegramAdmin.ErrBindingNotFound {
+	if err != nil && !errors.Is(err, telegramAdmin.ErrBindingNotFound) {
 		return nil, err
 	}
 	if existingTg != nil {
@@ -175,7 +182,7 @@ func (s *ServiceDDD) BindFromWebhook(ctx context.Context, verifyCode string, tel
 	}
 
 	// Create binding
-	binding, err := telegramAdmin.NewAdminTelegramBinding(userID, telegramUserID, telegramUsername)
+	binding, err := telegramAdmin.NewAdminTelegramBinding(userID, telegramUserID, telegramUsername, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create binding: %w", err)
 	}
@@ -183,6 +190,9 @@ func (s *ServiceDDD) BindFromWebhook(ctx context.Context, verifyCode string, tel
 	if err := s.bindingRepo.Create(ctx, binding); err != nil {
 		return nil, fmt.Errorf("failed to save binding: %w", err)
 	}
+
+	// Delete the verify code (cleanup)
+	_ = s.verifyStore.Delete(ctx, verifyCode)
 
 	s.logger.Infow("admin telegram binding created",
 		"user_id", userID,
@@ -304,6 +314,19 @@ func (s *ServiceDDD) GetBindingByTelegramID(ctx context.Context, telegramUserID 
 	return s.bindingRepo.GetByTelegramUserID(ctx, telegramUserID)
 }
 
+// UpdateAdminBindingLanguage updates the language preference for an admin binding
+func (s *ServiceDDD) UpdateAdminBindingLanguage(ctx context.Context, telegramUserID int64, language string) error {
+	binding, err := s.bindingRepo.GetByTelegramUserID(ctx, telegramUserID)
+	if err != nil {
+		if errors.Is(err, telegramAdmin.ErrBindingNotFound) {
+			return nil
+		}
+		return err
+	}
+	binding.UpdateLanguage(language)
+	return s.bindingRepo.Update(ctx, binding)
+}
+
 // NotifyNewUser implements AdminNotifier interface
 func (s *ServiceDDD) NotifyNewUser(ctx context.Context, cmd NotifyNewUserCommand) error {
 	if s.botService == nil {
@@ -321,10 +344,15 @@ func (s *ServiceDDD) NotifyNewUser(ctx context.Context, cmd NotifyNewUserCommand
 		return nil
 	}
 
-	message := usecases.BuildNewUserMessage(cmd.UserSID, cmd.Email, cmd.Name, cmd.Source, cmd.CreatedAt)
-
 	for i, binding := range bindings {
+		lang := i18n.ParseLang(binding.Language())
+		message := i18n.BuildNewUserMessage(lang, cmd.UserSID, cmd.Email, cmd.Name, cmd.Source, cmd.CreatedAt)
 		if err := s.botService.SendMessage(binding.TelegramUserID(), message); err != nil {
+			if telegram.IsBotBlocked(err) {
+				s.logger.Warnw("bot blocked by user, skipping notification",
+					"telegram_user_id", binding.TelegramUserID())
+				continue
+			}
 			s.logger.Errorw("failed to send new user notification",
 				"telegram_user_id", binding.TelegramUserID(),
 				"error", err,
@@ -357,20 +385,26 @@ func (s *ServiceDDD) NotifyPaymentSuccess(ctx context.Context, cmd NotifyPayment
 		return nil
 	}
 
-	message := usecases.BuildPaymentSuccessMessage(
-		cmd.PaymentSID,
-		cmd.UserSID,
-		cmd.UserEmail,
-		cmd.PlanName,
-		cmd.Amount,
-		cmd.Currency,
-		cmd.PaymentMethod,
-		cmd.TransactionID,
-		cmd.PaidAt,
-	)
-
 	for i, binding := range bindings {
+		lang := i18n.ParseLang(binding.Language())
+		message := i18n.BuildPaymentSuccessMessage(
+			lang,
+			cmd.PaymentSID,
+			cmd.UserSID,
+			cmd.UserEmail,
+			cmd.PlanName,
+			cmd.Amount,
+			cmd.Currency,
+			cmd.PaymentMethod,
+			cmd.TransactionID,
+			cmd.PaidAt,
+		)
 		if err := s.botService.SendMessage(binding.TelegramUserID(), message); err != nil {
+			if telegram.IsBotBlocked(err) {
+				s.logger.Warnw("bot blocked by user, skipping notification",
+					"telegram_user_id", binding.TelegramUserID())
+				continue
+			}
 			s.logger.Errorw("failed to send payment success notification",
 				"telegram_user_id", binding.TelegramUserID(),
 				"error", err,
@@ -423,11 +457,16 @@ func (s *ServiceDDD) NotifyNodeOnline(ctx context.Context, cmd NotifyNodeOnlineC
 		return nil
 	}
 
-	message := usecases.BuildNodeOnlineMessage(cmd.NodeSID, cmd.NodeName, biztime.NowUTC())
-	keyboard := usecases.BuildMuteKeyboard("node", cmd.NodeSID)
-
 	for i, binding := range bindings {
+		lang := i18n.ParseLang(binding.Language())
+		message := i18n.BuildNodeOnlineMessage(lang, cmd.NodeSID, cmd.NodeName, biztime.NowUTC())
+		keyboard := i18n.BuildMuteKeyboard(lang, "node", cmd.NodeSID)
 		if err := s.botService.SendMessageWithInlineKeyboard(binding.TelegramUserID(), message, keyboard); err != nil {
+			if telegram.IsBotBlocked(err) {
+				s.logger.Warnw("bot blocked by user, skipping notification",
+					"telegram_user_id", binding.TelegramUserID())
+				continue
+			}
 			s.logger.Errorw("failed to send node online notification",
 				"telegram_user_id", binding.TelegramUserID(),
 				"error", err,
@@ -469,11 +508,16 @@ func (s *ServiceDDD) NotifyNodeOffline(ctx context.Context, cmd NotifyNodeOfflin
 		return nil
 	}
 
-	message := usecases.BuildNodeOfflineMessage(cmd.NodeSID, cmd.NodeName, cmd.LastSeenAt, cmd.OfflineMinutes)
-	keyboard := usecases.BuildMuteKeyboard("node", cmd.NodeSID)
-
 	for i, binding := range bindings {
+		lang := i18n.ParseLang(binding.Language())
+		message := i18n.BuildNodeOfflineMessage(lang, cmd.NodeSID, cmd.NodeName, cmd.LastSeenAt, cmd.OfflineMinutes)
+		keyboard := i18n.BuildMuteKeyboard(lang, "node", cmd.NodeSID)
 		if err := s.botService.SendMessageWithInlineKeyboard(binding.TelegramUserID(), message, keyboard); err != nil {
+			if telegram.IsBotBlocked(err) {
+				s.logger.Warnw("bot blocked by user, skipping notification",
+					"telegram_user_id", binding.TelegramUserID())
+				continue
+			}
 			s.logger.Errorw("failed to send node offline notification",
 				"telegram_user_id", binding.TelegramUserID(),
 				"error", err,
@@ -526,11 +570,16 @@ func (s *ServiceDDD) NotifyAgentOnline(ctx context.Context, cmd NotifyAgentOnlin
 		return nil
 	}
 
-	message := usecases.BuildAgentOnlineMessage(cmd.AgentSID, cmd.AgentName, biztime.NowUTC())
-	keyboard := usecases.BuildMuteKeyboard("agent", cmd.AgentSID)
-
 	for i, binding := range bindings {
+		lang := i18n.ParseLang(binding.Language())
+		message := i18n.BuildAgentOnlineMessage(lang, cmd.AgentSID, cmd.AgentName, biztime.NowUTC())
+		keyboard := i18n.BuildMuteKeyboard(lang, "agent", cmd.AgentSID)
 		if err := s.botService.SendMessageWithInlineKeyboard(binding.TelegramUserID(), message, keyboard); err != nil {
+			if telegram.IsBotBlocked(err) {
+				s.logger.Warnw("bot blocked by user, skipping notification",
+					"telegram_user_id", binding.TelegramUserID())
+				continue
+			}
 			s.logger.Errorw("failed to send agent online notification",
 				"telegram_user_id", binding.TelegramUserID(),
 				"error", err,
@@ -572,11 +621,16 @@ func (s *ServiceDDD) NotifyAgentOffline(ctx context.Context, cmd NotifyAgentOffl
 		return nil
 	}
 
-	message := usecases.BuildAgentOfflineMessage(cmd.AgentSID, cmd.AgentName, cmd.LastSeenAt, cmd.OfflineMinutes)
-	keyboard := usecases.BuildMuteKeyboard("agent", cmd.AgentSID)
-
 	for i, binding := range bindings {
+		lang := i18n.ParseLang(binding.Language())
+		message := i18n.BuildAgentOfflineMessage(lang, cmd.AgentSID, cmd.AgentName, cmd.LastSeenAt, cmd.OfflineMinutes)
+		keyboard := i18n.BuildMuteKeyboard(lang, "agent", cmd.AgentSID)
 		if err := s.botService.SendMessageWithInlineKeyboard(binding.TelegramUserID(), message, keyboard); err != nil {
+			if telegram.IsBotBlocked(err) {
+				s.logger.Warnw("bot blocked by user, skipping notification",
+					"telegram_user_id", binding.TelegramUserID())
+				continue
+			}
 			s.logger.Errorw("failed to send agent offline notification",
 				"telegram_user_id", binding.TelegramUserID(),
 				"error", err,
@@ -620,10 +674,15 @@ func (s *ServiceDDD) NotifyNodeRecovery(ctx context.Context, cmd NotifyNodeRecov
 		return nil
 	}
 
-	message := usecases.BuildNodeRecoveryMessage(cmd.NodeSID, cmd.NodeName, cmd.OnlineAt, cmd.DowntimeMinutes)
-
 	for i, binding := range bindings {
+		lang := i18n.ParseLang(binding.Language())
+		message := i18n.BuildNodeRecoveryMessage(lang, cmd.NodeSID, cmd.NodeName, cmd.OnlineAt, cmd.DowntimeMinutes)
 		if err := s.botService.SendMessage(binding.TelegramUserID(), message); err != nil {
+			if telegram.IsBotBlocked(err) {
+				s.logger.Warnw("bot blocked by user, skipping notification",
+					"telegram_user_id", binding.TelegramUserID())
+				continue
+			}
 			s.logger.Errorw("failed to send node recovery notification",
 				"telegram_user_id", binding.TelegramUserID(),
 				"error", err,
@@ -667,10 +726,15 @@ func (s *ServiceDDD) NotifyAgentRecovery(ctx context.Context, cmd NotifyAgentRec
 		return nil
 	}
 
-	message := usecases.BuildAgentRecoveryMessage(cmd.AgentSID, cmd.AgentName, cmd.OnlineAt, cmd.DowntimeMinutes)
-
 	for i, binding := range bindings {
+		lang := i18n.ParseLang(binding.Language())
+		message := i18n.BuildAgentRecoveryMessage(lang, cmd.AgentSID, cmd.AgentName, cmd.OnlineAt, cmd.DowntimeMinutes)
 		if err := s.botService.SendMessage(binding.TelegramUserID(), message); err != nil {
+			if telegram.IsBotBlocked(err) {
+				s.logger.Warnw("bot blocked by user, skipping notification",
+					"telegram_user_id", binding.TelegramUserID())
+				continue
+			}
 			s.logger.Errorw("failed to send agent recovery notification",
 				"telegram_user_id", binding.TelegramUserID(),
 				"error", err,

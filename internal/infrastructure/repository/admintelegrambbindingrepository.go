@@ -18,6 +18,7 @@ type AdminTelegramBindingModel struct {
 	UserID                         uint       `gorm:"column:user_id;not null;uniqueIndex"`
 	TelegramUserID                 int64      `gorm:"column:telegram_user_id;not null;uniqueIndex"`
 	TelegramUsername               string     `gorm:"column:telegram_username;type:varchar(100)"`
+	Language                       string     `gorm:"column:language;type:varchar(5);default:zh"`
 	NotifyNodeOffline              bool       `gorm:"column:notify_node_offline;default:true"`
 	NotifyAgentOffline             bool       `gorm:"column:notify_agent_offline;default:true"`
 	NotifyNewUser                  bool       `gorm:"column:notify_new_user;default:true"`
@@ -287,6 +288,7 @@ func (r *AdminTelegramBindingRepository) toModel(binding *admin.AdminTelegramBin
 		UserID:                         binding.UserID(),
 		TelegramUserID:                 binding.TelegramUserID(),
 		TelegramUsername:               binding.TelegramUsername(),
+		Language:                       binding.Language(),
 		NotifyNodeOffline:              binding.NotifyNodeOffline(),
 		NotifyAgentOffline:             binding.NotifyAgentOffline(),
 		NotifyNewUser:                  binding.NotifyNewUser(),
@@ -318,6 +320,7 @@ func (r *AdminTelegramBindingRepository) toDomain(model *AdminTelegramBindingMod
 		model.UserID,
 		model.TelegramUserID,
 		model.TelegramUsername,
+		model.Language,
 		model.NotifyNodeOffline,
 		model.NotifyAgentOffline,
 		model.NotifyNewUser,
@@ -345,7 +348,7 @@ func (r *AdminTelegramBindingRepository) toDomain(model *AdminTelegramBindingMod
 // and haven't been notified today
 func (r *AdminTelegramBindingRepository) FindBindingsForResourceExpiringNotification(ctx context.Context) ([]*admin.AdminTelegramBinding, error) {
 	var models []AdminTelegramBindingModel
-	today := biztime.NowUTC().Truncate(24 * time.Hour)
+	today := biztime.StartOfDayUTC(biztime.NowUTC())
 
 	err := r.db.WithContext(ctx).
 		Where("notify_resource_expiring = ?", true).

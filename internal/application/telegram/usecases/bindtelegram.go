@@ -2,6 +2,7 @@ package usecases
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/orris-inc/orris/internal/application/telegram/dto"
@@ -50,19 +51,25 @@ func (uc *BindTelegramUseCase) Execute(
 	}
 
 	// Check if user already has binding
-	existing, _ := uc.bindingRepo.GetByUserID(ctx, userID)
+	existing, err := uc.bindingRepo.GetByUserID(ctx, userID)
+	if err != nil && !errors.Is(err, telegram.ErrBindingNotFound) {
+		return nil, fmt.Errorf("failed to check existing binding: %w", err)
+	}
 	if existing != nil {
 		return nil, telegram.ErrAlreadyBound
 	}
 
 	// Check if telegram account is already used
-	existingTg, _ := uc.bindingRepo.GetByTelegramUserID(ctx, telegramUserID)
+	existingTg, err := uc.bindingRepo.GetByTelegramUserID(ctx, telegramUserID)
+	if err != nil && !errors.Is(err, telegram.ErrBindingNotFound) {
+		return nil, fmt.Errorf("failed to check telegram binding: %w", err)
+	}
 	if existingTg != nil {
 		return nil, telegram.ErrTelegramAlreadyUsed
 	}
 
 	// Create binding
-	binding, err := telegram.NewTelegramBinding(userID, telegramUserID, telegramUsername)
+	binding, err := telegram.NewTelegramBinding(userID, telegramUserID, telegramUsername, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create binding: %w", err)
 	}

@@ -10,7 +10,8 @@ import (
 
 	telegramApp "github.com/orris-inc/orris/internal/application/telegram"
 	"github.com/orris-inc/orris/internal/application/telegram/dto"
-	telegramInfra "github.com/orris-inc/orris/internal/infrastructure/telegram"
+	"github.com/orris-inc/orris/internal/infrastructure/telegram/i18n"
+	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
@@ -20,6 +21,7 @@ type AdminTelegramService interface {
 	BindFromWebhook(ctx context.Context, verifyCode string, telegramUserID int64, telegramUsername string) (any, error)
 	UnbindByTelegramID(ctx context.Context, telegramUserID int64) error
 	GetBindingByTelegramID(ctx context.Context, telegramUserID int64) (any, error)
+	UpdateAdminBindingLanguage(ctx context.Context, telegramUserID int64, language string) error
 }
 
 // MuteNotificationService defines the interface for muting resource notifications
@@ -202,86 +204,125 @@ func (h *Handler) HandleWebhook(c *gin.Context) {
 	text := strings.TrimSpace(update.Message.Text)
 	telegramUserID := update.Message.From.ID
 	username := update.Message.From.Username
+	langCode := update.Message.From.LanguageCode
+	lang := i18n.DetectLang(langCode)
 
 	// Handle commands
 	switch {
+	case strings.HasPrefix(text, "/start "):
+		// Deep link: /start <payload>
+		payload := strings.TrimSpace(strings.TrimPrefix(text, "/start "))
+		h.handleStartPayload(c, telegramUserID, username, lang, payload)
 	case strings.HasPrefix(text, "/bind "):
 		code := strings.TrimSpace(strings.TrimPrefix(text, "/bind "))
-		h.handleBindCommand(c, telegramUserID, username, code)
+		h.handleBindCommand(c, telegramUserID, username, lang, code)
 	case text == "/unbind":
-		h.handleUnbindCommand(c, telegramUserID)
+		h.handleUnbindCommand(c, telegramUserID, lang)
 	case text == "/status":
-		h.handleStatusCommand(c, telegramUserID)
+		h.handleStatusCommand(c, telegramUserID, lang)
 	case text == "/start" || text == "/help":
-		h.handleHelpCommand(c, telegramUserID)
+		h.handleHelpCommand(c, telegramUserID, lang)
 	case strings.HasPrefix(text, "/adminbind "):
 		code := strings.TrimSpace(strings.TrimPrefix(text, "/adminbind "))
-		h.handleAdminBindCommand(c, telegramUserID, username, code)
+		h.handleAdminBindCommand(c, telegramUserID, username, lang, code)
 	case text == "/adminunbind":
-		h.handleAdminUnbindCommand(c, telegramUserID)
+		h.handleAdminUnbindCommand(c, telegramUserID, lang)
 	case text == "/adminstatus":
-		h.handleAdminStatusCommand(c, telegramUserID)
+		h.handleAdminStatusCommand(c, telegramUserID, lang)
 	default:
 		// Unknown command, show help
-		h.handleHelpCommand(c, telegramUserID)
+		h.handleHelpCommand(c, telegramUserID, lang)
 	}
 }
 
-func (h *Handler) handleBindCommand(c *gin.Context, telegramUserID int64, username, code string) {
+func (h *Handler) handleStartPayload(c *gin.Context, telegramUserID int64, username string, lang i18n.Lang, payload string) {
+	// Reject overly long payloads to prevent abuse
+	const maxPayloadLen = 128
+	if len(payload) > maxPayloadLen {
+		h.handleHelpCommand(c, telegramUserID, lang)
+		return
+	}
+
+	switch {
+	case strings.HasPrefix(payload, "bind_"):
+		code := strings.TrimPrefix(payload, "bind_")
+		h.handleBindCommand(c, telegramUserID, username, lang, code)
+	case strings.HasPrefix(payload, "adminbind_"):
+		code := strings.TrimPrefix(payload, "adminbind_")
+		h.handleAdminBindCommand(c, telegramUserID, username, lang, code)
+	default:
+		h.handleHelpCommand(c, telegramUserID, lang)
+	}
+}
+
+func (h *Handler) handleBindCommand(c *gin.Context, telegramUserID int64, username string, lang i18n.Lang, code string) {
 	if code == "" {
-		_ = h.service.SendBotMessage(telegramUserID, telegramInfra.MsgBindMissingCode)
+		_ = h.service.SendBotMessage(telegramUserID, i18n.MsgBindMissingCode(lang))
 		utils.SuccessResponse(c, http.StatusOK, "error", gin.H{"message": "missing code"})
 		return
 	}
 
+	_ = h.service.SendBotChatAction(telegramUserID, "typing")
 	resp, err := h.service.BindFromWebhook(c.Request.Context(), telegramUserID, username, code)
 	if err != nil {
 		h.logger.Errorw("failed to bind telegram from webhook",
 			"telegram_user_id", telegramUserID,
 			"error", err,
 		)
-		_ = h.service.SendBotMessage(telegramUserID, telegramInfra.MsgBindFailed)
+		_ = h.service.SendBotMessage(telegramUserID, i18n.MsgBindFailed(lang))
 		utils.SuccessResponse(c, http.StatusOK, "error", gin.H{"message": "binding failed"})
 		return
 	}
 
+	// Update language after successful binding
+	if err := h.service.UpdateBindingLanguage(c.Request.Context(), telegramUserID, string(lang)); err != nil {
+		h.logger.Debugw("failed to update binding language", "telegram_user_id", telegramUserID, "error", err)
+	}
+
 	// Send success message with reply keyboard for easy access to commands
-	_ = h.service.SendBotMessageWithKeyboard(telegramUserID, telegramInfra.MsgBindSuccess)
+	_ = h.service.SendBotMessageWithKeyboard(telegramUserID, i18n.MsgBindSuccess(lang))
 	utils.SuccessResponse(c, http.StatusOK, "success", resp)
 }
 
-func (h *Handler) handleUnbindCommand(c *gin.Context, telegramUserID int64) {
+func (h *Handler) handleUnbindCommand(c *gin.Context, telegramUserID int64, lang i18n.Lang) {
 	err := h.service.UnbindByTelegramID(c.Request.Context(), telegramUserID)
 	if err != nil {
 		h.logger.Errorw("failed to unbind telegram from webhook",
 			"telegram_user_id", telegramUserID,
 			"error", err,
 		)
-		_ = h.service.SendBotMessage(telegramUserID, telegramInfra.MsgUnbindFailed)
+		_ = h.service.SendBotMessage(telegramUserID, i18n.MsgUnbindFailed(lang))
 		utils.SuccessResponse(c, http.StatusOK, "error", gin.H{"message": "unbind failed"})
 		return
 	}
 
-	_ = h.service.SendBotMessage(telegramUserID, telegramInfra.MsgUnbindSuccess)
+	_ = h.service.SendBotMessage(telegramUserID, i18n.MsgUnbindSuccess(lang))
 	utils.SuccessResponse(c, http.StatusOK, "success", nil)
 }
 
-func (h *Handler) handleStatusCommand(c *gin.Context, telegramUserID int64) {
+func (h *Handler) handleStatusCommand(c *gin.Context, telegramUserID int64, lang i18n.Lang) {
+	_ = h.service.SendBotChatAction(telegramUserID, "typing")
 	status, err := h.service.GetBindingStatusByTelegramID(c.Request.Context(), telegramUserID)
 	if err != nil {
 		h.logger.Errorw("failed to get binding status from webhook",
 			"telegram_user_id", telegramUserID,
 			"error", err,
 		)
-		_ = h.service.SendBotMessage(telegramUserID, telegramInfra.MsgStatusError)
+		_ = h.service.SendBotMessage(telegramUserID, i18n.MsgStatusError(lang))
 		utils.SuccessResponse(c, http.StatusOK, "error", nil)
 		return
 	}
 
 	if !status.IsBound {
-		_ = h.service.SendBotMessage(telegramUserID, telegramInfra.MsgStatusNotConnected)
+		_ = h.service.SendBotMessage(telegramUserID, i18n.MsgStatusNotConnected(lang))
 	} else {
-		msg := telegramInfra.BuildStatusConnectedMessage(
+		// Update language if bound
+		if err := h.service.UpdateBindingLanguage(c.Request.Context(), telegramUserID, string(lang)); err != nil {
+			h.logger.Debugw("failed to update binding language", "telegram_user_id", telegramUserID, "error", err)
+		}
+
+		msg := i18n.BuildStatusConnectedMessage(
+			lang,
 			status.Binding.NotifyExpiring,
 			status.Binding.ExpiringDays,
 			status.Binding.NotifyTraffic,
@@ -292,23 +333,23 @@ func (h *Handler) handleStatusCommand(c *gin.Context, telegramUserID int64) {
 	utils.SuccessResponse(c, http.StatusOK, "success", nil)
 }
 
-func (h *Handler) handleHelpCommand(c *gin.Context, telegramUserID int64) {
+func (h *Handler) handleHelpCommand(c *gin.Context, telegramUserID int64, lang i18n.Lang) {
 	// Send help message with reply keyboard for easy access to commands
-	_ = h.service.SendBotMessageWithKeyboard(telegramUserID, telegramInfra.MsgHelpUser)
+	_ = h.service.SendBotMessageWithKeyboard(telegramUserID, i18n.MsgHelpUser(lang))
 	utils.SuccessResponse(c, http.StatusOK, "success", nil)
 }
 
 // Admin command handlers
 
-func (h *Handler) handleAdminBindCommand(c *gin.Context, telegramUserID int64, username, code string) {
+func (h *Handler) handleAdminBindCommand(c *gin.Context, telegramUserID int64, username string, lang i18n.Lang, code string) {
 	if h.adminService == nil {
-		_ = h.service.SendBotMessage(telegramUserID, telegramInfra.MsgAdminFeatureNotEnabled)
+		_ = h.service.SendBotMessage(telegramUserID, i18n.MsgAdminFeatureNotEnabled(lang))
 		utils.SuccessResponse(c, http.StatusOK, "error", gin.H{"message": "admin service not configured"})
 		return
 	}
 
 	if code == "" {
-		_ = h.service.SendBotMessage(telegramUserID, telegramInfra.MsgAdminBindMissingCode)
+		_ = h.service.SendBotMessage(telegramUserID, i18n.MsgAdminBindMissingCode(lang))
 		utils.SuccessResponse(c, http.StatusOK, "error", gin.H{"message": "missing code"})
 		return
 	}
@@ -319,18 +360,23 @@ func (h *Handler) handleAdminBindCommand(c *gin.Context, telegramUserID int64, u
 			"telegram_user_id", telegramUserID,
 			"error", err,
 		)
-		_ = h.service.SendBotMessage(telegramUserID, telegramInfra.MsgAdminBindFailed)
+		_ = h.service.SendBotMessage(telegramUserID, i18n.MsgAdminBindFailed(lang))
 		utils.SuccessResponse(c, http.StatusOK, "error", gin.H{"message": "binding failed"})
 		return
 	}
 
-	_ = h.service.SendBotMessage(telegramUserID, telegramInfra.MsgAdminBindSuccess)
+	// Update language after successful binding
+	if err := h.adminService.UpdateAdminBindingLanguage(c.Request.Context(), telegramUserID, string(lang)); err != nil {
+		h.logger.Debugw("failed to update admin binding language", "telegram_user_id", telegramUserID, "error", err)
+	}
+
+	_ = h.service.SendBotMessage(telegramUserID, i18n.MsgAdminBindSuccess(lang))
 	utils.SuccessResponse(c, http.StatusOK, "success", nil)
 }
 
-func (h *Handler) handleAdminUnbindCommand(c *gin.Context, telegramUserID int64) {
+func (h *Handler) handleAdminUnbindCommand(c *gin.Context, telegramUserID int64, lang i18n.Lang) {
 	if h.adminService == nil {
-		_ = h.service.SendBotMessage(telegramUserID, telegramInfra.MsgAdminFeatureNotEnabledShort)
+		_ = h.service.SendBotMessage(telegramUserID, i18n.MsgAdminFeatureNotEnabledShort(lang))
 		utils.SuccessResponse(c, http.StatusOK, "error", gin.H{"message": "admin service not configured"})
 		return
 	}
@@ -341,30 +387,35 @@ func (h *Handler) handleAdminUnbindCommand(c *gin.Context, telegramUserID int64)
 			"telegram_user_id", telegramUserID,
 			"error", err,
 		)
-		_ = h.service.SendBotMessage(telegramUserID, telegramInfra.MsgAdminUnbindFailed)
+		_ = h.service.SendBotMessage(telegramUserID, i18n.MsgAdminUnbindFailed(lang))
 		utils.SuccessResponse(c, http.StatusOK, "error", gin.H{"message": "unbind failed"})
 		return
 	}
 
-	_ = h.service.SendBotMessage(telegramUserID, telegramInfra.MsgAdminUnbindSuccess)
+	_ = h.service.SendBotMessage(telegramUserID, i18n.MsgAdminUnbindSuccess(lang))
 	utils.SuccessResponse(c, http.StatusOK, "success", nil)
 }
 
-func (h *Handler) handleAdminStatusCommand(c *gin.Context, telegramUserID int64) {
+func (h *Handler) handleAdminStatusCommand(c *gin.Context, telegramUserID int64, lang i18n.Lang) {
 	if h.adminService == nil {
-		_ = h.service.SendBotMessage(telegramUserID, telegramInfra.MsgAdminFeatureNotEnabledShort)
+		_ = h.service.SendBotMessage(telegramUserID, i18n.MsgAdminFeatureNotEnabledShort(lang))
 		utils.SuccessResponse(c, http.StatusOK, "error", gin.H{"message": "admin service not configured"})
 		return
 	}
 
 	binding, err := h.adminService.GetBindingByTelegramID(c.Request.Context(), telegramUserID)
 	if err != nil || binding == nil {
-		_ = h.service.SendBotMessage(telegramUserID, telegramInfra.MsgAdminStatusNotBound)
+		_ = h.service.SendBotMessage(telegramUserID, i18n.MsgAdminStatusNotBound(lang))
 		utils.SuccessResponse(c, http.StatusOK, "success", nil)
 		return
 	}
 
-	_ = h.service.SendBotMessage(telegramUserID, telegramInfra.MsgAdminStatusBound)
+	// Update language if bound
+	if err := h.adminService.UpdateAdminBindingLanguage(c.Request.Context(), telegramUserID, string(lang)); err != nil {
+		h.logger.Debugw("failed to update admin binding language", "telegram_user_id", telegramUserID, "error", err)
+	}
+
+	_ = h.service.SendBotMessage(telegramUserID, i18n.MsgAdminStatusBound(lang))
 	utils.SuccessResponse(c, http.StatusOK, "success", nil)
 }
 
@@ -375,12 +426,18 @@ func (h *Handler) handleCallbackQuery(c *gin.Context, query *dto.CallbackQuery) 
 		return
 	}
 
+	// Detect language from callback query user
+	lang := i18n.ZH
+	if query.From != nil && query.From.LanguageCode != "" {
+		lang = i18n.DetectLang(query.From.LanguageCode)
+	}
+
 	// Parse callback data: format is "action:type:sid"
 	// Example: "mute:agent:fa_xxx" or "mute:node:nd_xxx"
 	parts := strings.SplitN(query.Data, ":", 3)
 	if len(parts) != 3 {
 		h.logger.Warnw("invalid callback data format", "data", query.Data)
-		h.answerCallback(query.ID, "❌ 无效操作 / Invalid action", true)
+		h.answerCallback(query.ID, i18n.MsgCallbackInvalidAction(lang), true)
 		utils.SuccessResponse(c, http.StatusOK, "error", nil)
 		return
 	}
@@ -389,23 +446,31 @@ func (h *Handler) handleCallbackQuery(c *gin.Context, query *dto.CallbackQuery) 
 	resourceType := parts[1]
 	resourceSID := parts[2]
 
+	// Validate SID format (defense-in-depth)
+	if _, _, err := id.ParsePrefixedID(resourceSID); err != nil {
+		h.logger.Warnw("invalid resource SID in callback", "sid", resourceSID)
+		h.answerCallback(query.ID, i18n.MsgCallbackInvalidAction(lang), true)
+		utils.SuccessResponse(c, http.StatusOK, "error", nil)
+		return
+	}
+
 	switch action {
 	case "mute":
-		h.handleMuteCallback(c, query, resourceType, resourceSID)
+		h.handleMuteCallback(c, query, lang, resourceType, resourceSID)
 	case "unmute":
-		h.handleUnmuteCallback(c, query, resourceType, resourceSID)
+		h.handleUnmuteCallback(c, query, lang, resourceType, resourceSID)
 	default:
 		h.logger.Warnw("unknown callback action", "action", action)
-		h.answerCallback(query.ID, "❌ 未知操作 / Unknown action", true)
+		h.answerCallback(query.ID, i18n.MsgCallbackUnknownAction(lang), true)
 		utils.SuccessResponse(c, http.StatusOK, "error", nil)
 	}
 }
 
 // handleMuteCallback handles the mute notification callback
-func (h *Handler) handleMuteCallback(c *gin.Context, query *dto.CallbackQuery, resourceType, resourceSID string) {
-	if h.muteService == nil {
-		h.logger.Warnw("mute service not configured")
-		h.answerCallback(query.ID, "❌ 功能未启用 / Feature not enabled", true)
+func (h *Handler) handleMuteCallback(c *gin.Context, query *dto.CallbackQuery, lang i18n.Lang, resourceType, resourceSID string) {
+	if h.muteService == nil || h.adminService == nil {
+		h.logger.Warnw("mute/admin service not configured")
+		h.answerCallback(query.ID, i18n.MsgCallbackFeatureNotEnabled(lang), true)
 		utils.SuccessResponse(c, http.StatusOK, "error", nil)
 		return
 	}
@@ -413,16 +478,7 @@ func (h *Handler) handleMuteCallback(c *gin.Context, query *dto.CallbackQuery, r
 	// Verify the user is a bound admin (security check)
 	if query.From == nil {
 		h.logger.Warnw("callback query missing from user")
-		h.answerCallback(query.ID, "❌ 无效请求 / Invalid request", true)
-		utils.SuccessResponse(c, http.StatusOK, "error", nil)
-		return
-	}
-
-	// Check if the telegram user is a bound admin
-	// SECURITY: adminService must be configured to verify permissions
-	if h.adminService == nil {
-		h.logger.Errorw("admin service not configured, cannot verify permissions")
-		h.answerCallback(query.ID, "❌ 功能未启用 / Feature not enabled", true)
+		h.answerCallback(query.ID, i18n.MsgCallbackInvalidRequest(lang), true)
 		utils.SuccessResponse(c, http.StatusOK, "error", nil)
 		return
 	}
@@ -432,24 +488,21 @@ func (h *Handler) handleMuteCallback(c *gin.Context, query *dto.CallbackQuery, r
 		h.logger.Warnw("mute callback from non-admin user",
 			"telegram_user_id", query.From.ID,
 		)
-		h.answerCallback(query.ID, "❌ 无权限操作 / Permission denied", true)
+		h.answerCallback(query.ID, i18n.MsgCallbackPermissionDenied(lang), true)
 		utils.SuccessResponse(c, http.StatusOK, "error", nil)
 		return
 	}
 
+	// Execute mute operation
 	var err error
-	var resourceName string
-
 	switch resourceType {
 	case "agent":
 		err = h.muteService.MuteAgentNotification(c.Request.Context(), resourceSID)
-		resourceName = "转发代理 / Forward Agent"
 	case "node":
 		err = h.muteService.MuteNodeNotification(c.Request.Context(), resourceSID)
-		resourceName = "Node Agent"
 	default:
 		h.logger.Warnw("unknown resource type for mute", "type", resourceType)
-		h.answerCallback(query.ID, "❌ 未知资源类型 / Unknown resource type", true)
+		h.answerCallback(query.ID, i18n.MsgCallbackUnknownResourceType(lang), true)
 		utils.SuccessResponse(c, http.StatusOK, "error", nil)
 		return
 	}
@@ -460,20 +513,20 @@ func (h *Handler) handleMuteCallback(c *gin.Context, query *dto.CallbackQuery, r
 			"resource_sid", resourceSID,
 			"error", err,
 		)
-		h.answerCallback(query.ID, "❌ 操作失败 / Operation failed", true)
+		h.answerCallback(query.ID, i18n.MsgCallbackOperationFailed(lang), true)
 		utils.SuccessResponse(c, http.StatusOK, "error", nil)
 		return
 	}
 
 	// Answer callback with success message
-	h.answerCallback(query.ID, "✅ 已静默此"+resourceName+"的通知 / Notifications muted", false)
+	successMsg := i18n.MsgCallbackMuteSuccess(lang) + i18n.ResourceName(lang, resourceType)
+	h.answerCallback(query.ID, successMsg, false)
 
 	// Update the button to show unmute option
 	if query.Message != nil && query.Message.Chat != nil && h.callbackAnswerer != nil {
 		chatID := query.Message.Chat.ID
 		messageID := query.Message.MessageID
-		// Only update the button, don't modify message text (original message is HTML formatted)
-		unmuteKeyboard := buildUnmuteKeyboard(resourceType, resourceSID)
+		unmuteKeyboard := i18n.BuildUnmuteKeyboard(lang, resourceType, resourceSID)
 		if editErr := h.callbackAnswerer.EditMessageReplyMarkup(chatID, messageID, unmuteKeyboard); editErr != nil {
 			h.logger.Errorw("failed to update message reply markup after mute",
 				"chat_id", chatID,
@@ -483,25 +536,20 @@ func (h *Handler) handleMuteCallback(c *gin.Context, query *dto.CallbackQuery, r
 		}
 	}
 
-	// Log with nil-safe access to telegram user ID
-	var telegramUserID int64
-	if query.From != nil {
-		telegramUserID = query.From.ID
-	}
 	h.logger.Infow("notification muted via telegram callback",
 		"resource_type", resourceType,
 		"resource_sid", resourceSID,
-		"telegram_user_id", telegramUserID,
+		"telegram_user_id", query.From.ID,
 	)
 
 	utils.SuccessResponse(c, http.StatusOK, "success", nil)
 }
 
 // handleUnmuteCallback handles the unmute notification callback
-func (h *Handler) handleUnmuteCallback(c *gin.Context, query *dto.CallbackQuery, resourceType, resourceSID string) {
-	if h.muteService == nil {
-		h.logger.Warnw("mute service not configured")
-		h.answerCallback(query.ID, "❌ 功能未启用 / Feature not enabled", true)
+func (h *Handler) handleUnmuteCallback(c *gin.Context, query *dto.CallbackQuery, lang i18n.Lang, resourceType, resourceSID string) {
+	if h.muteService == nil || h.adminService == nil {
+		h.logger.Warnw("mute/admin service not configured")
+		h.answerCallback(query.ID, i18n.MsgCallbackFeatureNotEnabled(lang), true)
 		utils.SuccessResponse(c, http.StatusOK, "error", nil)
 		return
 	}
@@ -509,16 +557,7 @@ func (h *Handler) handleUnmuteCallback(c *gin.Context, query *dto.CallbackQuery,
 	// Verify the user is a bound admin (security check)
 	if query.From == nil {
 		h.logger.Warnw("callback query missing from user")
-		h.answerCallback(query.ID, "❌ 无效请求 / Invalid request", true)
-		utils.SuccessResponse(c, http.StatusOK, "error", nil)
-		return
-	}
-
-	// Check if the telegram user is a bound admin
-	// SECURITY: adminService must be configured to verify permissions
-	if h.adminService == nil {
-		h.logger.Errorw("admin service not configured, cannot verify permissions")
-		h.answerCallback(query.ID, "❌ 功能未启用 / Feature not enabled", true)
+		h.answerCallback(query.ID, i18n.MsgCallbackInvalidRequest(lang), true)
 		utils.SuccessResponse(c, http.StatusOK, "error", nil)
 		return
 	}
@@ -528,24 +567,21 @@ func (h *Handler) handleUnmuteCallback(c *gin.Context, query *dto.CallbackQuery,
 		h.logger.Warnw("unmute callback from non-admin user",
 			"telegram_user_id", query.From.ID,
 		)
-		h.answerCallback(query.ID, "❌ 无权限操作 / Permission denied", true)
+		h.answerCallback(query.ID, i18n.MsgCallbackPermissionDenied(lang), true)
 		utils.SuccessResponse(c, http.StatusOK, "error", nil)
 		return
 	}
 
+	// Execute unmute operation
 	var err error
-	var resourceName string
-
 	switch resourceType {
 	case "agent":
 		err = h.muteService.UnmuteAgentNotification(c.Request.Context(), resourceSID)
-		resourceName = "转发代理 / Forward Agent"
 	case "node":
 		err = h.muteService.UnmuteNodeNotification(c.Request.Context(), resourceSID)
-		resourceName = "Node Agent"
 	default:
 		h.logger.Warnw("unknown resource type for unmute", "type", resourceType)
-		h.answerCallback(query.ID, "❌ 未知资源类型 / Unknown resource type", true)
+		h.answerCallback(query.ID, i18n.MsgCallbackUnknownResourceType(lang), true)
 		utils.SuccessResponse(c, http.StatusOK, "error", nil)
 		return
 	}
@@ -556,20 +592,20 @@ func (h *Handler) handleUnmuteCallback(c *gin.Context, query *dto.CallbackQuery,
 			"resource_sid", resourceSID,
 			"error", err,
 		)
-		h.answerCallback(query.ID, "❌ 操作失败 / Operation failed", true)
+		h.answerCallback(query.ID, i18n.MsgCallbackOperationFailed(lang), true)
 		utils.SuccessResponse(c, http.StatusOK, "error", nil)
 		return
 	}
 
 	// Answer callback with success message
-	h.answerCallback(query.ID, "✅ 已解除静默此"+resourceName+"的通知 / Notifications unmuted", false)
+	successMsg := i18n.MsgCallbackUnmuteSuccess(lang) + i18n.ResourceName(lang, resourceType)
+	h.answerCallback(query.ID, successMsg, false)
 
 	// Update the button to show mute option again
 	if query.Message != nil && query.Message.Chat != nil && h.callbackAnswerer != nil {
 		chatID := query.Message.Chat.ID
 		messageID := query.Message.MessageID
-		// Only update the button, don't modify message text
-		muteKeyboard := buildMuteKeyboard(resourceType, resourceSID)
+		muteKeyboard := i18n.BuildMuteKeyboard(lang, resourceType, resourceSID)
 		if editErr := h.callbackAnswerer.EditMessageReplyMarkup(chatID, messageID, muteKeyboard); editErr != nil {
 			h.logger.Errorw("failed to update message reply markup after unmute",
 				"chat_id", chatID,
@@ -579,15 +615,10 @@ func (h *Handler) handleUnmuteCallback(c *gin.Context, query *dto.CallbackQuery,
 		}
 	}
 
-	// Log with nil-safe access to telegram user ID
-	var telegramUserID int64
-	if query.From != nil {
-		telegramUserID = query.From.ID
-	}
 	h.logger.Infow("notification unmuted via telegram callback",
 		"resource_type", resourceType,
 		"resource_sid", resourceSID,
-		"telegram_user_id", telegramUserID,
+		"telegram_user_id", query.From.ID,
 	)
 
 	utils.SuccessResponse(c, http.StatusOK, "success", nil)
@@ -600,30 +631,3 @@ func (h *Handler) answerCallback(callbackQueryID, text string, showAlert bool) {
 	}
 }
 
-// buildMuteKeyboard builds an inline keyboard with mute button
-func buildMuteKeyboard(resourceType, resourceSID string) map[string]any {
-	return map[string]any{
-		"inline_keyboard": [][]map[string]string{
-			{
-				{
-					"text":          "🔕 静默此通知 / Mute",
-					"callback_data": "mute:" + resourceType + ":" + resourceSID,
-				},
-			},
-		},
-	}
-}
-
-// buildUnmuteKeyboard builds an inline keyboard with unmute button
-func buildUnmuteKeyboard(resourceType, resourceSID string) map[string]any {
-	return map[string]any{
-		"inline_keyboard": [][]map[string]string{
-			{
-				{
-					"text":          "🔔 解除静默 / Unmute",
-					"callback_data": "unmute:" + resourceType + ":" + resourceSID,
-				},
-			},
-		},
-	}
-}

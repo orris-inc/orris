@@ -16,10 +16,11 @@ type TelegramBindingResponse struct {
 
 // BindingStatusResponse represents the binding status response
 type BindingStatusResponse struct {
-	IsBound    bool                     `json:"is_bound"`
-	Binding    *TelegramBindingResponse `json:"binding,omitempty"`
-	VerifyCode string                   `json:"verify_code,omitempty"` // Shown when not bound
-	BotLink    string                   `json:"bot_link,omitempty"`    // Telegram bot link (https://t.me/username)
+	IsBound      bool                     `json:"is_bound"`
+	Binding      *TelegramBindingResponse `json:"binding,omitempty"`
+	VerifyCode   string                   `json:"verify_code,omitempty"`    // Shown when not bound
+	BotLink      string                   `json:"bot_link,omitempty"`       // Telegram bot link (https://t.me/username)
+	DeepBindLink string                   `json:"deep_bind_link,omitempty"` // Deep link: t.me/bot?start=bind_<code>
 }
 
 // UpdatePreferencesRequest represents the request to update notification preferences
@@ -55,10 +56,11 @@ type WebhookMessage struct {
 
 // TelegramUser represents a Telegram user
 type TelegramUser struct {
-	ID        int64  `json:"id"`
-	Username  string `json:"username,omitempty"`
-	FirstName string `json:"first_name,omitempty"`
-	LastName  string `json:"last_name,omitempty"`
+	ID           int64  `json:"id"`
+	Username     string `json:"username,omitempty"`
+	FirstName    string `json:"first_name,omitempty"`
+	LastName     string `json:"last_name,omitempty"`
+	LanguageCode string `json:"language_code,omitempty"`
 }
 
 // TelegramChat represents a Telegram chat

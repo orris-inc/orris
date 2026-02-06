@@ -2,6 +2,7 @@ package usecases
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/orris-inc/orris/internal/application/telegram/admin/dto"
@@ -68,19 +69,25 @@ func (uc *BindAdminUseCase) Execute(
 	}
 
 	// Check if admin already has binding
-	existing, _ := uc.bindingRepo.GetByUserID(ctx, userID)
+	existing, err := uc.bindingRepo.GetByUserID(ctx, userID)
+	if err != nil && !errors.Is(err, admin.ErrBindingNotFound) {
+		return nil, fmt.Errorf("failed to check existing binding: %w", err)
+	}
 	if existing != nil {
 		return nil, admin.ErrAlreadyBound
 	}
 
 	// Check if telegram account is already used by another admin
-	existingTg, _ := uc.bindingRepo.GetByTelegramUserID(ctx, telegramUserID)
+	existingTg, err := uc.bindingRepo.GetByTelegramUserID(ctx, telegramUserID)
+	if err != nil && !errors.Is(err, admin.ErrBindingNotFound) {
+		return nil, fmt.Errorf("failed to check telegram binding: %w", err)
+	}
 	if existingTg != nil {
 		return nil, admin.ErrTelegramAlreadyUsed
 	}
 
 	// Create binding
-	binding, err := admin.NewAdminTelegramBinding(userID, telegramUserID, telegramUsername)
+	binding, err := admin.NewAdminTelegramBinding(userID, telegramUserID, telegramUsername, "")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create admin binding: %w", err)
 	}
@@ -98,18 +105,22 @@ func (uc *BindAdminUseCase) Execute(
 	)
 
 	return &dto.AdminTelegramBindingResponse{
-		SID:                     binding.SID(),
-		TelegramUserID:          binding.TelegramUserID(),
-		TelegramUsername:        binding.TelegramUsername(),
-		NotifyNodeOffline:       binding.NotifyNodeOffline(),
-		NotifyAgentOffline:      binding.NotifyAgentOffline(),
-		NotifyNewUser:           binding.NotifyNewUser(),
-		NotifyPaymentSuccess:    binding.NotifyPaymentSuccess(),
-		NotifyDailySummary:      binding.NotifyDailySummary(),
-		NotifyWeeklySummary:     binding.NotifyWeeklySummary(),
-		OfflineThresholdMinutes: binding.OfflineThresholdMinutes(),
-		NotifyResourceExpiring:  binding.NotifyResourceExpiring(),
-		ResourceExpiringDays:    binding.ResourceExpiringDays(),
-		CreatedAt:               binding.CreatedAt(),
+		SID:                         binding.SID(),
+		TelegramUserID:              binding.TelegramUserID(),
+		TelegramUsername:            binding.TelegramUsername(),
+		NotifyNodeOffline:           binding.NotifyNodeOffline(),
+		NotifyAgentOffline:          binding.NotifyAgentOffline(),
+		NotifyNewUser:               binding.NotifyNewUser(),
+		NotifyPaymentSuccess:        binding.NotifyPaymentSuccess(),
+		NotifyDailySummary:          binding.NotifyDailySummary(),
+		NotifyWeeklySummary:         binding.NotifyWeeklySummary(),
+		OfflineThresholdMinutes:     binding.OfflineThresholdMinutes(),
+		NotifyResourceExpiring:      binding.NotifyResourceExpiring(),
+		ResourceExpiringDays:        binding.ResourceExpiringDays(),
+		DailySummaryHour:            binding.DailySummaryHour(),
+		WeeklySummaryHour:           binding.WeeklySummaryHour(),
+		WeeklySummaryWeekday:        binding.WeeklySummaryWeekday(),
+		OfflineCheckIntervalMinutes: binding.OfflineCheckIntervalMinutes(),
+		CreatedAt:                   binding.CreatedAt(),
 	}, nil
 }

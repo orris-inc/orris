@@ -24,6 +24,7 @@ type BotService interface {
 	usecases.BotLinkProvider
 	SendMessage(chatID int64, text string) error
 	SendMessageWithKeyboard(chatID int64, text string, keyboard any) error
+	SendChatAction(chatID int64, action string) error
 	GetDefaultReplyKeyboard() any
 }
 
@@ -43,7 +44,6 @@ type ServiceDDD struct {
 func NewServiceDDD(
 	bindingRepo telegram.TelegramBindingRepository,
 	subscriptionRepo subscription.SubscriptionRepository,
-	usageRepo subscription.SubscriptionUsageRepository,
 	usageStatsRepo subscription.SubscriptionUsageStatsRepository,
 	hourlyCache cache.HourlyTrafficCache,
 	planRepo subscription.PlanRepository,
@@ -57,7 +57,7 @@ func NewServiceDDD(
 		unbindUC:            usecases.NewUnbindTelegramUseCase(bindingRepo, logger),
 		updatePreferencesUC: usecases.NewUpdatePreferencesUseCase(bindingRepo, logger),
 		processReminderUC: usecases.NewProcessReminderUseCase(
-			bindingRepo, subscriptionRepo, usageRepo, usageStatsRepo, hourlyCache, planRepo, botService, logger,
+			bindingRepo, subscriptionRepo, usageStatsRepo, hourlyCache, planRepo, botService, logger,
 		),
 		botService:  botService,
 		bindingRepo: bindingRepo,
@@ -149,6 +149,30 @@ func (s *ServiceDDD) SendBotMessageWithKeyboard(chatID int64, text string) error
 	}
 	keyboard := s.botService.GetDefaultReplyKeyboard()
 	return s.botService.SendMessageWithKeyboard(chatID, text, keyboard)
+}
+
+// SendBotChatAction sends a chat action via the telegram bot
+func (s *ServiceDDD) SendBotChatAction(chatID int64, action string) error {
+	if s.botService == nil {
+		return nil
+	}
+	return s.botService.SendChatAction(chatID, action)
+}
+
+// UpdateBindingLanguage updates the language preference for a binding
+func (s *ServiceDDD) UpdateBindingLanguage(ctx context.Context, telegramUserID int64, language string) error {
+	binding, err := s.bindingRepo.GetByTelegramUserID(ctx, telegramUserID)
+	if err != nil {
+		if errors.Is(err, telegram.ErrBindingNotFound) {
+			return nil
+		}
+		return err
+	}
+	if binding == nil {
+		return nil
+	}
+	binding.UpdateLanguage(language)
+	return s.bindingRepo.Update(ctx, binding)
 }
 
 // GetProcessReminderUseCase returns the reminder processor for scheduler use

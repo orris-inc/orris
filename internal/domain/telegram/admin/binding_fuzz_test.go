@@ -32,7 +32,7 @@ func FuzzNewAdminTelegramBinding(f *testing.F) {
 			return
 		}
 
-		binding, err := NewAdminTelegramBinding(userID, telegramUserID, telegramUsername)
+		binding, err := NewAdminTelegramBinding(userID, telegramUserID, telegramUsername, "")
 
 		// Zero userID should error
 		if userID == 0 {
@@ -107,7 +107,7 @@ func FuzzUpdatePreferences(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, threshold int) {
-		binding, err := NewAdminTelegramBinding(1, 12345, "test")
+		binding, err := NewAdminTelegramBinding(1, 12345, "test", "")
 		if err != nil {
 			t.Fatalf("Failed to create binding: %v", err)
 		}
@@ -152,7 +152,7 @@ func FuzzUpdatePreferencesBooleans(f *testing.F) {
 	}
 
 	f.Fuzz(func(t *testing.T, nodeOffline, agentOffline, newUser, paymentSuccess, dailySummary, weeklySummary bool) {
-		binding, err := NewAdminTelegramBinding(1, 12345, "test")
+		binding, err := NewAdminTelegramBinding(1, 12345, "test", "")
 		if err != nil {
 			t.Fatalf("Failed to create binding: %v", err)
 		}
@@ -221,7 +221,7 @@ func FuzzUpdateTelegramUsername(f *testing.F) {
 			return
 		}
 
-		binding, err := NewAdminTelegramBinding(1, 12345, "original")
+		binding, err := NewAdminTelegramBinding(1, 12345, "original", "")
 		if err != nil {
 			t.Fatalf("Failed to create binding: %v", err)
 		}

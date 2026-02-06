@@ -9,6 +9,8 @@ import (
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/domain/telegram/admin"
+	telegram "github.com/orris-inc/orris/internal/infrastructure/telegram"
+	"github.com/orris-inc/orris/internal/infrastructure/telegram/i18n"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -61,7 +63,7 @@ func (uc *CheckExpiringUseCase) CheckAndNotify(ctx context.Context) error {
 	alertsSent := 0
 	errors := 0
 
-	for _, binding := range bindings {
+	for i, binding := range bindings {
 		// Double check if notification can be sent (domain-level deduplication)
 		if !binding.CanNotifyResourceExpiring() {
 			continue
@@ -121,12 +123,18 @@ func (uc *CheckExpiringUseCase) CheckAndNotify(ctx context.Context) error {
 		}
 
 		// Build and send message
-		message := BuildResourceExpiringMessage(agentInfos, nodeInfos)
+		lang := i18n.ParseLang(binding.Language())
+		message := i18n.BuildResourceExpiringMessage(lang, agentInfos, nodeInfos)
 		if message == "" {
 			continue
 		}
 
 		if err := uc.botService.SendMessage(binding.TelegramUserID(), message); err != nil {
+			if telegram.IsBotBlocked(err) {
+				uc.logger.Warnw("bot blocked by user, skipping notification",
+					"telegram_user_id", binding.TelegramUserID())
+				continue
+			}
 			uc.logger.Errorw("failed to send resource expiring notification",
 				"telegram_user_id", binding.TelegramUserID(),
 				"error", err,
@@ -146,6 +154,11 @@ func (uc *CheckExpiringUseCase) CheckAndNotify(ctx context.Context) error {
 		}
 
 		alertsSent++
+		// Rate limiting between messages to avoid Telegram API throttling
+		if i < len(bindings)-1 {
+			time.Sleep(50 * time.Millisecond)
+		}
+
 		uc.logger.Infow("resource expiring notification sent",
 			"telegram_user_id", binding.TelegramUserID(),
 			"expiring_agents", len(agentInfos),

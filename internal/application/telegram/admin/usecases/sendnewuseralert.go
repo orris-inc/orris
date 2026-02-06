@@ -3,10 +3,13 @@ package usecases
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/orris-inc/orris/internal/application/telegram/admin/dto"
 	"github.com/orris-inc/orris/internal/domain/telegram/admin"
 	"github.com/orris-inc/orris/internal/domain/user"
+	telegram "github.com/orris-inc/orris/internal/infrastructure/telegram"
+	"github.com/orris-inc/orris/internal/infrastructure/telegram/i18n"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -58,17 +61,23 @@ func (uc *SendNewUserAlertUseCase) SendAlert(ctx context.Context, newUser *user.
 		CreatedAt: newUser.CreatedAt(),
 	}
 
-	message := BuildNewUserMessage(userInfo.SID, userInfo.Email, userInfo.Name, userInfo.Source, userInfo.CreatedAt)
-
 	sentCount := 0
 	errorCount := 0
 
-	for _, binding := range bindings {
+	for i, binding := range bindings {
 		if !binding.NotifyNewUser() {
 			continue
 		}
 
+		lang := i18n.ParseLang(binding.Language())
+		message := i18n.BuildNewUserMessage(lang, userInfo.SID, userInfo.Email, userInfo.Name, userInfo.Source, userInfo.CreatedAt)
+
 		if err := uc.botService.SendMessage(binding.TelegramUserID(), message); err != nil {
+			if telegram.IsBotBlocked(err) {
+				uc.logger.Warnw("bot blocked by user, skipping notification",
+					"telegram_user_id", binding.TelegramUserID())
+				continue
+			}
 			uc.logger.Errorw("failed to send new user notification",
 				"telegram_user_id", binding.TelegramUserID(),
 				"user_sid", userInfo.SID,
@@ -78,6 +87,10 @@ func (uc *SendNewUserAlertUseCase) SendAlert(ctx context.Context, newUser *user.
 			continue
 		}
 		sentCount++
+		// Rate limiting between messages to avoid Telegram API throttling
+		if i < len(bindings)-1 {
+			time.Sleep(50 * time.Millisecond)
+		}
 	}
 
 	uc.logger.Infow("new user alert sent",
@@ -108,17 +121,23 @@ func (uc *SendNewUserAlertUseCase) SendAlertWithInfo(ctx context.Context, userIn
 		return nil
 	}
 
-	message := BuildNewUserMessage(userInfo.SID, userInfo.Email, userInfo.Name, userInfo.Source, userInfo.CreatedAt)
-
 	sentCount := 0
 	errorCount := 0
 
-	for _, binding := range bindings {
+	for i, binding := range bindings {
 		if !binding.NotifyNewUser() {
 			continue
 		}
 
+		lang := i18n.ParseLang(binding.Language())
+		message := i18n.BuildNewUserMessage(lang, userInfo.SID, userInfo.Email, userInfo.Name, userInfo.Source, userInfo.CreatedAt)
+
 		if err := uc.botService.SendMessage(binding.TelegramUserID(), message); err != nil {
+			if telegram.IsBotBlocked(err) {
+				uc.logger.Warnw("bot blocked by user, skipping notification",
+					"telegram_user_id", binding.TelegramUserID())
+				continue
+			}
 			uc.logger.Errorw("failed to send new user notification",
 				"telegram_user_id", binding.TelegramUserID(),
 				"user_sid", userInfo.SID,
@@ -128,6 +147,10 @@ func (uc *SendNewUserAlertUseCase) SendAlertWithInfo(ctx context.Context, userIn
 			continue
 		}
 		sentCount++
+		// Rate limiting between messages to avoid Telegram API throttling
+		if i < len(bindings)-1 {
+			time.Sleep(50 * time.Millisecond)
+		}
 	}
 
 	uc.logger.Infow("new user alert sent",

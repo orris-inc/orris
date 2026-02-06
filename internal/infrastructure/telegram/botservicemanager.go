@@ -16,6 +16,7 @@ type BotServiceManager struct {
 	provider      *settingUsecases.SettingProvider
 	logger        logger.Interface
 	updateHandler UpdateHandler
+	offsetStore   OffsetStore // optional, for polling offset persistence
 
 	mu             sync.RWMutex
 	currentConfig  *sharedConfig.TelegramConfig
@@ -35,6 +36,11 @@ func NewBotServiceManager(
 		updateHandler: updateHandler,
 		logger:        logger,
 	}
+}
+
+// SetOffsetStore sets the polling offset store for persisting offset across restarts.
+func (m *BotServiceManager) SetOffsetStore(store OffsetStore) {
+	m.offsetStore = store
 }
 
 // Start initializes and starts the Telegram bot service based on current configuration.
@@ -89,7 +95,7 @@ func (m *BotServiceManager) startPollingMode(ctx context.Context) error {
 		return nil
 	}
 
-	m.pollingService = NewPollingService(m.botService, m.updateHandler, m.logger)
+	m.pollingService = NewPollingService(m.botService, m.updateHandler, m.logger, m.offsetStore)
 	if err := m.pollingService.Start(ctx); err != nil {
 		m.logger.Errorw("failed to start polling service", "error", err)
 		return err
@@ -417,4 +423,13 @@ func (d *DynamicBotService) EditMessageReplyMarkup(chatID int64, messageID int64
 		return nil
 	}
 	return botService.EditMessageReplyMarkup(chatID, messageID, keyboard)
+}
+
+// SendChatAction sends a chat action (e.g., "typing") to a chat
+func (d *DynamicBotService) SendChatAction(chatID int64, action string) error {
+	botService := d.manager.GetBotService()
+	if botService == nil {
+		return nil
+	}
+	return botService.SendChatAction(chatID, action)
 }

@@ -136,3 +136,12 @@ func (w *dynamicBotServiceWrapper) SendMessageWithInlineKeyboard(chatID int64, t
 	}
 	return botService.SendMessageWithInlineKeyboard(chatID, text, keyboard)
 }
+
+// SendChatAction implements TelegramMessageSender
+func (w *dynamicBotServiceWrapper) SendChatAction(chatID int64, action string) error {
+	botService := w.provider.GetBotService()
+	if botService == nil {
+		return nil // Bot service not available, skip silently
+	}
+	return botService.SendChatAction(chatID, action)
+}

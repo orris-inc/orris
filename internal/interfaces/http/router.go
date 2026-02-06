@@ -589,7 +589,6 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	telegramServiceDDD = telegramApp.NewServiceDDD(
 		telegramBindingRepo,
 		subscriptionRepo,
-		subscriptionUsageRepo,
 		subscriptionUsageStatsRepo,
 		hourlyTrafficCache,
 		subscriptionPlanRepo,
@@ -597,6 +596,9 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		nil, // BotService will be managed by BotServiceManager
 		log,
 	)
+
+	// Declare admin service variable early for closure capture
+	var adminNotificationServiceDDD *telegramAdminApp.ServiceDDD
 
 	// Create UpdateHandler for polling mode
 	serviceAdapter := telegramInfra.NewServiceAdapter(
@@ -612,11 +614,24 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 			}
 			return status.IsBound, nil
 		},
+		func(ctx context.Context, telegramUserID int64, language string) error {
+			return telegramServiceDDD.UpdateBindingLanguage(ctx, telegramUserID, language)
+		},
+		func(ctx context.Context, telegramUserID int64, language string) error {
+			if adminNotificationServiceDDD != nil {
+				return adminNotificationServiceDDD.UpdateAdminBindingLanguage(ctx, telegramUserID, language)
+			}
+			return nil
+		},
 	)
 	updateHandler := telegramInfra.NewPollingUpdateHandler(serviceAdapter, log)
 
 	// Create BotServiceManager with hot-reload support
 	telegramBotManager = telegramInfra.NewBotServiceManager(settingProvider, updateHandler, log)
+
+	// Inject polling offset store for offset persistence across restarts
+	pollingOffsetStore := cache.NewPollingOffsetStore(redisClient)
+	telegramBotManager.SetOffsetStore(pollingOffsetStore)
 
 	// Inject BotServiceManager into ServiceAdapter (break circular dependency)
 	serviceAdapter.SetBotServiceGetter(telegramBotManager)
@@ -645,7 +660,6 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	// Initialize admin notification components
 	var adminTelegramHandler *adminHandlers.AdminTelegramHandler
-	var adminNotificationServiceDDD *telegramAdminApp.ServiceDDD
 
 	// Admin notification initialization - uses BotServiceManager's BotService when available
 	adminVerifyStore := cache.NewAdminTelegramVerifyStore(redisClient)

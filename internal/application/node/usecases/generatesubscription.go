@@ -333,7 +333,7 @@ func (uc *GenerateSubscriptionUseCase) buildUserInfo(ctx context.Context, valida
 	}
 
 	// Calculate current period traffic usage
-	upload, download := uc.calculatePeriodTraffic(ctx, validation)
+	upload, download := uc.calculatePeriodTraffic(ctx, validation, plan)
 
 	return &SubscriptionUserInfo{
 		Upload:   upload,
@@ -343,17 +343,25 @@ func (uc *GenerateSubscriptionUseCase) buildUserInfo(ctx context.Context, valida
 	}
 }
 
-// calculatePeriodTraffic calculates upload and download traffic for the current billing month.
-// Uses calendar month boundaries in business timezone, matching checkTrafficLimit logic
-// to ensure displayed traffic is consistent with limit enforcement.
+// calculatePeriodTraffic calculates upload and download traffic for the current traffic period.
+// Uses the plan's traffic_reset_mode to determine period boundaries:
+// - calendar_month: business timezone month boundaries (default, backward compatible)
+// - billing_cycle: subscription's CurrentPeriodStart/CurrentPeriodEnd
 // Uses Redis for recent data (last 24h) and MySQL stats for historical data.
-func (uc *GenerateSubscriptionUseCase) calculatePeriodTraffic(ctx context.Context, validation *SubscriptionValidationResult) (upload, download uint64) {
+func (uc *GenerateSubscriptionUseCase) calculatePeriodTraffic(ctx context.Context, validation *SubscriptionValidationResult, plan *subscription.Plan) (upload, download uint64) {
 	now := biztime.NowUTC()
 
-	// Calculate month boundaries in business timezone, then convert to UTC for query
-	bizNow := biztime.ToBizTimezone(now)
-	periodStart := biztime.StartOfMonthUTC(bizNow.Year(), bizNow.Month())
-	periodEnd := biztime.EndOfMonthUTC(bizNow.Year(), bizNow.Month())
+	// Determine period based on plan's traffic reset mode
+	var periodStart, periodEnd time.Time
+	mode := subscription.GetTrafficResetMode(plan)
+	if mode == subscription.TrafficResetBillingCycle {
+		periodStart = validation.CurrentPeriodStart
+		periodEnd = validation.CurrentPeriodEnd
+	} else {
+		bizNow := biztime.ToBizTimezone(now)
+		periodStart = biztime.StartOfMonthUTC(bizNow.Year(), bizNow.Month())
+		periodEnd = biztime.EndOfMonthUTC(bizNow.Year(), bizNow.Month())
+	}
 
 	// If period end is in the future, use current time
 	if periodEnd.After(now) {

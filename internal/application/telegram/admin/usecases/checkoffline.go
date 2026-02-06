@@ -10,6 +10,8 @@ import (
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/domain/telegram/admin"
 	"github.com/orris-inc/orris/internal/infrastructure/cache"
+	telegram "github.com/orris-inc/orris/internal/infrastructure/telegram"
+	"github.com/orris-inc/orris/internal/infrastructure/telegram/i18n"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -18,6 +20,7 @@ import (
 type TelegramMessageSender interface {
 	SendMessage(chatID int64, text string) error
 	SendMessageWithInlineKeyboard(chatID int64, text string, keyboard any) error
+	SendChatAction(chatID int64, action string) error
 }
 
 // NodeOfflineChecker defines the interface for checking offline nodes
@@ -73,12 +76,18 @@ func (uc *CheckOfflineUseCase) CheckAndNotify(ctx context.Context) error {
 	nodeCount, nodeErrors := uc.checkNodeOffline(ctx)
 	agentCount, agentErrors := uc.checkAgentOffline(ctx)
 
+	totalErrors := nodeErrors + agentErrors
+
 	uc.logger.Infow("offline check completed",
 		"node_alerts_sent", nodeCount,
 		"agent_alerts_sent", agentCount,
 		"node_errors", nodeErrors,
 		"agent_errors", agentErrors,
 	)
+
+	if totalErrors > 0 {
+		return fmt.Errorf("offline check completed with %d errors", totalErrors)
+	}
 
 	return nil
 }
@@ -149,9 +158,6 @@ func (uc *CheckOfflineUseCase) checkNodeOffline(ctx context.Context) (int, int) 
 			}
 		}
 
-		// Build message and keyboard once for this node
-		message := BuildNodeOfflineMessageFromDTO(nodeInfo)
-		keyboard := BuildMuteKeyboard("node", nodeInfo.SID)
 		sentToAny := false
 
 		// Send to ALL bindings whose threshold is met by this node's offline duration
@@ -166,7 +172,21 @@ func (uc *CheckOfflineUseCase) checkNodeOffline(ctx context.Context) (int, int) 
 				continue // This binding's threshold is higher than node's offline time
 			}
 
+			// Build per-binding i18n message and keyboard
+			lang := i18n.ParseLang(binding.Language())
+			var lastSeen time.Time
+			if nodeInfo.LastSeenAt != nil {
+				lastSeen = *nodeInfo.LastSeenAt
+			}
+			message := i18n.BuildNodeOfflineMessage(lang, nodeInfo.SID, nodeInfo.Name, lastSeen, int(nodeInfo.OfflineMinutes))
+			keyboard := i18n.BuildMuteKeyboard(lang, "node", nodeInfo.SID)
+
 			if err := uc.botService.SendMessageWithInlineKeyboard(binding.TelegramUserID(), message, keyboard); err != nil {
+				if telegram.IsBotBlocked(err) {
+					uc.logger.Warnw("bot blocked by user, skipping notification",
+						"telegram_user_id", binding.TelegramUserID())
+					continue
+				}
 				uc.logger.Errorw("failed to send node offline notification",
 					"telegram_user_id", binding.TelegramUserID(),
 					"node_id", nodeInfo.ID,
@@ -265,9 +285,6 @@ func (uc *CheckOfflineUseCase) checkAgentOffline(ctx context.Context) (int, int)
 			}
 		}
 
-		// Build message and keyboard once for this agent
-		message := BuildAgentOfflineMessageFromDTO(agentInfo)
-		keyboard := BuildMuteKeyboard("agent", agentInfo.SID)
 		sentToAny := false
 
 		// Send to ALL bindings whose threshold is met by this agent's offline duration
@@ -282,7 +299,21 @@ func (uc *CheckOfflineUseCase) checkAgentOffline(ctx context.Context) (int, int)
 				continue // This binding's threshold is higher than agent's offline time
 			}
 
+			// Build per-binding i18n message and keyboard
+			lang := i18n.ParseLang(binding.Language())
+			var lastSeen time.Time
+			if agentInfo.LastSeenAt != nil {
+				lastSeen = *agentInfo.LastSeenAt
+			}
+			message := i18n.BuildAgentOfflineMessage(lang, agentInfo.SID, agentInfo.Name, lastSeen, int(agentInfo.OfflineMinutes))
+			keyboard := i18n.BuildMuteKeyboard(lang, "agent", agentInfo.SID)
+
 			if err := uc.botService.SendMessageWithInlineKeyboard(binding.TelegramUserID(), message, keyboard); err != nil {
+				if telegram.IsBotBlocked(err) {
+					uc.logger.Warnw("bot blocked by user, skipping notification",
+						"telegram_user_id", binding.TelegramUserID())
+					continue
+				}
 				uc.logger.Errorw("failed to send agent offline notification",
 					"telegram_user_id", binding.TelegramUserID(),
 					"agent_id", agentInfo.ID,

@@ -93,10 +93,8 @@ func (uc *CheckTrafficLimitUseCase) Execute(
 		}, nil
 	}
 
-	// Calculate month boundaries in business timezone, then convert to UTC for query
-	bizNow := biztime.ToBizTimezone(biztime.NowUTC())
-	startOfMonth := biztime.StartOfMonthUTC(bizNow.Year(), bizNow.Month())
-	endOfMonth := biztime.EndOfMonthUTC(bizNow.Year(), bizNow.Month())
+	// Resolve traffic period based on plan's reset mode (calendar_month or billing_cycle)
+	period := subscription.ResolveTrafficPeriod(plan, sub)
 
 	// Get traffic combining Redis (recent 24h) and MySQL stats (historical)
 	totalTraffic, err := uc.getTotalUsageByResource(
@@ -104,8 +102,8 @@ func (uc *CheckTrafficLimitUseCase) Execute(
 		subscription.ResourceTypeNode.String(),
 		query.NodeID,
 		query.SubscriptionID,
-		startOfMonth,
-		endOfMonth,
+		period.Start,
+		period.End,
 	)
 	if err != nil {
 		uc.logger.Errorw("failed to get total traffic", "error", err)

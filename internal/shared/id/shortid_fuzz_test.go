@@ -100,8 +100,21 @@ func FuzzValidatePrefix(f *testing.F) {
 			return
 		}
 
-		// If has correct prefix, should not error
-		if strings.HasPrefix(prefixedID, expectedPrefix+"_") && err != nil {
+		// Check if shortID part is valid (correct length and charset)
+		parts := strings.SplitN(prefixedID, "_", 2)
+		shortID := parts[1]
+		validShortID := len(shortID) == DefaultLength
+		if validShortID {
+			for _, c := range shortID {
+				if !strings.ContainsRune(alphabet, c) {
+					validShortID = false
+					break
+				}
+			}
+		}
+
+		// If has correct prefix AND valid shortID, should not error
+		if strings.HasPrefix(prefixedID, expectedPrefix+"_") && validShortID && err != nil {
 			t.Errorf("ValidatePrefix(%q, %q) returned unexpected error: %v", prefixedID, expectedPrefix, err)
 		}
 

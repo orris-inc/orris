@@ -12,6 +12,8 @@ import (
 	"github.com/orris-inc/orris/internal/domain/telegram/admin"
 	"github.com/orris-inc/orris/internal/domain/user"
 	"github.com/orris-inc/orris/internal/infrastructure/cache"
+	telegram "github.com/orris-inc/orris/internal/infrastructure/telegram"
+	"github.com/orris-inc/orris/internal/infrastructure/telegram/i18n"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -101,13 +103,20 @@ func (uc *SendWeeklySummaryUseCase) SendSummary(ctx context.Context) error {
 		return fmt.Errorf("failed to gather stats: %w", err)
 	}
 
-	message := uc.buildWeeklySummaryMessage(summary)
-
 	sentCount := 0
 	errorCount := 0
 
 	for _, binding := range matchedBindings {
+		lang := i18n.ParseLang(binding.Language())
+		message := uc.buildWeeklySummaryMessage(summary, lang)
+
+		_ = uc.botService.SendChatAction(binding.TelegramUserID(), "typing")
 		if err := uc.botService.SendMessage(binding.TelegramUserID(), message); err != nil {
+			if telegram.IsBotBlocked(err) {
+				uc.logger.Warnw("bot blocked by user, skipping notification",
+					"telegram_user_id", binding.TelegramUserID())
+				continue
+			}
 			uc.logger.Errorw("failed to send weekly summary",
 				"telegram_user_id", binding.TelegramUserID(),
 				"error", err,
@@ -265,7 +274,7 @@ func (uc *SendWeeklySummaryUseCase) gatherWeeklyStats(ctx context.Context, lastS
 	if err == nil {
 		summary.TotalAgents = agentTotal
 		for _, a := range agents {
-			if a.IsEnabled() && time.Since(a.UpdatedAt()) < 5*time.Minute {
+			if a.IsOnline() {
 				summary.OnlineAgents++
 			}
 		}
@@ -360,61 +369,74 @@ func (uc *SendWeeklySummaryUseCase) getTrafficFromHourlyCache(ctx context.Contex
 	return total
 }
 
-func (uc *SendWeeklySummaryUseCase) buildWeeklySummaryMessage(summary *dto.WeeklySummaryData) string {
-	// Format traffic
+func (uc *SendWeeklySummaryUseCase) buildWeeklySummaryMessage(summary *dto.WeeklySummaryData, lang i18n.Lang) string {
 	trafficStr := FormatBytes(summary.TotalTrafficBytes)
+	nodeStatus := statusIndicator(summary.OnlineNodes, summary.OfflineNodes, summary.TotalNodes)
+	agentStatus := statusIndicator(summary.OnlineAgents, summary.OfflineAgents, summary.TotalAgents)
+	userChange := FormatPercentChangeCompact(summary.UserChangePercent)
+	subChange := FormatPercentChangeCompact(summary.SubChangePercent)
+	trafficChange := FormatPercentChangeCompact(summary.TrafficChangePercent)
+	generatedAt := biztime.FormatInBizTimezone(biztime.NowUTC(), "2006-01-02 15:04:05")
 
-	// Node status indicator
-	nodeStatus := "🟢"
-	if summary.OfflineNodes > 0 {
-		nodeStatus = "🟡"
-	}
-	if summary.OnlineNodes == 0 && summary.TotalNodes > 0 {
-		nodeStatus = "🔴"
-	}
-
-	// Agent status indicator
-	agentStatus := "🟢"
-	if summary.OfflineAgents > 0 {
-		agentStatus = "🟡"
-	}
-	if summary.OnlineAgents == 0 && summary.TotalAgents > 0 {
-		agentStatus = "🔴"
-	}
-
-	return fmt.Sprintf(`📊 <b>Weekly Summary / 每周摘要</b>
+	if lang == i18n.EN {
+		return fmt.Sprintf(`📊 <b>Weekly Summary</b>
 📅 %s ~ %s
 
-👥 <b>Users / 用户</b>
-   New 新增: <b>%d</b> %s
-   Active 活跃: <b>%d</b>
+👥 <b>Users</b>
+   New: <b>%d</b> %s
+   Active: <b>%d</b>
 
-📦 <b>Subscriptions / 订阅</b>
-   New 新增: <b>%d</b> %s
+📦 <b>Subscriptions</b>
+   New: <b>%d</b> %s
 
-%s <b>Nodes / 节点</b>
-   Online 在线: <b>%d</b> / %d
-   Offline 离线: <b>%d</b>
+%s <b>Nodes</b>
+   Online: <b>%d</b> / %d
+   Offline: <b>%d</b>
 
-%s <b>Forward Agents / 转发代理</b>
-   Online 在线: <b>%d</b> / %d
-   Offline 离线: <b>%d</b>
+%s <b>Forward Agents</b>
+   Online: <b>%d</b> / %d
+   Offline: <b>%d</b>
 
-📈 <b>Traffic / 流量</b>
-   Total 总计: <b>%s</b> %s
+📈 <b>Traffic</b>
+   Total: <b>%s</b> %s
 
 ━━━━━━━━━━━━━━━
 Generated at %s`,
+			summary.WeekStart, summary.WeekEnd,
+			summary.NewUsers, userChange, summary.ActiveUsers,
+			summary.NewSubscriptions, subChange,
+			nodeStatus, summary.OnlineNodes, summary.TotalNodes, summary.OfflineNodes,
+			agentStatus, summary.OnlineAgents, summary.TotalAgents, summary.OfflineAgents,
+			trafficStr, trafficChange, generatedAt)
+	}
+
+	return fmt.Sprintf(`📊 <b>每周摘要</b>
+📅 %s ~ %s
+
+👥 <b>用户</b>
+   新增：<b>%d</b> %s
+   活跃：<b>%d</b>
+
+📦 <b>订阅</b>
+   新增：<b>%d</b> %s
+
+%s <b>节点</b>
+   在线：<b>%d</b> / %d
+   离线：<b>%d</b>
+
+%s <b>转发代理</b>
+   在线：<b>%d</b> / %d
+   离线：<b>%d</b>
+
+📈 <b>流量</b>
+   总计：<b>%s</b> %s
+
+━━━━━━━━━━━━━━━
+生成于 %s`,
 		summary.WeekStart, summary.WeekEnd,
-		summary.NewUsers, FormatPercentChangeCompact(summary.UserChangePercent),
-		summary.ActiveUsers,
-		summary.NewSubscriptions, FormatPercentChangeCompact(summary.SubChangePercent),
-		nodeStatus,
-		summary.OnlineNodes, summary.TotalNodes,
-		summary.OfflineNodes,
-		agentStatus,
-		summary.OnlineAgents, summary.TotalAgents,
-		summary.OfflineAgents,
-		trafficStr, FormatPercentChangeCompact(summary.TrafficChangePercent),
-		biztime.FormatInBizTimezone(biztime.NowUTC(), "2006-01-02 15:04:05"))
+		summary.NewUsers, userChange, summary.ActiveUsers,
+		summary.NewSubscriptions, subChange,
+		nodeStatus, summary.OnlineNodes, summary.TotalNodes, summary.OfflineNodes,
+		agentStatus, summary.OnlineAgents, summary.TotalAgents, summary.OfflineAgents,
+		trafficStr, trafficChange, generatedAt)
 }

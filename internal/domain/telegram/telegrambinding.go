@@ -18,6 +18,7 @@ type TelegramBinding struct {
 	userID           uint   // Internal user ID reference
 	telegramUserID   int64  // Telegram user_id
 	telegramUsername string // @username (optional)
+	language         string // User's preferred language (e.g., "zh", "en")
 
 	// Notification preferences
 	notifyExpiring   bool // Subscription expiring reminder
@@ -34,7 +35,7 @@ type TelegramBinding struct {
 }
 
 // NewTelegramBinding creates a new telegram binding
-func NewTelegramBinding(userID uint, telegramUserID int64, telegramUsername string) (*TelegramBinding, error) {
+func NewTelegramBinding(userID uint, telegramUserID int64, telegramUsername, language string) (*TelegramBinding, error) {
 	if userID == 0 {
 		return nil, fmt.Errorf("user ID is required")
 	}
@@ -48,11 +49,15 @@ func NewTelegramBinding(userID uint, telegramUserID int64, telegramUsername stri
 	}
 
 	now := biztime.NowUTC()
+	if language == "" {
+		language = "zh"
+	}
 	return &TelegramBinding{
 		sid:              sid,
 		userID:           userID,
 		telegramUserID:   telegramUserID,
 		telegramUsername: telegramUsername,
+		language:         language,
 		notifyExpiring:   true, // Default enabled
 		notifyTraffic:    true, // Default enabled
 		expiringDays:     3,    // Default 3 days
@@ -69,6 +74,7 @@ func ReconstructTelegramBinding(
 	userID uint,
 	telegramUserID int64,
 	telegramUsername string,
+	language string,
 	notifyExpiring bool,
 	notifyTraffic bool,
 	expiringDays int,
@@ -83,6 +89,7 @@ func ReconstructTelegramBinding(
 		userID:               userID,
 		telegramUserID:       telegramUserID,
 		telegramUsername:     telegramUsername,
+		language:             language,
 		notifyExpiring:       notifyExpiring,
 		notifyTraffic:        notifyTraffic,
 		expiringDays:         expiringDays,
@@ -100,6 +107,7 @@ func (b *TelegramBinding) SID() string                      { return b.sid }
 func (b *TelegramBinding) UserID() uint                     { return b.userID }
 func (b *TelegramBinding) TelegramUserID() int64            { return b.telegramUserID }
 func (b *TelegramBinding) TelegramUsername() string         { return b.telegramUsername }
+func (b *TelegramBinding) Language() string                 { return b.language }
 func (b *TelegramBinding) NotifyExpiring() bool             { return b.notifyExpiring }
 func (b *TelegramBinding) NotifyTraffic() bool              { return b.notifyTraffic }
 func (b *TelegramBinding) ExpiringDays() int                { return b.expiringDays }
@@ -172,5 +180,11 @@ func (b *TelegramBinding) RecordTrafficNotification() {
 // UpdateTelegramUsername updates the telegram username
 func (b *TelegramBinding) UpdateTelegramUsername(username string) {
 	b.telegramUsername = username
+	b.updatedAt = biztime.NowUTC()
+}
+
+// UpdateLanguage updates the user's preferred language
+func (b *TelegramBinding) UpdateLanguage(lang string) {
+	b.language = lang
 	b.updatedAt = biztime.NowUTC()
 }

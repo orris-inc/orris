@@ -25,11 +25,12 @@ type AdminTelegramBindingResponse struct {
 
 // AdminBindingStatusResponse represents the admin binding status response
 type AdminBindingStatusResponse struct {
-	IsBound    bool                          `json:"is_bound"`
-	Binding    *AdminTelegramBindingResponse `json:"binding,omitempty"`
-	VerifyCode string                        `json:"verify_code,omitempty"` // Shown when not bound
-	BotLink    string                        `json:"bot_link,omitempty"`    // Telegram bot link (https://t.me/username)
-	ExpiresAt  *time.Time                    `json:"expires_at,omitempty"`  // Verify code expiration time
+	IsBound      bool                          `json:"is_bound"`
+	Binding      *AdminTelegramBindingResponse `json:"binding,omitempty"`
+	VerifyCode   string                        `json:"verify_code,omitempty"`    // Shown when not bound
+	BotLink      string                        `json:"bot_link,omitempty"`       // Telegram bot link (https://t.me/username)
+	DeepBindLink string                        `json:"deep_bind_link,omitempty"` // Deep link: t.me/bot?start=adminbind_<code>
+	ExpiresAt    *time.Time                    `json:"expires_at,omitempty"`     // Verify code expiration time
 }
 
 // UpdateAdminPreferencesRequest represents the request to update admin notification preferences

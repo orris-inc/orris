@@ -10,6 +10,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/domain/telegram"
 	"github.com/orris-inc/orris/internal/infrastructure/cache"
+	telegramInfra "github.com/orris-inc/orris/internal/infrastructure/telegram"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -17,6 +18,7 @@ import (
 // TelegramMessageSender sends messages via Telegram
 type TelegramMessageSender interface {
 	SendMessageMarkdown(chatID int64, text string) error
+	SendChatAction(chatID int64, action string) error
 }
 
 // highUsageInfo represents high traffic usage information for a plan
@@ -32,7 +34,6 @@ type highUsageInfo struct {
 type ProcessReminderUseCase struct {
 	bindingRepo      telegram.TelegramBindingRepository
 	subscriptionRepo subscription.SubscriptionRepository
-	usageRepo        subscription.SubscriptionUsageRepository // Kept for backward compatibility but not used
 	usageStatsRepo   subscription.SubscriptionUsageStatsRepository
 	hourlyCache      cache.HourlyTrafficCache
 	planRepo         subscription.PlanRepository
@@ -44,7 +45,6 @@ type ProcessReminderUseCase struct {
 func NewProcessReminderUseCase(
 	bindingRepo telegram.TelegramBindingRepository,
 	subscriptionRepo subscription.SubscriptionRepository,
-	usageRepo subscription.SubscriptionUsageRepository,
 	usageStatsRepo subscription.SubscriptionUsageStatsRepository,
 	hourlyCache cache.HourlyTrafficCache,
 	planRepo subscription.PlanRepository,
@@ -54,7 +54,6 @@ func NewProcessReminderUseCase(
 	return &ProcessReminderUseCase{
 		bindingRepo:      bindingRepo,
 		subscriptionRepo: subscriptionRepo,
-		usageRepo:        usageRepo,
 		usageStatsRepo:   usageStatsRepo,
 		hourlyCache:      hourlyCache,
 		planRepo:         planRepo,
@@ -156,7 +155,13 @@ func (uc *ProcessReminderUseCase) processExpiringSubscriptions(ctx context.Conte
 		}
 
 		// Send message
+		_ = uc.botService.SendChatAction(binding.TelegramUserID(), "typing")
 		if err := uc.botService.SendMessageMarkdown(binding.TelegramUserID(), message); err != nil {
+			if telegramInfra.IsBotBlocked(err) {
+				uc.logger.Warnw("bot blocked by user, skipping notification",
+					"telegram_user_id", binding.TelegramUserID())
+				continue
+			}
 			uc.logger.Errorw("failed to send expiring notification",
 				"telegram_user_id", binding.TelegramUserID(),
 				"error", err,
@@ -242,12 +247,13 @@ func (uc *ProcessReminderUseCase) processTrafficUsage(ctx context.Context) (int,
 				subIDs = append(subIDs, sub.ID())
 			}
 
-			// Get current period usage - use the earliest period start among these subscriptions
+			// Get current period usage - resolve period based on plan's traffic_reset_mode
 			now := biztime.NowUTC()
 			periodStart := now
 			for _, sub := range planSubs {
-				if sub.CurrentPeriodStart().Before(periodStart) {
-					periodStart = sub.CurrentPeriodStart()
+				period := subscription.ResolveTrafficPeriod(plan, sub)
+				if period.Start.Before(periodStart) {
+					periodStart = period.Start
 				}
 			}
 
@@ -290,7 +296,13 @@ func (uc *ProcessReminderUseCase) processTrafficUsage(ctx context.Context) (int,
 		}
 
 		// Send message
+		_ = uc.botService.SendChatAction(binding.TelegramUserID(), "typing")
 		if err := uc.botService.SendMessageMarkdown(binding.TelegramUserID(), message); err != nil {
+			if telegramInfra.IsBotBlocked(err) {
+				uc.logger.Warnw("bot blocked by user, skipping notification",
+					"telegram_user_id", binding.TelegramUserID())
+				continue
+			}
 			uc.logger.Errorw("failed to send traffic notification",
 				"telegram_user_id", binding.TelegramUserID(),
 				"error", err,
@@ -344,7 +356,7 @@ func (uc *ProcessReminderUseCase) buildTrafficMessage(subs []highUsageInfo, thre
 		msg += fmt.Sprintf("📦 `%s`\n"+
 			"   %s *%d%%*\n"+
 			"   已用 Used: %s / %s\n\n",
-			item.PlanName,
+			telegramInfra.EscapeMarkdownV1(item.PlanName),
 			bar,
 			item.Percent,
 			formatBytes(item.UsedBytes),

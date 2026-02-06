@@ -4,29 +4,74 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
 
+	gobreaker "github.com/sony/gobreaker/v2"
+
 	sharedConfig "github.com/orris-inc/orris/internal/shared/config"
 )
 
+const (
+	// maxRetryAfterSeconds caps the 429 retry_after wait to prevent excessive blocking
+	maxRetryAfterSeconds = 30
+
+	// maxNetworkRetries is the number of retries for transient network/decode errors
+	maxNetworkRetries = 2
+)
+
+// allowedUpdates restricts the update types received from Telegram API.
+// Only types we actually handle are listed to reduce unnecessary traffic.
+var allowedUpdates = []string{"message", "callback_query"}
+
 // BotService provides Telegram Bot API operations
 type BotService struct {
-	config      sharedConfig.TelegramConfig
-	httpClient  *http.Client
-	baseURL     string
-	botUsername string // Cached bot username from getMe
+	config         sharedConfig.TelegramConfig
+	httpClient     *http.Client
+	longPollClient *http.Client // Reusable client for long polling with extended timeout
+	baseURL        string
+	botUsername     string // Cached bot username from getMe
+	cb             *gobreaker.CircuitBreaker[struct{}]
 }
 
 // NewBotService creates a new Telegram bot service
 func NewBotService(config sharedConfig.TelegramConfig) *BotService {
+	cb := gobreaker.NewCircuitBreaker[struct{}](gobreaker.Settings{
+		Name:        "telegram-bot-api",
+		MaxRequests: 1,                // half-open: allow 1 probe request
+		Interval:    0,                // closed state does not auto-reset counts
+		Timeout:     30 * time.Second, // open -> half-open wait time
+		ReadyToTrip: func(counts gobreaker.Counts) bool {
+			return counts.ConsecutiveFailures >= 5
+		},
+		IsSuccessful: func(err error) bool {
+			if err == nil {
+				return true
+			}
+			// 429 (rate limit) counts as infrastructure failure to trip the breaker
+			// when Telegram is persistently rate-limiting us.
+			if IsRetryAfter(err) {
+				return false
+			}
+			// Other API errors (400, 403) are "successful" from infrastructure perspective;
+			// only network/timeout/decode errors count as failures.
+			var apiErr *APIError
+			return errors.As(err, &apiErr)
+		},
+	})
+
 	s := &BotService{
 		config: config,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
+		longPollClient: &http.Client{
+			Timeout: 40 * time.Second, // pollTimeout(30s) + 10s buffer
+		},
 		baseURL: fmt.Sprintf("https://api.telegram.org/bot%s", config.BotToken),
+		cb:      cb,
 	}
 	// Fetch and cache bot username on initialization
 	if config.BotToken != "" {
@@ -39,7 +84,8 @@ func NewBotService(config sharedConfig.TelegramConfig) *BotService {
 func (s *BotService) SetWebhook(webhookURL string) error {
 	url := fmt.Sprintf("%s/setWebhook", s.baseURL)
 	body := map[string]any{
-		"url": webhookURL,
+		"url":             webhookURL,
+		"allowed_updates": allowedUpdates,
 	}
 	// Include secret_token if configured for webhook verification
 	if s.config.WebhookSecret != "" {
@@ -121,7 +167,8 @@ func (s *BotService) GetUpdatesWithContext(ctx context.Context, offset int64, ti
 	apiURL := fmt.Sprintf("%s/getUpdates", s.baseURL)
 
 	body := map[string]any{
-		"timeout": timeout,
+		"timeout":         timeout,
+		"allowed_updates": allowedUpdates,
 	}
 	if offset > 0 {
 		body["offset"] = offset
@@ -132,18 +179,13 @@ func (s *BotService) GetUpdatesWithContext(ctx context.Context, offset int64, ti
 		return nil, fmt.Errorf("failed to marshal request body: %w", err)
 	}
 
-	// Create a client with extended timeout for long polling
-	client := &http.Client{
-		Timeout: time.Duration(timeout+10) * time.Second,
-	}
-
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := client.Do(req)
+	resp, err := s.longPollClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
@@ -155,46 +197,71 @@ func (s *BotService) GetUpdatesWithContext(ctx context.Context, offset int64, ti
 	}
 
 	if !result.OK {
-		return nil, fmt.Errorf("telegram API error: %s", result.Description)
+		apiErr := &APIError{
+			ErrorCode:   result.ErrorCode,
+			Description: result.Description,
+		}
+		if result.Parameters != nil {
+			apiErr.RetryAfter = result.Parameters.RetryAfter
+		}
+		return nil, apiErr
 	}
 
 	return result.Result, nil
 }
 
-// SendMessage sends a plain text message to a chat (HTML format)
+// SendMessage sends a plain text message to a chat (HTML format).
+// Long messages are automatically split into multiple chunks.
 func (s *BotService) SendMessage(chatID int64, text string) error {
-	url := fmt.Sprintf("%s/sendMessage", s.baseURL)
-	body := map[string]any{
-		"chat_id":    chatID,
-		"text":       text,
-		"parse_mode": "HTML",
+	chunks := splitMessage(text, maxMessageLength)
+	for _, chunk := range chunks {
+		url := fmt.Sprintf("%s/sendMessage", s.baseURL)
+		body := map[string]any{
+			"chat_id":    chatID,
+			"text":       chunk,
+			"parse_mode": "HTML",
+		}
+		if err := s.makeRequest(url, body); err != nil {
+			return err
+		}
 	}
-
-	return s.makeRequest(url, body)
+	return nil
 }
 
-// SendMessagePlain sends a plain text message without any formatting
+// SendMessagePlain sends a plain text message without any formatting.
+// Long messages are automatically split into multiple chunks.
 func (s *BotService) SendMessagePlain(chatID int64, text string) error {
-	url := fmt.Sprintf("%s/sendMessage", s.baseURL)
-	body := map[string]any{
-		"chat_id": chatID,
-		"text":    text,
+	chunks := splitMessage(text, maxMessageLength)
+	for _, chunk := range chunks {
+		url := fmt.Sprintf("%s/sendMessage", s.baseURL)
+		body := map[string]any{
+			"chat_id": chatID,
+			"text":    chunk,
+		}
+		if err := s.makeRequest(url, body); err != nil {
+			return err
+		}
 	}
-
-	return s.makeRequest(url, body)
+	return nil
 }
 
-// SendMessageMarkdown sends a markdown formatted message to a chat
-// Deprecated: Use SendMessage with HTML format instead
+// SendMessageMarkdown sends a markdown formatted message to a chat.
+// Deprecated: Use SendMessage with HTML format instead.
+// Long messages are automatically split into multiple chunks.
 func (s *BotService) SendMessageMarkdown(chatID int64, text string) error {
-	url := fmt.Sprintf("%s/sendMessage", s.baseURL)
-	body := map[string]any{
-		"chat_id":    chatID,
-		"text":       text,
-		"parse_mode": "Markdown",
+	chunks := splitMessage(text, maxMessageLength)
+	for _, chunk := range chunks {
+		url := fmt.Sprintf("%s/sendMessage", s.baseURL)
+		body := map[string]any{
+			"chat_id":    chatID,
+			"text":       chunk,
+			"parse_mode": "Markdown",
+		}
+		if err := s.makeRequest(url, body); err != nil {
+			return err
+		}
 	}
-
-	return s.makeRequest(url, body)
+	return nil
 }
 
 // SendMessageWithKeyboard sends a message with a reply keyboard (HTML format)
@@ -346,7 +413,14 @@ func NewInlineKeyboardButtonURL(text, url string) InlineKeyboardButton {
 // apiResponse represents a Telegram API response
 type apiResponse struct {
 	OK          bool   `json:"ok"`
+	ErrorCode   int    `json:"error_code,omitempty"`
 	Description string `json:"description,omitempty"`
+	Parameters  *responseParameters `json:"parameters,omitempty"`
+}
+
+// responseParameters contains additional response parameters from Telegram API
+type responseParameters struct {
+	RetryAfter int `json:"retry_after,omitempty"`
 }
 
 // Update represents a Telegram update from getUpdates or webhook
@@ -375,11 +449,12 @@ type Message struct {
 
 // User represents a Telegram user
 type User struct {
-	ID        int64  `json:"id"`
-	IsBot     bool   `json:"is_bot"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name,omitempty"`
-	Username  string `json:"username,omitempty"`
+	ID           int64  `json:"id"`
+	IsBot        bool   `json:"is_bot"`
+	FirstName    string `json:"first_name"`
+	LastName     string `json:"last_name,omitempty"`
+	Username     string `json:"username,omitempty"`
+	LanguageCode string `json:"language_code,omitempty"`
 }
 
 // Chat represents a Telegram chat
@@ -390,9 +465,11 @@ type Chat struct {
 
 // getUpdatesResponse represents the response from getUpdates API
 type getUpdatesResponse struct {
-	OK          bool     `json:"ok"`
-	Result      []Update `json:"result"`
-	Description string   `json:"description,omitempty"`
+	OK          bool                `json:"ok"`
+	ErrorCode   int                 `json:"error_code,omitempty"`
+	Result      []Update            `json:"result"`
+	Description string              `json:"description,omitempty"`
+	Parameters  *responseParameters `json:"parameters,omitempty"`
 }
 
 // getMeResponse represents the response from getMe API
@@ -447,22 +524,23 @@ func (s *BotService) GetBotLink() string {
 	return fmt.Sprintf("https://t.me/%s", s.botUsername)
 }
 
-func (s *BotService) makeRequest(url string, body map[string]any) error {
+// doRequest performs a single HTTP request and returns a typed *APIError for API failures.
+func (s *BotService) doRequest(apiURL string, body map[string]any) error {
 	var req *http.Request
 	var err error
 
 	if body != nil {
-		jsonBody, err := json.Marshal(body)
-		if err != nil {
-			return fmt.Errorf("failed to marshal request body: %w", err)
+		jsonBody, marshalErr := json.Marshal(body)
+		if marshalErr != nil {
+			return fmt.Errorf("failed to marshal request body: %w", marshalErr)
 		}
-		req, err = http.NewRequest(http.MethodPost, url, bytes.NewBuffer(jsonBody))
+		req, err = http.NewRequest(http.MethodPost, apiURL, bytes.NewBuffer(jsonBody))
 		if err != nil {
 			return fmt.Errorf("failed to create request: %w", err)
 		}
 		req.Header.Set("Content-Type", "application/json")
 	} else {
-		req, err = http.NewRequest(http.MethodPost, url, nil)
+		req, err = http.NewRequest(http.MethodPost, apiURL, nil)
 		if err != nil {
 			return fmt.Errorf("failed to create request: %w", err)
 		}
@@ -480,8 +558,87 @@ func (s *BotService) makeRequest(url string, body map[string]any) error {
 	}
 
 	if !result.OK {
-		return fmt.Errorf("telegram API error: %s", result.Description)
+		apiErr := &APIError{
+			ErrorCode:   result.ErrorCode,
+			Description: result.Description,
+		}
+		if result.Parameters != nil {
+			apiErr.RetryAfter = result.Parameters.RetryAfter
+		}
+		return apiErr
 	}
 
 	return nil
+}
+
+// SendChatAction sends a chat action (e.g., "typing") to a chat.
+// This is a fire-and-forget operation that skips retry logic but still
+// respects the circuit breaker to avoid requests when the API is down.
+func (s *BotService) SendChatAction(chatID int64, action string) error {
+	if s.cb.State() == gobreaker.StateOpen {
+		return ErrCircuitOpen
+	}
+	url := fmt.Sprintf("%s/sendChatAction", s.baseURL)
+	body := map[string]any{"chat_id": chatID, "action": action}
+	return s.doRequest(url, body)
+}
+
+// makeRequest wraps makeRequestInternal with a circuit breaker.
+// When the breaker is open, returns ErrCircuitOpen immediately.
+func (s *BotService) makeRequest(apiURL string, body map[string]any) error {
+	_, err := s.cb.Execute(func() (struct{}, error) {
+		return struct{}{}, s.makeRequestInternal(apiURL, body)
+	})
+	if err != nil && (errors.Is(err, gobreaker.ErrOpenState) || errors.Is(err, gobreaker.ErrTooManyRequests)) {
+		return ErrCircuitOpen
+	}
+	return err
+}
+
+// makeRequestInternal performs an HTTP request with retry logic:
+//   - 429 Too Many Requests: wait retry_after seconds (capped at 30s), retry once
+//   - Network/decode errors: exponential backoff (500ms, 1s), up to 2 retries
+//   - 400/403 (non-retryable API errors): return immediately, no retry
+func (s *BotService) makeRequestInternal(apiURL string, body map[string]any) error {
+	err := s.doRequest(apiURL, body)
+	if err == nil {
+		return nil
+	}
+
+	// 429: wait and retry once
+	if IsRetryAfter(err) {
+		waitSec := GetRetryAfter(err)
+		if waitSec > maxRetryAfterSeconds {
+			waitSec = maxRetryAfterSeconds
+		}
+		if waitSec < 1 {
+			waitSec = 1
+		}
+		time.Sleep(time.Duration(waitSec) * time.Second)
+		return s.doRequest(apiURL, body)
+	}
+
+	// Non-retryable API errors (400, 403): return immediately
+	if isNonRetryable(err) {
+		return err
+	}
+
+	// Network/decode errors: exponential backoff retries
+	backoff := 500 * time.Millisecond
+	for i := 0; i < maxNetworkRetries; i++ {
+		time.Sleep(backoff)
+		backoff *= 2
+
+		err = s.doRequest(apiURL, body)
+		if err == nil {
+			return nil
+		}
+
+		// If the retry returned a non-retryable API error, stop
+		if isNonRetryable(err) || IsRetryAfter(err) {
+			return err
+		}
+	}
+
+	return err
 }
