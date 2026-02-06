@@ -18,6 +18,13 @@ type ManageResourceGroupNodesUseCase struct {
 	nodeRepo          node.NodeRepository
 	planRepo          subscription.PlanRepository
 	logger            logger.Interface
+	syncer            NodeSubscriptionSyncer
+}
+
+// SetNodeSubscriptionSyncer sets the subscription syncer for pushing updates to node agents.
+// Uses setter injection because the sync service is initialized after the use case.
+func (uc *ManageResourceGroupNodesUseCase) SetNodeSubscriptionSyncer(syncer NodeSubscriptionSyncer) {
+	uc.syncer = syncer
 }
 
 // NewManageResourceGroupNodesUseCase creates a new ManageResourceGroupNodesUseCase
@@ -145,6 +152,9 @@ func (uc *ManageResourceGroupNodesUseCase) executeAddNodes(ctx context.Context, 
 		} else {
 			uc.logger.Infow("batch updated nodes", "updated_count", updated)
 			result.Succeeded = append(result.Succeeded, succeededSIDs...)
+
+			// Fire-and-forget: sync subscriptions to newly added nodes
+			uc.syncNodes(ctx, nodeMap, succeededSIDs)
 		}
 	} else {
 		// All nodes were already in the group
@@ -250,6 +260,9 @@ func (uc *ManageResourceGroupNodesUseCase) executeRemoveNodes(ctx context.Contex
 		} else {
 			uc.logger.Infow("batch updated nodes", "updated_count", updated)
 			result.Succeeded = append(result.Succeeded, succeededSIDs...)
+
+			// Fire-and-forget: sync subscriptions to removed nodes
+			uc.syncNodes(ctx, nodeMap, succeededSIDs)
 		}
 	}
 
@@ -359,4 +372,26 @@ func (uc *ManageResourceGroupNodesUseCase) executeListNodes(ctx context.Context,
 		PageSize:   pageSize,
 		TotalPages: totalPages,
 	}, nil
+}
+
+// syncNodes triggers a subscription sync for each node in the succeeded list.
+// Errors are logged but not propagated.
+func (uc *ManageResourceGroupNodesUseCase) syncNodes(ctx context.Context, nodeMap map[string]*node.Node, succeededSIDs []string) {
+	if uc.syncer == nil {
+		return
+	}
+
+	for _, sid := range succeededSIDs {
+		n, ok := nodeMap[sid]
+		if !ok || n == nil {
+			continue
+		}
+		if err := uc.syncer.SyncSubscriptionsToNode(ctx, n.ID()); err != nil {
+			uc.logger.Warnw("failed to sync subscriptions to node after group membership change",
+				"node_id", n.ID(),
+				"node_sid", n.SID(),
+				"error", err,
+			)
+		}
+	}
 }

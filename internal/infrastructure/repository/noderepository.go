@@ -1535,6 +1535,23 @@ func (r *NodeRepositoryImpl) BatchUpdateGroupIDs(ctx context.Context, nodeGroupI
 	return updated, nil
 }
 
+// GetIDsByGroupID returns all node IDs that belong to the specified resource group.
+// This method has no pagination limit — it returns only IDs for efficiency.
+func (r *NodeRepositoryImpl) GetIDsByGroupID(ctx context.Context, groupID uint) ([]uint, error) {
+	groupIDsJSON, _ := json.Marshal([]uint{groupID})
+
+	var ids []uint
+	if err := r.db.WithContext(ctx).
+		Model(&models.NodeModel{}).
+		Where("JSON_OVERLAPS(group_ids, ?)", string(groupIDsJSON)).
+		Pluck("id", &ids).Error; err != nil {
+		r.logger.Errorw("failed to get node IDs by group ID", "group_id", groupID, "error", err)
+		return nil, fmt.Errorf("failed to get node IDs by group ID: %w", err)
+	}
+
+	return ids, nil
+}
+
 // FindExpiringNodes returns active nodes that will expire within the specified days.
 // Only returns nodes that have expires_at set, are active, and are not already expired.
 func (r *NodeRepositoryImpl) FindExpiringNodes(ctx context.Context, withinDays int) ([]*node.ExpiringNodeInfo, error) {

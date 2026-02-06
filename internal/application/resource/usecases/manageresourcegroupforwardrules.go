@@ -19,6 +19,13 @@ type ManageResourceGroupForwardRulesUseCase struct {
 	ruleRepo          forward.Repository
 	planRepo          subscription.PlanRepository
 	logger            logger.Interface
+	syncer            NodeSubscriptionSyncer
+}
+
+// SetNodeSubscriptionSyncer sets the subscription syncer for pushing updates to node agents.
+// Uses setter injection because the sync service is initialized after the use case.
+func (uc *ManageResourceGroupForwardRulesUseCase) SetNodeSubscriptionSyncer(syncer NodeSubscriptionSyncer) {
+	uc.syncer = syncer
 }
 
 // NewManageResourceGroupForwardRulesUseCase creates a new ManageResourceGroupForwardRulesUseCase
@@ -137,6 +144,9 @@ func (uc *ManageResourceGroupForwardRulesUseCase) executeAddRules(ctx context.Co
 			for _, ruleID := range validRuleIDs {
 				result.Succeeded = append(result.Succeeded, sidToID[ruleID])
 			}
+
+			// Fire-and-forget: sync subscriptions to affected node agents
+			uc.syncAffectedNodes(ctx, rulesMap, result.Succeeded)
 		}
 	}
 
@@ -243,6 +253,9 @@ func (uc *ManageResourceGroupForwardRulesUseCase) executeRemoveRules(ctx context
 			for _, ruleID := range validRuleIDs {
 				result.Succeeded = append(result.Succeeded, sidToID[ruleID])
 			}
+
+			// Fire-and-forget: sync subscriptions to affected node agents
+			uc.syncAffectedNodes(ctx, rulesMap, result.Succeeded)
 		}
 	}
 
@@ -352,4 +365,32 @@ func (uc *ManageResourceGroupForwardRulesUseCase) executeListRules(ctx context.C
 		PageSize:   pageSize,
 		TotalPages: totalPages,
 	}, nil
+}
+
+// syncAffectedNodes extracts target node IDs from successfully processed rules and
+// triggers a subscription sync for each unique node. Errors are logged but not propagated.
+func (uc *ManageResourceGroupForwardRulesUseCase) syncAffectedNodes(ctx context.Context, rulesMap map[string]*forward.ForwardRule, succeededSIDs []string) {
+	if uc.syncer == nil {
+		return
+	}
+
+	nodeIDSet := setutil.NewUintSet()
+	for _, sid := range succeededSIDs {
+		rule, ok := rulesMap[sid]
+		if !ok || rule == nil {
+			continue
+		}
+		if nid := rule.TargetNodeID(); nid != nil {
+			nodeIDSet.Add(*nid)
+		}
+	}
+
+	for _, nodeID := range nodeIDSet.ToSlice() {
+		if err := uc.syncer.SyncSubscriptionsToNode(ctx, nodeID); err != nil {
+			uc.logger.Warnw("failed to sync subscriptions to node after group rule change",
+				"node_id", nodeID,
+				"error", err,
+			)
+		}
+	}
 }

@@ -415,6 +415,13 @@ func (s *SubscriptionSyncService) FullSyncSubscriptionsToNode(
 	return nil
 }
 
+// SyncSubscriptionsToNode syncs all active subscriptions to a specific node.
+// This is an adapter that delegates to SyncSubscriptionsOnNodeConnect, used by
+// resource group membership use cases to push subscription updates after group changes.
+func (s *SubscriptionSyncService) SyncSubscriptionsToNode(ctx context.Context, nodeID uint) error {
+	return s.SyncSubscriptionsOnNodeConnect(ctx, nodeID)
+}
+
 // SyncSubscriptionsOnNodeConnect syncs all active subscriptions to a node when it connects.
 // This method queries subscriptions internally and pushes them to the node.
 func (s *SubscriptionSyncService) SyncSubscriptionsOnNodeConnect(ctx context.Context, nodeID uint) error {

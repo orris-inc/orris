@@ -83,6 +83,10 @@ type NodeRepository interface {
 	// nodeGroupIDs is a map of node ID to new group IDs slice.
 	// Returns the number of nodes updated and any error.
 	BatchUpdateGroupIDs(ctx context.Context, nodeGroupIDs map[uint][]uint) (int, error)
+
+	// GetIDsByGroupID returns all node IDs that belong to the specified resource group.
+	// Unlike List, this method has no pagination limit and returns only IDs for efficiency.
+	GetIDsByGroupID(ctx context.Context, groupID uint) ([]uint, error)
 }
 
 type NodeFilter struct {

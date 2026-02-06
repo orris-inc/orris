@@ -334,8 +334,8 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 	getResourceGroupUC := resourceUsecases.NewGetResourceGroupUseCase(resourceGroupRepo, subscriptionPlanRepo, log)
 	listResourceGroupsUC := resourceUsecases.NewListResourceGroupsUseCase(resourceGroupRepo, subscriptionPlanRepo, log)
 	updateResourceGroupUC := resourceUsecases.NewUpdateResourceGroupUseCase(resourceGroupRepo, subscriptionPlanRepo, log)
-	deleteResourceGroupUC := resourceUsecases.NewDeleteResourceGroupUseCase(resourceGroupRepo, forwardRuleRepo, log)
-	updateResourceGroupStatusUC := resourceUsecases.NewUpdateResourceGroupStatusUseCase(resourceGroupRepo, subscriptionPlanRepo, log)
+	deleteResourceGroupUC := resourceUsecases.NewDeleteResourceGroupUseCase(resourceGroupRepo, forwardRuleRepo, nodeRepoImpl, log)
+	updateResourceGroupStatusUC := resourceUsecases.NewUpdateResourceGroupStatusUseCase(resourceGroupRepo, subscriptionPlanRepo, nodeRepoImpl, forwardRuleRepo, log)
 
 	planHandler := handlers.NewPlanHandler(
 		createPlanUC, updatePlanUC, getPlanUC, listPlansUC,
@@ -1260,6 +1260,13 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 
 	// Set event publisher on subscription sync service for cross-instance sync
 	subscriptionSyncService.SetEventPublisher(subscriptionEventBus)
+
+	// Set subscription syncer on resource group use cases so that
+	// membership changes, status changes, and deletion trigger subscription push to affected nodes.
+	manageNodesUC.SetNodeSubscriptionSyncer(subscriptionSyncService)
+	manageRulesUC.SetNodeSubscriptionSyncer(subscriptionSyncService)
+	deleteResourceGroupUC.SetNodeSubscriptionSyncer(subscriptionSyncService)
+	updateResourceGroupStatusUC.SetNodeSubscriptionSyncer(subscriptionSyncService)
 
 	// Set deactivation notifier on node traffic limit enforcement service
 	nodeTrafficLimitEnforcementSvc.SetDeactivationNotifier(subscriptionSyncService)

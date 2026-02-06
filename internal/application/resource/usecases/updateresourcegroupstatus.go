@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/orris-inc/orris/internal/application/resource/dto"
+	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/domain/resource"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -14,16 +16,32 @@ import (
 type UpdateResourceGroupStatusUseCase struct {
 	repo     resource.Repository
 	planRepo subscription.PlanRepository
+	nodeRepo node.NodeRepository
+	ruleRepo forward.Repository
 	logger   logger.Interface
+	syncer   NodeSubscriptionSyncer
 }
 
 // NewUpdateResourceGroupStatusUseCase creates a new UpdateResourceGroupStatusUseCase
-func NewUpdateResourceGroupStatusUseCase(repo resource.Repository, planRepo subscription.PlanRepository, logger logger.Interface) *UpdateResourceGroupStatusUseCase {
+func NewUpdateResourceGroupStatusUseCase(
+	repo resource.Repository,
+	planRepo subscription.PlanRepository,
+	nodeRepo node.NodeRepository,
+	ruleRepo forward.Repository,
+	logger logger.Interface,
+) *UpdateResourceGroupStatusUseCase {
 	return &UpdateResourceGroupStatusUseCase{
 		repo:     repo,
 		planRepo: planRepo,
+		nodeRepo: nodeRepo,
+		ruleRepo: ruleRepo,
 		logger:   logger,
 	}
+}
+
+// SetNodeSubscriptionSyncer sets the subscription syncer for pushing updates to node agents.
+func (uc *UpdateResourceGroupStatusUseCase) SetNodeSubscriptionSyncer(syncer NodeSubscriptionSyncer) {
+	uc.syncer = syncer
 }
 
 // Activate activates a resource group by internal ID
@@ -60,6 +78,10 @@ func (uc *UpdateResourceGroupStatusUseCase) executeActivate(ctx context.Context,
 	}
 
 	uc.logger.Infow("resource group activated", "id", group.ID(), "sid", group.SID())
+
+	// Fire-and-forget: sync subscriptions to affected nodes (new subscriptions become available)
+	nodeIDs := collectGroupAffectedNodeIDs(ctx, group.ID(), uc.nodeRepo, uc.ruleRepo, uc.logger)
+	syncSubscriptionsToNodes(ctx, uc.syncer, nodeIDs, uc.logger)
 
 	return uc.buildResponse(ctx, group)
 }
@@ -98,6 +120,10 @@ func (uc *UpdateResourceGroupStatusUseCase) executeDeactivate(ctx context.Contex
 	}
 
 	uc.logger.Infow("resource group deactivated", "id", group.ID(), "sid", group.SID())
+
+	// Fire-and-forget: sync subscriptions to affected nodes (subscriptions become unavailable)
+	nodeIDs := collectGroupAffectedNodeIDs(ctx, group.ID(), uc.nodeRepo, uc.ruleRepo, uc.logger)
+	syncSubscriptionsToNodes(ctx, uc.syncer, nodeIDs, uc.logger)
 
 	return uc.buildResponse(ctx, group)
 }

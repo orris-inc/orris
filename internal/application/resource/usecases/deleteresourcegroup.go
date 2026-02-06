@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/domain/resource"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -13,20 +14,29 @@ import (
 type DeleteResourceGroupUseCase struct {
 	repo     resource.Repository
 	ruleRepo forward.Repository
+	nodeRepo node.NodeRepository
 	logger   logger.Interface
+	syncer   NodeSubscriptionSyncer
 }
 
 // NewDeleteResourceGroupUseCase creates a new DeleteResourceGroupUseCase
 func NewDeleteResourceGroupUseCase(
 	repo resource.Repository,
 	ruleRepo forward.Repository,
+	nodeRepo node.NodeRepository,
 	logger logger.Interface,
 ) *DeleteResourceGroupUseCase {
 	return &DeleteResourceGroupUseCase{
 		repo:     repo,
 		ruleRepo: ruleRepo,
+		nodeRepo: nodeRepo,
 		logger:   logger,
 	}
+}
+
+// SetNodeSubscriptionSyncer sets the subscription syncer for pushing updates to node agents.
+func (uc *DeleteResourceGroupUseCase) SetNodeSubscriptionSyncer(syncer NodeSubscriptionSyncer) {
+	uc.syncer = syncer
 }
 
 // Execute soft deletes a resource group by its internal ID
@@ -58,6 +68,9 @@ func (uc *DeleteResourceGroupUseCase) executeDelete(ctx context.Context, group *
 	groupID := group.ID()
 	groupSID := group.SID()
 
+	// Collect affected node IDs BEFORE cleanup so we can sync them after deletion.
+	affectedNodeIDs := collectGroupAffectedNodeIDs(ctx, groupID, uc.nodeRepo, uc.ruleRepo, uc.logger)
+
 	// Clean up forward rule group_ids references before deleting the group
 	// This removes orphaned group ID references from all forward rules
 	if uc.ruleRepo != nil {
@@ -79,6 +92,9 @@ func (uc *DeleteResourceGroupUseCase) executeDelete(ctx context.Context, group *
 	}
 
 	uc.logger.Infow("resource group deleted successfully", "id", groupID, "sid", groupSID)
+
+	// Fire-and-forget: sync subscriptions to affected nodes
+	syncSubscriptionsToNodes(ctx, uc.syncer, affectedNodeIDs, uc.logger)
 
 	return nil
 }
