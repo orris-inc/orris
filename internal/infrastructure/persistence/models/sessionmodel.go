@@ -12,6 +12,7 @@ type SessionModel struct {
 	UserAgent        string    `gorm:"size:512"`
 	TokenHash        string    `gorm:"size:255;index"`
 	RefreshTokenHash string    `gorm:"size:255;index"`
+	RememberMe       bool      `gorm:"not null;default:true"`
 	ExpiresAt        time.Time `gorm:"not null;index"`
 	LastActivityAt   time.Time `gorm:"not null"`
 	CreatedAt        time.Time

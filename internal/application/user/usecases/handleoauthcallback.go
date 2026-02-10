@@ -216,6 +216,7 @@ func (uc *HandleOAuthCallbackUseCase) Execute(ctx context.Context, cmd HandleOAu
 			UserAgent:  cmd.UserAgent,
 		},
 		sessionDuration,
+		true, // rememberMe: OAuth defaults to persistent cookie
 		func(userUUID string, sessionID string) (string, string, int64, error) {
 			tokens, err := uc.jwtService.Generate(userUUID, sessionID, existingUser.Role())
 			if err != nil {

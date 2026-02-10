@@ -462,7 +462,7 @@ func (c *Container) initSettingsAndAuth() {
 	hdlrs.authHandler = handlers.NewAuthHandler(
 		ucs.registerUC, ucs.loginUC, ucs.verifyEmailUC, ucs.requestResetUC, ucs.resetPasswordUC,
 		ucs.initiateOAuthUC, ucs.handleOAuthUC, ucs.refreshTokenUC, ucs.logoutUC, repos.userRepo, log,
-		cfg.Auth.Cookie, cfg.Auth.JWT,
+		cfg.Auth.Cookie, cfg.Auth.JWT, cfg.Auth.Session,
 		cfg.Server.FrontendCallbackURL, cfg.Server.AllowedOrigins,
 		c.emailManager,
 	)
@@ -491,7 +491,7 @@ func (c *Container) initSettingsAndAuth() {
 				startPasskeyAuthenticationUC, finishPasskeyAuthenticationUC,
 				startPasskeySignupUC, finishPasskeySignupUC,
 				listUserPasskeysUC, deletePasskeyUC,
-				log, cfg.Auth.Cookie, cfg.Auth.JWT,
+				log, cfg.Auth.Cookie, cfg.Auth.JWT, cfg.Auth.Session,
 			)
 			log.Infow("WebAuthn passkey authentication enabled")
 		}

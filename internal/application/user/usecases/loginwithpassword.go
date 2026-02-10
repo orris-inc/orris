@@ -43,6 +43,7 @@ type LoginWithPasswordResult struct {
 	AccessToken  string
 	RefreshToken string
 	ExpiresIn    int64
+	RememberMe   bool
 }
 
 type LoginWithPasswordUseCase struct {
@@ -123,6 +124,7 @@ func (uc *LoginWithPasswordUseCase) Execute(ctx context.Context, cmd LoginWithPa
 			UserAgent:  cmd.UserAgent,
 		},
 		sessionDuration,
+		cmd.RememberMe,
 		func(userUUID string, sessionID string) (string, string, int64, error) {
 			tokens, err := uc.jwtService.Generate(userUUID, sessionID, existingUser.Role())
 			if err != nil {
@@ -145,5 +147,6 @@ func (uc *LoginWithPasswordUseCase) Execute(ctx context.Context, cmd LoginWithPa
 		AccessToken:  sessionWithTokens.AccessToken,
 		RefreshToken: sessionWithTokens.RefreshToken,
 		ExpiresIn:    sessionWithTokens.ExpiresIn,
+		RememberMe:   cmd.RememberMe,
 	}, nil
 }

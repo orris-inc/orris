@@ -33,6 +33,7 @@ type AuthHandler struct {
 	logger               logger.Interface
 	cookieConfig         config.CookieConfig
 	jwtConfig            config.JWTConfig
+	sessionConfig        config.SessionConfig
 	frontendCallbackURL  string
 	allowedOrigins       []string
 	emailChecker         EmailConfigChecker
@@ -52,6 +53,7 @@ func NewAuthHandler(
 	logger logger.Interface,
 	cookieConfig config.CookieConfig,
 	jwtConfig config.JWTConfig,
+	sessionConfig config.SessionConfig,
 	frontendCallbackURL string,
 	allowedOrigins []string,
 	emailChecker EmailConfigChecker,
@@ -70,6 +72,7 @@ func NewAuthHandler(
 		logger:               logger,
 		cookieConfig:         cookieConfig,
 		jwtConfig:            jwtConfig,
+		sessionConfig:        sessionConfig,
 		frontendCallbackURL:  frontendCallbackURL,
 		allowedOrigins:       allowedOrigins,
 		emailChecker:         emailChecker,
@@ -160,9 +163,14 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// Calculate cookie max age in seconds
-	accessMaxAge := h.jwtConfig.AccessExpMinutes * 60
-	refreshMaxAge := h.jwtConfig.RefreshExpDays * 24 * 60 * 60
+	// Calculate cookie max age based on remember me preference
+	// rememberMe=true: persistent cookies with explicit max age
+	// rememberMe=false: session cookies (maxAge=0, cleared when browser closes)
+	var accessMaxAge, refreshMaxAge int
+	if result.RememberMe {
+		accessMaxAge = h.jwtConfig.AccessExpMinutes * 60
+		refreshMaxAge = h.sessionConfig.RememberExpDays * 24 * 60 * 60
+	}
 
 	// Set tokens in HttpOnly cookies
 	utils.SetAuthCookies(c, h.cookieConfig, result.AccessToken, result.RefreshToken, accessMaxAge, refreshMaxAge)
@@ -313,9 +321,9 @@ func (h *AuthHandler) HandleOAuthCallback(c *gin.Context) {
 		return
 	}
 
-	// Calculate cookie max age in seconds
+	// OAuth login always uses persistent cookies (rememberMe=true)
 	accessMaxAge := h.jwtConfig.AccessExpMinutes * 60
-	refreshMaxAge := h.jwtConfig.RefreshExpDays * 24 * 60 * 60
+	refreshMaxAge := h.sessionConfig.RememberExpDays * 24 * 60 * 60
 
 	// Set tokens in HttpOnly cookies
 	utils.SetAuthCookies(c, h.cookieConfig, result.AccessToken, result.RefreshToken, accessMaxAge, refreshMaxAge)
@@ -349,9 +357,12 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	// Calculate cookie max age in seconds
-	accessMaxAge := h.jwtConfig.AccessExpMinutes * 60
-	refreshMaxAge := h.jwtConfig.RefreshExpDays * 24 * 60 * 60
+	// Calculate cookie max age based on session's remember me preference
+	var accessMaxAge, refreshMaxAge int
+	if result.RememberMe {
+		accessMaxAge = h.jwtConfig.AccessExpMinutes * 60
+		refreshMaxAge = h.sessionConfig.RememberExpDays * 24 * 60 * 60
+	}
 
 	// Update cookies with new tokens (rotated refresh token)
 	utils.SetAuthCookies(c, h.cookieConfig, result.AccessToken, result.RefreshToken, accessMaxAge, refreshMaxAge)

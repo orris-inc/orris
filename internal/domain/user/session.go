@@ -18,12 +18,13 @@ type Session struct {
 	UserAgent        string
 	TokenHash        string
 	RefreshTokenHash string
+	RememberMe       bool
 	ExpiresAt        time.Time
 	LastActivityAt   time.Time
 	CreatedAt        time.Time
 }
 
-func NewSession(userID uint, deviceName, deviceType, ipAddress, userAgent string, expiresAt time.Time) (*Session, error) {
+func NewSession(userID uint, deviceName, deviceType, ipAddress, userAgent string, expiresAt time.Time, rememberMe bool) (*Session, error) {
 	if userID == 0 {
 		return nil, fmt.Errorf("user ID is required")
 	}
@@ -41,6 +42,7 @@ func NewSession(userID uint, deviceName, deviceType, ipAddress, userAgent string
 		DeviceType:     deviceType,
 		IPAddress:      ipAddress,
 		UserAgent:      userAgent,
+		RememberMe:     rememberMe,
 		ExpiresAt:      expiresAt,
 		LastActivityAt: now,
 		CreatedAt:      now,

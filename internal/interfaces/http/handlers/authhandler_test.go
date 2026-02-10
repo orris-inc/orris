@@ -221,7 +221,7 @@ func newTestAuthHandler(
 		registerUC, loginUC, verifyEmailUC, requestResetUC, resetPasswordUC,
 		initiateOAuthUC, handleOAuthUC, refreshTokenUC, logoutUC,
 		userRepo, testutil.NewMockLogger(),
-		config.CookieConfig{}, config.JWTConfig{},
+		config.CookieConfig{}, config.JWTConfig{}, config.SessionConfig{},
 		"http://localhost:3000/callback", nil, emailChecker,
 	)
 }

@@ -79,6 +79,7 @@ func (h *AuthHelper) CreateSessionWithTokens(
 	accessToken string,
 	refreshToken string,
 	expiresIn int64,
+	rememberMe bool,
 ) (*SessionWithTokens, error) {
 	// Step 1: Create new session domain object
 	expiresAt := biztime.NowUTC().Add(sessionDuration)
@@ -89,6 +90,7 @@ func (h *AuthHelper) CreateSessionWithTokens(
 		deviceInfo.IPAddress,
 		deviceInfo.UserAgent,
 		expiresAt,
+		rememberMe,
 	)
 	if err != nil {
 		h.logger.Errorw("failed to create session", "error", err, "user_id", userID)
@@ -123,6 +125,7 @@ func (h *AuthHelper) CreateAndSaveSessionWithTokens(
 	userUUID string,
 	deviceInfo DeviceInfo,
 	sessionDuration time.Duration,
+	rememberMe bool,
 	generateTokens func(userUUID string, sessionID string) (accessToken, refreshToken string, expiresIn int64, err error),
 ) (*SessionWithTokens, error) {
 	// Step 1: Create new session domain object
@@ -134,6 +137,7 @@ func (h *AuthHelper) CreateAndSaveSessionWithTokens(
 		deviceInfo.IPAddress,
 		deviceInfo.UserAgent,
 		expiresAt,
+		rememberMe,
 	)
 	if err != nil {
 		h.logger.Errorw("failed to create session", "error", err, "user_id", userID)

@@ -188,8 +188,8 @@ func (uc *FinishPasskeySignupUseCase) Execute(ctx context.Context, cmd FinishPas
 		return nil, fmt.Errorf("failed to save passkey credential: %w", err)
 	}
 
-	// Create session with tokens
-	sessionDuration := time.Duration(uc.sessionConfig.DefaultExpDays) * 24 * time.Hour
+	// Create session with tokens (passkey is trusted auth, use remember duration)
+	sessionDuration := time.Duration(uc.sessionConfig.RememberExpDays) * 24 * time.Hour
 
 	sessionWithTokens, err := uc.authHelper.CreateAndSaveSessionWithTokens(
 		newUser.ID(),
@@ -201,6 +201,7 @@ func (uc *FinishPasskeySignupUseCase) Execute(ctx context.Context, cmd FinishPas
 			UserAgent:  cmd.UserAgent,
 		},
 		sessionDuration,
+		true, // rememberMe: passkey is trusted auth, default to persistent cookie
 		func(userUUID string, sessionID string) (string, string, int64, error) {
 			tokens, err := uc.jwtService.Generate(userUUID, sessionID, newUser.Role())
 			if err != nil {

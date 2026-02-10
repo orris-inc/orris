@@ -19,6 +19,7 @@ type RefreshTokenResult struct {
 	AccessToken  string
 	RefreshToken string
 	ExpiresIn    int64
+	RememberMe   bool
 }
 
 type RefreshTokenUseCase struct {
@@ -93,8 +94,12 @@ func (uc *RefreshTokenUseCase) Execute(ctx context.Context, cmd RefreshTokenComm
 	session.UpdateActivity()
 
 	// Extend session expiration on refresh to keep active users logged in
-	// Use default session duration (active users shouldn't need to re-login frequently)
-	sessionDuration := time.Duration(uc.sessionConfig.DefaultExpDays) * 24 * time.Hour
+	// Use remember or default duration based on session's remember me setting
+	expDays := uc.sessionConfig.DefaultExpDays
+	if session.RememberMe {
+		expDays = uc.sessionConfig.RememberExpDays
+	}
+	sessionDuration := time.Duration(expDays) * 24 * time.Hour
 	session.ExtendExpiration(sessionDuration)
 
 	if err := uc.sessionRepo.Update(session); err != nil {
@@ -108,5 +113,6 @@ func (uc *RefreshTokenUseCase) Execute(ctx context.Context, cmd RefreshTokenComm
 		AccessToken:  tokenPair.AccessToken,
 		RefreshToken: tokenPair.RefreshToken,
 		ExpiresIn:    tokenPair.ExpiresIn,
+		RememberMe:   session.RememberMe,
 	}, nil
 }

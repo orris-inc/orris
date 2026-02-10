@@ -30,6 +30,7 @@ type PasskeyHandler struct {
 	logger                 logger.Interface
 	cookieConfig           config.CookieConfig
 	jwtConfig              config.JWTConfig
+	sessionConfig          config.SessionConfig
 }
 
 
@@ -46,6 +47,7 @@ func NewPasskeyHandler(
 	logger logger.Interface,
 	cookieConfig config.CookieConfig,
 	jwtConfig config.JWTConfig,
+	sessionConfig config.SessionConfig,
 ) *PasskeyHandler {
 	return &PasskeyHandler{
 		startRegistrationUC:    startRegistrationUC,
@@ -59,6 +61,7 @@ func NewPasskeyHandler(
 		logger:                 logger,
 		cookieConfig:           cookieConfig,
 		jwtConfig:              jwtConfig,
+		sessionConfig:          sessionConfig,
 	}
 }
 
@@ -310,9 +313,9 @@ func (h *PasskeyHandler) FinishSignup(c *gin.Context) {
 		return
 	}
 
-	// Set tokens in HttpOnly cookies
+	// Passkey is trusted auth, always use persistent cookies (rememberMe=true)
 	accessMaxAge := h.jwtConfig.AccessExpMinutes * 60
-	refreshMaxAge := h.jwtConfig.RefreshExpDays * 24 * 60 * 60
+	refreshMaxAge := h.sessionConfig.RememberExpDays * 24 * 60 * 60
 	utils.SetAuthCookies(c, h.cookieConfig, result.AccessToken, result.RefreshToken, accessMaxAge, refreshMaxAge)
 
 	utils.SuccessResponse(c, http.StatusOK, "signup successful", gin.H{
@@ -464,9 +467,9 @@ func (h *PasskeyHandler) FinishAuthentication(c *gin.Context) {
 		return
 	}
 
-	// Set tokens in HttpOnly cookies
+	// Passkey is trusted auth, always use persistent cookies (rememberMe=true)
 	accessMaxAge := h.jwtConfig.AccessExpMinutes * 60
-	refreshMaxAge := h.jwtConfig.RefreshExpDays * 24 * 60 * 60
+	refreshMaxAge := h.sessionConfig.RememberExpDays * 24 * 60 * 60
 	utils.SetAuthCookies(c, h.cookieConfig, result.AccessToken, result.RefreshToken, accessMaxAge, refreshMaxAge)
 
 	utils.SuccessResponse(c, http.StatusOK, "login successful", gin.H{
