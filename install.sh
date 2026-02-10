@@ -725,6 +725,13 @@ run_migrations() {
     docker exec orris_app /app/orris migrate up
 
     log_info "Database migrations completed."
+
+    # Restart orris app to trigger admin user seeding
+    # seedAdminUser runs on server startup but the first attempt fails because
+    # the users table does not exist yet (migrations had not been applied).
+    log_info "Restarting orris to apply initial configuration..."
+    $DOCKER_COMPOSE restart orris
+    sleep 5
 }
 
 print_reverse_proxy_examples() {
