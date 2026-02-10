@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/orris-inc/orris/internal/domain/subscription"
+	apperrors "github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -39,10 +40,13 @@ func (uc *ActivateSubscriptionUseCase) Execute(ctx context.Context, cmd Activate
 		uc.logger.Errorw("failed to get subscription", "error", err, "subscription_id", cmd.SubscriptionID)
 		return fmt.Errorf("failed to get subscription: %w", err)
 	}
+	if sub == nil {
+		return apperrors.NewNotFoundError("subscription not found")
+	}
 
 	if err := sub.Activate(); err != nil {
 		uc.logger.Errorw("failed to activate subscription", "error", err, "subscription_id", cmd.SubscriptionID)
-		return fmt.Errorf("failed to activate subscription: %w", err)
+		return err
 	}
 
 	if err := uc.subscriptionRepo.Update(ctx, sub); err != nil {

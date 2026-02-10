@@ -25,10 +25,11 @@ type SubscriptionHandler struct {
 
 func NewSubscriptionHandler(
 	generateSubscriptionUC GenerateSubscriptionExecutor,
+	log logger.Interface,
 ) *SubscriptionHandler {
 	return &SubscriptionHandler{
 		generateSubscriptionUC: generateSubscriptionUC,
-		logger:                 logger.NewLogger(),
+		logger:                 log,
 	}
 }
 

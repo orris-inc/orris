@@ -9,6 +9,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/user"
 	vo "github.com/orris-inc/orris/internal/domain/user/valueobjects"
 	"github.com/orris-inc/orris/internal/shared/config"
+	apperrors "github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -134,6 +135,10 @@ func (uc *HandleOAuthCallbackUseCase) Execute(ctx context.Context, cmd HandleOAu
 			uc.logger.Errorw("failed to get user", "error", err, "user_id", oauthAccount.UserID)
 			return nil, fmt.Errorf("failed to get user: %w", err)
 		}
+		if existingUser == nil {
+			uc.logger.Errorw("associated user not found for oauth account", "user_id", oauthAccount.UserID)
+			return nil, apperrors.NewNotFoundError("associated user not found")
+		}
 
 		oauthAccount.RecordLogin()
 		if updateErr := uc.oauthRepo.Update(oauthAccount); updateErr != nil {
@@ -149,18 +154,18 @@ func (uc *HandleOAuthCallbackUseCase) Execute(ctx context.Context, cmd HandleOAu
 		if existingUser == nil {
 			email, err := vo.NewEmail(userInfo.Email)
 			if err != nil {
-				return nil, fmt.Errorf("invalid email: %w", err)
+				return nil, err
 			}
 
 			name, err := vo.NewName(userInfo.Name)
 			if err != nil {
-				return nil, fmt.Errorf("invalid name: %w", err)
+				return nil, err
 			}
 
 			existingUser, err = user.NewUser(email, name, id.NewUserID)
 			if err != nil {
 				uc.logger.Errorw("failed to create user", "error", err)
-				return nil, fmt.Errorf("failed to create user: %w", err)
+				return nil, err
 			}
 
 			if err := uc.userRepo.Create(ctx, existingUser); err != nil {

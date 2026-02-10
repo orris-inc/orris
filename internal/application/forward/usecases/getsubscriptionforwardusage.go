@@ -29,7 +29,7 @@ type GetSubscriptionForwardUsageResult struct {
 
 // GetSubscriptionForwardUsageUseCase handles getting subscription forward usage.
 type GetSubscriptionForwardUsageUseCase struct {
-	repo             forward.Repository
+	repo             forward.RuleQuerier
 	subscriptionRepo subscription.SubscriptionRepository
 	planRepo         subscription.PlanRepository
 	usageRepo        subscription.SubscriptionUsageRepository      // Legacy, kept for compatibility
@@ -40,7 +40,7 @@ type GetSubscriptionForwardUsageUseCase struct {
 
 // NewGetSubscriptionForwardUsageUseCase creates a new GetSubscriptionForwardUsageUseCase.
 func NewGetSubscriptionForwardUsageUseCase(
-	repo forward.Repository,
+	repo forward.RuleQuerier,
 	subscriptionRepo subscription.SubscriptionRepository,
 	planRepo subscription.PlanRepository,
 	usageRepo subscription.SubscriptionUsageRepository,

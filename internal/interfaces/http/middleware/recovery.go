@@ -65,21 +65,3 @@ func checkBrokenConnection(err interface{}) bool {
 	return false
 }
 
-func ErrorHandler() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Next()
-
-		if len(c.Errors) > 0 {
-			err := c.Errors.Last().Err
-
-			logger.Error("handler error occurred",
-				"path", c.Request.URL.Path,
-				"method", c.Request.Method,
-				"error", err)
-
-			if !c.Writer.Written() {
-				utils.ErrorResponseWithError(c, err)
-			}
-		}
-	}
-}

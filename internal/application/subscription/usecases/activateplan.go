@@ -35,7 +35,7 @@ func (uc *ActivatePlanUseCase) Execute(ctx context.Context, planSID string) erro
 
 	if err := plan.Activate(); err != nil {
 		uc.logger.Errorw("failed to activate plan", "error", err, "plan_id", plan.ID())
-		return fmt.Errorf("failed to activate plan: %w", err)
+		return err
 	}
 
 	if err := uc.planRepo.Update(ctx, plan); err != nil {

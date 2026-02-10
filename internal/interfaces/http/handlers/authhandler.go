@@ -20,15 +20,15 @@ type EmailConfigChecker interface {
 }
 
 type AuthHandler struct {
-	registerUseCase      *usecases.RegisterWithPasswordUseCase
-	loginUseCase         *usecases.LoginWithPasswordUseCase
-	verifyEmailUseCase   *usecases.VerifyEmailUseCase
-	requestResetUseCase  *usecases.RequestPasswordResetUseCase
-	resetPasswordUseCase *usecases.ResetPasswordUseCase
-	initiateOAuthUseCase *usecases.InitiateOAuthLoginUseCase
-	handleOAuthUseCase   *usecases.HandleOAuthCallbackUseCase
-	refreshTokenUseCase  *usecases.RefreshTokenUseCase
-	logoutUseCase        *usecases.LogoutUseCase
+	registerUseCase      registerUseCase
+	loginUseCase         loginUseCase
+	verifyEmailUseCase   verifyEmailUseCase
+	requestResetUseCase  requestPasswordResetUseCase
+	resetPasswordUseCase resetPasswordUseCase
+	initiateOAuthUseCase initiateOAuthUseCase
+	handleOAuthUseCase   handleOAuthCallbackUseCase
+	refreshTokenUseCase  refreshTokenUseCase
+	logoutUseCase        logoutUseCase
 	userRepo             user.Repository
 	logger               logger.Interface
 	cookieConfig         config.CookieConfig
@@ -39,15 +39,15 @@ type AuthHandler struct {
 }
 
 func NewAuthHandler(
-	registerUC *usecases.RegisterWithPasswordUseCase,
-	loginUC *usecases.LoginWithPasswordUseCase,
-	verifyEmailUC *usecases.VerifyEmailUseCase,
-	requestResetUC *usecases.RequestPasswordResetUseCase,
-	resetPasswordUC *usecases.ResetPasswordUseCase,
-	initiateOAuthUC *usecases.InitiateOAuthLoginUseCase,
-	handleOAuthUC *usecases.HandleOAuthCallbackUseCase,
-	refreshTokenUC *usecases.RefreshTokenUseCase,
-	logoutUC *usecases.LogoutUseCase,
+	registerUC registerUseCase,
+	loginUC loginUseCase,
+	verifyEmailUC verifyEmailUseCase,
+	requestResetUC requestPasswordResetUseCase,
+	resetPasswordUC resetPasswordUseCase,
+	initiateOAuthUC initiateOAuthUseCase,
+	handleOAuthUC handleOAuthCallbackUseCase,
+	refreshTokenUC refreshTokenUseCase,
+	logoutUC logoutUseCase,
 	userRepo user.Repository,
 	logger logger.Interface,
 	cookieConfig config.CookieConfig,
@@ -121,7 +121,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	newUser, err := h.registerUseCase.Execute(c.Request.Context(), cmd)
 	if err != nil {
 		h.logger.Errorw("registration failed", "error", err)
-		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
+		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
@@ -133,11 +133,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		message = "registration successful, please verify your email"
 	}
 
-	utils.SuccessResponse(c, http.StatusCreated, message, gin.H{
-		"user_id":                     newUser.SID(),
-		"email":                       newUser.Email().String(),
-		"requires_email_verification": requiresEmailVerification,
-	})
+	utils.SuccessResponse(c, http.StatusCreated, message, toRegisterResponse(newUser, requiresEmailVerification))
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {
@@ -171,9 +167,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// Set tokens in HttpOnly cookies
 	utils.SetAuthCookies(c, h.cookieConfig, result.AccessToken, result.RefreshToken, accessMaxAge, refreshMaxAge)
 
-	utils.SuccessResponse(c, http.StatusOK, "login successful", gin.H{
-		"user":       result.User.GetDisplayInfo(),
-		"expires_in": result.ExpiresIn,
+	utils.SuccessResponse(c, http.StatusOK, "login successful", &LoginResponse{
+		User:      toUserInfoResponse(result.User.GetDisplayInfo()),
+		ExpiresIn: result.ExpiresIn,
 	})
 }
 
@@ -357,11 +353,11 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	accessMaxAge := h.jwtConfig.AccessExpMinutes * 60
 	refreshMaxAge := h.jwtConfig.RefreshExpDays * 24 * 60 * 60
 
-	// Update cookies with new tokens
-	utils.SetAuthCookies(c, h.cookieConfig, result.AccessToken, refreshToken, accessMaxAge, refreshMaxAge)
+	// Update cookies with new tokens (rotated refresh token)
+	utils.SetAuthCookies(c, h.cookieConfig, result.AccessToken, result.RefreshToken, accessMaxAge, refreshMaxAge)
 
-	utils.SuccessResponse(c, http.StatusOK, "token refreshed successfully", gin.H{
-		"expires_in": result.ExpiresIn,
+	utils.SuccessResponse(c, http.StatusOK, "token refreshed successfully", &RefreshTokenResponse{
+		ExpiresIn: result.ExpiresIn,
 	})
 }
 
@@ -394,11 +390,15 @@ func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 	}
 
 	currentUser, err := h.userRepo.GetByID(c.Request.Context(), userID)
-	if err != nil || currentUser == nil {
+	if err != nil {
 		h.logger.Errorw("failed to get current user", "error", err, "user_id", userID)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+	if currentUser == nil {
 		utils.ErrorResponse(c, http.StatusNotFound, "user not found")
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "success", currentUser.GetDisplayInfo())
+	utils.SuccessResponse(c, http.StatusOK, "success", toUserInfoResponse(currentUser.GetDisplayInfo()))
 }

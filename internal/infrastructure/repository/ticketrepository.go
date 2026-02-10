@@ -2,16 +2,15 @@ package repository
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"gorm.io/gorm"
 
 	"github.com/orris-inc/orris/internal/domain/ticket"
-	vo "github.com/orris-inc/orris/internal/domain/ticket/valueobjects"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	db "github.com/orris-inc/orris/internal/shared/db"
 )
 
 // allowedTicketOrderByFields defines the whitelist of allowed ORDER BY fields
@@ -30,17 +29,22 @@ var allowedTicketOrderByFields = map[string]bool{
 }
 
 type TicketRepository struct {
-	db *gorm.DB
+	db     *gorm.DB
+	mapper mappers.TicketMapper
 }
 
 func NewTicketRepository(db *gorm.DB) *TicketRepository {
-	return &TicketRepository{db: db}
+	return &TicketRepository{
+		db:     db,
+		mapper: mappers.NewTicketMapper(),
+	}
 }
 
 func (r *TicketRepository) Save(ctx context.Context, t *ticket.Ticket) error {
-	model := r.toModel(t)
+	model := r.mapper.ToModel(t)
+	tx := db.GetTxFromContext(ctx, r.db)
 
-	if err := r.db.WithContext(ctx).Create(model).Error; err != nil {
+	if err := tx.Create(model).Error; err != nil {
 		return fmt.Errorf("failed to save ticket: %w", err)
 	}
 
@@ -52,9 +56,10 @@ func (r *TicketRepository) Save(ctx context.Context, t *ticket.Ticket) error {
 }
 
 func (r *TicketRepository) Update(ctx context.Context, t *ticket.Ticket) error {
-	model := r.toModel(t)
+	model := r.mapper.ToModel(t)
+	tx := db.GetTxFromContext(ctx, r.db)
 
-	result := r.db.WithContext(ctx).
+	result := tx.
 		Model(&models.TicketModel{}).
 		Where("id = ?", model.ID).
 		Updates(model)
@@ -70,9 +75,9 @@ func (r *TicketRepository) Update(ctx context.Context, t *ticket.Ticket) error {
 
 func (r *TicketRepository) FindByID(ctx context.Context, id uint) (*ticket.Ticket, error) {
 	var model models.TicketModel
+	tx := db.GetTxFromContext(ctx, r.db)
 
-	if err := r.db.WithContext(ctx).
-		Preload("Comments").
+	if err := tx.
 		First(&model, id).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, fmt.Errorf("ticket not found")
@@ -80,14 +85,24 @@ func (r *TicketRepository) FindByID(ctx context.Context, id uint) (*ticket.Ticke
 		return nil, fmt.Errorf("failed to find ticket: %w", err)
 	}
 
-	return r.toDomain(&model)
+	t, err := r.mapper.ToDomain(&model)
+	if err != nil {
+		return nil, err
+	}
+
+	// Load comments in a single query and convert via mapper
+	if err := r.loadComments(ctx, t, model.ID); err != nil {
+		return nil, err
+	}
+
+	return t, nil
 }
 
 func (r *TicketRepository) FindByNumber(ctx context.Context, number string) (*ticket.Ticket, error) {
 	var model models.TicketModel
+	tx := db.GetTxFromContext(ctx, r.db)
 
-	if err := r.db.WithContext(ctx).
-		Preload("Comments").
+	if err := tx.
 		Where("number = ?", number).
 		First(&model).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -96,11 +111,22 @@ func (r *TicketRepository) FindByNumber(ctx context.Context, number string) (*ti
 		return nil, fmt.Errorf("failed to find ticket: %w", err)
 	}
 
-	return r.toDomain(&model)
+	t, err := r.mapper.ToDomain(&model)
+	if err != nil {
+		return nil, err
+	}
+
+	// Load comments in a single query and convert via mapper
+	if err := r.loadComments(ctx, t, model.ID); err != nil {
+		return nil, err
+	}
+
+	return t, nil
 }
 
 func (r *TicketRepository) Delete(ctx context.Context, id uint) error {
-	result := r.db.WithContext(ctx).Delete(&models.TicketModel{}, id)
+	tx := db.GetTxFromContext(ctx, r.db)
+	result := tx.Delete(&models.TicketModel{}, id)
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete ticket: %w", result.Error)
 	}
@@ -114,7 +140,8 @@ func (r *TicketRepository) List(
 	ctx context.Context,
 	filter ticket.TicketFilter,
 ) ([]*ticket.Ticket, int64, error) {
-	query := r.db.WithContext(ctx).Model(&models.TicketModel{})
+	tx := db.GetTxFromContext(ctx, r.db)
+	query := tx.Model(&models.TicketModel{})
 
 	if filter.Status != nil {
 		query = query.Where("status = ?", filter.Status.String())
@@ -155,13 +182,13 @@ func (r *TicketRepository) List(
 	}
 
 	var ticketModels []models.TicketModel
-	if err := query.Preload("Comments").Find(&ticketModels).Error; err != nil {
+	if err := query.Find(&ticketModels).Error; err != nil {
 		return nil, 0, fmt.Errorf("failed to list tickets: %w", err)
 	}
 
 	tickets := make([]*ticket.Ticket, len(ticketModels))
 	for i, model := range ticketModels {
-		t, err := r.toDomain(&model)
+		t, err := r.mapper.ToDomain(&model)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -181,7 +208,8 @@ func (r *TicketRepository) SaveComment(ctx context.Context, c *ticket.Comment) e
 		UpdatedAt:  c.UpdatedAt().UnixMilli(),
 	}
 
-	if err := r.db.WithContext(ctx).Create(model).Error; err != nil {
+	tx := db.GetTxFromContext(ctx, r.db)
+	if err := tx.Create(model).Error; err != nil {
 		return fmt.Errorf("failed to save comment: %w", err)
 	}
 
@@ -198,7 +226,8 @@ func (r *TicketRepository) FindCommentsByTicketID(
 ) ([]*ticket.Comment, error) {
 	var commentModels []models.CommentModel
 
-	if err := r.db.WithContext(ctx).
+	tx := db.GetTxFromContext(ctx, r.db)
+	if err := tx.
 		Where("ticket_id = ?", ticketID).
 		Order("created_at ASC").
 		Find(&commentModels).Error; err != nil {
@@ -207,7 +236,7 @@ func (r *TicketRepository) FindCommentsByTicketID(
 
 	comments := make([]*ticket.Comment, len(commentModels))
 	for i, model := range commentModels {
-		c, err := r.commentToDomain(&model)
+		c, err := r.mapper.CommentToDomain(&model)
 		if err != nil {
 			return nil, err
 		}
@@ -217,148 +246,24 @@ func (r *TicketRepository) FindCommentsByTicketID(
 	return comments, nil
 }
 
-func (r *TicketRepository) toModel(t *ticket.Ticket) *models.TicketModel {
-	model := &models.TicketModel{
-		ID:          t.ID(),
-		Number:      t.Number(),
-		Title:       t.Title(),
-		Description: t.Description(),
-		Category:    t.Category().String(),
-		Priority:    t.Priority().String(),
-		Status:      t.Status().String(),
-		CreatorID:   t.CreatorID(),
-		AssigneeID:  t.AssigneeID(),
-		Version:     t.Version(),
-		CreatedAt:   t.CreatedAt().UnixMilli(),
-		UpdatedAt:   t.UpdatedAt().UnixMilli(),
-	}
-
-	if len(t.Tags()) > 0 {
-		tagsJSON, _ := json.Marshal(t.Tags())
-		model.Tags = string(tagsJSON)
-	}
-
-	if len(t.Metadata()) > 0 {
-		metaJSON, _ := json.Marshal(t.Metadata())
-		model.Metadata = string(metaJSON)
-	}
-
-	if t.SLADueTime() != nil {
-		sla := t.SLADueTime().UnixMilli()
-		model.SLADueTime = &sla
-	}
-
-	if t.ResponseTime() != nil {
-		resp := t.ResponseTime().UnixMilli()
-		model.ResponseTime = &resp
-	}
-
-	if t.ResolvedTime() != nil {
-		resolved := t.ResolvedTime().UnixMilli()
-		model.ResolvedTime = &resolved
-	}
-
-	if t.ClosedAt() != nil {
-		closed := t.ClosedAt().UnixMilli()
-		model.ClosedAt = &closed
-	}
-
-	return model
-}
-
-func (r *TicketRepository) toDomain(model *models.TicketModel) (*ticket.Ticket, error) {
-	category, _ := vo.NewCategory(model.Category)
-	priority, _ := vo.NewPriority(model.Priority)
-	status, _ := vo.NewTicketStatus(model.Status)
-
-	var tags []string
-	if model.Tags != "" {
-		json.Unmarshal([]byte(model.Tags), &tags)
-	}
-
-	var metadata map[string]interface{}
-	if model.Metadata != "" {
-		json.Unmarshal([]byte(model.Metadata), &metadata)
-	}
-
-	createdAt := convertMillisToTime(model.CreatedAt)
-	updatedAt := convertMillisToTime(model.UpdatedAt)
-
-	var slaDueTime, responseTime, resolvedTime, closedAt *time.Time
-	if model.SLADueTime != nil {
-		t := convertMillisToTime(*model.SLADueTime)
-		slaDueTime = &t
-	}
-	if model.ResponseTime != nil {
-		t := convertMillisToTime(*model.ResponseTime)
-		responseTime = &t
-	}
-	if model.ResolvedTime != nil {
-		t := convertMillisToTime(*model.ResolvedTime)
-		resolvedTime = &t
-	}
-	if model.ClosedAt != nil {
-		t := convertMillisToTime(*model.ClosedAt)
-		closedAt = &t
-	}
-
-	t, err := ticket.ReconstructTicket(
-		model.ID,
-		model.Number,
-		model.Title,
-		model.Description,
-		category,
-		priority,
-		status,
-		model.CreatorID,
-		model.AssigneeID,
-		tags,
-		metadata,
-		slaDueTime,
-		responseTime,
-		resolvedTime,
-		model.Version,
-		createdAt,
-		updatedAt,
-		closedAt,
-	)
-
-	if err != nil {
-		return nil, err
-	}
-
-	// Query comments manually (no foreign key associations)
+// loadComments queries comments for a ticket and adds them to the domain entity.
+func (r *TicketRepository) loadComments(ctx context.Context, t *ticket.Ticket, ticketID uint) error {
 	var commentModels []models.CommentModel
-	if err := r.db.Where("ticket_id = ?", model.ID).Order("created_at ASC").Find(&commentModels).Error; err != nil {
-		return nil, err
+	tx := db.GetTxFromContext(ctx, r.db)
+	if err := tx.
+		Where("ticket_id = ?", ticketID).
+		Order("created_at ASC").
+		Find(&commentModels).Error; err != nil {
+		return fmt.Errorf("failed to load comments: %w", err)
 	}
 
-	for _, commentModel := range commentModels {
-		comment, err := r.commentToDomain(&commentModel)
+	for _, cm := range commentModels {
+		comment, err := r.mapper.CommentToDomain(&cm)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		t.AddComment(comment)
 	}
 
-	return t, nil
-}
-
-func (r *TicketRepository) commentToDomain(model *models.CommentModel) (*ticket.Comment, error) {
-	createdAt := convertMillisToTime(model.CreatedAt)
-	updatedAt := convertMillisToTime(model.UpdatedAt)
-
-	return ticket.ReconstructComment(
-		model.ID,
-		model.TicketID,
-		model.UserID,
-		model.Content,
-		model.IsInternal,
-		createdAt,
-		updatedAt,
-	)
-}
-
-func convertMillisToTime(millis int64) time.Time {
-	return time.Unix(0, millis*int64(time.Millisecond))
+	return nil
 }

@@ -50,7 +50,7 @@ func (uc *SuspendSubscriptionUseCase) Execute(ctx context.Context, cmd SuspendSu
 
 	if err := sub.Suspend(cmd.Reason); err != nil {
 		uc.logger.Errorw("failed to suspend subscription", "error", err, "subscription_id", cmd.SubscriptionID)
-		return fmt.Errorf("failed to suspend subscription: %w", err)
+		return err
 	}
 
 	if err := uc.subscriptionRepo.Update(ctx, sub); err != nil {
@@ -125,7 +125,7 @@ func (uc *UnsuspendSubscriptionUseCase) Execute(ctx context.Context, cmd Unsuspe
 
 	if err := sub.Unsuspend(); err != nil {
 		uc.logger.Errorw("failed to unsuspend subscription", "error", err, "subscription_id", cmd.SubscriptionID)
-		return fmt.Errorf("failed to unsuspend subscription: %w", err)
+		return err
 	}
 
 	if err := uc.subscriptionRepo.Update(ctx, sub); err != nil {

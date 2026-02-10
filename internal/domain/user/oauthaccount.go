@@ -22,10 +22,6 @@ type OAuthAccount struct {
 	UpdatedAt         time.Time
 }
 
-func (OAuthAccount) TableName() string {
-	return "oauth_accounts"
-}
-
 func NewOAuthAccount(userID uint, provider, providerUserID, providerEmail string) (*OAuthAccount, error) {
 	if userID == 0 {
 		return nil, fmt.Errorf("user ID is required")

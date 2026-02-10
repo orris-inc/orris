@@ -16,6 +16,8 @@ func FuzzParsePrefixedID(f *testing.F) {
 		"usr_user123",
 		"sub_subscription",
 		"plan_plan123",
+		"tg_bind_xK9mP2vL3n",
+		"atg_bind_K9mP2vL3nQ",
 		"",
 		"nounderscore",
 		"_leadingunderscore",
@@ -24,7 +26,6 @@ func FuzzParsePrefixedID(f *testing.F) {
 		"__double__underscore__",
 		"a_b",
 		"*_special",
-		"中文_测试",
 		strings.Repeat("a", 1000) + "_" + strings.Repeat("b", 1000),
 	}
 
@@ -50,14 +51,14 @@ func FuzzParsePrefixedID(f *testing.F) {
 
 		// If has underscore, check the parsing is correct
 		if err == nil {
-			// Verify the parsed values can reconstruct the original (up to first underscore)
+			// Verify the parsed values can reconstruct the original
 			if !strings.HasPrefix(input, prefix+"_") {
 				t.Errorf("ParsePrefixedID(%q) returned prefix=%q which doesn't match input", input, prefix)
 			}
-			// Verify shortID is the rest after first underscore
-			parts := strings.SplitN(input, "_", 2)
-			if len(parts) == 2 && shortID != parts[1] {
-				t.Errorf("ParsePrefixedID(%q) returned shortID=%q, expected %q", input, shortID, parts[1])
+			// Verify prefix + "_" + shortID == input
+			reconstructed := prefix + "_" + shortID
+			if reconstructed != input {
+				t.Errorf("ParsePrefixedID(%q) returned prefix=%q, shortID=%q which don't reconstruct input (got %q)", input, prefix, shortID, reconstructed)
 			}
 		}
 	})
@@ -78,6 +79,8 @@ func FuzzValidatePrefix(f *testing.F) {
 		{"nounderscore", "fa"},
 		{"fa_", "fa"},
 		{"_test", ""},
+		{"tg_bind_abc123", "tg_bind"},
+		{"atg_bind_abc123", "atg_bind"},
 	}
 
 	for _, seed := range seeds {
@@ -100,30 +103,24 @@ func FuzzValidatePrefix(f *testing.F) {
 			return
 		}
 
-		// Check if shortID part is valid (correct length and charset)
-		parts := strings.SplitN(prefixedID, "_", 2)
-		shortID := parts[1]
-		validShortID := len(shortID) == DefaultLength
-		if validShortID {
-			for _, c := range shortID {
-				if !strings.ContainsRune(alphabet, c) {
-					validShortID = false
-					break
-				}
+		// If parsing succeeds, verify prefix matching logic
+		parsedPrefix, _, parseErr := ParsePrefixedID(prefixedID)
+		if parseErr != nil {
+			// If parsing fails, ValidatePrefix should also fail
+			if err == nil {
+				t.Errorf("ValidatePrefix(%q, %q) should return error when ParsePrefixedID fails", prefixedID, expectedPrefix)
 			}
+			return
 		}
 
-		// If has correct prefix AND valid shortID, should not error
-		if strings.HasPrefix(prefixedID, expectedPrefix+"_") && validShortID && err != nil {
+		// If parsed prefix matches expected, should not error
+		if parsedPrefix == expectedPrefix && err != nil {
 			t.Errorf("ValidatePrefix(%q, %q) returned unexpected error: %v", prefixedID, expectedPrefix, err)
 		}
 
-		// If has wrong prefix, should error
-		if !strings.HasPrefix(prefixedID, expectedPrefix+"_") && err == nil {
-			actualPrefix := strings.SplitN(prefixedID, "_", 2)[0]
-			if actualPrefix != expectedPrefix {
-				t.Errorf("ValidatePrefix(%q, %q) should return error for wrong prefix", prefixedID, expectedPrefix)
-			}
+		// If parsed prefix doesn't match expected, should error
+		if parsedPrefix != expectedPrefix && err == nil {
+			t.Errorf("ValidatePrefix(%q, %q) should return error for wrong prefix (parsed: %q)", prefixedID, expectedPrefix, parsedPrefix)
 		}
 	})
 }
@@ -140,7 +137,6 @@ func FuzzFormatWithPrefix(f *testing.F) {
 		{"", ""},
 		{"node", "test_with_underscore"},
 		{"*special*", "id"},
-		{"中文", "测试"},
 	}
 
 	for _, seed := range seeds {
@@ -226,26 +222,30 @@ func TestGenerateUniqueness(t *testing.T) {
 	}
 }
 
-// TestNewSIDFormats tests that NewSID produces correct formats
+// TestNewSIDFormats tests that NewSID produces correct formats for all prefix types,
+// including multi-segment prefixes like "tg_bind" and "atg_bind".
 func TestNewSIDFormats(t *testing.T) {
 	tests := []struct {
 		name      string
 		generator func() (string, error)
 		prefix    string
-		// hasUnderscoreInPrefix indicates the prefix itself contains underscore
-		// These prefixes cannot be correctly parsed by ParsePrefixedID
-		hasUnderscoreInPrefix bool
 	}{
-		{"ForwardAgent", NewForwardAgentID, PrefixForwardAgent, false},
-		{"ForwardRule", NewForwardRuleID, PrefixForwardRule, false},
-		{"Node", NewNodeID, PrefixNode, false},
-		{"User", NewUserID, PrefixUser, false},
-		{"Subscription", NewSubscriptionID, PrefixSubscription, false},
-		{"Plan", NewPlanID, PrefixPlan, false},
-		// Note: These prefixes contain underscores, ParsePrefixedID will not work correctly
-		{"TelegramBinding", NewTelegramBindingID, PrefixTelegramBinding, true},
-		{"AdminTelegramBinding", NewAdminTelegramBindingID, PrefixAdminTelegramBinding, true},
-		{"Setting", NewSettingID, PrefixSetting, false},
+		{"ForwardAgent", NewForwardAgentID, PrefixForwardAgent},
+		{"ForwardRule", NewForwardRuleID, PrefixForwardRule},
+		{"Node", NewNodeID, PrefixNode},
+		{"User", NewUserID, PrefixUser},
+		{"Subscription", NewSubscriptionID, PrefixSubscription},
+		{"Plan", NewPlanID, PrefixPlan},
+		{"TelegramBinding", NewTelegramBindingID, PrefixTelegramBinding},
+		{"AdminTelegramBinding", NewAdminTelegramBindingID, PrefixAdminTelegramBinding},
+		{"Setting", NewSettingID, PrefixSetting},
+		{"SubscriptionToken", NewSubscriptionTokenID, PrefixSubscriptionToken},
+		{"SubscriptionUsage", NewSubscriptionUsageID, PrefixSubscriptionUsage},
+		{"PlanPricing", NewPlanPricingID, PrefixPlanPricing},
+		{"ResourceGroup", NewResourceGroupID, PrefixResourceGroup},
+		{"SubscriptionUsageStats", NewSubscriptionUsageStatsID, PrefixSubscriptionUsageStats},
+		{"PasskeyCredential", NewPasskeyCredentialID, PrefixPasskeyCredential},
+		{"Announcement", NewAnnouncementID, PrefixAnnouncement},
 	}
 
 	for _, tt := range tests {
@@ -259,14 +259,7 @@ func TestNewSIDFormats(t *testing.T) {
 				t.Errorf("generated ID %q doesn't have expected prefix %q_", id, tt.prefix)
 			}
 
-			// Skip parse verification for prefixes with underscores
-			// ParsePrefixedID splits on first "_", so "tg_bind_xxx" becomes prefix="tg", shortID="bind_xxx"
-			if tt.hasUnderscoreInPrefix {
-				t.Logf("Skipping parse test for %q (prefix contains underscore)", tt.prefix)
-				return
-			}
-
-			// Verify the format can be parsed back
+			// Verify the format can be parsed back correctly
 			parsedPrefix, shortID, err := ParsePrefixedID(id)
 			if err != nil {
 				t.Errorf("failed to parse generated ID %q: %v", id, err)
@@ -276,6 +269,64 @@ func TestNewSIDFormats(t *testing.T) {
 			}
 			if len(shortID) != DefaultLength {
 				t.Errorf("short ID length %d doesn't match default %d", len(shortID), DefaultLength)
+			}
+
+			// Verify round-trip: prefix + "_" + shortID == original id
+			reconstructed := parsedPrefix + "_" + shortID
+			if reconstructed != id {
+				t.Errorf("round-trip failed: original=%q, reconstructed=%q", id, reconstructed)
+			}
+		})
+	}
+}
+
+// TestParsePrefixedIDMultiSegment specifically tests multi-segment prefix parsing
+func TestParsePrefixedIDMultiSegment(t *testing.T) {
+	tests := []struct {
+		name           string
+		input          string
+		expectedPrefix string
+		expectError    bool
+	}{
+		{
+			name:           "tg_bind prefix parses correctly",
+			input:          "tg_bind_xK9mP2vL3nQw",
+			expectedPrefix: "tg_bind",
+		},
+		{
+			name:           "atg_bind prefix parses correctly",
+			input:          "atg_bind_xK9mP2vL3nQw",
+			expectedPrefix: "atg_bind",
+		},
+		{
+			name:           "simple prefix still works",
+			input:          "fa_xK9mP2vL3nQw",
+			expectedPrefix: "fa",
+		},
+		{
+			name:        "tg_bind with wrong length short ID",
+			input:       "tg_bind_short",
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			prefix, shortID, err := ParsePrefixedID(tt.input)
+			if tt.expectError {
+				if err == nil {
+					t.Errorf("expected error for input %q, got prefix=%q shortID=%q", tt.input, prefix, shortID)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error for input %q: %v", tt.input, err)
+			}
+			if prefix != tt.expectedPrefix {
+				t.Errorf("prefix mismatch for %q: got %q, want %q", tt.input, prefix, tt.expectedPrefix)
+			}
+			if len(shortID) != DefaultLength {
+				t.Errorf("shortID length mismatch for %q: got %d, want %d", tt.input, len(shortID), DefaultLength)
 			}
 		})
 	}

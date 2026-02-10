@@ -18,6 +18,7 @@ import (
 	infraBlockchain "github.com/orris-inc/orris/internal/infrastructure/blockchain"
 	infraExchangerate "github.com/orris-inc/orris/internal/infrastructure/exchangerate"
 	"github.com/orris-inc/orris/internal/shared/biztime"
+	"github.com/orris-inc/orris/internal/shared/goroutine"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -298,10 +299,10 @@ func (m *USDTServiceManager) StartScheduler(ctx context.Context) {
 	m.logger.Infow("starting USDT monitor scheduler", "interval", "30s")
 
 	m.wg.Add(1)
-	go func() {
+	goroutine.SafeGo(m.logger, "usdt-monitor-loop", func() {
 		defer m.wg.Done()
 		m.runMonitorLoop(ctx)
-	}()
+	})
 }
 
 // StopScheduler stops the USDT monitor scheduler

@@ -1,4 +1,4 @@
-package dto
+package handlers
 
 import (
 	"strconv"
@@ -110,16 +110,16 @@ func ParseNotificationID(c *gin.Context) (uint, error) {
 		return 0, errors.NewValidationError("Notification ID is required")
 	}
 
-	id, err := strconv.ParseUint(idStr, 10, 32)
+	nid, err := strconv.ParseUint(idStr, 10, 32)
 	if err != nil {
 		return 0, errors.NewValidationError("Invalid notification ID format")
 	}
 
-	if id == 0 {
+	if nid == 0 {
 		return 0, errors.NewValidationError("Notification ID cannot be zero")
 	}
 
-	return uint(id), nil
+	return uint(nid), nil
 }
 
 func ParseListAnnouncementsRequest(c *gin.Context) (*ListAnnouncementsRequest, error) {

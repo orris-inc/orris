@@ -56,7 +56,8 @@ func (r *SubscriptionRepositoryImpl) Create(ctx context.Context, subscriptionEnt
 		return fmt.Errorf("failed to map subscription entity: %w", err)
 	}
 
-	if err := r.db.WithContext(ctx).Create(model).Error; err != nil {
+	tx := db.GetTxFromContext(ctx, r.db)
+	if err := tx.Create(model).Error; err != nil {
 		r.logger.Errorw("failed to create subscription in database", "error", err)
 		return fmt.Errorf("failed to create subscription: %w", err)
 	}
@@ -354,7 +355,8 @@ func (r *SubscriptionRepositoryImpl) Update(ctx context.Context, subscriptionEnt
 		return fmt.Errorf("failed to map subscription entity: %w", err)
 	}
 
-	result := r.db.WithContext(ctx).Model(model).
+	tx := db.GetTxFromContext(ctx, r.db)
+	result := tx.Model(model).
 		Where("id = ?", model.ID).
 		Updates(map[string]interface{}{
 			"user_id":              model.UserID,

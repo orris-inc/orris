@@ -12,8 +12,17 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/infrastructure/services/protocol"
+	"github.com/orris-inc/orris/internal/shared/goroutine"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
+
+// udpBufPool reuses 64KB buffers for UDP read operations to reduce GC pressure.
+var udpBufPool = sync.Pool{
+	New: func() any {
+		buf := make([]byte, 65535)
+		return &buf
+	},
+}
 
 const (
 	// DefaultBufferSize is the default buffer size for data transfer.
@@ -21,6 +30,12 @@ const (
 
 	// DefaultUDPTimeout is the default timeout for UDP sessions.
 	DefaultUDPTimeout = 60 * time.Second
+
+	// DefaultMaxTCPConnsPerRule is the default maximum number of concurrent TCP connections per forwarding rule.
+	DefaultMaxTCPConnsPerRule = 1024
+
+	// tcpConnsWarnThreshold is the fraction of max capacity at which a warning is logged.
+	tcpConnsWarnThreshold = 0.8
 )
 
 // TrafficRecorder records traffic statistics.
@@ -35,6 +50,7 @@ type Manager struct {
 	repo            forward.Repository
 	trafficRecorder TrafficRecorder
 	logger          logger.Interface
+	maxTCPConns     int // max concurrent TCP connections per rule; 0 means use DefaultMaxTCPConnsPerRule
 }
 
 // ForwardingRule represents an active forwarding rule.
@@ -52,6 +68,7 @@ type ForwardingRule struct {
 	running          atomic.Bool
 	blockedProtocols map[string]struct{} // protocols to block (O(1) lookup)
 	sniffer          *protocol.Sniffer
+	tcpSemaphore     chan struct{} // limits concurrent TCP connections
 }
 
 // NewManager creates a new forwarding manager.
@@ -71,6 +88,23 @@ func (m *Manager) SetTrafficRecorder(recorder TrafficRecorder) {
 	m.trafficRecorder = recorder
 }
 
+// SetMaxTCPConns sets the maximum number of concurrent TCP connections per rule.
+// This only affects rules started after this call. Pass 0 to use the default.
+func (m *Manager) SetMaxTCPConns(max int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.maxTCPConns = max
+}
+
+// effectiveMaxTCPConns returns the configured max or the default.
+// Caller must hold at least a read lock.
+func (m *Manager) effectiveMaxTCPConns() int {
+	if m.maxTCPConns > 0 {
+		return m.maxTCPConns
+	}
+	return DefaultMaxTCPConnsPerRule
+}
+
 // Start starts forwarding for a rule.
 func (m *Manager) Start(ruleID uint, listenPort uint16, targetAddress string, targetPort uint16, protocolType string, blockedProtocols []string) error {
 	m.mu.Lock()
@@ -81,6 +115,7 @@ func (m *Manager) Start(ruleID uint, listenPort uint16, targetAddress string, ta
 		return fmt.Errorf("forwarding rule %d is already running", ruleID)
 	}
 
+	maxConns := m.effectiveMaxTCPConns()
 	ctx, cancel := context.WithCancel(context.Background())
 	rule := &ForwardingRule{
 		ID:            ruleID,
@@ -89,6 +124,7 @@ func (m *Manager) Start(ruleID uint, listenPort uint16, targetAddress string, ta
 		TargetPort:    targetPort,
 		Protocol:      protocolType,
 		cancel:        cancel,
+		tcpSemaphore:  make(chan struct{}, maxConns),
 	}
 
 	// Initialize blocked protocols map for O(1) lookup
@@ -110,7 +146,9 @@ func (m *Manager) Start(ruleID uint, listenPort uint16, targetAddress string, ta
 			return fmt.Errorf("failed to listen on TCP port %d: %w", listenPort, err)
 		}
 		rule.tcpListener = listener
-		go m.handleTCP(ctx, rule, target)
+		goroutine.SafeGo(m.logger, "forwarder-handle-tcp", func() {
+			m.handleTCP(ctx, rule, target)
+		})
 	}
 
 	// Start UDP forwarding
@@ -133,7 +171,9 @@ func (m *Manager) Start(ruleID uint, listenPort uint16, targetAddress string, ta
 			return fmt.Errorf("failed to listen on UDP port %d: %w", listenPort, err)
 		}
 		rule.udpConn = conn
-		go m.handleUDP(ctx, rule, target)
+		goroutine.SafeGo(m.logger, "forwarder-handle-udp", func() {
+			m.handleUDP(ctx, rule, target)
+		})
 	}
 
 	rule.running.Store(true)
@@ -262,7 +302,30 @@ func (m *Manager) handleTCP(ctx context.Context, rule *ForwardingRule, target st
 			}
 		}
 
-		go m.handleTCPConnection(ctx, rule, conn, target)
+		select {
+		case rule.tcpSemaphore <- struct{}{}:
+			// Check if connections reached the warning threshold (80% capacity).
+			active := len(rule.tcpSemaphore)
+			maxConns := cap(rule.tcpSemaphore)
+			if active >= int(float64(maxConns)*tcpConnsWarnThreshold) {
+				m.logger.Warnw("TCP connections approaching limit",
+					"rule_id", rule.ID,
+					"active", active,
+					"max", maxConns,
+				)
+			}
+			goroutine.SafeGo(m.logger, "forwarder-handle-tcp-connection", func() {
+				defer func() { <-rule.tcpSemaphore }()
+				m.handleTCPConnection(ctx, rule, conn, target)
+			})
+		default:
+			// Max connections reached, reject the incoming connection.
+			m.logger.Warnw("max TCP connections reached, rejecting",
+				"rule_id", rule.ID,
+				"max", cap(rule.tcpSemaphore),
+			)
+			conn.Close()
+		}
 	}
 }
 
@@ -308,17 +371,17 @@ func (m *Manager) handleTCPConnection(ctx context.Context, rule *ForwardingRule,
 	done := make(chan struct{}, 2)
 
 	// Copy data bidirectionally
-	go func() {
+	goroutine.SafeGo(m.logger, "forwarder-tcp-upload", func() {
+		defer func() { done <- struct{}{} }()
 		n, _ := io.Copy(targetConn, conn)
 		rule.uploadBytes.Add(n)
-		done <- struct{}{}
-	}()
+	})
 
-	go func() {
+	goroutine.SafeGo(m.logger, "forwarder-tcp-download", func() {
+		defer func() { done <- struct{}{} }()
 		n, _ := io.Copy(conn, targetConn)
 		rule.downloadBytes.Add(n)
-		done <- struct{}{}
-	}()
+	})
 
 	// Wait for context cancellation or both goroutines to finish
 	select {
@@ -346,7 +409,7 @@ func (m *Manager) handleUDP(ctx context.Context, rule *ForwardingRule, target st
 	var sessionsMu sync.Mutex
 
 	// Cleanup old sessions periodically
-	go func() {
+	goroutine.SafeGo(m.logger, "forwarder-udp-session-cleanup", func() {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
 		for {
@@ -365,7 +428,7 @@ func (m *Manager) handleUDP(ctx context.Context, rule *ForwardingRule, target st
 				sessionsMu.Unlock()
 			}
 		}
-	}()
+	})
 
 	targetAddr, err := net.ResolveUDPAddr("udp", target)
 	if err != nil {
@@ -373,7 +436,9 @@ func (m *Manager) handleUDP(ctx context.Context, rule *ForwardingRule, target st
 		return
 	}
 
-	buf := make([]byte, 65535)
+	bufPtr := udpBufPool.Get().(*[]byte)
+	buf := *bufPtr
+	defer udpBufPool.Put(bufPtr)
 	for {
 		select {
 		case <-ctx.Done():
@@ -423,8 +488,12 @@ func (m *Manager) handleUDP(ctx context.Context, rule *ForwardingRule, target st
 			sessions[clientKey] = session
 
 			// Start response handler for this session
-			go func(s *udpSession, cAddr *net.UDPAddr) {
-				respBuf := make([]byte, 65535)
+			s := session
+			cAddr := clientAddr
+			goroutine.SafeGo(m.logger, "forwarder-udp-response-handler", func() {
+				respBufPtr := udpBufPool.Get().(*[]byte)
+				respBuf := *respBufPtr
+				defer udpBufPool.Put(respBufPtr)
 				for {
 					select {
 					case <-ctx.Done():
@@ -456,7 +525,7 @@ func (m *Manager) handleUDP(ctx context.Context, rule *ForwardingRule, target st
 					s.lastActive = time.Now()
 					sessionsMu.Unlock()
 				}
-			}(session, clientAddr)
+			})
 		}
 
 		session.lastActive = time.Now()

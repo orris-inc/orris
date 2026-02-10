@@ -11,14 +11,14 @@ import (
 // It encapsulates the logic for determining which agents need to be notified
 // when configuration changes occur.
 type AffectedAgentsFinder struct {
-	repo      forward.Repository
+	repo      forward.RuleQuerier
 	agentRepo forward.AgentRepository
 	logger    logger.Interface
 }
 
 // NewAffectedAgentsFinder creates a new AffectedAgentsFinder.
 func NewAffectedAgentsFinder(
-	repo forward.Repository,
+	repo forward.RuleQuerier,
 	agentRepo forward.AgentRepository,
 	log logger.Interface,
 ) *AffectedAgentsFinder {

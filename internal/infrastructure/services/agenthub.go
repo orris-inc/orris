@@ -2,6 +2,7 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -12,9 +13,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 
-	"github.com/orris-inc/orris/internal/application/forward/dto"
-	nodedto "github.com/orris-inc/orris/internal/application/node/dto"
+	"github.com/orris-inc/orris/internal/infrastructure/pubsub"
 	"github.com/orris-inc/orris/internal/shared/biztime"
+	"github.com/orris-inc/orris/internal/shared/goroutine"
+	dto "github.com/orris-inc/orris/internal/shared/hubprotocol/forward"
+	nodedto "github.com/orris-inc/orris/internal/shared/hubprotocol/node"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -64,6 +67,10 @@ type AgentHub struct {
 	shutdown atomic.Bool
 
 	logger logger.Interface
+
+	// Optional event bus for cross-instance command relay
+	eventBus   pubsub.HubCommandPublisher
+	eventBusMu sync.RWMutex
 }
 
 // AgentHubConn represents a forward agent WebSocket connection.
@@ -163,7 +170,9 @@ func NewAgentHub(log logger.Interface, config *AgentHubConfig) *AgentHub {
 	}
 
 	// Start background timeout checker
-	go h.nodeTimeoutChecker()
+	goroutine.SafeGo(log, "agenthub-node-timeout-checker", func() {
+		h.nodeTimeoutChecker()
+	})
 
 	return h
 }
@@ -176,6 +185,22 @@ func (h *AgentHub) Shutdown() {
 	}
 
 	close(h.done)
+}
+
+// SetEventBus sets the event bus for cross-instance command relay.
+// When set, commands to non-local agents will be published to Redis
+// for delivery by other instances.
+func (h *AgentHub) SetEventBus(eventBus pubsub.HubCommandPublisher) {
+	h.eventBusMu.Lock()
+	defer h.eventBusMu.Unlock()
+	h.eventBus = eventBus
+}
+
+// getEventBus safely retrieves the event bus with read lock.
+func (h *AgentHub) getEventBus() pubsub.HubCommandPublisher {
+	h.eventBusMu.RLock()
+	defer h.eventBusMu.RUnlock()
+	return h.eventBus
 }
 
 // nodeTimeoutChecker periodically checks for nodes that haven't reported status.
@@ -240,7 +265,9 @@ func (h *AgentHub) disconnectNode(nodeID uint) {
 		)
 
 		if h.onNodeOffline != nil {
-			go h.onNodeOffline(nodeID)
+			goroutine.SafeGo(h.logger, "agenthub-on-node-offline-timeout", func() {
+				h.onNodeOffline(nodeID)
+			})
 		}
 	}
 }
@@ -325,7 +352,9 @@ func (h *AgentHub) RegisterAgent(agentID uint, conn *websocket.Conn) *AgentHubCo
 	)
 
 	if h.onAgentOnline != nil {
-		go h.onAgentOnline(agentID)
+		goroutine.SafeGo(h.logger, "agenthub-on-agent-online", func() {
+			h.onAgentOnline(agentID)
+		})
 	}
 
 	return agentConn
@@ -345,7 +374,9 @@ func (h *AgentHub) UnregisterAgent(agentID uint) {
 		)
 
 		if h.onAgentOffline != nil {
-			go h.onAgentOffline(agentID)
+			goroutine.SafeGo(h.logger, "agenthub-on-agent-offline", func() {
+				h.onAgentOffline(agentID)
+			})
 		}
 	}
 }
@@ -370,26 +401,36 @@ func (h *AgentHub) HandleAgentStatus(agentID uint, data any) {
 }
 
 // SendCommandToAgent sends a command to a specific agent.
+// If the agent is not connected to this instance but an event bus is configured,
+// the command is published to Redis for cross-instance delivery.
 func (h *AgentHub) SendCommandToAgent(agentID uint, cmd *dto.CommandData) error {
 	h.agentsMu.RLock()
 	agentConn, ok := h.agents[agentID]
 	h.agentsMu.RUnlock()
 
-	if !ok {
-		return ErrAgentNotConnected
+	if ok {
+		// Local delivery
+		msg := &dto.HubMessage{
+			Type:      dto.MsgTypeCommand,
+			AgentID:   "", // Agent already knows its own ID; this field is primarily for logging/debug
+			Timestamp: biztime.NowUTC().Unix(),
+			Data:      cmd,
+		}
+		if !agentConn.TrySend(msg) {
+			return ErrSendChannelFull
+		}
+		return nil
 	}
 
-	msg := &dto.HubMessage{
-		Type:      dto.MsgTypeCommand,
-		AgentID:   "", // Agent already knows its own ID; this field is primarily for logging/debug
-		Timestamp: biztime.NowUTC().Unix(),
-		Data:      cmd,
+	// Not local - publish to Redis for other instances
+	eb := h.getEventBus()
+	if eb != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return eb.PublishAgentCommand(ctx, agentID, cmd)
 	}
 
-	if !agentConn.TrySend(msg) {
-		return ErrSendChannelFull
-	}
-	return nil
+	return ErrAgentNotConnected
 }
 
 // IsAgentOnline checks if an agent is connected.
@@ -486,7 +527,9 @@ func (h *AgentHub) RegisterNodeAgent(nodeID uint, conn *websocket.Conn) *NodeHub
 	)
 
 	if h.onNodeOnline != nil {
-		go h.onNodeOnline(nodeID)
+		goroutine.SafeGo(h.logger, "agenthub-on-node-online", func() {
+			h.onNodeOnline(nodeID)
+		})
 	}
 
 	return nodeConn
@@ -506,7 +549,9 @@ func (h *AgentHub) UnregisterNodeAgent(nodeID uint) {
 		)
 
 		if h.onNodeOffline != nil {
-			go h.onNodeOffline(nodeID)
+			goroutine.SafeGo(h.logger, "agenthub-on-node-offline", func() {
+				h.onNodeOffline(nodeID)
+			})
 		}
 	}
 }
@@ -578,13 +623,75 @@ func (h *AgentHub) SendMessageToNode(nodeID uint, msg []byte) error {
 }
 
 // SendCommandToNode sends a command to a specific node agent.
+// If the node is not connected to this instance but an event bus is configured,
+// the command is published to Redis for cross-instance delivery.
 func (h *AgentHub) SendCommandToNode(nodeID uint, cmd *nodedto.NodeCommandData) error {
 	h.nodesMu.RLock()
 	nodeConn, ok := h.nodes[nodeID]
 	h.nodesMu.RUnlock()
 
+	if ok {
+		// Local delivery
+		msg := &nodedto.NodeHubMessage{
+			Type:      nodedto.NodeMsgTypeCommand,
+			Timestamp: biztime.NowUTC().Unix(),
+			Data:      cmd,
+		}
+		msgBytes, err := json.Marshal(msg)
+		if err != nil {
+			return err
+		}
+		if !nodeConn.TrySend(msgBytes) {
+			return ErrSendChannelFull
+		}
+		return nil
+	}
+
+	// Not local - publish to Redis for other instances
+	eb := h.getEventBus()
+	if eb != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return eb.PublishNodeCommand(ctx, nodeID, cmd)
+	}
+
+	return ErrNodeNotConnected
+}
+
+// HandleRemoteAgentCommand handles an agent command received from Redis PubSub.
+// Only delivers if the agent is connected to this instance.
+func (h *AgentHub) HandleRemoteAgentCommand(agentID uint, cmd *dto.CommandData) {
+	h.agentsMu.RLock()
+	agentConn, ok := h.agents[agentID]
+	h.agentsMu.RUnlock()
+
 	if !ok {
-		return ErrNodeNotConnected
+		return // Agent not on this instance
+	}
+
+	msg := &dto.HubMessage{
+		Type:      dto.MsgTypeCommand,
+		Timestamp: biztime.NowUTC().Unix(),
+		Data:      cmd,
+	}
+
+	if !agentConn.TrySend(msg) {
+		h.logger.Warnw("failed to deliver remote agent command, channel full",
+			"agent_id", agentID,
+			"action", cmd.Action,
+		)
+	}
+}
+
+// HandleRemoteNodeCommand handles a node command received from Redis PubSub.
+// Only delivers if the node is connected to this instance.
+func (h *AgentHub) HandleRemoteNodeCommand(nodeID uint, cmd *nodedto.NodeCommandData) {
+	h.nodesMu.RLock()
+	nodeConn, ok := h.nodes[nodeID]
+	h.nodesMu.RUnlock()
+
+	if !ok {
+		return // Node not on this instance
 	}
 
 	msg := &nodedto.NodeHubMessage{
@@ -595,13 +702,19 @@ func (h *AgentHub) SendCommandToNode(nodeID uint, cmd *nodedto.NodeCommandData) 
 
 	msgBytes, err := json.Marshal(msg)
 	if err != nil {
-		return err
+		h.logger.Errorw("failed to marshal remote node command",
+			"node_id", nodeID,
+			"error", err,
+		)
+		return
 	}
 
 	if !nodeConn.TrySend(msgBytes) {
-		return ErrSendChannelFull
+		h.logger.Warnw("failed to deliver remote node command, channel full",
+			"node_id", nodeID,
+			"action", cmd.Action,
+		)
 	}
-	return nil
 }
 
 // extractURLHost extracts the host from a URL for safe logging (avoids leaking credentials).

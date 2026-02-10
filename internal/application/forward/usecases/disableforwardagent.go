@@ -51,7 +51,7 @@ func (uc *DisableForwardAgentUseCase) Execute(ctx context.Context, cmd DisableFo
 	// Disable the agent
 	if err := agent.Disable(); err != nil {
 		uc.logger.Errorw("failed to disable forward agent", "id", agent.ID(), "short_id", agent.SID(), "error", err)
-		return fmt.Errorf("failed to disable forward agent: %w", err)
+		return err
 	}
 
 	// Persist changes

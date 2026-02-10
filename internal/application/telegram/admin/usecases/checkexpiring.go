@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/orris-inc/orris/internal/application/telegram/admin/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/domain/telegram/admin"
@@ -94,13 +93,12 @@ func (uc *CheckExpiringUseCase) CheckAndNotify(ctx context.Context) error {
 			continue
 		}
 
-		// Convert to DTO with days remaining calculation
+		// Convert to i18n resource info with days remaining calculation
 		now := biztime.NowUTC()
-		agentInfos := make([]dto.ExpiringAgentInfo, 0, len(expiringAgents))
+		agentInfos := make([]i18n.ExpiringResourceInfo, 0, len(expiringAgents))
 		for _, a := range expiringAgents {
 			daysRemaining := calculateDaysRemaining(now, a.ExpiresAt)
-			agentInfos = append(agentInfos, dto.ExpiringAgentInfo{
-				ID:            a.ID,
+			agentInfos = append(agentInfos, i18n.ExpiringResourceInfo{
 				SID:           a.SID,
 				Name:          a.Name,
 				ExpiresAt:     a.ExpiresAt,
@@ -109,11 +107,10 @@ func (uc *CheckExpiringUseCase) CheckAndNotify(ctx context.Context) error {
 			})
 		}
 
-		nodeInfos := make([]dto.ExpiringNodeInfo, 0, len(expiringNodes))
+		nodeInfos := make([]i18n.ExpiringResourceInfo, 0, len(expiringNodes))
 		for _, n := range expiringNodes {
 			daysRemaining := calculateDaysRemaining(now, n.ExpiresAt)
-			nodeInfos = append(nodeInfos, dto.ExpiringNodeInfo{
-				ID:            n.ID,
+			nodeInfos = append(nodeInfos, i18n.ExpiringResourceInfo{
 				SID:           n.SID,
 				Name:          n.Name,
 				ExpiresAt:     n.ExpiresAt,

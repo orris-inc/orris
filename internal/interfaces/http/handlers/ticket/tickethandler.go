@@ -37,6 +37,7 @@ func NewTicketHandler(
 	listTicketsUC usecases.ListTicketsExecutor,
 	deleteTicketUC usecases.DeleteTicketExecutor,
 	updatePriorityUC usecases.UpdateTicketPriorityExecutor,
+	log logger.Interface,
 ) *TicketHandler {
 	return &TicketHandler{
 		createTicketUC:   createTicketUC,
@@ -48,7 +49,7 @@ func NewTicketHandler(
 		listTicketsUC:    listTicketsUC,
 		deleteTicketUC:   deleteTicketUC,
 		updatePriorityUC: updatePriorityUC,
-		logger:           logger.NewLogger(),
+		logger:           log,
 	}
 }
 

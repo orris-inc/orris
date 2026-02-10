@@ -6,6 +6,7 @@ import (
 	"github.com/orris-inc/orris/internal/application/node/dto"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/infrastructure/pubsub"
+	"github.com/orris-inc/orris/internal/shared/goroutine"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -85,7 +86,7 @@ func (h *SubscriptionEventHandler) HandleEvent(ctx context.Context, event pubsub
 
 // StartSubscriber starts the subscription event subscriber in a background goroutine
 func (h *SubscriptionEventHandler) StartSubscriber(ctx context.Context, subscriber pubsub.SubscriptionEventSubscriber) {
-	go func() {
+	goroutine.SafeGo(h.logger, "subscription-event-subscriber", func() {
 		h.logger.Infow("starting subscription event subscriber")
 
 		err := subscriber.Subscribe(ctx, h.HandleEvent)
@@ -94,5 +95,5 @@ func (h *SubscriptionEventHandler) StartSubscriber(ctx context.Context, subscrib
 				"error", err,
 			)
 		}
-	}()
+	})
 }

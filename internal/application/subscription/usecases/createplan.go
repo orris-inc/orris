@@ -62,7 +62,7 @@ func (uc *CreatePlanUseCase) Execute(
 	planType, err := vo.NewPlanType(cmd.PlanType)
 	if err != nil {
 		uc.logger.Errorw("invalid plan type", "error", err, "plan_type", cmd.PlanType)
-		return nil, fmt.Errorf("invalid plan type: %w", err)
+		return nil, err
 	}
 
 	plan, err := subscription.NewPlan(
@@ -73,18 +73,18 @@ func (uc *CreatePlanUseCase) Execute(
 	)
 	if err != nil {
 		uc.logger.Errorw("failed to create plan", "error", err)
-		return nil, fmt.Errorf("failed to create plan: %w", err)
+		return nil, err
 	}
 
 	if cmd.Limits != nil {
 		features, err := vo.NewPlanFeaturesWithValidation(cmd.Limits)
 		if err != nil {
 			uc.logger.Errorw("invalid plan limits", "error", err)
-			return nil, fmt.Errorf("invalid plan limits: %w", err)
+			return nil, err
 		}
 		if err := plan.UpdateFeatures(features); err != nil {
 			uc.logger.Errorw("failed to set plan features", "error", err)
-			return nil, fmt.Errorf("failed to set plan features: %w", err)
+			return nil, err
 		}
 	}
 
@@ -114,7 +114,7 @@ func (uc *CreatePlanUseCase) Execute(
 				"error", err,
 				"billing_cycle", pricingInput.BillingCycle,
 				"plan_id", plan.ID())
-			return nil, fmt.Errorf("invalid billing cycle '%s': %w", pricingInput.BillingCycle, err)
+			return nil, err
 		}
 
 		// Create pricing value object
@@ -124,7 +124,7 @@ func (uc *CreatePlanUseCase) Execute(
 				"error", err,
 				"plan_id", plan.ID(),
 				"billing_cycle", pricingInput.BillingCycle)
-			return nil, fmt.Errorf("failed to create pricing for cycle '%s': %w", pricingInput.BillingCycle, err)
+			return nil, err
 		}
 
 		// Set active status if explicitly set to false

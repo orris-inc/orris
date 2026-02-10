@@ -17,6 +17,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/infrastructure/services"
 	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/goroutine"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
@@ -104,6 +105,7 @@ type CachedQuotaInfo struct {
 	PeriodEnd   time.Time // Billing period end
 	PlanType    string    // node/forward/hybrid
 	Suspended   bool      // Whether the subscription is suspended
+	NotFound    bool      // Null marker: subscription confirmed not found/inactive in DB
 }
 
 // NodeSubscriptionQuotaLoader defines the interface for lazy loading subscription quota.
@@ -233,7 +235,9 @@ func (h *NodeHubHandler) NodeAgentWS(c *gin.Context) {
 	h.syncSubscriptionsOnConnect(nodeID)
 
 	// Start read and write pumps
-	go h.writePump(nodeID, conn, nodeConn.Send)
+	goroutine.SafeGo(h.logger, "node-agent-write-pump", func() {
+		h.writePump(nodeID, conn, nodeConn.Send)
+	})
 	h.readPump(nodeID, conn)
 }
 
@@ -305,7 +309,7 @@ func (h *NodeHubHandler) checkAndNotifyIPChange(ctx context.Context, nodeID uint
 	)
 
 	// Step 2: Notify forward agents asynchronously (now database has the new IP)
-	go func() {
+	goroutine.SafeGo(h.logger, "notify-node-ip-change", func() {
 		notifyCtx := context.Background()
 		if err := h.addressChangeNotifier.NotifyNodeAddressChange(notifyCtx, nodeID); err != nil {
 			h.logger.Warnw("failed to notify forward agents of node IP change",
@@ -313,7 +317,7 @@ func (h *NodeHubHandler) checkAndNotifyIPChange(ctx context.Context, nodeID uint
 				"node_id", nodeID,
 			)
 		}
-	}()
+	})
 }
 
 // syncSubscriptionsOnConnect pushes all active subscriptions to the node when it connects.
@@ -322,7 +326,7 @@ func (h *NodeHubHandler) syncSubscriptionsOnConnect(nodeID uint) {
 		return
 	}
 
-	go func() {
+	goroutine.SafeGo(h.logger, "sync-subscriptions-on-node-connect", func() {
 		ctx := context.Background()
 		if err := h.subscriptionSyncer.SyncSubscriptionsOnNodeConnect(ctx, nodeID); err != nil {
 			h.logger.Warnw("failed to sync subscriptions on node connect",
@@ -330,7 +334,7 @@ func (h *NodeHubHandler) syncSubscriptionsOnConnect(nodeID uint) {
 				"error", err,
 			)
 		}
-	}()
+	})
 }
 
 // readPump reads messages from node agent WebSocket.
@@ -583,7 +587,12 @@ func (h *NodeHubHandler) checkAndEnforceTrafficLimit(ctx context.Context, subscr
 		return
 	}
 
-	// 2. If cache miss, try lazy loading from database
+	// 2. If null marker hit, skip DB lookup (anti-penetration)
+	if quota != nil && quota.NotFound {
+		return
+	}
+
+	// 3. If cache miss, try lazy loading from database
 	if quota == nil {
 		if h.quotaLoader == nil {
 			// No loader configured, skip check
@@ -603,17 +612,17 @@ func (h *NodeHubHandler) checkAndEnforceTrafficLimit(ctx context.Context, subscr
 		}
 	}
 
-	// 3. Check if already suspended
+	// 4. Check if already suspended
 	if quota.Suspended {
 		return
 	}
 
-	// 4. Check if plan type is node or hybrid (skip forward-only subscriptions)
+	// 5. Check if plan type is node or hybrid (skip forward-only subscriptions)
 	if quota.PlanType != "node" && quota.PlanType != "hybrid" {
 		return
 	}
 
-	// 5. Get current period usage
+	// 6. Get current period usage
 	usage, err := h.usageReader.GetCurrentPeriodUsage(ctx, subscriptionID, quota.PeriodStart, quota.PeriodEnd)
 	if err != nil {
 		h.logger.Warnw("failed to get node subscription usage for traffic limit check",
@@ -623,7 +632,7 @@ func (h *NodeHubHandler) checkAndEnforceTrafficLimit(ctx context.Context, subscr
 		return
 	}
 
-	// 6. Compare usage against limit (skip unlimited quotas where Limit == 0)
+	// 7. Compare usage against limit (skip unlimited quotas where Limit == 0)
 	if quota.Limit > 0 && usage >= quota.Limit {
 		h.logger.Infow("node subscription exceeded traffic limit, triggering enforcement",
 			"subscription_id", subscriptionID,
@@ -640,7 +649,8 @@ func (h *NodeHubHandler) checkAndEnforceTrafficLimit(ctx context.Context, subscr
 		}
 
 		// Async enforcement to avoid blocking traffic report flow
-		go func(sid uint) {
+		sid := subscriptionID
+		goroutine.SafeGo(h.logger, "enforce-node-traffic-limit", func() {
 			enforceCtx := context.Background()
 			if err := h.trafficEnforcer.CheckAndEnforceLimitForNode(enforceCtx, sid); err != nil {
 				h.logger.Warnw("failed to enforce node traffic limit",
@@ -648,7 +658,7 @@ func (h *NodeHubHandler) checkAndEnforceTrafficLimit(ctx context.Context, subscr
 					"error", err,
 				)
 			}
-		}(subscriptionID)
+		})
 	}
 }
 

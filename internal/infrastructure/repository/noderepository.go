@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -822,8 +821,14 @@ func (r *NodeRepositoryImpl) List(ctx context.Context, filter node.NodeFilter) (
 		return nil, 0, fmt.Errorf("failed to list nodes: %w", err)
 	}
 
-	// Collect node IDs by protocol
-	var ssNodeIDs, trojanNodeIDs, vlessNodeIDs, vmessNodeIDs, hysteria2NodeIDs, tuicNodeIDs []uint
+	// Collect node IDs by protocol (pre-allocate with upper bound capacity)
+	protoCapacity := len(nodeModels)
+	ssNodeIDs := make([]uint, 0, protoCapacity)
+	trojanNodeIDs := make([]uint, 0, protoCapacity)
+	vlessNodeIDs := make([]uint, 0, protoCapacity)
+	vmessNodeIDs := make([]uint, 0, protoCapacity)
+	hysteria2NodeIDs := make([]uint, 0, protoCapacity)
+	tuicNodeIDs := make([]uint, 0, protoCapacity)
 	for _, m := range nodeModels {
 		switch m.Protocol {
 		case "shadowsocks":
@@ -841,7 +846,9 @@ func (r *NodeRepositoryImpl) List(ctx context.Context, filter node.NodeFilter) (
 		}
 	}
 
-	// Load protocol-specific configs in parallel
+	// Load protocol-specific configs in parallel.
+	// Each goroutine writes to a distinct variable and errgroup.Wait() provides
+	// a happens-before guarantee, so no mutex is needed.
 	var (
 		ssConfigsRaw     map[uint]*ShadowsocksConfigData
 		trojanConfigs    map[uint]*vo.TrojanConfig
@@ -849,7 +856,6 @@ func (r *NodeRepositoryImpl) List(ctx context.Context, filter node.NodeFilter) (
 		vmessConfigs     map[uint]*vo.VMessConfig
 		hysteria2Configs map[uint]*vo.Hysteria2Config
 		tuicConfigs      map[uint]*vo.TUICConfig
-		mu               sync.Mutex
 	)
 
 	g, gctx := errgroup.WithContext(ctx)
@@ -862,9 +868,7 @@ func (r *NodeRepositoryImpl) List(ctx context.Context, filter node.NodeFilter) (
 				r.logger.Errorw("failed to get shadowsocks configs", "error", err)
 				return fmt.Errorf("failed to get shadowsocks configs: %w", err)
 			}
-			mu.Lock()
 			ssConfigsRaw = configs
-			mu.Unlock()
 			return nil
 		})
 	}
@@ -877,9 +881,7 @@ func (r *NodeRepositoryImpl) List(ctx context.Context, filter node.NodeFilter) (
 				r.logger.Errorw("failed to get trojan configs", "error", err)
 				return fmt.Errorf("failed to get trojan configs: %w", err)
 			}
-			mu.Lock()
 			trojanConfigs = configs
-			mu.Unlock()
 			return nil
 		})
 	}
@@ -892,9 +894,7 @@ func (r *NodeRepositoryImpl) List(ctx context.Context, filter node.NodeFilter) (
 				r.logger.Errorw("failed to get vless configs", "error", err)
 				return fmt.Errorf("failed to get vless configs: %w", err)
 			}
-			mu.Lock()
 			vlessConfigs = configs
-			mu.Unlock()
 			return nil
 		})
 	}
@@ -907,9 +907,7 @@ func (r *NodeRepositoryImpl) List(ctx context.Context, filter node.NodeFilter) (
 				r.logger.Errorw("failed to get vmess configs", "error", err)
 				return fmt.Errorf("failed to get vmess configs: %w", err)
 			}
-			mu.Lock()
 			vmessConfigs = configs
-			mu.Unlock()
 			return nil
 		})
 	}
@@ -922,9 +920,7 @@ func (r *NodeRepositoryImpl) List(ctx context.Context, filter node.NodeFilter) (
 				r.logger.Errorw("failed to get hysteria2 configs", "error", err)
 				return fmt.Errorf("failed to get hysteria2 configs: %w", err)
 			}
-			mu.Lock()
 			hysteria2Configs = configs
-			mu.Unlock()
 			return nil
 		})
 	}
@@ -937,9 +933,7 @@ func (r *NodeRepositoryImpl) List(ctx context.Context, filter node.NodeFilter) (
 				r.logger.Errorw("failed to get tuic configs", "error", err)
 				return fmt.Errorf("failed to get tuic configs: %w", err)
 			}
-			mu.Lock()
 			tuicConfigs = configs
-			mu.Unlock()
 			return nil
 		})
 	}
@@ -1160,74 +1154,9 @@ func (r *NodeRepositoryImpl) ListByUserID(ctx context.Context, userID uint, filt
 		return nil, 0, fmt.Errorf("failed to list user nodes: %w", err)
 	}
 
-	// Collect node IDs by protocol
-	var ssNodeIDs, trojanNodeIDs, vlessNodeIDs, vmessNodeIDs, hysteria2NodeIDs, tuicNodeIDs []uint
-	for _, m := range nodeModels {
-		switch m.Protocol {
-		case "shadowsocks":
-			ssNodeIDs = append(ssNodeIDs, m.ID)
-		case "trojan":
-			trojanNodeIDs = append(trojanNodeIDs, m.ID)
-		case "vless":
-			vlessNodeIDs = append(vlessNodeIDs, m.ID)
-		case "vmess":
-			vmessNodeIDs = append(vmessNodeIDs, m.ID)
-		case "hysteria2":
-			hysteria2NodeIDs = append(hysteria2NodeIDs, m.ID)
-		case "tuic":
-			tuicNodeIDs = append(tuicNodeIDs, m.ID)
-		}
-	}
-
-	// Load protocol-specific configs
-	ssConfigsRaw, err := r.shadowsocksConfigRepo.GetByNodeIDs(ctx, ssNodeIDs)
+	entities, err := r.loadProtocolConfigsAndConvert(ctx, nodeModels)
 	if err != nil {
-		r.logger.Errorw("failed to get shadowsocks configs", "error", err)
-		return nil, 0, fmt.Errorf("failed to get shadowsocks configs: %w", err)
-	}
-
-	ssConfigs := make(map[uint]*mappers.ShadowsocksConfigData)
-	for nodeID, data := range ssConfigsRaw {
-		ssConfigs[nodeID] = &mappers.ShadowsocksConfigData{
-			EncryptionConfig: data.EncryptionConfig,
-			PluginConfig:     data.PluginConfig,
-		}
-	}
-
-	trojanConfigs, err := r.trojanConfigRepo.GetByNodeIDs(ctx, trojanNodeIDs)
-	if err != nil {
-		r.logger.Errorw("failed to get trojan configs", "error", err)
-		return nil, 0, fmt.Errorf("failed to get trojan configs: %w", err)
-	}
-
-	vlessConfigs, err := r.vlessConfigRepo.GetByNodeIDs(ctx, vlessNodeIDs)
-	if err != nil {
-		r.logger.Errorw("failed to get vless configs", "error", err)
-		return nil, 0, fmt.Errorf("failed to get vless configs: %w", err)
-	}
-
-	vmessConfigs, err := r.vmessConfigRepo.GetByNodeIDs(ctx, vmessNodeIDs)
-	if err != nil {
-		r.logger.Errorw("failed to get vmess configs", "error", err)
-		return nil, 0, fmt.Errorf("failed to get vmess configs: %w", err)
-	}
-
-	hysteria2Configs, err := r.hysteria2ConfigRepo.GetByNodeIDs(ctx, hysteria2NodeIDs)
-	if err != nil {
-		r.logger.Errorw("failed to get hysteria2 configs", "error", err)
-		return nil, 0, fmt.Errorf("failed to get hysteria2 configs: %w", err)
-	}
-
-	tuicConfigs, err := r.tuicConfigRepo.GetByNodeIDs(ctx, tuicNodeIDs)
-	if err != nil {
-		r.logger.Errorw("failed to get tuic configs", "error", err)
-		return nil, 0, fmt.Errorf("failed to get tuic configs: %w", err)
-	}
-
-	entities, err := r.mapper.ToEntities(nodeModels, ssConfigs, trojanConfigs, vlessConfigs, vmessConfigs, hysteria2Configs, tuicConfigs)
-	if err != nil {
-		r.logger.Errorw("failed to map node models to entities", "error", err)
-		return nil, 0, fmt.Errorf("failed to map nodes: %w", err)
+		return nil, 0, err
 	}
 
 	return entities, total, nil
@@ -1486,43 +1415,67 @@ func (r *NodeRepositoryImpl) GetMetadataBySIDs(ctx context.Context, sids []strin
 	return metadata, nil
 }
 
-// BatchUpdateGroupIDs updates group_ids for multiple nodes in a single transaction.
+// BatchUpdateGroupIDs updates group_ids for multiple nodes using a single CASE WHEN SQL.
 // This is optimized for resource group membership changes where only group_ids needs to be updated.
 func (r *NodeRepositoryImpl) BatchUpdateGroupIDs(ctx context.Context, nodeGroupIDs map[uint][]uint) (int, error) {
 	if len(nodeGroupIDs) == 0 {
 		return 0, nil
 	}
 
-	updated := 0
-	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		for nodeID, groupIDs := range nodeGroupIDs {
-			// Convert group IDs to JSON array
-			var groupIDsJSON []byte
-			var err error
-			if len(groupIDs) == 0 {
-				groupIDsJSON = []byte("[]")
-			} else {
-				groupIDsJSON, err = json.Marshal(groupIDs)
-				if err != nil {
-					return fmt.Errorf("failed to marshal group IDs for node %d: %w", nodeID, err)
-				}
-			}
-
-			result := tx.Model(&models.NodeModel{}).
-				Where("id = ?", nodeID).
-				Updates(map[string]interface{}{
-					"group_ids":  groupIDsJSON,
-					"updated_at": biztime.NowUTC(),
-				})
-
-			if result.Error != nil {
-				return fmt.Errorf("failed to update node %d: %w", nodeID, result.Error)
-			}
-
-			if result.RowsAffected > 0 {
-				updated++
+	// Pre-serialize all group IDs to JSON
+	type nodeGroupJSON struct {
+		nodeID    uint
+		jsonBytes []byte
+	}
+	entries := make([]nodeGroupJSON, 0, len(nodeGroupIDs))
+	for nodeID, groupIDs := range nodeGroupIDs {
+		var groupIDsJSON []byte
+		var err error
+		if len(groupIDs) == 0 {
+			groupIDsJSON = []byte("[]")
+		} else {
+			groupIDsJSON, err = json.Marshal(groupIDs)
+			if err != nil {
+				return 0, fmt.Errorf("failed to marshal group IDs for node %d: %w", nodeID, err)
 			}
 		}
+		entries = append(entries, nodeGroupJSON{nodeID: nodeID, jsonBytes: groupIDsJSON})
+	}
+
+	// Build CASE WHEN SQL:
+	// UPDATE nodes SET group_ids = CASE id WHEN ? THEN ? ... END, updated_at = ? WHERE id IN (?,...)
+	var sb strings.Builder
+	sb.WriteString("UPDATE nodes SET group_ids = CASE id ")
+
+	// args: CASE WHEN pairs + updated_at + WHERE IN ids
+	args := make([]interface{}, 0, len(entries)*2+1+len(entries))
+	ids := make([]interface{}, 0, len(entries))
+
+	for _, e := range entries {
+		sb.WriteString("WHEN ? THEN ? ")
+		args = append(args, e.nodeID, string(e.jsonBytes))
+		ids = append(ids, e.nodeID)
+	}
+
+	sb.WriteString("END, updated_at = ? WHERE id IN (")
+	args = append(args, biztime.NowUTC())
+
+	for i := range ids {
+		if i > 0 {
+			sb.WriteString(",")
+		}
+		sb.WriteString("?")
+	}
+	sb.WriteString(")")
+	args = append(args, ids...)
+
+	var updated int
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.Exec(sb.String(), args...)
+		if result.Error != nil {
+			return fmt.Errorf("failed to batch update group IDs: %w", result.Error)
+		}
+		updated = int(result.RowsAffected)
 		return nil
 	})
 
@@ -1550,6 +1503,133 @@ func (r *NodeRepositoryImpl) GetIDsByGroupID(ctx context.Context, groupID uint) 
 	}
 
 	return ids, nil
+}
+
+// loadProtocolConfigsAndConvert loads protocol-specific configs for node models
+// in parallel and converts them to domain entities.
+// This is a shared helper to avoid duplicating protocol config loading logic.
+func (r *NodeRepositoryImpl) loadProtocolConfigsAndConvert(ctx context.Context, nodeModels []*models.NodeModel) ([]*node.Node, error) {
+	// Collect node IDs by protocol
+	protoCapacity := len(nodeModels)
+	ssNodeIDs := make([]uint, 0, protoCapacity)
+	trojanNodeIDs := make([]uint, 0, protoCapacity)
+	vlessNodeIDs := make([]uint, 0, protoCapacity)
+	vmessNodeIDs := make([]uint, 0, protoCapacity)
+	hysteria2NodeIDs := make([]uint, 0, protoCapacity)
+	tuicNodeIDs := make([]uint, 0, protoCapacity)
+	for _, m := range nodeModels {
+		switch m.Protocol {
+		case "shadowsocks":
+			ssNodeIDs = append(ssNodeIDs, m.ID)
+		case "trojan":
+			trojanNodeIDs = append(trojanNodeIDs, m.ID)
+		case "vless":
+			vlessNodeIDs = append(vlessNodeIDs, m.ID)
+		case "vmess":
+			vmessNodeIDs = append(vmessNodeIDs, m.ID)
+		case "hysteria2":
+			hysteria2NodeIDs = append(hysteria2NodeIDs, m.ID)
+		case "tuic":
+			tuicNodeIDs = append(tuicNodeIDs, m.ID)
+		}
+	}
+
+	// Load protocol-specific configs in parallel.
+	// Each goroutine writes to a distinct variable and errgroup.Wait() provides
+	// a happens-before guarantee, so no mutex is needed.
+	var (
+		ssConfigsRaw     map[uint]*ShadowsocksConfigData
+		trojanConfigs    map[uint]*vo.TrojanConfig
+		vlessConfigs     map[uint]*vo.VLESSConfig
+		vmessConfigs     map[uint]*vo.VMessConfig
+		hysteria2Configs map[uint]*vo.Hysteria2Config
+		tuicConfigs      map[uint]*vo.TUICConfig
+	)
+
+	g, gctx := errgroup.WithContext(ctx)
+
+	if len(ssNodeIDs) > 0 {
+		g.Go(func() error {
+			configs, err := r.shadowsocksConfigRepo.GetByNodeIDs(gctx, ssNodeIDs)
+			if err != nil {
+				return fmt.Errorf("failed to get shadowsocks configs: %w", err)
+			}
+			ssConfigsRaw = configs
+			return nil
+		})
+	}
+	if len(trojanNodeIDs) > 0 {
+		g.Go(func() error {
+			configs, err := r.trojanConfigRepo.GetByNodeIDs(gctx, trojanNodeIDs)
+			if err != nil {
+				return fmt.Errorf("failed to get trojan configs: %w", err)
+			}
+			trojanConfigs = configs
+			return nil
+		})
+	}
+	if len(vlessNodeIDs) > 0 {
+		g.Go(func() error {
+			configs, err := r.vlessConfigRepo.GetByNodeIDs(gctx, vlessNodeIDs)
+			if err != nil {
+				return fmt.Errorf("failed to get vless configs: %w", err)
+			}
+			vlessConfigs = configs
+			return nil
+		})
+	}
+	if len(vmessNodeIDs) > 0 {
+		g.Go(func() error {
+			configs, err := r.vmessConfigRepo.GetByNodeIDs(gctx, vmessNodeIDs)
+			if err != nil {
+				return fmt.Errorf("failed to get vmess configs: %w", err)
+			}
+			vmessConfigs = configs
+			return nil
+		})
+	}
+	if len(hysteria2NodeIDs) > 0 {
+		g.Go(func() error {
+			configs, err := r.hysteria2ConfigRepo.GetByNodeIDs(gctx, hysteria2NodeIDs)
+			if err != nil {
+				return fmt.Errorf("failed to get hysteria2 configs: %w", err)
+			}
+			hysteria2Configs = configs
+			return nil
+		})
+	}
+	if len(tuicNodeIDs) > 0 {
+		g.Go(func() error {
+			configs, err := r.tuicConfigRepo.GetByNodeIDs(gctx, tuicNodeIDs)
+			if err != nil {
+				return fmt.Errorf("failed to get tuic configs: %w", err)
+			}
+			tuicConfigs = configs
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		r.logger.Errorw("failed to load protocol configs", "error", err)
+		return nil, err
+	}
+
+	// Convert shadowsocks configs to mapper format
+	ssConfigs := make(map[uint]*mappers.ShadowsocksConfigData)
+	for nodeID, data := range ssConfigsRaw {
+		ssConfigs[nodeID] = &mappers.ShadowsocksConfigData{
+			EncryptionConfig: data.EncryptionConfig,
+			PluginConfig:     data.PluginConfig,
+		}
+	}
+
+	entities, err := r.mapper.ToEntities(nodeModels, ssConfigs, trojanConfigs, vlessConfigs, vmessConfigs, hysteria2Configs, tuicConfigs)
+	if err != nil {
+		r.logger.Errorw("failed to map node models to entities", "error", err)
+		return nil, fmt.Errorf("failed to map nodes: %w", err)
+	}
+
+	return entities, nil
 }
 
 // FindExpiringNodes returns active nodes that will expire within the specified days.

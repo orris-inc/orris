@@ -9,6 +9,7 @@ import (
 	domainUser "github.com/orris-inc/orris/internal/domain/user"
 	vo "github.com/orris-inc/orris/internal/domain/user/valueobjects"
 	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/goroutine"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -106,13 +107,13 @@ func (uc *CreateUserUseCase) Execute(ctx context.Context, request dto.CreateUser
 	userEntity, err := domainUser.NewUser(email, name, id.NewUserID)
 	if err != nil {
 		uc.logger.Errorw("failed to create user entity", "error", err)
-		return nil, fmt.Errorf("failed to create user: %w", err)
+		return nil, err
 	}
 
 	// Set password for the user
 	if err := userEntity.SetPassword(password, uc.passwordHasher); err != nil {
 		uc.logger.Errorw("failed to set password", "error", err)
-		return nil, fmt.Errorf("failed to set password: %w", err)
+		return nil, err
 	}
 
 	// Persist the user
@@ -145,7 +146,7 @@ func (uc *CreateUserUseCase) Execute(ctx context.Context, request dto.CreateUser
 
 	// Notify admins about new user (async, non-blocking)
 	if uc.adminNotifier != nil {
-		go func() {
+		goroutine.SafeGo(uc.logger, "create-user-notify-admins", func() {
 			notifyCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
 			if err := uc.adminNotifier.NotifyNewUser(notifyCtx, AdminNewUserCommand{
@@ -158,7 +159,7 @@ func (uc *CreateUserUseCase) Execute(ctx context.Context, request dto.CreateUser
 			}); err != nil {
 				uc.logger.Warnw("failed to notify admins about new user", "user_id", userEntity.ID(), "error", err)
 			}
-		}()
+		})
 	}
 
 	return response, nil

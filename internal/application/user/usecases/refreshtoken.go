@@ -16,8 +16,9 @@ type RefreshTokenCommand struct {
 }
 
 type RefreshTokenResult struct {
-	AccessToken string
-	ExpiresIn   int64
+	AccessToken  string
+	RefreshToken string
+	ExpiresIn    int64
 }
 
 type RefreshTokenUseCase struct {
@@ -81,13 +82,14 @@ func (uc *RefreshTokenUseCase) Execute(ctx context.Context, cmd RefreshTokenComm
 		return nil, fmt.Errorf("account is not active")
 	}
 
-	newAccessToken, err := uc.jwtService.Refresh(cmd.RefreshToken)
+	tokenPair, err := uc.jwtService.Refresh(cmd.RefreshToken)
 	if err != nil {
 		uc.logger.Errorw("failed to refresh token", "error", err)
 		return nil, fmt.Errorf("failed to refresh token: %w", err)
 	}
 
-	uc.authHelper.UpdateSessionAccessToken(session, newAccessToken)
+	// Update both access and refresh token hashes (refresh token rotation)
+	uc.authHelper.SetSessionTokens(session, tokenPair.AccessToken, tokenPair.RefreshToken)
 	session.UpdateActivity()
 
 	// Extend session expiration on refresh to keep active users logged in
@@ -103,7 +105,8 @@ func (uc *RefreshTokenUseCase) Execute(ctx context.Context, cmd RefreshTokenComm
 	uc.logger.Infow("token refreshed successfully", "user_id", session.UserID, "session_id", session.ID)
 
 	return &RefreshTokenResult{
-		AccessToken: newAccessToken,
-		ExpiresIn:   900,
+		AccessToken:  tokenPair.AccessToken,
+		RefreshToken: tokenPair.RefreshToken,
+		ExpiresIn:    tokenPair.ExpiresIn,
 	}, nil
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/infrastructure/services"
 	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/goroutine"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
@@ -60,7 +61,14 @@ func (h *Handler) ForwardAgentWS(c *gin.Context) {
 		utils.ErrorResponse(c, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	agentID := agentIDVal.(uint)
+	agentID, ok := agentIDVal.(uint)
+	if !ok {
+		h.logger.Errorw("forward_agent_id has unexpected type in context",
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error")
+		return
+	}
 
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
@@ -83,7 +91,9 @@ func (h *Handler) ForwardAgentWS(c *gin.Context) {
 	// to centralize the logic and avoid duplicate sync calls.
 
 	// Start read and write pumps
-	go h.writePump(agentID, conn, agentConn.Send)
+	goroutine.SafeGo(h.logger, "forward-agent-write-pump", func() {
+		h.writePump(agentID, conn, agentConn.Send)
+	})
 	h.readPump(agentID, conn)
 }
 

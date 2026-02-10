@@ -60,7 +60,7 @@ func (uc *StartPasskeySignupUseCase) Execute(ctx context.Context, cmd StartPassk
 	email, err := vo.NewEmail(cmd.Email)
 	if err != nil {
 		uc.logger.Infow("invalid email format in passkey signup", "email", cmd.Email, "error", err)
-		return nil, fmt.Errorf("invalid email format: %w", err)
+		return nil, err
 	}
 
 	// Check if email is already registered
@@ -79,7 +79,7 @@ func (uc *StartPasskeySignupUseCase) Execute(ctx context.Context, cmd StartPassk
 	name, err := vo.NewName(cmd.Name)
 	if err != nil {
 		uc.logger.Infow("invalid name in passkey signup", "name", cmd.Name, "error", err)
-		return nil, fmt.Errorf("invalid name: %w", err)
+		return nil, err
 	}
 
 	// Generate temporary user ID for WebAuthn

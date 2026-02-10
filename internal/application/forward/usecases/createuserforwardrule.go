@@ -9,6 +9,7 @@ import (
 	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/goroutine"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -293,31 +294,33 @@ func (uc *CreateUserForwardRuleUseCase) Execute(ctx context.Context, cmd CreateU
 	// Notify config sync asynchronously if rule is enabled (failure only logs warning, doesn't block)
 	if rule.IsEnabled() && uc.configSyncSvc != nil {
 		// Notify entry agent
-		go func() {
+		goroutine.SafeGo(uc.logger, "create-user-rule-notify-entry-agent", func() {
 			if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), rule.AgentID(), rule.SID(), "added"); err != nil {
 				uc.logger.Debugw("config sync notification skipped for entry agent", "rule_id", rule.SID(), "user_id", cmd.UserID, "agent_id", rule.AgentID(), "reason", err.Error())
 			}
-		}()
+		})
 
 		// Notify additional agents based on rule type
 		switch rule.RuleType().String() {
 		case "entry":
 			// Notify all exit agents for entry type rules (supports load balancing)
 			for _, exitAgentID := range rule.GetAllExitAgentIDs() {
-				go func(aid uint) {
+				aid := exitAgentID
+				goroutine.SafeGo(uc.logger, "create-user-rule-notify-exit-agent", func() {
 					if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), aid, rule.SID(), "added"); err != nil {
 						uc.logger.Debugw("config sync notification skipped for exit agent", "rule_id", rule.SID(), "user_id", cmd.UserID, "agent_id", aid, "reason", err.Error())
 					}
-				}(exitAgentID)
+				})
 			}
 		case "chain", "direct_chain":
 			// Notify all chain agents for chain and direct_chain type rules
-			for _, agentID := range rule.ChainAgentIDs() {
-				go func(aid uint) {
+			for _, chainAgentID := range rule.ChainAgentIDs() {
+				aid := chainAgentID
+				goroutine.SafeGo(uc.logger, "create-user-rule-notify-chain-agent", func() {
 					if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), aid, rule.SID(), "added"); err != nil {
 						uc.logger.Debugw("config sync notification skipped for chain agent", "rule_id", rule.SID(), "user_id", cmd.UserID, "agent_id", aid, "reason", err.Error())
 					}
-				}(agentID)
+				})
 			}
 		}
 	}

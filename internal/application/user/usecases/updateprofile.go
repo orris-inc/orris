@@ -62,7 +62,7 @@ func (uc *UpdateProfileUseCase) Execute(ctx context.Context, userID uint, reques
 
 		if err := userEntity.UpdateEmail(email); err != nil {
 			uc.logger.Errorw("failed to update email", "error", err)
-			return nil, fmt.Errorf("failed to update email: %w", err)
+			return nil, err
 		}
 	}
 
@@ -76,7 +76,7 @@ func (uc *UpdateProfileUseCase) Execute(ctx context.Context, userID uint, reques
 
 		if err := userEntity.UpdateName(name); err != nil {
 			uc.logger.Errorw("failed to update name", "error", err)
-			return nil, fmt.Errorf("failed to update name: %w", err)
+			return nil, err
 		}
 	}
 

@@ -6,10 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"github.com/orris-inc/orris/internal/application/notification"
 	appDto "github.com/orris-inc/orris/internal/application/notification/dto"
-	"github.com/orris-inc/orris/internal/domain/user"
-	"github.com/orris-inc/orris/internal/interfaces/dto"
 	"github.com/orris-inc/orris/internal/shared/authorization"
 	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
@@ -18,12 +15,12 @@ import (
 )
 
 type NotificationHandler struct {
-	serviceDDD *notification.ServiceDDD
-	userRepo   user.Repository
+	serviceDDD notificationService
+	userRepo   notificationUserRepo
 	logger     logger.Interface
 }
 
-func NewNotificationHandler(serviceDDD *notification.ServiceDDD, userRepo user.Repository, logger logger.Interface) *NotificationHandler {
+func NewNotificationHandler(serviceDDD notificationService, userRepo notificationUserRepo, logger logger.Interface) *NotificationHandler {
 	return &NotificationHandler{
 		serviceDDD: serviceDDD,
 		userRepo:   userRepo,
@@ -32,7 +29,7 @@ func NewNotificationHandler(serviceDDD *notification.ServiceDDD, userRepo user.R
 }
 
 func (h *NotificationHandler) CreateAnnouncement(c *gin.Context) {
-	var req dto.CreateAnnouncementRequest
+	var req CreateAnnouncementRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Warnw("invalid request body for create announcement", "error", err)
 		utils.ErrorResponseWithError(c, err)
@@ -62,13 +59,13 @@ func (h *NotificationHandler) CreateAnnouncement(c *gin.Context) {
 }
 
 func (h *NotificationHandler) UpdateAnnouncement(c *gin.Context) {
-	sid, err := dto.ParseAnnouncementSID(c)
+	sid, err := ParseAnnouncementSID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	var req dto.UpdateAnnouncementRequest
+	var req UpdateAnnouncementRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Warnw("invalid request body for update announcement",
 			"announcement_sid", sid,
@@ -94,7 +91,7 @@ func (h *NotificationHandler) UpdateAnnouncement(c *gin.Context) {
 }
 
 func (h *NotificationHandler) DeleteAnnouncement(c *gin.Context) {
-	sid, err := dto.ParseAnnouncementSID(c)
+	sid, err := ParseAnnouncementSID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -115,7 +112,7 @@ type UpdateAnnouncementStatusRequest struct {
 }
 
 func (h *NotificationHandler) UpdateAnnouncementStatus(c *gin.Context) {
-	sid, err := dto.ParseAnnouncementSID(c)
+	sid, err := ParseAnnouncementSID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -154,7 +151,7 @@ func (h *NotificationHandler) UpdateAnnouncementStatus(c *gin.Context) {
 }
 
 func (h *NotificationHandler) ListAnnouncements(c *gin.Context) {
-	req, err := dto.ParseListAnnouncementsRequest(c)
+	req, err := ParseListAnnouncementsRequest(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -173,7 +170,7 @@ func (h *NotificationHandler) ListAnnouncements(c *gin.Context) {
 }
 
 func (h *NotificationHandler) GetAnnouncement(c *gin.Context) {
-	sid, err := dto.ParseAnnouncementSID(c)
+	sid, err := ParseAnnouncementSID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -196,7 +193,7 @@ func (h *NotificationHandler) GetAnnouncement(c *gin.Context) {
 }
 
 func (h *NotificationHandler) ListNotifications(c *gin.Context) {
-	req, err := dto.ParseListNotificationsRequest(c)
+	req, err := ParseListNotificationsRequest(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -241,7 +238,7 @@ type UpdateNotificationStatusRequest struct {
 }
 
 func (h *NotificationHandler) UpdateNotificationStatus(c *gin.Context) {
-	notificationID, err := dto.ParseNotificationID(c)
+	notificationID, err := ParseNotificationID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -316,7 +313,7 @@ func (h *NotificationHandler) UpdateAllNotificationsStatus(c *gin.Context) {
 }
 
 func (h *NotificationHandler) DeleteNotification(c *gin.Context) {
-	notificationID, err := dto.ParseNotificationID(c)
+	notificationID, err := ParseNotificationID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -338,7 +335,7 @@ func (h *NotificationHandler) DeleteNotification(c *gin.Context) {
 }
 
 func (h *NotificationHandler) CreateTemplate(c *gin.Context) {
-	var req dto.CreateTemplateRequest
+	var req CreateTemplateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Warnw("invalid request body for create template", "error", err)
 		utils.ErrorResponseWithError(c, err)
@@ -362,7 +359,7 @@ func (h *NotificationHandler) CreateTemplate(c *gin.Context) {
 }
 
 func (h *NotificationHandler) ListTemplates(c *gin.Context) {
-	_, err := dto.ParseListTemplatesRequest(c)
+	_, err := ParseListTemplatesRequest(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -378,7 +375,7 @@ func (h *NotificationHandler) ListTemplates(c *gin.Context) {
 }
 
 func (h *NotificationHandler) RenderTemplate(c *gin.Context) {
-	var req dto.RenderTemplateRequest
+	var req RenderTemplateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Warnw("invalid request body for render template", "error", err)
 		utils.ErrorResponseWithError(c, err)
@@ -402,7 +399,7 @@ func (h *NotificationHandler) RenderTemplate(c *gin.Context) {
 }
 
 func (h *NotificationHandler) ListPublicAnnouncements(c *gin.Context) {
-	req, err := dto.ParseListAnnouncementsRequest(c)
+	req, err := ParseListAnnouncementsRequest(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -547,7 +544,7 @@ func (h *NotificationHandler) GetAnnouncementUnreadCount(c *gin.Context) {
 
 // MarkAnnouncementAsRead marks a specific announcement as read for the current user.
 func (h *NotificationHandler) MarkAnnouncementAsRead(c *gin.Context) {
-	sid, err := dto.ParseAnnouncementSID(c)
+	sid, err := ParseAnnouncementSID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return

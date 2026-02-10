@@ -7,11 +7,9 @@ import (
 	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
 )
 
-// Repository defines the interface for forward rule persistence.
-type Repository interface {
-	// Create persists a new forward rule.
-	Create(ctx context.Context, rule *ForwardRule) error
-
+// RuleReader defines single/multi entity lookup and existence check operations
+// for forward rules.
+type RuleReader interface {
 	// GetByID retrieves a forward rule by ID.
 	GetByID(ctx context.Context, id uint) (*ForwardRule, error)
 
@@ -29,24 +27,6 @@ type Repository interface {
 	// GetByListenPort retrieves a forward rule by listen port.
 	GetByListenPort(ctx context.Context, port uint16) (*ForwardRule, error)
 
-	// Update updates an existing forward rule.
-	Update(ctx context.Context, rule *ForwardRule) error
-
-	// Delete removes a forward rule.
-	Delete(ctx context.Context, id uint) error
-
-	// List returns all forward rules with optional filtering.
-	List(ctx context.Context, filter ListFilter) ([]*ForwardRule, int64, error)
-
-	// ListEnabled returns all enabled forward rules.
-	ListEnabled(ctx context.Context) ([]*ForwardRule, error)
-
-	// ListByAgentID returns all forward rules for a specific agent.
-	ListByAgentID(ctx context.Context, agentID uint) ([]*ForwardRule, error)
-
-	// ListEnabledByAgentID returns all enabled forward rules for a specific agent.
-	ListEnabledByAgentID(ctx context.Context, agentID uint) ([]*ForwardRule, error)
-
 	// ExistsByListenPort checks if a rule with the given listen port exists.
 	ExistsByListenPort(ctx context.Context, port uint16) (bool, error)
 
@@ -60,9 +40,21 @@ type Repository interface {
 	// - Rules where chain_port_config contains the agent with the specified port
 	// The excludeRuleID parameter can be used to exclude a specific rule from the check (useful for updates).
 	IsPortInUseByAgent(ctx context.Context, agentID uint, port uint16, excludeRuleID uint) (bool, error)
+}
 
-	// UpdateTraffic updates the traffic counters for a rule.
-	UpdateTraffic(ctx context.Context, id uint, upload, download int64) error
+// RuleQuerier defines list, count, and aggregate query operations for forward rules.
+type RuleQuerier interface {
+	// List returns all forward rules with optional filtering.
+	List(ctx context.Context, filter ListFilter) ([]*ForwardRule, int64, error)
+
+	// ListEnabled returns all enabled forward rules.
+	ListEnabled(ctx context.Context) ([]*ForwardRule, error)
+
+	// ListByAgentID returns all forward rules for a specific agent.
+	ListByAgentID(ctx context.Context, agentID uint) ([]*ForwardRule, error)
+
+	// ListEnabledByAgentID returns all enabled forward rules for a specific agent.
+	ListEnabledByAgentID(ctx context.Context, agentID uint) ([]*ForwardRule, error)
 
 	// ListByExitAgentID returns all entrance rules for a specific exit agent.
 	ListByExitAgentID(ctx context.Context, exitAgentID uint) ([]*ForwardRule, error)
@@ -94,9 +86,6 @@ type Repository interface {
 	// GetTotalTrafficByUserID returns the total traffic (upload + download) for all rules owned by a user.
 	GetTotalTrafficByUserID(ctx context.Context, userID uint) (int64, error)
 
-	// UpdateSortOrders batch updates sort_order for multiple rules.
-	UpdateSortOrders(ctx context.Context, ruleOrders map[uint]int) error
-
 	// ListSystemRulesByTargetNodes returns enabled system rules targeting the specified nodes.
 	// Only includes rules with system scope (user_id IS NULL or 0).
 	// If groupIDs is not empty, only returns rules that belong to at least one of the specified resource groups.
@@ -123,6 +112,31 @@ type Repository interface {
 	// Supports pagination when page > 0 and pageSize > 0.
 	ListByGroupID(ctx context.Context, groupID uint, page, pageSize int) ([]*ForwardRule, int64, error)
 
+	// ListByExternalSource returns all forward rules with the given external source.
+	// Used for querying rules imported from a specific external system.
+	ListByExternalSource(ctx context.Context, source string) ([]*ForwardRule, error)
+}
+
+// RuleWriter defines create, update, and delete operations for forward rules.
+type RuleWriter interface {
+	// Create persists a new forward rule.
+	Create(ctx context.Context, rule *ForwardRule) error
+
+	// Update updates an existing forward rule.
+	Update(ctx context.Context, rule *ForwardRule) error
+
+	// Delete removes a forward rule.
+	Delete(ctx context.Context, id uint) error
+
+	// UpdateTraffic updates the traffic counters for a rule.
+	UpdateTraffic(ctx context.Context, id uint, upload, download int64) error
+
+	// UpdateSortOrders batch updates sort_order for multiple rules.
+	UpdateSortOrders(ctx context.Context, ruleOrders map[uint]int) error
+}
+
+// RuleGroupManager defines resource group management operations for forward rules.
+type RuleGroupManager interface {
 	// AddGroupIDAtomically adds a group ID to a rule's group_ids array atomically using JSON_ARRAY_APPEND.
 	// Returns true if the group ID was added, false if it already exists.
 	// This avoids read-modify-write race conditions.
@@ -144,10 +158,17 @@ type Repository interface {
 	// BatchRemoveGroupID removes a group ID from multiple rules atomically in a single transaction.
 	// Returns the number of rules that were updated.
 	BatchRemoveGroupID(ctx context.Context, ruleIDs []uint, groupID uint) (int, error)
+}
 
-	// ListByExternalSource returns all forward rules with the given external source.
-	// Used for querying rules imported from a specific external system.
-	ListByExternalSource(ctx context.Context, source string) ([]*ForwardRule, error)
+// Repository defines the complete interface for forward rule persistence.
+// It composes RuleReader, RuleQuerier, RuleWriter, and RuleGroupManager
+// for backward compatibility. New consumers should depend on the narrowest
+// sub-interface that satisfies their needs.
+type Repository interface {
+	RuleReader
+	RuleQuerier
+	RuleWriter
+	RuleGroupManager
 }
 
 // ListFilter defines the filtering options for listing forward rules.

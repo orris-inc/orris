@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/orris-inc/orris/internal/domain/subscription"
+	apperrors "github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -54,6 +55,9 @@ func (uc *ChangePlanUseCase) Execute(ctx context.Context, cmd ChangePlanCommand)
 		uc.logger.Errorw("failed to get subscription", "error", err, "subscription_id", cmd.SubscriptionID)
 		return fmt.Errorf("failed to get subscription: %w", err)
 	}
+	if sub == nil {
+		return apperrors.NewNotFoundError("subscription not found")
+	}
 
 	oldPlan, err := uc.planRepo.GetByID(ctx, sub.PlanID())
 	if err != nil {
@@ -73,7 +77,7 @@ func (uc *ChangePlanUseCase) Execute(ctx context.Context, cmd ChangePlanCommand)
 		}
 		if newPlan == nil {
 			uc.logger.Warnw("new plan not found by SID", "plan_sid", cmd.NewPlanSID)
-			return fmt.Errorf("new plan not found")
+			return apperrors.NewNotFoundError("new plan not found")
 		}
 		newPlanID = newPlan.ID()
 	} else {
@@ -82,10 +86,13 @@ func (uc *ChangePlanUseCase) Execute(ctx context.Context, cmd ChangePlanCommand)
 			uc.logger.Errorw("failed to get new plan", "error", err, "plan_id", cmd.NewPlanID)
 			return fmt.Errorf("failed to get new plan: %w", err)
 		}
+		if newPlan == nil {
+			return apperrors.NewNotFoundError("new plan not found")
+		}
 	}
 
 	if !newPlan.IsActive() {
-		return fmt.Errorf("new plan is not active")
+		return apperrors.NewValidationError("new plan is not active")
 	}
 
 	// Note: Change type validation is removed as pricing is now flexible per billing cycle
@@ -110,7 +117,7 @@ func (uc *ChangePlanUseCase) Execute(ctx context.Context, cmd ChangePlanCommand)
 	} else {
 		if err := uc.applyPlanChange(sub, newPlanID, cmd.ChangeType); err != nil {
 			uc.logger.Errorw("failed to apply plan change", "error", err)
-			return fmt.Errorf("failed to apply plan change: %w", err)
+			return err
 		}
 
 		uc.logger.Infow("plan changed immediately",

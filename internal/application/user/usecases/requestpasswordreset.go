@@ -3,19 +3,20 @@ package usecases
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
 	"github.com/orris-inc/orris/internal/domain/user"
-	"github.com/orris-inc/orris/internal/shared/biztime"
+	apperrors "github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 const (
 	// rateLimitWindow is the time window for rate limiting password reset requests
 	rateLimitWindow = 1 * time.Minute
-	// rateLimitCleanupInterval is how often expired entries are cleaned up
-	rateLimitCleanupInterval = 10 * time.Minute
+	// rateLimitKeyPrefix is the Redis key prefix for password reset rate limiting
+	rateLimitKeyPrefix = "pwreset:ratelimit:"
 )
 
 type RequestPasswordResetCommand struct {
@@ -23,31 +24,29 @@ type RequestPasswordResetCommand struct {
 }
 
 type RequestPasswordResetUseCase struct {
-	userRepo      user.Repository
-	emailService  EmailService
-	logger        logger.Interface
-	rateLimiter   map[string]time.Time
-	rateLimiterMu sync.Mutex
-	lastCleanup   time.Time
+	userRepo     user.Repository
+	emailService EmailService
+	redisClient  *redis.Client
+	logger       logger.Interface
 }
 
 func NewRequestPasswordResetUseCase(
 	userRepo user.Repository,
 	emailService EmailService,
+	redisClient *redis.Client,
 	logger logger.Interface,
 ) *RequestPasswordResetUseCase {
 	return &RequestPasswordResetUseCase{
 		userRepo:     userRepo,
 		emailService: emailService,
+		redisClient:  redisClient,
 		logger:       logger,
-		rateLimiter:  make(map[string]time.Time),
-		lastCleanup:  biztime.NowUTC(),
 	}
 }
 
 func (uc *RequestPasswordResetUseCase) Execute(ctx context.Context, cmd RequestPasswordResetCommand) error {
-	// Check rate limit with mutex protection
-	if err := uc.checkRateLimit(cmd.Email); err != nil {
+	// Check rate limit via Redis
+	if err := uc.checkRateLimit(ctx, cmd.Email); err != nil {
 		return err
 	}
 
@@ -57,7 +56,7 @@ func (uc *RequestPasswordResetUseCase) Execute(ctx context.Context, cmd RequestP
 		return nil
 	}
 	if existingUser == nil {
-		uc.logger.Infow("password reset requested for non-existent email", "email", cmd.Email)
+		uc.logger.Infow("password reset requested for non-existent email")
 		return nil
 	}
 
@@ -78,53 +77,40 @@ func (uc *RequestPasswordResetUseCase) Execute(ctx context.Context, cmd RequestP
 	}
 
 	if err := uc.emailService.SendPasswordResetEmail(cmd.Email, token.Value()); err != nil {
-		uc.logger.Warnw("failed to send password reset email", "error", err, "email", cmd.Email)
+		uc.logger.Warnw("failed to send password reset email", "error", err)
 	}
 
-	// Record rate limit with mutex protection
-	uc.recordRateLimit(cmd.Email)
+	// Record rate limit via Redis
+	uc.recordRateLimit(ctx, cmd.Email)
 
 	uc.logger.Infow("password reset requested", "user_id", existingUser.ID())
 
 	return nil
 }
 
-// checkRateLimit checks if the email is rate limited and cleans up expired entries
-func (uc *RequestPasswordResetUseCase) checkRateLimit(email string) error {
-	uc.rateLimiterMu.Lock()
-	defer uc.rateLimiterMu.Unlock()
+// checkRateLimit checks if the email is rate limited using Redis
+func (uc *RequestPasswordResetUseCase) checkRateLimit(ctx context.Context, email string) error {
+	key := rateLimitKeyPrefix + email
 
-	now := biztime.NowUTC()
-
-	// Periodically cleanup expired entries to prevent memory leak
-	if now.Sub(uc.lastCleanup) > rateLimitCleanupInterval {
-		uc.cleanupExpiredEntries(now)
-		uc.lastCleanup = now
+	exists, err := uc.redisClient.Exists(ctx, key).Result()
+	if err != nil {
+		// If Redis is unavailable, allow the request to avoid blocking password resets entirely
+		uc.logger.Warnw("failed to check rate limit from Redis, allowing request", "error", err)
+		return nil
 	}
 
-	if lastRequest, exists := uc.rateLimiter[email]; exists {
-		if now.Sub(lastRequest) < rateLimitWindow {
-			return fmt.Errorf("please wait before requesting another password reset")
-		}
+	if exists > 0 {
+		return apperrors.NewValidationError("please wait before requesting another password reset")
 	}
 
 	return nil
 }
 
-// recordRateLimit records the rate limit timestamp for an email
-func (uc *RequestPasswordResetUseCase) recordRateLimit(email string) {
-	uc.rateLimiterMu.Lock()
-	defer uc.rateLimiterMu.Unlock()
+// recordRateLimit records the rate limit timestamp for an email in Redis with automatic expiry
+func (uc *RequestPasswordResetUseCase) recordRateLimit(ctx context.Context, email string) {
+	key := rateLimitKeyPrefix + email
 
-	uc.rateLimiter[email] = biztime.NowUTC()
-}
-
-// cleanupExpiredEntries removes entries older than rateLimitCleanupInterval
-// Must be called with rateLimiterMu held
-func (uc *RequestPasswordResetUseCase) cleanupExpiredEntries(now time.Time) {
-	for email, lastRequest := range uc.rateLimiter {
-		if now.Sub(lastRequest) > rateLimitCleanupInterval {
-			delete(uc.rateLimiter, email)
-		}
+	if err := uc.redisClient.Set(ctx, key, "1", rateLimitWindow).Err(); err != nil {
+		uc.logger.Warnw("failed to record rate limit in Redis", "error", err)
 	}
 }

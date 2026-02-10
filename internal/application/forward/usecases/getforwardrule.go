@@ -19,7 +19,7 @@ type GetForwardRuleQuery struct {
 
 // GetForwardRuleUseCase handles getting a single forward rule.
 type GetForwardRuleUseCase struct {
-	repo              forward.Repository
+	repo              forward.RuleReader
 	agentRepo         forward.AgentRepository
 	nodeRepo          node.NodeRepository
 	resourceGroupRepo resource.Repository
@@ -28,7 +28,7 @@ type GetForwardRuleUseCase struct {
 
 // NewGetForwardRuleUseCase creates a new GetForwardRuleUseCase.
 func NewGetForwardRuleUseCase(
-	repo forward.Repository,
+	repo forward.RuleReader,
 	agentRepo forward.AgentRepository,
 	nodeRepo node.NodeRepository,
 	resourceGroupRepo resource.Repository,

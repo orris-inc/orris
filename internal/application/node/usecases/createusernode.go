@@ -140,7 +140,7 @@ func (uc *CreateUserNodeUseCase) Execute(ctx context.Context, cmd CreateUserNode
 	serverAddress, err := vo.NewServerAddress(cmd.ServerAddress)
 	if err != nil {
 		uc.logger.Errorw("invalid server address", "error", err)
-		return nil, fmt.Errorf("invalid server address: %w", err)
+		return nil, err
 	}
 
 	// Validate and create protocol
@@ -169,7 +169,7 @@ func (uc *CreateUserNodeUseCase) Execute(ctx context.Context, cmd CreateUserNode
 		encryptionConfig, err = vo.NewEncryptionConfig(cmd.Method)
 		if err != nil {
 			uc.logger.Errorw("invalid encryption config", "error", err)
-			return nil, fmt.Errorf("invalid encryption config: %w", err)
+			return nil, err
 		}
 
 		// Create plugin config if plugin is specified
@@ -177,7 +177,7 @@ func (uc *CreateUserNodeUseCase) Execute(ctx context.Context, cmd CreateUserNode
 			pluginConfig, err = vo.NewPluginConfig(*cmd.Plugin, cmd.PluginOpts)
 			if err != nil {
 				uc.logger.Errorw("invalid plugin config", "error", err)
-				return nil, fmt.Errorf("invalid plugin config: %w", err)
+				return nil, err
 			}
 		}
 	} else if protocol.IsTrojan() {
@@ -200,7 +200,7 @@ func (uc *CreateUserNodeUseCase) Execute(ctx context.Context, cmd CreateUserNode
 		)
 		if err != nil {
 			uc.logger.Errorw("invalid trojan config", "error", err)
-			return nil, fmt.Errorf("invalid trojan config: %w", err)
+			return nil, err
 		}
 		trojanConfig = &tc
 	} else if protocol.IsVLESS() {
@@ -262,7 +262,7 @@ func (uc *CreateUserNodeUseCase) Execute(ctx context.Context, cmd CreateUserNode
 		)
 		if err != nil {
 			uc.logger.Errorw("invalid VLESS config", "error", err)
-			return nil, fmt.Errorf("invalid VLESS config: %w", err)
+			return nil, err
 		}
 		vlessConfig = &vc
 	} else if protocol.IsVMess() {
@@ -291,7 +291,7 @@ func (uc *CreateUserNodeUseCase) Execute(ctx context.Context, cmd CreateUserNode
 		)
 		if err != nil {
 			uc.logger.Errorw("invalid VMess config", "error", err)
-			return nil, fmt.Errorf("invalid VMess config: %w", err)
+			return nil, err
 		}
 		vmessConfig = &vc
 	} else if protocol.IsHysteria2() {
@@ -315,7 +315,7 @@ func (uc *CreateUserNodeUseCase) Execute(ctx context.Context, cmd CreateUserNode
 		)
 		if err != nil {
 			uc.logger.Errorw("invalid Hysteria2 config", "error", err)
-			return nil, fmt.Errorf("invalid Hysteria2 config: %w", err)
+			return nil, err
 		}
 		hysteria2Config = &hc
 	} else if protocol.IsTUIC() {
@@ -343,7 +343,7 @@ func (uc *CreateUserNodeUseCase) Execute(ctx context.Context, cmd CreateUserNode
 		)
 		if err != nil {
 			uc.logger.Errorw("invalid TUIC config", "error", err)
-			return nil, fmt.Errorf("invalid TUIC config: %w", err)
+			return nil, err
 		}
 		tuicConfig = &tc
 	}
@@ -372,7 +372,7 @@ func (uc *CreateUserNodeUseCase) Execute(ctx context.Context, cmd CreateUserNode
 	)
 	if err != nil {
 		uc.logger.Errorw("failed to create node entity", "error", err)
-		return nil, fmt.Errorf("failed to create node: %w", err)
+		return nil, err
 	}
 
 	// Set user ownership

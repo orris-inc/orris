@@ -10,6 +10,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/resource"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/goroutine"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -557,7 +558,7 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 		newChainAgentIDs := rule.ChainAgentIDs()
 		ruleType := rule.RuleType().String()
 
-		go func() {
+		goroutine.SafeGo(uc.logger, "update-rule-notify-agents", func() {
 			// Notify entry agent
 			if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), newAgentID, cmd.ShortID, "updated"); err != nil {
 				uc.logger.Debugw("config sync notification skipped for entry agent", "rule_id", cmd.ShortID, "agent_id", newAgentID, "reason", err.Error())
@@ -619,7 +620,7 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 					}
 				}
 			}
-		}()
+		})
 	}
 
 	return nil

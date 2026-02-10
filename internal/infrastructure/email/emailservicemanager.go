@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"sync"
 
-	settingUsecases "github.com/orris-inc/orris/internal/application/setting/usecases"
+	"github.com/orris-inc/orris/internal/domain/setting"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // EmailServiceManager manages email service with hot-reload support
 type EmailServiceManager struct {
-	provider *settingUsecases.SettingProvider
+	provider setting.SettingProvider
 	logger   logger.Interface
 
 	mu      sync.RWMutex
@@ -20,7 +20,7 @@ type EmailServiceManager struct {
 
 // NewEmailServiceManager creates a new EmailServiceManager
 func NewEmailServiceManager(
-	provider *settingUsecases.SettingProvider,
+	provider setting.SettingProvider,
 	logger logger.Interface,
 ) *EmailServiceManager {
 	return &EmailServiceManager{

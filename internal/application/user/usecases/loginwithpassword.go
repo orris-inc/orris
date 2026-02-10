@@ -2,13 +2,13 @@ package usecases
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/orris-inc/orris/internal/application/user/helpers"
 	"github.com/orris-inc/orris/internal/domain/user"
 	"github.com/orris-inc/orris/internal/shared/authorization"
 	"github.com/orris-inc/orris/internal/shared/config"
+	apperrors "github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -25,7 +25,7 @@ type TokenPair struct {
 
 type JWTService interface {
 	Generate(userUUID string, sessionID string, role authorization.UserRole) (*TokenPair, error)
-	Refresh(refreshToken string) (string, error)
+	Refresh(refreshToken string) (*TokenPair, error)
 }
 
 type LoginWithPasswordCommand struct {
@@ -82,12 +82,12 @@ func (uc *LoginWithPasswordUseCase) Execute(ctx context.Context, cmd LoginWithPa
 	existingUser, err := uc.userRepo.GetByEmail(ctx, cmd.Email)
 	if err != nil {
 		uc.logger.Errorw("failed to get user by email", "error", err)
-		return nil, fmt.Errorf("failed to get user: %w", err)
+		return nil, apperrors.NewInternalError("failed to get user")
 	}
 
 	// Return generic error if user not found (security: don't reveal if email exists)
 	if existingUser == nil {
-		return nil, fmt.Errorf("invalid email or password")
+		return nil, apperrors.NewInvalidCredentialsError()
 	}
 
 	// Validate user can login using unified helper (checks lock, password availability, status)
@@ -103,7 +103,7 @@ func (uc *LoginWithPasswordUseCase) Execute(ctx context.Context, cmd LoginWithPa
 			securityPolicy = uc.securityPolicyProvider.GetSecurityPolicy(ctx)
 		}
 		uc.authHelper.RecordFailedLoginWithPolicyAndSave(ctx, existingUser, securityPolicy)
-		return nil, fmt.Errorf("invalid email or password")
+		return nil, apperrors.NewInvalidCredentialsError()
 	}
 
 	// Determine session duration based on remember me option

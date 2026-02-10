@@ -15,7 +15,7 @@ import (
 
 // BatchForwardRuleUseCase handles batch operations for forward rules.
 type BatchForwardRuleUseCase struct {
-	repo             forward.Repository
+	repo             forward.RuleReader
 	createRuleUC     *CreateForwardRuleUseCase
 	createUserRuleUC *CreateUserForwardRuleUseCase
 	deleteRuleUC     *DeleteForwardRuleUseCase
@@ -28,7 +28,7 @@ type BatchForwardRuleUseCase struct {
 
 // NewBatchForwardRuleUseCase creates a new BatchForwardRuleUseCase.
 func NewBatchForwardRuleUseCase(
-	repo forward.Repository,
+	repo forward.RuleReader,
 	createRuleUC *CreateForwardRuleUseCase,
 	createUserRuleUC *CreateUserForwardRuleUseCase,
 	deleteRuleUC *DeleteForwardRuleUseCase,

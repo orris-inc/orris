@@ -47,7 +47,7 @@ func (uc *PublishAnnouncementUseCase) Execute(ctx context.Context, sid string) (
 
 	if err := announcement.Publish(); err != nil {
 		uc.logger.Errorw("failed to publish announcement", "sid", sid, "error", err)
-		return nil, fmt.Errorf("failed to publish announcement: %w", err)
+		return nil, err
 	}
 
 	if err := uc.announcementRepo.Update(ctx, announcement); err != nil {

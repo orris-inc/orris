@@ -3,14 +3,23 @@ package i18n
 import (
 	"fmt"
 	"html"
+	"time"
 
-	"github.com/orris-inc/orris/internal/application/telegram/admin/dto"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 )
 
+// ExpiringResourceInfo holds lightweight resource info for building expiring notification messages.
+type ExpiringResourceInfo struct {
+	SID           string
+	Name          string
+	ExpiresAt     time.Time
+	DaysRemaining int
+	CostLabel     *string
+}
+
 // BuildResourceExpiringMessage builds a resource expiring notification message (HTML format)
-// for agents and nodes that will expire soon
-func BuildResourceExpiringMessage(lang Lang, agents []dto.ExpiringAgentInfo, nodes []dto.ExpiringNodeInfo) string {
+// for agents and nodes that will expire soon.
+func BuildResourceExpiringMessage(lang Lang, agents []ExpiringResourceInfo, nodes []ExpiringResourceInfo) string {
 	if len(agents) == 0 && len(nodes) == 0 {
 		return ""
 	}

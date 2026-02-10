@@ -56,6 +56,9 @@ type ForwardTrafficCache interface {
 	// IncrementRuleTraffic atomically increments rule traffic in Redis.
 	IncrementRuleTraffic(ctx context.Context, ruleID uint, upload, download int64) error
 
+	// BatchIncrementRuleTraffic atomically increments traffic for multiple rules in a single Redis pipeline.
+	BatchIncrementRuleTraffic(ctx context.Context, entries []RuleTrafficBatchEntry) error
+
 	// GetRuleTraffic returns the real-time traffic (accumulated value in Redis).
 	// If the key does not exist in Redis, returns (0, 0, false).
 	GetRuleTraffic(ctx context.Context, ruleID uint) (upload, download int64, exists bool)
@@ -74,6 +77,13 @@ type ForwardTrafficCache interface {
 	// CleanupRuleCache removes traffic cache for a rule.
 	// Should be called when a rule is deleted.
 	CleanupRuleCache(ctx context.Context, ruleID uint) error
+}
+
+// RuleTrafficBatchEntry represents a single entry for batch traffic increment.
+type RuleTrafficBatchEntry struct {
+	RuleID   uint
+	Upload   int64
+	Download int64
 }
 
 // RedisForwardTrafficCache implements ForwardTrafficCache using Redis.
@@ -139,6 +149,53 @@ func (c *RedisForwardTrafficCache) IncrementRuleTraffic(ctx context.Context, rul
 		"rule_id", ruleID,
 		"upload", upload,
 		"download", download,
+	)
+
+	return nil
+}
+
+// BatchIncrementRuleTraffic atomically increments traffic for multiple rules in a single Redis pipeline.
+// All entries are written in one pipeline round-trip to minimize Redis network overhead.
+func (c *RedisForwardTrafficCache) BatchIncrementRuleTraffic(ctx context.Context, entries []RuleTrafficBatchEntry) error {
+	if len(entries) == 0 {
+		return nil
+	}
+
+	pipe := c.client.Pipeline()
+
+	for _, entry := range entries {
+		if entry.Upload == 0 && entry.Download == 0 {
+			continue
+		}
+
+		key := ruleTrafficKey(entry.RuleID)
+		ruleIDStr := strconv.FormatUint(uint64(entry.RuleID), 10)
+
+		if entry.Upload > 0 {
+			pipe.HIncrBy(ctx, key, fieldUpload, entry.Upload)
+		}
+		if entry.Download > 0 {
+			pipe.HIncrBy(ctx, key, fieldDownload, entry.Download)
+		}
+
+		// Set expiration to prevent memory leak
+		pipe.Expire(ctx, key, forwardTrafficTTL)
+
+		// Add rule ID to active rules set for efficient flush lookup
+		pipe.SAdd(ctx, activeRulesSetKey, ruleIDStr)
+	}
+
+	_, err := pipe.Exec(ctx)
+	if err != nil {
+		c.logger.Errorw("failed to batch increment forward rule traffic in redis",
+			"entry_count", len(entries),
+			"error", err,
+		)
+		return fmt.Errorf("failed to batch increment rule traffic: %w", err)
+	}
+
+	c.logger.Debugw("forward rule traffic batch incremented in redis",
+		"entry_count", len(entries),
 	)
 
 	return nil

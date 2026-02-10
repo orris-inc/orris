@@ -15,34 +15,30 @@ import (
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
-var (
-	_ = subdto.PlanDTO{}
-	_ = subdto.PricingOptionDTO{}
-)
-
 type PlanHandler struct {
-	createPlanUC      *usecases.CreatePlanUseCase
-	updatePlanUC      *usecases.UpdatePlanUseCase
-	getPlanUC         *usecases.GetPlanUseCase
-	listPlansUC       *usecases.ListPlansUseCase
-	getPublicPlansUC  *usecases.GetPublicPlansUseCase
-	activatePlanUC    *usecases.ActivatePlanUseCase
-	deactivatePlanUC  *usecases.DeactivatePlanUseCase
-	deletePlanUC      *usecases.DeletePlanUseCase
-	getPlanPricingsUC *usecases.GetPlanPricingsUseCase
+	createPlanUC      createPlanUseCase
+	updatePlanUC      updatePlanUseCase
+	getPlanUC         getPlanUseCase
+	listPlansUC       listPlansUseCase
+	getPublicPlansUC  getPublicPlansUseCase
+	activatePlanUC    activatePlanUseCase
+	deactivatePlanUC  deactivatePlanUseCase
+	deletePlanUC      deletePlanUseCase
+	getPlanPricingsUC getPlanPricingsUseCase
 	logger            logger.Interface
 }
 
 func NewPlanHandler(
-	createPlanUC *usecases.CreatePlanUseCase,
-	updatePlanUC *usecases.UpdatePlanUseCase,
-	getPlanUC *usecases.GetPlanUseCase,
-	listPlansUC *usecases.ListPlansUseCase,
-	getPublicPlansUC *usecases.GetPublicPlansUseCase,
-	activatePlanUC *usecases.ActivatePlanUseCase,
-	deactivatePlanUC *usecases.DeactivatePlanUseCase,
-	deletePlanUC *usecases.DeletePlanUseCase,
-	getPlanPricingsUC *usecases.GetPlanPricingsUseCase,
+	createPlanUC createPlanUseCase,
+	updatePlanUC updatePlanUseCase,
+	getPlanUC getPlanUseCase,
+	listPlansUC listPlansUseCase,
+	getPublicPlansUC getPublicPlansUseCase,
+	activatePlanUC activatePlanUseCase,
+	deactivatePlanUC deactivatePlanUseCase,
+	deletePlanUC deletePlanUseCase,
+	getPlanPricingsUC getPlanPricingsUseCase,
+	log logger.Interface,
 ) *PlanHandler {
 	return &PlanHandler{
 		createPlanUC:      createPlanUC,
@@ -54,7 +50,7 @@ func NewPlanHandler(
 		deactivatePlanUC:  deactivatePlanUC,
 		deletePlanUC:      deletePlanUC,
 		getPlanPricingsUC: getPlanPricingsUC,
-		logger:            logger.NewLogger(),
+		logger:            log,
 	}
 }
 
@@ -257,7 +253,7 @@ func (h *PlanHandler) DeletePlan(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "Plan deleted successfully", nil)
+	utils.NoContentResponse(c)
 }
 
 

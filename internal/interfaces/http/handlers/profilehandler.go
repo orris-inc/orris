@@ -6,7 +6,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/orris-inc/orris/internal/application/user"
-	"github.com/orris-inc/orris/internal/interfaces/dto"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
@@ -18,10 +17,10 @@ type ProfileHandler struct {
 }
 
 // NewProfileHandler creates a new ProfileHandler
-func NewProfileHandler(userService *user.ServiceDDD) *ProfileHandler {
+func NewProfileHandler(userService *user.ServiceDDD, log logger.Interface) *ProfileHandler {
 	return &ProfileHandler{
 		userService: userService,
-		logger:      logger.NewLogger(),
+		logger:      log,
 	}
 }
 
@@ -34,7 +33,7 @@ func (h *ProfileHandler) UpdateProfile(c *gin.Context) {
 	}
 
 	// Parse request
-	var req dto.UpdateProfileRequest
+	var req UpdateProfileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Warnw("invalid request body for update profile",
 			"user_id", userID,
@@ -71,7 +70,7 @@ func (h *ProfileHandler) ChangePassword(c *gin.Context) {
 	}
 
 	// Parse request
-	var req dto.ChangePasswordRequest
+	var req ChangePasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Warnw("invalid request body for change password",
 			"user_id", userID,

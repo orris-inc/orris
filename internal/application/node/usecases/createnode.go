@@ -140,7 +140,7 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 	// Create value objects
 	serverAddress, err := vo.NewServerAddress(cmd.ServerAddress)
 	if err != nil {
-		return nil, fmt.Errorf("invalid server address: %w", err)
+		return nil, err
 	}
 
 	// Validate and create protocol
@@ -166,14 +166,14 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 	if protocol.IsShadowsocks() {
 		encryptionConfig, err = vo.NewEncryptionConfig(cmd.Method)
 		if err != nil {
-			return nil, fmt.Errorf("invalid encryption config: %w", err)
+			return nil, err
 		}
 
 		// Create plugin config if plugin is specified
 		if cmd.Plugin != nil && *cmd.Plugin != "" {
 			pluginConfig, err = vo.NewPluginConfig(*cmd.Plugin, cmd.PluginOpts)
 			if err != nil {
-				return nil, fmt.Errorf("invalid plugin config: %w", err)
+				return nil, err
 			}
 		}
 	} else if protocol.IsTrojan() {
@@ -195,7 +195,7 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 			cmd.SNI,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("invalid trojan config: %w", err)
+			return nil, err
 		}
 		trojanConfig = &tc
 	} else if protocol.IsVLESS() {
@@ -253,7 +253,7 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 			cmd.VLESSRealitySpiderX,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("invalid VLESS config: %w", err)
+			return nil, err
 		}
 		vlessConfig = &vc
 	} else if protocol.IsVMess() {
@@ -281,7 +281,7 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 			cmd.VMessAllowInsecure,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("invalid VMess config: %w", err)
+			return nil, err
 		}
 		vmessConfig = &vc
 	} else if protocol.IsHysteria2() {
@@ -304,7 +304,7 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 			cmd.Hysteria2Fingerprint,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("invalid Hysteria2 config: %w", err)
+			return nil, err
 		}
 		hysteria2Config = &hc
 	} else if protocol.IsTUIC() {
@@ -331,7 +331,7 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 			cmd.TUICDisableSNI,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("invalid TUIC config: %w", err)
+			return nil, err
 		}
 		tuicConfig = &tc
 	}
@@ -344,7 +344,7 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 	if cmd.Route != nil {
 		routeConfig, err = dto.FromRouteConfigDTO(cmd.Route)
 		if err != nil {
-			return nil, fmt.Errorf("invalid route config: %w", err)
+			return nil, err
 		}
 
 		// Validate node references in route config (admin nodes can reference any existing node)
@@ -373,7 +373,7 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 		id.NewNodeID,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create node: %w", err)
+		return nil, err
 	}
 
 	// Handle GroupSIDs (resolve SIDs to internal IDs)

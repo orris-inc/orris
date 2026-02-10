@@ -7,7 +7,6 @@ import (
 
 	"github.com/orris-inc/orris/internal/application/user"
 	"github.com/orris-inc/orris/internal/application/user/usecases"
-	"github.com/orris-inc/orris/internal/interfaces/dto"
 	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -26,17 +25,18 @@ type UserHandler struct {
 func NewUserHandler(
 	userService *user.ServiceDDD,
 	adminResetPasswordUC *usecases.AdminResetPasswordUseCase,
+	log logger.Interface,
 ) *UserHandler {
 	return &UserHandler{
 		userService:          userService,
 		adminResetPasswordUC: adminResetPasswordUC,
-		logger:               logger.NewLogger(),
+		logger:               log,
 	}
 }
 
 // CreateUser handles POST /users
 func (h *UserHandler) CreateUser(c *gin.Context) {
-	var req dto.CreateUserRequest
+	var req CreateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Warnw("invalid request body for create user", "error", err)
 		utils.ErrorResponseWithError(c, err)
@@ -59,7 +59,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 // GetUser handles GET /users/:id
 func (h *UserHandler) GetUser(c *gin.Context) {
 	// Parse user UUID (Stripe-style ID)
-	userUUID, err := dto.ParseUserID(c)
+	userUUID, err := ParseUserID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -82,7 +82,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	userRole := c.GetString(constants.ContextKeyUserRole)
 
 	// Parse user UUID (Stripe-style ID)
-	userUUID, err := dto.ParseUserID(c)
+	userUUID, err := ParseUserID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -93,7 +93,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		constants.ContextKeyUserRole, userRole,
 		"target_user_uuid", userUUID)
 
-	var req dto.UpdateUserRequest
+	var req UpdateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Warnw("invalid request body for update user",
 			"user_uuid", userUUID,
@@ -118,7 +118,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 // DeleteUser handles DELETE /users/:id
 func (h *UserHandler) DeleteUser(c *gin.Context) {
 	// Parse user UUID (Stripe-style ID)
-	userUUID, err := dto.ParseUserID(c)
+	userUUID, err := ParseUserID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -136,7 +136,7 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 // ListUsers handles GET /users
 func (h *UserHandler) ListUsers(c *gin.Context) {
 	// Parse query parameters
-	req, err := dto.ParseListUsersRequest(c)
+	req, err := ParseListUsersRequest(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
@@ -173,13 +173,13 @@ func (h *UserHandler) GetUserByEmail(c *gin.Context) {
 // AdminResetPassword handles PATCH /users/:id/password
 func (h *UserHandler) AdminResetPassword(c *gin.Context) {
 	// Parse user UUID (Stripe-style ID)
-	userUUID, err := dto.ParseUserID(c)
+	userUUID, err := ParseUserID(c)
 	if err != nil {
 		utils.ErrorResponseWithError(c, err)
 		return
 	}
 
-	var req dto.AdminResetPasswordRequest
+	var req AdminResetPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		h.logger.Warnw("invalid request body for admin reset password", "user_uuid", userUUID, "error", err)
 		utils.ErrorResponseWithError(c, err)

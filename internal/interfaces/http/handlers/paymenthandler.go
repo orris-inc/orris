@@ -40,7 +40,6 @@ type CreatePaymentRequest struct {
 }
 
 type CreatePaymentResponse struct {
-	PaymentID  uint   `json:"payment_id"`
 	OrderNo    string `json:"order_no"`
 	PaymentURL string `json:"payment_url"`
 	QRCode     string `json:"qr_code,omitempty"`
@@ -90,7 +89,6 @@ func (h *PaymentHandler) CreatePayment(c *gin.Context) {
 	}
 
 	response := CreatePaymentResponse{
-		PaymentID:  result.Payment.ID(),
 		OrderNo:    result.Payment.OrderNo(),
 		PaymentURL: result.PaymentURL,
 		QRCode:     result.QRCode,
@@ -114,7 +112,7 @@ func (h *PaymentHandler) CreatePayment(c *gin.Context) {
 		}
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "payment created successfully", response)
+	utils.CreatedResponse(c, response, "payment created successfully")
 }
 
 func (h *PaymentHandler) HandleCallback(c *gin.Context) {

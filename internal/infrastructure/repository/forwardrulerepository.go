@@ -18,6 +18,9 @@ import (
 	"github.com/orris-inc/orris/internal/shared/utils/jsonutil"
 )
 
+// Compile-time interface assertion.
+var _ forward.Repository = (*ForwardRuleRepositoryImpl)(nil)
+
 // allowedRuleOrderByFields defines the whitelist of allowed ORDER BY fields
 // to prevent SQL injection attacks.
 var allowedRuleOrderByFields = map[string]bool{
@@ -767,26 +770,39 @@ func (r *ForwardRuleRepositoryImpl) GetTotalTrafficByUserID(ctx context.Context,
 	return result.TotalTraffic, nil
 }
 
-// UpdateSortOrders batch updates sort_order for multiple rules.
+// UpdateSortOrders batch updates sort_order for multiple rules using a single CASE WHEN SQL.
 func (r *ForwardRuleRepositoryImpl) UpdateSortOrders(ctx context.Context, ruleOrders map[uint]int) error {
 	if len(ruleOrders) == 0 {
 		return nil
 	}
 
-	tx := db.GetTxFromContext(ctx, r.db)
+	// Build CASE WHEN SQL: UPDATE forward_rules SET sort_order = CASE id WHEN ? THEN ? ... END WHERE id IN (?,...)
+	var sb strings.Builder
+	sb.WriteString("UPDATE forward_rules SET sort_order = CASE id ")
+
+	args := make([]interface{}, 0, len(ruleOrders)*2+len(ruleOrders))
+	ids := make([]interface{}, 0, len(ruleOrders))
+
 	for id, sortOrder := range ruleOrders {
-		result := tx.Model(&models.ForwardRuleModel{}).
-			Where("id = ?", id).
-			Update("sort_order", sortOrder)
+		sb.WriteString("WHEN ? THEN ? ")
+		args = append(args, id, sortOrder)
+		ids = append(ids, id)
+	}
 
-		if result.Error != nil {
-			r.logger.Errorw("failed to update sort order", "id", id, "sort_order", sortOrder, "error", result.Error)
-			return fmt.Errorf("failed to update sort order for rule %d: %w", id, result.Error)
+	sb.WriteString("END WHERE id IN (")
+	for i := range ids {
+		if i > 0 {
+			sb.WriteString(",")
 		}
+		sb.WriteString("?")
+	}
+	sb.WriteString(")")
+	args = append(args, ids...)
 
-		if result.RowsAffected == 0 {
-			r.logger.Warnw("rule not found when updating sort order", "id", id)
-		}
+	tx := db.GetTxFromContext(ctx, r.db)
+	if err := tx.Exec(sb.String(), args...).Error; err != nil {
+		r.logger.Errorw("failed to batch update sort orders", "error", err, "count", len(ruleOrders))
+		return fmt.Errorf("failed to batch update sort orders: %w", err)
 	}
 
 	r.logger.Infow("sort orders updated successfully", "count", len(ruleOrders))

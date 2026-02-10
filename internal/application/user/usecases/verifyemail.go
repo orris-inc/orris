@@ -36,12 +36,12 @@ func (uc *VerifyEmailUseCase) Execute(ctx context.Context, cmd VerifyEmailComman
 
 	if err := existingUser.VerifyEmail(cmd.Token); err != nil {
 		uc.logger.Errorw("failed to verify email", "error", err, "user_id", existingUser.ID())
-		return fmt.Errorf("failed to verify email: %w", err)
+		return err
 	}
 
 	if err := existingUser.Activate(); err != nil {
 		uc.logger.Errorw("failed to activate user", "error", err, "user_id", existingUser.ID())
-		return fmt.Errorf("failed to activate user: %w", err)
+		return err
 	}
 
 	if err := uc.userRepo.Update(ctx, existingUser); err != nil {

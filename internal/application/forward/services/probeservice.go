@@ -16,6 +16,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/infrastructure/auth"
 	"github.com/orris-inc/orris/internal/shared/biztime"
+	"github.com/orris-inc/orris/internal/shared/goroutine"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -313,13 +314,15 @@ func (s *ProbeService) probeEntryRule(ctx context.Context, rule *forward.Forward
 
 	for i, exitAgentID := range exitAgentIDs {
 		wg.Add(1)
-		go func(idx int, agentID uint) {
+		idx := i
+		agentID := exitAgentID
+		goroutine.SafeGo(s.logger, "probe-exit-agent", func() {
 			defer wg.Done()
 			sem <- struct{}{}        // acquire
 			defer func() { <-sem }() // release
 			exitResults[idx] = s.probeExitAgent(ctx, entryAgentID, agentID, ruleStripeID,
 				tunnelType, tunnelToken, targetAddress, targetPort, rule)
-		}(i, exitAgentID)
+		})
 	}
 	wg.Wait()
 

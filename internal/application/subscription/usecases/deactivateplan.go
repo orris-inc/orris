@@ -35,7 +35,7 @@ func (uc *DeactivatePlanUseCase) Execute(ctx context.Context, planSID string) er
 
 	if err := plan.Deactivate(); err != nil {
 		uc.logger.Errorw("failed to deactivate plan", "error", err, "plan_id", plan.ID())
-		return fmt.Errorf("failed to deactivate plan: %w", err)
+		return err
 	}
 
 	if err := uc.planRepo.Update(ctx, plan); err != nil {

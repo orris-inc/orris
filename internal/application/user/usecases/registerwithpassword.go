@@ -58,7 +58,7 @@ func NewRegisterWithPasswordUseCase(
 func (uc *RegisterWithPasswordUseCase) Execute(ctx context.Context, cmd RegisterWithPasswordCommand) (*user.User, error) {
 	email, err := vo.NewEmail(cmd.Email)
 	if err != nil {
-		return nil, fmt.Errorf("invalid email: %w", err)
+		return nil, err
 	}
 
 	exists, err := uc.userRepo.ExistsByEmail(ctx, email.String())
@@ -74,7 +74,7 @@ func (uc *RegisterWithPasswordUseCase) Execute(ctx context.Context, cmd Register
 
 	name, err := vo.NewName(cmd.Name)
 	if err != nil {
-		return nil, fmt.Errorf("invalid name: %w", err)
+		return nil, err
 	}
 
 	// Get password policy from settings
@@ -85,18 +85,18 @@ func (uc *RegisterWithPasswordUseCase) Execute(ctx context.Context, cmd Register
 
 	password, err := vo.NewPasswordWithPolicy(cmd.Password, passwordPolicy)
 	if err != nil {
-		return nil, fmt.Errorf("invalid password: %w", err)
+		return nil, err
 	}
 
 	newUser, err := user.NewUser(email, name, id.NewUserID)
 	if err != nil {
 		uc.logger.Errorw("failed to create user aggregate", "error", err)
-		return nil, fmt.Errorf("failed to create user: %w", err)
+		return nil, err
 	}
 
 	if err := newUser.SetPassword(password, uc.passwordHasher); err != nil {
 		uc.logger.Errorw("failed to set password", "error", err)
-		return nil, fmt.Errorf("failed to set password: %w", err)
+		return nil, err
 	}
 
 	if err := uc.userRepo.Create(ctx, newUser); err != nil {

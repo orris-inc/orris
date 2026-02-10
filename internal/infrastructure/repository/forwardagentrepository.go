@@ -519,43 +519,67 @@ func (r *ForwardAgentRepositoryImpl) FindExpiringAgents(ctx context.Context, wit
 	return agents, nil
 }
 
-// BatchUpdateGroupIDs updates group_ids for multiple agents in a single transaction.
+// BatchUpdateGroupIDs updates group_ids for multiple agents using a single CASE WHEN SQL.
 // This is optimized for resource group membership changes where only group_ids needs to be updated.
 func (r *ForwardAgentRepositoryImpl) BatchUpdateGroupIDs(ctx context.Context, agentGroupIDs map[uint][]uint) (int, error) {
 	if len(agentGroupIDs) == 0 {
 		return 0, nil
 	}
 
-	updated := 0
-	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		for agentID, groupIDs := range agentGroupIDs {
-			// Convert group IDs to JSON array
-			var groupIDsJSON []byte
-			var err error
-			if len(groupIDs) == 0 {
-				groupIDsJSON = []byte("[]")
-			} else {
-				groupIDsJSON, err = json.Marshal(groupIDs)
-				if err != nil {
-					return fmt.Errorf("failed to marshal group IDs for agent %d: %w", agentID, err)
-				}
-			}
-
-			result := tx.Model(&models.ForwardAgentModel{}).
-				Where("id = ?", agentID).
-				Updates(map[string]interface{}{
-					"group_ids":  groupIDsJSON,
-					"updated_at": biztime.NowUTC(),
-				})
-
-			if result.Error != nil {
-				return fmt.Errorf("failed to update agent %d: %w", agentID, result.Error)
-			}
-
-			if result.RowsAffected > 0 {
-				updated++
+	// Pre-serialize all group IDs to JSON
+	type agentGroupJSON struct {
+		agentID   uint
+		jsonBytes []byte
+	}
+	entries := make([]agentGroupJSON, 0, len(agentGroupIDs))
+	for agentID, groupIDs := range agentGroupIDs {
+		var groupIDsJSON []byte
+		var err error
+		if len(groupIDs) == 0 {
+			groupIDsJSON = []byte("[]")
+		} else {
+			groupIDsJSON, err = json.Marshal(groupIDs)
+			if err != nil {
+				return 0, fmt.Errorf("failed to marshal group IDs for agent %d: %w", agentID, err)
 			}
 		}
+		entries = append(entries, agentGroupJSON{agentID: agentID, jsonBytes: groupIDsJSON})
+	}
+
+	// Build CASE WHEN SQL:
+	// UPDATE forward_agents SET group_ids = CASE id WHEN ? THEN ? ... END, updated_at = ? WHERE id IN (?,...)
+	var sb strings.Builder
+	sb.WriteString("UPDATE forward_agents SET group_ids = CASE id ")
+
+	// args: CASE WHEN pairs + updated_at + WHERE IN ids
+	args := make([]interface{}, 0, len(entries)*2+1+len(entries))
+	ids := make([]interface{}, 0, len(entries))
+
+	for _, e := range entries {
+		sb.WriteString("WHEN ? THEN ? ")
+		args = append(args, e.agentID, string(e.jsonBytes))
+		ids = append(ids, e.agentID)
+	}
+
+	sb.WriteString("END, updated_at = ? WHERE id IN (")
+	args = append(args, biztime.NowUTC())
+
+	for i := range ids {
+		if i > 0 {
+			sb.WriteString(",")
+		}
+		sb.WriteString("?")
+	}
+	sb.WriteString(")")
+	args = append(args, ids...)
+
+	var updated int
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.Exec(sb.String(), args...)
+		if result.Error != nil {
+			return fmt.Errorf("failed to batch update group IDs for agents: %w", result.Error)
+		}
+		updated = int(result.RowsAffected)
 		return nil
 	})
 

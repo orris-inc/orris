@@ -60,12 +60,12 @@ func (uc *AdminResetPasswordUseCase) Execute(ctx context.Context, cmd AdminReset
 
 	newPassword, err := vo.NewPasswordWithPolicy(cmd.NewPassword, passwordPolicy)
 	if err != nil {
-		return fmt.Errorf("invalid password: %w", err)
+		return err
 	}
 
 	if err := existingUser.AdminResetPassword(newPassword, uc.passwordHasher); err != nil {
 		uc.logger.Errorw("failed to reset password", "error", err, "user_id", existingUser.ID())
-		return fmt.Errorf("failed to reset password: %w", err)
+		return err
 	}
 
 	// Invalidate all existing sessions for security

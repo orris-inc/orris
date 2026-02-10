@@ -16,34 +16,29 @@ import (
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
-var (
-	_ = subdto.SubscriptionDTO{}
-	_ = subdto.SubscriptionTokenDTO{}
-)
-
 // SubscriptionHandler handles user subscription operations
 type SubscriptionHandler struct {
-	createUseCase        *usecases.CreateSubscriptionUseCase
-	getUseCase           *usecases.GetSubscriptionUseCase
-	listUserUseCase      *usecases.ListUserSubscriptionsUseCase
-	cancelUseCase        *usecases.CancelSubscriptionUseCase
-	deleteUseCase        *usecases.DeleteSubscriptionUseCase
-	changePlanUseCase    *usecases.ChangePlanUseCase
-	getUsageStatsUseCase *usecases.GetSubscriptionUsageStatsUseCase
-	resetLinkUseCase     *usecases.ResetSubscriptionLinkUseCase
+	createUseCase        createSubscriptionUseCase
+	getUseCase           getSubscriptionUseCase
+	listUserUseCase      listUserSubscriptionsUseCase
+	cancelUseCase        cancelSubscriptionUseCase
+	deleteUseCase        deleteSubscriptionUseCase
+	changePlanUseCase    changePlanUseCase
+	getUsageStatsUseCase getSubscriptionUsageStatsUseCase
+	resetLinkUseCase     resetSubscriptionLinkUseCase
 	logger               logger.Interface
 }
 
 // NewSubscriptionHandler creates a new user subscription handler
 func NewSubscriptionHandler(
-	createUC *usecases.CreateSubscriptionUseCase,
-	getUC *usecases.GetSubscriptionUseCase,
-	listUserUC *usecases.ListUserSubscriptionsUseCase,
-	cancelUC *usecases.CancelSubscriptionUseCase,
-	deleteUC *usecases.DeleteSubscriptionUseCase,
-	changePlanUC *usecases.ChangePlanUseCase,
-	getUsageStatsUC *usecases.GetSubscriptionUsageStatsUseCase,
-	resetLinkUC *usecases.ResetSubscriptionLinkUseCase,
+	createUC createSubscriptionUseCase,
+	getUC getSubscriptionUseCase,
+	listUserUC listUserSubscriptionsUseCase,
+	cancelUC cancelSubscriptionUseCase,
+	deleteUC deleteSubscriptionUseCase,
+	changePlanUC changePlanUseCase,
+	getUsageStatsUC getSubscriptionUsageStatsUseCase,
+	resetLinkUC resetSubscriptionLinkUseCase,
 	logger logger.Interface,
 ) *SubscriptionHandler {
 	return &SubscriptionHandler{
@@ -80,12 +75,6 @@ type ChangePlanRequest struct {
 	NewPlanID     string `json:"new_plan_id" binding:"required"` // Stripe-style plan SID (plan_xxx)
 	ChangeType    string `json:"change_type" binding:"required,oneof=upgrade downgrade"`
 	EffectiveDate string `json:"effective_date" binding:"required,oneof=immediate period_end"`
-}
-
-// CreateSubscriptionResponse represents the response for subscription creation
-type CreateSubscriptionResponse struct {
-	Subscription *subdto.SubscriptionDTO      `json:"subscription"`
-	Token        *subdto.SubscriptionTokenDTO `json:"token"`
 }
 
 func (h *SubscriptionHandler) CreateSubscription(c *gin.Context) {
@@ -386,5 +375,5 @@ func (h *SubscriptionHandler) DeleteSubscription(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "Subscription deleted successfully", nil)
+	utils.NoContentResponse(c)
 }

@@ -2,40 +2,39 @@
 package rule
 
 import (
-	"github.com/orris-inc/orris/internal/application/forward/services"
-	"github.com/orris-inc/orris/internal/application/forward/usecases"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // Handler handles HTTP requests for forward rules.
 type Handler struct {
-	createRuleUC   *usecases.CreateForwardRuleUseCase
-	getRuleUC      *usecases.GetForwardRuleUseCase
-	updateRuleUC   *usecases.UpdateForwardRuleUseCase
-	deleteRuleUC   *usecases.DeleteForwardRuleUseCase
-	listRulesUC    *usecases.ListForwardRulesUseCase
-	enableRuleUC   *usecases.EnableForwardRuleUseCase
-	disableRuleUC  *usecases.DisableForwardRuleUseCase
-	resetTrafficUC *usecases.ResetForwardRuleTrafficUseCase
-	reorderRulesUC *usecases.ReorderForwardRulesUseCase
-	batchRuleUC    *usecases.BatchForwardRuleUseCase
-	probeService   *services.ProbeService
+	createRuleUC   createRuleUseCase
+	getRuleUC      getRuleUseCase
+	updateRuleUC   updateRuleUseCase
+	deleteRuleUC   deleteRuleUseCase
+	listRulesUC    listRulesUseCase
+	enableRuleUC   enableRuleUseCase
+	disableRuleUC  disableRuleUseCase
+	resetTrafficUC resetTrafficUseCase
+	reorderRulesUC reorderRulesUseCase
+	batchRuleUC    batchRuleUseCase
+	probeService   probeService
 	logger         logger.Interface
 }
 
 // NewHandler creates a new Handler.
 func NewHandler(
-	createRuleUC *usecases.CreateForwardRuleUseCase,
-	getRuleUC *usecases.GetForwardRuleUseCase,
-	updateRuleUC *usecases.UpdateForwardRuleUseCase,
-	deleteRuleUC *usecases.DeleteForwardRuleUseCase,
-	listRulesUC *usecases.ListForwardRulesUseCase,
-	enableRuleUC *usecases.EnableForwardRuleUseCase,
-	disableRuleUC *usecases.DisableForwardRuleUseCase,
-	resetTrafficUC *usecases.ResetForwardRuleTrafficUseCase,
-	reorderRulesUC *usecases.ReorderForwardRulesUseCase,
-	batchRuleUC *usecases.BatchForwardRuleUseCase,
-	probeService *services.ProbeService,
+	createRuleUC createRuleUseCase,
+	getRuleUC getRuleUseCase,
+	updateRuleUC updateRuleUseCase,
+	deleteRuleUC deleteRuleUseCase,
+	listRulesUC listRulesUseCase,
+	enableRuleUC enableRuleUseCase,
+	disableRuleUC disableRuleUseCase,
+	resetTrafficUC resetTrafficUseCase,
+	reorderRulesUC reorderRulesUseCase,
+	batchRuleUC batchRuleUseCase,
+	probeService probeService,
+	log logger.Interface,
 ) *Handler {
 	return &Handler{
 		createRuleUC:   createRuleUC,
@@ -49,7 +48,7 @@ func NewHandler(
 		reorderRulesUC: reorderRulesUC,
 		batchRuleUC:    batchRuleUC,
 		probeService:   probeService,
-		logger:         logger.NewLogger(),
+		logger:         log,
 	}
 }
 

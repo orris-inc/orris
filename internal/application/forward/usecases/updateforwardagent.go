@@ -9,6 +9,7 @@ import (
 	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/resource"
 	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/goroutine"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -252,14 +253,14 @@ func (uc *UpdateForwardAgentUseCase) Execute(ctx context.Context, cmd UpdateForw
 		)
 
 		// Notify asynchronously to avoid blocking the API response
-		go func() {
+		goroutine.SafeGo(uc.logger, "update-agent-notify-address-change", func() {
 			if err := uc.addressChangeNotifier.NotifyAgentAddressChange(context.Background(), agentID); err != nil {
 				uc.logger.Warnw("failed to notify agent address change",
 					"agent_id", agentID,
 					"error", err,
 				)
 			}
-		}()
+		})
 	}
 
 	// Check if blocked protocols changed and notify the agent
@@ -274,14 +275,14 @@ func (uc *UpdateForwardAgentUseCase) Execute(ctx context.Context, cmd UpdateForw
 		)
 
 		// Notify asynchronously to avoid blocking the API response
-		go func() {
+		goroutine.SafeGo(uc.logger, "update-agent-notify-blocked-protocols-change", func() {
 			if err := uc.agentConfigNotifier.NotifyAgentBlockedProtocolsChange(context.Background(), agentID); err != nil {
 				uc.logger.Warnw("failed to notify agent blocked protocols change",
 					"agent_id", agentID,
 					"error", err,
 				)
 			}
-		}()
+		})
 	}
 
 	return nil

@@ -17,7 +17,7 @@ import (
 // PlanPricingRepositoryImpl implements PlanPricingRepository interface
 type PlanPricingRepositoryImpl struct {
 	db     *gorm.DB
-	mapper *mappers.PlanPricingMapper
+	mapper mappers.PlanPricingMapper
 	logger logger.Interface
 }
 

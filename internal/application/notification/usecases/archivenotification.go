@@ -39,7 +39,7 @@ func (uc *ArchiveNotificationUseCase) Execute(ctx context.Context, id uint, user
 
 	if err := notification.Archive(); err != nil {
 		uc.logger.Errorw("failed to archive notification", "id", id, "error", err)
-		return fmt.Errorf("failed to archive notification: %w", err)
+		return err
 	}
 
 	if err := uc.repo.Update(ctx, notification); err != nil {

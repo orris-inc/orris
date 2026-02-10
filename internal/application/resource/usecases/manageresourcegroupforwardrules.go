@@ -13,10 +13,18 @@ import (
 	"github.com/orris-inc/orris/internal/shared/utils/setutil"
 )
 
+// ruleReaderQuerierGroupManager combines RuleReader, RuleQuerier, and RuleGroupManager
+// for use cases that need lookup, listing, and group management operations.
+type ruleReaderQuerierGroupManager interface {
+	forward.RuleReader
+	forward.RuleQuerier
+	forward.RuleGroupManager
+}
+
 // ManageResourceGroupForwardRulesUseCase handles adding/removing forward rules from resource groups
 type ManageResourceGroupForwardRulesUseCase struct {
 	resourceGroupRepo resource.Repository
-	ruleRepo          forward.Repository
+	ruleRepo          ruleReaderQuerierGroupManager
 	planRepo          subscription.PlanRepository
 	logger            logger.Interface
 	syncer            NodeSubscriptionSyncer
@@ -31,7 +39,7 @@ func (uc *ManageResourceGroupForwardRulesUseCase) SetNodeSubscriptionSyncer(sync
 // NewManageResourceGroupForwardRulesUseCase creates a new ManageResourceGroupForwardRulesUseCase
 func NewManageResourceGroupForwardRulesUseCase(
 	resourceGroupRepo resource.Repository,
-	ruleRepo forward.Repository,
+	ruleRepo ruleReaderQuerierGroupManager,
 	planRepo subscription.PlanRepository,
 	logger logger.Interface,
 ) *ManageResourceGroupForwardRulesUseCase {

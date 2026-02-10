@@ -51,7 +51,7 @@ func (uc *EnableForwardAgentUseCase) Execute(ctx context.Context, cmd EnableForw
 	// Enable the agent
 	if err := agent.Enable(); err != nil {
 		uc.logger.Errorw("failed to enable forward agent", "id", agent.ID(), "short_id", agent.SID(), "error", err)
-		return fmt.Errorf("failed to enable forward agent: %w", err)
+		return err
 	}
 
 	// Persist changes

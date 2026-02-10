@@ -83,6 +83,10 @@ type SubscriptionTrafficCache interface {
 	// IncrementSubscriptionTraffic atomically increments subscription traffic in Redis.
 	IncrementSubscriptionTraffic(ctx context.Context, nodeID, subscriptionID uint, upload, download int64) error
 
+	// BatchIncrementSubscriptionTraffic atomically increments traffic for multiple subscriptions
+	// in a single Redis pipeline.
+	BatchIncrementSubscriptionTraffic(ctx context.Context, entries []SubscriptionTrafficBatchEntry) error
+
 	// GetSubscriptionTraffic returns the real-time traffic for a node:subscription pair.
 	GetSubscriptionTraffic(ctx context.Context, nodeID, subscriptionID uint) (upload, download int64, exists bool)
 
@@ -94,6 +98,14 @@ type SubscriptionTrafficCache interface {
 	// FlushToDatabase flushes all pending traffic to Redis HourlyTrafficCache.
 	// Note: Previously flushed to MySQL subscription_usages table, now writes to Redis hourly buckets.
 	FlushToDatabase(ctx context.Context) error
+}
+
+// SubscriptionTrafficBatchEntry represents a single entry for batch subscription traffic increment.
+type SubscriptionTrafficBatchEntry struct {
+	NodeID         uint
+	SubscriptionID uint
+	Upload         int64
+	Download       int64
 }
 
 // RedisSubscriptionTrafficCache implements SubscriptionTrafficCache using Redis.
@@ -175,6 +187,52 @@ func (c *RedisSubscriptionTrafficCache) IncrementSubscriptionTraffic(ctx context
 		"subscription_id", subscriptionID,
 		"upload", upload,
 		"download", download,
+	)
+
+	return nil
+}
+
+// BatchIncrementSubscriptionTraffic atomically increments traffic for multiple subscriptions
+// in a single Redis pipeline round-trip to minimize Redis network overhead.
+func (c *RedisSubscriptionTrafficCache) BatchIncrementSubscriptionTraffic(ctx context.Context, entries []SubscriptionTrafficBatchEntry) error {
+	if len(entries) == 0 {
+		return nil
+	}
+
+	pipe := c.client.Pipeline()
+
+	for _, entry := range entries {
+		if entry.Upload == 0 && entry.Download == 0 {
+			continue
+		}
+
+		key := subscriptionTrafficKey(entry.NodeID, entry.SubscriptionID)
+
+		if entry.Upload > 0 {
+			pipe.HIncrBy(ctx, key, subFieldUpload, entry.Upload)
+		}
+		if entry.Download > 0 {
+			pipe.HIncrBy(ctx, key, subFieldDownload, entry.Download)
+		}
+
+		// Set expiration to prevent memory leak
+		pipe.Expire(ctx, key, subscriptionTrafficTTL)
+
+		// Add to active set for efficient flush lookup
+		pipe.SAdd(ctx, activeSubscriptionsSetKey, key)
+	}
+
+	_, err := pipe.Exec(ctx)
+	if err != nil {
+		c.logger.Errorw("failed to batch increment subscription traffic in redis",
+			"entry_count", len(entries),
+			"error", err,
+		)
+		return fmt.Errorf("failed to batch increment subscription traffic: %w", err)
+	}
+
+	c.logger.Debugw("subscription traffic batch incremented in redis",
+		"entry_count", len(entries),
 	)
 
 	return nil

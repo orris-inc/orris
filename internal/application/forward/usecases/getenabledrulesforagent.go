@@ -38,7 +38,7 @@ type GetEnabledRulesForAgentExecutor interface {
 
 // GetEnabledRulesForAgentUseCase implements the use case for getting enabled rules for an agent.
 type GetEnabledRulesForAgentUseCase struct {
-	repo          forward.Repository
+	repo          forward.RuleQuerier
 	agentRepo     forward.AgentRepository
 	ruleConverter AgentRuleConverter
 	logger        logger.Interface
@@ -46,7 +46,7 @@ type GetEnabledRulesForAgentUseCase struct {
 
 // NewGetEnabledRulesForAgentUseCase creates a new GetEnabledRulesForAgentUseCase.
 func NewGetEnabledRulesForAgentUseCase(
-	repo forward.Repository,
+	repo forward.RuleQuerier,
 	agentRepo forward.AgentRepository,
 	ruleConverter AgentRuleConverter,
 	logger logger.Interface,

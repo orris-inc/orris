@@ -31,17 +31,17 @@ type SubscriptionRepository interface {
 }
 
 type SubscriptionFilter struct {
-	UserID       *uint
-	PlanID       *uint
-	Status       *string
-	BillingCycle *string
-	CreatedFrom  *time.Time
-	CreatedTo    *time.Time
+	UserID        *uint
+	PlanID        *uint
+	Status        *string
+	BillingCycle  *string
+	CreatedFrom   *time.Time
+	CreatedTo     *time.Time
 	ExpiresBefore *time.Time // For finding subscriptions expiring before a certain date
-	Page         int
-	PageSize     int
-	SortBy       string
-	SortDesc     bool
+	Page          int
+	PageSize      int
+	SortBy        string
+	SortDesc      bool
 }
 
 type PlanRepository interface {

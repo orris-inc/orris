@@ -15,28 +15,29 @@ import (
 )
 
 type NodeHandler struct {
-	createNodeUC                 usecases.CreateNodeExecutor
-	getNodeUC                    usecases.GetNodeExecutor
-	updateNodeUC                 usecases.UpdateNodeExecutor
-	deleteNodeUC                 usecases.DeleteNodeExecutor
-	listNodesUC                  usecases.ListNodesExecutor
-	generateTokenUC              usecases.GenerateNodeTokenExecutor
-	generateInstallScriptUC      usecases.GenerateNodeInstallScriptExecutor
-	generateBatchInstallScriptUC usecases.GenerateBatchInstallScriptExecutor
+	createNodeUC                 createNodeUseCase
+	getNodeUC                    getNodeUseCase
+	updateNodeUC                 updateNodeUseCase
+	deleteNodeUC                 deleteNodeUseCase
+	listNodesUC                  listNodesUseCase
+	generateTokenUC              generateNodeTokenUseCase
+	generateInstallScriptUC      generateNodeInstallScriptUseCase
+	generateBatchInstallScriptUC generateBatchInstallScriptUseCase
 	apiURL                       string
 	logger                       logger.Interface
 }
 
 func NewNodeHandler(
-	createNodeUC usecases.CreateNodeExecutor,
-	getNodeUC usecases.GetNodeExecutor,
-	updateNodeUC usecases.UpdateNodeExecutor,
-	deleteNodeUC usecases.DeleteNodeExecutor,
-	listNodesUC usecases.ListNodesExecutor,
-	generateTokenUC usecases.GenerateNodeTokenExecutor,
-	generateInstallScriptUC usecases.GenerateNodeInstallScriptExecutor,
-	generateBatchInstallScriptUC usecases.GenerateBatchInstallScriptExecutor,
+	createNodeUC createNodeUseCase,
+	getNodeUC getNodeUseCase,
+	updateNodeUC updateNodeUseCase,
+	deleteNodeUC deleteNodeUseCase,
+	listNodesUC listNodesUseCase,
+	generateTokenUC generateNodeTokenUseCase,
+	generateInstallScriptUC generateNodeInstallScriptUseCase,
+	generateBatchInstallScriptUC generateBatchInstallScriptUseCase,
 	apiURL string,
+	log logger.Interface,
 ) *NodeHandler {
 	return &NodeHandler{
 		createNodeUC:                 createNodeUC,
@@ -48,7 +49,7 @@ func NewNodeHandler(
 		generateInstallScriptUC:      generateInstallScriptUC,
 		generateBatchInstallScriptUC: generateBatchInstallScriptUC,
 		apiURL:                       apiURL,
-		logger:                       logger.NewLogger(),
+		logger:                       log,
 	}
 }
 

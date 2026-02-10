@@ -23,16 +23,16 @@ type SubscriptionUsageStatsMapper interface {
 	ToModels(entities []*subscription.SubscriptionUsageStats) ([]*models.SubscriptionUsageStatsModel, error)
 }
 
-// subscriptionUsageStatsMapper is the concrete implementation of SubscriptionUsageStatsMapper
-type subscriptionUsageStatsMapper struct{}
+// SubscriptionUsageStatsMapperImpl is the concrete implementation of SubscriptionUsageStatsMapper
+type SubscriptionUsageStatsMapperImpl struct{}
 
 // NewSubscriptionUsageStatsMapper creates a new subscription usage stats mapper
 func NewSubscriptionUsageStatsMapper() SubscriptionUsageStatsMapper {
-	return &subscriptionUsageStatsMapper{}
+	return &SubscriptionUsageStatsMapperImpl{}
 }
 
 // ToEntity converts a persistence model to a domain entity
-func (m *subscriptionUsageStatsMapper) ToEntity(model *models.SubscriptionUsageStatsModel) (*subscription.SubscriptionUsageStats, error) {
+func (m *SubscriptionUsageStatsMapperImpl) ToEntity(model *models.SubscriptionUsageStatsModel) (*subscription.SubscriptionUsageStats, error) {
 	if model == nil {
 		return nil, nil
 	}
@@ -60,7 +60,7 @@ func (m *subscriptionUsageStatsMapper) ToEntity(model *models.SubscriptionUsageS
 }
 
 // ToModel converts a domain entity to a persistence model
-func (m *subscriptionUsageStatsMapper) ToModel(entity *subscription.SubscriptionUsageStats) (*models.SubscriptionUsageStatsModel, error) {
+func (m *SubscriptionUsageStatsMapperImpl) ToModel(entity *subscription.SubscriptionUsageStats) (*models.SubscriptionUsageStatsModel, error) {
 	if entity == nil {
 		return nil, nil
 	}
@@ -84,11 +84,11 @@ func (m *subscriptionUsageStatsMapper) ToModel(entity *subscription.Subscription
 }
 
 // ToEntities converts multiple persistence models to domain entities
-func (m *subscriptionUsageStatsMapper) ToEntities(modelList []*models.SubscriptionUsageStatsModel) ([]*subscription.SubscriptionUsageStats, error) {
+func (m *SubscriptionUsageStatsMapperImpl) ToEntities(modelList []*models.SubscriptionUsageStatsModel) ([]*subscription.SubscriptionUsageStats, error) {
 	return mapper.MapSlicePtrWithID(modelList, m.ToEntity, func(model *models.SubscriptionUsageStatsModel) uint { return model.ID })
 }
 
 // ToModels converts multiple domain entities to persistence models
-func (m *subscriptionUsageStatsMapper) ToModels(entities []*subscription.SubscriptionUsageStats) ([]*models.SubscriptionUsageStatsModel, error) {
+func (m *SubscriptionUsageStatsMapperImpl) ToModels(entities []*subscription.SubscriptionUsageStats) ([]*models.SubscriptionUsageStatsModel, error) {
 	return mapper.MapSlicePtrWithID(entities, m.ToModel, func(entity *subscription.SubscriptionUsageStats) uint { return entity.ID() })
 }

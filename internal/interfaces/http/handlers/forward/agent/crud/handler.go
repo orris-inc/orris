@@ -48,6 +48,7 @@ func NewHandler(
 	getRuleOverallStatusUC *usecases.GetRuleOverallStatusUseCase,
 	generateInstallScriptUC *usecases.GenerateInstallScriptUseCase,
 	serverURL string,
+	log logger.Interface,
 ) *Handler {
 	return &Handler{
 		createAgentUC:           createAgentUC,
@@ -63,7 +64,7 @@ func NewHandler(
 		getRuleOverallStatusUC:  getRuleOverallStatusUC,
 		generateInstallScriptUC: generateInstallScriptUC,
 		serverURL:               serverURL,
-		logger:                  logger.NewLogger(),
+		logger:                  log,
 	}
 }
 

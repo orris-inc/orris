@@ -2,6 +2,7 @@
 package subscription
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -93,28 +94,24 @@ var allowedSortByFields = map[string]bool{
 	"end_date": true, "created_at": true, "updated_at": true,
 }
 
-// ParseSubscriptionID parses subscription ID from URL parameter, supporting both Stripe-style (sub_xxx) and numeric IDs
+// ParseSubscriptionID parses subscription ID from URL parameter.
+// Only accepts Stripe-style SID format (sub_xxx) to prevent ID enumeration.
 func (h *Handler) ParseSubscriptionID(c *gin.Context) (uint, error) {
 	idStr := c.Param("id")
 
-	// Check if ID is Stripe-style (sub_xxx)
-	if strings.HasPrefix(idStr, id.PrefixSubscription+"_") {
-		sub, err := h.subscriptionRepo.GetBySID(c.Request.Context(), idStr)
-		if err != nil {
-			return 0, err
-		}
-		if sub == nil {
-			return 0, nil
-		}
-		return sub.ID(), nil
+	// Only accept Stripe-style SID format (sub_xxx) to prevent ID enumeration
+	if !strings.HasPrefix(idStr, id.PrefixSubscription+"_") {
+		return 0, fmt.Errorf("invalid subscription ID format: expected sub_xxx")
 	}
 
-	// Try parsing as numeric ID
-	subscriptionID, err := strconv.ParseUint(idStr, 10, 64)
+	sub, err := h.subscriptionRepo.GetBySID(c.Request.Context(), idStr)
 	if err != nil {
 		return 0, err
 	}
-	return uint(subscriptionID), nil
+	if sub == nil {
+		return 0, nil
+	}
+	return sub.ID(), nil
 }
 
 func (h *Handler) Create(c *gin.Context) {
@@ -327,5 +324,5 @@ func (h *Handler) Delete(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "Subscription deleted successfully", nil)
+	utils.NoContentResponse(c)
 }

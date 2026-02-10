@@ -4,13 +4,16 @@ package services
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/orris-inc/orris/internal/infrastructure/pubsub"
 	"github.com/orris-inc/orris/internal/shared/biztime"
+	"github.com/orris-inc/orris/internal/shared/goroutine"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -340,6 +343,10 @@ type AdminHub struct {
 	shutdown atomic.Bool
 
 	logger logger.Interface
+
+	// Optional event bus for cross-instance status event relay
+	eventBus   pubsub.HubCommandPublisher
+	eventBusMu sync.RWMutex
 }
 
 // AdminHubConfig holds configuration for AdminHub.
@@ -399,9 +406,15 @@ func NewAdminHub(log logger.Interface, config *AdminHubConfig) *AdminHub {
 	}
 
 	// Start background goroutines
-	go h.cleanupLoop()
-	go h.agentBroadcastLoop()
-	go h.nodeBroadcastLoop()
+	goroutine.SafeGo(log, "adminhub-cleanup-loop", func() {
+		h.cleanupLoop()
+	})
+	goroutine.SafeGo(log, "adminhub-agent-broadcast-loop", func() {
+		h.agentBroadcastLoop()
+	})
+	goroutine.SafeGo(log, "adminhub-node-broadcast-loop", func() {
+		h.nodeBroadcastLoop()
+	})
 
 	return h
 }
@@ -469,6 +482,20 @@ func (h *AdminHub) Shutdown() {
 	}
 	h.conns = make(map[string]*SSEConn)
 	h.connsMu.Unlock()
+}
+
+// SetEventBus sets the event bus for cross-instance status event relay.
+func (h *AdminHub) SetEventBus(eventBus pubsub.HubCommandPublisher) {
+	h.eventBusMu.Lock()
+	defer h.eventBusMu.Unlock()
+	h.eventBus = eventBus
+}
+
+// getEventBus safely retrieves the event bus with read lock.
+func (h *AdminHub) getEventBus() pubsub.HubCommandPublisher {
+	h.eventBusMu.RLock()
+	defer h.eventBusMu.RUnlock()
+	return h.eventBus
 }
 
 // RegisterConn registers a new SSE connection for node events only.
@@ -806,13 +833,21 @@ func (h *AdminHub) CleanupThrottleCache() {
 
 // cacheEvent caches an event for the given user.
 func (h *AdminHub) cacheEvent(userID uint, result *formatSSEEventResult, eventType string) {
-	h.eventCachesMu.Lock()
+	// Fast path: read lock to check if cache exists
+	h.eventCachesMu.RLock()
 	cache, ok := h.eventCaches[userID]
+	h.eventCachesMu.RUnlock()
+
 	if !ok {
-		cache = NewSSEEventCache(h.eventCacheSize)
-		h.eventCaches[userID] = cache
+		// Slow path: write lock to create cache
+		h.eventCachesMu.Lock()
+		cache, ok = h.eventCaches[userID] // double-check after acquiring write lock
+		if !ok {
+			cache = NewSSEEventCache(h.eventCacheSize)
+			h.eventCaches[userID] = cache
+		}
+		h.eventCachesMu.Unlock()
 	}
-	h.eventCachesMu.Unlock()
 
 	cache.Add(&CachedEvent{
 		ID:        result.ID,
@@ -975,42 +1010,15 @@ func (h *AdminHub) broadcastAggregatedAgentStatus() {
 		}
 	}
 
-	// For connections with specific filters, send only their subscribed agents
-	for _, conn := range filteredConns {
-		filteredStatus := make(map[string]*AgentStatusData)
-		for agentSID := range conn.AgentFilters {
-			if status, ok := statusMap[agentSID]; ok {
-				filteredStatus[agentSID] = status
-			}
-		}
-
-		if len(filteredStatus) == 0 {
-			continue
-		}
-
-		filteredEvent := &BatchAgentStatusEvent{
-			Type:      ForwardAgentEventBatchStatus,
-			Timestamp: timestamp,
-			Agents:    filteredStatus,
-		}
-		filteredResult, err := h.formatBatchSSEEvent(filteredEvent)
-		if err != nil {
-			h.logger.Errorw("failed to format filtered batch SSE event",
-				"error", err,
-				"conn_id", conn.ID,
-			)
-			continue
-		}
-
-		// Cache event for this user
-		h.cacheEvent(conn.UserID, filteredResult, "agent")
-
-		if !conn.TrySend(filteredResult.Data) {
-			h.logger.Warnw("failed to send batch SSE event, channel full",
-				"conn_id", conn.ID,
-			)
-		}
-	}
+	// For connections with specific filters, group by filter set and serialize once per group
+	h.broadcastFilteredBatchEvent(
+		filteredConns,
+		statusMap,
+		func(conn *SSEConn) map[string]bool { return conn.AgentFilters },
+		ForwardAgentEventBatchStatus,
+		"agent",
+		timestamp,
+	)
 }
 
 // formatBatchSSEEvent formats a batch event as SSE data.
@@ -1030,6 +1038,87 @@ func (h *AdminHub) formatBatchSSEEvent(event *BatchAgentStatusEvent) (*formatSSE
 		Data:     sseData,
 		AgentSID: "", // Batch events don't have a single agent SID
 	}, nil
+}
+
+// filterKey builds a deterministic string key from a filter map for grouping.
+func filterKey(filters map[string]bool) string {
+	if len(filters) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(filters))
+	for k := range filters {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return strings.Join(keys, ",")
+}
+
+// broadcastFilteredBatchEvent groups connections by their filter set, serializes once
+// per unique filter combination, and sends to all connections in each group.
+func (h *AdminHub) broadcastFilteredBatchEvent(
+	filteredConns []*SSEConn,
+	statusMap map[string]*AgentStatusData,
+	getFilters func(*SSEConn) map[string]bool,
+	eventType AgentEventType,
+	cacheType string,
+	timestamp int64,
+) {
+	// Group connections by filter key
+	type connGroup struct {
+		filters map[string]bool
+		conns   []*SSEConn
+	}
+	groups := make(map[string]*connGroup)
+	for _, conn := range filteredConns {
+		filters := getFilters(conn)
+		key := filterKey(filters)
+		if g, ok := groups[key]; ok {
+			g.conns = append(g.conns, conn)
+		} else {
+			groups[key] = &connGroup{
+				filters: filters,
+				conns:   []*SSEConn{conn},
+			}
+		}
+	}
+
+	// Serialize once per unique filter group, send to all connections in that group
+	for _, group := range groups {
+		filteredStatus := make(map[string]*AgentStatusData)
+		for sid := range group.filters {
+			if status, ok := statusMap[sid]; ok {
+				filteredStatus[sid] = status
+			}
+		}
+
+		if len(filteredStatus) == 0 {
+			continue
+		}
+
+		filteredEvent := &BatchAgentStatusEvent{
+			Type:      eventType,
+			Timestamp: timestamp,
+			Agents:    filteredStatus,
+		}
+		filteredResult, err := h.formatBatchSSEEvent(filteredEvent)
+		if err != nil {
+			h.logger.Errorw("failed to format filtered batch SSE event",
+				"error", err,
+				"event_type", eventType,
+			)
+			continue
+		}
+
+		for _, conn := range group.conns {
+			h.cacheEvent(conn.UserID, filteredResult, cacheType)
+
+			if !conn.TrySend(filteredResult.Data) {
+				h.logger.Warnw("failed to send batch SSE event, channel full",
+					"conn_id", conn.ID,
+				)
+			}
+		}
+	}
 }
 
 // BroadcastAgentStatusToConn sends current agent status to a specific connection.
@@ -1209,42 +1298,15 @@ func (h *AdminHub) broadcastAggregatedNodeStatus() {
 		}
 	}
 
-	// For connections with specific filters, send only their subscribed nodes
-	for _, conn := range filteredConns {
-		filteredStatus := make(map[string]*AgentStatusData)
-		for nodeSID := range conn.NodeFilters {
-			if status, ok := statusMap[nodeSID]; ok {
-				filteredStatus[nodeSID] = status
-			}
-		}
-
-		if len(filteredStatus) == 0 {
-			continue
-		}
-
-		filteredEvent := &BatchAgentStatusEvent{
-			Type:      NodeEventBatchStatus,
-			Timestamp: timestamp,
-			Agents:    filteredStatus,
-		}
-		filteredResult, err := h.formatBatchSSEEvent(filteredEvent)
-		if err != nil {
-			h.logger.Errorw("failed to format filtered batch node SSE event",
-				"error", err,
-				"conn_id", conn.ID,
-			)
-			continue
-		}
-
-		// Cache event for this user
-		h.cacheEvent(conn.UserID, filteredResult, "node")
-
-		if !conn.TrySend(filteredResult.Data) {
-			h.logger.Warnw("failed to send batch node SSE event, channel full",
-				"conn_id", conn.ID,
-			)
-		}
-	}
+	// For connections with specific filters, group by filter set and serialize once per group
+	h.broadcastFilteredBatchEvent(
+		filteredConns,
+		statusMap,
+		func(conn *SSEConn) map[string]bool { return conn.NodeFilters },
+		NodeEventBatchStatus,
+		"node",
+		timestamp,
+	)
 }
 
 // BroadcastNodeStatusToConn sends current node status to a specific connection.

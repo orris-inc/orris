@@ -58,7 +58,7 @@ func (uc *ResetSubscriptionUsageUseCase) Execute(ctx context.Context, cmd ResetS
 
 	if err := sub.ResetUsage(); err != nil {
 		uc.logger.Errorw("failed to reset subscription usage", "error", err, "subscription_id", cmd.SubscriptionID)
-		return fmt.Errorf("failed to reset subscription usage: %w", err)
+		return err
 	}
 
 	if err := uc.subscriptionRepo.Update(ctx, sub); err != nil {

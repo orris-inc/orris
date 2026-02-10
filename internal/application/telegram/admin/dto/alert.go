@@ -112,24 +112,3 @@ type WeeklySummaryData struct {
 	TrafficChangePercent  float64
 }
 
-// ExpiringAgentInfo contains information about an expiring agent for notification.
-// Used internally for building Telegram messages, not for JSON serialization.
-type ExpiringAgentInfo struct {
-	ID            uint
-	SID           string
-	Name          string
-	ExpiresAt     time.Time
-	DaysRemaining int
-	CostLabel     *string
-}
-
-// ExpiringNodeInfo contains information about an expiring node for notification.
-// Used internally for building Telegram messages, not for JSON serialization.
-type ExpiringNodeInfo struct {
-	ID            uint
-	SID           string
-	Name          string
-	ExpiresAt     time.Time
-	DaysRemaining int
-	CostLabel     *string
-}

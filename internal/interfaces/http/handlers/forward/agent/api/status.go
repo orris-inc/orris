@@ -73,9 +73,19 @@ func (h *Handler) ReportStatus(c *gin.Context) {
 		TlsListenPort:     req.TlsListenPort,
 	}
 
+	// Safely assert agent ID type
+	agentIDUint, ok := agentID.(uint)
+	if !ok {
+		h.logger.Errorw("forward_agent_id has unexpected type in context",
+			"ip", c.ClientIP(),
+		)
+		utils.ErrorResponse(c, http.StatusInternalServerError, "internal error")
+		return
+	}
+
 	// Execute use case
 	input := &dto.ReportAgentStatusInput{
-		AgentID: agentID.(uint),
+		AgentID: agentIDUint,
 		Status:  statusDTO,
 	}
 

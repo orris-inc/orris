@@ -8,7 +8,25 @@ import (
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 )
 
-func PaymentToModel(p *payment.Payment) *models.PaymentModel {
+// PaymentMapper handles the conversion between domain entities and persistence models
+type PaymentMapper interface {
+	// ToModel converts a domain entity to a persistence model
+	ToModel(p *payment.Payment) *models.PaymentModel
+
+	// ToDomain converts a persistence model to a domain entity
+	ToDomain(model *models.PaymentModel) (*payment.Payment, error)
+}
+
+// PaymentMapperImpl is the concrete implementation of PaymentMapper
+type PaymentMapperImpl struct{}
+
+// NewPaymentMapper creates a new payment mapper
+func NewPaymentMapper() PaymentMapper {
+	return &PaymentMapperImpl{}
+}
+
+// ToModel converts a domain entity to a persistence model
+func (m *PaymentMapperImpl) ToModel(p *payment.Payment) *models.PaymentModel {
 	model := &models.PaymentModel{
 		ID:               p.ID(),
 		OrderNo:          p.OrderNo(),
@@ -48,7 +66,8 @@ func PaymentToModel(p *payment.Payment) *models.PaymentModel {
 	return model
 }
 
-func PaymentToDomain(model *models.PaymentModel) (*payment.Payment, error) {
+// ToDomain converts a persistence model to a domain entity
+func (m *PaymentMapperImpl) ToDomain(model *models.PaymentModel) (*payment.Payment, error) {
 	amount := vo.NewMoney(model.Amount, model.Currency)
 
 	method, err := vo.NewPaymentMethod(model.PaymentMethod)

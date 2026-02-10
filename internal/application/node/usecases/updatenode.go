@@ -10,6 +10,7 @@ import (
 	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/resource"
 	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/goroutine"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -263,7 +264,7 @@ func (uc *UpdateNodeUseCase) Execute(ctx context.Context, cmd UpdateNodeCommand)
 		)
 		// Notify asynchronously to avoid blocking the response
 		nodeID := existingNode.ID()
-		go func() {
+		goroutine.SafeGo(uc.logger, "update-node-notify-address-change", func() {
 			notifyCtx := context.Background()
 			if err := uc.addressChangeNotifier.NotifyNodeAddressChange(notifyCtx, nodeID); err != nil {
 				uc.logger.Warnw("failed to notify forward agents of node address change",
@@ -271,13 +272,13 @@ func (uc *UpdateNodeUseCase) Execute(ctx context.Context, cmd UpdateNodeCommand)
 					"node_id", nodeID,
 				)
 			}
-		}()
+		})
 	}
 
 	// Notify node agent of configuration change (including route config)
 	if uc.configChangeNotifier != nil {
 		nodeID := existingNode.ID()
-		go func() {
+		goroutine.SafeGo(uc.logger, "update-node-notify-config-change", func() {
 			notifyCtx := context.Background()
 			if err := uc.configChangeNotifier.NotifyConfigChange(notifyCtx, nodeID); err != nil {
 				uc.logger.Warnw("failed to notify node agent of config change",
@@ -285,7 +286,7 @@ func (uc *UpdateNodeUseCase) Execute(ctx context.Context, cmd UpdateNodeCommand)
 					"node_id", nodeID,
 				)
 			}
-		}()
+		})
 	}
 
 	// Build and return result

@@ -1,4 +1,4 @@
-package dto
+package handlers
 
 import (
 	"github.com/orris-inc/orris/internal/application/user/dto"

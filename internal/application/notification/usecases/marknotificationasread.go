@@ -39,7 +39,7 @@ func (uc *MarkNotificationAsReadUseCase) Execute(ctx context.Context, id uint, u
 
 	if err := notification.MarkAsRead(); err != nil {
 		uc.logger.Errorw("failed to mark notification as read", "id", id, "error", err)
-		return fmt.Errorf("failed to mark notification as read: %w", err)
+		return err
 	}
 
 	if err := uc.repo.Update(ctx, notification); err != nil {

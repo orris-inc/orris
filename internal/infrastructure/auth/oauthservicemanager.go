@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	settingUsecases "github.com/orris-inc/orris/internal/application/setting/usecases"
+	"github.com/orris-inc/orris/internal/domain/setting"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -16,7 +16,7 @@ var ErrOAuthNotConfigured = errors.New("oauth provider not configured")
 // OAuthServiceManager manages OAuth clients with hot-reload support.
 // It implements SettingChangeSubscriber to receive configuration change notifications.
 type OAuthServiceManager struct {
-	provider *settingUsecases.SettingProvider
+	provider setting.SettingProvider
 	logger   logger.Interface
 
 	mu           sync.RWMutex
@@ -26,7 +26,7 @@ type OAuthServiceManager struct {
 
 // NewOAuthServiceManager creates a new OAuthServiceManager instance.
 func NewOAuthServiceManager(
-	provider *settingUsecases.SettingProvider,
+	provider setting.SettingProvider,
 	logger logger.Interface,
 ) *OAuthServiceManager {
 	return &OAuthServiceManager{

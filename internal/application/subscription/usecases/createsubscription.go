@@ -9,6 +9,7 @@ import (
 	vo "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/user"
 	"github.com/orris-inc/orris/internal/shared/biztime"
+	"github.com/orris-inc/orris/internal/shared/db"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -37,6 +38,7 @@ type CreateSubscriptionUseCase struct {
 	pricingRepo          subscription.PlanPricingRepository
 	userRepo             user.Repository
 	tokenGenerator       TokenGenerator
+	txMgr                *db.TransactionManager
 	subscriptionNotifier SubscriptionChangeNotifier // Optional: for notifying node agents
 	logger               logger.Interface
 }
@@ -48,6 +50,7 @@ func NewCreateSubscriptionUseCase(
 	pricingRepo subscription.PlanPricingRepository,
 	userRepo user.Repository,
 	tokenGenerator TokenGenerator,
+	txMgr *db.TransactionManager,
 	logger logger.Interface,
 ) *CreateSubscriptionUseCase {
 	return &CreateSubscriptionUseCase{
@@ -57,6 +60,7 @@ func NewCreateSubscriptionUseCase(
 		pricingRepo:      pricingRepo,
 		userRepo:         userRepo,
 		tokenGenerator:   tokenGenerator,
+		txMgr:            txMgr,
 		logger:           logger,
 	}
 }
@@ -135,7 +139,7 @@ func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, cmd CreateSubs
 	billingCycle, err := vo.ParseBillingCycle(cmd.BillingCycle)
 	if err != nil {
 		uc.logger.Warnw("invalid billing cycle provided", "error", err, "billing_cycle", cmd.BillingCycle)
-		return nil, fmt.Errorf("invalid billing cycle: %w", err)
+		return nil, err
 	}
 
 	// Verify that pricing exists for this plan and billing cycle
@@ -166,59 +170,57 @@ func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, cmd CreateSubs
 	sub, err := subscription.NewSubscription(userID, planID, startDate, endDate, cmd.AutoRenew, &billingCycle)
 	if err != nil {
 		uc.logger.Errorw("failed to create subscription aggregate", "error", err)
-		return nil, fmt.Errorf("failed to create subscription: %w", err)
+		return nil, err
 	}
 
-	if err := uc.subscriptionRepo.Create(ctx, sub); err != nil {
-		uc.logger.Errorw("failed to create subscription in database", "error", err)
-		return nil, fmt.Errorf("failed to create subscription: %w", err)
-	}
+	// Use database transaction to ensure subscription + token creation is atomic.
+	// If any step fails, the entire operation is rolled back automatically.
+	var token *subscription.SubscriptionToken
+	var plainToken string
 
-	// Activate subscription immediately if requested (typically for admin-created subscriptions)
-	if cmd.ActivateImmediately {
-		if err := sub.Activate(); err != nil {
-			uc.logger.Errorw("failed to activate subscription", "error", err, "subscription_id", sub.ID())
-			return nil, fmt.Errorf("failed to activate subscription: %w", err)
+	txErr := uc.txMgr.RunInTransaction(ctx, func(txCtx context.Context) error {
+		if err := uc.subscriptionRepo.Create(txCtx, sub); err != nil {
+			uc.logger.Errorw("failed to create subscription in database", "error", err)
+			return fmt.Errorf("failed to create subscription: %w", err)
 		}
-		if err := uc.subscriptionRepo.Update(ctx, sub); err != nil {
-			uc.logger.Errorw("failed to update subscription after activation", "error", err, "subscription_id", sub.ID())
-			return nil, fmt.Errorf("failed to update subscription: %w", err)
-		}
-		uc.logger.Infow("subscription activated immediately", "subscription_id", sub.ID())
 
-		// Notify node agents about the new active subscription
-		if uc.subscriptionNotifier != nil {
-			notifyCtx := context.Background()
-			if err := uc.subscriptionNotifier.NotifySubscriptionActivation(notifyCtx, sub); err != nil {
-				// Log error but don't fail the subscription creation
-				uc.logger.Warnw("failed to notify nodes of subscription activation",
-					"subscription_id", sub.ID(),
-					"error", err,
-				)
+		// Activate subscription immediately if requested (typically for admin-created subscriptions)
+		if cmd.ActivateImmediately {
+			if err := sub.Activate(); err != nil {
+				uc.logger.Errorw("failed to activate subscription", "error", err, "subscription_id", sub.ID())
+				return err
 			}
+			if err := uc.subscriptionRepo.Update(txCtx, sub); err != nil {
+				uc.logger.Errorw("failed to update subscription after activation", "error", err, "subscription_id", sub.ID())
+				return fmt.Errorf("failed to update subscription: %w", err)
+			}
+			uc.logger.Infow("subscription activated immediately", "subscription_id", sub.ID())
 		}
+
+		// Create default token within the same transaction
+		var tokenErr error
+		token, plainToken, tokenErr = uc.createDefaultToken(txCtx, sub.ID())
+		if tokenErr != nil {
+			uc.logger.Errorw("failed to create default token", "error", tokenErr, "subscription_id", sub.ID())
+			return fmt.Errorf("failed to create default token for subscription: %w", tokenErr)
+		}
+
+		return nil
+	})
+
+	if txErr != nil {
+		return nil, txErr
 	}
 
-	// Create default token - this is critical for subscription usability
-	// Token creation failure should fail the entire subscription creation
-	token, plainToken, err := uc.createDefaultToken(ctx, sub.ID())
-	if err != nil {
-		uc.logger.Errorw("failed to create default token", "error", err, "subscription_id", sub.ID())
-
-		// Rollback: delete the subscription to maintain data consistency
-		if deleteErr := uc.subscriptionRepo.Delete(ctx, sub.ID()); deleteErr != nil {
-			uc.logger.Errorw("failed to rollback subscription after token creation failure",
-				"error", deleteErr,
+	// Post-transaction side effects (notifications are best-effort, not transactional)
+	if cmd.ActivateImmediately && uc.subscriptionNotifier != nil {
+		notifyCtx := context.Background()
+		if err := uc.subscriptionNotifier.NotifySubscriptionActivation(notifyCtx, sub); err != nil {
+			uc.logger.Warnw("failed to notify nodes of subscription activation",
 				"subscription_id", sub.ID(),
-			)
-			// Return original error but log the rollback failure
-		} else {
-			uc.logger.Infow("subscription rolled back after token creation failure",
-				"subscription_id", sub.ID(),
+				"error", err,
 			)
 		}
-
-		return nil, fmt.Errorf("failed to create default token for subscription: %w", err)
 	}
 
 	uc.logger.Infow("subscription created successfully",
@@ -265,11 +267,14 @@ func (uc *CreateSubscriptionUseCase) createDefaultToken(ctx context.Context, sub
 		return nil, "", fmt.Errorf("failed to generate token: %w", err)
 	}
 
+	if len(plainToken) < 8 {
+		return nil, "", fmt.Errorf("generated token too short: got %d chars, need at least 8", len(plainToken))
+	}
 	prefix := plainToken[:8]
 
 	token, err := subscription.NewSubscriptionToken(subscriptionID, "Default Token", hashedToken, prefix, vo.TokenScopeFull, nil)
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to create token: %w", err)
+		return nil, "", err
 	}
 
 	if err := uc.tokenRepo.Create(ctx, token); err != nil {

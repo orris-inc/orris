@@ -25,6 +25,7 @@ import (
 	httpRouter "github.com/orris-inc/orris/internal/interfaces/http"
 	"github.com/orris-inc/orris/internal/shared/authorization"
 	"github.com/orris-inc/orris/internal/shared/biztime"
+	"github.com/orris-inc/orris/internal/shared/goroutine"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -140,7 +141,7 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	// Start HTTP Server in background
-	go func() {
+	goroutine.SafeGo(logger.NewLogger(), "http-server", func() {
 		logger.Info("server starting",
 			"address", cfg.Server.GetAddr(),
 			"mode", cfg.Server.Mode)
@@ -148,7 +149,7 @@ func run(cmd *cobra.Command, args []string) error {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logger.Fatal("failed to start server", "error", err)
 		}
-	}()
+	})
 
 	// Wait for shutdown signal
 	quit := make(chan os.Signal, 1)

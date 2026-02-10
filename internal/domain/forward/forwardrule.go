@@ -8,6 +8,7 @@ import (
 	"time"
 
 	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
+	"github.com/orris-inc/orris/internal/domain/shared"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 )
 
@@ -86,259 +87,17 @@ func NewForwardRule(
 	sortOrder int,
 	shortIDGenerator func() (string, error),
 ) (*ForwardRule, error) {
-	// Agent ID is required for non-external rules
-	if ruleType.RequiresAgent() && agentID == 0 {
-		return nil, fmt.Errorf("agent ID is required")
-	}
-	if !ruleType.IsValid() {
-		return nil, fmt.Errorf("invalid rule type: %s", ruleType)
-	}
-	if name == "" {
-		return nil, fmt.Errorf("forward rule name is required")
-	}
-	if !protocol.IsValid() {
-		return nil, fmt.Errorf("invalid protocol: %s", protocol)
-	}
-
-	// Validate traffic multiplier
-	if trafficMultiplier != nil {
-		if *trafficMultiplier < 0 {
-			return nil, fmt.Errorf("traffic multiplier cannot be negative: %f", *trafficMultiplier)
-		}
-		if *trafficMultiplier > 1000000 {
-			return nil, fmt.Errorf("traffic multiplier exceeds maximum (1000000): %f", *trafficMultiplier)
-		}
-	}
-
-	// Validate required fields based on rule type
-	switch ruleType {
-	case vo.ForwardRuleTypeDirect:
-		if listenPort == 0 {
-			return nil, fmt.Errorf("listen port is required for direct forward")
-		}
-		// Either targetAddress+targetPort OR targetNodeID must be set
-		hasTarget := targetAddress != "" && targetPort != 0
-		hasTargetNode := targetNodeID != nil && *targetNodeID != 0
-		if !hasTarget && !hasTargetNode {
-			return nil, fmt.Errorf("either target address+port or target node ID is required for direct forward")
-		}
-		if hasTarget && hasTargetNode {
-			return nil, fmt.Errorf("target address+port and target node ID are mutually exclusive for direct forward")
-		}
-		if hasTarget {
-			if err := validateAddress(targetAddress); err != nil {
-				return nil, fmt.Errorf("invalid target address: %w", err)
-			}
-		}
-	case vo.ForwardRuleTypeEntry:
-		if listenPort == 0 {
-			return nil, fmt.Errorf("listen port is required for entry forward")
-		}
-		// Validate exit agent configuration: either exitAgentID OR exitAgents, not both
-		hasExitAgent := exitAgentID != 0
-		hasExitAgents := len(exitAgents) > 0
-		if !hasExitAgent && !hasExitAgents {
-			return nil, fmt.Errorf("either exit agent ID or exit agents is required for entry forward")
-		}
-		if hasExitAgent && hasExitAgents {
-			return nil, fmt.Errorf("exit agent ID and exit agents are mutually exclusive for entry forward")
-		}
-		// Validate single exit agent is not the same as entry agent
-		if hasExitAgent && exitAgentID == agentID {
-			return nil, fmt.Errorf("exit agent cannot be the same as entry agent")
-		}
-		// Validate exitAgents if provided
-		if hasExitAgents {
-			if err := vo.ValidateAgentWeights(exitAgents); err != nil {
-				return nil, fmt.Errorf("invalid exit agents: %w", err)
-			}
-			// Validate no exit agent is the same as entry agent
-			for _, aw := range exitAgents {
-				if aw.AgentID() == agentID {
-					return nil, fmt.Errorf("exit agent cannot be the same as entry agent")
-				}
-			}
-			// Validate weighted strategy requires at least one non-backup agent
-			effectiveStrategy := loadBalanceStrategy
-			if effectiveStrategy == "" {
-				effectiveStrategy = vo.DefaultLoadBalanceStrategy
-			}
-			if effectiveStrategy.IsWeighted() {
-				hasNonBackup := false
-				for _, aw := range exitAgents {
-					if !aw.IsBackup() {
-						hasNonBackup = true
-						break
-					}
-				}
-				if !hasNonBackup {
-					return nil, fmt.Errorf("weighted strategy requires at least one exit agent with non-zero weight")
-				}
-			}
-		}
-		// Entry rules now also require target information (to be passed to exit agent)
-		hasTarget := targetAddress != "" && targetPort != 0
-		hasTargetNode := targetNodeID != nil && *targetNodeID != 0
-		if !hasTarget && !hasTargetNode {
-			return nil, fmt.Errorf("either target address+port or target node ID is required for entry forward")
-		}
-		if hasTarget && hasTargetNode {
-			return nil, fmt.Errorf("target address+port and target node ID are mutually exclusive for entry forward")
-		}
-		if hasTarget {
-			if err := validateAddress(targetAddress); err != nil {
-				return nil, fmt.Errorf("invalid target address: %w", err)
-			}
-		}
-	case vo.ForwardRuleTypeChain:
-		if listenPort == 0 {
-			return nil, fmt.Errorf("listen port is required for chain forward")
-		}
-		if len(chainAgentIDs) == 0 {
-			return nil, fmt.Errorf("chain agent IDs is required for chain forward (at least 1 intermediate agent)")
-		}
-		if len(chainAgentIDs) > 10 {
-			return nil, fmt.Errorf("chain forward supports maximum 10 intermediate agents")
-		}
-		// Check for duplicates in chain (including entry agent)
-		seen := make(map[uint]bool)
-		seen[agentID] = true
-		for _, id := range chainAgentIDs {
-			if id == 0 {
-				return nil, fmt.Errorf("chain agent ID cannot be zero")
-			}
-			if seen[id] {
-				return nil, fmt.Errorf("chain contains duplicate agent ID: %d", id)
-			}
-			seen[id] = true
-		}
-		// Validate tunnelHops for hybrid chain
-		if tunnelHops != nil {
-			if *tunnelHops < 0 {
-				return nil, fmt.Errorf("tunnel_hops cannot be negative")
-			}
-			// If tunnelHops > 0, validate chainPortConfig for direct hops
-			// Total hops = len(chainAgentIDs) (entry -> chain[0] -> chain[1] -> ... -> chain[n-1] -> target)
-			totalHops := len(chainAgentIDs)
-			if *tunnelHops > 0 && *tunnelHops < totalHops {
-				// This is a hybrid chain, need port config for direct hops
-				// Direct hops start from position tunnelHops
-				// Full chain: [agentID, chainAgentIDs[0], chainAgentIDs[1], ...]
-				// Position tunnelHops is the boundary node (receives tunnel, sends direct)
-				// Positions > tunnelHops are pure direct nodes
-				for i := *tunnelHops; i < len(chainAgentIDs); i++ {
-					chainAgentID := chainAgentIDs[i]
-					port, exists := chainPortConfig[chainAgentID]
-					if !exists {
-						return nil, fmt.Errorf("chain_port_config missing port for agent ID %d (required for direct hop at position %d)", chainAgentID, i+1)
-					}
-					if port == 0 {
-						return nil, fmt.Errorf("chain_port_config has invalid port for agent ID %d", chainAgentID)
-					}
-				}
-			}
-		}
-		// Chain rules require target information (at the end of chain)
-		hasTarget := targetAddress != "" && targetPort != 0
-		hasTargetNode := targetNodeID != nil && *targetNodeID != 0
-		if !hasTarget && !hasTargetNode {
-			return nil, fmt.Errorf("either target address+port or target node ID is required for chain forward")
-		}
-		if hasTarget && hasTargetNode {
-			return nil, fmt.Errorf("target address+port and target node ID are mutually exclusive for chain forward")
-		}
-		if hasTarget {
-			if err := validateAddress(targetAddress); err != nil {
-				return nil, fmt.Errorf("invalid target address: %w", err)
-			}
-		}
-	case vo.ForwardRuleTypeDirectChain:
-		if listenPort == 0 {
-			return nil, fmt.Errorf("listen port is required for direct_chain forward")
-		}
-		if len(chainAgentIDs) == 0 {
-			return nil, fmt.Errorf("chain agent IDs is required for direct_chain forward (at least 1 intermediate agent)")
-		}
-		if len(chainAgentIDs) > 10 {
-			return nil, fmt.Errorf("direct_chain forward supports maximum 10 intermediate agents")
-		}
-		// Check for duplicates in chain (including entry agent)
-		seen := make(map[uint]bool)
-		seen[agentID] = true
-		for _, id := range chainAgentIDs {
-			if id == 0 {
-				return nil, fmt.Errorf("chain agent ID cannot be zero")
-			}
-			if seen[id] {
-				return nil, fmt.Errorf("chain contains duplicate agent ID: %d", id)
-			}
-			seen[id] = true
-		}
-		// Validate chain_port_config
-		if len(chainPortConfig) == 0 {
-			return nil, fmt.Errorf("chain_port_config is required for direct_chain forward")
-		}
-		// Verify all chain agents have port configuration
-		for _, id := range chainAgentIDs {
-			port, exists := chainPortConfig[id]
-			if !exists {
-				return nil, fmt.Errorf("chain_port_config missing port for agent ID %d", id)
-			}
-			if port == 0 {
-				return nil, fmt.Errorf("chain_port_config has invalid port for agent ID %d", id)
-			}
-		}
-		// Check for extra entries in chain_port_config
-		for id := range chainPortConfig {
-			found := false
-			for _, chainID := range chainAgentIDs {
-				if id == chainID {
-					found = true
-					break
-				}
-			}
-			if !found {
-				return nil, fmt.Errorf("chain_port_config contains agent ID %d not in chain_agent_ids", id)
-			}
-		}
-		// Direct chain rules require target information (at the end of chain)
-		hasTarget := targetAddress != "" && targetPort != 0
-		hasTargetNode := targetNodeID != nil && *targetNodeID != 0
-		if !hasTarget && !hasTargetNode {
-			return nil, fmt.Errorf("either target address+port or target node ID is required for direct_chain forward")
-		}
-		if hasTarget && hasTargetNode {
-			return nil, fmt.Errorf("target address+port and target node ID are mutually exclusive for direct_chain forward")
-		}
-		if hasTarget {
-			if err := validateAddress(targetAddress); err != nil {
-				return nil, fmt.Errorf("invalid target address: %w", err)
-			}
-		}
-	case vo.ForwardRuleTypeExternal:
-		// External rules don't support NewForwardRule, use NewExternalForwardRule instead
+	// Pre-construction check: reject external type early (use NewExternalForwardRule instead)
+	if ruleType == vo.ForwardRuleTypeExternal {
 		return nil, fmt.Errorf("use NewExternalForwardRule to create external forward rules")
 	}
 
-	// Default ipVersion to auto if not set
+	// Apply defaults before constructing the aggregate
 	if ipVersion == "" {
 		ipVersion = vo.IPVersionAuto
 	}
-	if !ipVersion.IsValid() {
-		return nil, fmt.Errorf("invalid IP version: %s", ipVersion)
-	}
-
-	// Validate tunnel type (empty defaults to WS)
-	if !tunnelType.IsValid() {
-		return nil, fmt.Errorf("invalid tunnel type: %s", tunnelType)
-	}
-
-	// Default loadBalanceStrategy to failover if not set or invalid
 	if loadBalanceStrategy == "" {
 		loadBalanceStrategy = vo.DefaultLoadBalanceStrategy
-	}
-	if !loadBalanceStrategy.IsValid() {
-		return nil, fmt.Errorf("invalid load balance strategy: %s", loadBalanceStrategy)
 	}
 
 	// Generate SID for external API use
@@ -348,7 +107,7 @@ func NewForwardRule(
 	}
 
 	now := biztime.NowUTC()
-	return &ForwardRule{
+	rule := &ForwardRule{
 		sid:                 sid,
 		agentID:             agentID,
 		userID:              userID,
@@ -377,7 +136,14 @@ func NewForwardRule(
 		sortOrder:           sortOrder,
 		createdAt:           now,
 		updatedAt:           now,
-	}, nil
+	}
+
+	// Delegate all validation to the single Validate method
+	if err := rule.Validate(); err != nil {
+		return nil, err
+	}
+
+	return rule, nil
 }
 
 // NewExternalForwardRule creates a new external forward rule aggregate.
@@ -999,37 +765,28 @@ func (r *ForwardRule) SetGroupIDs(groupIDs []uint) {
 // AddGroupID adds a resource group ID if not already present.
 // Returns true if the group ID was added, false if it already exists.
 func (r *ForwardRule) AddGroupID(groupID uint) bool {
-	for _, id := range r.groupIDs {
-		if id == groupID {
-			return false // already exists
-		}
+	newIDs, added := shared.AddToGroupIDs(r.groupIDs, groupID)
+	if added {
+		r.groupIDs = newIDs
+		r.updatedAt = biztime.NowUTC()
 	}
-	r.groupIDs = append(r.groupIDs, groupID)
-	r.updatedAt = biztime.NowUTC()
-	return true
+	return added
 }
 
 // RemoveGroupID removes a resource group ID.
 // Returns true if the group ID was removed, false if not found.
 func (r *ForwardRule) RemoveGroupID(groupID uint) bool {
-	for i, id := range r.groupIDs {
-		if id == groupID {
-			r.groupIDs = append(r.groupIDs[:i], r.groupIDs[i+1:]...)
-			r.updatedAt = biztime.NowUTC()
-			return true
-		}
+	newIDs, removed := shared.RemoveFromGroupIDs(r.groupIDs, groupID)
+	if removed {
+		r.groupIDs = newIDs
+		r.updatedAt = biztime.NowUTC()
 	}
-	return false // not found
+	return removed
 }
 
 // HasGroupID checks if the rule belongs to a specific resource group.
 func (r *ForwardRule) HasGroupID(groupID uint) bool {
-	for _, id := range r.groupIDs {
-		if id == groupID {
-			return true
-		}
-	}
-	return false
+	return shared.HasGroupID(r.groupIDs, groupID)
 }
 
 // ServerAddress returns the server address for external rules.
@@ -1723,7 +1480,9 @@ func (r *ForwardRule) IsEnabled() bool {
 	return r.status.IsEnabled()
 }
 
-// Validate performs domain-level validation.
+// Validate performs domain-level validation on a fully constructed ForwardRule.
+// This is the single source of truth for all validation rules.
+// Both NewForwardRule (after construction) and ReconstructForwardRule call this method.
 func (r *ForwardRule) Validate() error {
 	// Agent ID is required for non-external rules
 	if r.ruleType.RequiresAgent() && r.agentID == 0 {
@@ -1742,6 +1501,31 @@ func (r *ForwardRule) Validate() error {
 		return fmt.Errorf("invalid status: %s", r.status)
 	}
 
+	// Validate traffic multiplier
+	if r.trafficMultiplier != nil {
+		if *r.trafficMultiplier < 0 {
+			return fmt.Errorf("traffic multiplier cannot be negative: %f", *r.trafficMultiplier)
+		}
+		if *r.trafficMultiplier > 1000000 {
+			return fmt.Errorf("traffic multiplier exceeds maximum (1000000): %f", *r.trafficMultiplier)
+		}
+	}
+
+	// Validate IP version
+	if !r.ipVersion.IsValid() {
+		return fmt.Errorf("invalid IP version: %s", r.ipVersion)
+	}
+
+	// Validate tunnel type
+	if !r.tunnelType.IsValid() {
+		return fmt.Errorf("invalid tunnel type: %s", r.tunnelType)
+	}
+
+	// Validate load balance strategy
+	if !r.loadBalanceStrategy.IsValid() {
+		return fmt.Errorf("invalid load balance strategy: %s", r.loadBalanceStrategy)
+	}
+
 	// Validate required fields based on rule type
 	switch r.ruleType {
 	case vo.ForwardRuleTypeDirect:
@@ -1756,6 +1540,11 @@ func (r *ForwardRule) Validate() error {
 		}
 		if hasTarget && hasTargetNode {
 			return fmt.Errorf("target address+port and target node ID are mutually exclusive for direct forward")
+		}
+		if hasTarget {
+			if err := validateAddress(r.targetAddress); err != nil {
+				return fmt.Errorf("invalid target address: %w", err)
+			}
 		}
 	case vo.ForwardRuleTypeEntry:
 		if r.listenPort == 0 {
@@ -1799,7 +1588,7 @@ func (r *ForwardRule) Validate() error {
 				}
 			}
 		}
-		// Entry rules now also require target information (to be passed to exit agent)
+		// Entry rules require target information (to be passed to exit agent)
 		hasTarget := r.targetAddress != "" && r.targetPort != 0
 		hasTargetNode := r.targetNodeID != nil && *r.targetNodeID != 0
 		if !hasTarget && !hasTargetNode {
@@ -1808,12 +1597,32 @@ func (r *ForwardRule) Validate() error {
 		if hasTarget && hasTargetNode {
 			return fmt.Errorf("target address+port and target node ID are mutually exclusive for entry forward")
 		}
+		if hasTarget {
+			if err := validateAddress(r.targetAddress); err != nil {
+				return fmt.Errorf("invalid target address: %w", err)
+			}
+		}
 	case vo.ForwardRuleTypeChain:
 		if r.listenPort == 0 {
 			return fmt.Errorf("listen port is required for chain forward")
 		}
 		if len(r.chainAgentIDs) == 0 {
-			return fmt.Errorf("chain agent IDs is required for chain forward")
+			return fmt.Errorf("chain agent IDs is required for chain forward (at least 1 intermediate agent)")
+		}
+		if len(r.chainAgentIDs) > 10 {
+			return fmt.Errorf("chain forward supports maximum 10 intermediate agents")
+		}
+		// Check for duplicates in chain (including entry agent)
+		seen := make(map[uint]bool)
+		seen[r.agentID] = true
+		for _, id := range r.chainAgentIDs {
+			if id == 0 {
+				return fmt.Errorf("chain agent ID cannot be zero")
+			}
+			if seen[id] {
+				return fmt.Errorf("chain contains duplicate agent ID: %d", id)
+			}
+			seen[id] = true
 		}
 		// Validate tunnelHops for hybrid chain
 		if r.tunnelHops != nil {
@@ -1827,7 +1636,7 @@ func (r *ForwardRule) Validate() error {
 					chainAgentID := r.chainAgentIDs[i]
 					port, exists := r.chainPortConfig[chainAgentID]
 					if !exists || port == 0 {
-						return fmt.Errorf("chain_port_config missing valid port for agent ID %d (required for direct hop)", chainAgentID)
+						return fmt.Errorf("chain_port_config missing valid port for agent ID %d (required for direct hop at position %d)", chainAgentID, i+1)
 					}
 				}
 			}
@@ -1841,12 +1650,32 @@ func (r *ForwardRule) Validate() error {
 		if hasTarget && hasTargetNode {
 			return fmt.Errorf("target address+port and target node ID are mutually exclusive for chain forward")
 		}
+		if hasTarget {
+			if err := validateAddress(r.targetAddress); err != nil {
+				return fmt.Errorf("invalid target address: %w", err)
+			}
+		}
 	case vo.ForwardRuleTypeDirectChain:
 		if r.listenPort == 0 {
 			return fmt.Errorf("listen port is required for direct_chain forward")
 		}
 		if len(r.chainAgentIDs) == 0 {
-			return fmt.Errorf("chain agent IDs is required for direct_chain forward")
+			return fmt.Errorf("chain agent IDs is required for direct_chain forward (at least 1 intermediate agent)")
+		}
+		if len(r.chainAgentIDs) > 10 {
+			return fmt.Errorf("direct_chain forward supports maximum 10 intermediate agents")
+		}
+		// Check for duplicates in chain (including entry agent)
+		seen := make(map[uint]bool)
+		seen[r.agentID] = true
+		for _, id := range r.chainAgentIDs {
+			if id == 0 {
+				return fmt.Errorf("chain agent ID cannot be zero")
+			}
+			if seen[id] {
+				return fmt.Errorf("chain contains duplicate agent ID: %d", id)
+			}
+			seen[id] = true
 		}
 		// Validate chain_port_config
 		if len(r.chainPortConfig) == 0 {
@@ -1862,6 +1691,19 @@ func (r *ForwardRule) Validate() error {
 				return fmt.Errorf("chain_port_config has invalid port for agent ID %d", id)
 			}
 		}
+		// Check for extra entries in chain_port_config
+		for id := range r.chainPortConfig {
+			found := false
+			for _, chainID := range r.chainAgentIDs {
+				if id == chainID {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return fmt.Errorf("chain_port_config contains agent ID %d not in chain_agent_ids", id)
+			}
+		}
 		// Direct chain rules require target information (at the end of chain)
 		hasTarget := r.targetAddress != "" && r.targetPort != 0
 		hasTargetNode := r.targetNodeID != nil && *r.targetNodeID != 0
@@ -1870,6 +1712,11 @@ func (r *ForwardRule) Validate() error {
 		}
 		if hasTarget && hasTargetNode {
 			return fmt.Errorf("target address+port and target node ID are mutually exclusive for direct_chain forward")
+		}
+		if hasTarget {
+			if err := validateAddress(r.targetAddress); err != nil {
+				return fmt.Errorf("invalid target address: %w", err)
+			}
 		}
 	case vo.ForwardRuleTypeExternal:
 		if r.listenPort == 0 {

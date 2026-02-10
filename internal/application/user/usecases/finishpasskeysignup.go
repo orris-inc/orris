@@ -137,12 +137,12 @@ func (uc *FinishPasskeySignupUseCase) Execute(ctx context.Context, cmd FinishPas
 	// Create value objects for user
 	email, err := vo.NewEmail(signupSession.Email)
 	if err != nil {
-		return nil, fmt.Errorf("invalid email: %w", err)
+		return nil, err
 	}
 
 	name, err := vo.NewName(signupSession.Name)
 	if err != nil {
-		return nil, fmt.Errorf("invalid name: %w", err)
+		return nil, err
 	}
 
 	// Create new user (active status, no password)

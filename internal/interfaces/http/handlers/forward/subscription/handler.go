@@ -39,6 +39,7 @@ func NewHandler(
 	disableRuleUC *usecases.DisableForwardRuleUseCase,
 	getRuleUC *usecases.GetForwardRuleUseCase,
 	reorderRulesUC *usecases.ReorderForwardRulesUseCase,
+	log logger.Interface,
 ) *Handler {
 	return &Handler{
 		createRuleUC:   createRuleUC,
@@ -50,7 +51,7 @@ func NewHandler(
 		disableRuleUC:  disableRuleUC,
 		getRuleUC:      getRuleUC,
 		reorderRulesUC: reorderRulesUC,
-		logger:         logger.NewLogger(),
+		logger:         log,
 	}
 }
 

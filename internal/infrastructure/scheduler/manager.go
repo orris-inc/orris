@@ -8,11 +8,15 @@ import (
 
 	"github.com/go-co-op/gocron/v2"
 
-	paymentUsecases "github.com/orris-inc/orris/internal/application/payment/usecases"
-	subscriptionUsecases "github.com/orris-inc/orris/internal/application/subscription/usecases"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
+
+// BatchJob defines the interface for a scheduled batch processing job.
+// Each Execute call processes a batch and returns the number of items processed.
+type BatchJob interface {
+	Execute(ctx context.Context) (int, error)
+}
 
 // SchedulerManager manages all scheduled jobs using gocron v2.
 // It unifies the previously separate scheduler implementations into a single
@@ -54,17 +58,19 @@ func NewSchedulerManager(log logger.Interface) (*SchedulerManager, error) {
 // - Cancel subscriptions with unpaid payments after 24-hour grace period
 // - Retry failed subscription activations for paid non-USDT payments
 func (m *SchedulerManager) RegisterPaymentJobs(
-	expirePaymentsUC *paymentUsecases.ExpirePaymentsUseCase,
-	cancelUnpaidSubsUC *paymentUsecases.CancelUnpaidSubscriptionsUseCase,
-	retryActivationUC *paymentUsecases.RetrySubscriptionActivationUseCase,
+	expirePaymentsJob BatchJob,
+	cancelUnpaidSubsJob BatchJob,
+	retryActivationJob BatchJob,
 ) error {
 	_, err := m.scheduler.NewJob(
 		gocron.DurationJob(5*time.Minute),
 		gocron.NewTask(func() {
-			ctx := context.Background()
-			m.processPaymentTasks(ctx, expirePaymentsUC, cancelUnpaidSubsUC, retryActivationUC)
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+			m.processPaymentTasks(ctx, expirePaymentsJob, cancelUnpaidSubsJob, retryActivationJob)
 		}),
 		gocron.WithStartAt(gocron.WithStartImmediately()),
+		gocron.WithSingletonMode(gocron.LimitModeReschedule),
 		gocron.WithTags("payment", "expire", "cancel-unpaid", "retry-activation"),
 		gocron.WithName("payment-processor"),
 	)
@@ -78,16 +84,16 @@ func (m *SchedulerManager) RegisterPaymentJobs(
 
 func (m *SchedulerManager) processPaymentTasks(
 	ctx context.Context,
-	expirePaymentsUC *paymentUsecases.ExpirePaymentsUseCase,
-	cancelUnpaidSubsUC *paymentUsecases.CancelUnpaidSubscriptionsUseCase,
-	retryActivationUC *paymentUsecases.RetrySubscriptionActivationUseCase,
+	expirePaymentsJob BatchJob,
+	cancelUnpaidSubsJob BatchJob,
+	retryActivationJob BatchJob,
 ) {
 	m.logger.Debugw("processing payment tasks started")
 
 	startTime := biztime.NowUTC()
 
 	// Step 1: Expire pending payments that have passed their expiration time
-	expiredCount, err := expirePaymentsUC.Execute(ctx)
+	expiredCount, err := expirePaymentsJob.Execute(ctx)
 	if err != nil {
 		m.logger.Errorw("failed to process expired payments",
 			"error", err,
@@ -101,7 +107,7 @@ func (m *SchedulerManager) processPaymentTasks(
 	}
 
 	// Step 2: Cancel subscriptions with unpaid payments beyond grace period
-	cancelledCount, err := cancelUnpaidSubsUC.Execute(ctx)
+	cancelledCount, err := cancelUnpaidSubsJob.Execute(ctx)
 	if err != nil {
 		m.logger.Errorw("failed to cancel unpaid subscriptions",
 			"error", err,
@@ -113,8 +119,8 @@ func (m *SchedulerManager) processPaymentTasks(
 	}
 
 	// Step 3: Retry failed subscription activations for paid non-USDT payments
-	if retryActivationUC != nil {
-		retryCount, err := retryActivationUC.Execute(ctx)
+	if retryActivationJob != nil {
+		retryCount, err := retryActivationJob.Execute(ctx)
 		if err != nil {
 			m.logger.Errorw("failed to retry subscription activations",
 				"error", err,
@@ -134,15 +140,17 @@ func (m *SchedulerManager) processPaymentTasks(
 // RegisterSubscriptionJobs registers subscription maintenance jobs:
 // - Mark expired subscriptions (data consistency for reports/statistics)
 func (m *SchedulerManager) RegisterSubscriptionJobs(
-	expireSubscriptionsUC *subscriptionUsecases.ExpireSubscriptionsUseCase,
+	expireSubscriptionsJob BatchJob,
 ) error {
 	_, err := m.scheduler.NewJob(
 		gocron.DurationJob(24*time.Hour),
 		gocron.NewTask(func() {
-			ctx := context.Background()
-			m.processExpiredSubscriptions(ctx, expireSubscriptionsUC)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			defer cancel()
+			m.processExpiredSubscriptions(ctx, expireSubscriptionsJob)
 		}),
 		gocron.WithStartAt(gocron.WithStartImmediately()),
+		gocron.WithSingletonMode(gocron.LimitModeReschedule),
 		gocron.WithTags("subscription", "expire"),
 		gocron.WithName("subscription-expire"),
 	)
@@ -156,13 +164,13 @@ func (m *SchedulerManager) RegisterSubscriptionJobs(
 
 func (m *SchedulerManager) processExpiredSubscriptions(
 	ctx context.Context,
-	expireSubscriptionsUC *subscriptionUsecases.ExpireSubscriptionsUseCase,
+	expireSubscriptionsJob BatchJob,
 ) {
 	m.logger.Debugw("processing expired subscriptions task started")
 
 	startTime := biztime.NowUTC()
 
-	expiredCount, err := expireSubscriptionsUC.Execute(ctx)
+	expiredCount, err := expireSubscriptionsJob.Execute(ctx)
 	if err != nil {
 		m.logger.Errorw("failed to process expired subscriptions",
 			"error", err,
@@ -216,9 +224,11 @@ func (m *SchedulerManager) RegisterUsageAggregationJobs(
 	_, err := m.scheduler.NewJob(
 		gocron.CronJob("0 3 * * *", false),
 		gocron.NewTask(func() {
-			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			defer cancel()
 			m.executeDailyAggregation(ctx, aggregator)
 		}),
+		gocron.WithSingletonMode(gocron.LimitModeReschedule),
 		gocron.WithTags("usage", "daily-aggregation"),
 		gocron.WithName("usage-daily-aggregation"),
 	)
@@ -230,9 +240,11 @@ func (m *SchedulerManager) RegisterUsageAggregationJobs(
 	_, err = m.scheduler.NewJob(
 		gocron.CronJob("0 4 1 * *", false),
 		gocron.NewTask(func() {
-			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			defer cancel()
 			m.executeMonthlyAggregation(ctx, aggregator)
 		}),
+		gocron.WithSingletonMode(gocron.LimitModeReschedule),
 		gocron.WithTags("usage", "monthly-aggregation"),
 		gocron.WithName("usage-monthly-aggregation"),
 	)
@@ -244,9 +256,11 @@ func (m *SchedulerManager) RegisterUsageAggregationJobs(
 	_, err = m.scheduler.NewJob(
 		gocron.CronJob("0 5 * * *", false),
 		gocron.NewTask(func() {
-			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			defer cancel()
 			m.executeDataCleanup(ctx, aggregator, retentionDays)
 		}),
+		gocron.WithSingletonMode(gocron.LimitModeReschedule),
 		gocron.WithTags("usage", "cleanup"),
 		gocron.WithName("usage-data-cleanup"),
 	)
@@ -335,10 +349,12 @@ func (m *SchedulerManager) RegisterReminderJobs(
 	_, err := m.scheduler.NewJob(
 		gocron.DurationJob(6*time.Hour),
 		gocron.NewTask(func() {
-			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
 			m.processReminders(ctx, processor)
 		}),
 		gocron.WithStartAt(gocron.WithStartImmediately()),
+		gocron.WithSingletonMode(gocron.LimitModeReschedule),
 		gocron.WithTags("reminder", "telegram"),
 		gocron.WithName("reminder-processor"),
 	)
@@ -393,10 +409,12 @@ func (m *SchedulerManager) RegisterAdminNotificationJobs(
 	_, err := m.scheduler.NewJob(
 		gocron.DurationJob(2*time.Minute),
 		gocron.NewTask(func() {
-			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
+			defer cancel()
 			m.checkOffline(ctx, processor)
 		}),
 		gocron.WithStartAt(gocron.WithStartImmediately()),
+		gocron.WithSingletonMode(gocron.LimitModeReschedule),
 		gocron.WithTags("admin", "offline-check"),
 		gocron.WithName("admin-offline-check"),
 	)
@@ -408,9 +426,11 @@ func (m *SchedulerManager) RegisterAdminNotificationJobs(
 	_, err = m.scheduler.NewJob(
 		gocron.CronJob("0 8 * * *", false),
 		gocron.NewTask(func() {
-			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
 			m.checkExpiring(ctx, processor)
 		}),
+		gocron.WithSingletonMode(gocron.LimitModeReschedule),
 		gocron.WithTags("admin", "expiring-check"),
 		gocron.WithName("admin-expiring-check"),
 	)
@@ -422,9 +442,11 @@ func (m *SchedulerManager) RegisterAdminNotificationJobs(
 	_, err = m.scheduler.NewJob(
 		gocron.CronJob("0 * * * *", false),
 		gocron.NewTask(func() {
-			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
 			m.sendDailySummary(ctx, processor)
 		}),
+		gocron.WithSingletonMode(gocron.LimitModeReschedule),
 		gocron.WithTags("admin", "daily-summary"),
 		gocron.WithName("admin-daily-summary"),
 	)
@@ -436,9 +458,11 @@ func (m *SchedulerManager) RegisterAdminNotificationJobs(
 	_, err = m.scheduler.NewJob(
 		gocron.CronJob("0 * * * *", false),
 		gocron.NewTask(func() {
-			ctx := context.Background()
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
 			m.sendWeeklySummary(ctx, processor)
 		}),
+		gocron.WithSingletonMode(gocron.LimitModeReschedule),
 		gocron.WithTags("admin", "weekly-summary"),
 		gocron.WithName("admin-weekly-summary"),
 	)

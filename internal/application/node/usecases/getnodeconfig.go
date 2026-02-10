@@ -7,6 +7,7 @@ import (
 	"github.com/orris-inc/orris/internal/application/node/dto"
 	"github.com/orris-inc/orris/internal/domain/node"
 	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
+	apperrors "github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -56,7 +57,10 @@ func (uc *GetNodeConfigUseCase) Execute(ctx context.Context, cmd GetNodeConfigCo
 			"error", err,
 			"node_id", cmd.NodeID,
 		)
-		return nil, fmt.Errorf("node not found")
+		return nil, fmt.Errorf("failed to get node: %w", err)
+	}
+	if n == nil {
+		return nil, apperrors.NewNotFoundError("node not found")
 	}
 
 	// Node can be connected regardless of activation status.

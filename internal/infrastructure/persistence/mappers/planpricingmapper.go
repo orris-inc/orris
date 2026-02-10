@@ -8,15 +8,30 @@ import (
 )
 
 // PlanPricingMapper handles mapping between PlanPricing domain object and database model
-type PlanPricingMapper struct{}
+type PlanPricingMapper interface {
+	// ToDomain converts database model to domain value object
+	ToDomain(model *models.PlanPricingModel) (*valueobjects.PlanPricing, error)
+
+	// ToModel converts domain value object to database model
+	ToModel(pricing *valueobjects.PlanPricing) (*models.PlanPricingModel, error)
+
+	// ToDomainList converts a list of database models to domain value objects
+	ToDomainList(models []*models.PlanPricingModel) ([]*valueobjects.PlanPricing, error)
+
+	// ToModelList converts a list of domain value objects to database models
+	ToModelList(pricings []*valueobjects.PlanPricing) ([]*models.PlanPricingModel, error)
+}
+
+// PlanPricingMapperImpl is the concrete implementation of PlanPricingMapper
+type PlanPricingMapperImpl struct{}
 
 // NewPlanPricingMapper creates a new PlanPricingMapper
-func NewPlanPricingMapper() *PlanPricingMapper {
-	return &PlanPricingMapper{}
+func NewPlanPricingMapper() PlanPricingMapper {
+	return &PlanPricingMapperImpl{}
 }
 
 // ToDomain converts database model to domain value object
-func (m *PlanPricingMapper) ToDomain(model *models.PlanPricingModel) (*valueobjects.PlanPricing, error) {
+func (m *PlanPricingMapperImpl) ToDomain(model *models.PlanPricingModel) (*valueobjects.PlanPricing, error) {
 	if model == nil {
 		return nil, fmt.Errorf("pricing model cannot be nil")
 	}
@@ -44,7 +59,7 @@ func (m *PlanPricingMapper) ToDomain(model *models.PlanPricingModel) (*valueobje
 }
 
 // ToModel converts domain value object to database model
-func (m *PlanPricingMapper) ToModel(pricing *valueobjects.PlanPricing) (*models.PlanPricingModel, error) {
+func (m *PlanPricingMapperImpl) ToModel(pricing *valueobjects.PlanPricing) (*models.PlanPricingModel, error) {
 	if pricing == nil {
 		return nil, fmt.Errorf("pricing cannot be nil")
 	}
@@ -65,7 +80,7 @@ func (m *PlanPricingMapper) ToModel(pricing *valueobjects.PlanPricing) (*models.
 }
 
 // ToDomainList converts a list of database models to domain value objects
-func (m *PlanPricingMapper) ToDomainList(models []*models.PlanPricingModel) ([]*valueobjects.PlanPricing, error) {
+func (m *PlanPricingMapperImpl) ToDomainList(models []*models.PlanPricingModel) ([]*valueobjects.PlanPricing, error) {
 	if models == nil {
 		return []*valueobjects.PlanPricing{}, nil
 	}
@@ -83,7 +98,7 @@ func (m *PlanPricingMapper) ToDomainList(models []*models.PlanPricingModel) ([]*
 }
 
 // ToModelList converts a list of domain value objects to database models
-func (m *PlanPricingMapper) ToModelList(pricings []*valueobjects.PlanPricing) ([]*models.PlanPricingModel, error) {
+func (m *PlanPricingMapperImpl) ToModelList(pricings []*valueobjects.PlanPricing) ([]*models.PlanPricingModel, error) {
 	if pricings == nil {
 		return []*models.PlanPricingModel{}, nil
 	}

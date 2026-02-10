@@ -48,7 +48,7 @@ func (uc *ResetSubscriptionLinkUseCase) Execute(ctx context.Context, cmd ResetSu
 	// Reset link token to generate new subscription link (invalidates old link)
 	if err := sub.ResetLinkToken(); err != nil {
 		uc.logger.Errorw("failed to reset link token", "error", err, "subscription_id", cmd.SubscriptionID)
-		return nil, fmt.Errorf("failed to reset link token: %w", err)
+		return nil, err
 	}
 
 	// Persist the change

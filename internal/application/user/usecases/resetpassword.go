@@ -59,12 +59,12 @@ func (uc *ResetPasswordUseCase) Execute(ctx context.Context, cmd ResetPasswordCo
 
 	newPassword, err := vo.NewPasswordWithPolicy(cmd.NewPassword, passwordPolicy)
 	if err != nil {
-		return fmt.Errorf("invalid password: %w", err)
+		return err
 	}
 
 	if err := existingUser.ResetPassword(cmd.Token, newPassword, uc.passwordHasher); err != nil {
 		uc.logger.Errorw("failed to reset password", "error", err, "user_id", existingUser.ID())
-		return fmt.Errorf("failed to reset password: %w", err)
+		return err
 	}
 
 	if err := uc.sessionRepo.DeleteByUserID(existingUser.ID()); err != nil {

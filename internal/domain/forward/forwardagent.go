@@ -9,6 +9,7 @@ import (
 	"time"
 
 	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
+	"github.com/orris-inc/orris/internal/domain/shared"
 	"github.com/orris-inc/orris/internal/domain/shared/services"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 )
@@ -542,10 +543,7 @@ func (a *ForwardAgent) LastSeenAt() *time.Time {
 
 // IsOnline checks if agent is online (reported within 5 minutes)
 func (a *ForwardAgent) IsOnline() bool {
-	if a.lastSeenAt == nil {
-		return false
-	}
-	return time.Since(*a.lastSeenAt) < 5*time.Minute
+	return shared.IsOnline(a.lastSeenAt)
 }
 
 // UpdateLastSeen updates the last seen timestamp
@@ -578,17 +576,10 @@ func (a *ForwardAgent) SetCostLabel(label *string) {
 
 // IsExpired checks if the agent has expired
 func (a *ForwardAgent) IsExpired() bool {
-	if a.expiresAt == nil {
-		return false
-	}
-	return time.Now().UTC().After(*a.expiresAt)
+	return shared.IsExpired(a.expiresAt)
 }
 
 // IsExpiringSoon checks if the agent will expire within the specified number of days
 func (a *ForwardAgent) IsExpiringSoon(days int) bool {
-	if a.expiresAt == nil {
-		return false
-	}
-	threshold := time.Now().UTC().AddDate(0, 0, days)
-	return a.expiresAt.Before(threshold)
+	return shared.IsExpiringSoon(a.expiresAt, days)
 }

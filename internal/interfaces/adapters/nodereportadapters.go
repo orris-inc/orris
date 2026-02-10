@@ -9,7 +9,7 @@ import (
 
 	nodeUsecases "github.com/orris-inc/orris/internal/application/node/usecases"
 	"github.com/orris-inc/orris/internal/domain/subscription"
-	"github.com/orris-inc/orris/internal/infrastructure/adapters/systemstatus"
+	"github.com/orris-inc/orris/internal/interfaces/adapters/systemstatus"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )

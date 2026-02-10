@@ -8,7 +8,7 @@ import (
 	commondto "github.com/orris-inc/orris/internal/application/common/dto"
 	nodeUsecases "github.com/orris-inc/orris/internal/application/node/usecases"
 	"github.com/orris-inc/orris/internal/domain/node"
-	"github.com/orris-inc/orris/internal/infrastructure/adapters/cacheutil"
+	"github.com/orris-inc/orris/internal/interfaces/adapters/cacheutil"
 	"github.com/orris-inc/orris/internal/infrastructure/services"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )

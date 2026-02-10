@@ -2,44 +2,25 @@ package http
 
 import (
 	"context"
-	"time"
+	"sync"
 
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
-	adminUsecases "github.com/orris-inc/orris/internal/application/admin/usecases"
 	forwardServices "github.com/orris-inc/orris/internal/application/forward/services"
-	forwardUsecases "github.com/orris-inc/orris/internal/application/forward/usecases"
 	nodeServices "github.com/orris-inc/orris/internal/application/node/services"
-	nodeUsecases "github.com/orris-inc/orris/internal/application/node/usecases"
-	notificationApp "github.com/orris-inc/orris/internal/application/notification"
-	paymentGateway "github.com/orris-inc/orris/internal/application/payment/paymentgateway"
-	paymentUsecases "github.com/orris-inc/orris/internal/application/payment/usecases"
-	resourceUsecases "github.com/orris-inc/orris/internal/application/resource/usecases"
 	settingApp "github.com/orris-inc/orris/internal/application/setting"
-	settingUsecases "github.com/orris-inc/orris/internal/application/setting/usecases"
-	subscriptionServices "github.com/orris-inc/orris/internal/application/subscription/services"
-	subscriptionUsecases "github.com/orris-inc/orris/internal/application/subscription/usecases"
 	telegramApp "github.com/orris-inc/orris/internal/application/telegram"
 	telegramAdminApp "github.com/orris-inc/orris/internal/application/telegram/admin"
-	telegramAdminUsecases "github.com/orris-inc/orris/internal/application/telegram/admin/usecases"
 	"github.com/orris-inc/orris/internal/application/user"
-	"github.com/orris-inc/orris/internal/application/user/helpers"
-	"github.com/orris-inc/orris/internal/application/user/usecases"
-	"github.com/orris-inc/orris/internal/infrastructure/adapters"
 	"github.com/orris-inc/orris/internal/infrastructure/auth"
 	"github.com/orris-inc/orris/internal/infrastructure/cache"
 	"github.com/orris-inc/orris/internal/infrastructure/config"
 	"github.com/orris-inc/orris/internal/infrastructure/email"
 	infraPayment "github.com/orris-inc/orris/internal/infrastructure/payment"
-	"github.com/orris-inc/orris/internal/infrastructure/pubsub"
-	"github.com/orris-inc/orris/internal/infrastructure/repository"
 	"github.com/orris-inc/orris/internal/infrastructure/scheduler"
 	"github.com/orris-inc/orris/internal/infrastructure/services"
 	telegramInfra "github.com/orris-inc/orris/internal/infrastructure/telegram"
-	"github.com/orris-inc/orris/internal/infrastructure/template"
-	"github.com/orris-inc/orris/internal/infrastructure/token"
 	"github.com/orris-inc/orris/internal/interfaces/http/handlers"
 	adminHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/admin"
 	adminResourceGroupHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/admin/resourcegroup"
@@ -54,13 +35,11 @@ import (
 	telegramHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/telegram"
 	ticketHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/ticket"
 	"github.com/orris-inc/orris/internal/interfaces/http/middleware"
-	"github.com/orris-inc/orris/internal/shared/biztime"
-	shareddb "github.com/orris-inc/orris/internal/shared/db"
 	"github.com/orris-inc/orris/internal/shared/logger"
-	"github.com/orris-inc/orris/internal/shared/services/markdown"
 )
 
-// Router represents the HTTP router configuration
+// Router represents the HTTP router configuration.
+// Handler and middleware fields are accessed by router_methods.go for route setup.
 type Router struct {
 	engine                         *gin.Engine
 	userHandler                    *handlers.UserHandler
@@ -111,6 +90,8 @@ type Router struct {
 	subscriptionTrafficFlushDone   chan struct{}
 	schedulerManager               *scheduler.SchedulerManager
 	usdtServiceManager             *infraPayment.USDTServiceManager
+	hubEventBusCancel              context.CancelFunc
+	hubEventBusCancelMu            *sync.Mutex
 	logger                         logger.Interface
 	authMiddleware                 *middleware.AuthMiddleware
 	subscriptionOwnerMiddleware    *middleware.SubscriptionOwnerMiddleware
@@ -125,1521 +106,205 @@ type Router struct {
 	emailManager                   *email.EmailServiceManager
 }
 
-// NewRouter creates a new HTTP router with all dependencies
+// NewRouter creates a new HTTP router with all dependencies.
+// The function signature is preserved for backward compatibility with command.go.
 func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, log logger.Interface) *Router {
-	engine := gin.New()
-
-	// ============================================================
-	// Section 1: Infrastructure - Redis, Repositories, Basic Services
-	// ============================================================
-
-	userRepo := repository.NewUserRepository(db, log)
-	sessionRepo := repository.NewSessionRepository(db)
-	oauthRepo := repository.NewOAuthAccountRepository(db)
-
-	hasher := auth.NewBcryptPasswordHasher(cfg.Auth.Password.BcryptCost)
-	jwtSvc := auth.NewJWTService(cfg.Auth.JWT.Secret, cfg.Auth.JWT.AccessExpMinutes, cfg.Auth.JWT.RefreshExpDays)
-	jwtService := &jwtServiceAdapter{jwtSvc}
-
-	// Note: Email service and OAuth clients are now initialized later via
-	// EmailServiceManager and OAuthServiceManager for hot-reload support.
-	// See section after settingServiceDDD initialization.
-
-	// Initialize Redis client for OAuth state storage and Asynq
-	redisClient := redis.NewClient(&redis.Options{
-		Addr:     cfg.Redis.GetAddr(),
-		Password: cfg.Redis.Password,
-		DB:       cfg.Redis.DB,
-	})
-
-	// Test Redis connection
-	ctx := context.Background()
-	if err := redisClient.Ping(ctx).Err(); err != nil {
-		log.Fatalw("failed to connect to Redis", "error", err)
-	}
-	log.Infow("Redis connection established successfully")
-
-	// Create OAuth StateStore with 10 minute TTL
-	stateStore := cache.NewRedisStateStore(
-		redisClient,
-		"oauth:state:",
-		10*time.Minute,
-	)
-
-	// Initialize HMAC-based agent token service for local token verification
-	agentTokenSvc := auth.NewAgentTokenService(cfg.Forward.TokenSigningSecret)
-
-	authHelper := helpers.NewAuthHelper(userRepo, sessionRepo, log)
-
-	// Note: Auth-related use cases (registerUC, loginUC, etc.) and authHandler
-	// are initialized later after OAuthServiceManager and EmailServiceManager
-	// are created for hot-reload support. See section after settingServiceDDD.
-
-	// Declare variables for auth components that will be initialized later
-	var authHandler *handlers.AuthHandler
-	var passkeyHandler *handlers.PasskeyHandler
-	var userHandler *handlers.UserHandler
-
-	authMiddleware := middleware.NewAuthMiddleware(jwtSvc, userRepo, cfg.Auth.Cookie, log)
-	rateLimiter := middleware.NewRateLimiter(100, 1*time.Minute)
-
-	// ============================================================
-	// Section 2: Subscription - Repositories, UseCases, Handlers
-	// ============================================================
-
-	subscriptionRepo := repository.NewSubscriptionRepository(db, log)
-	subscriptionPlanRepo := repository.NewPlanRepository(db, log)
-	subscriptionTokenRepo := repository.NewSubscriptionTokenRepository(db, log)
-	subscriptionUsageRepo := repository.NewSubscriptionUsageRepository(db, log)
-	subscriptionUsageStatsRepo := repository.NewSubscriptionUsageStatsRepository(db, log)
-	planPricingRepo := repository.NewPlanPricingRepository(db, log)
-	paymentRepo := repository.NewPaymentRepository(db)
-
-	// Initialize node and forward repositories early (needed by subscription usage stats)
-	nodeRepoImpl := repository.NewNodeRepository(db, log)
-	forwardRuleRepo := repository.NewForwardRuleRepository(db, log)
-
-	tokenGenerator := token.NewTokenGenerator()
-
-	createSubscriptionUC := subscriptionUsecases.NewCreateSubscriptionUseCase(
-		subscriptionRepo, subscriptionPlanRepo, subscriptionTokenRepo, planPricingRepo, userRepo, tokenGenerator, log,
-	)
-	activateSubscriptionUC := subscriptionUsecases.NewActivateSubscriptionUseCase(
-		subscriptionRepo, log,
-	)
-	subscriptionBaseURL := cfg.Subscription.GetBaseURL(cfg.Server.GetBaseURL())
-	getSubscriptionUC := subscriptionUsecases.NewGetSubscriptionUseCase(
-		subscriptionRepo, subscriptionPlanRepo, userRepo, log, subscriptionBaseURL,
-	)
-	listUserSubscriptionsUC := subscriptionUsecases.NewListUserSubscriptionsUseCase(
-		subscriptionRepo, subscriptionPlanRepo, userRepo, log, subscriptionBaseURL,
-	)
-	cancelSubscriptionUC := subscriptionUsecases.NewCancelSubscriptionUseCase(
-		subscriptionRepo, subscriptionTokenRepo, log,
-	)
-	suspendSubscriptionUC := subscriptionUsecases.NewSuspendSubscriptionUseCase(
-		subscriptionRepo, log,
-	)
-	unsuspendSubscriptionUC := subscriptionUsecases.NewUnsuspendSubscriptionUseCase(
-		subscriptionRepo, log,
-	)
-	resetSubscriptionUsageUC := subscriptionUsecases.NewResetSubscriptionUsageUseCase(
-		subscriptionRepo, log,
-	)
-	deleteSubscriptionUC := subscriptionUsecases.NewDeleteSubscriptionUseCase(
-		subscriptionRepo, subscriptionTokenRepo, shareddb.NewTransactionManager(db), log,
-	)
-	renewSubscriptionUC := subscriptionUsecases.NewRenewSubscriptionUseCase(
-		subscriptionRepo, subscriptionPlanRepo, planPricingRepo, log,
-	)
-	changePlanUC := subscriptionUsecases.NewChangePlanUseCase(
-		subscriptionRepo, subscriptionPlanRepo, log,
-	)
-
-	// Initialize hourly traffic cache for Redis-based hourly data queries and daily aggregation
-	hourlyTrafficCache := cache.NewRedisHourlyTrafficCache(redisClient, log)
-
-	getSubscriptionUsageStatsUC := subscriptionUsecases.NewGetSubscriptionUsageStatsUseCase(
-		subscriptionUsageRepo, subscriptionUsageStatsRepo, hourlyTrafficCache, nodeRepoImpl, forwardRuleRepo, log,
-	)
-	resetSubscriptionLinkUC := subscriptionUsecases.NewResetSubscriptionLinkUseCase(
-		subscriptionRepo, subscriptionPlanRepo, userRepo, log, subscriptionBaseURL,
-	)
-
-	aggregateUsageUC := subscriptionUsecases.NewAggregateUsageUseCase(
-		subscriptionUsageRepo, subscriptionUsageStatsRepo, hourlyTrafficCache, log,
-	)
-
-	// Initialize unified scheduler manager (gocron v2)
-	schedulerManager, err := scheduler.NewSchedulerManager(log)
-	if err != nil {
-		log.Fatalw("failed to create scheduler manager", "error", err)
-	}
-
-	// Register payment jobs (5 min interval)
-	expirePaymentsUC := paymentUsecases.NewExpirePaymentsUseCase(paymentRepo, subscriptionRepo, log)
-	cancelUnpaidSubsUC := paymentUsecases.NewCancelUnpaidSubscriptionsUseCase(subscriptionRepo, paymentRepo, log)
-	retryActivationUC := paymentUsecases.NewRetrySubscriptionActivationUseCase(paymentRepo, activateSubscriptionUC, log)
-	if err := schedulerManager.RegisterPaymentJobs(expirePaymentsUC, cancelUnpaidSubsUC, retryActivationUC); err != nil {
-		log.Warnw("failed to register payment jobs", "error", err)
-	}
-
-	// Register subscription jobs (24h interval)
-	expireSubscriptionsUC := subscriptionUsecases.NewExpireSubscriptionsUseCase(subscriptionRepo, log)
-	if err := schedulerManager.RegisterSubscriptionJobs(expireSubscriptionsUC); err != nil {
-		log.Warnw("failed to register subscription jobs", "error", err)
-	}
-
-	// Register usage aggregation jobs (cron-based)
-	if err := schedulerManager.RegisterUsageAggregationJobs(aggregateUsageUC, scheduler.DefaultRetentionDays); err != nil {
-		log.Warnw("failed to register usage aggregation jobs", "error", err)
-	}
-
-	createPlanUC := subscriptionUsecases.NewCreatePlanUseCase(
-		subscriptionPlanRepo, planPricingRepo, log,
-	)
-	updatePlanUC := subscriptionUsecases.NewUpdatePlanUseCase(
-		subscriptionPlanRepo, planPricingRepo, log,
-	)
-	getPlanUC := subscriptionUsecases.NewGetPlanUseCase(
-		subscriptionPlanRepo, planPricingRepo, log,
-	)
-	listPlansUC := subscriptionUsecases.NewListPlansUseCase(
-		subscriptionPlanRepo, planPricingRepo, log,
-	)
-	getPublicPlansUC := subscriptionUsecases.NewGetPublicPlansUseCase(
-		subscriptionPlanRepo, planPricingRepo, log,
-	)
-	activatePlanUC := subscriptionUsecases.NewActivatePlanUseCase(
-		subscriptionPlanRepo, log,
-	)
-	deactivatePlanUC := subscriptionUsecases.NewDeactivatePlanUseCase(
-		subscriptionPlanRepo, log,
-	)
-	deletePlanUC := subscriptionUsecases.NewDeletePlanUseCase(
-		subscriptionPlanRepo, subscriptionRepo, planPricingRepo, shareddb.NewTransactionManager(db), log,
-	)
-	getPlanPricingsUC := subscriptionUsecases.NewGetPlanPricingsUseCase(
-		subscriptionPlanRepo, planPricingRepo, log,
-	)
-
-	generateTokenUC := subscriptionUsecases.NewGenerateSubscriptionTokenUseCase(
-		subscriptionRepo, subscriptionTokenRepo, tokenGenerator, log,
-	)
-	listTokensUC := subscriptionUsecases.NewListSubscriptionTokensUseCase(
-		subscriptionTokenRepo, log,
-	)
-	revokeTokenUC := subscriptionUsecases.NewRevokeSubscriptionTokenUseCase(
-		subscriptionTokenRepo, log,
-	)
-	refreshSubscriptionTokenUC := subscriptionUsecases.NewRefreshSubscriptionTokenUseCase(
-		subscriptionTokenRepo, subscriptionRepo, tokenGenerator, log,
-	)
-
-	subscriptionHandler := handlers.NewSubscriptionHandler(
-		createSubscriptionUC, getSubscriptionUC, listUserSubscriptionsUC,
-		cancelSubscriptionUC, deleteSubscriptionUC, changePlanUC, getSubscriptionUsageStatsUC,
-		resetSubscriptionLinkUC, log,
-	)
-	adminSubscriptionHandler := adminSubscriptionHandlers.NewHandler(
-		subscriptionRepo, createSubscriptionUC, getSubscriptionUC, listUserSubscriptionsUC,
-		cancelSubscriptionUC, deleteSubscriptionUC, renewSubscriptionUC, changePlanUC,
-		activateSubscriptionUC, suspendSubscriptionUC, unsuspendSubscriptionUC, resetSubscriptionUsageUC, log,
-	)
-	subscriptionOwnerMiddleware := middleware.NewSubscriptionOwnerMiddleware(subscriptionRepo, log)
-
-	// Initialize resource group repository (handler initialized later after node and agent repos)
-	resourceGroupRepo := repository.NewResourceGroupRepository(db, log)
-	createResourceGroupUC := resourceUsecases.NewCreateResourceGroupUseCase(resourceGroupRepo, subscriptionPlanRepo, log)
-	getResourceGroupUC := resourceUsecases.NewGetResourceGroupUseCase(resourceGroupRepo, subscriptionPlanRepo, log)
-	listResourceGroupsUC := resourceUsecases.NewListResourceGroupsUseCase(resourceGroupRepo, subscriptionPlanRepo, log)
-	updateResourceGroupUC := resourceUsecases.NewUpdateResourceGroupUseCase(resourceGroupRepo, subscriptionPlanRepo, log)
-	deleteResourceGroupUC := resourceUsecases.NewDeleteResourceGroupUseCase(resourceGroupRepo, forwardRuleRepo, nodeRepoImpl, log)
-	updateResourceGroupStatusUC := resourceUsecases.NewUpdateResourceGroupStatusUseCase(resourceGroupRepo, subscriptionPlanRepo, nodeRepoImpl, forwardRuleRepo, log)
-
-	planHandler := handlers.NewPlanHandler(
-		createPlanUC, updatePlanUC, getPlanUC, listPlansUC,
-		getPublicPlansUC, activatePlanUC, deactivatePlanUC, deletePlanUC, getPlanPricingsUC,
-	)
-	subscriptionTokenHandler := handlers.NewSubscriptionTokenHandler(
-		generateTokenUC, listTokensUC, revokeTokenUC, refreshSubscriptionTokenUC,
-	)
-
-	nodeRepo := adapters.NewNodeRepositoryAdapter(nodeRepoImpl, forwardRuleRepo, db, log)
-	tokenValidator := adapters.NewSubscriptionTokenValidatorAdapter(db, log)
-
-	// Initialize subscription template loader
-	templateLoader := template.NewSubscriptionTemplateLoader(
-		cfg.Subscription.TemplatesPath,
-		log,
-	)
-	if err := templateLoader.Load(); err != nil {
-		log.Warnw("failed to load subscription templates, using defaults", "error", err)
-	}
-
-	// Note: generateSubscriptionUC is created later after settingProvider is initialized
-	// to support admin-configurable subscription settings
-
-	// Initialize node system status querier adapter
-	nodeStatusQuerier := adapters.NewNodeSystemStatusQuerierAdapter(redisClient, log)
-
-	// Initialize GitHub release services for version checking
-	// Forward agent uses orris-client repository
-	forwardAgentReleaseService := services.NewGitHubReleaseService(services.GitHubRepoConfig{
-		Owner:       "orris-inc",
-		Repo:        "orris-client",
-		AssetPrefix: "orris-client",
-	}, log)
-	// Node agent uses orrisp repository
-	nodeAgentReleaseService := services.NewGitHubReleaseService(services.GitHubRepoConfig{
-		Owner:       "orris-inc",
-		Repo:        "orrisp",
-		AssetPrefix: "orrisp",
-	}, log)
-
-	// ============================================================
-	// Section 3: Node - UseCases, Handlers, Middlewares
-	// ============================================================
-
-	// Initialize node use cases
-	createNodeUC := nodeUsecases.NewCreateNodeUseCase(nodeRepoImpl, resourceGroupRepo, log)
-	getNodeUC := nodeUsecases.NewGetNodeUseCase(nodeRepoImpl, resourceGroupRepo, nodeStatusQuerier, log)
-	updateNodeUC := nodeUsecases.NewUpdateNodeUseCase(log, nodeRepoImpl, resourceGroupRepo)
-	deleteNodeUC := nodeUsecases.NewDeleteNodeUseCase(nodeRepoImpl, forwardRuleRepo, log)
-	listNodesUC := nodeUsecases.NewListNodesUseCase(nodeRepoImpl, resourceGroupRepo, userRepo, nodeStatusQuerier, nodeAgentReleaseService, log)
-	generateNodeTokenUC := nodeUsecases.NewGenerateNodeTokenUseCase(nodeRepoImpl, log)
-	generateNodeInstallScriptUC := nodeUsecases.NewGenerateNodeInstallScriptUseCase(nodeRepoImpl, log)
-	generateBatchInstallScriptUC := nodeUsecases.NewGenerateBatchInstallScriptUseCase(nodeRepoImpl, log)
-
-	// Initialize user node use cases
-	createUserNodeUC := nodeUsecases.NewCreateUserNodeUseCase(nodeRepoImpl, log)
-	listUserNodesUC := nodeUsecases.NewListUserNodesUseCase(nodeRepoImpl, log)
-	getUserNodeUC := nodeUsecases.NewGetUserNodeUseCase(nodeRepoImpl, log)
-	updateUserNodeUC := nodeUsecases.NewUpdateUserNodeUseCase(nodeRepoImpl, log)
-	deleteUserNodeUC := nodeUsecases.NewDeleteUserNodeUseCase(nodeRepoImpl, log)
-	regenerateUserNodeTokenUC := nodeUsecases.NewRegenerateUserNodeTokenUseCase(nodeRepoImpl, log)
-	getUserNodeUsageUC := nodeUsecases.NewGetUserNodeUsageUseCase(nodeRepoImpl, subscriptionRepo, subscriptionPlanRepo, log)
-	getUserNodeInstallScriptUC := nodeUsecases.NewGetUserNodeInstallScriptUseCase(nodeRepoImpl, log)
-	getUserBatchInstallScriptUC := nodeUsecases.NewGetUserBatchInstallScriptUseCase(nodeRepoImpl, log)
-
-	// Initialize node authentication middleware using the same node repository adapter
-	validateNodeTokenUC := nodeUsecases.NewValidateNodeTokenUseCase(nodeRepo, log)
-	nodeTokenMiddleware := middleware.NewNodeTokenMiddleware(validateNodeTokenUC, log)
-
-	// Initialize node owner middleware
-	nodeOwnerMiddleware := middleware.NewNodeOwnerMiddleware(nodeRepoImpl)
-
-	// Initialize node quota middleware
-	nodeQuotaMiddleware := middleware.NewNodeQuotaMiddleware(nodeRepoImpl, subscriptionRepo, subscriptionPlanRepo)
-
-	// Initialize handlers
-	// API URL for node install script generation
-	apiBaseURL := cfg.Server.GetBaseURL()
-	nodeHandler := handlers.NewNodeHandler(createNodeUC, getNodeUC, updateNodeUC, deleteNodeUC, listNodesUC, generateNodeTokenUC, generateNodeInstallScriptUC, generateBatchInstallScriptUC, apiBaseURL)
-	// Note: nodeSubscriptionHandler is created later after settingProvider is initialized
-	var nodeSubscriptionHandler *handlers.NodeSubscriptionHandler
-	userNodeHandler := nodeHandlers.NewUserNodeHandler(
-		createUserNodeUC,
-		listUserNodesUC,
-		getUserNodeUC,
-		updateUserNodeUC,
-		deleteUserNodeUC,
-		regenerateUserNodeTokenUC,
-		getUserNodeUsageUC,
-		getUserNodeInstallScriptUC,
-		getUserBatchInstallScriptUC,
-		apiBaseURL,
-	)
-
-	ticketHandler := ticketHandlers.NewTicketHandler(nil, nil, nil, nil, nil, nil, nil, nil, nil)
-
-	announcementRepo := adapters.NewAnnouncementRepositoryAdapter(repository.NewAnnouncementRepository(db))
-	notificationRepo := adapters.NewNotificationRepositoryAdapter(repository.NewNotificationRepository(db))
-	templateRepo := adapters.NewTemplateRepositoryAdapter(repository.NewNotificationTemplateRepository(db))
-	userAnnouncementReadRepo := adapters.NewUserAnnouncementReadRepositoryAdapter(repository.NewUserAnnouncementReadRepository(db))
-
-	markdownService := markdown.NewMarkdownService()
-
-	announcementFactory := adapters.NewAnnouncementFactoryAdapter()
-	templateFactory := adapters.NewTemplateFactoryAdapter()
-
-	notificationServiceDDD := notificationApp.NewServiceDDD(
-		announcementRepo,
-		notificationRepo,
-		templateRepo,
-		userAnnouncementReadRepo,
-		announcementFactory,
-		templateFactory,
-		markdownService,
-		log,
-	)
-
-	notificationHandler := handlers.NewNotificationHandler(notificationServiceDDD, userRepo, log)
-
-	// ============================================================
-	// Section 4: Settings & Auth - OAuth, Email, Passkey
-	// ============================================================
-
-	// Initialize System Setting components
-	settingRepo := repository.NewSystemSettingRepository(db, log)
-	settingProviderCfg := settingUsecases.SettingProviderConfig{
-		TelegramConfig:      cfg.Telegram,
-		GoogleOAuthConfig:   cfg.OAuth.Google,
-		GitHubOAuthConfig:   cfg.OAuth.GitHub,
-		EmailConfig:         cfg.Email,
-		APIBaseURL:          apiBaseURL,
-		SubscriptionBaseURL: cfg.Subscription.BaseURL,
-		FrontendURL:         cfg.Server.FrontendCallbackURL,
-		Timezone:            cfg.Server.Timezone,
-	}
-	settingServiceDDD := settingApp.NewServiceDDD(settingRepo, settingProviderCfg, nil, log)
-	settingHandler := adminHandlers.NewSettingHandler(settingServiceDDD, log)
-	settingProvider := settingServiceDDD.GetSettingProvider()
-
-	// Initialize subscription setting provider adapter for admin-configurable settings
-	subscriptionSettingAdapter := adapters.NewSubscriptionSettingProviderAdapter(settingProvider)
-
-	// Initialize generateSubscriptionUC (moved here to use settingProvider)
-	generateSubscriptionUC := nodeUsecases.NewGenerateSubscriptionUseCase(
-		nodeRepo, tokenValidator, templateLoader,
-		subscriptionPlanRepo, subscriptionUsageStatsRepo, hourlyTrafficCache,
-		subscriptionSettingAdapter, log,
-	)
-	nodeSubscriptionHandler = handlers.NewNodeSubscriptionHandler(generateSubscriptionUC)
-
-	// Initialize OAuthServiceManager for hot-reload support
-	// Note: Initial failure is acceptable - will be re-initialized on setting changes
-	oauthManager := auth.NewOAuthServiceManager(settingProvider, log)
-	if err := oauthManager.Initialize(context.Background()); err != nil {
-		log.Warnw("oauth service manager initial config incomplete, will reinitialize on setting change", "error", err)
-	}
-	settingServiceDDD.Subscribe(oauthManager)
-
-	// Initialize EmailServiceManager for hot-reload support
-	// Note: Initial failure is acceptable - will be re-initialized on setting changes
-	emailManager := email.NewEmailServiceManager(settingProvider, log)
-	if err := emailManager.Initialize(context.Background()); err != nil {
-		log.Warnw("email service manager initial config incomplete, will reinitialize on setting change", "error", err)
-	}
-	settingServiceDDD.Subscribe(emailManager)
-
-	// Create DynamicEmailService for use cases
-	dynamicEmailSvc := email.NewDynamicEmailService(emailManager, log)
-
-	// Inject EmailTester to break circular dependency
-	settingServiceDDD.SetEmailTester(dynamicEmailSvc)
-
-	// Create dynamic OAuth clients that fetch current client from manager
-	dynamicGoogleClient := &dynamicOAuthClientAdapter{manager: oauthManager, provider: "google"}
-	dynamicGitHubClient := &dynamicOAuthClientAdapter{manager: oauthManager, provider: "github"}
-
-	// Initialize auth-related use cases with dynamic services for hot-reload support
-	registerUC := usecases.NewRegisterWithPasswordUseCase(userRepo, hasher, dynamicEmailSvc, authHelper, settingServiceDDD, log)
-	loginUC := usecases.NewLoginWithPasswordUseCase(userRepo, sessionRepo, hasher, jwtService, authHelper, settingServiceDDD, cfg.Auth.Session, log)
-	verifyEmailUC := usecases.NewVerifyEmailUseCase(userRepo, log)
-	requestResetUC := usecases.NewRequestPasswordResetUseCase(userRepo, dynamicEmailSvc, log)
-	resetPasswordUC := usecases.NewResetPasswordUseCase(userRepo, sessionRepo, hasher, dynamicEmailSvc, settingServiceDDD, log)
-	adminResetPasswordUC := usecases.NewAdminResetPasswordUseCase(userRepo, sessionRepo, hasher, dynamicEmailSvc, settingServiceDDD, log)
-	initiateOAuthUC := usecases.NewInitiateOAuthLoginUseCase(dynamicGoogleClient, dynamicGitHubClient, log, stateStore)
-	handleOAuthUC := usecases.NewHandleOAuthCallbackUseCase(userRepo, oauthRepo, sessionRepo, dynamicGoogleClient, dynamicGitHubClient, jwtService, initiateOAuthUC, authHelper, cfg.Auth.Session, log)
-	refreshTokenUC := usecases.NewRefreshTokenUseCase(userRepo, sessionRepo, jwtService, authHelper, cfg.Auth.Session, log)
-	logoutUC := usecases.NewLogoutUseCase(sessionRepo, log)
-
-	authHandler = handlers.NewAuthHandler(
-		registerUC, loginUC, verifyEmailUC, requestResetUC, resetPasswordUC,
-		initiateOAuthUC, handleOAuthUC, refreshTokenUC, logoutUC, userRepo, log,
-		cfg.Auth.Cookie, cfg.Auth.JWT,
-		cfg.Server.FrontendCallbackURL, cfg.Server.AllowedOrigins,
-		emailManager,
-	)
-
-	// Initialize Passkey (WebAuthn) components if configured
-	if cfg.WebAuthn.IsConfigured() {
-		webAuthnService, err := auth.NewWebAuthnService(cfg.WebAuthn)
-		if err != nil {
-			log.Warnw("failed to initialize WebAuthn service, passkey authentication disabled", "error", err)
-		} else {
-			passkeyRepo := repository.NewPasskeyCredentialRepository(db, log)
-			passkeyChallengeStore := cache.NewPasskeyChallengeStore(redisClient)
-			passkeySignupSessionStore := cache.NewPasskeySignupSessionStore(redisClient)
-
-			startPasskeyRegistrationUC := usecases.NewStartPasskeyRegistrationUseCase(userRepo, passkeyRepo, webAuthnService, passkeyChallengeStore, log)
-			finishPasskeyRegistrationUC := usecases.NewFinishPasskeyRegistrationUseCase(userRepo, passkeyRepo, webAuthnService, passkeyChallengeStore, log)
-			startPasskeyAuthenticationUC := usecases.NewStartPasskeyAuthenticationUseCase(userRepo, passkeyRepo, webAuthnService, passkeyChallengeStore, log)
-			finishPasskeyAuthenticationUC := usecases.NewFinishPasskeyAuthenticationUseCase(userRepo, passkeyRepo, sessionRepo, webAuthnService, passkeyChallengeStore, jwtService, authHelper, cfg.Auth.Session, log)
-			startPasskeySignupUC := usecases.NewStartPasskeySignupUseCase(userRepo, webAuthnService, passkeyChallengeStore, passkeySignupSessionStore, log)
-			finishPasskeySignupUC := usecases.NewFinishPasskeySignupUseCase(userRepo, passkeyRepo, sessionRepo, webAuthnService, passkeyChallengeStore, passkeySignupSessionStore, jwtService, authHelper, cfg.Auth.Session, log)
-			listUserPasskeysUC := usecases.NewListUserPasskeysUseCase(passkeyRepo, log)
-			deletePasskeyUC := usecases.NewDeletePasskeyUseCase(passkeyRepo, log)
-
-			passkeyHandler = handlers.NewPasskeyHandler(
-				startPasskeyRegistrationUC,
-				finishPasskeyRegistrationUC,
-				startPasskeyAuthenticationUC,
-				finishPasskeyAuthenticationUC,
-				startPasskeySignupUC,
-				finishPasskeySignupUC,
-				listUserPasskeysUC,
-				deletePasskeyUC,
-				log,
-				cfg.Auth.Cookie,
-				cfg.Auth.JWT,
-			)
-			log.Infow("WebAuthn passkey authentication enabled")
-		}
-	}
-
-	userHandler = handlers.NewUserHandler(userService, adminResetPasswordUC)
-
-	// ============================================================
-	// Section 5: Telegram - Bot, Notifications, Admin Alerts
-	// ============================================================
-
-	// Initialize Telegram notification components using BotServiceManager for hot-reload support
-	var telegramHandler *telegramHandlers.Handler
-	var telegramServiceDDD *telegramApp.ServiceDDD
-	var telegramBotManager *telegramInfra.BotServiceManager
-
-	// Initialize Telegram base components (regardless of initial config state)
-	// These components don't depend on whether Telegram is currently configured
-	telegramVerifyStore := cache.NewTelegramVerifyStore(redisClient)
-	telegramBindingRepo := repository.NewTelegramBindingRepository(db, log)
-
-	// Initialize Telegram ServiceDDD (initially without BotService, will be managed by BotServiceManager)
-	telegramServiceDDD = telegramApp.NewServiceDDD(
-		telegramBindingRepo,
-		subscriptionRepo,
-		subscriptionUsageStatsRepo,
-		hourlyTrafficCache,
-		subscriptionPlanRepo,
-		telegramVerifyStore,
-		nil, // BotService will be managed by BotServiceManager
-		log,
-	)
-
-	// Declare admin service variable early for closure capture
-	var adminNotificationServiceDDD *telegramAdminApp.ServiceDDD
-
-	// Create UpdateHandler for polling mode
-	serviceAdapter := telegramInfra.NewServiceAdapter(
-		telegramServiceDDD,
-		func(ctx context.Context, telegramUserID int64, telegramUsername, verifyCode string) error {
-			_, err := telegramServiceDDD.BindFromWebhook(ctx, telegramUserID, telegramUsername, verifyCode)
-			return err
-		},
-		func(ctx context.Context, telegramUserID int64) (bool, error) {
-			status, err := telegramServiceDDD.GetBindingStatusByTelegramID(ctx, telegramUserID)
-			if err != nil {
-				return false, err
-			}
-			return status.IsBound, nil
-		},
-		func(ctx context.Context, telegramUserID int64, language string) error {
-			return telegramServiceDDD.UpdateBindingLanguage(ctx, telegramUserID, language)
-		},
-		func(ctx context.Context, telegramUserID int64, language string) error {
-			if adminNotificationServiceDDD != nil {
-				return adminNotificationServiceDDD.UpdateAdminBindingLanguage(ctx, telegramUserID, language)
-			}
-			return nil
-		},
-	)
-	updateHandler := telegramInfra.NewPollingUpdateHandler(serviceAdapter, log)
-
-	// Create BotServiceManager with hot-reload support
-	telegramBotManager = telegramInfra.NewBotServiceManager(settingProvider, updateHandler, log)
-
-	// Inject polling offset store for offset persistence across restarts
-	pollingOffsetStore := cache.NewPollingOffsetStore(redisClient)
-	telegramBotManager.SetOffsetStore(pollingOffsetStore)
-
-	// Inject BotServiceManager into ServiceAdapter (break circular dependency)
-	serviceAdapter.SetBotServiceGetter(telegramBotManager)
-
-	// Create DynamicBotService and inject into telegramServiceDDD
-	// This allows the service to send messages via webhook mode with hot-reload support
-	dynamicBotService := telegramInfra.NewDynamicBotService(telegramBotManager, log)
-	telegramServiceDDD.SetBotService(dynamicBotService)
-
-	// Subscribe BotServiceManager to setting changes for hot-reload
-	settingServiceDDD.Subscribe(telegramBotManager)
-
-	// Inject telegramTester to break circular dependency
-	// BotServiceManager implements TelegramConnectionTester interface
-	settingServiceDDD.SetTelegramTester(telegramBotManager)
-
-	// Initialize Telegram Handler (webhook secret will be retrieved dynamically from SettingProvider)
-	// For initial webhook secret, use env config as fallback
-	initialWebhookSecret := cfg.Telegram.WebhookSecret
-	telegramHandler = telegramHandlers.NewHandler(telegramServiceDDD, log, initialWebhookSecret)
-
-	// Inject SettingProvider for hot-reload support of webhook secret from database
-	telegramHandler.SetWebhookSecretProvider(settingProvider)
-
-	log.Infow("telegram components initialized with hot-reload support")
-
-	// Initialize admin notification components
-	var adminTelegramHandler *adminHandlers.AdminTelegramHandler
-
-	// Admin notification initialization - uses BotServiceManager's BotService when available
-	adminVerifyStore := cache.NewAdminTelegramVerifyStore(redisClient)
-	adminBindingRepo := repository.NewAdminTelegramBindingRepository(db, log)
-	userRoleChecker := adapters.NewUserRoleCheckerAdapter(userRepo)
-
-	// Create admin notification service with DynamicBotService for message sending
-	// Note: dynamicBotService was already created above for telegramServiceDDD
-	// Reusing it here enables hot-reload support for admin notifications as well
-	adminNotificationServiceDDD = telegramAdminApp.NewServiceDDD(
-		adminBindingRepo,
-		adminVerifyStore,
-		dynamicBotService,  // BotService - uses DynamicBotService for hot-reload
-		telegramBotManager, // BotLinkProvider - get bot link from manager
-		userRoleChecker,
-		log,
-	)
-
-	adminTelegramHandler = adminHandlers.NewAdminTelegramHandler(adminNotificationServiceDDD, log)
-
-	// Inject admin service into telegram handler for /adminbind command support (webhook mode)
-	telegramHandler.SetAdminService(adminNotificationServiceDDD)
-
-	// Inject admin binder into service adapter for /adminbind command support (polling mode)
-	serviceAdapter.SetAdminBinder(adminNotificationServiceDDD)
-
-	log.Infow("admin notification components initialized")
-
-	// Create profile handler
-	profileHandler := handlers.NewProfileHandler(userService)
-
-	// Create dashboard handler
-	getDashboardUC := usecases.NewGetDashboardUseCase(
-		subscriptionRepo,
-		subscriptionUsageStatsRepo,
-		hourlyTrafficCache,
-		subscriptionPlanRepo,
-		log,
-	)
-	dashboardHandler := handlers.NewDashboardHandler(getDashboardUC, log)
-
-	// TODO: Implement real payment gateway (Alipay/WeChat/Stripe)
-	// Currently mock gateway is removed as per CLAUDE.md rule: "no mock data allowed"
-	var gateway paymentGateway.PaymentGateway = nil // Temporary placeholder until real implementation
-	paymentConfig := paymentUsecases.PaymentConfig{
-		NotifyURL: cfg.Server.GetBaseURL() + "/payments/callback",
-	}
-	paymentTxMgr := shareddb.NewTransactionManager(db)
-	createPaymentUC := paymentUsecases.NewCreatePaymentUseCase(
-		paymentRepo,
-		subscriptionRepo,
-		subscriptionPlanRepo,
-		planPricingRepo,
-		gateway,
-		paymentTxMgr,
-		log,
-		paymentConfig,
-	)
-	handleCallbackUC := paymentUsecases.NewHandlePaymentCallbackUseCase(
-		paymentRepo,
-		activateSubscriptionUC,
-		gateway,
-		log,
-	)
-
-	paymentHandler := handlers.NewPaymentHandler(createPaymentUC, handleCallbackUC, subscriptionRepo, log)
-
-	// Initialize USDT Service Manager for crypto payment support
-	usdtServiceManager := infraPayment.NewUSDTServiceManager(
-		db,
-		paymentRepo,
-		subscriptionRepo,
-		log,
-	)
-	// Load USDT config from settings and initialize services
-	usdtConfig := settingProvider.GetUSDTConfig(context.Background())
-	if err := usdtServiceManager.Initialize(context.Background(), infraPayment.USDTConfig{
-		Enabled:               usdtConfig.Enabled,
-		POLReceivingAddresses: usdtConfig.POLReceivingAddresses,
-		TRCReceivingAddresses: usdtConfig.TRCReceivingAddresses,
-		PolygonScanAPIKey:     usdtConfig.PolygonScanAPIKey,
-		TronGridAPIKey:        usdtConfig.TronGridAPIKey,
-		PaymentTTLMinutes:     usdtConfig.PaymentTTLMinutes,
-		POLConfirmations:      usdtConfig.POLConfirmations,
-		TRCConfirmations:      usdtConfig.TRCConfirmations,
-	}); err != nil {
-		log.Warnw("failed to initialize USDT services, will retry on setting change", "error", err)
-	}
-	// Subscribe to setting changes for hot-reload
-	settingServiceDDD.Subscribe(usdtServiceManager)
-	// Set USDT gateway provider on payment use case
-	createPaymentUC.SetUSDTGatewayProvider(usdtServiceManager)
-
-	// Agent API handlers
-	getNodeConfigUC := nodeUsecases.NewGetNodeConfigUseCase(nodeRepoImpl, log)
-	getNodeSubscriptionsUC := nodeUsecases.NewGetNodeSubscriptionsUseCase(subscriptionRepo, nodeRepoImpl, log)
-
-	// Initialize subscription traffic cache and buffer for RESTful agent traffic reporting
-	// This is also used later by forwardQuotaMiddleware and nodeHubHandler
-	// Note: subscriptionUsageRepo is passed for backward compatibility but no longer used.
-	// Traffic data is now flushed to HourlyTrafficCache (Redis) instead of MySQL.
-	subscriptionTrafficCache := cache.NewRedisSubscriptionTrafficCache(
-		redisClient,
-		hourlyTrafficCache,
-		subscriptionUsageRepo,
-		log,
-	)
-	subscriptionTrafficBuffer := nodeServices.NewSubscriptionTrafficBuffer(subscriptionTrafficCache, log)
-	subscriptionTrafficBuffer.Start()
-
-	// Initialize subscription quota cache for node traffic limit checking
-	subscriptionQuotaCache := cache.NewRedisSubscriptionQuotaCache(redisClient, log)
-
-	// Initialize quota cache sync service for managing quota cache
-	quotaCacheSyncService := subscriptionServices.NewQuotaCacheSyncService(
-		subscriptionRepo,
-		subscriptionPlanRepo,
-		subscriptionQuotaCache,
-		log,
-	)
-
-	// Initialize node traffic limit enforcement service
-	nodeTrafficLimitEnforcementSvc := nodeServices.NewNodeTrafficLimitEnforcementService(
-		subscriptionRepo,
-		subscriptionUsageStatsRepo,
-		hourlyTrafficCache,
-		subscriptionPlanRepo,
-		subscriptionQuotaCache,
-		log,
-	)
-
-	// Initialize adapters for node hub handler traffic limit checking
-	nodeQuotaCacheAdapter := adapters.NewNodeSubscriptionQuotaCacheAdapter(subscriptionQuotaCache, log)
-	nodeQuotaLoaderAdapter := adapters.NewNodeSubscriptionQuotaLoaderAdapter(
-		subscriptionRepo,
-		subscriptionPlanRepo,
-		subscriptionQuotaCache,
-		log,
-	)
-	nodeUsageReaderAdapter := adapters.NewNodeSubscriptionUsageReaderAdapter(
-		hourlyTrafficCache,
-		subscriptionUsageStatsRepo,
-		log,
-	)
-
-	// Initialize agent report use cases with adapters
-	subscriptionUsageRecorder := adapters.NewSubscriptionUsageRecorderAdapter(subscriptionTrafficBuffer, log)
-	systemStatusUpdater := adapters.NewNodeSystemStatusUpdaterAdapter(redisClient, log)
-	onlineSubscriptionTracker := adapters.NewOnlineSubscriptionTrackerAdapter(log)
-	subscriptionIDResolver := adapters.NewSubscriptionIDResolverAdapter(subscriptionRepo, log)
-	reportSubscriptionUsageUC := nodeUsecases.NewReportSubscriptionUsageUseCase(subscriptionUsageRecorder, subscriptionIDResolver, log)
-	reportNodeStatusUC := nodeUsecases.NewReportNodeStatusUseCase(systemStatusUpdater, nodeRepoImpl, nodeRepoImpl, log)
-	reportOnlineSubscriptionsUC := nodeUsecases.NewReportOnlineSubscriptionsUseCase(onlineSubscriptionTracker, subscriptionIDResolver, log)
-
-	// Initialize RESTful Agent Handler
-	agentHandler := nodeHandlers.NewAgentHandler(
-		getNodeConfigUC,
-		getNodeSubscriptionsUC,
-		reportSubscriptionUsageUC,
-		reportNodeStatusUC,
-		reportOnlineSubscriptionsUC,
-		log,
-	)
-
-	// Initialize forward agent repository (rule repo initialized earlier)
-	forwardAgentRepo := repository.NewForwardAgentRepository(db, log)
-
-	// Initialize admin notification processor and scheduler for offline alerts
-	// (requires forwardAgentRepo, nodeRepoImpl, and other repos to be initialized)
-	alertStateManager := cache.NewAlertStateManager(redisClient)
-	adminNotificationProcessor := telegramAdminApp.NewAdminNotificationProcessor(
-		adminBindingRepo,
-		userRepo,
-		subscriptionRepo,
-		subscriptionUsageStatsRepo,
-		hourlyTrafficCache,
-		nodeRepoImpl,
-		forwardAgentRepo,
-		alertStateManager,
-		&botServiceProviderAdapter{telegramBotManager},
-		log,
-	)
-	// Register admin notification jobs (2min offline check, 09:00 daily/weekly summaries)
-	if err := schedulerManager.RegisterAdminNotificationJobs(adminNotificationProcessor); err != nil {
-		log.Warnw("failed to register admin notification jobs", "error", err)
-	}
-
-	// Create alert state clearer adapter and inject into delete use cases
-	// This ensures alert states are cleaned up when resources are deleted
-	alertStateClearer := adapters.NewAlertStateClearerAdapter(alertStateManager)
-	deleteNodeUC.WithAlertStateClearer(alertStateClearer)
-
-	// Initialize mute notification service and inject into telegram handler
-	muteNotificationUC := telegramAdminUsecases.NewMuteNotificationUseCase(forwardAgentRepo, nodeRepoImpl, log)
-	telegramHandler.SetMuteService(muteNotificationUC)
-	telegramHandler.SetCallbackAnswerer(dynamicBotService)
-
-	// Inject mute service and callback answerer into service adapter for polling mode callback query handling
-	serviceAdapter.SetMuteService(muteNotificationUC)
-	serviceAdapter.SetCallbackAnswerer(dynamicBotService)
-
-	// Initialize resource group membership use cases (need node and agent repos)
-	manageNodesUC := resourceUsecases.NewManageResourceGroupNodesUseCase(resourceGroupRepo, nodeRepoImpl, subscriptionPlanRepo, log)
-	manageAgentsUC := resourceUsecases.NewManageResourceGroupForwardAgentsUseCase(resourceGroupRepo, forwardAgentRepo, subscriptionPlanRepo, log)
-	manageRulesUC := resourceUsecases.NewManageResourceGroupForwardRulesUseCase(resourceGroupRepo, forwardRuleRepo, subscriptionPlanRepo, log)
-
-	// Initialize admin resource group handler
-	adminResourceGroupHandler := adminResourceGroupHandlers.NewHandler(
-		createResourceGroupUC, getResourceGroupUC, listResourceGroupsUC,
-		updateResourceGroupUC, deleteResourceGroupUC, updateResourceGroupStatusUC,
-		manageNodesUC, manageAgentsUC, manageRulesUC,
-		subscriptionPlanRepo, log,
-	)
-
-	// Initialize admin traffic stats use cases (uses subscription_usage_stats table + Redis hourly buckets)
-	getTrafficOverviewUC := adminUsecases.NewGetTrafficOverviewUseCase(
-		subscriptionUsageStatsRepo, hourlyTrafficCache, subscriptionRepo, userRepo, nodeRepoImpl, forwardRuleRepo, log,
-	)
-	getUserTrafficStatsUC := adminUsecases.NewGetUserTrafficStatsUseCase(
-		subscriptionUsageStatsRepo, hourlyTrafficCache, subscriptionRepo, userRepo, log,
-	)
-	getSubscriptionTrafficStatsUC := adminUsecases.NewGetSubscriptionTrafficStatsUseCase(
-		subscriptionUsageStatsRepo, hourlyTrafficCache, subscriptionRepo, userRepo, subscriptionPlanRepo, log,
-	)
-	getAdminNodeTrafficStatsUC := adminUsecases.NewGetAdminNodeTrafficStatsUseCase(
-		subscriptionUsageStatsRepo, hourlyTrafficCache, nodeRepoImpl, log,
-	)
-	getTrafficRankingUC := adminUsecases.NewGetTrafficRankingUseCase(
-		subscriptionUsageStatsRepo, hourlyTrafficCache, subscriptionRepo, userRepo, log,
-	)
-	getTrafficTrendUC := adminUsecases.NewGetTrafficTrendUseCase(
-		subscriptionUsageStatsRepo, hourlyTrafficCache, log,
-	)
-
-	// Initialize admin traffic stats handler
-	adminTrafficStatsHandler := adminHandlers.NewTrafficStatsHandler(
-		getTrafficOverviewUC,
-		getUserTrafficStatsUC,
-		getSubscriptionTrafficStatsUC,
-		getAdminNodeTrafficStatsUC,
-		getTrafficRankingUC,
-		getTrafficTrendUC,
-		log,
-	)
-
-	// ============================================================
-	// Section 6: Forward - Agents, Rules, Traffic, AgentHub
-	// ============================================================
-
-	// Initialize forward rule components (configSyncService will be injected after creation)
-	var createForwardRuleUC *forwardUsecases.CreateForwardRuleUseCase
-	var getForwardRuleUC *forwardUsecases.GetForwardRuleUseCase
-	var updateForwardRuleUC *forwardUsecases.UpdateForwardRuleUseCase
-	var deleteForwardRuleUC *forwardUsecases.DeleteForwardRuleUseCase
-	var listForwardRulesUC *forwardUsecases.ListForwardRulesUseCase
-	var enableForwardRuleUC *forwardUsecases.EnableForwardRuleUseCase
-	var disableForwardRuleUC *forwardUsecases.DisableForwardRuleUseCase
-	var resetForwardTrafficUC *forwardUsecases.ResetForwardRuleTrafficUseCase
-
-	// forwardRuleHandler will be initialized later after probeService is available
-
-	// Initialize forward agent components
-
-	createForwardAgentUC := forwardUsecases.NewCreateForwardAgentUseCase(forwardAgentRepo, resourceGroupRepo, agentTokenSvc, log)
-	// Initialize forward agent status adapter early for getForwardAgentUC
-	forwardAgentStatusAdapter := adapters.NewForwardAgentStatusAdapter(redisClient, log)
-	ruleSyncStatusAdapter := adapters.NewRuleSyncStatusAdapter(redisClient, log)
-	getForwardAgentUC := forwardUsecases.NewGetForwardAgentUseCase(forwardAgentRepo, forwardAgentStatusAdapter, log)
-	// updateForwardAgentUC will be initialized later after configSyncService is available
-	var updateForwardAgentUC *forwardUsecases.UpdateForwardAgentUseCase
-	deleteForwardAgentUC := forwardUsecases.NewDeleteForwardAgentUseCase(forwardAgentRepo, forwardRuleRepo, log).
-		WithAlertStateClearer(alertStateClearer)
-	listForwardAgentsUC := forwardUsecases.NewListForwardAgentsUseCase(forwardAgentRepo, resourceGroupRepo, forwardAgentStatusAdapter, forwardAgentReleaseService, log)
-	enableForwardAgentUC := forwardUsecases.NewEnableForwardAgentUseCase(forwardAgentRepo, log)
-	disableForwardAgentUC := forwardUsecases.NewDisableForwardAgentUseCase(forwardAgentRepo, log)
-	regenerateForwardAgentTokenUC := forwardUsecases.NewRegenerateForwardAgentTokenUseCase(forwardAgentRepo, agentTokenSvc, log)
-	validateForwardAgentTokenUC := forwardUsecases.NewValidateForwardAgentTokenUseCase(forwardAgentRepo, log)
-
-	// Initialize agent last seen updater and agent info updater for status reporting
-	agentLastSeenUpdater := adapters.NewAgentLastSeenUpdaterAdapter(forwardAgentRepo)
-	agentInfoUpdater := adapters.NewAgentInfoUpdaterAdapter(forwardAgentRepo)
-	getAgentStatusUC := forwardUsecases.NewGetAgentStatusUseCase(forwardAgentRepo, forwardAgentStatusAdapter, log)
-	getRuleOverallStatusUC := forwardUsecases.NewGetRuleOverallStatusUseCase(forwardRuleRepo, forwardAgentRepo, ruleSyncStatusAdapter, log)
-	getForwardAgentTokenUC := forwardUsecases.NewGetForwardAgentTokenUseCase(forwardAgentRepo, log)
-	generateInstallScriptUC := forwardUsecases.NewGenerateInstallScriptUseCase(forwardAgentRepo, log)
-
-	// Server base URL for forward agent install script
-	serverBaseURL := cfg.Server.GetBaseURL()
-
-	// forwardAgentHandler will be initialized later after updateForwardAgentUC is available
-	var forwardAgentHandler *forwardAgentCrudHandlers.Handler
-
-	reportAgentStatusUC := forwardUsecases.NewReportAgentStatusUseCase(
-		forwardAgentRepo,
-		forwardAgentStatusAdapter,
-		forwardAgentStatusAdapter, // statusQuerier (same adapter implements both interfaces)
-		agentLastSeenUpdater,
-		agentInfoUpdater,
-		log,
-	)
-	reportRuleSyncStatusUC := forwardUsecases.NewReportRuleSyncStatusUseCase(
-		forwardAgentRepo,
-		ruleSyncStatusAdapter,
-		forwardRuleRepo,
-		log,
-	)
-
-	// Initialize forward traffic recorder adapter for writing forward traffic to Redis HourlyTrafficCache
-	forwardTrafficRecorder := adapters.NewForwardTrafficRecorderAdapter(
-		hourlyTrafficCache,
-		log,
-	)
-
-	// Initialize forward agent API handler for client to fetch rules and report traffic
-	forwardAgentAPIHandler := forwardAgentAPIHandlers.NewHandler(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, reportAgentStatusUC, reportRuleSyncStatusUC, forwardAgentStatusAdapter, cfg.Forward.TokenSigningSecret, forwardTrafficRecorder, log)
-
-	// Initialize forward agent token middleware
-	forwardAgentTokenMiddleware := middleware.NewForwardAgentTokenMiddleware(validateForwardAgentTokenUC, log)
-
-	// Initialize agent hub for forward agent WebSocket connections (probe functionality)
-	agentHub := services.NewAgentHub(log, &services.AgentHubConfig{
-		NodeStatusTimeoutMs: 5000, // 5 seconds timeout for node status
-	})
-
-	// Register forward status handler to process forward agent status updates
-	forwardStatusHandler := adapters.NewForwardStatusHandler(reportAgentStatusUC, log)
-	agentHub.RegisterStatusHandler(forwardStatusHandler)
-
-	// Initialize and register probe service for forward domain
-	probeService := forwardServices.NewProbeService(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, forwardAgentStatusAdapter, agentHub, cfg.Forward.TokenSigningSecret, log)
-	agentHub.RegisterMessageHandler(probeService)
-
-	// Initialize and register config sync service for forward domain
-	configSyncService := forwardServices.NewConfigSyncService(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, forwardAgentStatusAdapter, cfg.Forward.TokenSigningSecret, agentHub, log)
-	agentHub.RegisterMessageHandler(configSyncService)
-
-	// Register rule sync status handler for WebSocket-based status reporting
-	agentHub.RegisterMessageHandler(reportRuleSyncStatusUC)
-
-	// Initialize forward traffic cache for real-time traffic updates
-	forwardTrafficCache := cache.NewRedisForwardTrafficCache(
-		redisClient,
-		forwardRuleRepo,
-		log,
-	)
-
-	// Initialize rule traffic buffer for batching traffic updates
-	ruleTrafficBuffer := forwardServices.NewRuleTrafficBuffer(forwardTrafficCache, log)
-	ruleTrafficBuffer.Start()
-
-	// Initialize and register traffic message handler for WebSocket traffic updates
-	trafficMessageHandler := services.NewTrafficMessageHandler(
-		ruleTrafficBuffer,
-		forwardRuleRepo,
-		forwardTrafficRecorder,
-		log,
-	)
-	agentHub.RegisterMessageHandler(trafficMessageHandler)
-
-	// Initialize and register tunnel health handler for health status reporting
-	tunnelHealthHandler := forwardServices.NewTunnelHealthHandler(log)
-	agentHub.RegisterMessageHandler(tunnelHealthHandler)
-
-	// Create done channel for rule traffic flush scheduler
-	ruleTrafficFlushDone := make(chan struct{})
-
-	// Start rule traffic flush scheduler (Redis -> MySQL)
-	go func() {
-		ticker := time.NewTicker(2 * time.Minute)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				ctx := context.Background()
-				if err := forwardTrafficCache.FlushToDatabase(ctx); err != nil {
-					log.Errorw("failed to flush rule traffic to database", "error", err)
-				}
-			case <-ruleTrafficFlushDone:
-				return
-			}
-		}
-	}()
-
-	// Set port change notifier for exit agent port change detection
-	reportAgentStatusUC.SetPortChangeNotifier(configSyncService)
-
-	// Set node address change notifier for node IP change detection
-	reportNodeStatusUC.SetAddressChangeNotifier(configSyncService)
-
-	// Set node address change notifier for node update use case
-	updateNodeUC.SetAddressChangeNotifier(configSyncService)
-
-	// Now initialize updateForwardAgentUC with configSyncService for address change and config change notification
-	updateForwardAgentUC = forwardUsecases.NewUpdateForwardAgentUseCase(forwardAgentRepo, resourceGroupRepo, configSyncService, configSyncService, log)
-
-	// Now initialize forwardAgentHandler after updateForwardAgentUC is available
-	forwardAgentHandler = forwardAgentCrudHandlers.NewHandler(
-		createForwardAgentUC,
-		getForwardAgentUC,
-		listForwardAgentsUC,
-		updateForwardAgentUC,
-		deleteForwardAgentUC,
-		enableForwardAgentUC,
-		disableForwardAgentUC,
-		regenerateForwardAgentTokenUC,
-		getForwardAgentTokenUC,
-		getAgentStatusUC,
-		getRuleOverallStatusUC,
-		generateInstallScriptUC,
-		serverBaseURL,
-	)
-
-	// Initialize version handlers
-	forwardAgentVersionHandler := forwardAgentCrudHandlers.NewVersionHandler(
-		forwardAgentRepo,
-		forwardAgentReleaseService,
-		agentHub,
-		log,
-	)
-	nodeVersionHandler := nodeHandlers.NewNodeVersionHandler(
-		nodeRepoImpl,
-		nodeAgentReleaseService,
-		agentHub,
-		log,
-	)
-
-	// Now initialize forward rule use cases with configSyncService
-	createForwardRuleUC = forwardUsecases.NewCreateForwardRuleUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, resourceGroupRepo, subscriptionPlanRepo, configSyncService, log)
-	getForwardRuleUC = forwardUsecases.NewGetForwardRuleUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, resourceGroupRepo, log)
-	updateForwardRuleUC = forwardUsecases.NewUpdateForwardRuleUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, resourceGroupRepo, subscriptionPlanRepo, subscriptionRepo, configSyncService, log)
-	deleteForwardRuleUC = forwardUsecases.NewDeleteForwardRuleUseCase(forwardRuleRepo, forwardTrafficCache, configSyncService, log)
-	listForwardRulesUC = forwardUsecases.NewListForwardRulesUseCase(forwardRuleRepo, forwardAgentRepo, nodeRepoImpl, resourceGroupRepo, ruleSyncStatusAdapter, log)
-	enableForwardRuleUC = forwardUsecases.NewEnableForwardRuleUseCase(forwardRuleRepo, configSyncService, log)
-	disableForwardRuleUC = forwardUsecases.NewDisableForwardRuleUseCase(forwardRuleRepo, configSyncService, log)
-	resetForwardTrafficUC = forwardUsecases.NewResetForwardRuleTrafficUseCase(forwardRuleRepo, log)
-
-	// Initialize user forward rule use cases
-	createUserForwardRuleUC := forwardUsecases.NewCreateUserForwardRuleUseCase(
-		forwardRuleRepo,
-		forwardAgentRepo,
-		nodeRepoImpl,
-		configSyncService,
-		log,
-	)
-	listUserForwardRulesUC := forwardUsecases.NewListUserForwardRulesUseCase(
-		forwardRuleRepo,
-		forwardAgentRepo,
-		nodeRepoImpl,
-		ruleSyncStatusAdapter,
-		log,
-	)
-	txMgr := shareddb.NewTransactionManager(db)
-	reorderForwardRulesUC := forwardUsecases.NewReorderForwardRulesUseCase(
-		forwardRuleRepo,
-		txMgr,
-		log,
-	)
-	getUserForwardUsageUC := forwardUsecases.NewGetUserForwardUsageUseCase(
-		forwardRuleRepo,
-		subscriptionRepo,
-		subscriptionPlanRepo,
-		subscriptionUsageRepo,
-		subscriptionUsageStatsRepo,
-		hourlyTrafficCache,
-		log,
-	)
-
-	// Initialize traffic limit enforcement service
-	trafficLimitEnforcementSvc := forwardServices.NewTrafficLimitEnforcementService(
-		forwardRuleRepo,
-		subscriptionRepo,
-		subscriptionUsageRepo,
-		subscriptionUsageStatsRepo,
-		hourlyTrafficCache,
-		subscriptionPlanRepo,
-		log,
-	)
-
-	// Initialize list user forward agents use case
-	listUserForwardAgentsUC := forwardUsecases.NewListUserForwardAgentsUseCase(
-		forwardAgentRepo,
-		subscriptionRepo,
-		subscriptionPlanRepo,
-		resourceGroupRepo,
-		log,
-	)
-
-	// Initialize batch forward rule use case (needed by both admin and user handlers)
-	batchForwardRuleUC := forwardUsecases.NewBatchForwardRuleUseCase(
-		forwardRuleRepo,
-		createForwardRuleUC,
-		createUserForwardRuleUC,
-		deleteForwardRuleUC,
-		enableForwardRuleUC,
-		disableForwardRuleUC,
-		updateForwardRuleUC,
-		txMgr,
-		log,
-	)
-
-	// Initialize user forward rule handler
-	userForwardRuleHandler := forwardUserHandlers.NewHandler(
-		createUserForwardRuleUC,
-		listUserForwardRulesUC,
-		getUserForwardUsageUC,
-		updateForwardRuleUC,  // reuse existing
-		deleteForwardRuleUC,  // reuse existing
-		enableForwardRuleUC,  // reuse existing
-		disableForwardRuleUC, // reuse existing
-		getForwardRuleUC,     // reuse existing
-		listUserForwardAgentsUC,
-		reorderForwardRulesUC, // reuse existing
-		batchForwardRuleUC,
-	)
-
-	// Initialize subscription forward rule use cases
-	createSubscriptionForwardRuleUC := forwardUsecases.NewCreateSubscriptionForwardRuleUseCase(
-		forwardRuleRepo,
-		forwardAgentRepo,
-		nodeRepoImpl,
-		configSyncService,
-		log,
-	)
-	listSubscriptionForwardRulesUC := forwardUsecases.NewListSubscriptionForwardRulesUseCase(
-		forwardRuleRepo,
-		forwardAgentRepo,
-		nodeRepoImpl,
-		subscriptionRepo,
-		resourceGroupRepo,
-		ruleSyncStatusAdapter,
-		log,
-	)
-	getSubscriptionForwardUsageUC := forwardUsecases.NewGetSubscriptionForwardUsageUseCase(
-		forwardRuleRepo,
-		subscriptionRepo,
-		subscriptionPlanRepo,
-		subscriptionUsageRepo,
-		subscriptionUsageStatsRepo,
-		hourlyTrafficCache,
-		log,
-	)
-
-	// Initialize subscription forward rule handler
-	subscriptionForwardRuleHandler := forwardSubscriptionHandlers.NewHandler(
-		createSubscriptionForwardRuleUC,
-		listSubscriptionForwardRulesUC,
-		getSubscriptionForwardUsageUC,
-		updateForwardRuleUC,   // reuse existing
-		deleteForwardRuleUC,   // reuse existing
-		enableForwardRuleUC,   // reuse existing
-		disableForwardRuleUC,  // reuse existing
-		getForwardRuleUC,      // reuse existing
-		reorderForwardRulesUC, // reuse existing
-	)
-
-	// Note: External forward rules have been merged into forward_rules table with rule_type='external'
-	// The separate externalforward module has been removed.
-
-	// Initialize forward rule owner middleware
-	forwardRuleOwnerMiddleware := middleware.NewForwardRuleOwnerMiddleware(
-		forwardRuleRepo,
-		log,
-	)
-
-	// forwardQuotaMiddleware will be initialized after subscriptionTrafficCache is created
-	var forwardQuotaMiddleware *middleware.ForwardQuotaMiddleware
-
-	// Initialize forward rule handler (after probeService is available)
-	forwardRuleHandler := forwardRuleHandlers.NewHandler(
-		createForwardRuleUC,
-		getForwardRuleUC,
-		updateForwardRuleUC,
-		deleteForwardRuleUC,
-		listForwardRulesUC,
-		enableForwardRuleUC,
-		disableForwardRuleUC,
-		resetForwardTrafficUC,
-		reorderForwardRulesUC,
-		batchForwardRuleUC,
-		probeService,
-	)
-
-	// Initialize agent hub handler
-	agentHubHandler := forwardAgentHubHandlers.NewHandler(agentHub, forwardAgentRepo, log)
-
-	// Initialize node status handler and register to agent hub
-	nodeStatusHandler := adapters.NewNodeStatusHandler(systemStatusUpdater, nodeRepoImpl, log)
-	agentHub.RegisterNodeStatusHandler(nodeStatusHandler)
-
-	// Initialize node config sync service for pushing config to node agents
-	nodeConfigSyncService := nodeServices.NewNodeConfigSyncService(nodeRepoImpl, agentHub, log)
-
-	// Initialize subscription sync service for pushing subscription changes to node agents
-	subscriptionSyncService := nodeServices.NewSubscriptionSyncService(nodeRepoImpl, subscriptionRepo, resourceGroupRepo, agentHub, log)
-
-	// Initialize Redis Pub/Sub event bus for cross-instance subscription synchronization
-	subscriptionEventBus := pubsub.NewRedisSubscriptionEventBus(redisClient, log)
-
-	// Set event publisher on subscription sync service for cross-instance sync
-	subscriptionSyncService.SetEventPublisher(subscriptionEventBus)
-
-	// Set subscription syncer on resource group use cases so that
-	// membership changes, status changes, and deletion trigger subscription push to affected nodes.
-	manageNodesUC.SetNodeSubscriptionSyncer(subscriptionSyncService)
-	manageRulesUC.SetNodeSubscriptionSyncer(subscriptionSyncService)
-	deleteResourceGroupUC.SetNodeSubscriptionSyncer(subscriptionSyncService)
-	updateResourceGroupStatusUC.SetNodeSubscriptionSyncer(subscriptionSyncService)
-
-	// Set deactivation notifier on node traffic limit enforcement service
-	nodeTrafficLimitEnforcementSvc.SetDeactivationNotifier(subscriptionSyncService)
-
-	// Initialize subscription event handler for processing events from other instances
-	subscriptionEventHandler := nodeServices.NewSubscriptionEventHandler(
-		subscriptionRepo,
-		subscriptionSyncService,
-		log,
-	)
-
-	// Start subscription event subscriber in background
-	subscriptionEventHandler.StartSubscriber(context.Background(), subscriptionEventBus)
-
-	// Initialize admin hub for SSE connections to frontend (must be before callbacks)
-	adminHub := services.NewAdminHub(log, &services.AdminHubConfig{
-		MaxConnsPerUser:  20,   // Max SSE connections per user before returning 429
-		StatusThrottleMs: 1000, // 1 second throttle for node status updates
-		AgentBroadcastMs: 1000, // 1 second interval for aggregated agent status broadcast
-		NodeBroadcastMs:  1000, // 1 second interval for aggregated node status broadcast
-	})
-
-	// ============================================================
-	// Section 7: Callbacks & Notifiers - Event Handlers, Sync
-	// ============================================================
-
-	// Set AdminHub on nodeStatusHandler for SSE broadcasting
-	nodeStatusHandler.SetAdminHub(adminHub, &nodeSIDResolverAdapter{repo: nodeRepoImpl})
-
-	// Set AdminHub on forwardStatusHandler for SSE broadcasting
-	forwardStatusHandler.SetAdminHub(adminHub, &agentSIDResolverAdapter{repo: forwardAgentRepo})
-
-	// Set AgentStatusQuerier on AdminHub for aggregated SSE broadcasting
-	agentStatusQuerierAdapter := adapters.NewAgentStatusQuerierAdapter(forwardAgentRepo, forwardAgentStatusAdapter, log)
-	adminHub.SetAgentStatusQuerier(agentStatusQuerierAdapter)
-
-	// Set NodeStatusQuerier on AdminHub for aggregated SSE broadcasting
-	nodeStatusQuerierAdapter := adapters.NewNodeStatusQuerierAdapter(nodeRepoImpl, nodeStatusQuerier, log)
-	adminHub.SetNodeStatusQuerier(nodeStatusQuerierAdapter)
-
-	// Set OnNodeOnline callback to sync config, broadcast SSE event, and send recovery notification if needed
-	agentHub.SetOnNodeOnline(func(nodeID uint) {
-		ctx := context.Background()
-
-		// Sync config to node
-		if err := nodeConfigSyncService.FullSyncToNode(ctx, nodeID); err != nil {
-			log.Warnw("failed to sync config to node on connect",
-				"node_id", nodeID,
-				"error", err,
-			)
-		}
-
-		// Get node info
-		n, err := nodeRepoImpl.GetByID(ctx, nodeID)
-		if err != nil {
-			log.Warnw("failed to get node for SSE broadcast",
-				"node_id", nodeID,
-				"error", err,
-			)
-			return
-		}
-		if n == nil {
-			return
-		}
-
-		// Broadcast SSE event
-		adminHub.BroadcastNodeOnline(n.SID(), n.Name())
-
-		// Check if node was in Firing state (offline alert was sent)
-		// If so, send recovery notification
-		wasFiring, firedAt, err := alertStateManager.TransitionToNormal(ctx, cache.AlertResourceTypeNode, nodeID)
-		if err != nil {
-			log.Warnw("failed to transition node alert state to normal",
-				"node_id", nodeID,
-				"error", err,
-			)
-		}
-
-		if wasFiring {
-			// Calculate downtime
-			var downtimeMinutes int64
-			if firedAt != nil {
-				downtimeMinutes = int64(biztime.NowUTC().Sub(*firedAt).Minutes())
-			}
-
-			// Send recovery notification instead of online notification
-			cmd := telegramAdminApp.NotifyNodeRecoveryCommand{
-				NodeID:           nodeID,
-				NodeSID:          n.SID(),
-				NodeName:         n.Name(),
-				OnlineAt:         biztime.NowUTC(),
-				DowntimeMinutes:  downtimeMinutes,
-				MuteNotification: n.MuteNotification(),
-			}
-			if err := adminNotificationServiceDDD.NotifyNodeRecovery(ctx, cmd); err != nil {
-				log.Errorw("failed to send node recovery notification",
-					"node_sid", n.SID(),
-					"error", err,
-				)
-			}
-		}
-		// Note: We no longer send regular online notifications here
-		// The recovery notification serves as the "online" notification for nodes that had fired alerts
-	})
-
-	// Set OnNodeOffline callback to broadcast SSE event only
-	// Note: Telegram offline notification is handled by the scheduled check (checkoffline.go)
-	// to avoid duplicate notifications and support threshold-based alerting
-	agentHub.SetOnNodeOffline(func(nodeID uint) {
-		ctx := context.Background()
-
-		// Get node info
-		n, err := nodeRepoImpl.GetByID(ctx, nodeID)
-		if err != nil {
-			log.Warnw("failed to get node for offline broadcast",
-				"node_id", nodeID,
-				"error", err,
-			)
-			return
-		}
-		if n == nil {
-			return
-		}
-
-		// Broadcast SSE event only (for real-time UI updates)
-		adminHub.BroadcastNodeOffline(n.SID(), n.Name())
-
-		// Note: No Telegram notification here - the scheduled offline check will
-		// send the notification once the node has been offline for the configured threshold
-	})
-
-	// Set OnAgentOnline callback to sync config, broadcast SSE event, and send recovery notification if needed
-	agentHub.SetOnAgentOnline(func(agentID uint) {
-		ctx := context.Background()
-
-		// Sync config to forward agent
-		if err := configSyncService.FullSyncToAgent(ctx, agentID); err != nil {
-			log.Warnw("failed to sync config to agent on connect",
-				"agent_id", agentID,
-				"error", err,
-			)
-		}
-
-		// Notify entry agents that this exit agent is now online
-		// This allows entry agents to update their load balancing configuration
-		if err := configSyncService.NotifyExitPortChange(ctx, agentID); err != nil {
-			log.Warnw("failed to notify entry agents of exit agent online",
-				"agent_id", agentID,
-				"error", err,
-			)
-		}
-
-		// Get agent info
-		agent, err := forwardAgentRepo.GetByID(ctx, agentID)
-		if err != nil {
-			log.Warnw("failed to get agent for SSE broadcast",
-				"agent_id", agentID,
-				"error", err,
-			)
-			return
-		}
-		if agent == nil {
-			return
-		}
-
-		// Broadcast SSE event
-		adminHub.BroadcastForwardAgentOnline(agent.SID(), agent.Name())
-
-		// Check if agent was in Firing state (offline alert was sent)
-		// If so, send recovery notification
-		wasFiring, firedAt, err := alertStateManager.TransitionToNormal(ctx, cache.AlertResourceTypeAgent, agentID)
-		if err != nil {
-			log.Warnw("failed to transition agent alert state to normal",
-				"agent_id", agentID,
-				"error", err,
-			)
-		}
-
-		if wasFiring {
-			// Calculate downtime
-			var downtimeMinutes int64
-			if firedAt != nil {
-				downtimeMinutes = int64(biztime.NowUTC().Sub(*firedAt).Minutes())
-			}
-
-			// Send recovery notification instead of online notification
-			cmd := telegramAdminApp.NotifyAgentRecoveryCommand{
-				AgentID:          agentID,
-				AgentSID:         agent.SID(),
-				AgentName:        agent.Name(),
-				OnlineAt:         biztime.NowUTC(),
-				DowntimeMinutes:  downtimeMinutes,
-				MuteNotification: agent.MuteNotification(),
-			}
-			if err := adminNotificationServiceDDD.NotifyAgentRecovery(ctx, cmd); err != nil {
-				log.Errorw("failed to send agent recovery notification",
-					"agent_sid", agent.SID(),
-					"error", err,
-				)
-			}
-		}
-		// Note: We no longer send regular online notifications here
-		// The recovery notification serves as the "online" notification for agents that had fired alerts
-	})
-
-	// Set OnAgentOffline callback to broadcast SSE event only
-	// Note: Telegram offline notification is handled by the scheduled check (checkoffline.go)
-	// to avoid duplicate notifications and support threshold-based alerting
-	agentHub.SetOnAgentOffline(func(agentID uint) {
-		ctx := context.Background()
-
-		// Notify entry agents that this exit agent is now offline
-		// This allows entry agents to immediately failover to other exit agents
-		if err := configSyncService.NotifyExitPortChange(ctx, agentID); err != nil {
-			log.Warnw("failed to notify entry agents of exit agent offline",
-				"agent_id", agentID,
-				"error", err,
-			)
-		}
-
-		// Get agent info
-		agent, err := forwardAgentRepo.GetByID(ctx, agentID)
-		if err != nil {
-			log.Warnw("failed to get agent for offline broadcast",
-				"agent_id", agentID,
-				"error", err,
-			)
-			return
-		}
-		if agent == nil {
-			return
-		}
-
-		// Broadcast SSE event only (for real-time UI updates)
-		adminHub.BroadcastForwardAgentOffline(agent.SID(), agent.Name())
-
-		// Note: No Telegram notification here - the scheduled offline check will
-		// send the notification once the agent has been offline for the configured threshold
-	})
-
-	// Set config change notifier for node update use case
-	updateNodeUC.SetConfigChangeNotifier(nodeConfigSyncService)
-
-	// Set subscription change notifier for subscription use cases
-	createSubscriptionUC.SetSubscriptionNotifier(subscriptionSyncService)
-	activateSubscriptionUC.SetSubscriptionNotifier(subscriptionSyncService)
-	cancelSubscriptionUC.SetSubscriptionNotifier(subscriptionSyncService)
-	suspendSubscriptionUC.SetSubscriptionNotifier(subscriptionSyncService)
-	unsuspendSubscriptionUC.SetSubscriptionNotifier(subscriptionSyncService)
-	unsuspendSubscriptionUC.SetQuotaCacheManager(quotaCacheSyncService)
-	resetSubscriptionUsageUC.SetSubscriptionNotifier(subscriptionSyncService)
-	resetSubscriptionUsageUC.SetQuotaCacheManager(quotaCacheSyncService)
-	renewSubscriptionUC.SetSubscriptionNotifier(subscriptionSyncService)
-
-	// Initialize QuotaService for unified quota calculation
-	quotaService := subscriptionUsecases.NewQuotaService(
-		subscriptionRepo,
-		subscriptionUsageStatsRepo,
-		hourlyTrafficCache,
-		subscriptionPlanRepo,
-		log,
-	)
-
-	// Initialize forward quota middleware with QuotaService for unified quota check
-	forwardQuotaMiddleware = middleware.NewForwardQuotaMiddleware(
-		forwardRuleRepo,
-		subscriptionRepo,
-		subscriptionPlanRepo,
-		quotaService,
-		log,
-	)
-
-	// Create done channel for subscription traffic flush scheduler
-	subscriptionTrafficFlushDone := make(chan struct{})
-
-	// Start subscription traffic flush scheduler (Redis -> MySQL)
-	go func() {
-		ticker := time.NewTicker(2 * time.Minute)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				ctx := context.Background()
-				if err := subscriptionTrafficCache.FlushToDatabase(ctx); err != nil {
-					log.Errorw("failed to flush subscription traffic to database", "error", err)
-				}
-			case <-subscriptionTrafficFlushDone:
-				return
-			}
-		}
-	}()
-
-	// Initialize node hub handler with traffic buffer support
-	nodeHubHandler := nodeHandlers.NewNodeHubHandler(agentHub, nodeRepoImpl, subscriptionTrafficBuffer, subscriptionIDResolver, log)
-	nodeHubHandler.SetAddressChangeNotifier(configSyncService)
-	nodeHubHandler.SetIPUpdater(nodeRepoImpl)
-	nodeHubHandler.SetSubscriptionSyncer(subscriptionSyncService)
-	nodeHubHandler.SetTrafficEnforcer(nodeTrafficLimitEnforcementSvc)
-	nodeHubHandler.SetQuotaCache(nodeQuotaCacheAdapter)
-	nodeHubHandler.SetQuotaLoader(nodeQuotaLoaderAdapter)
-	nodeHubHandler.SetUsageReader(nodeUsageReaderAdapter)
-
-	// Initialize node SSE handler
-	nodeSSEHandler := nodeHandlers.NewNodeSSEHandler(adminHub, log)
-
-	// Initialize forward agent SSE handler
-	forwardAgentSSEHandler := forwardAgentCrudHandlers.NewForwardAgentSSEHandler(adminHub, log)
-
-	// ============================================================
-	// Section 8: Final Assembly - Build Router
-	// ============================================================
+	c := NewContainer(userService, db, cfg, log)
 
 	return &Router{
-		engine:                         engine,
-		userHandler:                    userHandler,
-		authHandler:                    authHandler,
-		passkeyHandler:                 passkeyHandler,
-		profileHandler:                 profileHandler,
-		dashboardHandler:               dashboardHandler,
-		subscriptionHandler:            subscriptionHandler,
-		adminSubscriptionHandler:       adminSubscriptionHandler,
-		adminResourceGroupHandler:      adminResourceGroupHandler,
-		adminTrafficStatsHandler:       adminTrafficStatsHandler,
-		adminTelegramHandler:           adminTelegramHandler,
-		adminNotificationService:       adminNotificationServiceDDD,
-		settingHandler:                 settingHandler,
-		settingService:                 settingServiceDDD,
-		planHandler:                    planHandler,
-		subscriptionTokenHandler:       subscriptionTokenHandler,
-		paymentHandler:                 paymentHandler,
-		nodeHandler:                    nodeHandler,
-		nodeSubscriptionHandler:        nodeSubscriptionHandler,
-		userNodeHandler:                userNodeHandler,
-		agentHandler:                   agentHandler,
-		ticketHandler:                  ticketHandler,
-		notificationHandler:            notificationHandler,
-		telegramHandler:                telegramHandler,
-		telegramService:                telegramServiceDDD,
-		telegramBotManager:             telegramBotManager,
-		forwardRuleHandler:             forwardRuleHandler,
-		forwardAgentHandler:            forwardAgentHandler,
-		forwardAgentVersionHandler:     forwardAgentVersionHandler,
-		forwardAgentSSEHandler:         forwardAgentSSEHandler,
-		forwardAgentAPIHandler:         forwardAgentAPIHandler,
-		userForwardRuleHandler:         userForwardRuleHandler,
-		subscriptionForwardRuleHandler: subscriptionForwardRuleHandler,
-		agentHub:                       agentHub,
-		agentHubHandler:                agentHubHandler,
-		nodeHubHandler:                 nodeHubHandler,
-		nodeVersionHandler:             nodeVersionHandler,
-		nodeSSEHandler:                 nodeSSEHandler,
-		adminHub:                       adminHub,
-		configSyncService:              configSyncService,
-		trafficLimitEnforcementSvc:     trafficLimitEnforcementSvc,
-		forwardTrafficCache:            forwardTrafficCache,
-		ruleTrafficBuffer:              ruleTrafficBuffer,
-		ruleTrafficFlushDone:           ruleTrafficFlushDone,
-		subscriptionTrafficCache:       subscriptionTrafficCache,
-		subscriptionTrafficBuffer:      subscriptionTrafficBuffer,
-		subscriptionTrafficFlushDone:   subscriptionTrafficFlushDone,
-		schedulerManager:               schedulerManager,
-		usdtServiceManager:             usdtServiceManager,
+		engine:                         c.engine,
+		userHandler:                    c.hdlrs.userHandler,
+		authHandler:                    c.hdlrs.authHandler,
+		passkeyHandler:                 c.hdlrs.passkeyHandler,
+		profileHandler:                 c.hdlrs.profileHandler,
+		dashboardHandler:               c.hdlrs.dashboardHandler,
+		subscriptionHandler:            c.hdlrs.subscriptionHandler,
+		adminSubscriptionHandler:       c.hdlrs.adminSubscriptionHandler,
+		adminResourceGroupHandler:      c.hdlrs.adminResourceGroupHandler,
+		adminTrafficStatsHandler:       c.hdlrs.adminTrafficStatsHandler,
+		adminTelegramHandler:           c.hdlrs.adminTelegramHandler,
+		adminNotificationService:       c.adminNotificationServiceDDD,
+		settingHandler:                 c.hdlrs.settingHandler,
+		settingService:                 c.settingServiceDDD,
+		planHandler:                    c.hdlrs.planHandler,
+		subscriptionTokenHandler:       c.hdlrs.subscriptionTokenHandler,
+		paymentHandler:                 c.hdlrs.paymentHandler,
+		nodeHandler:                    c.hdlrs.nodeHandler,
+		nodeSubscriptionHandler:        c.hdlrs.nodeSubscriptionHandler,
+		userNodeHandler:                c.hdlrs.userNodeHandler,
+		agentHandler:                   c.hdlrs.agentHandler,
+		ticketHandler:                  c.hdlrs.ticketHandler,
+		notificationHandler:            c.hdlrs.notificationHandler,
+		telegramHandler:                c.hdlrs.telegramHandler,
+		telegramService:                c.telegramServiceDDD,
+		telegramBotManager:             c.telegramBotManager,
+		forwardRuleHandler:             c.hdlrs.forwardRuleHandler,
+		forwardAgentHandler:            c.hdlrs.forwardAgentHandler,
+		forwardAgentVersionHandler:     c.hdlrs.forwardAgentVersionHandler,
+		forwardAgentSSEHandler:         c.hdlrs.forwardAgentSSEHandler,
+		forwardAgentAPIHandler:         c.hdlrs.forwardAgentAPIHandler,
+		userForwardRuleHandler:         c.hdlrs.userForwardRuleHandler,
+		subscriptionForwardRuleHandler: c.hdlrs.subscriptionForwardRuleHandler,
+		agentHub:                       c.agentHub,
+		agentHubHandler:                c.hdlrs.agentHubHandler,
+		nodeHubHandler:                 c.hdlrs.nodeHubHandler,
+		nodeVersionHandler:             c.hdlrs.nodeVersionHandler,
+		nodeSSEHandler:                 c.hdlrs.nodeSSEHandler,
+		adminHub:                       c.adminHub,
+		configSyncService:              c.configSyncService,
+		trafficLimitEnforcementSvc:     c.trafficLimitEnforcementSvc,
+		forwardTrafficCache:            c.forwardTrafficCache,
+		ruleTrafficBuffer:              c.ruleTrafficBuffer,
+		ruleTrafficFlushDone:           c.ruleTrafficFlushDone,
+		subscriptionTrafficCache:       c.subscriptionTrafficCache,
+		subscriptionTrafficBuffer:      c.subscriptionTrafficBuffer,
+		subscriptionTrafficFlushDone:   c.subscriptionTrafficFlushDone,
+		schedulerManager:               c.schedulerManager,
+		usdtServiceManager:             c.usdtServiceManager,
+		hubEventBusCancel:              c.hubEventBusCancel,
+		hubEventBusCancelMu:            &c.hubEventBusCancelMu,
 		logger:                         log,
-		authMiddleware:                 authMiddleware,
-		subscriptionOwnerMiddleware:    subscriptionOwnerMiddleware,
-		nodeTokenMiddleware:            nodeTokenMiddleware,
-		nodeOwnerMiddleware:            nodeOwnerMiddleware,
-		nodeQuotaMiddleware:            nodeQuotaMiddleware,
-		forwardAgentTokenMiddleware:    forwardAgentTokenMiddleware,
-		forwardRuleOwnerMiddleware:     forwardRuleOwnerMiddleware,
-		forwardQuotaMiddleware:         forwardQuotaMiddleware,
-		rateLimiter:                    rateLimiter,
-		oauthManager:                   oauthManager,
-		emailManager:                   emailManager,
+		authMiddleware:                 c.authMiddleware,
+		subscriptionOwnerMiddleware:    c.subscriptionOwnerMiddleware,
+		nodeTokenMiddleware:            c.nodeTokenMiddleware,
+		nodeOwnerMiddleware:            c.nodeOwnerMiddleware,
+		nodeQuotaMiddleware:            c.nodeQuotaMiddleware,
+		forwardAgentTokenMiddleware:    c.forwardAgentTokenMiddleware,
+		forwardRuleOwnerMiddleware:     c.forwardRuleOwnerMiddleware,
+		forwardQuotaMiddleware:         c.forwardQuotaMiddleware,
+		rateLimiter:                    c.rateLimiter,
+		oauthManager:                   c.oauthManager,
+		emailManager:                   c.emailManager,
 	}
+}
+
+// GetEngine returns the Gin engine.
+func (r *Router) GetEngine() *gin.Engine {
+	return r.engine
+}
+
+// Run starts the HTTP server.
+func (r *Router) Run(addr string) error {
+	return r.engine.Run(addr)
+}
+
+// Shutdown gracefully shuts down the router by delegating to the Container.
+func (r *Router) Shutdown() {
+	// Stop hub event bus subscribers first to prevent new cross-instance events
+	r.hubEventBusCancelMu.Lock()
+	cancel := r.hubEventBusCancel
+	r.hubEventBusCancelMu.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
+
+	// Stop unified scheduler manager (includes all scheduled jobs)
+	if r.schedulerManager != nil {
+		if err := r.schedulerManager.Stop(); err != nil {
+			r.logger.Errorw("failed to stop scheduler manager", "error", err)
+		}
+	}
+
+	// Stop USDT monitor scheduler (managed by USDTServiceManager separately)
+	if r.usdtServiceManager != nil {
+		r.usdtServiceManager.StopScheduler()
+	}
+
+	// Stop telegram bot service manager if running
+	if r.telegramBotManager != nil {
+		r.telegramBotManager.Stop()
+	}
+
+	// Close all SSE connections first to allow HTTP server shutdown to proceed quickly
+	if r.adminHub != nil {
+		r.adminHub.Shutdown()
+	}
+
+	// Stop rule traffic flush scheduler goroutine
+	if r.ruleTrafficFlushDone != nil {
+		close(r.ruleTrafficFlushDone)
+	}
+
+	// Stop rule traffic buffer (flushes remaining data to Redis)
+	if r.ruleTrafficBuffer != nil {
+		r.ruleTrafficBuffer.Stop()
+	}
+
+	// Final flush forward traffic from Redis to MySQL
+	if r.forwardTrafficCache != nil {
+		ctx := context.Background()
+		if err := r.forwardTrafficCache.FlushToDatabase(ctx); err != nil {
+			r.logger.Errorw("failed to flush forward traffic to database on shutdown", "error", err)
+		}
+	}
+
+	// Stop subscription traffic flush scheduler goroutine
+	if r.subscriptionTrafficFlushDone != nil {
+		close(r.subscriptionTrafficFlushDone)
+	}
+
+	// Stop subscription traffic buffer (flushes remaining data to Redis)
+	if r.subscriptionTrafficBuffer != nil {
+		r.subscriptionTrafficBuffer.Stop()
+	}
+
+	// Final flush subscription traffic from Redis to MySQL
+	if r.subscriptionTrafficCache != nil {
+		ctx := context.Background()
+		if err := r.subscriptionTrafficCache.FlushToDatabase(ctx); err != nil {
+			r.logger.Errorw("failed to flush subscription traffic to database on shutdown", "error", err)
+		}
+	}
+}
+
+// GetTelegramService returns the telegram service for scheduler use.
+func (r *Router) GetTelegramService() *telegramApp.ServiceDDD {
+	return r.telegramService
+}
+
+// GetAdminNotificationService returns the admin notification service for scheduler use.
+func (r *Router) GetAdminNotificationService() *telegramAdminApp.ServiceDDD {
+	return r.adminNotificationService
+}
+
+// GetTelegramBotManager returns the telegram bot service manager.
+func (r *Router) GetTelegramBotManager() *telegramInfra.BotServiceManager {
+	return r.telegramBotManager
+}
+
+// GetSettingService returns the setting service.
+func (r *Router) GetSettingService() *settingApp.ServiceDDD {
+	return r.settingService
+}
+
+// StartTelegramPolling starts the telegram bot service using BotServiceManager.
+func (r *Router) StartTelegramPolling(ctx context.Context) error {
+	if r.telegramBotManager == nil {
+		return nil
+	}
+	if err := r.telegramBotManager.Start(ctx); err != nil {
+		return err
+	}
+	return nil
+}
+
+// StartScheduler starts the unified scheduler manager (all registered jobs).
+func (r *Router) StartScheduler() {
+	if r.schedulerManager != nil {
+		r.schedulerManager.Start()
+	}
+}
+
+// StartUSDTMonitorScheduler starts the USDT payment monitor scheduler
+// (managed by USDTServiceManager separately from the unified scheduler).
+func (r *Router) StartUSDTMonitorScheduler(ctx context.Context) {
+	if r.usdtServiceManager != nil {
+		r.usdtServiceManager.StartScheduler(ctx)
+	}
+}
+
+// GetSchedulerManager returns the scheduler manager for external job registration.
+func (r *Router) GetSchedulerManager() *scheduler.SchedulerManager {
+	return r.schedulerManager
 }

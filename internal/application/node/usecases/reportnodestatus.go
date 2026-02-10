@@ -6,6 +6,8 @@ import (
 
 	commondto "github.com/orris-inc/orris/internal/application/common/dto"
 	"github.com/orris-inc/orris/internal/application/node/dto"
+	apperrors "github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/goroutine"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -79,7 +81,7 @@ func (uc *ReportNodeStatusUseCase) SetAddressChangeNotifier(notifier NodeAddress
 // Execute processes node status report from node agent
 func (uc *ReportNodeStatusUseCase) Execute(ctx context.Context, cmd ReportNodeStatusCommand) (*ReportNodeStatusResult, error) {
 	if cmd.NodeID == 0 {
-		return nil, fmt.Errorf("node_id is required")
+		return nil, apperrors.NewValidationError("node_id is required")
 	}
 
 	// Build status update from request.
@@ -173,7 +175,7 @@ func (uc *ReportNodeStatusUseCase) checkAndNotifyIPChange(ctx context.Context, n
 
 	// Notify forward agents asynchronously to avoid blocking status reporting
 	// Use background context since this goroutine outlives the HTTP request
-	go func() {
+	goroutine.SafeGo(uc.logger, "report-node-status-notify-ip-change", func() {
 		notifyCtx := context.Background()
 		if err := uc.addressChangeNotifier.NotifyNodeAddressChange(notifyCtx, nodeID); err != nil {
 			uc.logger.Warnw("failed to notify forward agents of node IP change",
@@ -181,5 +183,5 @@ func (uc *ReportNodeStatusUseCase) checkAndNotifyIPChange(ctx context.Context, n
 				"node_id", nodeID,
 			)
 		}
-	}()
+	})
 }

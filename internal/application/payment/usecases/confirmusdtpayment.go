@@ -214,7 +214,7 @@ func (uc *ConfirmUSDTPaymentUseCase) checkPayment(ctx context.Context, p *paymen
 
 	// Transaction confirmed - update payment
 	if err := p.ConfirmUSDTTransaction(tx.TxHash, tx.BlockNumber); err != nil {
-		return nil, fmt.Errorf("failed to confirm payment: %w", err)
+		return nil, err
 	}
 
 	if err := uc.paymentRepo.Update(ctx, p); err != nil {
@@ -301,7 +301,7 @@ func (uc *ConfirmUSDTPaymentUseCase) activateSubscription(ctx context.Context, p
 
 	// Activate the subscription
 	if err := sub.Activate(); err != nil {
-		return fmt.Errorf("failed to activate subscription: %w", err)
+		return err
 	}
 
 	if err := uc.subscriptionRepo.Update(ctx, sub); err != nil {

@@ -13,31 +13,32 @@ import (
 
 // UserNodeHandler handles user node management endpoints
 type UserNodeHandler struct {
-	createNodeUC            usecases.CreateUserNodeExecutor
-	listNodesUC             usecases.ListUserNodesExecutor
-	getNodeUC               usecases.GetUserNodeExecutor
-	updateNodeUC            usecases.UpdateUserNodeExecutor
-	deleteNodeUC            usecases.DeleteUserNodeExecutor
-	regenerateTokenUC       usecases.RegenerateUserNodeTokenExecutor
-	getUsageUC              usecases.GetUserNodeUsageExecutor
-	getInstallScriptUC      usecases.GetUserNodeInstallScriptExecutor
-	getBatchInstallScriptUC usecases.GetUserBatchInstallScriptExecutor
+	createNodeUC            createUserNodeUseCase
+	listNodesUC             listUserNodesUseCase
+	getNodeUC               getUserNodeUseCase
+	updateNodeUC            updateUserNodeUseCase
+	deleteNodeUC            deleteUserNodeUseCase
+	regenerateTokenUC       regenerateUserNodeTokenUseCase
+	getUsageUC              getUserNodeUsageUseCase
+	getInstallScriptUC      getUserNodeInstallScriptUseCase
+	getBatchInstallScriptUC getUserBatchInstallScriptUseCase
 	apiURL                  string
 	logger                  logger.Interface
 }
 
 // NewUserNodeHandler creates a new user node handler
 func NewUserNodeHandler(
-	createNodeUC usecases.CreateUserNodeExecutor,
-	listNodesUC usecases.ListUserNodesExecutor,
-	getNodeUC usecases.GetUserNodeExecutor,
-	updateNodeUC usecases.UpdateUserNodeExecutor,
-	deleteNodeUC usecases.DeleteUserNodeExecutor,
-	regenerateTokenUC usecases.RegenerateUserNodeTokenExecutor,
-	getUsageUC usecases.GetUserNodeUsageExecutor,
-	getInstallScriptUC usecases.GetUserNodeInstallScriptExecutor,
-	getBatchInstallScriptUC usecases.GetUserBatchInstallScriptExecutor,
+	createNodeUC createUserNodeUseCase,
+	listNodesUC listUserNodesUseCase,
+	getNodeUC getUserNodeUseCase,
+	updateNodeUC updateUserNodeUseCase,
+	deleteNodeUC deleteUserNodeUseCase,
+	regenerateTokenUC regenerateUserNodeTokenUseCase,
+	getUsageUC getUserNodeUsageUseCase,
+	getInstallScriptUC getUserNodeInstallScriptUseCase,
+	getBatchInstallScriptUC getUserBatchInstallScriptUseCase,
 	apiURL string,
+	log logger.Interface,
 ) *UserNodeHandler {
 	return &UserNodeHandler{
 		createNodeUC:            createNodeUC,
@@ -50,7 +51,7 @@ func NewUserNodeHandler(
 		getInstallScriptUC:      getInstallScriptUC,
 		getBatchInstallScriptUC: getBatchInstallScriptUC,
 		apiURL:                  apiURL,
-		logger:                  logger.NewLogger(),
+		logger:                  log,
 	}
 }
 

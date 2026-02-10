@@ -10,7 +10,7 @@ import (
 	"github.com/orris-inc/orris/internal/application/forward/usecases"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
-	"github.com/orris-inc/orris/internal/infrastructure/adapters"
+	"github.com/orris-inc/orris/internal/interfaces/adapters"
 	"github.com/orris-inc/orris/internal/infrastructure/auth"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )

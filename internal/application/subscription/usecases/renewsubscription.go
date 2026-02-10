@@ -6,6 +6,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	vo "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
+	apperrors "github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -48,11 +49,17 @@ func (uc *RenewSubscriptionUseCase) Execute(ctx context.Context, cmd RenewSubscr
 		uc.logger.Errorw("failed to get subscription", "error", err, "subscription_id", cmd.SubscriptionID)
 		return fmt.Errorf("failed to get subscription: %w", err)
 	}
+	if sub == nil {
+		return apperrors.NewNotFoundError("subscription not found")
+	}
 
 	plan, err := uc.planRepo.GetByID(ctx, sub.PlanID())
 	if err != nil {
 		uc.logger.Errorw("failed to get plan", "error", err, "plan_id", sub.PlanID())
 		return fmt.Errorf("failed to get plan: %w", err)
+	}
+	if plan == nil {
+		return apperrors.NewNotFoundError("plan not found")
 	}
 
 	if !plan.IsActive() {
@@ -66,7 +73,7 @@ func (uc *RenewSubscriptionUseCase) Execute(ctx context.Context, cmd RenewSubscr
 		parsed, err := vo.ParseBillingCycle(cmd.BillingCycle)
 		if err != nil {
 			uc.logger.Warnw("invalid billing cycle for renewal", "error", err, "billing_cycle", cmd.BillingCycle)
-			return fmt.Errorf("invalid billing cycle: %w", err)
+			return err
 		}
 		billingCycle = parsed
 	} else if sub.BillingCycle() != nil {
@@ -106,7 +113,7 @@ func (uc *RenewSubscriptionUseCase) Execute(ctx context.Context, cmd RenewSubscr
 
 	if err := sub.Renew(newEndDate); err != nil {
 		uc.logger.Errorw("failed to renew subscription", "error", err, "subscription_id", cmd.SubscriptionID)
-		return fmt.Errorf("failed to renew subscription: %w", err)
+		return err
 	}
 
 	if err := uc.subscriptionRepo.Update(ctx, sub); err != nil {

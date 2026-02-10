@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
+	"sort"
 	"strings"
 )
 
@@ -34,6 +35,36 @@ const (
 	PrefixPasskeyCredential      = "pk"
 	PrefixAnnouncement           = "ann"
 )
+
+// knownPrefixes is a list of all known prefixes sorted by length (longest first)
+// to ensure correct matching for prefixes containing underscores (e.g., "tg_bind", "atg_bind").
+// Sorted at init time so new prefixes only need to be added to the slice, not manually ordered.
+var knownPrefixes []string
+
+func init() {
+	knownPrefixes = []string{
+		PrefixAdminTelegramBinding,
+		PrefixSubscriptionUsageStats,
+		PrefixSubscriptionToken,
+		PrefixTelegramBinding,
+		PrefixSubscriptionUsage,
+		PrefixPasskeyCredential,
+		PrefixPlanPricing,
+		PrefixResourceGroup,
+		PrefixAnnouncement,
+		PrefixForwardAgent,
+		PrefixForwardRule,
+		PrefixSubscription,
+		PrefixSetting,
+		PrefixNode,
+		PrefixPlan,
+		PrefixUser,
+	}
+	// Sort by length descending so longest prefixes are matched first.
+	sort.Slice(knownPrefixes, func(i, j int) bool {
+		return len(knownPrefixes[i]) > len(knownPrefixes[j])
+	})
+}
 
 // Generate creates a random short ID with the specified length using Base62 encoding.
 // The generated ID is cryptographically random and URL-safe.
@@ -111,8 +142,30 @@ func FormatWithPrefix(prefix, shortID string) string {
 }
 
 // ParsePrefixedID extracts the prefix and short ID from a prefixed ID string.
+// It tries matching known prefixes first (longest match) to correctly handle
+// multi-segment prefixes like "tg_bind" and "atg_bind", then falls back to
+// splitting on the first underscore for unknown prefixes.
 // Example: ParsePrefixedID("fa_xK9mP2vL3nQ") returns ("fa", "xK9mP2vL3nQ", nil)
+// Example: ParsePrefixedID("tg_bind_xK9mP2vL3nQ") returns ("tg_bind", "xK9mP2vL3nQ", nil)
 func ParsePrefixedID(prefixedID string) (prefix, shortID string, err error) {
+	// Try matching known prefixes (longest first to handle multi-segment prefixes like "tg_bind")
+	for _, p := range knownPrefixes {
+		pfx := p + "_"
+		if strings.HasPrefix(prefixedID, pfx) {
+			shortID = prefixedID[len(pfx):]
+			if len(shortID) != DefaultLength {
+				return "", "", fmt.Errorf("invalid short ID length: expected %d, got %d", DefaultLength, len(shortID))
+			}
+			for _, c := range shortID {
+				if !strings.ContainsRune(alphabet, c) {
+					return "", "", fmt.Errorf("invalid character in short ID: %c", c)
+				}
+			}
+			return p, shortID, nil
+		}
+	}
+
+	// Fallback for unknown prefixes: split on first underscore
 	parts := strings.SplitN(prefixedID, "_", 2)
 	if len(parts) != 2 {
 		return "", "", fmt.Errorf("invalid prefixed ID format: %s", prefixedID)

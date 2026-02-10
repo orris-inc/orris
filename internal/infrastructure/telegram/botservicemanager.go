@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	settingUsecases "github.com/orris-inc/orris/internal/application/setting/usecases"
+	"github.com/orris-inc/orris/internal/domain/setting"
 	sharedConfig "github.com/orris-inc/orris/internal/shared/config"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -13,7 +13,7 @@ import (
 // BotServiceManager manages the lifecycle of Telegram Bot services with hot-reload support.
 // It implements SettingChangeSubscriber to receive configuration change notifications.
 type BotServiceManager struct {
-	provider      *settingUsecases.SettingProvider
+	provider      setting.SettingProvider
 	logger        logger.Interface
 	updateHandler UpdateHandler
 	offsetStore   OffsetStore // optional, for polling offset persistence
@@ -27,7 +27,7 @@ type BotServiceManager struct {
 
 // NewBotServiceManager creates a new BotServiceManager instance.
 func NewBotServiceManager(
-	provider *settingUsecases.SettingProvider,
+	provider setting.SettingProvider,
 	updateHandler UpdateHandler,
 	logger logger.Interface,
 ) *BotServiceManager {

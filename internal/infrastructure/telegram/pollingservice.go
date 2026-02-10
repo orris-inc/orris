@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/orris-inc/orris/internal/infrastructure/telegram/i18n"
+	"github.com/orris-inc/orris/internal/shared/goroutine"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -107,7 +108,9 @@ func (s *PollingService) Start(ctx context.Context) error {
 	)
 
 	s.wg.Add(1)
-	go s.pollLoop(pollCtx)
+	goroutine.SafeGo(s.logger, "telegram-poll-loop", func() {
+		s.pollLoop(pollCtx)
+	})
 
 	return nil
 }
@@ -217,7 +220,11 @@ func (s *PollingService) poll(ctx context.Context) {
 			continue
 		}
 		batchWg.Add(1)
-		go s.processWorkerBatch(ctx, &batchWg, i, bucket)
+		workerIdx := i
+		workerBucket := bucket
+		goroutine.SafeGo(s.logger, "telegram-worker-batch", func() {
+			s.processWorkerBatch(ctx, &batchWg, workerIdx, workerBucket)
+		})
 	}
 	batchWg.Wait()
 

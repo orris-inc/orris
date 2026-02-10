@@ -36,7 +36,7 @@ func (uc *RevokeSubscriptionTokenUseCase) Execute(ctx context.Context, cmd Revok
 
 	if err := token.Revoke(); err != nil {
 		uc.logger.Warnw("failed to revoke token", "error", err, "token_id", cmd.TokenID)
-		return fmt.Errorf("failed to revoke token: %w", err)
+		return err
 	}
 
 	if err := uc.tokenRepo.Update(ctx, token); err != nil {

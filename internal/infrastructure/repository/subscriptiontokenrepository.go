@@ -34,7 +34,8 @@ func (r *SubscriptionTokenRepositoryImpl) Create(ctx context.Context, token *sub
 		return fmt.Errorf("failed to convert token to model: %w", err)
 	}
 
-	if err := r.db.WithContext(ctx).Create(model).Error; err != nil {
+	tx := db.GetTxFromContext(ctx, r.db)
+	if err := tx.Create(model).Error; err != nil {
 		r.logger.Errorw("failed to create subscription token", "error", err, "subscription_id", token.SubscriptionID())
 		return fmt.Errorf("failed to create subscription token: %w", err)
 	}

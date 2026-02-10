@@ -67,7 +67,7 @@ func (uc *UpdateUserUseCase) Execute(ctx context.Context, sid string, request dt
 		// Update email in domain
 		if err := userEntity.UpdateEmail(emailVO); err != nil {
 			uc.logger.Errorw("failed to update email in domain", "error", err)
-			return nil, fmt.Errorf("failed to update email: %w", err)
+			return nil, err
 		}
 	}
 
@@ -82,7 +82,7 @@ func (uc *UpdateUserUseCase) Execute(ctx context.Context, sid string, request dt
 		// Update name in domain
 		if err := userEntity.UpdateName(nameVO); err != nil {
 			uc.logger.Errorw("failed to update name in domain", "error", err)
-			return nil, fmt.Errorf("failed to update name: %w", err)
+			return nil, err
 		}
 	}
 

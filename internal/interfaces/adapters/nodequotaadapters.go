@@ -44,6 +44,7 @@ func (a *NodeSubscriptionQuotaCacheAdapter) GetQuota(ctx context.Context, subscr
 		PeriodEnd:   cached.PeriodEnd,
 		PlanType:    cached.PlanType,
 		Suspended:   cached.Suspended,
+		NotFound:    cached.NotFound,
 	}, nil
 }
 
@@ -75,7 +76,9 @@ func NewNodeSubscriptionQuotaLoaderAdapter(
 	}
 }
 
-// LoadQuotaByID loads subscription quota from database and caches it
+// LoadQuotaByID loads subscription quota from database and caches it.
+// When subscription is not found or inactive, a null marker is cached to prevent
+// repeated DB lookups (cache penetration protection).
 func (a *NodeSubscriptionQuotaLoaderAdapter) LoadQuotaByID(ctx context.Context, subscriptionID uint) (*nodeHandlers.CachedQuotaInfo, error) {
 	// Get subscription from database
 	sub, err := a.subscriptionRepo.GetByID(ctx, subscriptionID)
@@ -83,11 +86,13 @@ func (a *NodeSubscriptionQuotaLoaderAdapter) LoadQuotaByID(ctx context.Context, 
 		return nil, err
 	}
 	if sub == nil {
+		a.setNullMarker(ctx, subscriptionID)
 		return nil, nil
 	}
 
 	// Only cache active subscriptions
 	if !sub.IsActive() {
+		a.setNullMarker(ctx, subscriptionID)
 		return nil, nil
 	}
 
@@ -97,6 +102,7 @@ func (a *NodeSubscriptionQuotaLoaderAdapter) LoadQuotaByID(ctx context.Context, 
 		return nil, err
 	}
 	if plan == nil {
+		a.setNullMarker(ctx, subscriptionID)
 		return nil, nil
 	}
 
@@ -130,6 +136,15 @@ func (a *NodeSubscriptionQuotaLoaderAdapter) LoadQuotaByID(ctx context.Context, 
 		PlanType:    cachedQuota.PlanType,
 		Suspended:   cachedQuota.Suspended,
 	}, nil
+}
+
+func (a *NodeSubscriptionQuotaLoaderAdapter) setNullMarker(ctx context.Context, subscriptionID uint) {
+	if err := a.quotaCache.SetNullMarker(ctx, subscriptionID); err != nil {
+		a.logger.Warnw("failed to set quota null marker",
+			"subscription_id", subscriptionID,
+			"error", err,
+		)
+	}
 }
 
 // NodeSubscriptionUsageReaderAdapter adapts traffic cache and stats to NodeSubscriptionUsageReader interface

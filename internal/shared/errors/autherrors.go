@@ -1,6 +1,7 @@
 package errors
 
 import (
+	stderrors "errors"
 	"fmt"
 	"net/http"
 )
@@ -162,15 +163,16 @@ func NewOAuthError(provider string, stage string, details ...string) *AuthError 
 	}
 }
 
-// IsAuthError checks if the error is an AuthError
+// IsAuthError checks if the error is an AuthError (supports wrapped errors via errors.As)
 func IsAuthError(err error) bool {
-	_, ok := err.(*AuthError)
-	return ok
+	var authErr *AuthError
+	return stderrors.As(err, &authErr)
 }
 
-// GetAuthError extracts AuthError from error chain
+// GetAuthError extracts AuthError from error chain (supports wrapped errors via errors.As)
 func GetAuthError(err error) *AuthError {
-	if authErr, ok := err.(*AuthError); ok {
+	var authErr *AuthError
+	if stderrors.As(err, &authErr) {
 		return authErr
 	}
 	return nil

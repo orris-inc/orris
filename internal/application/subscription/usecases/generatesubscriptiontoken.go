@@ -61,7 +61,7 @@ func (uc *GenerateSubscriptionTokenUseCase) Execute(ctx context.Context, cmd Gen
 	tokenScope, err := vo.NewTokenScope(cmd.Scope)
 	if err != nil {
 		uc.logger.Errorw("invalid token scope", "error", err, "scope", cmd.Scope)
-		return nil, fmt.Errorf("invalid token scope: %w", err)
+		return nil, err
 	}
 
 	if cmd.ExpiresAt != nil && cmd.ExpiresAt.Before(biztime.NowUTC()) {
@@ -86,7 +86,7 @@ func (uc *GenerateSubscriptionTokenUseCase) Execute(ctx context.Context, cmd Gen
 	)
 	if err != nil {
 		uc.logger.Errorw("failed to create token entity", "error", err)
-		return nil, fmt.Errorf("failed to create token: %w", err)
+		return nil, err
 	}
 
 	if err := uc.tokenRepo.Create(ctx, token); err != nil {

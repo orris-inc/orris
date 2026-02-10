@@ -11,6 +11,7 @@ import (
 	vo "github.com/orris-inc/orris/internal/domain/notification/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
+	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/errors"
 )
 
@@ -254,7 +255,7 @@ func (r *AnnouncementRepositoryImpl) FindByStatus(
 
 func (r *AnnouncementRepositoryImpl) CountPublished(ctx context.Context) (int64, error) {
 	var count int64
-	now := time.Now().UTC()
+	now := biztime.NowUTC()
 
 	err := r.db.WithContext(ctx).Model(&models.AnnouncementModel{}).
 		Where("status = ?", vo.AnnouncementStatusPublished.String()).
@@ -270,7 +271,7 @@ func (r *AnnouncementRepositoryImpl) CountPublished(ctx context.Context) (int64,
 
 func (r *AnnouncementRepositoryImpl) CountPublishedAfter(ctx context.Context, after time.Time) (int64, error) {
 	var count int64
-	now := time.Now().UTC()
+	now := biztime.NowUTC()
 
 	// Use updated_at to match the logic in enrichAnnouncementsWithReadStatus
 	// which compares user's read time with announcement's UpdatedAt

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
+	"github.com/orris-inc/orris/internal/domain/shared"
 	"github.com/orris-inc/orris/internal/domain/shared/services"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 )
@@ -371,42 +372,33 @@ func (n *Node) SetGroupIDs(groupIDs []uint) {
 func (n *Node) AddGroupID(groupID uint) bool {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	for _, id := range n.groupIDs {
-		if id == groupID {
-			return false // already exists
-		}
+	newIDs, added := shared.AddToGroupIDs(n.groupIDs, groupID)
+	if added {
+		n.groupIDs = newIDs
+		n.updatedAt = biztime.NowUTC()
+		n.version++
 	}
-	n.groupIDs = append(n.groupIDs, groupID)
-	n.updatedAt = biztime.NowUTC()
-	n.version++
-	return true
+	return added
 }
 
 // RemoveGroupID removes a resource group ID
 func (n *Node) RemoveGroupID(groupID uint) bool {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	for i, id := range n.groupIDs {
-		if id == groupID {
-			n.groupIDs = append(n.groupIDs[:i], n.groupIDs[i+1:]...)
-			n.updatedAt = biztime.NowUTC()
-			n.version++
-			return true
-		}
+	newIDs, removed := shared.RemoveFromGroupIDs(n.groupIDs, groupID)
+	if removed {
+		n.groupIDs = newIDs
+		n.updatedAt = biztime.NowUTC()
+		n.version++
 	}
-	return false // not found
+	return removed
 }
 
 // HasGroupID checks if the node belongs to a specific resource group
 func (n *Node) HasGroupID(groupID uint) bool {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
-	for _, id := range n.groupIDs {
-		if id == groupID {
-			return true
-		}
-	}
-	return false
+	return shared.HasGroupID(n.groupIDs, groupID)
 }
 
 // TokenHash returns the API token hash
@@ -851,10 +843,7 @@ func (n *Node) LastSeenAt() *time.Time {
 
 // IsOnline checks if node agent is online (reported within 5 minutes)
 func (n *Node) IsOnline() bool {
-	if n.lastSeenAt == nil {
-		return false
-	}
-	return time.Since(*n.lastSeenAt) < 5*time.Minute
+	return shared.IsOnline(n.lastSeenAt)
 }
 
 // PublicIPv4 returns the public IPv4 address reported by agent
@@ -940,19 +929,12 @@ func (n *Node) SetCostLabel(label *string) {
 
 // IsExpired checks if the node has expired
 func (n *Node) IsExpired() bool {
-	if n.expiresAt == nil {
-		return false
-	}
-	return time.Now().UTC().After(*n.expiresAt)
+	return shared.IsExpired(n.expiresAt)
 }
 
 // IsExpiringSoon checks if the node will expire within the specified number of days
 func (n *Node) IsExpiringSoon(days int) bool {
-	if n.expiresAt == nil {
-		return false
-	}
-	threshold := time.Now().UTC().AddDate(0, 0, days)
-	return n.expiresAt.Before(threshold)
+	return shared.IsExpiringSoon(n.expiresAt, days)
 }
 
 // Validate performs domain-level validation

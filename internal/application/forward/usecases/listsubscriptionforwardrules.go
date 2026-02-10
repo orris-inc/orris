@@ -40,7 +40,7 @@ type ListSubscriptionForwardRulesResult struct {
 // It supports resource group priority mode: if the subscription's plan has active resource groups
 // with forward rules, those rules are returned; otherwise, direct subscription-bound rules are returned.
 type ListSubscriptionForwardRulesUseCase struct {
-	repo              forward.Repository
+	repo              forward.RuleQuerier
 	agentRepo         forward.AgentRepository
 	nodeRepo          node.NodeRepository
 	subscriptionRepo  subscription.SubscriptionRepository
@@ -51,7 +51,7 @@ type ListSubscriptionForwardRulesUseCase struct {
 
 // NewListSubscriptionForwardRulesUseCase creates a new ListSubscriptionForwardRulesUseCase.
 func NewListSubscriptionForwardRulesUseCase(
-	repo forward.Repository,
+	repo forward.RuleQuerier,
 	agentRepo forward.AgentRepository,
 	nodeRepo node.NodeRepository,
 	subscriptionRepo subscription.SubscriptionRepository,

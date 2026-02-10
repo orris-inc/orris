@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/orris-inc/orris/internal/infrastructure/cache"
+	"github.com/orris-inc/orris/internal/shared/goroutine"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -37,6 +39,7 @@ type subscriptionTrafficKey struct {
 // SubscriptionTrafficCacheWriter defines the interface for writing traffic data to Redis.
 type SubscriptionTrafficCacheWriter interface {
 	IncrementSubscriptionTraffic(ctx context.Context, nodeID, subscriptionID uint, upload, download int64) error
+	BatchIncrementSubscriptionTraffic(ctx context.Context, entries []cache.SubscriptionTrafficBatchEntry) error
 }
 
 // subscriptionBufferShard is a single shard containing traffic entries with its own mutex.
@@ -111,7 +114,7 @@ func (b *SubscriptionTrafficBuffer) AddTraffic(nodeID, subscriptionID uint, uplo
 // Start starts the background flush goroutine.
 func (b *SubscriptionTrafficBuffer) Start() {
 	b.wg.Add(1)
-	go b.flushLoop()
+	goroutine.SafeGo(b.logger, "subscription-traffic-buffer-flush-loop", b.flushLoop)
 	b.logger.Infow("subscription traffic buffer started",
 		"shards", SubscriptionTrafficNumShards,
 		"flush_interval", SubscriptionTrafficFlushInterval.String(),
@@ -143,13 +146,16 @@ func (b *SubscriptionTrafficBuffer) flushLoop() {
 	}
 }
 
-// flush flushes all accumulated traffic data to Redis.
+// subscriptionTrafficBatchSize is the maximum number of entries per batch pipeline call.
+const subscriptionTrafficBatchSize = 500
+
+// flush flushes all accumulated traffic data to Redis using batch pipeline.
 func (b *SubscriptionTrafficBuffer) flush() {
 	ctx := context.Background()
-	flushedCount := 0
-	failedCount := 0
 	droppedCount := 0
 
+	// Phase 1: Collect all entries from all shards
+	var allEntries []*SubscriptionTrafficEntry
 	for i := 0; i < SubscriptionTrafficNumShards; i++ {
 		shard := b.shards[i]
 
@@ -161,22 +167,43 @@ func (b *SubscriptionTrafficBuffer) flush() {
 
 		for _, entry := range entries {
 			if entry.Upload > 0 || entry.Download > 0 {
-				if err := b.cache.IncrementSubscriptionTraffic(ctx, entry.NodeID, entry.SubscriptionID, entry.Upload, entry.Download); err != nil {
-					entry.RetryCount++
-					if entry.RetryCount >= SubscriptionTrafficMaxRetryCount {
-						// Drop data after max retries to prevent memory accumulation
-						b.logger.Errorw("subscription traffic data dropped after max retries",
-							"node_id", entry.NodeID,
-							"subscription_id", entry.SubscriptionID,
-							"upload", entry.Upload,
-							"download", entry.Download,
-							"retry_count", entry.RetryCount,
-							"error", err,
-						)
-						droppedCount++
-						continue
-					}
-					b.logger.Warnw("failed to flush subscription traffic to redis, will retry",
+				allEntries = append(allEntries, entry)
+			}
+		}
+	}
+
+	if len(allEntries) == 0 {
+		return
+	}
+
+	// Phase 2: Batch write in chunks to avoid oversized pipelines
+	flushedCount := 0
+	failedCount := 0
+
+	for start := 0; start < len(allEntries); start += subscriptionTrafficBatchSize {
+		end := start + subscriptionTrafficBatchSize
+		if end > len(allEntries) {
+			end = len(allEntries)
+		}
+		batch := allEntries[start:end]
+
+		// Convert to cache batch entry slice
+		batchValues := make([]cache.SubscriptionTrafficBatchEntry, len(batch))
+		for i, e := range batch {
+			batchValues[i] = cache.SubscriptionTrafficBatchEntry{
+				NodeID:         e.NodeID,
+				SubscriptionID: e.SubscriptionID,
+				Upload:         e.Upload,
+				Download:       e.Download,
+			}
+		}
+
+		if err := b.cache.BatchIncrementSubscriptionTraffic(ctx, batchValues); err != nil {
+			// Entire batch failed — re-add or drop each entry based on retry count
+			for _, entry := range batch {
+				entry.RetryCount++
+				if entry.RetryCount >= SubscriptionTrafficMaxRetryCount {
+					b.logger.Errorw("subscription traffic data dropped after max retries",
 						"node_id", entry.NodeID,
 						"subscription_id", entry.SubscriptionID,
 						"upload", entry.Upload,
@@ -184,14 +211,19 @@ func (b *SubscriptionTrafficBuffer) flush() {
 						"retry_count", entry.RetryCount,
 						"error", err,
 					)
-					// Re-add failed entry to shard for retry on next flush
-					b.reAddEntry(entry)
-					failedCount++
+					droppedCount++
 					continue
 				}
-				flushedCount++
+				b.reAddEntry(entry)
+				failedCount++
 			}
+			b.logger.Warnw("failed to batch flush subscription traffic to redis, will retry",
+				"batch_size", len(batch),
+				"error", err,
+			)
+			continue
 		}
+		flushedCount += len(batch)
 	}
 
 	if flushedCount > 0 || failedCount > 0 || droppedCount > 0 {

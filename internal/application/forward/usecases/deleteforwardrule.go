@@ -7,6 +7,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/infrastructure/cache"
 	"github.com/orris-inc/orris/internal/shared/errors"
+	"github.com/orris-inc/orris/internal/shared/goroutine"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -87,31 +88,33 @@ func (uc *DeleteForwardRuleUseCase) Execute(ctx context.Context, cmd DeleteForwa
 	// Notify config sync asynchronously if rule was enabled (failure only logs warning, doesn't block)
 	if wasEnabled && uc.configSyncSvc != nil {
 		// Notify entry agent
-		go func() {
+		goroutine.SafeGo(uc.logger, "delete-rule-notify-entry-agent", func() {
 			if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), agentID, ruleShortID, "removed"); err != nil {
 				uc.logger.Debugw("config sync notification skipped for entry agent", "rule_id", ruleShortID, "agent_id", agentID, "reason", err.Error())
 			}
-		}()
+		})
 
 		// Notify additional agents based on rule type
 		switch ruleType {
 		case "entry":
 			// Notify all exit agents for entry type rules (supports load balancing)
 			for _, aid := range exitAgentIDs {
-				go func(exitAgentID uint) {
-					if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), exitAgentID, ruleShortID, "removed"); err != nil {
-						uc.logger.Debugw("config sync notification skipped for exit agent", "rule_id", ruleShortID, "agent_id", exitAgentID, "reason", err.Error())
+				exitAID := aid
+				goroutine.SafeGo(uc.logger, "delete-rule-notify-exit-agent", func() {
+					if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), exitAID, ruleShortID, "removed"); err != nil {
+						uc.logger.Debugw("config sync notification skipped for exit agent", "rule_id", ruleShortID, "agent_id", exitAID, "reason", err.Error())
 					}
-				}(aid)
+				})
 			}
 		case "chain", "direct_chain":
 			// Notify all chain agents for chain and direct_chain type rules
 			for _, aid := range chainAgentIDs {
-				go func(agentID uint) {
-					if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), agentID, ruleShortID, "removed"); err != nil {
-						uc.logger.Debugw("config sync notification skipped for chain agent", "rule_id", ruleShortID, "agent_id", agentID, "reason", err.Error())
+				chainAID := aid
+				goroutine.SafeGo(uc.logger, "delete-rule-notify-chain-agent", func() {
+					if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), chainAID, ruleShortID, "removed"); err != nil {
+						uc.logger.Debugw("config sync notification skipped for chain agent", "rule_id", ruleShortID, "agent_id", chainAID, "reason", err.Error())
 					}
-				}(aid)
+				})
 			}
 		}
 	}

@@ -71,7 +71,7 @@ func (uc *UpdateUserNodeUseCase) Execute(ctx context.Context, cmd UpdateUserNode
 	if cmd.ServerAddress != nil {
 		serverAddress, err := vo.NewServerAddress(*cmd.ServerAddress)
 		if err != nil {
-			return nil, fmt.Errorf("invalid server address: %w", err)
+			return nil, err
 		}
 		if err := nodeEntity.UpdateServerAddress(serverAddress); err != nil {
 			return nil, err

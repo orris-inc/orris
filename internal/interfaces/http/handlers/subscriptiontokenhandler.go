@@ -26,13 +26,14 @@ func NewSubscriptionTokenHandler(
 	listTokensUC *usecases.ListSubscriptionTokensUseCase,
 	revokeTokenUC *usecases.RevokeSubscriptionTokenUseCase,
 	refreshTokenUC *usecases.RefreshSubscriptionTokenUseCase,
+	log logger.Interface,
 ) *SubscriptionTokenHandler {
 	return &SubscriptionTokenHandler{
 		generateTokenUC: generateTokenUC,
 		listTokensUC:    listTokensUC,
 		revokeTokenUC:   revokeTokenUC,
 		refreshTokenUC:  refreshTokenUC,
-		logger:          logger.NewLogger(),
+		logger:          log,
 	}
 }
 

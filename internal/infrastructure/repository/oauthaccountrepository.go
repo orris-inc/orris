@@ -6,60 +6,73 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/orris-inc/orris/internal/domain/user"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/mappers"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 	"github.com/orris-inc/orris/internal/shared/errors"
 )
 
+// OAuthAccountRepository implements the user.OAuthAccountRepository interface
+// using GORM with Model/Mapper separation.
 type OAuthAccountRepository struct {
-	db *gorm.DB
+	db     *gorm.DB
+	mapper mappers.OAuthAccountMapper
 }
 
+// NewOAuthAccountRepository creates a new OAuthAccountRepository.
 func NewOAuthAccountRepository(db *gorm.DB) user.OAuthAccountRepository {
-	return &OAuthAccountRepository{db: db}
+	return &OAuthAccountRepository{
+		db:     db,
+		mapper: mappers.NewOAuthAccountMapper(),
+	}
 }
 
 func (r *OAuthAccountRepository) Create(account *user.OAuthAccount) error {
-	if err := r.db.Create(account).Error; err != nil {
+	model := r.mapper.ToModel(account)
+	if err := r.db.Create(model).Error; err != nil {
 		return fmt.Errorf("failed to create oauth account: %w", err)
 	}
+	// Sync auto-generated ID back to the domain entity
+	account.ID = model.ID
 	return nil
 }
 
 func (r *OAuthAccountRepository) GetByID(id uint) (*user.OAuthAccount, error) {
-	var account user.OAuthAccount
-	err := r.db.First(&account, id).Error
+	var model models.OAuthAccountModel
+	err := r.db.First(&model, id).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, errors.NewNotFoundError("oauth account not found")
 		}
 		return nil, fmt.Errorf("failed to get oauth account by ID: %w", err)
 	}
-	return &account, nil
+	return r.mapper.ToDomain(&model), nil
 }
 
 func (r *OAuthAccountRepository) GetByProviderAndUserID(provider, providerUserID string) (*user.OAuthAccount, error) {
-	var account user.OAuthAccount
+	var model models.OAuthAccountModel
 	err := r.db.Where("provider = ? AND provider_user_id = ?", provider, providerUserID).
-		First(&account).Error
+		First(&model).Error
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("failed to get oauth account: %w", err)
 	}
-	return &account, nil
+	return r.mapper.ToDomain(&model), nil
 }
 
 func (r *OAuthAccountRepository) GetByUserID(userID uint) ([]*user.OAuthAccount, error) {
-	var accounts []*user.OAuthAccount
-	err := r.db.Where("user_id = ?", userID).Find(&accounts).Error
+	var accountModels []*models.OAuthAccountModel
+	err := r.db.Where("user_id = ?", userID).Find(&accountModels).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to get oauth accounts by user ID: %w", err)
 	}
-	return accounts, nil
+	return r.mapper.ToDomainList(accountModels), nil
 }
 
 func (r *OAuthAccountRepository) Update(account *user.OAuthAccount) error {
-	result := r.db.Save(account)
+	model := r.mapper.ToModel(account)
+	result := r.db.Save(model)
 	if result.Error != nil {
 		return fmt.Errorf("failed to update oauth account: %w", result.Error)
 	}
@@ -70,7 +83,7 @@ func (r *OAuthAccountRepository) Update(account *user.OAuthAccount) error {
 }
 
 func (r *OAuthAccountRepository) Delete(id uint) error {
-	result := r.db.Delete(&user.OAuthAccount{}, id)
+	result := r.db.Delete(&models.OAuthAccountModel{}, id)
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete oauth account: %w", result.Error)
 	}

@@ -34,7 +34,7 @@ type ListUserForwardRulesResult struct {
 
 // ListUserForwardRulesUseCase handles listing forward rules for a specific user.
 type ListUserForwardRulesUseCase struct {
-	repo          forward.Repository
+	repo          forward.RuleQuerier
 	agentRepo     forward.AgentRepository
 	nodeRepo      node.NodeRepository
 	statusQuerier RuleSyncStatusBatchQuerier
@@ -43,7 +43,7 @@ type ListUserForwardRulesUseCase struct {
 
 // NewListUserForwardRulesUseCase creates a new ListUserForwardRulesUseCase.
 func NewListUserForwardRulesUseCase(
-	repo forward.Repository,
+	repo forward.RuleQuerier,
 	agentRepo forward.AgentRepository,
 	nodeRepo node.NodeRepository,
 	statusQuerier RuleSyncStatusBatchQuerier,

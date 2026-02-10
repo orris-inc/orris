@@ -15,15 +15,19 @@ import (
 )
 
 type PaymentRepository struct {
-	db *gorm.DB
+	db     *gorm.DB
+	mapper mappers.PaymentMapper
 }
 
 func NewPaymentRepository(db *gorm.DB) *PaymentRepository {
-	return &PaymentRepository{db: db}
+	return &PaymentRepository{
+		db:     db,
+		mapper: mappers.NewPaymentMapper(),
+	}
 }
 
 func (r *PaymentRepository) Create(ctx context.Context, p *payment.Payment) error {
-	model := mappers.PaymentToModel(p)
+	model := r.mapper.ToModel(p)
 
 	if err := db.GetTxFromContext(ctx, r.db).Create(model).Error; err != nil {
 		return fmt.Errorf("failed to create payment: %w", err)
@@ -36,7 +40,7 @@ func (r *PaymentRepository) Create(ctx context.Context, p *payment.Payment) erro
 }
 
 func (r *PaymentRepository) Update(ctx context.Context, p *payment.Payment) error {
-	model := mappers.PaymentToModel(p)
+	model := r.mapper.ToModel(p)
 
 	result := db.GetTxFromContext(ctx, r.db).
 		Model(&models.PaymentModel{}).
@@ -80,7 +84,7 @@ func (r *PaymentRepository) GetByID(ctx context.Context, id uint) (*payment.Paym
 		return nil, fmt.Errorf("failed to get payment: %w", err)
 	}
 
-	return mappers.PaymentToDomain(&model)
+	return r.mapper.ToDomain(&model)
 }
 
 func (r *PaymentRepository) GetByOrderNo(ctx context.Context, orderNo string) (*payment.Payment, error) {
@@ -95,7 +99,7 @@ func (r *PaymentRepository) GetByOrderNo(ctx context.Context, orderNo string) (*
 		return nil, fmt.Errorf("failed to get payment by order_no: %w", err)
 	}
 
-	return mappers.PaymentToDomain(&model)
+	return r.mapper.ToDomain(&model)
 }
 
 func (r *PaymentRepository) GetByGatewayOrderNo(ctx context.Context, gatewayOrderNo string) (*payment.Payment, error) {
@@ -110,7 +114,7 @@ func (r *PaymentRepository) GetByGatewayOrderNo(ctx context.Context, gatewayOrde
 		return nil, fmt.Errorf("failed to get payment by gateway_order_no: %w", err)
 	}
 
-	return mappers.PaymentToDomain(&model)
+	return r.mapper.ToDomain(&model)
 }
 
 func (r *PaymentRepository) GetBySubscriptionID(ctx context.Context, subscriptionID uint) ([]*payment.Payment, error) {
@@ -125,7 +129,7 @@ func (r *PaymentRepository) GetBySubscriptionID(ctx context.Context, subscriptio
 
 	payments := make([]*payment.Payment, len(paymentModels))
 	for i, model := range paymentModels {
-		p, err := mappers.PaymentToDomain(&model)
+		p, err := r.mapper.ToDomain(&model)
 		if err != nil {
 			return nil, err
 		}
@@ -148,7 +152,7 @@ func (r *PaymentRepository) GetPendingBySubscriptionID(ctx context.Context, subs
 		return nil, fmt.Errorf("failed to get pending payment: %w", err)
 	}
 
-	return mappers.PaymentToDomain(&model)
+	return r.mapper.ToDomain(&model)
 }
 
 // HasPendingPaymentBySubscriptionID checks if there are any pending payments for a subscription
@@ -196,7 +200,7 @@ func (r *PaymentRepository) GetExpiredPayments(ctx context.Context) ([]*payment.
 
 	payments := make([]*payment.Payment, len(paymentModels))
 	for i, model := range paymentModels {
-		p, err := mappers.PaymentToDomain(&model)
+		p, err := r.mapper.ToDomain(&model)
 		if err != nil {
 			return nil, err
 		}
@@ -222,7 +226,7 @@ func (r *PaymentRepository) GetPendingUSDTPayments(ctx context.Context) ([]*paym
 
 	payments := make([]*payment.Payment, len(paymentModels))
 	for i, model := range paymentModels {
-		p, err := mappers.PaymentToDomain(&model)
+		p, err := r.mapper.ToDomain(&model)
 		if err != nil {
 			return nil, err
 		}
@@ -250,7 +254,7 @@ func (r *PaymentRepository) GetConfirmedUSDTPaymentsNeedingActivation(ctx contex
 
 	payments := make([]*payment.Payment, len(paymentModels))
 	for i, model := range paymentModels {
-		p, err := mappers.PaymentToDomain(&model)
+		p, err := r.mapper.ToDomain(&model)
 		if err != nil {
 			return nil, err
 		}
@@ -294,7 +298,7 @@ func (r *PaymentRepository) GetPaidPaymentsNeedingActivation(ctx context.Context
 
 	payments := make([]*payment.Payment, len(paymentModels))
 	for i, model := range paymentModels {
-		p, err := mappers.PaymentToDomain(&model)
+		p, err := r.mapper.ToDomain(&model)
 		if err != nil {
 			return nil, err
 		}

@@ -14,9 +14,9 @@ func CORS(allowedOrigins []string) gin.HandlerFunc {
 		// Set CORS headers
 		c.Header("Access-Control-Allow-Origin", getAllowedOrigin(origin, allowedOrigins))
 		c.Header("Access-Control-Allow-Credentials", "true")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, Accept, Origin, Cache-Control, X-Requested-With, X-Request-ID")
+		c.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, Accept, Origin, Cache-Control, X-Requested-With, X-Request-ID, X-API-Version")
 		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS")
-		c.Header("Access-Control-Expose-Headers", "Content-Length, X-Request-ID")
+		c.Header("Access-Control-Expose-Headers", "Content-Length, X-Request-ID, X-API-Version")
 		c.Header("Access-Control-Max-Age", "86400")
 
 		// Handle preflight requests

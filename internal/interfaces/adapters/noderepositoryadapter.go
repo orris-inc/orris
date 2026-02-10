@@ -10,7 +10,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/node"
 	nodevo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
-	"github.com/orris-inc/orris/internal/infrastructure/adapters/nodeutil"
+	"github.com/orris-inc/orris/internal/interfaces/adapters/nodeutil"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils/jsonutil"

@@ -3,10 +3,13 @@ package http
 import (
 	"context"
 
+	settingUsecases "github.com/orris-inc/orris/internal/application/setting/usecases"
 	telegramAdminUsecases "github.com/orris-inc/orris/internal/application/telegram/admin/usecases"
 	"github.com/orris-inc/orris/internal/application/user/usecases"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/domain/setting"
+	sharedConfig "github.com/orris-inc/orris/internal/shared/config"
 	"github.com/orris-inc/orris/internal/infrastructure/auth"
 	telegramInfra "github.com/orris-inc/orris/internal/infrastructure/telegram"
 	"github.com/orris-inc/orris/internal/shared/authorization"
@@ -19,6 +22,18 @@ type jwtServiceAdapter struct {
 
 func (a *jwtServiceAdapter) Generate(userUUID string, sessionID string, role authorization.UserRole) (*usecases.TokenPair, error) {
 	pair, err := a.JWTService.Generate(userUUID, sessionID, role)
+	if err != nil {
+		return nil, err
+	}
+	return &usecases.TokenPair{
+		AccessToken:  pair.AccessToken,
+		RefreshToken: pair.RefreshToken,
+		ExpiresIn:    pair.ExpiresIn,
+	}, nil
+}
+
+func (a *jwtServiceAdapter) Refresh(refreshToken string) (*usecases.TokenPair, error) {
+	pair, err := a.JWTService.Refresh(refreshToken)
 	if err != nil {
 		return nil, err
 	}
@@ -128,4 +143,42 @@ func (a *botServiceProviderAdapter) GetBotService() telegramAdminUsecases.Telegr
 		return nil
 	}
 	return bs
+}
+
+// settingProviderAdapter adapts the application-layer *usecases.SettingProvider
+// to the domain-layer setting.SettingProvider interface.
+// This breaks the reverse dependency from infrastructure to application.
+type settingProviderAdapter struct {
+	provider *settingUsecases.SettingProvider
+}
+
+// Ensure compile-time interface compliance.
+var _ setting.SettingProvider = (*settingProviderAdapter)(nil)
+
+func (a *settingProviderAdapter) GetEmailConfig(ctx context.Context) sharedConfig.EmailConfig {
+	return a.provider.GetEmailConfig(ctx)
+}
+
+func (a *settingProviderAdapter) GetAPIBaseURL(ctx context.Context) setting.ConfigValue {
+	result := a.provider.GetAPIBaseURL(ctx)
+	return setting.ConfigValue{
+		Value:  result.Value,
+		Source: string(result.Source),
+	}
+}
+
+func (a *settingProviderAdapter) GetGoogleOAuthConfig(ctx context.Context) sharedConfig.GoogleOAuthConfig {
+	return a.provider.GetGoogleOAuthConfig(ctx)
+}
+
+func (a *settingProviderAdapter) GetGitHubOAuthConfig(ctx context.Context) sharedConfig.GitHubOAuthConfig {
+	return a.provider.GetGitHubOAuthConfig(ctx)
+}
+
+func (a *settingProviderAdapter) GetTelegramConfig(ctx context.Context) sharedConfig.TelegramConfig {
+	return a.provider.GetTelegramConfig(ctx)
+}
+
+func (a *settingProviderAdapter) IsTelegramEnabled(ctx context.Context) bool {
+	return a.provider.IsTelegramEnabled(ctx)
 }

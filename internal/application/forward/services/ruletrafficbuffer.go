@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/orris-inc/orris/internal/infrastructure/cache"
+	"github.com/orris-inc/orris/internal/shared/goroutine"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -31,6 +33,7 @@ type RuleTrafficEntry struct {
 // RuleTrafficCacheWriter defines the interface for writing rule traffic data to Redis.
 type RuleTrafficCacheWriter interface {
 	IncrementRuleTraffic(ctx context.Context, ruleID uint, upload, download int64) error
+	BatchIncrementRuleTraffic(ctx context.Context, entries []cache.RuleTrafficBatchEntry) error
 }
 
 // ruleBufferShard is a single shard containing rule traffic entries with its own mutex.
@@ -108,7 +111,7 @@ func (b *RuleTrafficBuffer) AddTraffic(ruleID uint, upload, download int64) {
 // Start starts the background flush goroutine.
 func (b *RuleTrafficBuffer) Start() {
 	b.wg.Add(1)
-	go b.flushLoop()
+	goroutine.SafeGo(b.logger, "rule-traffic-buffer-flush-loop", b.flushLoop)
 	b.logger.Infow("rule traffic buffer started",
 		"shards", RuleTrafficNumShards,
 		"flush_interval", RuleTrafficFlushInterval.String(),
@@ -140,13 +143,16 @@ func (b *RuleTrafficBuffer) flushLoop() {
 	}
 }
 
-// flush flushes all accumulated traffic data to Redis.
+// ruleTrafficBatchSize is the maximum number of entries per batch pipeline call.
+const ruleTrafficBatchSize = 500
+
+// flush flushes all accumulated traffic data to Redis using batch pipeline.
 func (b *RuleTrafficBuffer) flush() {
 	ctx := context.Background()
-	flushedCount := 0
-	failedCount := 0
 	droppedCount := 0
 
+	// Phase 1: Collect all entries from all shards
+	var allEntries []*RuleTrafficEntry
 	for i := 0; i < RuleTrafficNumShards; i++ {
 		shard := b.shards[i]
 
@@ -158,35 +164,61 @@ func (b *RuleTrafficBuffer) flush() {
 
 		for _, entry := range entries {
 			if entry.Upload > 0 || entry.Download > 0 {
-				if err := b.cache.IncrementRuleTraffic(ctx, entry.RuleID, entry.Upload, entry.Download); err != nil {
-					entry.RetryCount++
-					if entry.RetryCount >= RuleTrafficMaxRetryCount {
-						// Drop data after max retries to prevent memory accumulation
-						b.logger.Errorw("rule traffic data dropped after max retries",
-							"rule_id", entry.RuleID,
-							"upload", entry.Upload,
-							"download", entry.Download,
-							"retry_count", entry.RetryCount,
-							"error", err,
-						)
-						droppedCount++
-						continue
-					}
-					b.logger.Warnw("failed to flush rule traffic to redis, will retry",
+				allEntries = append(allEntries, entry)
+			}
+		}
+	}
+
+	if len(allEntries) == 0 {
+		return
+	}
+
+	// Phase 2: Batch write in chunks to avoid oversized pipelines
+	flushedCount := 0
+	failedCount := 0
+
+	for start := 0; start < len(allEntries); start += ruleTrafficBatchSize {
+		end := start + ruleTrafficBatchSize
+		if end > len(allEntries) {
+			end = len(allEntries)
+		}
+		batch := allEntries[start:end]
+
+		// Convert to cache batch entry slice
+		batchValues := make([]cache.RuleTrafficBatchEntry, len(batch))
+		for i, e := range batch {
+			batchValues[i] = cache.RuleTrafficBatchEntry{
+				RuleID:   e.RuleID,
+				Upload:   e.Upload,
+				Download: e.Download,
+			}
+		}
+
+		if err := b.cache.BatchIncrementRuleTraffic(ctx, batchValues); err != nil {
+			// Entire batch failed — re-add or drop each entry based on retry count
+			for _, entry := range batch {
+				entry.RetryCount++
+				if entry.RetryCount >= RuleTrafficMaxRetryCount {
+					b.logger.Errorw("rule traffic data dropped after max retries",
 						"rule_id", entry.RuleID,
 						"upload", entry.Upload,
 						"download", entry.Download,
 						"retry_count", entry.RetryCount,
 						"error", err,
 					)
-					// Re-add failed entry to shard for retry on next flush
-					b.reAddEntry(entry)
-					failedCount++
+					droppedCount++
 					continue
 				}
-				flushedCount++
+				b.reAddEntry(entry)
+				failedCount++
 			}
+			b.logger.Warnw("failed to batch flush rule traffic to redis, will retry",
+				"batch_size", len(batch),
+				"error", err,
+			)
+			continue
 		}
+		flushedCount += len(batch)
 	}
 
 	if flushedCount > 0 || failedCount > 0 || droppedCount > 0 {

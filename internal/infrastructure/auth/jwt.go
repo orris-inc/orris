@@ -148,20 +148,24 @@ func (s *JWTService) AccessExpMinutes() int {
 	return s.accessExpMinutes
 }
 
-func (s *JWTService) Refresh(refreshTokenString string) (string, error) {
+// Refresh generates a new access token AND a new refresh token from the given refresh token.
+// The old refresh token is effectively invalidated because the session's refresh token hash
+// will be updated to match the new refresh token (refresh token rotation).
+func (s *JWTService) Refresh(refreshTokenString string) (*TokenPair, error) {
 	claims, err := s.Verify(refreshTokenString)
 	if err != nil {
-		return "", fmt.Errorf("invalid refresh token: %w", err)
+		return nil, fmt.Errorf("invalid refresh token: %w", err)
 	}
 
 	if claims.TokenType != TokenTypeRefresh {
-		return "", fmt.Errorf("token is not a refresh token")
+		return nil, fmt.Errorf("token is not a refresh token")
 	}
 
 	now := biztime.NowUTC()
-	accessExp := now.Add(time.Duration(s.accessExpMinutes) * time.Minute)
 
-	newClaims := &Claims{
+	// Generate new access token
+	accessExp := now.Add(time.Duration(s.accessExpMinutes) * time.Minute)
+	accessClaims := &Claims{
 		UserUUID:  claims.UserUUID,
 		SessionID: claims.SessionID,
 		Role:      claims.Role,
@@ -173,11 +177,35 @@ func (s *JWTService) Refresh(refreshTokenString string) (string, error) {
 		},
 	}
 
-	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, newClaims)
+	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims)
 	accessTokenString, err := accessToken.SignedString(s.secret)
 	if err != nil {
-		return "", fmt.Errorf("failed to sign new access token: %w", err)
+		return nil, fmt.Errorf("failed to sign new access token: %w", err)
 	}
 
-	return accessTokenString, nil
+	// Generate new refresh token (rotation)
+	refreshExp := now.Add(time.Duration(s.refreshExpDays) * 24 * time.Hour)
+	refreshClaims := &Claims{
+		UserUUID:  claims.UserUUID,
+		SessionID: claims.SessionID,
+		Role:      claims.Role,
+		TokenType: TokenTypeRefresh,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(refreshExp),
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
+		},
+	}
+
+	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims)
+	refreshTokenStr, err := refreshToken.SignedString(s.secret)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign new refresh token: %w", err)
+	}
+
+	return &TokenPair{
+		AccessToken:  accessTokenString,
+		RefreshToken: refreshTokenStr,
+		ExpiresIn:    int64(s.accessExpMinutes * 60),
+	}, nil
 }

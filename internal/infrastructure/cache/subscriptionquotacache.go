@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"fmt"
+	"math/rand/v2"
 	"strconv"
 	"time"
 
@@ -18,6 +19,7 @@ type CachedQuota struct {
 	PeriodEnd   time.Time // Billing period end
 	PlanType    string    // Plan type: node/forward/hybrid
 	Suspended   bool      // Whether the subscription is suspended
+	NotFound    bool      // Null marker: subscription confirmed not found/inactive in DB
 }
 
 // SubscriptionQuotaCache defines the interface for subscription quota caching
@@ -26,16 +28,22 @@ type SubscriptionQuotaCache interface {
 	SetQuota(ctx context.Context, subscriptionID uint, quota *CachedQuota) error
 	InvalidateQuota(ctx context.Context, subscriptionID uint) error
 	SetSuspended(ctx context.Context, subscriptionID uint, suspended bool) error
+	// SetNullMarker caches a short-lived marker indicating the subscription was not found
+	// or inactive in DB, preventing repeated DB lookups (cache penetration protection).
+	SetNullMarker(ctx context.Context, subscriptionID uint) error
 }
 
 const (
-	quotaKeyPrefix   = "subscription:quota:"
-	defaultQuotaTTL  = 1 * time.Hour
-	fieldLimit       = "limit"
+	quotaKeyPrefix  = "subscription:quota:"
+	baseQuotaTTL    = 60 * time.Minute
+	quotaTTLJitter  = 20 * time.Minute // TTL range: 60-80 min (anti-stampede)
+	nullMarkerTTL   = 2 * time.Minute  // Short TTL for not-found markers (anti-penetration)
+	fieldLimit      = "limit"
 	fieldPeriodStart = "period_start"
 	fieldPeriodEnd   = "period_end"
 	fieldPlanType    = "plan_type"
 	fieldSuspended   = "suspended"
+	fieldNullMarker  = "_null"
 )
 
 // RedisSubscriptionQuotaCache implements SubscriptionQuotaCache using Redis Hash
@@ -67,6 +75,11 @@ func (c *RedisSubscriptionQuotaCache) GetQuota(ctx context.Context, subscription
 
 	if len(result) == 0 {
 		return nil, nil // Cache miss
+	}
+
+	// Detect null marker (anti-penetration)
+	if result[fieldNullMarker] == "1" {
+		return &CachedQuota{NotFound: true}, nil
 	}
 
 	quota := &CachedQuota{}
@@ -110,7 +123,7 @@ func (c *RedisSubscriptionQuotaCache) SetQuota(ctx context.Context, subscription
 
 	pipe := c.client.Pipeline()
 	pipe.HSet(ctx, key, fields)
-	pipe.Expire(ctx, key, defaultQuotaTTL)
+	pipe.Expire(ctx, key, quotaTTLWithJitter())
 
 	_, err := pipe.Exec(ctx)
 	if err != nil {
@@ -166,6 +179,35 @@ func (c *RedisSubscriptionQuotaCache) SetSuspended(ctx context.Context, subscrip
 	)
 
 	return nil
+}
+
+// SetNullMarker stores a short-lived marker indicating that the subscription was not found
+// or inactive in DB. This prevents cache penetration from repeated lookups of non-existent IDs.
+func (c *RedisSubscriptionQuotaCache) SetNullMarker(ctx context.Context, subscriptionID uint) error {
+	key := c.key(subscriptionID)
+
+	pipe := c.client.Pipeline()
+	pipe.HSet(ctx, key, fieldNullMarker, "1")
+	pipe.Expire(ctx, key, nullMarkerTTL)
+
+	_, err := pipe.Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to set null marker in cache: %w", err)
+	}
+
+	c.logger.Debugw("subscription quota null marker set",
+		"subscription_id", subscriptionID,
+		"ttl", nullMarkerTTL,
+	)
+
+	return nil
+}
+
+// quotaTTLWithJitter returns a randomized TTL to prevent cache stampede.
+// Range: [baseQuotaTTL, baseQuotaTTL + quotaTTLJitter) i.e. 60-80 minutes.
+func quotaTTLWithJitter() time.Duration {
+	jitter := time.Duration(rand.Int64N(int64(quotaTTLJitter)))
+	return baseQuotaTTL + jitter
 }
 
 func boolToInt(b bool) int {

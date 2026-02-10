@@ -59,6 +59,7 @@ func Init(cfg *config.DatabaseConfig) error {
 	sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
 	sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
 	sqlDB.SetConnMaxLifetime(time.Duration(cfg.ConnMaxLifetime) * time.Minute)
+	sqlDB.SetConnMaxIdleTime(10 * time.Minute)
 
 	// Verify connection
 	if err := sqlDB.Ping(); err != nil {

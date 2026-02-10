@@ -4,65 +4,50 @@ package dto
 import (
 	"github.com/orris-inc/orris/internal/domain/node"
 	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
+	nodehub "github.com/orris-inc/orris/internal/shared/hubprotocol/node"
 )
 
-// Node Hub message type constants.
+// Node Hub message type constants (re-exported from shared hubprotocol).
 const (
 	// Agent -> Server message types.
-	NodeMsgTypeStatus    = "status"
-	NodeMsgTypeHeartbeat = "heartbeat"
-	NodeMsgTypeEvent     = "event"
+	NodeMsgTypeStatus    = nodehub.NodeMsgTypeStatus
+	NodeMsgTypeHeartbeat = nodehub.NodeMsgTypeHeartbeat
+	NodeMsgTypeEvent     = nodehub.NodeMsgTypeEvent
 
 	// Server -> Agent message types.
-	NodeMsgTypeCommand          = "command"
-	NodeMsgTypeConfigSync       = "config_sync"
-	NodeMsgTypeSubscriptionSync = "subscription_sync"
+	NodeMsgTypeCommand          = nodehub.NodeMsgTypeCommand
+	NodeMsgTypeConfigSync       = nodehub.NodeMsgTypeConfigSync
+	NodeMsgTypeSubscriptionSync = nodehub.NodeMsgTypeSubscriptionSync
 )
 
-// NodeHubMessage is the unified WebSocket message envelope for node agents.
-type NodeHubMessage struct {
-	Type      string `json:"type"`
-	NodeID    string `json:"node_id,omitempty"` // Stripe-style prefixed ID (e.g., "node_xK9mP2vL3nQ")
-	Timestamp int64  `json:"timestamp"`
-	Data      any    `json:"data,omitempty"`
-}
+// NodeHubMessage is the unified WebSocket message envelope for node agents (type alias from shared hubprotocol).
+type NodeHubMessage = nodehub.NodeHubMessage
 
-// NodeCommandData represents a command to be sent to node agent.
-type NodeCommandData struct {
-	CommandID string `json:"command_id"`
-	Action    string `json:"action"`
-	Payload   any    `json:"payload,omitempty"`
-}
+// NodeCommandData represents a command to be sent to node agent (type alias from shared hubprotocol).
+type NodeCommandData = nodehub.NodeCommandData
 
-// Node command action constants.
+// Node command action constants (re-exported from shared hubprotocol).
 const (
-	NodeCmdActionReloadConfig   = "reload_config"
-	NodeCmdActionRestart        = "restart"
-	NodeCmdActionStop           = "stop"
-	NodeCmdActionUpdate         = "update"          // Update node agent binary
-	NodeCmdActionAPIURLChanged  = "api_url_changed" // API URL changed, node should reconnect
-	NodeCmdActionConfigRelocate = "config_relocate" // Configuration relocated to new server
+	NodeCmdActionReloadConfig   = nodehub.NodeCmdActionReloadConfig
+	NodeCmdActionRestart        = nodehub.NodeCmdActionRestart
+	NodeCmdActionStop           = nodehub.NodeCmdActionStop
+	NodeCmdActionUpdate         = nodehub.NodeCmdActionUpdate
+	NodeCmdActionAPIURLChanged  = nodehub.NodeCmdActionAPIURLChanged
+	NodeCmdActionConfigRelocate = nodehub.NodeCmdActionConfigRelocate
 )
 
-// NodeAPIURLChangedPayload contains the new API URL for node reconnection.
-type NodeAPIURLChangedPayload struct {
-	NewURL string `json:"new_url"`
-	Reason string `json:"reason,omitempty"`
-}
+// NodeAPIURLChangedPayload contains the new API URL for node reconnection (type alias from shared hubprotocol).
+type NodeAPIURLChangedPayload = nodehub.NodeAPIURLChangedPayload
 
-// NodeEventData represents a node agent event payload.
-type NodeEventData struct {
-	EventType string `json:"event_type"`
-	Message   string `json:"message,omitempty"`
-	Extra     any    `json:"extra,omitempty"`
-}
+// NodeEventData represents a node agent event payload (type alias from shared hubprotocol).
+type NodeEventData = nodehub.NodeEventData
 
-// Node event type constants.
+// Node event type constants (re-exported from shared hubprotocol).
 const (
-	NodeEventTypeConnected    = "connected"
-	NodeEventTypeDisconnected = "disconnected"
-	NodeEventTypeError        = "error"
-	NodeEventTypeConfigChange = "config_change"
+	NodeEventTypeConnected    = nodehub.NodeEventTypeConnected
+	NodeEventTypeDisconnected = nodehub.NodeEventTypeDisconnected
+	NodeEventTypeError        = nodehub.NodeEventTypeError
+	NodeEventTypeConfigChange = nodehub.NodeEventTypeConfigChange
 )
 
 // NodeConfigSyncData represents configuration sync data for node agent.

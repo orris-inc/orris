@@ -8,6 +8,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"github.com/orris-inc/orris/internal/shared/goroutine"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -159,7 +160,9 @@ func (b *RedisSubscriptionEventBus) Subscribe(ctx context.Context, handler Subsc
 
 			// Handle event in background goroutine to avoid blocking the event loop
 			// Use Background context to decouple event handling from subscriber lifecycle
-			go handler(context.Background(), event)
+			goroutine.SafeGo(b.logger, "subscription-event-handler", func() {
+				handler(context.Background(), event)
+			})
 		}
 	}
 }
