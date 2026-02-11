@@ -387,6 +387,8 @@ func (s *SubscriptionSyncService) FullSyncSubscriptionsToNode(
 		nodeForwardingPassword = vo.GenerateTrojanServerPassword(n.TokenHash())
 	} else if n.Protocol().IsShadowsocks() {
 		nodeForwardingPassword = vo.GenerateShadowsocksServerPassword(n.TokenHash(), encryptionMethod)
+	} else if n.Protocol().IsAnyTLS() {
+		nodeForwardingPassword = vo.GenerateAnyTLSServerPassword(n.TokenHash())
 	}
 
 	if nodeForwardingPassword != "" {

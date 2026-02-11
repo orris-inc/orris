@@ -101,6 +101,11 @@ type NodeConfigData struct {
 	UDPRelayMode string `json:"udp_relay_mode,omitempty"` // UDP relay mode (native, quic)
 	ALPN         string `json:"alpn,omitempty"`           // ALPN protocols
 	DisableSNI   bool   `json:"disable_sni,omitempty"`    // Disable SNI
+
+	// AnyTLS specific fields
+	AnyTLSIdleSessionCheckInterval string `json:"anytls_idle_session_check_interval,omitempty"` // Idle session check interval
+	AnyTLSIdleSessionTimeout       string `json:"anytls_idle_session_timeout,omitempty"`        // Idle session timeout
+	AnyTLSMinIdleSession           int    `json:"anytls_min_idle_session,omitempty"`             // Minimum idle sessions
 }
 
 // ToNodeConfigData converts a domain node entity to NodeConfigData for Hub sync.
@@ -249,6 +254,20 @@ func ToNodeConfigData(n *node.Node, referencedNodes []*node.Node, serverKeyFunc 
 			config.SNI = tc.SNI()
 			config.AllowInsecure = tc.AllowInsecure()
 			config.DisableSNI = tc.DisableSNI()
+		}
+	} else if n.Protocol().IsAnyTLS() {
+		config.Protocol = "anytls"
+		config.TransportProtocol = "tcp"
+
+		// Extract AnyTLS-specific configuration
+		if n.AnyTLSConfig() != nil {
+			ac := n.AnyTLSConfig()
+			config.SNI = ac.SNI()
+			config.AllowInsecure = ac.AllowInsecure()
+			config.Fingerprint = ac.Fingerprint()
+			config.AnyTLSIdleSessionCheckInterval = ac.IdleSessionCheckInterval()
+			config.AnyTLSIdleSessionTimeout = ac.IdleSessionTimeout()
+			config.AnyTLSMinIdleSession = ac.MinIdleSession()
 		}
 	}
 

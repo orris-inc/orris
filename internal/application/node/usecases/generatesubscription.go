@@ -434,7 +434,7 @@ type Node struct {
 	Name             string
 	ServerAddress    string
 	SubscriptionPort uint16 // port for client subscriptions (effective port)
-	Protocol         string // shadowsocks, trojan, vless, vmess, hysteria2, tuic
+	Protocol         string // shadowsocks, trojan, vless, vmess, hysteria2, tuic, anytls
 	EncryptionMethod string // for shadowsocks
 	TokenHash        string // Node token hash for SS2022 ServerKey derivation
 	Password         string

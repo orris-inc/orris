@@ -125,6 +125,10 @@ func (s *NodeConfigSyncService) FullSyncToNode(ctx context.Context, nodeID uint)
 		if refNode.Protocol().IsTrojan() {
 			return vo.GenerateTrojanServerPassword(refNode.TokenHash())
 		}
+		// For AnyTLS, generate password from token hash for node-to-node forwarding
+		if refNode.Protocol().IsAnyTLS() {
+			return vo.GenerateAnyTLSServerPassword(refNode.TokenHash())
+		}
 		return ""
 	}
 
@@ -232,6 +236,10 @@ func (s *NodeConfigSyncService) NotifyConfigChange(ctx context.Context, nodeID u
 		// For Trojan, generate password from token hash for node-to-node forwarding
 		if refNode.Protocol().IsTrojan() {
 			return vo.GenerateTrojanServerPassword(refNode.TokenHash())
+		}
+		// For AnyTLS, generate password from token hash for node-to-node forwarding
+		if refNode.Protocol().IsAnyTLS() {
+			return vo.GenerateAnyTLSServerPassword(refNode.TokenHash())
 		}
 		return ""
 	}

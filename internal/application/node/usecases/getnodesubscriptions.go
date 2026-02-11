@@ -80,13 +80,15 @@ func (uc *GetNodeSubscriptionsUseCase) Execute(ctx context.Context, cmd GetNodeS
 	// Convert subscriptions to agent subscriptions response
 	subscriptionInfos := dto.ToNodeSubscriptionsResponse(subscriptions, hmacSecret, encryptionMethod)
 
-	// Add a special node-to-node forwarding user for both Trojan and Shadowsocks
+	// Add a special node-to-node forwarding user
 	// This allows other nodes to forward traffic to this node using a derived password
 	var nodeForwardingPassword string
 	if nodeEntity.Protocol().IsTrojan() {
 		nodeForwardingPassword = vo.GenerateTrojanServerPassword(nodeEntity.TokenHash())
 	} else if nodeEntity.Protocol().IsShadowsocks() {
 		nodeForwardingPassword = vo.GenerateShadowsocksServerPassword(nodeEntity.TokenHash(), encryptionMethod)
+	} else if nodeEntity.Protocol().IsAnyTLS() {
+		nodeForwardingPassword = vo.GenerateAnyTLSServerPassword(nodeEntity.TokenHash())
 	}
 
 	if nodeForwardingPassword != "" {
