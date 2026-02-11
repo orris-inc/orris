@@ -93,6 +93,10 @@ func (f *Base64Formatter) FormatWithPassword(nodes []*Node, password string) (st
 				// For TUIC, use password as both uuid and password (derived from subscription)
 				link = node.TUICConfig.ToURI(node.ServerAddress, node.SubscriptionPort, node.Name, password, password)
 			}
+		case vo.ProtocolAnyTLS:
+			if node.AnyTLSConfig != nil {
+				link = node.AnyTLSConfig.ToURI(node.ServerAddress, node.SubscriptionPort, node.Name, password)
+			}
 		default:
 			// Shadowsocks: adjust password for SS2022 methods
 			nodePassword := adjustPasswordForMethod(password, node.EncryptionMethod, node.TokenHash)
@@ -170,6 +174,10 @@ type clashProxy struct {
 	UDPRelayMode         string   `yaml:"udp-relay-mode,omitempty"`
 	ALPN                 []string `yaml:"alpn,omitempty"`
 	DisableSNI           bool     `yaml:"disable-sni,omitempty"`
+	// AnyTLS specific fields
+	IdleSessionCheckInterval string `yaml:"idle-session-check-interval,omitempty"`
+	IdleSessionTimeout       string `yaml:"idle-session-timeout,omitempty"`
+	MinIdleSession           int    `yaml:"min-idle-session,omitempty"`
 }
 
 type clashWSOpts struct {
@@ -257,6 +265,11 @@ func (f *ClashFormatter) FormatWithPassword(nodes []*Node, password string) (str
 		case vo.ProtocolTUIC:
 			if node.TUICConfig != nil {
 				proxy = f.buildTUICProxy(node, password)
+			}
+
+		case vo.ProtocolAnyTLS:
+			if node.AnyTLSConfig != nil {
+				proxy = f.buildAnyTLSProxy(node, password)
 			}
 
 		default:
@@ -493,6 +506,42 @@ func (f *ClashFormatter) buildTUICProxy(node *Node, password string) clashProxy 
 	return proxy
 }
 
+// buildAnyTLSProxy builds a Clash Meta AnyTLS proxy configuration
+// password is the subscription-derived credential
+func (f *ClashFormatter) buildAnyTLSProxy(node *Node, password string) clashProxy {
+	cfg := node.AnyTLSConfig
+	proxy := clashProxy{
+		Name:           node.Name,
+		Type:           "anytls",
+		Server:         node.ServerAddress,
+		Port:           node.SubscriptionPort,
+		Password:       password,
+		SkipCertVerify: cfg.AllowInsecure(),
+	}
+
+	if cfg.SNI() != "" {
+		proxy.SNI = cfg.SNI()
+	}
+
+	if cfg.Fingerprint() != "" {
+		proxy.Fingerprint = cfg.Fingerprint()
+	}
+
+	if cfg.IdleSessionCheckInterval() != "" {
+		proxy.IdleSessionCheckInterval = cfg.IdleSessionCheckInterval()
+	}
+
+	if cfg.IdleSessionTimeout() != "" {
+		proxy.IdleSessionTimeout = cfg.IdleSessionTimeout()
+	}
+
+	if cfg.MinIdleSession() > 0 {
+		proxy.MinIdleSession = cfg.MinIdleSession()
+	}
+
+	return proxy
+}
+
 func (f *ClashFormatter) ContentType() string {
 	return "text/yaml; charset=utf-8"
 }
@@ -705,6 +754,10 @@ func (f *SurgeFormatter) FormatWithPassword(nodes []*Node, password string) (str
 			if node.TUICConfig != nil {
 				line = f.buildTUICLine(node, password)
 			}
+
+		case vo.ProtocolAnyTLS:
+			// Surge does not natively support AnyTLS, skip
+			continue
 
 		default:
 			// Shadowsocks: adjust password for SS2022 methods

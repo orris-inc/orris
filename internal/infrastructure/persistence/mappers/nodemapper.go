@@ -21,7 +21,7 @@ import (
 type NodeMapper interface {
 	// ToEntity converts a persistence model to a domain entity
 	// Protocol-specific configs are loaded separately from their respective tables
-	ToEntity(model *models.NodeModel, encryptionConfig vo.EncryptionConfig, pluginConfig *vo.PluginConfig, trojanConfig *vo.TrojanConfig, vlessConfig *vo.VLESSConfig, vmessConfig *vo.VMessConfig, hysteria2Config *vo.Hysteria2Config, tuicConfig *vo.TUICConfig) (*node.Node, error)
+	ToEntity(model *models.NodeModel, encryptionConfig vo.EncryptionConfig, pluginConfig *vo.PluginConfig, trojanConfig *vo.TrojanConfig, vlessConfig *vo.VLESSConfig, vmessConfig *vo.VMessConfig, hysteria2Config *vo.Hysteria2Config, tuicConfig *vo.TUICConfig, anytlsConfig *vo.AnyTLSConfig) (*node.Node, error)
 
 	// ToModel converts a domain entity to a persistence model
 	// Note: Protocol-specific configs are handled separately via their respective mappers
@@ -34,7 +34,8 @@ type NodeMapper interface {
 	// vmessConfigs is a map of nodeID -> VMessConfig
 	// hysteria2Configs is a map of nodeID -> Hysteria2Config
 	// tuicConfigs is a map of nodeID -> TUICConfig
-	ToEntities(models []*models.NodeModel, ssConfigs map[uint]*ShadowsocksConfigData, trojanConfigs map[uint]*vo.TrojanConfig, vlessConfigs map[uint]*vo.VLESSConfig, vmessConfigs map[uint]*vo.VMessConfig, hysteria2Configs map[uint]*vo.Hysteria2Config, tuicConfigs map[uint]*vo.TUICConfig) ([]*node.Node, error)
+	// anytlsConfigs is a map of nodeID -> AnyTLSConfig
+	ToEntities(models []*models.NodeModel, ssConfigs map[uint]*ShadowsocksConfigData, trojanConfigs map[uint]*vo.TrojanConfig, vlessConfigs map[uint]*vo.VLESSConfig, vmessConfigs map[uint]*vo.VMessConfig, hysteria2Configs map[uint]*vo.Hysteria2Config, tuicConfigs map[uint]*vo.TUICConfig, anytlsConfigs map[uint]*vo.AnyTLSConfig) ([]*node.Node, error)
 
 	// ToModels converts multiple domain entities to persistence models
 	ToModels(entities []*node.Node) ([]*models.NodeModel, error)
@@ -81,7 +82,7 @@ func NewNodeMapper() NodeMapper {
 
 // ToEntity converts a persistence model to a domain entity
 // Protocol-specific configs are loaded separately and passed in
-func (m *NodeMapperImpl) ToEntity(model *models.NodeModel, encryptionConfig vo.EncryptionConfig, pluginConfig *vo.PluginConfig, trojanConfig *vo.TrojanConfig, vlessConfig *vo.VLESSConfig, vmessConfig *vo.VMessConfig, hysteria2Config *vo.Hysteria2Config, tuicConfig *vo.TUICConfig) (*node.Node, error) {
+func (m *NodeMapperImpl) ToEntity(model *models.NodeModel, encryptionConfig vo.EncryptionConfig, pluginConfig *vo.PluginConfig, trojanConfig *vo.TrojanConfig, vlessConfig *vo.VLESSConfig, vmessConfig *vo.VMessConfig, hysteria2Config *vo.Hysteria2Config, tuicConfig *vo.TUICConfig, anytlsConfig *vo.AnyTLSConfig) (*node.Node, error) {
 	if model == nil {
 		return nil, nil
 	}
@@ -162,6 +163,7 @@ func (m *NodeMapperImpl) ToEntity(model *models.NodeModel, encryptionConfig vo.E
 		vmessConfig,
 		hysteria2Config,
 		tuicConfig,
+		anytlsConfig,
 		nodeStatus,
 		metadata,
 		groupIDs,
@@ -277,7 +279,7 @@ func (m *NodeMapperImpl) ToModel(entity *node.Node) (*models.NodeModel, error) {
 // vmessConfigs is a map of nodeID -> VMessConfig
 // hysteria2Configs is a map of nodeID -> Hysteria2Config
 // tuicConfigs is a map of nodeID -> TUICConfig
-func (m *NodeMapperImpl) ToEntities(nodeModels []*models.NodeModel, ssConfigs map[uint]*ShadowsocksConfigData, trojanConfigs map[uint]*vo.TrojanConfig, vlessConfigs map[uint]*vo.VLESSConfig, vmessConfigs map[uint]*vo.VMessConfig, hysteria2Configs map[uint]*vo.Hysteria2Config, tuicConfigs map[uint]*vo.TUICConfig) ([]*node.Node, error) {
+func (m *NodeMapperImpl) ToEntities(nodeModels []*models.NodeModel, ssConfigs map[uint]*ShadowsocksConfigData, trojanConfigs map[uint]*vo.TrojanConfig, vlessConfigs map[uint]*vo.VLESSConfig, vmessConfigs map[uint]*vo.VMessConfig, hysteria2Configs map[uint]*vo.Hysteria2Config, tuicConfigs map[uint]*vo.TUICConfig, anytlsConfigs map[uint]*vo.AnyTLSConfig) ([]*node.Node, error) {
 	entities := make([]*node.Node, 0, len(nodeModels))
 
 	for _, model := range nodeModels {
@@ -289,6 +291,7 @@ func (m *NodeMapperImpl) ToEntities(nodeModels []*models.NodeModel, ssConfigs ma
 		var vmessConfig *vo.VMessConfig
 		var hysteria2Config *vo.Hysteria2Config
 		var tuicConfig *vo.TUICConfig
+		var anytlsConfig *vo.AnyTLSConfig
 
 		switch model.Protocol {
 		case "shadowsocks":
@@ -318,9 +321,13 @@ func (m *NodeMapperImpl) ToEntities(nodeModels []*models.NodeModel, ssConfigs ma
 			if tuicConfigs != nil {
 				tuicConfig = tuicConfigs[model.ID]
 			}
+		case "anytls":
+			if anytlsConfigs != nil {
+				anytlsConfig = anytlsConfigs[model.ID]
+			}
 		}
 
-		entity, err := m.ToEntity(model, encryptionConfig, pluginConfig, trojanConfig, vlessConfig, vmessConfig, hysteria2Config, tuicConfig)
+		entity, err := m.ToEntity(model, encryptionConfig, pluginConfig, trojanConfig, vlessConfig, vmessConfig, hysteria2Config, tuicConfig, anytlsConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to map model ID %d: %w", model.ID, err)
 		}

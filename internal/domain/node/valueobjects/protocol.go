@@ -16,6 +16,8 @@ const (
 	ProtocolHysteria2 Protocol = "hysteria2"
 	// ProtocolTUIC represents the TUIC protocol
 	ProtocolTUIC Protocol = "tuic"
+	// ProtocolAnyTLS represents the AnyTLS protocol
+	ProtocolAnyTLS Protocol = "anytls"
 )
 
 var validProtocols = map[Protocol]bool{
@@ -25,6 +27,7 @@ var validProtocols = map[Protocol]bool{
 	ProtocolVMess:       true,
 	ProtocolHysteria2:   true,
 	ProtocolTUIC:        true,
+	ProtocolAnyTLS:      true,
 }
 
 // String returns the string representation of the protocol
@@ -70,4 +73,9 @@ func (p Protocol) IsHysteria2() bool {
 // IsTUIC checks if the protocol is TUIC
 func (p Protocol) IsTUIC() bool {
 	return p == ProtocolTUIC
+}
+
+// IsAnyTLS checks if the protocol is AnyTLS
+func (p Protocol) IsAnyTLS() bool {
+	return p == ProtocolAnyTLS
 }

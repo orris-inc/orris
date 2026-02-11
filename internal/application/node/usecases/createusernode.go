@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/orris-inc/orris/internal/domain/node"
 	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
@@ -71,6 +72,14 @@ type CreateUserNodeCommand struct {
 	TUICSni               string
 	TUICAllowInsecure     bool
 	TUICDisableSNI        bool
+
+	// AnyTLS specific fields
+	AnyTLSSni                      string
+	AnyTLSAllowInsecure            bool
+	AnyTLSFingerprint              string
+	AnyTLSIdleSessionCheckInterval string
+	AnyTLSIdleSessionTimeout       string
+	AnyTLSMinIdleSession           int
 }
 
 type CreateUserNodeResult struct {
@@ -164,6 +173,7 @@ func (uc *CreateUserNodeUseCase) Execute(ctx context.Context, cmd CreateUserNode
 	var vmessConfig *vo.VMessConfig
 	var hysteria2Config *vo.Hysteria2Config
 	var tuicConfig *vo.TUICConfig
+	var anytlsConfig *vo.AnyTLSConfig
 
 	if protocol.IsShadowsocks() {
 		encryptionConfig, err = vo.NewEncryptionConfig(cmd.Method)
@@ -346,6 +356,22 @@ func (uc *CreateUserNodeUseCase) Execute(ctx context.Context, cmd CreateUserNode
 			return nil, err
 		}
 		tuicConfig = &tc
+	} else if protocol.IsAnyTLS() {
+		// Create AnyTLS config
+		ac, err := vo.NewAnyTLSConfig(
+			"placeholder", // Password will be replaced by subscription UUID
+			cmd.AnyTLSSni,
+			cmd.AnyTLSAllowInsecure,
+			cmd.AnyTLSFingerprint,
+			cmd.AnyTLSIdleSessionCheckInterval,
+			cmd.AnyTLSIdleSessionTimeout,
+			cmd.AnyTLSMinIdleSession,
+		)
+		if err != nil {
+			uc.logger.Errorw("invalid AnyTLS config", "error", err)
+			return nil, err
+		}
+		anytlsConfig = &ac
 	}
 
 	// Create metadata (user nodes don't have region/tags/description)
@@ -365,6 +391,7 @@ func (uc *CreateUserNodeUseCase) Execute(ctx context.Context, cmd CreateUserNode
 		vmessConfig,
 		hysteria2Config,
 		tuicConfig,
+		anytlsConfig,
 		metadata,
 		0,   // sortOrder not used for user nodes
 		nil, // routeConfig - can be set later via UpdateRouteConfig
@@ -481,6 +508,13 @@ func (uc *CreateUserNodeUseCase) validateCommand(cmd CreateUserNodeCommand) erro
 	// Validate TUIC-specific requirements
 	if cmd.Protocol == "tuic" {
 		if err := uc.validateTUICCommand(cmd); err != nil {
+			return err
+		}
+	}
+
+	// Validate AnyTLS-specific requirements
+	if cmd.Protocol == "anytls" {
+		if err := uc.validateAnyTLSCommand(cmd); err != nil {
 			return err
 		}
 	}
@@ -616,6 +650,25 @@ func (uc *CreateUserNodeUseCase) validateTUICCommand(cmd CreateUserNodeCommand) 
 	validRelayMode := map[string]bool{"native": true, "quic": true}
 	if cmd.TUICUDPRelayMode != "" && !validRelayMode[cmd.TUICUDPRelayMode] {
 		return errors.NewValidationError("invalid TUIC UDP relay mode (must be native or quic)")
+	}
+
+	return nil
+}
+
+// validateAnyTLSCommand validates AnyTLS protocol specific requirements
+func (uc *CreateUserNodeUseCase) validateAnyTLSCommand(cmd CreateUserNodeCommand) error {
+	// Validate idle session check interval (must be valid Go duration if non-empty)
+	if cmd.AnyTLSIdleSessionCheckInterval != "" {
+		if _, err := time.ParseDuration(cmd.AnyTLSIdleSessionCheckInterval); err != nil {
+			return errors.NewValidationError("invalid AnyTLS idle session check interval (must be a valid duration, e.g. '30s', '1m')")
+		}
+	}
+
+	// Validate idle session timeout (must be valid Go duration if non-empty)
+	if cmd.AnyTLSIdleSessionTimeout != "" {
+		if _, err := time.ParseDuration(cmd.AnyTLSIdleSessionTimeout); err != nil {
+			return errors.NewValidationError("invalid AnyTLS idle session timeout (must be a valid duration, e.g. '30s', '1m')")
+		}
 	}
 
 	return nil

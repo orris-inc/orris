@@ -43,6 +43,7 @@ func newShadowsocksNode(t *testing.T) *Node {
 		nil, // vmessConfig
 		nil, // hysteria2Config
 		nil, // tuicConfig
+		nil, // anytlsConfig
 		meta,
 		0,   // sortOrder
 		nil, // routeConfig
@@ -76,6 +77,7 @@ func newTrojanNode(t *testing.T) *Node {
 		nil,
 		nil,
 		nil,
+		nil, // anytlsConfig
 		meta,
 		0,
 		nil,
@@ -118,6 +120,7 @@ func reconstructedNode(t *testing.T, status vo.NodeStatus) *Node {
 		nil,    // vmessConfig
 		nil,    // hysteria2Config
 		nil,    // tuicConfig
+		nil,    // anytlsConfig
 		status, // status
 		meta,
 		[]uint{1, 2},    // groupIDs
@@ -162,7 +165,7 @@ func TestNewNode_ValidInput_Shadowsocks(t *testing.T) {
 		nil,
 		vo.ProtocolShadowsocks,
 		enc,
-		nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil,
 		meta,
 		10,
 		nil,
@@ -210,7 +213,7 @@ func TestNewNode_ValidInput_Trojan(t *testing.T) {
 		&subPort,
 		vo.ProtocolTrojan,
 		vo.EncryptionConfig{},
-		nil, &trojanCfg, nil, nil, nil, nil,
+		nil, &trojanCfg, nil, nil, nil, nil, nil,
 		meta,
 		0,
 		nil,
@@ -256,7 +259,7 @@ func TestNewNode_ValidInput_VLESS(t *testing.T) {
 		nil,
 		vo.ProtocolVLESS,
 		vo.EncryptionConfig{},
-		nil, nil, &vlessCfg, nil, nil, nil,
+		nil, nil, &vlessCfg, nil, nil, nil, nil,
 		meta,
 		0,
 		nil,
@@ -295,7 +298,7 @@ func TestNewNode_ValidInput_VMess(t *testing.T) {
 		nil,
 		vo.ProtocolVMess,
 		vo.EncryptionConfig{},
-		nil, nil, nil, &vmessCfg, nil, nil,
+		nil, nil, nil, &vmessCfg, nil, nil, nil,
 		meta,
 		0,
 		nil,
@@ -334,7 +337,7 @@ func TestNewNode_ValidInput_Hysteria2(t *testing.T) {
 		nil,
 		vo.ProtocolHysteria2,
 		vo.EncryptionConfig{},
-		nil, nil, nil, nil, &hy2Cfg, nil,
+		nil, nil, nil, nil, &hy2Cfg, nil, nil,
 		meta,
 		0,
 		nil,
@@ -372,7 +375,7 @@ func TestNewNode_ValidInput_TUIC(t *testing.T) {
 		nil,
 		vo.ProtocolTUIC,
 		vo.EncryptionConfig{},
-		nil, nil, nil, nil, nil, &tuicCfg,
+		nil, nil, nil, nil, nil, &tuicCfg, nil,
 		meta,
 		0,
 		nil,
@@ -396,7 +399,7 @@ func TestNewNode_InvalidProtocol(t *testing.T) {
 		nil,
 		vo.Protocol("wireguard"), // not a valid protocol
 		vo.EncryptionConfig{},
-		nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil,
 		vo.NewNodeMetadata("", nil, ""),
 		0,
 		nil,
@@ -421,7 +424,7 @@ func TestNewNode_MissingName(t *testing.T) {
 		nil,
 		vo.ProtocolShadowsocks,
 		enc,
-		nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil,
 		vo.NewNodeMetadata("", nil, ""),
 		0,
 		nil,
@@ -446,7 +449,7 @@ func TestNewNode_MissingAgentPort(t *testing.T) {
 		nil,
 		vo.ProtocolShadowsocks,
 		enc,
-		nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil,
 		vo.NewNodeMetadata("", nil, ""),
 		0,
 		nil,
@@ -468,7 +471,7 @@ func TestNewNode_ShadowsocksMissingEncryption(t *testing.T) {
 		nil,
 		vo.ProtocolShadowsocks,
 		vo.EncryptionConfig{}, // empty encryption config
-		nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil,
 		vo.NewNodeMetadata("", nil, ""),
 		0,
 		nil,
@@ -490,7 +493,7 @@ func TestNewNode_TrojanMissingConfig(t *testing.T) {
 		nil,
 		vo.ProtocolTrojan,
 		vo.EncryptionConfig{},
-		nil, nil, nil, nil, nil, nil, // trojanConfig = nil
+		nil, nil, nil, nil, nil, nil, nil, // trojanConfig = nil, anytlsConfig = nil
 		vo.NewNodeMetadata("", nil, ""),
 		0,
 		nil,
@@ -512,7 +515,7 @@ func TestNewNode_VLESSMissingConfig(t *testing.T) {
 		nil,
 		vo.ProtocolVLESS,
 		vo.EncryptionConfig{},
-		nil, nil, nil, nil, nil, nil, // vlessConfig = nil
+		nil, nil, nil, nil, nil, nil, nil, // vlessConfig = nil, anytlsConfig = nil
 		vo.NewNodeMetadata("", nil, ""),
 		0,
 		nil,
@@ -534,7 +537,7 @@ func TestNewNode_VMessMissingConfig(t *testing.T) {
 		nil,
 		vo.ProtocolVMess,
 		vo.EncryptionConfig{},
-		nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil,
 		vo.NewNodeMetadata("", nil, ""),
 		0,
 		nil,
@@ -556,7 +559,7 @@ func TestNewNode_Hysteria2MissingConfig(t *testing.T) {
 		nil,
 		vo.ProtocolHysteria2,
 		vo.EncryptionConfig{},
-		nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil,
 		vo.NewNodeMetadata("", nil, ""),
 		0,
 		nil,
@@ -578,7 +581,7 @@ func TestNewNode_TUICMissingConfig(t *testing.T) {
 		nil,
 		vo.ProtocolTUIC,
 		vo.EncryptionConfig{},
-		nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil,
 		vo.NewNodeMetadata("", nil, ""),
 		0,
 		nil,
@@ -587,6 +590,66 @@ func TestNewNode_TUICMissingConfig(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "tuic config is required for TUIC protocol")
+}
+
+func TestNewNode_ValidInput_AnyTLS(t *testing.T) {
+	addr, err := vo.NewServerAddress("anytls.example.com")
+	require.NoError(t, err)
+
+	anytlsCfg, err := vo.NewAnyTLSConfig("securepass123", "anytls.example.com", false, "chrome", "30s", "30s", 2)
+	require.NoError(t, err)
+
+	meta := vo.NewNodeMetadata("ap-east", nil, "anytls node")
+
+	n, err := NewNode(
+		"test-anytls-node",
+		addr,
+		443,
+		nil,
+		vo.ProtocolAnyTLS,
+		vo.EncryptionConfig{},
+		nil,          // pluginConfig
+		nil,          // trojanConfig
+		nil,          // vlessConfig
+		nil,          // vmessConfig
+		nil,          // hysteria2Config
+		nil,          // tuicConfig
+		&anytlsCfg,   // anytlsConfig
+		meta,
+		0,
+		nil,
+		fakeSIDGenerator("node_anytls789"),
+	)
+
+	require.NoError(t, err)
+	assert.Equal(t, "test-anytls-node", n.Name())
+	assert.True(t, n.Protocol().IsAnyTLS())
+	require.NotNil(t, n.AnyTLSConfig())
+	assert.Equal(t, "anytls.example.com", n.AnyTLSConfig().SNI())
+	assert.Equal(t, "chrome", n.AnyTLSConfig().Fingerprint())
+	assert.Equal(t, 2, n.AnyTLSConfig().MinIdleSession())
+}
+
+func TestNewNode_AnyTLSMissingConfig(t *testing.T) {
+	addr, err := vo.NewServerAddress("1.2.3.4")
+	require.NoError(t, err)
+
+	_, err = NewNode(
+		"anytls-no-cfg",
+		addr,
+		443,
+		nil,
+		vo.ProtocolAnyTLS,
+		vo.EncryptionConfig{},
+		nil, nil, nil, nil, nil, nil, nil, // anytlsConfig = nil
+		vo.NewNodeMetadata("", nil, ""),
+		0,
+		nil,
+		fakeSIDGenerator("node_noanytls"),
+	)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "anytls config is required for AnyTLS protocol")
 }
 
 func TestNewNode_WithSubscriptionPort(t *testing.T) {
@@ -620,7 +683,7 @@ func TestReconstructNode_ZeroID(t *testing.T) {
 	_, err = ReconstructNode(
 		0, "node_x", "name", addr, 8388, nil,
 		vo.ProtocolShadowsocks, enc,
-		nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil,
 		vo.NodeStatusActive,
 		vo.NewNodeMetadata("", nil, ""),
 		nil, nil,
@@ -642,7 +705,7 @@ func TestReconstructNode_EmptySID(t *testing.T) {
 	_, err = ReconstructNode(
 		1, "", "name", addr, 8388, nil,
 		vo.ProtocolShadowsocks, enc,
-		nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil,
 		vo.NodeStatusActive,
 		vo.NewNodeMetadata("", nil, ""),
 		nil, nil,
@@ -664,7 +727,7 @@ func TestReconstructNode_EmptyTokenHash(t *testing.T) {
 	_, err = ReconstructNode(
 		1, "node_x", "name", addr, 8388, nil,
 		vo.ProtocolShadowsocks, enc,
-		nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil,
 		vo.NodeStatusActive,
 		vo.NewNodeMetadata("", nil, ""),
 		nil, nil,
@@ -1117,7 +1180,7 @@ func TestNode_IsOnline(t *testing.T) {
 		n2, err := ReconstructNode(
 			2, "node_online001", "online-node", addr, 8388, nil,
 			vo.ProtocolShadowsocks, enc,
-			nil, nil, nil, nil, nil, nil,
+			nil, nil, nil, nil, nil, nil, nil,
 			vo.NodeStatusActive,
 			vo.NewNodeMetadata("", nil, ""),
 			nil, nil,
@@ -1141,7 +1204,7 @@ func TestNode_IsOnline(t *testing.T) {
 		n, err := ReconstructNode(
 			3, "node_stale001", "stale-node", addr, 8388, nil,
 			vo.ProtocolShadowsocks, enc,
-			nil, nil, nil, nil, nil, nil,
+			nil, nil, nil, nil, nil, nil, nil,
 			vo.NodeStatusActive,
 			vo.NewNodeMetadata("", nil, ""),
 			nil, nil,
@@ -1322,7 +1385,7 @@ func TestNode_EffectiveServerAddress(t *testing.T) {
 		n, err := ReconstructNode(
 			4, "node_fb001", "fallback-node", addr, 8388, nil,
 			vo.ProtocolShadowsocks, enc,
-			nil, nil, nil, nil, nil, nil,
+			nil, nil, nil, nil, nil, nil, nil,
 			vo.NodeStatusActive,
 			vo.NewNodeMetadata("", nil, ""),
 			nil, nil,
@@ -1345,7 +1408,7 @@ func TestNode_EffectiveServerAddress(t *testing.T) {
 		n, err := ReconstructNode(
 			5, "node_empty001", "empty-addr-node", addr, 8388, nil,
 			vo.ProtocolShadowsocks, enc,
-			nil, nil, nil, nil, nil, nil,
+			nil, nil, nil, nil, nil, nil, nil,
 			vo.NodeStatusActive,
 			vo.NewNodeMetadata("", nil, ""),
 			nil, nil,
@@ -1472,6 +1535,53 @@ func TestNode_UpdateTUICConfig_ProtocolMismatch(t *testing.T) {
 	assert.Contains(t, err.Error(), "cannot update tuic config for non-tuic protocol")
 }
 
+func TestNode_UpdateAnyTLSConfig_ProtocolMismatch(t *testing.T) {
+	n := newShadowsocksNode(t) // Shadowsocks node
+
+	anytlsCfg, err := vo.NewAnyTLSConfig("securepass123", "example.com", false, "chrome", "", "", 0)
+	require.NoError(t, err)
+
+	err = n.UpdateAnyTLSConfig(&anytlsCfg)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "cannot update anytls config for non-anytls protocol")
+}
+
+func TestNode_UpdateAnyTLSConfig_CorrectProtocol(t *testing.T) {
+	addr, err := vo.NewServerAddress("anytls.example.com")
+	require.NoError(t, err)
+
+	anytlsCfg, err := vo.NewAnyTLSConfig("securepass123", "anytls.example.com", false, "chrome", "", "", 0)
+	require.NoError(t, err)
+
+	n, err := NewNode(
+		"test-anytls-update",
+		addr,
+		443,
+		nil,
+		vo.ProtocolAnyTLS,
+		vo.EncryptionConfig{},
+		nil, nil, nil, nil, nil, nil, &anytlsCfg,
+		vo.NewNodeMetadata("", nil, ""),
+		0,
+		nil,
+		fakeSIDGenerator("node_anytlsupd"),
+	)
+	require.NoError(t, err)
+	initialVersion := n.Version()
+
+	newCfg, err := vo.NewAnyTLSConfig("newlongpassword1", "new.example.com", true, "firefox", "60s", "120s", 5)
+	require.NoError(t, err)
+
+	err = n.UpdateAnyTLSConfig(&newCfg)
+	require.NoError(t, err)
+	assert.Equal(t, initialVersion+1, n.Version())
+	require.NotNil(t, n.AnyTLSConfig())
+	assert.Equal(t, "new.example.com", n.AnyTLSConfig().SNI())
+	assert.Equal(t, "firefox", n.AnyTLSConfig().Fingerprint())
+	assert.Equal(t, 5, n.AnyTLSConfig().MinIdleSession())
+	assert.True(t, n.AnyTLSConfig().AllowInsecure())
+}
+
 func TestNode_UpdateTrojanConfig_CorrectProtocol(t *testing.T) {
 	n := newTrojanNode(t)
 	initialVersion := n.Version()
@@ -1506,7 +1616,7 @@ func TestNode_Validate(t *testing.T) {
 		n, err := ReconstructNode(
 			10, "node_val001", "val-node", addr, 8388, nil,
 			vo.ProtocolShadowsocks, enc,
-			nil, nil, nil, nil, nil, nil,
+			nil, nil, nil, nil, nil, nil, nil,
 			vo.NodeStatusMaintenance, // maintenance status
 			vo.NewNodeMetadata("", nil, ""),
 			nil, nil,
@@ -1566,7 +1676,7 @@ func TestNode_AgentInfo(t *testing.T) {
 	n, err := ReconstructNode(
 		6, "node_agent001", "agent-info-node", addr, 8388, nil,
 		vo.ProtocolShadowsocks, enc,
-		nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil,
 		vo.NodeStatusActive,
 		vo.NewNodeMetadata("", nil, ""),
 		nil, nil,
@@ -1647,7 +1757,7 @@ func TestNewNode_EmptyServerAddress(t *testing.T) {
 		nil,
 		vo.ProtocolShadowsocks,
 		enc,
-		nil, nil, nil, nil, nil, nil,
+		nil, nil, nil, nil, nil, nil, nil,
 		vo.NewNodeMetadata("", nil, ""),
 		0,
 		nil,

@@ -166,3 +166,20 @@ func GenerateTrojanServerPassword(tokenHash string) string {
 	// Return as hex string (64 chars, common Trojan password format)
 	return fmt.Sprintf("%x", keyMaterial)
 }
+
+// GenerateAnyTLSServerPassword derives an AnyTLS password from node token hash.
+// This is used for node-to-node forwarding (outbound) scenarios.
+// Returns a hex-encoded 32-byte password derived using HMAC-SHA256.
+func GenerateAnyTLSServerPassword(tokenHash string) string {
+	if tokenHash == "" {
+		return ""
+	}
+
+	// Derive password using HMAC-SHA256 with a fixed salt
+	mac := hmac.New(sha256.New, []byte("anytls-server-password"))
+	mac.Write([]byte(tokenHash))
+	keyMaterial := mac.Sum(nil) // 32 bytes
+
+	// Return as hex string (64 chars)
+	return fmt.Sprintf("%x", keyMaterial)
+}

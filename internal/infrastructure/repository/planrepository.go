@@ -206,6 +206,10 @@ func (r *PlanRepositoryImpl) List(ctx context.Context, filter subscription.PlanF
 		query = query.Where("is_public = ?", *filter.IsPublic)
 	}
 
+	if filter.PlanType != nil && *filter.PlanType != "" {
+		query = query.Where("plan_type = ?", *filter.PlanType)
+	}
+
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
 		r.logger.Errorw("failed to count subscription plans", "error", err)

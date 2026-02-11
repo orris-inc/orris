@@ -29,6 +29,7 @@ type ProtocolConfigs struct {
 	VMess       map[uint]*models.VMessConfigModel
 	Hysteria2   map[uint]*models.Hysteria2ConfigModel
 	TUIC        map[uint]*models.TUICConfigModel
+	AnyTLS      map[uint]*models.AnyTLSConfigModel
 }
 
 // NewProtocolConfigs creates an empty ProtocolConfigs instance.
@@ -40,6 +41,7 @@ func NewProtocolConfigs() ProtocolConfigs {
 		VMess:       make(map[uint]*models.VMessConfigModel),
 		Hysteria2:   make(map[uint]*models.Hysteria2ConfigModel),
 		TUIC:        make(map[uint]*models.TUICConfigModel),
+		AnyTLS:      make(map[uint]*models.AnyTLSConfigModel),
 	}
 }
 
@@ -85,6 +87,8 @@ func ApplyProtocolConfig(node *usecases.Node, protocol string, nodeID uint, conf
 		applyHysteria2Config(node, nodeID, configs.Hysteria2)
 	case "tuic":
 		applyTUICConfig(node, nodeID, configs.TUIC)
+	case "anytls":
+		applyAnyTLSConfig(node, nodeID, configs.AnyTLS)
 	}
 }
 
@@ -198,6 +202,21 @@ func applyTUICConfig(node *usecases.Node, nodeID uint, configs map[uint]*models.
 	node.TUICConfig = config
 }
 
+// applyAnyTLSConfig applies AnyTLS-specific configuration to a node.
+func applyAnyTLSConfig(node *usecases.Node, nodeID uint, configs map[uint]*models.AnyTLSConfigModel) {
+	ac, ok := configs[nodeID]
+	if !ok {
+		return
+	}
+
+	mapper := mappers.NewAnyTLSConfigMapper()
+	config, err := mapper.ToValueObject(ac, mappers.PlaceholderPassword)
+	if err != nil {
+		return
+	}
+	node.AnyTLSConfig = config
+}
+
 // ResolveServerAddress returns the effective server address for subscription.
 // If server address is configured, use it; otherwise fall back to agent's reported public IP.
 func ResolveServerAddress(configuredAddr string, publicIPv4, publicIPv6 *string) string {
@@ -251,4 +270,5 @@ func CopyProtocolFieldsFromNode(dst, src *usecases.Node) {
 	dst.VMessConfig = src.VMessConfig
 	dst.Hysteria2Config = src.Hysteria2Config
 	dst.TUICConfig = src.TUICConfig
+	dst.AnyTLSConfig = src.AnyTLSConfig
 }

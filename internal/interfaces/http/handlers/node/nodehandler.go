@@ -280,7 +280,7 @@ type CreateNodeRequest struct {
 	ServerAddress    string            `json:"server_address,omitempty" example:"1.2.3.4"`
 	AgentPort        uint16            `json:"agent_port" binding:"required" example:"8388" comment:"Port for agent connections"`
 	SubscriptionPort *uint16           `json:"subscription_port,omitempty" example:"8389" comment:"Port for client subscriptions (if null, uses agent_port)"`
-	Protocol         string            `json:"protocol" binding:"required,oneof=shadowsocks trojan vless vmess hysteria2 tuic" example:"shadowsocks" comment:"Protocol type"`
+	Protocol         string            `json:"protocol" binding:"required,oneof=shadowsocks trojan vless vmess hysteria2 tuic anytls" example:"shadowsocks" comment:"Protocol type"`
 	EncryptionMethod string            `json:"encryption_method,omitempty" example:"aes-256-gcm" comment:"Encryption method (for Shadowsocks)"`
 	Plugin           *string           `json:"plugin,omitempty" example:"obfs-local"`
 	PluginOpts       map[string]string `json:"plugin_opts,omitempty"`
@@ -341,6 +341,14 @@ type CreateNodeRequest struct {
 	TUICSni               string `json:"tuic_sni,omitempty" comment:"TUIC TLS SNI"`
 	TUICAllowInsecure     bool   `json:"tuic_allow_insecure,omitempty" comment:"TUIC allow insecure TLS"`
 	TUICDisableSNI        bool   `json:"tuic_disable_sni,omitempty" comment:"TUIC disable SNI"`
+
+	// AnyTLS specific fields
+	AnyTLSSni                      string `json:"anytls_sni,omitempty" comment:"AnyTLS TLS SNI"`
+	AnyTLSAllowInsecure            bool   `json:"anytls_allow_insecure,omitempty" comment:"AnyTLS allow insecure TLS"`
+	AnyTLSFingerprint              string `json:"anytls_fingerprint,omitempty" comment:"AnyTLS TLS fingerprint"`
+	AnyTLSIdleSessionCheckInterval string `json:"anytls_idle_session_check_interval,omitempty" comment:"AnyTLS idle session check interval"`
+	AnyTLSIdleSessionTimeout       string `json:"anytls_idle_session_timeout,omitempty" comment:"AnyTLS idle session timeout"`
+	AnyTLSMinIdleSession           int    `json:"anytls_min_idle_session,omitempty" comment:"AnyTLS minimum idle sessions"`
 }
 
 func (r *CreateNodeRequest) ToCommand() usecases.CreateNodeCommand {
@@ -404,6 +412,13 @@ func (r *CreateNodeRequest) ToCommand() usecases.CreateNodeCommand {
 		TUICSni:               r.TUICSni,
 		TUICAllowInsecure:     r.TUICAllowInsecure,
 		TUICDisableSNI:        r.TUICDisableSNI,
+		// AnyTLS
+		AnyTLSSni:                      r.AnyTLSSni,
+		AnyTLSAllowInsecure:            r.AnyTLSAllowInsecure,
+		AnyTLSFingerprint:              r.AnyTLSFingerprint,
+		AnyTLSIdleSessionCheckInterval: r.AnyTLSIdleSessionCheckInterval,
+		AnyTLSIdleSessionTimeout:       r.AnyTLSIdleSessionTimeout,
+		AnyTLSMinIdleSession:           r.AnyTLSMinIdleSession,
 	}
 }
 
@@ -476,6 +491,14 @@ type UpdateNodeRequest struct {
 	TUICAllowInsecure     *bool   `json:"tuic_allow_insecure,omitempty" comment:"TUIC allow insecure TLS"`
 	TUICDisableSNI        *bool   `json:"tuic_disable_sni,omitempty" comment:"TUIC disable SNI"`
 
+	// AnyTLS specific fields
+	AnyTLSSni                      *string `json:"anytls_sni,omitempty" comment:"AnyTLS TLS SNI"`
+	AnyTLSAllowInsecure            *bool   `json:"anytls_allow_insecure,omitempty" comment:"AnyTLS allow insecure TLS"`
+	AnyTLSFingerprint              *string `json:"anytls_fingerprint,omitempty" comment:"AnyTLS TLS fingerprint"`
+	AnyTLSIdleSessionCheckInterval *string `json:"anytls_idle_session_check_interval,omitempty" comment:"AnyTLS idle session check interval"`
+	AnyTLSIdleSessionTimeout       *string `json:"anytls_idle_session_timeout,omitempty" comment:"AnyTLS idle session timeout"`
+	AnyTLSMinIdleSession           *int    `json:"anytls_min_idle_session,omitempty" comment:"AnyTLS minimum idle sessions"`
+
 	// Expiration and cost label fields
 	ExpiresAt *string `json:"expires_at,omitempty" example:"2025-12-31T23:59:59Z" comment:"Expiration time in ISO8601 format (empty string to clear, omit to keep unchanged)"`
 	CostLabel *string `json:"cost_label,omitempty" example:"35$/m" comment:"Cost label for display (empty string to clear, omit to keep unchanged)"`
@@ -545,6 +568,13 @@ func (r *UpdateNodeRequest) ToCommand(sid string) usecases.UpdateNodeCommand {
 		TUICSni:               r.TUICSni,
 		TUICAllowInsecure:     r.TUICAllowInsecure,
 		TUICDisableSNI:        r.TUICDisableSNI,
+		// AnyTLS
+		AnyTLSSni:                      r.AnyTLSSni,
+		AnyTLSAllowInsecure:            r.AnyTLSAllowInsecure,
+		AnyTLSFingerprint:              r.AnyTLSFingerprint,
+		AnyTLSIdleSessionCheckInterval: r.AnyTLSIdleSessionCheckInterval,
+		AnyTLSIdleSessionTimeout:       r.AnyTLSIdleSessionTimeout,
+		AnyTLSMinIdleSession:           r.AnyTLSMinIdleSession,
 	}
 
 	// Note: ExpiresAt is handled by the handler layer after ToCommand returns.

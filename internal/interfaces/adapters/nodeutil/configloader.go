@@ -37,6 +37,7 @@ func (l *ConfigLoader) LoadProtocolConfigs(ctx context.Context, nodeModels []mod
 	l.loadConfigsIntoMap(ctx, nodeIDsByProtocol["vmess"], &configs.VMess)
 	l.loadConfigsIntoMap(ctx, nodeIDsByProtocol["hysteria2"], &configs.Hysteria2)
 	l.loadConfigsIntoMap(ctx, nodeIDsByProtocol["tuic"], &configs.TUIC)
+	l.loadConfigsIntoMap(ctx, nodeIDsByProtocol["anytls"], &configs.AnyTLS)
 
 	return configs
 }
@@ -75,6 +76,8 @@ func (l *ConfigLoader) loadConfigsIntoMap(ctx context.Context, nodeIDs []uint, t
 		l.loadHysteria2Configs(ctx, nodeIDs, m)
 	case *map[uint]*models.TUICConfigModel:
 		l.loadTUICConfigs(ctx, nodeIDs, m)
+	case *map[uint]*models.AnyTLSConfigModel:
+		l.loadAnyTLSConfigs(ctx, nodeIDs, m)
 	}
 }
 
@@ -155,6 +158,20 @@ func (l *ConfigLoader) loadTUICConfigs(ctx context.Context, nodeIDs []uint, targ
 		Where("node_id IN ?", nodeIDs).
 		Find(&configs).Error; err != nil {
 		l.logger.Warnw("failed to query TUIC configs", "error", err)
+		return
+	}
+	for i := range configs {
+		(*targetMap)[configs[i].NodeID] = &configs[i]
+	}
+}
+
+// loadAnyTLSConfigs loads AnyTLS configs into the provided map.
+func (l *ConfigLoader) loadAnyTLSConfigs(ctx context.Context, nodeIDs []uint, targetMap *map[uint]*models.AnyTLSConfigModel) {
+	var configs []models.AnyTLSConfigModel
+	if err := l.db.WithContext(ctx).
+		Where("node_id IN ?", nodeIDs).
+		Find(&configs).Error; err != nil {
+		l.logger.Warnw("failed to query AnyTLS configs", "error", err)
 		return
 	}
 	for i := range configs {

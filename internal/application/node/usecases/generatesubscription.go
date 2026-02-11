@@ -247,6 +247,7 @@ func (uc *GenerateSubscriptionUseCase) createInfoNode(template *Node, name strin
 		VMessConfig:     template.VMessConfig,
 		Hysteria2Config: template.Hysteria2Config,
 		TUICConfig:      template.TUICConfig,
+		AnyTLSConfig:    template.AnyTLSConfig,
 		SortOrder:       sortOrder,
 	}
 }
@@ -450,6 +451,7 @@ type Node struct {
 	VMessConfig     *valueobjects.VMessConfig
 	Hysteria2Config *valueobjects.Hysteria2Config
 	TUICConfig      *valueobjects.TUICConfig
+	AnyTLSConfig    *valueobjects.AnyTLSConfig
 	// Sorting field for subscription output ordering
 	SortOrder int
 }

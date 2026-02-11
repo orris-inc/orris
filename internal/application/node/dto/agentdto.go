@@ -19,7 +19,7 @@ import (
 // Compatible with sing-box inbound configuration
 type NodeConfigResponse struct {
 	NodeSID           string          `json:"node_id" binding:"required"`                                                      // Node SID (Stripe-style: node_xxx)
-	Protocol          string          `json:"protocol" binding:"required,oneof=shadowsocks trojan vless vmess hysteria2 tuic"` // Protocol type
+	Protocol          string          `json:"protocol" binding:"required,oneof=shadowsocks trojan vless vmess hysteria2 tuic anytls"` // Protocol type
 	ServerHost        string          `json:"server_host" binding:"required"`                                                  // Server hostname or IP address
 	ServerPort        int             `json:"server_port" binding:"required,min=1,max=65535"`                                  // Server port number
 	EncryptionMethod  string          `json:"encryption_method,omitempty"`                                                     // Encryption method for Shadowsocks
@@ -65,6 +65,12 @@ type NodeConfigResponse struct {
 	TUICUDPRelayMode      string `json:"tuic_udp_relay_mode,omitempty"`     // UDP relay mode (native, quic)
 	TUICAlpn              string `json:"tuic_alpn,omitempty"`               // ALPN protocols
 	TUICDisableSNI        bool   `json:"tuic_disable_sni,omitempty"`        // Disable SNI
+
+	// AnyTLS specific fields
+	AnyTLSFingerprint              string `json:"anytls_fingerprint,omitempty"`                // TLS fingerprint for AnyTLS
+	AnyTLSIdleSessionCheckInterval string `json:"anytls_idle_session_check_interval,omitempty"` // Idle session check interval
+	AnyTLSIdleSessionTimeout       string `json:"anytls_idle_session_timeout,omitempty"`        // Idle session timeout
+	AnyTLSMinIdleSession           int    `json:"anytls_min_idle_session,omitempty"`             // Minimum idle sessions
 }
 
 // RouteConfigDTO represents the routing configuration for sing-box
@@ -144,6 +150,12 @@ type OutboundDTO struct {
 	// TUIC specific fields
 	TUICCongestionControl string `json:"congestion_control,omitempty"` // Congestion control algorithm
 	TUICUDPRelayMode      string `json:"udp_relay_mode,omitempty"`     // UDP relay mode
+
+	// AnyTLS specific fields
+	AnyTLSFingerprint              string `json:"anytls_fingerprint,omitempty"`                // TLS fingerprint
+	AnyTLSIdleSessionCheckInterval string `json:"anytls_idle_session_check_interval,omitempty"` // Idle session check interval
+	AnyTLSIdleSessionTimeout       string `json:"anytls_idle_session_timeout,omitempty"`        // Idle session timeout
+	AnyTLSMinIdleSession           int    `json:"anytls_min_idle_session,omitempty"`             // Minimum idle sessions
 }
 
 // OutboundTLSDTO represents TLS configuration for outbound.
@@ -381,6 +393,25 @@ func ToNodeConfigResponse(n *node.Node, referencedNodes []*node.Node, serverKeyF
 
 			// TUIC uses QUIC transport implicitly
 			config.TransportProtocol = "quic"
+		}
+
+	case n.Protocol().IsAnyTLS():
+		config.Protocol = "anytls"
+
+		// Extract AnyTLS-specific configuration
+		if n.AnyTLSConfig() != nil {
+			ac := n.AnyTLSConfig()
+			config.SNI = ac.SNI()
+			config.AllowInsecure = ac.AllowInsecure()
+
+			// AnyTLS specific fields
+			config.AnyTLSFingerprint = ac.Fingerprint()
+			config.AnyTLSIdleSessionCheckInterval = ac.IdleSessionCheckInterval()
+			config.AnyTLSIdleSessionTimeout = ac.IdleSessionTimeout()
+			config.AnyTLSMinIdleSession = ac.MinIdleSession()
+
+			// AnyTLS uses TLS transport
+			config.TransportProtocol = "tcp"
 		}
 	}
 
@@ -663,6 +694,27 @@ func ToOutboundDTO(n *node.Node, serverKey string) *OutboundDTO {
 			if tc.ALPN() != "" {
 				dto.TLS.ALPN = []string{tc.ALPN()}
 			}
+		}
+
+	case n.Protocol().IsAnyTLS():
+		dto.Type = "anytls"
+		dto.Password = serverKey // For AnyTLS, serverKey is the password
+
+		if n.AnyTLSConfig() != nil {
+			ac := n.AnyTLSConfig()
+
+			// TLS configuration (AnyTLS always uses TLS)
+			dto.TLS = &OutboundTLSDTO{
+				Enabled:    true,
+				ServerName: ac.SNI(),
+				Insecure:   ac.AllowInsecure(),
+			}
+
+			// AnyTLS specific fields
+			dto.AnyTLSFingerprint = ac.Fingerprint()
+			dto.AnyTLSIdleSessionCheckInterval = ac.IdleSessionCheckInterval()
+			dto.AnyTLSIdleSessionTimeout = ac.IdleSessionTimeout()
+			dto.AnyTLSMinIdleSession = ac.MinIdleSession()
 		}
 	}
 

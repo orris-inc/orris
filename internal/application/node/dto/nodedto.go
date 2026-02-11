@@ -14,7 +14,7 @@ type NodeDTO struct {
 	ServerAddress    string            `json:"server_address" example:"proxy.example.com" description:"Server hostname or IP address"`
 	AgentPort        uint16            `json:"agent_port" example:"8388" description:"Port for agent connections"`
 	SubscriptionPort *uint16           `json:"subscription_port,omitempty" example:"8389" description:"Port for client subscriptions (if null, uses agent_port)"`
-	Protocol         string            `json:"protocol" example:"shadowsocks" enums:"shadowsocks,trojan" description:"Proxy protocol type"`
+	Protocol         string            `json:"protocol" example:"shadowsocks" enums:"shadowsocks,trojan,vless,vmess,hysteria2,tuic,anytls" description:"Proxy protocol type"`
 	EncryptionMethod string            `json:"encryption_method" example:"aes-256-gcm" enums:"aes-256-gcm,aes-128-gcm,chacha20-ietf-poly1305" description:"Encryption method for the proxy connection"`
 	Plugin           string            `json:"plugin,omitempty" example:"obfs-local" description:"Optional plugin name"`
 	PluginOpts       map[string]string `json:"plugin_opts,omitempty" example:"obfs:http,obfs-host:example.com" description:"Plugin configuration options"`
@@ -71,9 +71,18 @@ type NodeDTO struct {
 	TUICUDPRelayMode      string     `json:"tuic_udp_relay_mode,omitempty" example:"native" enums:"native,quic" description:"TUIC UDP relay mode"`
 	TUICAlpn              string     `json:"tuic_alpn,omitempty" description:"TUIC ALPN protocols"`
 	TUICSni               string     `json:"tuic_sni,omitempty" description:"TUIC TLS SNI"`
-	TUICAllowInsecure     bool       `json:"tuic_allow_insecure,omitempty" description:"TUIC allow insecure TLS"`
-	TUICDisableSNI        bool       `json:"tuic_disable_sni,omitempty" description:"TUIC disable SNI"`
-	IsOnline              bool       `json:"is_online" example:"true" description:"Indicates if the node agent is online (reported within 5 minutes)"`
+	TUICAllowInsecure     bool   `json:"tuic_allow_insecure,omitempty" description:"TUIC allow insecure TLS"`
+	TUICDisableSNI        bool   `json:"tuic_disable_sni,omitempty" description:"TUIC disable SNI"`
+
+	// AnyTLS specific fields
+	AnyTLSSni                      string `json:"anytls_sni,omitempty" description:"AnyTLS TLS SNI"`
+	AnyTLSAllowInsecure            bool   `json:"anytls_allow_insecure,omitempty" description:"AnyTLS allow insecure TLS"`
+	AnyTLSFingerprint              string `json:"anytls_fingerprint,omitempty" description:"AnyTLS TLS fingerprint"`
+	AnyTLSIdleSessionCheckInterval string `json:"anytls_idle_session_check_interval,omitempty" description:"AnyTLS idle session check interval"`
+	AnyTLSIdleSessionTimeout       string `json:"anytls_idle_session_timeout,omitempty" description:"AnyTLS idle session timeout"`
+	AnyTLSMinIdleSession           int    `json:"anytls_min_idle_session,omitempty" description:"AnyTLS minimum idle sessions"`
+
+	IsOnline bool `json:"is_online" example:"true" description:"Indicates if the node agent is online (reported within 5 minutes)"`
 	LastSeenAt            *time.Time `json:"last_seen_at,omitempty" example:"2024-01-15T14:20:00Z" description:"Last time the node agent reported status"`
 	ExpiresAt             *string    `json:"expires_at,omitempty" example:"2025-12-31T23:59:59Z" description:"Expiration time in ISO8601 format (null = never expires)"`
 	CostLabel             string     `json:"cost_label,omitempty" example:"35$/m" description:"Cost label for display (e.g., '35$/m', '35¥/y')"`
@@ -274,6 +283,16 @@ func ToNodeDTO(n *node.Node) *NodeDTO {
 		dto.TUICDisableSNI = n.TUICConfig().DisableSNI()
 	}
 
+	// Map AnyTLS specific fields
+	if n.AnyTLSConfig() != nil {
+		dto.AnyTLSSni = n.AnyTLSConfig().SNI()
+		dto.AnyTLSAllowInsecure = n.AnyTLSConfig().AllowInsecure()
+		dto.AnyTLSFingerprint = n.AnyTLSConfig().Fingerprint()
+		dto.AnyTLSIdleSessionCheckInterval = n.AnyTLSConfig().IdleSessionCheckInterval()
+		dto.AnyTLSIdleSessionTimeout = n.AnyTLSConfig().IdleSessionTimeout()
+		dto.AnyTLSMinIdleSession = n.AnyTLSConfig().MinIdleSession()
+	}
+
 	metadata := n.Metadata()
 	if metadata.Region() != "" {
 		dto.Region = metadata.Region()
@@ -302,7 +321,7 @@ type UserNodeDTO struct {
 	ServerAddress    string     `json:"server_address" example:"proxy.example.com" description:"Server hostname or IP address"`
 	AgentPort        uint16     `json:"agent_port" example:"8388" description:"Port for agent connections"`
 	SubscriptionPort *uint16    `json:"subscription_port,omitempty" example:"8389" description:"Port for client subscriptions"`
-	Protocol         string     `json:"protocol" example:"shadowsocks" enums:"shadowsocks,trojan,vless,vmess,hysteria2,tuic" description:"Proxy protocol type"`
+	Protocol         string     `json:"protocol" example:"shadowsocks" enums:"shadowsocks,trojan,vless,vmess,hysteria2,tuic,anytls" description:"Proxy protocol type"`
 	EncryptionMethod string     `json:"encryption_method,omitempty" example:"aes-256-gcm" description:"Encryption method (Shadowsocks only)"`
 	Status           string     `json:"status" example:"active" enums:"active,inactive,maintenance" description:"Current operational status"`
 	IsOnline         bool       `json:"is_online" example:"true" description:"Indicates if the node agent is online"`
@@ -356,6 +375,14 @@ type UserNodeDTO struct {
 	TUICSni               string `json:"tuic_sni,omitempty" description:"TUIC TLS SNI"`
 	TUICAllowInsecure     bool   `json:"tuic_allow_insecure,omitempty" description:"TUIC allow insecure TLS"`
 	TUICDisableSNI        bool   `json:"tuic_disable_sni,omitempty" description:"TUIC disable SNI"`
+
+	// AnyTLS specific fields
+	AnyTLSSni                      string `json:"anytls_sni,omitempty" description:"AnyTLS TLS SNI"`
+	AnyTLSAllowInsecure            bool   `json:"anytls_allow_insecure,omitempty" description:"AnyTLS allow insecure TLS"`
+	AnyTLSFingerprint              string `json:"anytls_fingerprint,omitempty" description:"AnyTLS TLS fingerprint"`
+	AnyTLSIdleSessionCheckInterval string `json:"anytls_idle_session_check_interval,omitempty" description:"AnyTLS idle session check interval"`
+	AnyTLSIdleSessionTimeout       string `json:"anytls_idle_session_timeout,omitempty" description:"AnyTLS idle session timeout"`
+	AnyTLSMinIdleSession           int    `json:"anytls_min_idle_session,omitempty" description:"AnyTLS minimum idle sessions"`
 
 	CreatedAt time.Time `json:"created_at" example:"2024-01-15T10:30:00Z" description:"Timestamp when the node was created"`
 	UpdatedAt time.Time `json:"updated_at" example:"2024-01-15T14:20:00Z" description:"Timestamp when the node was last updated"`
@@ -440,6 +467,16 @@ func ToUserNodeDTO(n *node.Node) *UserNodeDTO {
 		dto.TUICSni = n.TUICConfig().SNI()
 		dto.TUICAllowInsecure = n.TUICConfig().AllowInsecure()
 		dto.TUICDisableSNI = n.TUICConfig().DisableSNI()
+	}
+
+	// Map AnyTLS specific fields
+	if n.AnyTLSConfig() != nil {
+		dto.AnyTLSSni = n.AnyTLSConfig().SNI()
+		dto.AnyTLSAllowInsecure = n.AnyTLSConfig().AllowInsecure()
+		dto.AnyTLSFingerprint = n.AnyTLSConfig().Fingerprint()
+		dto.AnyTLSIdleSessionCheckInterval = n.AnyTLSConfig().IdleSessionCheckInterval()
+		dto.AnyTLSIdleSessionTimeout = n.AnyTLSConfig().IdleSessionTimeout()
+		dto.AnyTLSMinIdleSession = n.AnyTLSConfig().MinIdleSession()
 	}
 
 	return dto

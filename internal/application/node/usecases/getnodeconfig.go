@@ -92,6 +92,10 @@ func (uc *GetNodeConfigUseCase) Execute(ctx context.Context, cmd GetNodeConfigCo
 		if refNode.Protocol().IsTrojan() {
 			return vo.GenerateTrojanServerPassword(refNode.TokenHash())
 		}
+		// For AnyTLS, generate password from token hash for node-to-node forwarding
+		if refNode.Protocol().IsAnyTLS() {
+			return vo.GenerateAnyTLSServerPassword(refNode.TokenHash())
+		}
 		return ""
 	}
 

@@ -48,6 +48,7 @@ const (
 	TablePasskeyCredentials      = "passkey_credentials"
 	TableUSDTAmountSuffixes      = "usdt_amount_suffixes"
 	TableUserAnnouncementReads   = "user_announcement_reads"
+	TableNodeAnyTLSConfigs       = "node_anytls_configs"
 
 	// Default values
 	DefaultCurrency = "CNY"

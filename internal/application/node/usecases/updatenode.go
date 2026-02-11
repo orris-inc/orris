@@ -84,6 +84,14 @@ type UpdateNodeCommand struct {
 	TUICAllowInsecure     *bool
 	TUICDisableSNI        *bool
 
+	// AnyTLS specific fields
+	AnyTLSSni                      *string
+	AnyTLSAllowInsecure            *bool
+	AnyTLSFingerprint              *string
+	AnyTLSIdleSessionCheckInterval *string
+	AnyTLSIdleSessionTimeout       *string
+	AnyTLSMinIdleSession           *int
+
 	// Expiration and cost label fields
 	ExpiresAt      *time.Time // nil: no update, set to update expiration time
 	ClearExpiresAt bool       // true: clear expiration time
@@ -457,6 +465,11 @@ func (uc *UpdateNodeUseCase) applyUpdates(n *node.Node, cmd UpdateNodeCommand) e
 		return err
 	}
 
+	// Update AnyTLS config (only for AnyTLS protocol nodes)
+	if err := uc.applyAnyTLSUpdates(n, cmd); err != nil {
+		return err
+	}
+
 	// Update route config
 	if cmd.ClearRoute {
 		n.ClearRouteConfig()
@@ -518,6 +531,10 @@ func (uc *UpdateNodeUseCase) validateCommand(cmd UpdateNodeCommand) error {
 		// TUIC fields
 		cmd.TUICCongestionControl != nil || cmd.TUICUDPRelayMode != nil || cmd.TUICAlpn != nil ||
 		cmd.TUICSni != nil || cmd.TUICAllowInsecure != nil || cmd.TUICDisableSNI != nil ||
+		// AnyTLS fields
+		cmd.AnyTLSSni != nil || cmd.AnyTLSAllowInsecure != nil || cmd.AnyTLSFingerprint != nil ||
+		cmd.AnyTLSIdleSessionCheckInterval != nil || cmd.AnyTLSIdleSessionTimeout != nil ||
+		cmd.AnyTLSMinIdleSession != nil ||
 		// Expiration and cost label fields
 		cmd.ExpiresAt != nil || cmd.ClearExpiresAt || cmd.CostLabel != nil || cmd.ClearCostLabel
 
@@ -1020,6 +1037,81 @@ func (uc *UpdateNodeUseCase) applyTUICUpdates(n *node.Node, cmd UpdateNodeComman
 	// Update the node with new config
 	if err := n.UpdateTUICConfig(&newConfig); err != nil {
 		return errors.NewValidationError("failed to update TUIC config: " + err.Error())
+	}
+
+	return nil
+}
+
+// applyAnyTLSUpdates applies AnyTLS-specific configuration updates
+func (uc *UpdateNodeUseCase) applyAnyTLSUpdates(n *node.Node, cmd UpdateNodeCommand) error {
+	// Check if any AnyTLS fields need updating
+	hasAnyTLSUpdate := cmd.AnyTLSSni != nil || cmd.AnyTLSAllowInsecure != nil ||
+		cmd.AnyTLSFingerprint != nil || cmd.AnyTLSIdleSessionCheckInterval != nil ||
+		cmd.AnyTLSIdleSessionTimeout != nil || cmd.AnyTLSMinIdleSession != nil
+
+	if !hasAnyTLSUpdate {
+		return nil
+	}
+
+	// Validate protocol is AnyTLS
+	if !n.Protocol().IsAnyTLS() {
+		return errors.NewValidationError("cannot update AnyTLS config for non-AnyTLS protocol node")
+	}
+
+	// Get current AnyTLS config or use defaults
+	currentConfig := n.AnyTLSConfig()
+
+	var password, sni, fingerprint, idleCheckInterval, idleTimeout string
+	var allowInsecure bool
+	var minIdleSession int
+
+	if currentConfig != nil {
+		password = currentConfig.Password()
+		sni = currentConfig.SNI()
+		allowInsecure = currentConfig.AllowInsecure()
+		fingerprint = currentConfig.Fingerprint()
+		idleCheckInterval = currentConfig.IdleSessionCheckInterval()
+		idleTimeout = currentConfig.IdleSessionTimeout()
+		minIdleSession = currentConfig.MinIdleSession()
+	} else {
+		password = "placeholder"
+		allowInsecure = true
+	}
+
+	if cmd.AnyTLSSni != nil {
+		sni = *cmd.AnyTLSSni
+	}
+	if cmd.AnyTLSAllowInsecure != nil {
+		allowInsecure = *cmd.AnyTLSAllowInsecure
+	}
+	if cmd.AnyTLSFingerprint != nil {
+		fingerprint = *cmd.AnyTLSFingerprint
+	}
+	if cmd.AnyTLSIdleSessionCheckInterval != nil {
+		idleCheckInterval = *cmd.AnyTLSIdleSessionCheckInterval
+	}
+	if cmd.AnyTLSIdleSessionTimeout != nil {
+		idleTimeout = *cmd.AnyTLSIdleSessionTimeout
+	}
+	if cmd.AnyTLSMinIdleSession != nil {
+		minIdleSession = *cmd.AnyTLSMinIdleSession
+	}
+
+	newConfig, err := vo.NewAnyTLSConfig(
+		password,
+		sni,
+		allowInsecure,
+		fingerprint,
+		idleCheckInterval,
+		idleTimeout,
+		minIdleSession,
+	)
+	if err != nil {
+		return errors.NewValidationError("invalid AnyTLS configuration: " + err.Error())
+	}
+
+	if err := n.UpdateAnyTLSConfig(&newConfig); err != nil {
+		return errors.NewValidationError("failed to update AnyTLS config: " + err.Error())
 	}
 
 	return nil

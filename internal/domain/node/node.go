@@ -31,6 +31,7 @@ type Node struct {
 	vmessConfig       *vo.VMessConfig
 	hysteria2Config   *vo.Hysteria2Config
 	tuicConfig        *vo.TUICConfig
+	anytlsConfig      *vo.AnyTLSConfig
 	status            vo.NodeStatus
 	metadata          vo.NodeMetadata
 	groupIDs          []uint // resource group IDs
@@ -70,6 +71,7 @@ func NewNode(
 	vmessConfig *vo.VMessConfig,
 	hysteria2Config *vo.Hysteria2Config,
 	tuicConfig *vo.TUICConfig,
+	anytlsConfig *vo.AnyTLSConfig,
 	metadata vo.NodeMetadata,
 	sortOrder int,
 	routeConfig *vo.RouteConfig,
@@ -103,6 +105,9 @@ func NewNode(
 	}
 	if protocol.IsTUIC() && tuicConfig == nil {
 		return nil, fmt.Errorf("tuic config is required for TUIC protocol")
+	}
+	if protocol.IsAnyTLS() && anytlsConfig == nil {
+		return nil, fmt.Errorf("anytls config is required for AnyTLS protocol")
 	}
 
 	// Validate route config if provided
@@ -139,6 +144,7 @@ func NewNode(
 		vmessConfig:      vmessConfig,
 		hysteria2Config:  hysteria2Config,
 		tuicConfig:       tuicConfig,
+		anytlsConfig:     anytlsConfig,
 		status:           vo.NodeStatusInactive,
 		metadata:         metadata,
 		apiToken:         plainToken,
@@ -170,6 +176,7 @@ func ReconstructNode(
 	vmessConfig *vo.VMessConfig,
 	hysteria2Config *vo.Hysteria2Config,
 	tuicConfig *vo.TUICConfig,
+	anytlsConfig *vo.AnyTLSConfig,
 	status vo.NodeStatus,
 	metadata vo.NodeMetadata,
 	groupIDs []uint,
@@ -225,6 +232,7 @@ func ReconstructNode(
 		vmessConfig:       vmessConfig,
 		hysteria2Config:   hysteria2Config,
 		tuicConfig:        tuicConfig,
+		anytlsConfig:      anytlsConfig,
 		status:            status,
 		metadata:          metadata,
 		groupIDs:          groupIDs,
@@ -328,6 +336,11 @@ func (n *Node) Hysteria2Config() *vo.Hysteria2Config {
 // TUICConfig returns the TUIC configuration
 func (n *Node) TUICConfig() *vo.TUICConfig {
 	return n.tuicConfig
+}
+
+// AnyTLSConfig returns the AnyTLS configuration
+func (n *Node) AnyTLSConfig() *vo.AnyTLSConfig {
+	return n.anytlsConfig
 }
 
 // Status returns the node status
@@ -700,6 +713,22 @@ func (n *Node) UpdateTUICConfig(config *vo.TUICConfig) error {
 	return nil
 }
 
+// UpdateAnyTLSConfig updates the AnyTLS configuration
+func (n *Node) UpdateAnyTLSConfig(config *vo.AnyTLSConfig) error {
+	if !n.protocol.IsAnyTLS() {
+		return fmt.Errorf("cannot update anytls config for non-anytls protocol")
+	}
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	n.anytlsConfig = config
+	n.updatedAt = biztime.NowUTC()
+	n.version++
+
+	return nil
+}
+
 // UpdateMetadata updates the node metadata
 func (n *Node) UpdateMetadata(metadata vo.NodeMetadata) error {
 	n.mu.Lock()
@@ -969,6 +998,9 @@ func (n *Node) Validate() error {
 	if n.protocol.IsTUIC() && n.tuicConfig == nil {
 		return fmt.Errorf("tuic config is required for TUIC protocol")
 	}
+	if n.protocol.IsAnyTLS() && n.anytlsConfig == nil {
+		return fmt.Errorf("anytls config is required for AnyTLS protocol")
+	}
 	if n.status == vo.NodeStatusMaintenance && n.maintenanceReason == nil {
 		return fmt.Errorf("maintenance reason is required when in maintenance mode")
 	}
@@ -994,6 +1026,12 @@ func (n *Node) GenerateSubscriptionURI(password string, remarks string) (string,
 		}
 		trojanConfig := vo.NewTrojanProtocolConfig(*n.trojanConfig)
 		return factory.GenerateSubscriptionURI(n.protocol, trojanConfig, serverAddr, port, password, remarks)
+
+	case vo.ProtocolAnyTLS:
+		if n.anytlsConfig == nil {
+			return "", fmt.Errorf("anytls config is required for AnyTLS protocol")
+		}
+		return n.anytlsConfig.ToURI(serverAddr, port, remarks, password), nil
 
 	default:
 		return "", fmt.Errorf("unsupported protocol: %s", n.protocol)

@@ -276,6 +276,9 @@ func (h *UserNodeHandler) GetInstallScript(c *gin.Context) {
 
 
 // CreateUserNodeRequest represents the request body for creating a user node
+// TODO: Protocol binding only allows shadowsocks/trojan. CreateUserNodeCommand already supports
+// all 7 protocols (vless, vmess, hysteria2, tuic, anytls). Need to add protocol-specific fields
+// and update ToCommand() mapping if user nodes should support all protocols.
 type CreateUserNodeRequest struct {
 	Name              string            `json:"name" binding:"required,min=2,max=100" example:"My-Node-01"`
 	ServerAddress     string            `json:"server_address,omitempty" example:"1.2.3.4"`
