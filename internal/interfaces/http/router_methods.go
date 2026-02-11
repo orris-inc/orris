@@ -22,10 +22,11 @@ func isValidBrandingFilename(filename string) bool {
 
 // SetupRoutes configures all HTTP routes.
 func (r *Router) SetupRoutes(cfg *config.Config) {
-	r.engine.Use(middleware.Logger())
-	r.engine.Use(middleware.Recovery())
+	r.engine.Use(middleware.Logger(r.logger))
+	r.engine.Use(middleware.Recovery(r.logger))
 	r.engine.Use(middleware.CORS(cfg.Server.AllowedOrigins))
 	r.engine.Use(middleware.SecurityHeaders())
+	r.engine.Use(middleware.CSRF())
 	r.engine.Use(middleware.APIVersion())
 
 	r.engine.GET("/health", r.userHandler.HealthCheck)
@@ -47,6 +48,7 @@ func (r *Router) SetupRoutes(cfg *config.Config) {
 	})
 
 	routes.SetupAdminRoutes(r.engine, &routes.AdminRouteConfig{
+		AdminDashboardHandler:     r.adminDashboardHandler,
 		AdminSubscriptionHandler:  r.adminSubscriptionHandler,
 		AdminResourceGroupHandler: r.adminResourceGroupHandler,
 		AdminTrafficStatsHandler:  r.adminTrafficStatsHandler,

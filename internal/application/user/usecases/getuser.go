@@ -26,7 +26,7 @@ func NewGetUserUseCase(userRepo domainUser.Repository, logger logger.Interface) 
 
 // ExecuteByID retrieves a user by internal ID (for internal use)
 func (uc *GetUserUseCase) ExecuteByID(ctx context.Context, internalID uint) (*dto.UserResponse, error) {
-	uc.logger.Infow("executing get user by internal ID", "id", internalID)
+	uc.logger.Debugw("executing get user by internal ID", "id", internalID)
 
 	if internalID == 0 {
 		return nil, errors.NewValidationError("user ID cannot be zero")
@@ -50,7 +50,7 @@ func (uc *GetUserUseCase) ExecuteByID(ctx context.Context, internalID uint) (*dt
 
 // ExecuteBySID retrieves a user by external SID (Stripe-style ID)
 func (uc *GetUserUseCase) ExecuteBySID(ctx context.Context, sid string) (*dto.UserResponse, error) {
-	uc.logger.Infow("executing get user by SID", "sid", sid)
+	uc.logger.Debugw("executing get user by SID", "sid", sid)
 
 	if sid == "" {
 		return nil, errors.NewValidationError("user SID cannot be empty")
@@ -74,7 +74,7 @@ func (uc *GetUserUseCase) ExecuteBySID(ctx context.Context, sid string) (*dto.Us
 
 // ExecuteByEmail retrieves a user by email
 func (uc *GetUserUseCase) ExecuteByEmail(ctx context.Context, email string) (*dto.UserResponse, error) {
-	uc.logger.Infow("executing get user by email", "email", email)
+	uc.logger.Debugw("executing get user by email", "email", email)
 
 	if email == "" {
 		return nil, errors.NewValidationError("email cannot be empty")
@@ -98,7 +98,7 @@ func (uc *GetUserUseCase) ExecuteByEmail(ctx context.Context, email string) (*dt
 
 // ExecuteList retrieves a paginated list of users
 func (uc *GetUserUseCase) ExecuteList(ctx context.Context, request dto.ListUsersRequest) (*dto.ListUsersResponse, error) {
-	uc.logger.Infow("executing list users", "page", request.Page, "pageSize", request.PageSize)
+	uc.logger.Debugw("executing list users", "page", request.Page, "pageSize", request.PageSize)
 
 	// Validate and set defaults for pagination
 	if request.Page <= 0 {
@@ -149,7 +149,7 @@ func (uc *GetUserUseCase) ExecuteList(ctx context.Context, request dto.ListUsers
 		},
 	}
 
-	uc.logger.Infow("users listed successfully", "count", len(users), "total", total)
+	uc.logger.Debugw("users listed successfully", "count", len(users), "total", total)
 	return response, nil
 }
 

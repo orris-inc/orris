@@ -28,10 +28,10 @@ type GolangMigrateStrategy struct {
 }
 
 // NewGolangMigrateStrategy creates a new golang-migrate strategy
-func NewGolangMigrateStrategy(scriptsPath string) Strategy {
+func NewGolangMigrateStrategy(scriptsPath string, log logger.Interface) Strategy {
 	return &GolangMigrateStrategy{
 		scriptsPath: scriptsPath,
-		logger:      logger.NewLogger().With("component", "migration.golang-migrate"),
+		logger:      log.With("component", "migration.golang-migrate"),
 	}
 }
 
@@ -183,10 +183,10 @@ type GooseStrategy struct {
 	logger      logger.Interface
 }
 
-func NewGooseStrategy(scriptsPath string) Strategy {
+func NewGooseStrategy(scriptsPath string, log logger.Interface) Strategy {
 	return &GooseStrategy{
 		scriptsPath: scriptsPath,
-		logger:      logger.NewLogger().With("component", "migration.goose"),
+		logger:      log.With("component", "migration.goose"),
 	}
 }
 

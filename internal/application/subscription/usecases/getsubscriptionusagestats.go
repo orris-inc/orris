@@ -88,7 +88,7 @@ func (uc *GetSubscriptionUsageStatsUseCase) Execute(
 	ctx context.Context,
 	query GetSubscriptionUsageStatsQuery,
 ) (*GetSubscriptionUsageStatsResponse, error) {
-	uc.logger.Infow("fetching subscription usage stats",
+	uc.logger.Debugw("fetching subscription usage stats",
 		"subscription_id", query.SubscriptionID,
 		"from", query.From,
 		"to", query.To,
@@ -96,7 +96,7 @@ func (uc *GetSubscriptionUsageStatsUseCase) Execute(
 	)
 
 	if err := uc.validateQuery(query); err != nil {
-		uc.logger.Errorw("invalid subscription usage stats query", "error", err)
+		uc.logger.Warnw("invalid subscription usage stats query", "error", err)
 		return nil, err
 	}
 
@@ -158,7 +158,7 @@ func (uc *GetSubscriptionUsageStatsUseCase) executeWithTrendAggregation(
 		PageSize: pageSize,
 	}
 
-	uc.logger.Infow("subscription usage stats with trend aggregation fetched successfully",
+	uc.logger.Debugw("subscription usage stats with trend aggregation fetched successfully",
 		"subscription_id", query.SubscriptionID,
 		"granularity", query.Granularity,
 		"count", len(records),
@@ -200,7 +200,7 @@ func (uc *GetSubscriptionUsageStatsUseCase) getHourlyTrendFromRedis(
 	retentionBoundary := now.Add(-maxHourlyDataHours * time.Hour)
 	adjustedFrom := query.From
 	if adjustedFrom.Before(retentionBoundary) {
-		uc.logger.Infow("hourly data requested beyond retention window, adjusting from time",
+		uc.logger.Debugw("hourly data requested beyond retention window, adjusting from time",
 			"subscription_id", query.SubscriptionID,
 			"original_from", query.From,
 			"adjusted_from", retentionBoundary,
@@ -236,7 +236,7 @@ func (uc *GetSubscriptionUsageStatsUseCase) getHourlyTrendFromRedis(
 		records = append(records, record)
 	}
 
-	uc.logger.Infow("hourly trend data fetched from Redis",
+	uc.logger.Debugw("hourly trend data fetched from Redis",
 		"subscription_id", query.SubscriptionID,
 		"from", query.From,
 		"to", query.To,
@@ -443,7 +443,7 @@ func (uc *GetSubscriptionUsageStatsUseCase) getDailyTrendFromStats(
 		records = append(records, mysqlRecords...)
 	}
 
-	uc.logger.Infow("daily trend data fetched from Redis + MySQL",
+	uc.logger.Debugw("daily trend data fetched from Redis + MySQL",
 		"subscription_id", query.SubscriptionID,
 		"from", query.From,
 		"to", query.To,

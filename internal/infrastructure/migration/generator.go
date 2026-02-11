@@ -21,10 +21,10 @@ type Generator struct {
 }
 
 // NewGenerator creates a new migration generator
-func NewGenerator(scriptsPath string) *Generator {
+func NewGenerator(scriptsPath string, log logger.Interface) *Generator {
 	return &Generator{
 		scriptsPath: scriptsPath,
-		logger:      logger.NewLogger().With("component", "migration.generator"),
+		logger:      log.With("component", "migration.generator"),
 	}
 }
 

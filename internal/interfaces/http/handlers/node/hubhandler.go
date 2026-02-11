@@ -484,11 +484,6 @@ func (h *NodeHubHandler) handleTrafficEvent(nodeID uint, extra any) {
 		return
 	}
 
-	h.logger.Debugw("traffic event received",
-		"node_id", nodeID,
-		"reports_count", len(reports),
-	)
-
 	// Collect unique subscription SIDs
 	sids := make([]string, 0, len(reports))
 	for _, r := range reports {
@@ -561,12 +556,6 @@ func (h *NodeHubHandler) handleTrafficEvent(nodeID uint, extra any) {
 		h.checkAndEnforceTrafficLimit(ctx, subID)
 	}
 
-	if addedCount > 0 {
-		h.logger.Debugw("traffic added to buffer",
-			"node_id", nodeID,
-			"added_count", addedCount,
-		)
-	}
 }
 
 // checkAndEnforceTrafficLimit performs real-time traffic limit check using cached quota.
@@ -634,7 +623,7 @@ func (h *NodeHubHandler) checkAndEnforceTrafficLimit(ctx context.Context, subscr
 
 	// 7. Compare usage against limit (skip unlimited quotas where Limit == 0)
 	if quota.Limit > 0 && usage >= quota.Limit {
-		h.logger.Infow("node subscription exceeded traffic limit, triggering enforcement",
+		h.logger.Debugw("node subscription exceeded traffic limit, triggering enforcement",
 			"subscription_id", subscriptionID,
 			"usage", usage,
 			"limit", quota.Limit,

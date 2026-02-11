@@ -16,22 +16,22 @@ type Manager struct {
 }
 
 // NewManager creates a new migration manager
-func NewManager(environment string) *Manager {
+func NewManager(environment string, log logger.Interface) *Manager {
 	var strategy Strategy
 
 	scriptsPath, _ := filepath.Abs("./internal/infrastructure/migration/scripts")
-	strategy = NewGooseStrategy(scriptsPath)
+	strategy = NewGooseStrategy(scriptsPath, log)
 
 	return &Manager{
 		strategy: strategy,
-		logger:   logger.NewLogger().With("component", "migration.manager"),
+		logger:   log.With("component", "migration.manager"),
 	}
 }
 
-func NewManagerWithStrategy(strategy Strategy) *Manager {
+func NewManagerWithStrategy(strategy Strategy, log logger.Interface) *Manager {
 	return &Manager{
 		strategy: strategy,
-		logger:   logger.NewLogger().With("component", "migration.manager"),
+		logger:   log.With("component", "migration.manager"),
 	}
 }
 
@@ -88,13 +88,13 @@ func getStrategyDescription(strategyName string) string {
 }
 
 // MigrateWithGoose is a convenience function for goose migration
-func MigrateWithGoose(db *gorm.DB, scriptsPath string, models ...interface{}) error {
-	manager := NewManagerWithStrategy(NewGooseStrategy(scriptsPath))
+func MigrateWithGoose(db *gorm.DB, scriptsPath string, log logger.Interface, models ...interface{}) error {
+	manager := NewManagerWithStrategy(NewGooseStrategy(scriptsPath, log), log)
 	return manager.Migrate(db, models...)
 }
 
 // MigrateWithGolangMigrate is a convenience function for golang-migrate
-func MigrateWithGolangMigrate(db *gorm.DB, scriptsPath string, models ...interface{}) error {
-	manager := NewManagerWithStrategy(NewGolangMigrateStrategy(scriptsPath))
+func MigrateWithGolangMigrate(db *gorm.DB, scriptsPath string, log logger.Interface, models ...interface{}) error {
+	manager := NewManagerWithStrategy(NewGolangMigrateStrategy(scriptsPath, log), log)
 	return manager.Migrate(db, models...)
 }

@@ -50,6 +50,7 @@ type Router struct {
 	subscriptionHandler            *handlers.SubscriptionHandler
 	adminSubscriptionHandler       *adminSubscriptionHandlers.Handler
 	adminResourceGroupHandler      *adminResourceGroupHandlers.Handler
+	adminDashboardHandler          *adminHandlers.AdminDashboardHandler
 	adminTrafficStatsHandler       *adminHandlers.TrafficStatsHandler
 	adminTelegramHandler           *adminHandlers.AdminTelegramHandler
 	adminNotificationService       *telegramAdminApp.ServiceDDD
@@ -121,6 +122,7 @@ func NewRouter(userService *user.ServiceDDD, db *gorm.DB, cfg *config.Config, lo
 		subscriptionHandler:            c.hdlrs.subscriptionHandler,
 		adminSubscriptionHandler:       c.hdlrs.adminSubscriptionHandler,
 		adminResourceGroupHandler:      c.hdlrs.adminResourceGroupHandler,
+		adminDashboardHandler:          c.hdlrs.adminDashboardHandler,
 		adminTrafficStatsHandler:       c.hdlrs.adminTrafficStatsHandler,
 		adminTelegramHandler:           c.hdlrs.adminTelegramHandler,
 		adminNotificationService:       c.adminNotificationServiceDDD,

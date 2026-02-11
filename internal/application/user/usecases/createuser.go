@@ -81,13 +81,13 @@ func (uc *CreateUserUseCase) Execute(ctx context.Context, request dto.CreateUser
 	// Create value objects
 	email, err := vo.NewEmail(request.Email)
 	if err != nil {
-		uc.logger.Errorw("invalid email", "error", err)
+		uc.logger.Warnw("invalid email", "error", err)
 		return nil, errors.NewValidationError("invalid email", err.Error())
 	}
 
 	name, err := vo.NewName(request.Name)
 	if err != nil {
-		uc.logger.Errorw("invalid name", "error", err)
+		uc.logger.Warnw("invalid name", "error", err)
 		return nil, errors.NewValidationError("invalid name", err.Error())
 	}
 
@@ -99,7 +99,7 @@ func (uc *CreateUserUseCase) Execute(ctx context.Context, request dto.CreateUser
 
 	password, err := vo.NewPasswordWithPolicy(request.Password, passwordPolicy)
 	if err != nil {
-		uc.logger.Errorw("invalid password", "error", err)
+		uc.logger.Warnw("invalid password", "error", err)
 		return nil, errors.NewValidationError("invalid password", err.Error())
 	}
 

@@ -62,7 +62,7 @@ func (uc *GetPlanPricingsUseCase) Execute(
 	// Convert to DTO list
 	result := uc.toPricingOptionDTOList(pricings)
 
-	uc.logger.Infow("plan pricings retrieved successfully",
+	uc.logger.Debugw("plan pricings retrieved successfully",
 		"plan_id", plan.ID(),
 		"pricing_count", len(result),
 	)

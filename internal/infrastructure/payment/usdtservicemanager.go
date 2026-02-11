@@ -292,7 +292,7 @@ func (m *USDTServiceManager) StartScheduler(ctx context.Context) {
 	m.mu.Unlock()
 
 	if !enabled {
-		m.logger.Infow("USDT scheduler not started (disabled)")
+		m.logger.Debugw("USDT scheduler not started (disabled)")
 		return
 	}
 

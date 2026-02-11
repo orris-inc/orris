@@ -61,7 +61,7 @@ func NewGetUserForwardUsageUseCase(
 
 // Execute retrieves forward rule usage statistics for a user.
 func (uc *GetUserForwardUsageUseCase) Execute(ctx context.Context, query GetUserForwardUsageQuery) (*GetUserForwardUsageResult, error) {
-	uc.logger.Infow("executing get user forward usage use case", "user_id", query.UserID)
+	uc.logger.Debugw("executing get user forward usage use case", "user_id", query.UserID)
 
 	// Validate user ID
 	if query.UserID == 0 {
@@ -273,7 +273,7 @@ func (uc *GetUserForwardUsageUseCase) Execute(ctx context.Context, query GetUser
 		AllowedTypes: allowedTypes,
 	}
 
-	uc.logger.Infow("user forward usage retrieved successfully",
+	uc.logger.Debugw("user forward usage retrieved successfully",
 		"user_id", query.UserID,
 		"rule_count", ruleCount,
 		"rule_limit", maxRuleLimit,

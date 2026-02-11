@@ -107,7 +107,7 @@ func (uc *RefreshTokenUseCase) Execute(ctx context.Context, cmd RefreshTokenComm
 		return nil, fmt.Errorf("failed to update session: %w", err)
 	}
 
-	uc.logger.Infow("token refreshed successfully", "user_id", session.UserID, "session_id", session.ID)
+	uc.logger.Debugw("token refreshed successfully", "user_id", session.UserID, "session_id", session.ID)
 
 	return &RefreshTokenResult{
 		AccessToken:  tokenPair.AccessToken,

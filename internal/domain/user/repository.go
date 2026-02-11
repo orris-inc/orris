@@ -1,6 +1,9 @@
 package user
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // Repository defines the interface for user data operations
 type Repository interface {
@@ -46,12 +49,13 @@ type Repository interface {
 
 // ListFilter represents filtering and pagination options for user list
 type ListFilter struct {
-	Page     int    `json:"page"`
-	PageSize int    `json:"page_size"`
-	Email    string `json:"email,omitempty"`
-	Name     string `json:"name,omitempty"`
-	Status   string `json:"status,omitempty"`
-	Role     string `json:"role,omitempty"`
-	OrderBy  string `json:"order_by,omitempty"` // field to order by
-	Order    string `json:"order,omitempty"`    // asc or desc
+	Page         int        `json:"page"`
+	PageSize     int        `json:"page_size"`
+	Email        string     `json:"email,omitempty"`
+	Name         string     `json:"name,omitempty"`
+	Status       string     `json:"status,omitempty"`
+	Role         string     `json:"role,omitempty"`
+	OrderBy      string     `json:"order_by,omitempty"` // field to order by
+	Order        string     `json:"order,omitempty"`    // asc or desc
+	CreatedAfter *time.Time `json:"created_after,omitempty"`
 }

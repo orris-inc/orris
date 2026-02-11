@@ -60,7 +60,7 @@ func (uc *GenerateSubscriptionTokenUseCase) Execute(ctx context.Context, cmd Gen
 
 	tokenScope, err := vo.NewTokenScope(cmd.Scope)
 	if err != nil {
-		uc.logger.Errorw("invalid token scope", "error", err, "scope", cmd.Scope)
+		uc.logger.Warnw("invalid token scope", "error", err, "scope", cmd.Scope)
 		return nil, err
 	}
 

@@ -324,8 +324,8 @@ func (c *Container) initNode() {
 	// Initialize node authentication middleware
 	ucs.validateNodeTokenUC = nodeUsecases.NewValidateNodeTokenUseCase(c.nodeRepoAdapter, log)
 	c.nodeTokenMiddleware = middleware.NewNodeTokenMiddleware(ucs.validateNodeTokenUC, log)
-	c.nodeOwnerMiddleware = middleware.NewNodeOwnerMiddleware(repos.nodeRepoImpl)
-	c.nodeQuotaMiddleware = middleware.NewNodeQuotaMiddleware(repos.nodeRepoImpl, repos.subscriptionRepo, repos.subscriptionPlanRepo)
+	c.nodeOwnerMiddleware = middleware.NewNodeOwnerMiddleware(repos.nodeRepoImpl, log)
+	c.nodeQuotaMiddleware = middleware.NewNodeQuotaMiddleware(repos.nodeRepoImpl, repos.subscriptionRepo, repos.subscriptionPlanRepo, log)
 
 	// Initialize handlers
 	apiBaseURL := cfg.Server.GetBaseURL()
@@ -752,8 +752,7 @@ func (c *Container) initForward() {
 
 	// Initialize admin traffic stats use cases
 	ucs.getTrafficOverviewUC = adminUsecases.NewGetTrafficOverviewUseCase(
-		repos.subscriptionUsageStatsRepo, c.hourlyTrafficCache, repos.subscriptionRepo,
-		repos.userRepo, repos.nodeRepoImpl, repos.forwardRuleRepo, log,
+		repos.subscriptionUsageStatsRepo, c.hourlyTrafficCache, log,
 	)
 	ucs.getUserTrafficStatsUC = adminUsecases.NewGetUserTrafficStatsUseCase(
 		repos.subscriptionUsageStatsRepo, c.hourlyTrafficCache, repos.subscriptionRepo, repos.userRepo, log,
@@ -776,6 +775,13 @@ func (c *Container) initForward() {
 		ucs.getSubscriptionTrafficStatsUC, ucs.getAdminNodeTrafficStatsUC,
 		ucs.getTrafficRankingUC, ucs.getTrafficTrendUC, log,
 	)
+
+	// Initialize admin dashboard use case and handler
+	ucs.getAdminDashboardUC = adminUsecases.NewGetAdminDashboardUseCase(
+		repos.userRepo, repos.subscriptionRepo, repos.nodeRepoImpl,
+		repos.forwardRuleRepo, repos.forwardAgentRepo, c.hourlyTrafficCache, log,
+	)
+	hdlrs.adminDashboardHandler = adminHandlers.NewAdminDashboardHandler(ucs.getAdminDashboardUC, log)
 
 	// Initialize forward agent components
 	forwardAgentStatusAdapter := adapters.NewForwardAgentStatusAdapter(c.redis, log)

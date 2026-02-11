@@ -87,7 +87,7 @@ func (h *Handler) RefreshRule(c *gin.Context) {
 		return
 	}
 
-	h.logger.Infow("rule refresh successful",
+	h.logger.Debugw("rule refresh successful",
 		"rule_id", ruleID,
 		"agent_id", agentID,
 		"rule_type", result.Rule.RuleType,

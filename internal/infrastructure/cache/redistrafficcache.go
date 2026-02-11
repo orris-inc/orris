@@ -59,12 +59,6 @@ func (c *RedisTrafficCache) IncrementTraffic(ctx context.Context, nodeID uint, u
 		return fmt.Errorf("failed to increment traffic: %w", err)
 	}
 
-	c.logger.Debugw("traffic incremented in redis",
-		"node_id", nodeID,
-		"upload", upload,
-		"download", download,
-	)
-
 	return nil
 }
 
@@ -88,19 +82,12 @@ func (c *RedisTrafficCache) GetNodeTraffic(ctx context.Context, nodeID uint) (ui
 
 	totalTraffic := upload + download
 
-	c.logger.Debugw("got node traffic from redis",
-		"node_id", nodeID,
-		"redis_upload", upload,
-		"redis_download", download,
-		"total", totalTraffic,
-	)
-
 	return totalTraffic, nil
 }
 
 // FlushToDatabase synchronizes all Redis traffic to MySQL
 func (c *RedisTrafficCache) FlushToDatabase(ctx context.Context) error {
-	c.logger.Infow("starting traffic flush to database")
+	c.logger.Debugw("starting traffic flush to database")
 
 	flushedCount := 0
 	errorCount := 0
@@ -158,7 +145,7 @@ func (c *RedisTrafficCache) FlushToDatabase(ctx context.Context) error {
 		}
 
 		flushedCount++
-		c.logger.Infow("flushed traffic to database",
+		c.logger.Debugw("flushed traffic to database",
 			"node_id", nodeID,
 			"amount", totalAmount,
 		)

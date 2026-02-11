@@ -48,7 +48,7 @@ func (uc *GetDashboardUseCase) Execute(
 	ctx context.Context,
 	query GetDashboardQuery,
 ) (*dto.DashboardResponse, error) {
-	uc.logger.Infow("fetching user dashboard", "user_id", query.UserID)
+	uc.logger.Debugw("fetching user dashboard", "user_id", query.UserID)
 
 	if query.UserID == 0 {
 		return nil, errors.NewValidationError("user_id is required")
@@ -144,7 +144,7 @@ func (uc *GetDashboardUseCase) Execute(
 		response.Subscriptions = append(response.Subscriptions, subDTO)
 	}
 
-	uc.logger.Infow("user dashboard fetched successfully",
+	uc.logger.Debugw("user dashboard fetched successfully",
 		"user_id", query.UserID,
 		"subscriptions_count", len(response.Subscriptions),
 	)

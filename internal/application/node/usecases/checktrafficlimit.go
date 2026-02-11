@@ -53,11 +53,6 @@ func (uc *CheckTrafficLimitUseCase) Execute(
 	ctx context.Context,
 	query CheckTrafficLimitQuery,
 ) (*TrafficLimitResult, error) {
-	uc.logger.Infow("checking traffic limit",
-		"node_id", query.NodeID,
-		"subscription_id", query.SubscriptionID,
-	)
-
 	if err := uc.validateQuery(query); err != nil {
 		uc.logger.Errorw("invalid traffic limit query", "error", err)
 		return nil, err
@@ -81,7 +76,7 @@ func (uc *CheckTrafficLimitUseCase) Execute(
 		return nil, errors.NewInternalError("failed to get traffic limit")
 	}
 	if trafficLimit == 0 {
-		uc.logger.Infow("no traffic limit configured",
+		uc.logger.Debugw("no traffic limit configured",
 			"subscription_id", query.SubscriptionID,
 		)
 		return &TrafficLimitResult{
@@ -135,11 +130,6 @@ func (uc *CheckTrafficLimitUseCase) Execute(
 			"subscription_id", query.SubscriptionID,
 			"total_traffic", totalTraffic,
 			"limit", trafficLimit,
-		)
-	} else {
-		uc.logger.Infow("traffic limit check completed",
-			"exceeded", false,
-			"usage_percent", usagePercent,
 		)
 	}
 

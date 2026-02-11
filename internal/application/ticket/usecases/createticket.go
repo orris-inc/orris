@@ -46,7 +46,7 @@ func (uc *CreateTicketUseCase) Execute(ctx context.Context, cmd CreateTicketComm
 	uc.logger.Infow("executing create ticket use case", "title", cmd.Title, "creator_id", cmd.CreatorID)
 
 	if err := uc.validateCommand(cmd); err != nil {
-		uc.logger.Errorw("invalid create ticket command", "error", err)
+		uc.logger.Warnw("invalid create ticket command", "error", err)
 		return nil, err
 	}
 

@@ -40,7 +40,7 @@ func (r *SystemSettingRepository) GetByKey(ctx context.Context, category, key st
 		if err == gorm.ErrRecordNotFound {
 			return nil, setting.ErrSettingNotFound
 		}
-		r.logger.Error("failed to get setting by key", "category", category, "key", key, "error", err)
+		r.logger.Errorw("failed to get setting by key", "category", category, "key", key, "error", err)
 		return nil, fmt.Errorf("failed to get setting by key: %w", err)
 	}
 
@@ -56,7 +56,7 @@ func (r *SystemSettingRepository) GetByCategory(ctx context.Context, category st
 		Order("setting_key ASC").
 		Find(&modelList).Error
 	if err != nil {
-		r.logger.Error("failed to get settings by category", "category", category, "error", err)
+		r.logger.Errorw("failed to get settings by category", "category", category, "error", err)
 		return nil, fmt.Errorf("failed to get settings by category: %w", err)
 	}
 
@@ -71,7 +71,7 @@ func (r *SystemSettingRepository) GetAll(ctx context.Context) ([]*setting.System
 		Order("category ASC, setting_key ASC").
 		Find(&modelList).Error
 	if err != nil {
-		r.logger.Error("failed to get all settings", "error", err)
+		r.logger.Errorw("failed to get all settings", "error", err)
 		return nil, fmt.Errorf("failed to get all settings: %w", err)
 	}
 
@@ -87,7 +87,7 @@ func (r *SystemSettingRepository) Upsert(ctx context.Context, s *setting.SystemS
 		DoUpdates: clause.AssignmentColumns([]string{"value", "value_type", "description", "updated_by", "version", "updated_at"}),
 	}).Create(model).Error
 	if err != nil {
-		r.logger.Error("failed to upsert setting", "category", s.Category(), "key", s.Key(), "error", err)
+		r.logger.Errorw("failed to upsert setting", "category", s.Category(), "key", s.Key(), "error", err)
 		return fmt.Errorf("failed to upsert setting: %w", err)
 	}
 
@@ -105,7 +105,7 @@ func (r *SystemSettingRepository) Delete(ctx context.Context, category, key stri
 		Where("category = ? AND setting_key = ?", category, key).
 		Delete(&models.SystemSettingModel{})
 	if result.Error != nil {
-		r.logger.Error("failed to delete setting", "category", category, "key", key, "error", result.Error)
+		r.logger.Errorw("failed to delete setting", "category", category, "key", key, "error", result.Error)
 		return fmt.Errorf("failed to delete setting: %w", result.Error)
 	}
 

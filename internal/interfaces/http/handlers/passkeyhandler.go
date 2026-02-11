@@ -318,6 +318,9 @@ func (h *PasskeyHandler) FinishSignup(c *gin.Context) {
 	refreshMaxAge := h.sessionConfig.RememberExpDays * 24 * 60 * 60
 	utils.SetAuthCookies(c, h.cookieConfig, result.AccessToken, result.RefreshToken, accessMaxAge, refreshMaxAge)
 
+	// Set CSRF cookie for passkey signup
+	utils.SetCSRFCookie(c, h.cookieConfig, accessMaxAge)
+
 	utils.SuccessResponse(c, http.StatusOK, "signup successful", gin.H{
 		"user":       result.User.GetDisplayInfo(),
 		"passkey":    result.Credential.GetDisplayInfo(),
@@ -471,6 +474,9 @@ func (h *PasskeyHandler) FinishAuthentication(c *gin.Context) {
 	accessMaxAge := h.jwtConfig.AccessExpMinutes * 60
 	refreshMaxAge := h.sessionConfig.RememberExpDays * 24 * 60 * 60
 	utils.SetAuthCookies(c, h.cookieConfig, result.AccessToken, result.RefreshToken, accessMaxAge, refreshMaxAge)
+
+	// Set CSRF cookie for passkey login
+	utils.SetCSRFCookie(c, h.cookieConfig, accessMaxAge)
 
 	utils.SuccessResponse(c, http.StatusOK, "login successful", gin.H{
 		"user":       result.User.GetDisplayInfo(),

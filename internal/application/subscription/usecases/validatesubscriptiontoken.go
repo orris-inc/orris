@@ -94,12 +94,6 @@ func (uc *ValidateSubscriptionTokenUseCase) Execute(ctx context.Context, cmd Val
 		}
 	}
 
-	uc.logger.Infow("token validated successfully",
-		"token_id", token.ID(),
-		"subscription_id", sub.ID(),
-		"usage_count", token.UsageCount(),
-	)
-
 	return &ValidateSubscriptionTokenResult{
 		Token:        token,
 		Subscription: sub,

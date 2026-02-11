@@ -61,7 +61,7 @@ func NewGetSubscriptionForwardUsageUseCase(
 
 // Execute retrieves forward rule usage statistics for a specific subscription.
 func (uc *GetSubscriptionForwardUsageUseCase) Execute(ctx context.Context, query GetSubscriptionForwardUsageQuery) (*GetSubscriptionForwardUsageResult, error) {
-	uc.logger.Infow("executing get subscription forward usage use case", "subscription_id", query.SubscriptionID)
+	uc.logger.Debugw("executing get subscription forward usage use case", "subscription_id", query.SubscriptionID)
 
 	// Validate subscription ID
 	if query.SubscriptionID == 0 {
@@ -195,7 +195,7 @@ func (uc *GetSubscriptionForwardUsageUseCase) Execute(ctx context.Context, query
 		AllowedTypes: allowedTypes,
 	}
 
-	uc.logger.Infow("subscription forward usage retrieved successfully",
+	uc.logger.Debugw("subscription forward usage retrieved successfully",
 		"subscription_id", query.SubscriptionID,
 		"rule_count", ruleCount,
 		"rule_limit", ruleLimit,

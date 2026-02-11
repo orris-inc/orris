@@ -52,7 +52,7 @@ func (uc *ChangePriorityUseCase) Execute(
 		"changed_by", cmd.ChangedBy)
 
 	if err := uc.validateCommand(cmd); err != nil {
-		uc.logger.Errorw("invalid change priority command", "error", err)
+		uc.logger.Warnw("invalid change priority command", "error", err)
 		return nil, err
 	}
 

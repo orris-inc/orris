@@ -103,6 +103,9 @@ func (m *AuthMiddleware) refreshAccessToken(c *gin.Context, claims *auth.Claims)
 	accessMaxAge := m.jwtService.AccessExpMinutes() * 60
 	utils.SetAccessTokenCookie(c, m.cookieConfig, newToken, accessMaxAge)
 
+	// Refresh CSRF cookie alongside access token
+	utils.SetCSRFCookie(c, m.cookieConfig, accessMaxAge)
+
 	m.logger.Debugw("access token auto-refreshed", "user_uuid", claims.UserUUID)
 }
 

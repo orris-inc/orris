@@ -59,7 +59,7 @@ func (uc *StartPasskeySignupUseCase) Execute(ctx context.Context, cmd StartPassk
 	// Validate email format
 	email, err := vo.NewEmail(cmd.Email)
 	if err != nil {
-		uc.logger.Infow("invalid email format in passkey signup", "email", cmd.Email, "error", err)
+		uc.logger.Warnw("invalid email format in passkey signup", "email", cmd.Email, "error", err)
 		return nil, err
 	}
 
@@ -78,7 +78,7 @@ func (uc *StartPasskeySignupUseCase) Execute(ctx context.Context, cmd StartPassk
 	// Validate name
 	name, err := vo.NewName(cmd.Name)
 	if err != nil {
-		uc.logger.Infow("invalid name in passkey signup", "name", cmd.Name, "error", err)
+		uc.logger.Warnw("invalid name in passkey signup", "name", cmd.Name, "error", err)
 		return nil, err
 	}
 

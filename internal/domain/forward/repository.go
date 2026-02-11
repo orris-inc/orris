@@ -252,6 +252,9 @@ type AgentRepository interface {
 	// UpdateAgentInfo updates the agent info (version, platform, arch) for an agent.
 	UpdateAgentInfo(ctx context.Context, id uint, agentVersion, platform, arch string) error
 
+	// CountByLastSeenAfter counts agents whose last_seen_at is after the given threshold.
+	CountByLastSeenAfter(ctx context.Context, threshold time.Time) (int64, error)
+
 	// FindExpiringAgents returns enabled agents that will expire within the specified days.
 	// Only returns agents that have expires_at set and are not already expired.
 	FindExpiringAgents(ctx context.Context, withinDays int) ([]*ExpiringAgentInfo, error)

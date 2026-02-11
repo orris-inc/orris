@@ -278,7 +278,7 @@ func (m *SchedulerManager) RegisterUsageAggregationJobs(
 }
 
 func (m *SchedulerManager) executeDailyAggregation(ctx context.Context, aggregator UsageAggregator) {
-	m.logger.Infow("executing daily usage aggregation")
+	m.logger.Debugw("executing daily usage aggregation")
 
 	startTime := biztime.NowUTC()
 	if err := aggregator.AggregateDailyUsage(ctx); err != nil {
@@ -295,7 +295,7 @@ func (m *SchedulerManager) executeDailyAggregation(ctx context.Context, aggregat
 }
 
 func (m *SchedulerManager) executeMonthlyAggregation(ctx context.Context, aggregator UsageAggregator) {
-	m.logger.Infow("executing monthly usage aggregation")
+	m.logger.Debugw("executing monthly usage aggregation")
 
 	startTime := biztime.NowUTC()
 	if err := aggregator.AggregateMonthlyUsage(ctx); err != nil {
@@ -312,7 +312,7 @@ func (m *SchedulerManager) executeMonthlyAggregation(ctx context.Context, aggreg
 }
 
 func (m *SchedulerManager) executeDataCleanup(ctx context.Context, aggregator UsageAggregator, retentionDays int) {
-	m.logger.Infow("executing data cleanup",
+	m.logger.Debugw("executing data cleanup",
 		"retention_days", retentionDays,
 	)
 
@@ -491,7 +491,7 @@ func (m *SchedulerManager) checkOffline(ctx context.Context, processor AdminNoti
 }
 
 func (m *SchedulerManager) checkExpiring(ctx context.Context, processor AdminNotificationProcessor) {
-	m.logger.Infow("starting expiring check")
+	m.logger.Debugw("starting expiring check")
 
 	if err := processor.CheckExpiring(ctx); err != nil {
 		m.logger.Errorw("failed to check expiring", "error", err)
@@ -502,8 +502,6 @@ func (m *SchedulerManager) checkExpiring(ctx context.Context, processor AdminNot
 }
 
 func (m *SchedulerManager) sendDailySummary(ctx context.Context, processor AdminNotificationProcessor) {
-	m.logger.Infow("starting daily summary")
-
 	if err := processor.SendDailySummary(ctx); err != nil {
 		m.logger.Errorw("failed to send daily summary", "error", err)
 		return
@@ -513,8 +511,6 @@ func (m *SchedulerManager) sendDailySummary(ctx context.Context, processor Admin
 }
 
 func (m *SchedulerManager) sendWeeklySummary(ctx context.Context, processor AdminNotificationProcessor) {
-	m.logger.Infow("starting weekly summary")
-
 	if err := processor.SendWeeklySummary(ctx); err != nil {
 		m.logger.Errorw("failed to send weekly summary", "error", err)
 		return

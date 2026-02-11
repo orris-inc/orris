@@ -44,7 +44,7 @@ func (uc *GetForwardAgentTokenUseCase) Execute(ctx context.Context, query GetFor
 		return nil, errors.NewValidationError("short_id is required")
 	}
 
-	uc.logger.Infow("executing get forward agent token use case", "short_id", query.ShortID)
+	uc.logger.Debugw("executing get forward agent token use case", "short_id", query.ShortID)
 
 	agent, err := uc.repo.GetBySID(ctx, query.ShortID)
 	if err != nil {
@@ -61,6 +61,6 @@ func (uc *GetForwardAgentTokenUseCase) Execute(ctx context.Context, query GetFor
 		HasToken: agent.HasToken(),
 	}
 
-	uc.logger.Infow("forward agent token retrieved successfully", "id", agent.ID(), "short_id", agent.SID(), "has_token", result.HasToken)
+	uc.logger.Debugw("forward agent token retrieved successfully", "id", agent.ID(), "short_id", agent.SID(), "has_token", result.HasToken)
 	return result, nil
 }

@@ -53,7 +53,7 @@ func (uc *ListSubscriptionTokensUseCase) Execute(ctx context.Context, query List
 		dtos = append(dtos, dto.ToSubscriptionTokenDTO(token))
 	}
 
-	uc.logger.Infow("tokens listed successfully",
+	uc.logger.Debugw("tokens listed successfully",
 		"subscription_id", query.SubscriptionID,
 		"count", len(dtos),
 		"active_only", query.ActiveOnly,

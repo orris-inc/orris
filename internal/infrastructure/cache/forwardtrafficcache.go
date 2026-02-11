@@ -145,12 +145,6 @@ func (c *RedisForwardTrafficCache) IncrementRuleTraffic(ctx context.Context, rul
 		return fmt.Errorf("failed to increment rule traffic: %w", err)
 	}
 
-	c.logger.Debugw("forward rule traffic incremented in redis",
-		"rule_id", ruleID,
-		"upload", upload,
-		"download", download,
-	)
-
 	return nil
 }
 
@@ -287,7 +281,7 @@ func (c *RedisForwardTrafficCache) BatchGetRuleTraffic(ctx context.Context, rule
 
 // FlushToDatabase synchronizes all Redis traffic to MySQL.
 func (c *RedisForwardTrafficCache) FlushToDatabase(ctx context.Context) error {
-	c.logger.Infow("starting forward traffic flush to database")
+	c.logger.Debugw("starting forward traffic flush to database")
 
 	flushedCount := 0
 	errorCount := 0
@@ -301,7 +295,6 @@ func (c *RedisForwardTrafficCache) FlushToDatabase(ctx context.Context) error {
 	}
 
 	if len(ruleIDStrs) == 0 {
-		c.logger.Infow("forward traffic flush completed, no active rules")
 		return nil
 	}
 

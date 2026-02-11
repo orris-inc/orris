@@ -129,7 +129,7 @@ func setDefaults() {
 	viper.SetDefault("auth.session.remember_exp_days", 30)
 	viper.SetDefault("auth.cookie.domain", "")
 	viper.SetDefault("auth.cookie.path", "/")
-	viper.SetDefault("auth.cookie.secure", false)
+	viper.SetDefault("auth.cookie.secure", true)
 	viper.SetDefault("auth.cookie.same_site", "Lax")
 
 	// OAuth defaults (empty by default, must be configured)

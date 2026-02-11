@@ -23,7 +23,7 @@ func NewListTemplatesUseCase(
 }
 
 func (uc *ListTemplatesUseCase) Execute(ctx context.Context) ([]*dto.TemplateResponse, error) {
-	uc.logger.Infow("executing list templates use case")
+	uc.logger.Debugw("executing list templates use case")
 
 	templates, err := uc.repo.FindAll(ctx)
 	if err != nil {

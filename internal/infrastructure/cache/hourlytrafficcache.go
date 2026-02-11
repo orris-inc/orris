@@ -257,15 +257,6 @@ func (c *RedisHourlyTrafficCache) IncrementHourlyTraffic(ctx context.Context, su
 		return fmt.Errorf("failed to increment hourly traffic: %w", err)
 	}
 
-	c.logger.Debugw("hourly traffic incremented in redis",
-		"subscription_id", subscriptionID,
-		"resource_type", resourceType,
-		"resource_id", resourceID,
-		"hour_key", hourKey,
-		"upload", upload,
-		"download", download,
-	)
-
 	return nil
 }
 
@@ -567,7 +558,7 @@ func (c *RedisHourlyTrafficCache) GetAndCleanupHour(ctx context.Context, hour ti
 		}
 	}
 
-	c.logger.Infow("got and cleaned up hourly traffic data",
+	c.logger.Debugw("got and cleaned up hourly traffic data",
 		"hour_key", hourKey,
 		"data_count", len(result),
 	)
@@ -593,7 +584,7 @@ func (c *RedisHourlyTrafficCache) CleanupHour(ctx context.Context, hour time.Tim
 	if deleted == 0 {
 		c.logger.Debugw("no keys to cleanup for hour", "hour_key", hourKey)
 	} else {
-		c.logger.Infow("cleaned up hourly traffic data",
+		c.logger.Debugw("cleaned up hourly traffic data",
 			"hour_key", hourKey,
 			"deleted_keys_count", deleted+1, // +1 for active set
 		)

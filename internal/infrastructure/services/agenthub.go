@@ -752,19 +752,19 @@ func (h *AgentHub) BroadcastAPIURLChanged(newURL, reason string) (notified int, 
 
 	urlHost := extractURLHost(newURL)
 	online = len(h.agents)
+	var failedAgentIDs []uint
 	for agentID, conn := range h.agents {
 		if conn.TrySend(msg) {
 			notified++
-			h.logger.Infow("sent API URL change notification to agent",
-				"agent_id", agentID,
-				"url_host", urlHost,
-			)
 		} else {
-			h.logger.Warnw("failed to send API URL change notification to agent",
-				"agent_id", agentID,
-				"url_host", urlHost,
-			)
+			failedAgentIDs = append(failedAgentIDs, agentID)
 		}
+	}
+	if len(failedAgentIDs) > 0 {
+		h.logger.Warnw("failed to send API URL change to some agents",
+			"failed_count", len(failedAgentIDs),
+			"url_host", urlHost,
+		)
 	}
 
 	h.logger.Infow("broadcasted API URL change to agents",
@@ -827,19 +827,19 @@ func (h *AgentHub) BroadcastNodeAPIURLChanged(newURL, reason string) (notified i
 
 	urlHost := extractURLHost(newURL)
 	online = len(h.nodes)
+	var failedNodeIDs []uint
 	for nodeID, conn := range h.nodes {
 		if conn.TrySend(msgBytes) {
 			notified++
-			h.logger.Infow("sent API URL change notification to node",
-				"node_id", nodeID,
-				"url_host", urlHost,
-			)
 		} else {
-			h.logger.Warnw("failed to send API URL change notification to node",
-				"node_id", nodeID,
-				"url_host", urlHost,
-			)
+			failedNodeIDs = append(failedNodeIDs, nodeID)
 		}
+	}
+	if len(failedNodeIDs) > 0 {
+		h.logger.Warnw("failed to send API URL change to some nodes",
+			"failed_count", len(failedNodeIDs),
+			"url_host", urlHost,
+		)
 	}
 
 	h.logger.Infow("broadcasted API URL change to nodes",

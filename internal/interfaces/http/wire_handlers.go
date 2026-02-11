@@ -67,6 +67,7 @@ type allHandlers struct {
 	telegramHandler *telegramHandlers.Handler
 
 	// Admin
+	adminDashboardHandler     *adminHandlers.AdminDashboardHandler
 	adminResourceGroupHandler *adminResourceGroupHandlers.Handler
 	adminTrafficStatsHandler  *adminHandlers.TrafficStatsHandler
 	adminTelegramHandler      *adminHandlers.AdminTelegramHandler

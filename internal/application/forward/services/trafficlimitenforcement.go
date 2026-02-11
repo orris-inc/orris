@@ -191,7 +191,7 @@ func (s *TrafficLimitEnforcementService) CheckAndEnforceLimit(ctx context.Contex
 		)
 	}
 
-	s.logger.Warnw("traffic limit enforcement completed",
+	s.logger.Infow("traffic limit enforcement completed",
 		"user_id", userID,
 		"rules_disabled", disabledCount,
 		"traffic_used", usedTraffic,

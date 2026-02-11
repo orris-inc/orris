@@ -58,7 +58,7 @@ func (uc *UpdatePlanUseCase) Execute(
 	if cmd.Limits != nil {
 		features, err := vo.NewPlanFeaturesWithValidation(*cmd.Limits)
 		if err != nil {
-			uc.logger.Errorw("invalid plan limits", "error", err)
+			uc.logger.Warnw("invalid plan limits", "error", err)
 			return nil, err
 		}
 		if err := plan.UpdateFeatures(features); err != nil {
@@ -103,7 +103,7 @@ func (uc *UpdatePlanUseCase) Execute(
 			// Validate billing cycle
 			cycle, err := vo.NewBillingCycle(pricingInput.BillingCycle)
 			if err != nil {
-				uc.logger.Errorw("invalid billing cycle in pricing",
+				uc.logger.Warnw("invalid billing cycle in pricing",
 					"error", err,
 					"billing_cycle", pricingInput.BillingCycle,
 					"plan_id", planID)

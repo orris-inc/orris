@@ -97,7 +97,7 @@ func (uc *AggregateUsageUseCase) AggregateDailyUsage(ctx context.Context) error 
 	}
 
 	if totalRecords == 0 {
-		uc.logger.Infow("no hourly traffic data found in Redis for aggregation",
+		uc.logger.Debugw("no hourly traffic data found in Redis for aggregation",
 			"date", yesterday.Format("2006-01-02"),
 		)
 		return nil

@@ -63,7 +63,7 @@ func NewListForwardAgentsUseCase(
 
 // Execute retrieves a list of forward agents.
 func (uc *ListForwardAgentsUseCase) Execute(ctx context.Context, query ListForwardAgentsQuery) (*ListForwardAgentsResult, error) {
-	uc.logger.Infow("executing list forward agents use case", "page", query.Page, "page_size", query.PageSize)
+	uc.logger.Debugw("executing list forward agents use case", "page", query.Page, "page_size", query.PageSize)
 
 	// Set defaults
 	if query.Page < 1 {

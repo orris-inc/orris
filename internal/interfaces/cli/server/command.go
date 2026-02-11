@@ -70,9 +70,9 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 	defer logger.Sync()
 
-	logger.Info("starting server",
-		"environment", env,
-		"version", "1.0.0")
+	log := logger.NewLogger()
+
+	log.Infow("initializing server", "environment", env)
 
 	gin.SetMode(cfg.Server.Mode)
 
@@ -82,54 +82,53 @@ func run(cmd *cobra.Command, args []string) error {
 
 	// Initialize business timezone for date boundary calculations
 	biztime.MustInit(cfg.Server.Timezone)
-	logger.Info("business timezone initialized", "timezone", biztime.Location().String())
+	log.Infow("business timezone initialized", "timezone", biztime.Location().String())
 
 	if err := database.Init(&cfg.Database); err != nil {
-		logger.Fatal("failed to initialize database", "error", err)
+		log.Fatalw("failed to initialize database", "error", err)
 	}
 	defer database.Close()
 
-	if err := handleMigrations(env); err != nil {
-		logger.Fatal("migration handling failed", "error", err)
+	if err := handleMigrations(log); err != nil {
+		log.Fatalw("migration handling failed", "error", err)
 	}
 
-	userRepo := repository.NewUserRepository(database.Get(), logger.NewLogger())
+	userRepo := repository.NewUserRepository(database.Get(), log)
 	sessionRepo := repository.NewSessionRepository(database.Get())
 	hasher := auth.NewBcryptPasswordHasher(cfg.Auth.Password.BcryptCost)
 
-	userAppService := userApp.NewServiceDDD(userRepo, sessionRepo, hasher, logger.NewLogger())
+	userAppService := userApp.NewServiceDDD(userRepo, sessionRepo, hasher, log)
 
 	// Seed initial admin user if configured
-	if err := seedAdminUser(cfg, userRepo, hasher); err != nil {
-		logger.Warn("failed to seed admin user", "error", err)
+	if err := seedAdminUser(cfg, userRepo, hasher, log); err != nil {
+		log.Warnw("failed to seed admin user", "error", err)
 	}
 
-	router := httpRouter.NewRouter(userAppService, database.Get(), cfg, logger.NewLogger())
+	router := httpRouter.NewRouter(userAppService, database.Get(), cfg, log)
 	router.SetupRoutes(cfg)
 
 	ctx := context.Background()
 
 	// Start BotServiceManager (handles both polling and webhook modes with hot-reload)
 	if err := router.StartTelegramPolling(ctx); err != nil {
-		logger.Warn("failed to start telegram bot service", "error", err)
+		log.Warnw("failed to start telegram bot service", "error", err)
 	}
 
 	// Register reminder jobs if telegram service is available
 	if telegramService := router.GetTelegramService(); telegramService != nil {
 		if schedulerMgr := router.GetSchedulerManager(); schedulerMgr != nil {
 			if err := schedulerMgr.RegisterReminderJobs(telegramService.GetProcessReminderUseCase()); err != nil {
-				logger.Warn("failed to register reminder jobs", "error", err)
+				log.Warnw("failed to register reminder jobs", "error", err)
 			}
 		}
 	}
 
 	// Start unified scheduler (all jobs: payment, subscription, usage aggregation, reminder, admin notifications)
 	router.StartScheduler()
-	logger.Info("unified scheduler started")
 
 	// Start USDT payment monitor scheduler (managed separately by USDTServiceManager)
 	router.StartUSDTMonitorScheduler(ctx)
-	logger.Info("USDT monitor scheduler started")
+	log.Infow("all schedulers started")
 
 	// HTTP Server setup
 	srv := &http.Server{
@@ -141,13 +140,13 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 
 	// Start HTTP Server in background
-	goroutine.SafeGo(logger.NewLogger(), "http-server", func() {
-		logger.Info("server starting",
+	goroutine.SafeGo(log, "http-server", func() {
+		log.Infow("HTTP server listening",
 			"address", cfg.Server.GetAddr(),
 			"mode", cfg.Server.Mode)
 
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Fatal("failed to start server", "error", err)
+			log.Fatalw("failed to start server", "error", err)
 		}
 	})
 
@@ -156,7 +155,7 @@ func run(cmd *cobra.Command, args []string) error {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	logger.Info("shutting down server...")
+	log.Infow("shutting down server")
 
 	// Shutdown router first (stops scheduler, closes SSE connections, flushes traffic data, etc.)
 	// This must happen before HTTP server shutdown to allow connections to close gracefully
@@ -167,53 +166,51 @@ func run(cmd *cobra.Command, args []string) error {
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		logger.Error("server forced to shutdown", "error", err)
+		log.Errorw("server forced to shutdown", "error", err)
 	}
 
-	logger.Info("server exited gracefully")
+	log.Infow("server exited gracefully")
 	return nil
 }
 
-func handleMigrations(_ string) error {
+func handleMigrations(log logger.Interface) error {
 	if skipMigrationCheck {
-		logger.Info("skipping migration check")
+		log.Debugw("skipping migration check")
 		return nil
 	}
 
-	logger.Info("checking migration status")
-
 	scriptsPath, err := filepath.Abs("./internal/infrastructure/migration/scripts")
 	if err != nil {
-		logger.Warn("failed to get migration scripts path", "error", err)
+		log.Warnw("failed to get migration scripts path", "error", err)
 		return nil
 	}
 
 	// Check if scripts directory exists, skip status check if not (e.g., production deployment)
 	if _, err := os.Stat(scriptsPath); os.IsNotExist(err) {
 		// Still try to get current version from database
-		strategy := migration.NewGooseStrategy(scriptsPath)
+		strategy := migration.NewGooseStrategy(scriptsPath, log)
 		if gooseStrategy, ok := strategy.(*migration.GooseStrategy); ok {
 			if version, err := gooseStrategy.GetVersion(database.Get()); err == nil {
-				logger.Info("current migration version", "version", version)
+				log.Infow("current database migration version", "version", version)
 			}
 		}
-		logger.Info("migration scripts directory not found, skipping status check (this is normal in production)")
+		log.Debugw("migration scripts not found, skipping status check")
 		return nil
 	}
 
-	strategy := migration.NewGooseStrategy(scriptsPath)
+	strategy := migration.NewGooseStrategy(scriptsPath, log)
 	gooseStrategy, ok := strategy.(*migration.GooseStrategy)
 	if !ok {
-		logger.Warn("failed to cast to GooseStrategy")
+		log.Warnw("failed to cast to GooseStrategy")
 		return nil
 	}
 
 	// Check current migration version
 	version, err := gooseStrategy.GetVersion(database.Get())
 	if err != nil {
-		logger.Warn("failed to get migration version", "error", err)
+		log.Warnw("failed to get migration version", "error", err)
 	} else {
-		logger.Info("current database migration version", "version", version)
+		log.Infow("current database migration version", "version", version)
 	}
 
 	return nil
@@ -237,10 +234,10 @@ func mapEnvToGinMode(environment string) string {
 }
 
 // seedAdminUser creates initial admin user if configured via environment variables
-func seedAdminUser(cfg *config.Config, userRepo user.Repository, hasher *auth.BcryptPasswordHasher) error {
+func seedAdminUser(cfg *config.Config, userRepo user.Repository, hasher *auth.BcryptPasswordHasher, log logger.Interface) error {
 	// Check if admin config is provided
 	if !cfg.Admin.IsConfigured() {
-		logger.Info("admin config not provided, skipping admin user creation")
+		log.Debugw("admin config not provided, skipping admin user creation")
 		return nil
 	}
 
@@ -249,12 +246,12 @@ func seedAdminUser(cfg *config.Config, userRepo user.Repository, hasher *auth.Bc
 	// Check if user with admin email already exists
 	existingUser, err := userRepo.GetByEmail(ctx, cfg.Admin.Email)
 	if err == nil && existingUser != nil {
-		logger.Info("admin user already exists", "email", cfg.Admin.Email)
+		log.Debugw("admin user already exists", "email", cfg.Admin.Email)
 		return nil
 	}
 
 	// Create admin user
-	logger.Info("creating initial admin user", "email", cfg.Admin.Email)
+	log.Infow("creating initial admin user", "email", cfg.Admin.Email)
 
 	// Create value objects
 	email, err := vo.NewEmail(cfg.Admin.Email)
@@ -302,6 +299,6 @@ func seedAdminUser(cfg *config.Config, userRepo user.Repository, hasher *auth.Bc
 		return fmt.Errorf("failed to save admin user: %w", err)
 	}
 
-	logger.Info("admin user created successfully", "email", cfg.Admin.Email, "id", adminUser.ID())
+	log.Infow("admin user created successfully", "email", cfg.Admin.Email, "id", adminUser.ID())
 	return nil
 }

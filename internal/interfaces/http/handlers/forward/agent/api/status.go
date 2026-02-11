@@ -151,7 +151,7 @@ func (h *Handler) ReportRuleSyncStatus(c *gin.Context) {
 		return
 	}
 
-	h.logger.Infow("rule sync status reported successfully",
+	h.logger.Debugw("rule sync status reported successfully",
 		"agent_id", agentID,
 		"rules_count", len(req.Rules),
 		"ip", c.ClientIP(),

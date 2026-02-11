@@ -63,7 +63,7 @@ func NewListForwardRulesUseCase(
 
 // Execute retrieves a list of forward rules.
 func (uc *ListForwardRulesUseCase) Execute(ctx context.Context, query ListForwardRulesQuery) (*ListForwardRulesResult, error) {
-	uc.logger.Infow("executing list forward rules use case", "page", query.Page, "page_size", query.PageSize)
+	uc.logger.Debugw("executing list forward rules use case", "page", query.Page, "page_size", query.PageSize)
 
 	// Set defaults
 	if query.Page < 1 {

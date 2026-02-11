@@ -61,7 +61,7 @@ func (uc *GetUserTrafficStatsUseCase) Execute(
 	ctx context.Context,
 	query GetUserTrafficStatsQuery,
 ) (*dto.UserTrafficStatsResponse, error) {
-	uc.logger.Infow("fetching user traffic stats",
+	uc.logger.Debugw("fetching user traffic stats",
 		"from", query.From,
 		"to", query.To,
 		"resource_type", query.ResourceType,
@@ -70,7 +70,7 @@ func (uc *GetUserTrafficStatsUseCase) Execute(
 	)
 
 	if err := uc.validateQuery(query); err != nil {
-		uc.logger.Errorw("invalid user traffic stats query", "error", err)
+		uc.logger.Warnw("invalid user traffic stats query", "error", err)
 		return nil, err
 	}
 
@@ -259,7 +259,7 @@ func (uc *GetUserTrafficStatsUseCase) Execute(
 		PageSize: pagination.PageSize,
 	}
 
-	uc.logger.Infow("user traffic stats fetched successfully",
+	uc.logger.Debugw("user traffic stats fetched successfully",
 		"count", len(items),
 		"total", total,
 	)

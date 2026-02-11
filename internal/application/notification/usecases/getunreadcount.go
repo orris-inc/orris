@@ -24,8 +24,6 @@ func NewGetUnreadCountUseCase(
 }
 
 func (uc *GetUnreadCountUseCase) Execute(ctx context.Context, userID uint) (*dto.UnreadCountResponse, error) {
-	uc.logger.Infow("executing get unread count use case", "user_id", userID)
-
 	count, err := uc.repo.CountUnreadByUserID(ctx, userID)
 	if err != nil {
 		uc.logger.Errorw("failed to get unread count", "user_id", userID, "error", err)

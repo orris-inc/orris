@@ -64,7 +64,7 @@ func (uc *GetSubscriptionTrafficStatsUseCase) Execute(
 	ctx context.Context,
 	query GetSubscriptionTrafficStatsQuery,
 ) (*dto.SubscriptionTrafficStatsResponse, error) {
-	uc.logger.Infow("fetching subscription traffic stats",
+	uc.logger.Debugw("fetching subscription traffic stats",
 		"from", query.From,
 		"to", query.To,
 		"resource_type", query.ResourceType,
@@ -73,7 +73,7 @@ func (uc *GetSubscriptionTrafficStatsUseCase) Execute(
 	)
 
 	if err := uc.validateQuery(query); err != nil {
-		uc.logger.Errorw("invalid subscription traffic stats query", "error", err)
+		uc.logger.Warnw("invalid subscription traffic stats query", "error", err)
 		return nil, err
 	}
 
@@ -261,7 +261,7 @@ func (uc *GetSubscriptionTrafficStatsUseCase) Execute(
 		PageSize: pagination.PageSize,
 	}
 
-	uc.logger.Infow("subscription traffic stats fetched successfully",
+	uc.logger.Debugw("subscription traffic stats fetched successfully",
 		"count", len(items),
 		"total", total,
 	)

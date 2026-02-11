@@ -1488,6 +1488,19 @@ func (r *NodeRepositoryImpl) BatchUpdateGroupIDs(ctx context.Context, nodeGroupI
 	return updated, nil
 }
 
+// CountByLastSeenAfter counts nodes whose last_seen_at is after the given threshold.
+func (r *NodeRepositoryImpl) CountByLastSeenAfter(ctx context.Context, threshold time.Time) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&models.NodeModel{}).
+		Where("last_seen_at > ?", threshold).
+		Count(&count).Error
+	if err != nil {
+		r.logger.Errorw("failed to count nodes by last_seen_at", "threshold", threshold, "error", err)
+		return 0, fmt.Errorf("failed to count nodes by last_seen_at: %w", err)
+	}
+	return count, nil
+}
+
 // GetIDsByGroupID returns all node IDs that belong to the specified resource group.
 // This method has no pagination limit — it returns only IDs for efficiency.
 func (r *NodeRepositoryImpl) GetIDsByGroupID(ctx context.Context, groupID uint) ([]uint, error) {

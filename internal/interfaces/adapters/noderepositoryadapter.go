@@ -87,7 +87,7 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, link
 	}
 
 	if len(groupIDs) == 0 {
-		r.logger.Infow("no resource groups associated with plan", "plan_id", subscriptionModel.PlanID)
+		r.logger.Debugw("no resource groups associated with plan", "plan_id", subscriptionModel.PlanID)
 		return []*usecases.Node{}, nil
 	}
 
@@ -128,7 +128,7 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, link
 	// This includes both regular forward rules and external forward rules (rule_type='external')
 	forwardedNodes := r.getForwardedNodes(ctx, groupIDs, nodeMap)
 
-	r.logger.Infow("retrieved nodes for subscription token",
+	r.logger.Debugw("retrieved nodes for subscription token",
 		"subscription_id", subscriptionModel.ID,
 		"plan_id", subscriptionModel.PlanID,
 		"group_count", len(groupIDs),
@@ -241,7 +241,7 @@ func (r *NodeRepositoryAdapter) getForwardedNodes(ctx context.Context, groupIDs 
 func (r *NodeRepositoryAdapter) getForwardPlanNodes(ctx context.Context, subscriptionID uint, userID uint, mode string) ([]*usecases.Node, error) {
 	// Forward plans have no origin nodes, return empty for origin mode
 	if mode == usecases.NodeModeOrigin {
-		r.logger.Infow("forward plan has no origin nodes", "user_id", userID, "mode", mode)
+		r.logger.Debugw("forward plan has no origin nodes", "user_id", userID, "mode", mode)
 		return []*usecases.Node{}, nil
 	}
 
@@ -250,7 +250,7 @@ func (r *NodeRepositoryAdapter) getForwardPlanNodes(ctx context.Context, subscri
 		return nil, err
 	}
 
-	r.logger.Infow("retrieved forward plan nodes for user",
+	r.logger.Debugw("retrieved forward plan nodes for user",
 		"user_id", userID,
 		"subscription_id", subscriptionID,
 		"forwarded_node_count", len(forwardedNodes),
@@ -335,7 +335,7 @@ func (r *NodeRepositoryAdapter) getHybridPlanNodes(ctx context.Context, subscrip
 	// - getUserForwardNodes for user's own external rules
 	allNodes := append(resourceGroupNodes, userForwardNodes...)
 
-	r.logger.Infow("retrieved hybrid plan nodes",
+	r.logger.Debugw("retrieved hybrid plan nodes",
 		"user_id", userID,
 		"subscription_id", subscriptionID,
 		"plan_id", planID,

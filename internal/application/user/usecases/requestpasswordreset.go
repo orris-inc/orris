@@ -56,12 +56,12 @@ func (uc *RequestPasswordResetUseCase) Execute(ctx context.Context, cmd RequestP
 		return nil
 	}
 	if existingUser == nil {
-		uc.logger.Infow("password reset requested for non-existent email")
+		uc.logger.Warnw("password reset requested for non-existent email")
 		return nil
 	}
 
 	if !existingUser.HasPassword() {
-		uc.logger.Infow("password reset requested for OAuth-only account", "user_id", existingUser.ID())
+		uc.logger.Warnw("password reset requested for OAuth-only account", "user_id", existingUser.ID())
 		return nil
 	}
 

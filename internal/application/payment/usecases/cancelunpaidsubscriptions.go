@@ -160,7 +160,7 @@ func (uc *CancelUnpaidSubscriptionsUseCase) Execute(ctx context.Context) (int, e
 		}
 
 		cancelledCount++
-		uc.logger.Infow("subscription auto-cancelled",
+		uc.logger.Debugw("subscription auto-cancelled",
 			"subscription_id", sub.ID(),
 			"reason", cancelReason,
 			"created_at", sub.CreatedAt())

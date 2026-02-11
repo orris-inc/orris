@@ -45,7 +45,7 @@ func (uc *GetTrafficTrendUseCase) Execute(
 	ctx context.Context,
 	query GetTrafficTrendQuery,
 ) (*dto.TrafficTrendResponse, error) {
-	uc.logger.Infow("fetching traffic trend",
+	uc.logger.Debugw("fetching traffic trend",
 		"from", query.From,
 		"to", query.To,
 		"resource_type", query.ResourceType,
@@ -53,7 +53,7 @@ func (uc *GetTrafficTrendUseCase) Execute(
 	)
 
 	if err := uc.validateQuery(query); err != nil {
-		uc.logger.Errorw("invalid traffic trend query", "error", err)
+		uc.logger.Warnw("invalid traffic trend query", "error", err)
 		return nil, err
 	}
 
@@ -101,7 +101,7 @@ func (uc *GetTrafficTrendUseCase) Execute(
 		Granularity: query.Granularity,
 	}
 
-	uc.logger.Infow("traffic trend fetched successfully",
+	uc.logger.Debugw("traffic trend fetched successfully",
 		"count", len(points),
 		"granularity", query.Granularity,
 	)

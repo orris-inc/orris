@@ -7,8 +7,6 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-
-	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 // AgentAPIResponse represents the standard agent API response structure
@@ -45,22 +43,15 @@ func AgentAPISuccessWithRet(c *gin.Context, data interface{}, ret int) {
 	c.JSON(http.StatusOK, response)
 }
 
-// AgentAPIError sends an error response with status code and message
-// Returns the specified HTTP status code with format: {"ret": 0, "msg": message}
-// The ret value is always 0 for errors
+// AgentAPIError sends an error response with status code and message.
+// Returns the specified HTTP status code with format: {"ret": 0, "msg": message}.
+// The ret value is always 0 for errors.
+// Callers are responsible for logging the error with appropriate context before calling this.
 func AgentAPIError(c *gin.Context, statusCode int, message string) {
 	errorResponse := AgentAPIErrorResponse{
 		Ret:     0,
 		Message: message,
 	}
-
-	// Log error for monitoring and debugging
-	logger.Error("agent API error",
-		"status_code", statusCode,
-		"message", message,
-		"path", c.Request.URL.Path,
-		"method", c.Request.Method,
-	)
 
 	c.JSON(statusCode, errorResponse)
 }
@@ -126,10 +117,7 @@ func AgentAPISuccessWithETag(c *gin.Context, data interface{}) {
 	// Generate ETag from data
 	etag, err := GenerateETag(data)
 	if err != nil {
-		logger.Warn("failed to generate ETag, returning response without caching",
-			"error", err,
-			"path", c.Request.URL.Path,
-		)
+		// Graceful fallback: serve response without caching
 		AgentAPISuccess(c, data)
 		return
 	}

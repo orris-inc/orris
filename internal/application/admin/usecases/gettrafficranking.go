@@ -59,7 +59,7 @@ func (uc *GetTrafficRankingUseCase) ExecuteUserRanking(
 	ctx context.Context,
 	query GetTrafficRankingQuery,
 ) (*dto.TrafficRankingResponse, error) {
-	uc.logger.Infow("fetching user traffic ranking",
+	uc.logger.Debugw("fetching user traffic ranking",
 		"from", query.From,
 		"to", query.To,
 		"resource_type", query.ResourceType,
@@ -67,7 +67,7 @@ func (uc *GetTrafficRankingUseCase) ExecuteUserRanking(
 	)
 
 	if err := uc.validateQuery(query); err != nil {
-		uc.logger.Errorw("invalid traffic ranking query", "error", err)
+		uc.logger.Warnw("invalid traffic ranking query", "error", err)
 		return nil, err
 	}
 
@@ -246,7 +246,7 @@ func (uc *GetTrafficRankingUseCase) ExecuteUserRanking(
 		})
 	}
 
-	uc.logger.Infow("user traffic ranking fetched successfully", "count", len(items))
+	uc.logger.Debugw("user traffic ranking fetched successfully", "count", len(items))
 
 	return &dto.TrafficRankingResponse{Items: items}, nil
 }
@@ -256,7 +256,7 @@ func (uc *GetTrafficRankingUseCase) ExecuteSubscriptionRanking(
 	ctx context.Context,
 	query GetTrafficRankingQuery,
 ) (*dto.TrafficRankingResponse, error) {
-	uc.logger.Infow("fetching subscription traffic ranking",
+	uc.logger.Debugw("fetching subscription traffic ranking",
 		"from", query.From,
 		"to", query.To,
 		"resource_type", query.ResourceType,
@@ -264,7 +264,7 @@ func (uc *GetTrafficRankingUseCase) ExecuteSubscriptionRanking(
 	)
 
 	if err := uc.validateQuery(query); err != nil {
-		uc.logger.Errorw("invalid traffic ranking query", "error", err)
+		uc.logger.Warnw("invalid traffic ranking query", "error", err)
 		return nil, err
 	}
 
@@ -402,7 +402,7 @@ func (uc *GetTrafficRankingUseCase) ExecuteSubscriptionRanking(
 		})
 	}
 
-	uc.logger.Infow("subscription traffic ranking fetched successfully", "count", len(items))
+	uc.logger.Debugw("subscription traffic ranking fetched successfully", "count", len(items))
 
 	return &dto.TrafficRankingResponse{Items: items}, nil
 }

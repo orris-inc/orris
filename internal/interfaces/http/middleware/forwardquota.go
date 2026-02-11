@@ -365,7 +365,7 @@ func (m *ForwardQuotaMiddleware) CheckSubscriptionRuleLimit() gin.HandlerFunc {
 		// Get subscription from context (set by SubscriptionOwnerMiddleware)
 		subValue, exists := c.Get("subscription")
 		if !exists {
-			m.logger.Errorw("subscription not found in context for rule limit check")
+			m.logger.Warnw("subscription not found in context for rule limit check")
 			utils.ErrorResponse(c, http.StatusInternalServerError, "subscription context not available")
 			c.Abort()
 			return
@@ -490,7 +490,7 @@ func (m *ForwardQuotaMiddleware) CheckSubscriptionTrafficLimit() gin.HandlerFunc
 		// Get subscription_id from context (set by SubscriptionOwnerMiddleware)
 		subscriptionIDValue, exists := c.Get("subscription_id")
 		if !exists {
-			m.logger.Errorw("subscription_id not found in context for traffic limit check")
+			m.logger.Warnw("subscription_id not found in context for traffic limit check")
 			utils.ErrorResponse(c, http.StatusInternalServerError, "subscription context not available")
 			c.Abort()
 			return
@@ -572,7 +572,7 @@ func (m *ForwardQuotaMiddleware) CheckSubscriptionRuleTypeAllowed() gin.HandlerF
 		// Get subscription from context (set by SubscriptionOwnerMiddleware)
 		subValue, exists := c.Get("subscription")
 		if !exists {
-			m.logger.Errorw("subscription not found in context for rule type check")
+			m.logger.Warnw("subscription not found in context for rule type check")
 			utils.ErrorResponse(c, http.StatusInternalServerError, "subscription context not available")
 			c.Abort()
 			return

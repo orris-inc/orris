@@ -175,6 +175,9 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// Set tokens in HttpOnly cookies
 	utils.SetAuthCookies(c, h.cookieConfig, result.AccessToken, result.RefreshToken, accessMaxAge, refreshMaxAge)
 
+	// Set CSRF cookie (non-HttpOnly, readable by frontend JS)
+	utils.SetCSRFCookie(c, h.cookieConfig, accessMaxAge)
+
 	utils.SuccessResponse(c, http.StatusOK, "login successful", &LoginResponse{
 		User:      toUserInfoResponse(result.User.GetDisplayInfo()),
 		ExpiresIn: result.ExpiresIn,
@@ -328,6 +331,9 @@ func (h *AuthHandler) HandleOAuthCallback(c *gin.Context) {
 	// Set tokens in HttpOnly cookies
 	utils.SetAuthCookies(c, h.cookieConfig, result.AccessToken, result.RefreshToken, accessMaxAge, refreshMaxAge)
 
+	// Set CSRF cookie for OAuth login
+	utils.SetCSRFCookie(c, h.cookieConfig, accessMaxAge)
+
 	h.renderOAuthSuccess(c, result)
 }
 
@@ -367,6 +373,9 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	// Update cookies with new tokens (rotated refresh token)
 	utils.SetAuthCookies(c, h.cookieConfig, result.AccessToken, result.RefreshToken, accessMaxAge, refreshMaxAge)
 
+	// Refresh CSRF cookie alongside auth cookies
+	utils.SetCSRFCookie(c, h.cookieConfig, accessMaxAge)
+
 	utils.SuccessResponse(c, http.StatusOK, "token refreshed successfully", &RefreshTokenResponse{
 		ExpiresIn: result.ExpiresIn,
 	})
@@ -387,8 +396,9 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		return
 	}
 
-	// Clear auth cookies
+	// Clear auth and CSRF cookies
 	utils.ClearAuthCookies(c, h.cookieConfig)
+	utils.ClearCSRFCookie(c, h.cookieConfig)
 
 	utils.SuccessResponse(c, http.StatusOK, "logout successful", nil)
 }

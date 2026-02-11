@@ -8,7 +8,7 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
-func Logger() gin.HandlerFunc {
+func Logger(log logger.Interface) gin.HandlerFunc {
 	return gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
 		args := []any{
 			"method", param.Method,
@@ -24,18 +24,18 @@ func Logger() gin.HandlerFunc {
 		}
 
 		if param.StatusCode >= 500 {
-			logger.Error("HTTP request completed", args...)
+			log.Errorw("HTTP request completed", args...)
 		} else if param.StatusCode >= 400 {
-			logger.Warn("HTTP request completed", args...)
+			log.Warnw("HTTP request completed", args...)
 		} else {
-			logger.Info("HTTP request completed", args...)
+			log.Debugw("HTTP request completed", args...)
 		}
 
 		return ""
 	})
 }
 
-func CustomLogger() gin.HandlerFunc {
+func CustomLogger(log logger.Interface) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 
@@ -65,13 +65,13 @@ func CustomLogger() gin.HandlerFunc {
 		status := c.Writer.Status()
 		switch {
 		case status >= 500:
-			logger.Error("HTTP request completed with server error", args...)
+			log.Errorw("HTTP request completed with server error", args...)
 		case status >= 400:
-			logger.Warn("HTTP request completed with client error", args...)
+			log.Warnw("HTTP request completed with client error", args...)
 		case status >= 300:
-			logger.Info("HTTP request completed with redirect", args...)
+			log.Debugw("HTTP request completed with redirect", args...)
 		default:
-			logger.Info("HTTP request completed successfully", args...)
+			log.Debugw("HTTP request completed successfully", args...)
 		}
 	}
 }

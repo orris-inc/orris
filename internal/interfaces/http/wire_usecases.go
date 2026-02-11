@@ -149,7 +149,8 @@ type allUseCases struct {
 	manageAgentsUC              *resourceUsecases.ManageResourceGroupForwardAgentsUseCase
 	manageRulesUC               *resourceUsecases.ManageResourceGroupForwardRulesUseCase
 
-	// Admin Traffic
+	// Admin Dashboard & Traffic
+	getAdminDashboardUC            *adminUsecases.GetAdminDashboardUseCase
 	getTrafficOverviewUC           *adminUsecases.GetTrafficOverviewUseCase
 	getUserTrafficStatsUC          *adminUsecases.GetUserTrafficStatsUseCase
 	getSubscriptionTrafficStatsUC  *adminUsecases.GetSubscriptionTrafficStatsUseCase

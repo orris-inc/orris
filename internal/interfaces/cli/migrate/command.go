@@ -95,99 +95,97 @@ func newGenerateUserCommand() *cobra.Command {
 	}
 }
 
-func initEnv() (string, error) {
+func initEnv() (string, logger.Interface, error) {
 	cfg, err := config.Load(env, configPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to load config: %w", err)
+		return "", nil, fmt.Errorf("failed to load config: %w", err)
 	}
 
 	if err := logger.Init(&cfg.Logger); err != nil {
-		return "", fmt.Errorf("failed to initialize logger: %w", err)
+		return "", nil, fmt.Errorf("failed to initialize logger: %w", err)
 	}
+
+	log := logger.NewLogger()
 
 	// Initialize business timezone for date boundary calculations
 	if err := biztime.Init(cfg.Server.Timezone); err != nil {
-		return "", fmt.Errorf("failed to initialize business timezone: %w", err)
+		return "", nil, fmt.Errorf("failed to initialize business timezone: %w", err)
 	}
 
 	if err := database.Init(&cfg.Database); err != nil {
-		return "", fmt.Errorf("failed to initialize database: %w", err)
+		return "", nil, fmt.Errorf("failed to initialize database: %w", err)
 	}
 
 	scriptsPath, err := filepath.Abs("./internal/infrastructure/migration/scripts")
 	if err != nil {
-		return "", fmt.Errorf("failed to get scripts path: %w", err)
+		return "", nil, fmt.Errorf("failed to get scripts path: %w", err)
 	}
 
-	return scriptsPath, nil
+	return scriptsPath, log, nil
 }
 
 func runUp(cmd *cobra.Command, args []string) error {
-	scriptsPath, err := initEnv()
+	scriptsPath, log, err := initEnv()
 	if err != nil {
 		return err
 	}
 	defer logger.Sync()
 	defer database.Close()
 
-	logger.Info("running up migrations",
-		"environment", env)
+	log.Infow("running up migrations", "environment", env)
 
-	strategy := migration.NewGooseStrategy(scriptsPath)
+	strategy := migration.NewGooseStrategy(scriptsPath, log)
 
 	if err := strategy.Migrate(database.Get()); err != nil {
-		logger.Error("migration failed", "error", err)
+		log.Errorw("migration failed", "error", err)
 		return fmt.Errorf("migration failed: %w", err)
 	}
 
-	logger.Info("migrations completed successfully")
+	log.Infow("migrations completed successfully")
 	return nil
 }
 
 func runDown(cmd *cobra.Command, args []string) error {
-	scriptsPath, err := initEnv()
+	scriptsPath, log, err := initEnv()
 	if err != nil {
 		return err
 	}
 	defer logger.Sync()
 	defer database.Close()
 
-	logger.Info("running down migrations",
-		"environment", env,
-		"steps", steps)
+	log.Infow("running down migrations", "environment", env, "steps", steps)
 
-	strategy := migration.NewGooseStrategy(scriptsPath)
+	strategy := migration.NewGooseStrategy(scriptsPath, log)
 
 	if gooseStrategy, ok := strategy.(*migration.GooseStrategy); ok {
 		if err := gooseStrategy.MigrateDown(database.Get(), steps); err != nil {
-			logger.Error("down migration failed", "error", err)
+			log.Errorw("down migration failed", "error", err)
 			return fmt.Errorf("down migration failed: %w", err)
 		}
 	} else {
 		return fmt.Errorf("down migration is only supported with goose strategy")
 	}
 
-	logger.Info("down migration completed successfully")
+	log.Infow("down migration completed successfully")
 	return nil
 }
 
 func runStatus(cmd *cobra.Command, args []string) error {
-	scriptsPath, err := initEnv()
+	scriptsPath, log, err := initEnv()
 	if err != nil {
 		return err
 	}
 	defer logger.Sync()
 	defer database.Close()
 
-	logger.Info("checking migration status",
-		"environment", env)
+	log.Infow("checking migration status", "environment", env)
 
-	strategy := migration.NewGooseStrategy(scriptsPath)
+	strategy := migration.NewGooseStrategy(scriptsPath, log)
 
 	if gooseStrategy, ok := strategy.(*migration.GooseStrategy); ok {
 		version, err := gooseStrategy.GetVersion(database.Get())
 		if err != nil {
-			logger.Error("failed to get migration version", "error", err)
+			log.Errorw("failed to get migration version", "error", err)
 			return fmt.Errorf("failed to get migration version: %w", err)
 		}
 
@@ -196,7 +194,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  Current Version: %d\n", version)
 
 		if err := gooseStrategy.Status(database.Get()); err != nil {
-			logger.Error("failed to get detailed status", "error", err)
+			log.Errorw("failed to get detailed status", "error", err)
 			return fmt.Errorf("failed to get detailed status: %w", err)
 		}
 
@@ -207,48 +205,46 @@ func runStatus(cmd *cobra.Command, args []string) error {
 }
 
 func runCreate(cmd *cobra.Command, args []string) error {
-	scriptsPath, err := initEnv()
+	scriptsPath, log, err := initEnv()
 	if err != nil {
 		return err
 	}
 	defer logger.Sync()
 
-	logger.Info("creating new migration",
-		"name", name)
+	log.Infow("creating new migration", "name", name)
 
-	strategy := migration.NewGooseStrategy(scriptsPath)
+	strategy := migration.NewGooseStrategy(scriptsPath, log)
 	if gooseStrategy, ok := strategy.(*migration.GooseStrategy); ok {
 		if err := gooseStrategy.Create(name); err != nil {
-			logger.Error("failed to create migration", "error", err)
+			log.Errorw("failed to create migration", "error", err)
 			return fmt.Errorf("failed to create migration: %w", err)
 		}
 	} else {
 		return fmt.Errorf("create is only supported with goose strategy")
 	}
 
-	logger.Info("migration created successfully",
-		"name", name)
+	log.Infow("migration created successfully", "name", name)
 	fmt.Printf("✅ Migration '%s' created successfully\n", name)
 
 	return nil
 }
 
 func runGenerateUser(cmd *cobra.Command, args []string) error {
-	scriptsPath, err := initEnv()
+	scriptsPath, log, err := initEnv()
 	if err != nil {
 		return err
 	}
 	defer logger.Sync()
 
-	logger.Info("generating user table migration")
+	log.Infow("generating user table migration")
 
-	generator := migration.NewGenerator(scriptsPath)
+	generator := migration.NewGenerator(scriptsPath, log)
 	if err := generator.CreateUserTableMigration(); err != nil {
-		logger.Error("failed to generate user table migration", "error", err)
+		log.Errorw("failed to generate user table migration", "error", err)
 		return fmt.Errorf("failed to generate user table migration: %w", err)
 	}
 
-	logger.Info("user table migration generated successfully")
+	log.Infow("user table migration generated successfully")
 	fmt.Println("✅ User table migration generated successfully")
 
 	return nil

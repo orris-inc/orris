@@ -84,6 +84,9 @@ type NodeRepository interface {
 	// Returns the number of nodes updated and any error.
 	BatchUpdateGroupIDs(ctx context.Context, nodeGroupIDs map[uint][]uint) (int, error)
 
+	// CountByLastSeenAfter counts nodes whose last_seen_at is after the given threshold.
+	CountByLastSeenAfter(ctx context.Context, threshold time.Time) (int64, error)
+
 	// GetIDsByGroupID returns all node IDs that belong to the specified resource group.
 	// Unlike List, this method has no pagination limit and returns only IDs for efficiency.
 	GetIDsByGroupID(ctx context.Context, groupID uint) ([]uint, error)

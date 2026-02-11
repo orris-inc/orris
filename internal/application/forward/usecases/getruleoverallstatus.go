@@ -45,7 +45,7 @@ func (uc *GetRuleOverallStatusUseCase) Execute(ctx context.Context, input *dto.G
 		return nil, fmt.Errorf("rule_sid is required")
 	}
 
-	uc.logger.Infow("executing get rule overall status use case", "rule_sid", input.RuleSID)
+	uc.logger.Debugw("executing get rule overall status use case", "rule_sid", input.RuleSID)
 
 	// 1. Get rule by SID
 	rule, err := uc.ruleRepo.GetBySID(ctx, input.RuleSID)
@@ -109,7 +109,7 @@ func (uc *GetRuleOverallStatusUseCase) Execute(ctx context.Context, input *dto.G
 		UpdatedAt:         latestUpdate,
 	}
 
-	uc.logger.Infow("rule overall status retrieved successfully",
+	uc.logger.Debugw("rule overall status retrieved successfully",
 		"rule_sid", input.RuleSID,
 		"total_agents", response.TotalAgents,
 		"healthy_agents", response.HealthyAgents,

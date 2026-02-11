@@ -263,6 +263,9 @@ func (r *UserRepository) List(ctx context.Context, filter user.ListFilter) ([]*u
 	if filter.Role != "" {
 		query = query.Where("role = ?", filter.Role)
 	}
+	if filter.CreatedAfter != nil {
+		query = query.Where("created_at >= ?", *filter.CreatedAfter)
+	}
 
 	// Count total records
 	if err := query.Count(&total).Error; err != nil {

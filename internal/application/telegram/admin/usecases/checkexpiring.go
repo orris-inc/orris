@@ -156,7 +156,7 @@ func (uc *CheckExpiringUseCase) CheckAndNotify(ctx context.Context) error {
 			time.Sleep(50 * time.Millisecond)
 		}
 
-		uc.logger.Infow("resource expiring notification sent",
+		uc.logger.Debugw("resource expiring notification sent",
 			"telegram_user_id", binding.TelegramUserID(),
 			"expiring_agents", len(agentInfos),
 			"expiring_nodes", len(nodeInfos),

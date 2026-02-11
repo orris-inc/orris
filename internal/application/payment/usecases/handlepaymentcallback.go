@@ -89,13 +89,13 @@ func (uc *HandlePaymentCallbackUseCase) SetPlanInfoProvider(provider PaymentPlan
 func (uc *HandlePaymentCallbackUseCase) Execute(ctx context.Context, req *http.Request) error {
 	callbackData, err := uc.gateway.VerifyCallback(req)
 	if err != nil {
-		uc.logger.Errorw("invalid payment callback signature", "error", err)
+		uc.logger.Warnw("invalid payment callback signature", "error", err)
 		return apperrors.NewValidationError("invalid payment callback", err.Error())
 	}
 
 	paymentOrder, err := uc.paymentRepo.GetByGatewayOrderNo(ctx, callbackData.GatewayOrderNo)
 	if err != nil {
-		uc.logger.Errorw("payment order not found", "gateway_order_no", callbackData.GatewayOrderNo, "error", err)
+		uc.logger.Warnw("payment order not found", "gateway_order_no", callbackData.GatewayOrderNo, "error", err)
 		return fmt.Errorf("payment not found: %w", err)
 	}
 

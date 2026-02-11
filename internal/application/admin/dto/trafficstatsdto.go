@@ -33,13 +33,9 @@ type TrafficTrendRequest struct {
 
 // TrafficOverviewResponse represents global traffic overview
 type TrafficOverviewResponse struct {
-	TotalUpload         uint64 `json:"total_upload"`
-	TotalDownload       uint64 `json:"total_download"`
-	TotalTraffic        uint64 `json:"total_traffic"`
-	ActiveSubscriptions int64  `json:"active_subscriptions"`
-	ActiveUsers         int64  `json:"active_users"`
-	TotalNodes          int64  `json:"total_nodes"`
-	TotalForwardRules   int64  `json:"total_forward_rules"`
+	TotalUpload   uint64 `json:"total_upload"`
+	TotalDownload uint64 `json:"total_download"`
+	TotalTraffic  uint64 `json:"total_traffic"`
 }
 
 // UserTrafficStatsItem represents traffic statistics for a single user

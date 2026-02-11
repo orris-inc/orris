@@ -60,7 +60,7 @@ func NewListUserForwardRulesUseCase(
 
 // Execute retrieves a list of forward rules for a specific user.
 func (uc *ListUserForwardRulesUseCase) Execute(ctx context.Context, query ListUserForwardRulesQuery) (*ListUserForwardRulesResult, error) {
-	uc.logger.Infow("executing list user forward rules use case", "user_id", query.UserID, "page", query.Page, "page_size", query.PageSize)
+	uc.logger.Debugw("executing list user forward rules use case", "user_id", query.UserID, "page", query.Page, "page_size", query.PageSize)
 
 	// Validate user ID
 	if query.UserID == 0 {
@@ -156,7 +156,7 @@ func (uc *ListUserForwardRulesUseCase) Execute(ctx context.Context, query ListUs
 		uc.populateSyncStatus(ctx, dtos, agentIDs)
 	}
 
-	uc.logger.Infow("user forward rules listed successfully", "user_id", query.UserID, "total", total)
+	uc.logger.Debugw("user forward rules listed successfully", "user_id", query.UserID, "total", total)
 
 	return &ListUserForwardRulesResult{
 		Rules: dtos,

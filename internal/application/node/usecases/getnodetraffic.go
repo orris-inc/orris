@@ -34,7 +34,7 @@ func NewGetNodeTrafficUseCase(
 }
 
 func (uc *GetNodeTrafficUseCase) Execute(ctx context.Context, query GetNodeTrafficQuery) (*GetNodeTrafficResult, error) {
-	uc.logger.Infow("getting node traffic", "node_id", query.NodeID)
+	uc.logger.Debugw("getting node traffic", "node_id", query.NodeID)
 
 	// Get real-time traffic from Redis + MySQL
 	trafficUsed, err := uc.trafficCache.GetNodeTraffic(ctx, query.NodeID)

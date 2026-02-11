@@ -60,7 +60,7 @@ func NewListUserForwardAgentsUseCase(
 // Execute retrieves a list of forward agents accessible to a user.
 // The access is determined by: User -> Subscription -> Plan(forward) -> ResourceGroup -> ForwardAgent
 func (uc *ListUserForwardAgentsUseCase) Execute(ctx context.Context, query ListUserForwardAgentsQuery) (*ListUserForwardAgentsResult, error) {
-	uc.logger.Infow("executing list user forward agents use case",
+	uc.logger.Debugw("executing list user forward agents use case",
 		"user_id", query.UserID,
 		"page", query.Page,
 		"page_size", query.PageSize,
@@ -204,7 +204,7 @@ func (uc *ListUserForwardAgentsUseCase) Execute(ctx context.Context, query ListU
 		d.PopulateGroups(groupInfoMap)
 	}
 
-	uc.logger.Infow("user forward agents listed successfully",
+	uc.logger.Debugw("user forward agents listed successfully",
 		"user_id", query.UserID,
 		"total", total,
 	)

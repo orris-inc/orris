@@ -35,7 +35,7 @@ func NewGetTicketUseCase(
 }
 
 func (uc *GetTicketUseCase) Execute(ctx context.Context, query GetTicketQuery) (*dto.TicketDTO, error) {
-	uc.logger.Infow("executing get ticket use case", "ticket_id", query.TicketID, "user_id", query.UserID)
+	uc.logger.Debugw("executing get ticket use case", "ticket_id", query.TicketID, "user_id", query.UserID)
 
 	t, err := uc.ticketRepo.GetByID(ctx, query.TicketID)
 	if err != nil {
@@ -64,6 +64,6 @@ func (uc *GetTicketUseCase) Execute(ctx context.Context, query GetTicketQuery) (
 
 	result := dto.ToTicketDTO(t, comments, isAgentOrAdmin)
 
-	uc.logger.Infow("ticket retrieved successfully", "ticket_id", query.TicketID)
+	uc.logger.Debugw("ticket retrieved successfully", "ticket_id", query.TicketID)
 	return result, nil
 }

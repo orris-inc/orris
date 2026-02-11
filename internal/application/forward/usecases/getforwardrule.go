@@ -49,7 +49,7 @@ func (uc *GetForwardRuleUseCase) Execute(ctx context.Context, query GetForwardRu
 		return nil, errors.NewValidationError("short_id is required")
 	}
 
-	uc.logger.Infow("executing get forward rule use case", "short_id", query.ShortID)
+	uc.logger.Debugw("executing get forward rule use case", "short_id", query.ShortID)
 	rule, err := uc.repo.GetBySID(ctx, query.ShortID)
 	if err != nil {
 		uc.logger.Errorw("failed to get forward rule", "short_id", query.ShortID, "error", err)

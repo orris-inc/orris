@@ -46,7 +46,7 @@ func (uc *CreatePlanUseCase) Execute(
 ) (*dto.PlanDTO, error) {
 	// Validate pricings array - at least one pricing option is required
 	if len(cmd.Pricings) == 0 {
-		uc.logger.Errorw("pricings array is empty", "slug", cmd.Slug)
+		uc.logger.Warnw("pricings array is empty", "slug", cmd.Slug)
 		return nil, fmt.Errorf("at least one pricing option is required")
 	}
 
@@ -61,7 +61,7 @@ func (uc *CreatePlanUseCase) Execute(
 
 	planType, err := vo.NewPlanType(cmd.PlanType)
 	if err != nil {
-		uc.logger.Errorw("invalid plan type", "error", err, "plan_type", cmd.PlanType)
+		uc.logger.Warnw("invalid plan type", "error", err, "plan_type", cmd.PlanType)
 		return nil, err
 	}
 
@@ -79,7 +79,7 @@ func (uc *CreatePlanUseCase) Execute(
 	if cmd.Limits != nil {
 		features, err := vo.NewPlanFeaturesWithValidation(cmd.Limits)
 		if err != nil {
-			uc.logger.Errorw("invalid plan limits", "error", err)
+			uc.logger.Warnw("invalid plan limits", "error", err)
 			return nil, err
 		}
 		if err := plan.UpdateFeatures(features); err != nil {
@@ -110,7 +110,7 @@ func (uc *CreatePlanUseCase) Execute(
 		// Validate billing cycle
 		cycle, err := vo.NewBillingCycle(pricingInput.BillingCycle)
 		if err != nil {
-			uc.logger.Errorw("invalid billing cycle in pricing",
+			uc.logger.Warnw("invalid billing cycle in pricing",
 				"error", err,
 				"billing_cycle", pricingInput.BillingCycle,
 				"plan_id", plan.ID())

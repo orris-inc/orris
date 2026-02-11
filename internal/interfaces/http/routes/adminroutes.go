@@ -12,6 +12,7 @@ import (
 
 // AdminRouteConfig holds dependencies for admin-only routes.
 type AdminRouteConfig struct {
+	AdminDashboardHandler     *adminHandlers.AdminDashboardHandler
 	AdminSubscriptionHandler  *adminSubscriptionHandlers.Handler
 	AdminResourceGroupHandler *adminResourceGroupHandlers.Handler
 	AdminTrafficStatsHandler  *adminHandlers.TrafficStatsHandler
@@ -21,6 +22,13 @@ type AdminRouteConfig struct {
 
 // SetupAdminRoutes configures admin-only routes.
 func SetupAdminRoutes(engine *gin.Engine, cfg *AdminRouteConfig) {
+	// Admin dashboard route
+	adminDashboard := engine.Group("/admin")
+	adminDashboard.Use(cfg.AuthMiddleware.RequireAuth(), authorization.RequireAdmin())
+	{
+		adminDashboard.GET("/dashboard", cfg.AdminDashboardHandler.GetDashboard)
+	}
+
 	// Admin subscription routes
 	adminSubscriptions := engine.Group("/admin/subscriptions")
 	adminSubscriptions.Use(cfg.AuthMiddleware.RequireAuth(), authorization.RequireAdmin())

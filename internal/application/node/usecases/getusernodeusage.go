@@ -51,7 +51,7 @@ func NewGetUserNodeUsageUseCase(
 
 // Execute retrieves node usage statistics for a user.
 func (uc *GetUserNodeUsageUseCase) Execute(ctx context.Context, query GetUserNodeUsageQuery) (*GetUserNodeUsageResult, error) {
-	uc.logger.Infow("executing get user node usage use case", "user_id", query.UserID)
+	uc.logger.Debugw("executing get user node usage use case", "user_id", query.UserID)
 
 	// Validate user ID
 	if query.UserID == 0 {
@@ -125,7 +125,7 @@ func (uc *GetUserNodeUsageUseCase) Execute(ctx context.Context, query GetUserNod
 		NodeLimit: maxNodeLimit,
 	}
 
-	uc.logger.Infow("user node usage retrieved successfully",
+	uc.logger.Debugw("user node usage retrieved successfully",
 		"user_id", query.UserID,
 		"node_count", nodeCount,
 		"node_limit", maxNodeLimit,

@@ -108,7 +108,7 @@ func (uc *RefreshSubscriptionTokenUseCase) Execute(ctx context.Context, cmd Refr
 		}
 	}
 
-	uc.logger.Infow("token refreshed successfully",
+	uc.logger.Debugw("token refreshed successfully",
 		"old_token_id", cmd.OldTokenID,
 		"new_token_id", newToken.ID(),
 		"subscription_id", oldToken.SubscriptionID(),

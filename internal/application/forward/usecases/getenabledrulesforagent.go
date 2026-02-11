@@ -151,7 +151,7 @@ func (uc *GetEnabledRulesForAgentUseCase) Execute(ctx context.Context, query Get
 	} else if requestingAgent != nil {
 		// Generate token using ruleConverter to ensure correct format (fwd_xxx_xxx)
 		clientToken = uc.ruleConverter.GenerateClientToken(requestingAgent.SID())
-		uc.logger.Infow("generated client token for agent",
+		uc.logger.Debugw("generated client token for agent",
 			"agent_id", query.AgentID,
 			"short_id", requestingAgent.SID(),
 		)

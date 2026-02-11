@@ -54,7 +54,7 @@ func (uc *ListTicketsUseCase) Execute(
 	ctx context.Context,
 	query ListTicketsQuery,
 ) (*ListTicketsResult, error) {
-	uc.logger.Infow("executing list tickets use case",
+	uc.logger.Debugw("executing list tickets use case",
 		"user_id", query.UserID,
 		"page", query.Page,
 		"page_size", query.PageSize)
@@ -130,7 +130,7 @@ func (uc *ListTicketsUseCase) Execute(
 		}
 	}
 
-	uc.logger.Infow("tickets listed successfully",
+	uc.logger.Debugw("tickets listed successfully",
 		"count", len(items),
 		"total", totalCount)
 

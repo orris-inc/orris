@@ -74,7 +74,7 @@ func NewListSubscriptionForwardRulesUseCase(
 // Resource group priority mode: if the plan has active resource groups with rules, return those;
 // otherwise, return direct subscription-bound rules.
 func (uc *ListSubscriptionForwardRulesUseCase) Execute(ctx context.Context, query ListSubscriptionForwardRulesQuery) (*ListSubscriptionForwardRulesResult, error) {
-	uc.logger.Infow("executing list subscription forward rules use case",
+	uc.logger.Debugw("executing list subscription forward rules use case",
 		"subscription_id", query.SubscriptionID,
 		"page", query.Page,
 		"page_size", query.PageSize,
@@ -177,7 +177,7 @@ func (uc *ListSubscriptionForwardRulesUseCase) Execute(ctx context.Context, quer
 		uc.populateSyncStatus(ctx, dtos, agentIDs)
 	}
 
-	uc.logger.Infow("subscription forward rules listed successfully",
+	uc.logger.Debugw("subscription forward rules listed successfully",
 		"subscription_id", query.SubscriptionID,
 		"total", total,
 	)

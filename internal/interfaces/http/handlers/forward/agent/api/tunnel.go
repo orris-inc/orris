@@ -82,7 +82,7 @@ func (h *Handler) GetExitEndpoint(c *gin.Context) {
 	}
 	exitAgentID := exitAgent.ID()
 
-	h.logger.Infow("forward client requesting exit endpoint information",
+	h.logger.Debugw("forward client requesting exit endpoint information",
 		"exit_agent_id", exitAgentID,
 		"entry_agent_id", entryAgentID,
 		"ip", c.ClientIP(),
@@ -180,7 +180,7 @@ func (h *Handler) GetExitEndpoint(c *gin.Context) {
 	// Use effective tunnel address (prefers tunnel_address over public_address)
 	address := exitAgent.GetEffectiveTunnelAddress()
 
-	h.logger.Infow("exit endpoint information retrieved successfully",
+	h.logger.Debugw("exit endpoint information retrieved successfully",
 		"exit_agent_id", exitAgentID,
 		"entry_agent_id", entryAgentID,
 		"address", address,
@@ -227,7 +227,7 @@ func (h *Handler) VerifyTunnelHandshake(c *gin.Context) {
 		return
 	}
 
-	h.logger.Infow("verifying tunnel handshake request",
+	h.logger.Debugw("verifying tunnel handshake request",
 		"exit_agent_id", exitAgentID,
 		"rule_id", req.RuleID,
 		"ip", c.ClientIP(),
@@ -365,7 +365,7 @@ func (h *Handler) VerifyTunnelHandshake(c *gin.Context) {
 	}
 
 	// Handshake verification successful
-	h.logger.Infow("tunnel handshake verified successfully",
+	h.logger.Debugw("tunnel handshake verified successfully",
 		"rule_id", req.RuleID,
 		"entry_agent_id", entryAgentIDStr,
 		"exit_agent_id", exitAgentID,

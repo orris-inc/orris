@@ -123,7 +123,7 @@ func NewOnlineSubscriptionTrackerAdapter(
 func (a *OnlineSubscriptionTrackerAdapter) UpdateOnlineSubscriptions(ctx context.Context, nodeID uint, subscriptions []nodeUsecases.OnlineSubscriptionInfo) error {
 	// For now, we just log the online subscriptions
 	// A full implementation would need a cache (Redis) or database table to track online subscriptions
-	a.logger.Infow("online subscriptions updated",
+	a.logger.Debugw("online subscriptions updated",
 		"node_id", nodeID,
 		"count", len(subscriptions),
 	)

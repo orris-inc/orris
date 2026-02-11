@@ -17,10 +17,10 @@ type NodeOwnerMiddleware struct {
 }
 
 // NewNodeOwnerMiddleware creates a new node owner middleware
-func NewNodeOwnerMiddleware(nodeRepo node.NodeRepository) *NodeOwnerMiddleware {
+func NewNodeOwnerMiddleware(nodeRepo node.NodeRepository, log logger.Interface) *NodeOwnerMiddleware {
 	return &NodeOwnerMiddleware{
 		nodeRepo: nodeRepo,
-		logger:   logger.NewLogger(),
+		logger:   log,
 	}
 }
 

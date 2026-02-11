@@ -475,6 +475,19 @@ func (r *ForwardAgentRepositoryImpl) GetMetadataBySIDs(ctx context.Context, sids
 	return metadata, nil
 }
 
+// CountByLastSeenAfter counts agents whose last_seen_at is after the given threshold.
+func (r *ForwardAgentRepositoryImpl) CountByLastSeenAfter(ctx context.Context, threshold time.Time) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&models.ForwardAgentModel{}).
+		Where("last_seen_at > ?", threshold).
+		Count(&count).Error
+	if err != nil {
+		r.logger.Errorw("failed to count forward agents by last_seen_at", "threshold", threshold, "error", err)
+		return 0, fmt.Errorf("failed to count forward agents by last_seen_at: %w", err)
+	}
+	return count, nil
+}
+
 // FindExpiringAgents returns enabled agents that will expire within the specified days.
 // Only returns agents that have expires_at set and are not already expired.
 func (r *ForwardAgentRepositoryImpl) FindExpiringAgents(ctx context.Context, withinDays int) ([]*forward.ExpiringAgentInfo, error) {

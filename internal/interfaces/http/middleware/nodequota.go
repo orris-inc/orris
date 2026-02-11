@@ -23,12 +23,13 @@ func NewNodeQuotaMiddleware(
 	nodeRepo node.NodeRepository,
 	subscriptionRepo subscription.SubscriptionRepository,
 	planRepo subscription.PlanRepository,
+	log logger.Interface,
 ) *NodeQuotaMiddleware {
 	return &NodeQuotaMiddleware{
 		nodeRepo:         nodeRepo,
 		subscriptionRepo: subscriptionRepo,
 		planRepo:         planRepo,
-		logger:           logger.NewLogger(),
+		logger:           log,
 	}
 }
 

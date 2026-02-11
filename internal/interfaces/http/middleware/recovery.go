@@ -13,10 +13,10 @@ import (
 	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
-func Recovery() gin.HandlerFunc {
+func Recovery(log logger.Interface) gin.HandlerFunc {
 	return gin.CustomRecovery(func(c *gin.Context, recovered interface{}) {
 		if checkBrokenConnection(recovered) {
-			logger.Error("connection broken during request",
+			log.Errorw("connection broken during request",
 				"path", c.Request.URL.Path,
 				"method", c.Request.Method,
 				"error", recovered)
@@ -28,12 +28,12 @@ func Recovery() gin.HandlerFunc {
 		headers := strings.Split(string(httpRequest), "\r\n")
 		for idx, header := range headers {
 			current := strings.Split(header, ":")
-			if current[0] == "Authorization" {
+			if current[0] == "Authorization" || current[0] == "Cookie" {
 				headers[idx] = current[0] + ": *"
 			}
 		}
 
-		logger.Error("panic recovered",
+		log.Errorw("panic recovered",
 			"path", c.Request.URL.Path,
 			"method", c.Request.Method,
 			"headers", headers,
@@ -64,4 +64,3 @@ func checkBrokenConnection(err interface{}) bool {
 	}
 	return false
 }
-

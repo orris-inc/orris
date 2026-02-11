@@ -58,7 +58,7 @@ func (uc *GetAdminNodeTrafficStatsUseCase) Execute(
 	ctx context.Context,
 	query GetAdminNodeTrafficStatsQuery,
 ) (*dto.NodeTrafficStatsResponse, error) {
-	uc.logger.Infow("fetching node traffic stats",
+	uc.logger.Debugw("fetching node traffic stats",
 		"from", query.From,
 		"to", query.To,
 		"page", query.Page,
@@ -66,7 +66,7 @@ func (uc *GetAdminNodeTrafficStatsUseCase) Execute(
 	)
 
 	if err := uc.validateQuery(query); err != nil {
-		uc.logger.Errorw("invalid node traffic stats query", "error", err)
+		uc.logger.Warnw("invalid node traffic stats query", "error", err)
 		return nil, err
 	}
 
@@ -219,7 +219,7 @@ func (uc *GetAdminNodeTrafficStatsUseCase) Execute(
 		PageSize: pagination.PageSize,
 	}
 
-	uc.logger.Infow("node traffic stats fetched successfully",
+	uc.logger.Debugw("node traffic stats fetched successfully",
 		"count", len(items),
 		"total", total,
 	)

@@ -89,7 +89,7 @@ func (uc *ExpirePaymentsUseCase) Execute(ctx context.Context) (int, error) {
 		}
 
 		expiredCount++
-		uc.logger.Infow("payment marked as expired",
+		uc.logger.Debugw("payment marked as expired",
 			"payment_id", p.ID(),
 			"order_no", p.OrderNo(),
 			"subscription_id", p.SubscriptionID())

@@ -61,7 +61,7 @@ func (uc *GetPublicPlansUseCase) Execute(ctx context.Context) ([]*dto.PlanDTO, e
 		}
 	}
 
-	uc.logger.Infow("public plans retrieved successfully",
+	uc.logger.Debugw("public plans retrieved successfully",
 		"plan_count", len(plans),
 		"plans_with_pricings", len(pricingsByPlanID))
 

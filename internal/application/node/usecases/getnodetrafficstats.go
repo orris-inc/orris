@@ -49,7 +49,7 @@ func (uc *GetNodeTrafficStatsUseCase) Execute(
 	ctx context.Context,
 	query GetNodeTrafficStatsQuery,
 ) ([]*NodeTrafficStatsResult, error) {
-	uc.logger.Infow("fetching node traffic stats",
+	uc.logger.Debugw("fetching node traffic stats",
 		"node_id", query.NodeID,
 		"from", query.From,
 		"to", query.To,
@@ -106,7 +106,7 @@ func (uc *GetNodeTrafficStatsUseCase) Execute(
 		})
 	}
 
-	uc.logger.Infow("traffic stats fetched successfully",
+	uc.logger.Debugw("traffic stats fetched successfully",
 		"count", len(results),
 	)
 

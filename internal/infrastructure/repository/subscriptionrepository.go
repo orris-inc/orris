@@ -210,7 +210,7 @@ func (r *SubscriptionRepositoryImpl) GetActiveSubscriptionsByNodeID(ctx context.
 		Where("id = ?", nodeID).
 		First(&nodeModel).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			r.logger.Infow("node not found", "node_id", nodeID)
+			r.logger.Debugw("node not found", "node_id", nodeID)
 			return []*subscription.Subscription{}, nil
 		}
 		r.logger.Errorw("failed to query node", "node_id", nodeID, "error", err)
@@ -239,7 +239,7 @@ func (r *SubscriptionRepositoryImpl) GetActiveSubscriptionsByNodeID(ctx context.
 	groupIDs = mergeUintSlice(groupIDs, forwardRuleGroupIDs)
 
 	if len(groupIDs) == 0 {
-		r.logger.Infow("node has no resource groups (direct or via forward rules)", "node_id", nodeID)
+		r.logger.Debugw("node has no resource groups (direct or via forward rules)", "node_id", nodeID)
 		return []*subscription.Subscription{}, nil
 	}
 
@@ -256,7 +256,7 @@ func (r *SubscriptionRepositoryImpl) GetActiveSubscriptionsByNodeID(ctx context.
 	}
 
 	if len(planIDs) == 0 {
-		r.logger.Infow("no active resource groups found", "group_ids", groupIDs)
+		r.logger.Debugw("no active resource groups found", "group_ids", groupIDs)
 		return []*subscription.Subscription{}, nil
 	}
 

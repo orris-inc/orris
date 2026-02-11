@@ -136,7 +136,7 @@ func (uc *HandleOAuthCallbackUseCase) Execute(ctx context.Context, cmd HandleOAu
 			return nil, fmt.Errorf("failed to get user: %w", err)
 		}
 		if existingUser == nil {
-			uc.logger.Errorw("associated user not found for oauth account", "user_id", oauthAccount.UserID)
+			uc.logger.Warnw("associated user not found for oauth account", "user_id", oauthAccount.UserID)
 			return nil, apperrors.NewNotFoundError("associated user not found")
 		}
 

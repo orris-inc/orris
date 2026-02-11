@@ -105,6 +105,13 @@ func (c *RuleSyncConverter) Convert(ctx context.Context, rule *forward.ForwardRu
 		}
 	}
 
+	// Only send bindIP to the agent that connects to the final target.
+	// For direct rules the single agent IS the exit; for other rule types
+	// only the "exit" role should receive bindIP.
+	if syncData.Role != "exit" && rule.RuleType().String() != "direct" {
+		syncData.BindIP = ""
+	}
+
 	return syncData, nil
 }
 
@@ -346,7 +353,7 @@ func (c *RuleSyncConverter) convertDirectChainRule(
 
 	// Defensive check: agent must be in chain
 	if chainPosition < 0 {
-		c.logger.Errorw("agent not found in direct_chain rule",
+		c.logger.Warnw("agent not found in direct_chain rule",
 			"agent_id", agentID,
 			"rule_id", rule.ID(),
 			"entry_agent_id", rule.AgentID(),

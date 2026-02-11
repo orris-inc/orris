@@ -94,7 +94,7 @@ func (s *ConfigSyncService) HandleMessage(agentID uint, msgType string, data any
 // NotifyRuleChange notifies an agent about a rule change (add/update/delete).
 // changeType should be "added", "updated", or "removed".
 func (s *ConfigSyncService) NotifyRuleChange(ctx context.Context, agentID uint, ruleShortID string, changeType string) error {
-	s.logger.Infow("notifying agent of rule change",
+	s.logger.Debugw("notifying agent of rule change",
 		"agent_id", agentID,
 		"rule_short_id", ruleShortID,
 		"change_type", changeType,
@@ -183,7 +183,7 @@ func (s *ConfigSyncService) NotifyRuleChange(ctx context.Context, agentID uint, 
 		)
 	}
 
-	s.logger.Infow("config sync notification sent",
+	s.logger.Debugw("config sync notification sent",
 		"agent_id", agentID,
 		"version", version,
 		"change_type", changeType,

@@ -23,13 +23,13 @@ func NewMarkAllAsReadUseCase(
 }
 
 func (uc *MarkAllAsReadUseCase) Execute(ctx context.Context, userID uint) error {
-	uc.logger.Infow("executing mark all notifications as read use case", "user_id", userID)
+	uc.logger.Debugw("executing mark all notifications as read use case", "user_id", userID)
 
 	if err := uc.repo.MarkAllAsReadByUserID(ctx, userID); err != nil {
 		uc.logger.Errorw("failed to mark all notifications as read", "user_id", userID, "error", err)
 		return fmt.Errorf("failed to mark all notifications as read: %w", err)
 	}
 
-	uc.logger.Infow("all notifications marked as read", "user_id", userID)
+	uc.logger.Debugw("all notifications marked as read", "user_id", userID)
 	return nil
 }

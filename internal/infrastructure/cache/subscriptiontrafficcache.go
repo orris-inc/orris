@@ -182,13 +182,6 @@ func (c *RedisSubscriptionTrafficCache) IncrementSubscriptionTraffic(ctx context
 		return fmt.Errorf("failed to increment subscription traffic: %w", err)
 	}
 
-	c.logger.Debugw("subscription traffic incremented in redis",
-		"node_id", nodeID,
-		"subscription_id", subscriptionID,
-		"upload", upload,
-		"download", download,
-	)
-
 	return nil
 }
 
@@ -266,7 +259,7 @@ func (c *RedisSubscriptionTrafficCache) GetSubscriptionTraffic(ctx context.Conte
 // Note: This method name is kept for backward compatibility, but it now writes to Redis hourly buckets
 // instead of MySQL subscription_usages table.
 func (c *RedisSubscriptionTrafficCache) FlushToDatabase(ctx context.Context) error {
-	c.logger.Infow("starting subscription traffic flush to hourly cache")
+	c.logger.Debugw("starting subscription traffic flush to hourly cache")
 
 	flushedCount := 0
 	errorCount := 0
@@ -280,7 +273,6 @@ func (c *RedisSubscriptionTrafficCache) FlushToDatabase(ctx context.Context) err
 	}
 
 	if len(keys) == 0 {
-		c.logger.Infow("subscription traffic flush completed, no active entries")
 		return nil
 	}
 

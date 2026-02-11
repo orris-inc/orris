@@ -26,7 +26,7 @@ func NewListNotificationsUseCase(
 }
 
 func (uc *ListNotificationsUseCase) Execute(ctx context.Context, req dto.ListNotificationsRequest) (*dto.ListResponse, error) {
-	uc.logger.Infow("executing list notifications use case", "user_id", req.UserID, "status", req.Status)
+	uc.logger.Debugw("executing list notifications use case", "user_id", req.UserID, "status", req.Status)
 
 	var notifications []Notification
 	var total int64

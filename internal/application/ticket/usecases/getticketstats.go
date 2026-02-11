@@ -48,7 +48,7 @@ func (uc *GetTicketStatsUseCase) Execute(
 	ctx context.Context,
 	query GetTicketStatsQuery,
 ) (*GetTicketStatsResult, error) {
-	uc.logger.Infow("executing get ticket stats use case",
+	uc.logger.Debugw("executing get ticket stats use case",
 		"user_id", query.UserID)
 
 	result := &GetTicketStatsResult{
@@ -138,7 +138,7 @@ func (uc *GetTicketStatsUseCase) Execute(
 		}
 	}
 
-	uc.logger.Infow("ticket stats retrieved successfully",
+	uc.logger.Debugw("ticket stats retrieved successfully",
 		"total", result.TotalTickets,
 		"open", result.OpenTickets,
 		"closed", result.ClosedTickets,

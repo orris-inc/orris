@@ -114,10 +114,9 @@ func (uc *GetNodeConfigUseCase) Execute(ctx context.Context, cmd GetNodeConfigCo
 		"protocol", config.Protocol,
 	)
 
-	// Debug: print outbound configurations
 	if len(config.Outbounds) > 0 {
 		for i, ob := range config.Outbounds {
-			uc.logger.Infow("outbound configuration",
+			uc.logger.Debugw("outbound configuration",
 				"index", i,
 				"tag", ob.Tag,
 				"type", ob.Type,

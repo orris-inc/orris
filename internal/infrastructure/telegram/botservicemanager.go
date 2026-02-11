@@ -50,7 +50,7 @@ func (m *BotServiceManager) Start(ctx context.Context) error {
 	defer m.mu.Unlock()
 
 	if m.isRunning {
-		m.logger.Infow("telegram bot service already running, skipping start")
+		m.logger.Debugw("telegram bot service already running, skipping start")
 		return nil
 	}
 
@@ -59,13 +59,13 @@ func (m *BotServiceManager) Start(ctx context.Context) error {
 
 	// Check if telegram is enabled
 	if !m.provider.IsTelegramEnabled(ctx) {
-		m.logger.Infow("telegram bot is disabled, not starting service")
+		m.logger.Debugw("telegram bot is disabled, not starting service")
 		return nil
 	}
 
 	// Check if configuration is valid
 	if !config.IsConfigured() {
-		m.logger.Infow("telegram bot is not configured, not starting service")
+		m.logger.Debugw("telegram bot is not configured, not starting service")
 		return nil
 	}
 

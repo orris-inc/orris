@@ -432,7 +432,7 @@ func (h *Handler) GetRuleOverallStatus(c *gin.Context) {
 		return
 	}
 
-	h.logger.Infow("rule overall status retrieved successfully",
+	h.logger.Debugw("rule overall status retrieved successfully",
 		"rule_id", ruleSID,
 		"total_agents", result.TotalAgents,
 		"healthy_agents", result.HealthyAgents,

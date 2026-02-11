@@ -61,7 +61,7 @@ func (s *SubscriptionSyncService) NotifySubscriptionChange(
 		return nil
 	}
 
-	s.logger.Infow("notifying nodes of subscription change",
+	s.logger.Debugw("notifying nodes of subscription change",
 		"subscription_id", sub.ID(),
 		"subscription_sid", sub.SID(),
 		"plan_id", sub.PlanID(),
@@ -150,7 +150,7 @@ func (s *SubscriptionSyncService) NotifySubscriptionChange(
 		notifiedCount++
 	}
 
-	s.logger.Infow("subscription change notification sent",
+	s.logger.Debugw("subscription change notification sent",
 		"subscription_sid", sub.SID(),
 		"change_type", changeType,
 		"total_nodes", len(nodes),

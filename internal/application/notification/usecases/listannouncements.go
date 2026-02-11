@@ -26,7 +26,7 @@ func NewListAnnouncementsUseCase(
 }
 
 func (uc *ListAnnouncementsUseCase) Execute(ctx context.Context, limit, offset int) (*dto.ListResponse, error) {
-	uc.logger.Infow("executing list announcements use case", "limit", limit, "offset", offset)
+	uc.logger.Debugw("executing list announcements use case", "limit", limit, "offset", offset)
 
 	announcements, total, err := uc.repo.FindAll(ctx, limit, offset)
 	if err != nil {
@@ -49,7 +49,7 @@ func (uc *ListAnnouncementsUseCase) Execute(ctx context.Context, limit, offset i
 }
 
 func (uc *ListAnnouncementsUseCase) ExecutePublished(ctx context.Context, limit, offset int) (*dto.ListResponse, error) {
-	uc.logger.Infow("executing list published announcements use case", "limit", limit, "offset", offset)
+	uc.logger.Debugw("executing list published announcements use case", "limit", limit, "offset", offset)
 
 	announcements, total, err := uc.repo.FindPublished(ctx, limit, offset)
 	if err != nil {

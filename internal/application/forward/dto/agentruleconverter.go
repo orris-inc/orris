@@ -242,6 +242,13 @@ func (c *AgentRuleConverter) populateRoleSpecificInfo(ctx context.Context, rule 
 	case "direct_chain":
 		c.populateDirectChainRuleInfo(ctx, rule, ruleDTO, agentID)
 	}
+
+	// Only send bindIP to the agent that connects to the final target.
+	// For direct rules the single agent IS the exit; for other rule types
+	// only the "exit" role should receive bindIP.
+	if ruleDTO.Role != "exit" && ruleType != "direct" {
+		ruleDTO.BindIP = ""
+	}
 }
 
 // populateDirectRuleInfo populates info for direct rules.
@@ -450,7 +457,7 @@ func (c *AgentRuleConverter) populateDirectChainRuleInfo(ctx context.Context, ru
 
 	// Defensive check: agent must be in chain
 	if chainPosition < 0 {
-		c.logger.Errorw("agent not found in direct_chain rule",
+		c.logger.Warnw("agent not found in direct_chain rule",
 			"agent_id", agentID,
 			"rule_id", ruleDTO.ID,
 			"entry_agent_id", rule.AgentID(),

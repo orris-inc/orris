@@ -204,7 +204,7 @@ func (h *Handler) handleAgentEvent(agentID uint, data any) {
 		return
 	}
 
-	h.logger.Infow("forward agent event received",
+	h.logger.Debugw("forward agent event received",
 		"agent_id", agentID,
 		"event_type", event.EventType,
 		"message", event.Message,
