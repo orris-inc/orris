@@ -274,11 +274,20 @@ func ToNodeConfigData(n *node.Node, referencedNodes []*node.Node, serverKeyFunc 
 	// Convert route configuration if present
 	if n.RouteConfig() != nil {
 		config.Route = ToRouteConfigDTO(n.RouteConfig())
+		// Agent only needs route rules and final action; custom outbound
+		// definitions are already flattened into the top-level outbounds list.
+		config.Route.CustomOutbounds = nil
+
+		// Merge custom outbounds into the outbounds list
+		customDTOs := CustomOutboundsToAgentDTOs(n.RouteConfig())
+		if len(customDTOs) > 0 {
+			config.Outbounds = append(config.Outbounds, customDTOs...)
+		}
 	}
 
 	// Convert referenced nodes to outbounds
 	if len(referencedNodes) > 0 {
-		config.Outbounds = ToOutboundDTOs(referencedNodes, serverKeyFunc)
+		config.Outbounds = append(config.Outbounds, ToOutboundDTOs(referencedNodes, serverKeyFunc)...)
 	}
 
 	return config

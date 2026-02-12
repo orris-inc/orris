@@ -6,8 +6,9 @@ import "fmt"
 // It specifies how traffic should be routed based on matching rules.
 // Compatible with sing-box route configuration.
 type RouteConfig struct {
-	rules       []RouteRule  // Ordered list of routing rules
-	finalAction OutboundType // Default action when no rules match
+	rules            []RouteRule      // Ordered list of routing rules
+	finalAction      OutboundType     // Default action when no rules match
+	customOutbounds  []CustomOutbound // User-defined outbound configurations referenced by route rules via custom_xxx tags
 }
 
 // NewRouteConfig creates a new route configuration
@@ -65,6 +66,59 @@ func (c *RouteConfig) SetFinalAction(action OutboundType) error {
 	return nil
 }
 
+// CustomOutbounds returns a copy of the custom outbounds
+func (c *RouteConfig) CustomOutbounds() []CustomOutbound {
+	if c.customOutbounds == nil {
+		return nil
+	}
+	result := make([]CustomOutbound, len(c.customOutbounds))
+	copy(result, c.customOutbounds)
+	return result
+}
+
+// maxCustomOutbounds is the maximum number of custom outbounds per route config
+const maxCustomOutbounds = 20
+
+// SetCustomOutbounds replaces all custom outbounds after validation.
+// Validates each outbound and ensures tag uniqueness.
+func (c *RouteConfig) SetCustomOutbounds(outbounds []CustomOutbound) error {
+	if len(outbounds) > maxCustomOutbounds {
+		return fmt.Errorf("too many custom outbounds: %d (max %d)", len(outbounds), maxCustomOutbounds)
+	}
+	// Validate each outbound and check tag uniqueness
+	seen := make(map[string]bool, len(outbounds))
+	for i, co := range outbounds {
+		if err := co.Validate(); err != nil {
+			return fmt.Errorf("invalid custom outbound at index %d: %w", i, err)
+		}
+		if seen[co.Tag()] {
+			return fmt.Errorf("duplicate custom outbound tag: %s", co.Tag())
+		}
+		seen[co.Tag()] = true
+	}
+	// Defensive copy to prevent caller from modifying internal state
+	cp := make([]CustomOutbound, len(outbounds))
+	copy(cp, outbounds)
+	c.customOutbounds = cp
+	return nil
+}
+
+// HasCustomOutbounds checks if the route config has custom outbounds
+func (c *RouteConfig) HasCustomOutbounds() bool {
+	return len(c.customOutbounds) > 0
+}
+
+// GetCustomOutboundByTag returns a copy of a custom outbound by its tag, or nil if not found
+func (c *RouteConfig) GetCustomOutboundByTag(tag string) *CustomOutbound {
+	for i := range c.customOutbounds {
+		if c.customOutbounds[i].Tag() == tag {
+			co := c.customOutbounds[i] // value copy
+			return &co
+		}
+	}
+	return nil
+}
+
 // Validate validates the route configuration
 func (c *RouteConfig) Validate() error {
 	if !c.finalAction.IsValid() {
@@ -75,6 +129,36 @@ func (c *RouteConfig) Validate() error {
 			return fmt.Errorf("invalid rule at index %d: %w", i, err)
 		}
 	}
+
+	// Validate custom outbounds: uniqueness and individual validity
+	customTags := make(map[string]bool, len(c.customOutbounds))
+	for i, co := range c.customOutbounds {
+		if err := co.Validate(); err != nil {
+			return fmt.Errorf("invalid custom outbound at index %d: %w", i, err)
+		}
+		if customTags[co.Tag()] {
+			return fmt.Errorf("duplicate custom outbound tag: %s", co.Tag())
+		}
+		customTags[co.Tag()] = true
+	}
+
+	// Validate that all custom outbound references in rules have corresponding definitions
+	for i, rule := range c.rules {
+		if rule.outbound.IsCustomOutbound() {
+			tag := rule.outbound.CustomOutboundTag()
+			if !customTags[tag] {
+				return fmt.Errorf("rule at index %d references undefined custom outbound: %s", i, tag)
+			}
+		}
+	}
+	// Also check finalAction
+	if c.finalAction.IsCustomOutbound() {
+		tag := c.finalAction.CustomOutboundTag()
+		if !customTags[tag] {
+			return fmt.Errorf("final action references undefined custom outbound: %s", tag)
+		}
+	}
+
 	return nil
 }
 
@@ -107,11 +191,20 @@ func (c *RouteConfig) Equals(other *RouteConfig) bool {
 			return false
 		}
 	}
+	if len(c.customOutbounds) != len(other.customOutbounds) {
+		return false
+	}
+	for i, co := range c.customOutbounds {
+		if !co.Equals(&other.customOutbounds[i]) {
+			return false
+		}
+	}
 	return true
 }
 
 // GetReferencedNodeSIDs returns all unique node SIDs referenced in outbound rules.
 // This includes both rule outbounds and finalAction if they reference nodes.
+// Custom outbound references (custom_xxx) are excluded.
 func (c *RouteConfig) GetReferencedNodeSIDs() []string {
 	if c == nil {
 		return nil
@@ -120,7 +213,7 @@ func (c *RouteConfig) GetReferencedNodeSIDs() []string {
 	seen := make(map[string]bool)
 	var sids []string
 
-	// Check rules
+	// Check rules (skip custom outbound references)
 	for _, rule := range c.rules {
 		if rule.outbound.IsNodeReference() {
 			sid := rule.outbound.NodeSID()
@@ -131,7 +224,7 @@ func (c *RouteConfig) GetReferencedNodeSIDs() []string {
 		}
 	}
 
-	// Check finalAction
+	// Check finalAction (skip custom outbound references)
 	if c.finalAction.IsNodeReference() {
 		sid := c.finalAction.NodeSID()
 		if !seen[sid] {
@@ -158,10 +251,11 @@ func (c *RouteConfig) HasNodeReferences() bool {
 }
 
 // ReconstructRouteConfig reconstructs a RouteConfig from persistence data
-func ReconstructRouteConfig(rules []RouteRule, finalAction OutboundType) *RouteConfig {
+func ReconstructRouteConfig(rules []RouteRule, finalAction OutboundType, customOutbounds []CustomOutbound) *RouteConfig {
 	return &RouteConfig{
-		rules:       rules,
-		finalAction: finalAction,
+		rules:           rules,
+		finalAction:     finalAction,
+		customOutbounds: customOutbounds,
 	}
 }
 

@@ -49,8 +49,18 @@ type ShadowsocksConfigData struct {
 
 // RouteConfigJSON represents the JSON structure for RouteConfig persistence
 type RouteConfigJSON struct {
-	Rules       []RouteRuleJSON `json:"rules,omitempty"`
-	FinalAction string          `json:"final_action"`
+	Rules           []RouteRuleJSON      `json:"rules,omitempty"`
+	FinalAction     string               `json:"final_action"`
+	CustomOutbounds []CustomOutboundJSON `json:"custom_outbounds,omitempty"`
+}
+
+// CustomOutboundJSON represents the JSON structure for a custom outbound in persistence
+type CustomOutboundJSON struct {
+	Tag      string         `json:"tag"`
+	Type     string         `json:"type"`
+	Server   string         `json:"server"`
+	Port     uint16         `json:"server_port"`
+	Settings map[string]any `json:"settings,omitempty"`
 }
 
 // RouteRuleJSON represents the JSON structure for a single routing rule
@@ -383,10 +393,27 @@ func routeConfigToJSON(rc *vo.RouteConfig) *RouteConfigJSON {
 		})
 	}
 
-	return &RouteConfigJSON{
+	rcJSON := &RouteConfigJSON{
 		Rules:       rules,
 		FinalAction: rc.FinalAction().String(),
 	}
+
+	// Serialize custom outbounds
+	if rc.HasCustomOutbounds() {
+		customOutbounds := rc.CustomOutbounds()
+		rcJSON.CustomOutbounds = make([]CustomOutboundJSON, 0, len(customOutbounds))
+		for _, co := range customOutbounds {
+			rcJSON.CustomOutbounds = append(rcJSON.CustomOutbounds, CustomOutboundJSON{
+				Tag:      co.Tag(),
+				Type:     co.Protocol(),
+				Server:   co.Server(),
+				Port:     co.Port(),
+				Settings: co.Settings(),
+			})
+		}
+	}
+
+	return rcJSON
 }
 
 // routeConfigFromJSON converts JSON structure to domain RouteConfig
@@ -427,5 +454,15 @@ func routeConfigFromJSON(rcJSON *RouteConfigJSON) *vo.RouteConfig {
 		rules = append(rules, *rule)
 	}
 
-	return vo.ReconstructRouteConfig(rules, finalAction)
+	// Deserialize custom outbounds
+	var customOutbounds []vo.CustomOutbound
+	if len(rcJSON.CustomOutbounds) > 0 {
+		customOutbounds = make([]vo.CustomOutbound, 0, len(rcJSON.CustomOutbounds))
+		for _, coJSON := range rcJSON.CustomOutbounds {
+			co := vo.ReconstructCustomOutbound(coJSON.Tag, coJSON.Type, coJSON.Server, coJSON.Port, coJSON.Settings)
+			customOutbounds = append(customOutbounds, *co)
+		}
+	}
+
+	return vo.ReconstructRouteConfig(rules, finalAction, customOutbounds)
 }

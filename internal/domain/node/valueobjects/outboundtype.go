@@ -10,6 +10,7 @@ import (
 // Supports:
 //   - Preset types: "direct", "block", "proxy"
 //   - Node reference: "node_xxx" (routes traffic through the specified node)
+//   - Custom outbound: "custom_xxx" (routes traffic through a user-defined outbound)
 type OutboundType string
 
 const (
@@ -23,6 +24,9 @@ const (
 
 // nodeSIDPrefix is the prefix for node SID references
 const nodeSIDPrefix = "node_"
+
+// customOutboundPrefix is the prefix for custom outbound references
+const customOutboundPrefix = "custom_"
 
 // IsPresetType checks if this is a built-in outbound type (direct/block/proxy)
 func (o OutboundType) IsPresetType() bool {
@@ -40,9 +44,23 @@ func (o OutboundType) IsNodeReference() bool {
 	return strings.HasPrefix(s, nodeSIDPrefix) && len(s) > len(nodeSIDPrefix)
 }
 
-// IsValid checks if the outbound type is valid (either preset type or node reference)
+// IsCustomOutbound checks if this outbound references a custom outbound (custom_xxx format)
+func (o OutboundType) IsCustomOutbound() bool {
+	s := string(o)
+	return strings.HasPrefix(s, customOutboundPrefix) && len(s) > len(customOutboundPrefix)
+}
+
+// CustomOutboundTag returns the custom outbound tag if this is a custom outbound reference, empty string otherwise
+func (o OutboundType) CustomOutboundTag() string {
+	if o.IsCustomOutbound() {
+		return string(o)
+	}
+	return ""
+}
+
+// IsValid checks if the outbound type is valid (preset type, node reference, or custom outbound)
 func (o OutboundType) IsValid() bool {
-	return o.IsPresetType() || o.IsNodeReference()
+	return o.IsPresetType() || o.IsNodeReference() || o.IsCustomOutbound()
 }
 
 // NodeSID returns the node SID if this is a node reference, empty string otherwise
@@ -59,11 +77,11 @@ func (o OutboundType) String() string {
 }
 
 // ParseOutboundType parses a string to OutboundType
-// Accepts preset types (direct/block/proxy) and node SID references (node_xxx)
+// Accepts preset types (direct/block/proxy), node SID references (node_xxx), or custom outbound references (custom_xxx)
 func ParseOutboundType(s string) (OutboundType, error) {
 	o := OutboundType(s)
 	if !o.IsValid() {
-		return "", fmt.Errorf("invalid outbound type: %s (must be 'direct', 'block', 'proxy', or node SID like 'node_xxx')", s)
+		return "", fmt.Errorf("invalid outbound type: %s (must be 'direct', 'block', 'proxy', node SID like 'node_xxx', or custom outbound like 'custom_xxx')", s)
 	}
 	return o, nil
 }

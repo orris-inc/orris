@@ -75,8 +75,19 @@ type NodeConfigResponse struct {
 
 // RouteConfigDTO represents the routing configuration for sing-box
 type RouteConfigDTO struct {
-	Rules []RouteRuleDTO `json:"rules,omitempty"` // Ordered list of routing rules
-	Final string         `json:"final"`           // Default outbound when no rules match (direct/block/proxy/node_xxx)
+	Rules           []RouteRuleDTO      `json:"rules,omitempty"`            // Ordered list of routing rules
+	Final           string              `json:"final"`                      // Default outbound when no rules match (direct/block/proxy/node_xxx/custom_xxx)
+	CustomOutbounds []CustomOutboundDTO `json:"custom_outbounds,omitempty"` // User-defined outbound configurations
+}
+
+// CustomOutboundDTO represents a user-defined sing-box outbound configuration.
+// Route rules reference these via custom_xxx tags.
+type CustomOutboundDTO struct {
+	Tag      string         `json:"tag"`                    // Unique identifier, must start with "custom_"
+	Type     string         `json:"type"`                   // Protocol type (shadowsocks, trojan, vless, vmess, hysteria2, tuic, anytls, socks, http)
+	Server   string         `json:"server"`                 // Server hostname or IP address
+	Port     int            `json:"server_port"`            // Server port number
+	Settings map[string]any `json:"settings,omitempty"`     // Protocol-specific configuration (password, uuid, method, tls, transport, etc.)
 }
 
 // RouteRuleDTO represents a single routing rule, compatible with sing-box route rule
@@ -418,11 +429,20 @@ func ToNodeConfigResponse(n *node.Node, referencedNodes []*node.Node, serverKeyF
 	// Convert route configuration if present
 	if n.RouteConfig() != nil {
 		config.Route = ToRouteConfigDTO(n.RouteConfig())
+		// Agent only needs route rules and final action; custom outbound
+		// definitions are already flattened into the top-level outbounds list.
+		config.Route.CustomOutbounds = nil
+
+		// Merge custom outbounds into the outbounds list
+		customDTOs := CustomOutboundsToAgentDTOs(n.RouteConfig())
+		if len(customDTOs) > 0 {
+			config.Outbounds = append(config.Outbounds, customDTOs...)
+		}
 	}
 
 	// Convert referenced nodes to outbounds
 	if len(referencedNodes) > 0 {
-		config.Outbounds = ToOutboundDTOs(referencedNodes, serverKeyFunc)
+		config.Outbounds = append(config.Outbounds, ToOutboundDTOs(referencedNodes, serverKeyFunc)...)
 	}
 
 	return config
@@ -439,10 +459,21 @@ func ToRouteConfigDTO(rc *vo.RouteConfig) *RouteConfigDTO {
 		rules = append(rules, ToRouteRuleDTO(&rule))
 	}
 
-	return &RouteConfigDTO{
+	dto := &RouteConfigDTO{
 		Rules: rules,
 		Final: rc.FinalAction().String(),
 	}
+
+	// Convert custom outbounds
+	if rc.HasCustomOutbounds() {
+		customOutbounds := rc.CustomOutbounds()
+		dto.CustomOutbounds = make([]CustomOutboundDTO, 0, len(customOutbounds))
+		for _, co := range customOutbounds {
+			dto.CustomOutbounds = append(dto.CustomOutbounds, customOutboundToDTO(&co))
+		}
+	}
+
+	return dto
 }
 
 // ToRouteRuleDTO converts domain RouteRule to DTO
@@ -828,6 +859,21 @@ func FromRouteConfigDTO(dto *RouteConfigDTO) (*vo.RouteConfig, error) {
 		}
 	}
 
+	// Convert and set custom outbounds
+	if len(dto.CustomOutbounds) > 0 {
+		customOutbounds := make([]vo.CustomOutbound, 0, len(dto.CustomOutbounds))
+		for i, coDTO := range dto.CustomOutbounds {
+			co, err := customOutboundFromDTO(&coDTO)
+			if err != nil {
+				return nil, fmt.Errorf("invalid custom outbound at index %d: %w", i, err)
+			}
+			customOutbounds = append(customOutbounds, *co)
+		}
+		if err := config.SetCustomOutbounds(customOutbounds); err != nil {
+			return nil, fmt.Errorf("failed to set custom outbounds: %w", err)
+		}
+	}
+
 	return config, nil
 }
 
@@ -909,6 +955,175 @@ func FromRouteRuleDTO(dto *RouteRuleDTO) (*vo.RouteRule, error) {
 	}
 
 	return rule, nil
+}
+
+// customOutboundToDTO converts domain CustomOutbound to CustomOutboundDTO
+func customOutboundToDTO(co *vo.CustomOutbound) CustomOutboundDTO {
+	return CustomOutboundDTO{
+		Tag:      co.Tag(),
+		Type:     co.Protocol(),
+		Server:   co.Server(),
+		Port:     int(co.Port()),
+		Settings: co.Settings(),
+	}
+}
+
+// customOutboundFromDTO converts CustomOutboundDTO to domain CustomOutbound
+func customOutboundFromDTO(dto *CustomOutboundDTO) (*vo.CustomOutbound, error) {
+	if dto == nil {
+		return nil, nil
+	}
+	port := dto.Port
+	if port < 1 || port > 65535 {
+		return nil, fmt.Errorf("invalid port number: %d (must be 1-65535)", port)
+	}
+	return vo.NewCustomOutbound(dto.Tag, dto.Type, dto.Server, uint16(port), dto.Settings)
+}
+
+// CustomOutboundsToAgentDTOs converts custom outbounds from a RouteConfig into OutboundDTOs
+// for the agent sync protocol. The settings map is flattened into OutboundDTO fields
+// using JSON marshal/unmarshal for automatic field mapping.
+func CustomOutboundsToAgentDTOs(rc *vo.RouteConfig) []OutboundDTO {
+	if rc == nil || !rc.HasCustomOutbounds() {
+		return nil
+	}
+
+	customOutbounds := rc.CustomOutbounds()
+	dtos := make([]OutboundDTO, 0, len(customOutbounds))
+	for _, co := range customOutbounds {
+		dto := customOutboundToAgentDTO(&co)
+		dtos = append(dtos, dto)
+	}
+	return dtos
+}
+
+// customOutboundToAgentDTO converts a domain CustomOutbound to an OutboundDTO
+// for the agent sync protocol by mapping settings to typed fields.
+func customOutboundToAgentDTO(co *vo.CustomOutbound) OutboundDTO {
+	dto := OutboundDTO{
+		Tag:    co.Tag(),
+		Type:   co.Protocol(),
+		Server: co.Server(),
+		Port:   int(co.Port()),
+	}
+
+	s := co.Settings()
+	if s == nil {
+		return dto
+	}
+
+	// Common fields
+	dto.Password = getStringFromSettings(s, "password")
+	dto.UUID = getStringFromSettings(s, "uuid")
+	dto.Method = getStringFromSettings(s, "method")
+	dto.Plugin = getStringFromSettings(s, "plugin")
+	dto.PluginOpts = getStringFromSettings(s, "plugin_opts")
+	dto.VLESSFlow = getStringFromSettings(s, "flow")
+	dto.VMessAlterID = getIntFromSettings(s, "alter_id")
+	dto.VMessSecurity = getStringFromSettings(s, "security")
+	dto.Hysteria2Obfs = getStringFromSettings(s, "obfs")
+	dto.Hysteria2ObfsPassword = getStringFromSettings(s, "obfs_password")
+	dto.Hysteria2UpMbps = getIntPtrFromSettings(s, "up_mbps")
+	dto.Hysteria2DownMbps = getIntPtrFromSettings(s, "down_mbps")
+	dto.TUICCongestionControl = getStringFromSettings(s, "congestion_control")
+	dto.TUICUDPRelayMode = getStringFromSettings(s, "udp_relay_mode")
+	dto.AnyTLSFingerprint = getStringFromSettings(s, "anytls_fingerprint")
+	dto.AnyTLSIdleSessionCheckInterval = getStringFromSettings(s, "anytls_idle_session_check_interval")
+	dto.AnyTLSIdleSessionTimeout = getStringFromSettings(s, "anytls_idle_session_timeout")
+	dto.AnyTLSMinIdleSession = getIntFromSettings(s, "anytls_min_idle_session")
+
+	// TLS configuration
+	if tlsMap, ok := s["tls"].(map[string]any); ok {
+		dto.TLS = &OutboundTLSDTO{
+			Enabled:    getBoolFromSettings(tlsMap, "enabled"),
+			ServerName: getStringFromSettings(tlsMap, "server_name"),
+			Insecure:   getBoolFromSettings(tlsMap, "insecure"),
+			DisableSNI: getBoolFromSettings(tlsMap, "disable_sni"),
+		}
+		if alpn, ok := tlsMap["alpn"].([]any); ok {
+			for _, a := range alpn {
+				if str, ok := a.(string); ok {
+					dto.TLS.ALPN = append(dto.TLS.ALPN, str)
+				}
+			}
+		}
+		// Reality configuration
+		if realityMap, ok := tlsMap["reality"].(map[string]any); ok {
+			dto.TLS.Reality = &OutboundRealityDTO{
+				Enabled:   getBoolFromSettings(realityMap, "enabled"),
+				PublicKey: getStringFromSettings(realityMap, "public_key"),
+				ShortID:   getStringFromSettings(realityMap, "short_id"),
+			}
+		}
+	}
+
+	// Transport configuration
+	if transportMap, ok := s["transport"].(map[string]any); ok {
+		dto.Transport = &OutboundTransportDTO{
+			Type:        getStringFromSettings(transportMap, "type"),
+			Path:        getStringFromSettings(transportMap, "path"),
+			ServiceName: getStringFromSettings(transportMap, "service_name"),
+		}
+		if headers, ok := transportMap["headers"].(map[string]any); ok {
+			dto.Transport.Headers = make(map[string]string, len(headers))
+			for k, v := range headers {
+				if str, ok := v.(string); ok {
+					dto.Transport.Headers[k] = str
+				}
+			}
+		}
+	}
+
+	return dto
+}
+
+// Settings extraction helpers
+
+func getStringFromSettings(m map[string]any, key string) string {
+	if v, ok := m[key].(string); ok {
+		return v
+	}
+	return ""
+}
+
+func getIntFromSettings(m map[string]any, key string) int {
+	switch v := m[key].(type) {
+	case float64:
+		return int(v)
+	case int:
+		return v
+	case int64:
+		return int(v)
+	default:
+		return 0
+	}
+}
+
+func getIntPtrFromSettings(m map[string]any, key string) *int {
+	val, ok := m[key]
+	if !ok {
+		return nil
+	}
+	// Only return non-nil for actual numeric types; ignore non-numeric values
+	switch v := val.(type) {
+	case float64:
+		i := int(v)
+		return &i
+	case int:
+		return &v
+	case int64:
+		i := int(v)
+		return &i
+	default:
+		return nil
+	}
+}
+
+func getBoolFromSettings(m map[string]any, key string) bool {
+	if v, ok := m[key].(bool); ok {
+		return v
+	}
+	return false
 }
 
 // generatePasswordForEncryptionMethod generates password based on encryption method type
