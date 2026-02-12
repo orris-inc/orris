@@ -500,68 +500,6 @@ func (uc *UpdateNodeUseCase) applyUpdates(n *node.Node, cmd UpdateNodeCommand) e
 	return nil
 }
 
-func (uc *UpdateNodeUseCase) validateCommand(cmd UpdateNodeCommand) error {
-	if cmd.SID == "" {
-		return errors.NewValidationError("SID must be provided")
-	}
-
-	// Check if at least one field is provided for update
-	hasUpdate := cmd.Name != nil || cmd.ServerAddress != nil || cmd.AgentPort != nil ||
-		cmd.SubscriptionPort != nil || cmd.Method != nil || cmd.Plugin != nil ||
-		len(cmd.PluginOpts) > 0 || cmd.Region != nil || cmd.Tags != nil ||
-		cmd.Description != nil || cmd.SortOrder != nil || cmd.Status != nil ||
-		cmd.GroupSIDs != nil || cmd.MuteNotification != nil ||
-		cmd.TrojanTransportProtocol != nil || cmd.TrojanHost != nil ||
-		cmd.TrojanPath != nil || cmd.TrojanSNI != nil || cmd.TrojanAllowInsecure != nil ||
-		cmd.Route != nil || cmd.ClearRoute ||
-		// VLESS fields
-		cmd.VLESSTransportType != nil || cmd.VLESSFlow != nil || cmd.VLESSSecurity != nil ||
-		cmd.VLESSSni != nil || cmd.VLESSFingerprint != nil || cmd.VLESSAllowInsecure != nil ||
-		cmd.VLESSHost != nil || cmd.VLESSPath != nil || cmd.VLESSServiceName != nil ||
-		cmd.VLESSRealityPrivateKey != nil || cmd.VLESSRealityPublicKey != nil ||
-		cmd.VLESSRealityShortID != nil || cmd.VLESSRealitySpiderX != nil ||
-		// VMess fields
-		cmd.VMessAlterID != nil || cmd.VMessSecurity != nil || cmd.VMessTransportType != nil ||
-		cmd.VMessHost != nil || cmd.VMessPath != nil || cmd.VMessServiceName != nil ||
-		cmd.VMessTLS != nil || cmd.VMessSni != nil || cmd.VMessAllowInsecure != nil ||
-		// Hysteria2 fields
-		cmd.Hysteria2CongestionControl != nil || cmd.Hysteria2Obfs != nil || cmd.Hysteria2ObfsPassword != nil ||
-		cmd.Hysteria2UpMbps != nil || cmd.Hysteria2DownMbps != nil || cmd.Hysteria2Sni != nil ||
-		cmd.Hysteria2AllowInsecure != nil || cmd.Hysteria2Fingerprint != nil ||
-		// TUIC fields
-		cmd.TUICCongestionControl != nil || cmd.TUICUDPRelayMode != nil || cmd.TUICAlpn != nil ||
-		cmd.TUICSni != nil || cmd.TUICAllowInsecure != nil || cmd.TUICDisableSNI != nil ||
-		// AnyTLS fields
-		cmd.AnyTLSSni != nil || cmd.AnyTLSAllowInsecure != nil || cmd.AnyTLSFingerprint != nil ||
-		cmd.AnyTLSIdleSessionCheckInterval != nil || cmd.AnyTLSIdleSessionTimeout != nil ||
-		cmd.AnyTLSMinIdleSession != nil ||
-		// Expiration and cost label fields
-		cmd.ExpiresAt != nil || cmd.ClearExpiresAt || cmd.CostLabel != nil || cmd.ClearCostLabel
-
-	if !hasUpdate {
-		return errors.NewValidationError("at least one field must be provided for update")
-	}
-
-	if cmd.Name != nil && *cmd.Name == "" {
-		return errors.NewValidationError("node name cannot be empty")
-	}
-
-	if cmd.AgentPort != nil && *cmd.AgentPort == 0 {
-		return errors.NewValidationError("agent port cannot be zero")
-	}
-
-	if cmd.Method != nil && *cmd.Method == "" {
-		return errors.NewValidationError("encryption method cannot be empty")
-	}
-
-	// ClearRoute and Route are mutually exclusive
-	if cmd.ClearRoute && cmd.Route != nil {
-		return errors.NewValidationError("cannot set both ClearRoute and Route; use ClearRoute to remove config or Route to set new config")
-	}
-
-	return nil
-}
-
 // applyTrojanUpdates applies Trojan-specific configuration updates
 func (uc *UpdateNodeUseCase) applyTrojanUpdates(n *node.Node, cmd UpdateNodeCommand) error {
 	// Check if any Trojan fields need updating
@@ -1112,6 +1050,69 @@ func (uc *UpdateNodeUseCase) applyAnyTLSUpdates(n *node.Node, cmd UpdateNodeComm
 
 	if err := n.UpdateAnyTLSConfig(&newConfig); err != nil {
 		return errors.NewValidationError("failed to update AnyTLS config: " + err.Error())
+	}
+
+	return nil
+}
+
+// validateCommand validates the update node command
+func (uc *UpdateNodeUseCase) validateCommand(cmd UpdateNodeCommand) error {
+	if cmd.SID == "" {
+		return errors.NewValidationError("SID must be provided")
+	}
+
+	// Check if at least one field is provided for update
+	hasUpdate := cmd.Name != nil || cmd.ServerAddress != nil || cmd.AgentPort != nil ||
+		cmd.SubscriptionPort != nil || cmd.Method != nil || cmd.Plugin != nil ||
+		len(cmd.PluginOpts) > 0 || cmd.Region != nil || cmd.Tags != nil ||
+		cmd.Description != nil || cmd.SortOrder != nil || cmd.Status != nil ||
+		cmd.GroupSIDs != nil || cmd.MuteNotification != nil ||
+		cmd.TrojanTransportProtocol != nil || cmd.TrojanHost != nil ||
+		cmd.TrojanPath != nil || cmd.TrojanSNI != nil || cmd.TrojanAllowInsecure != nil ||
+		cmd.Route != nil || cmd.ClearRoute ||
+		// VLESS fields
+		cmd.VLESSTransportType != nil || cmd.VLESSFlow != nil || cmd.VLESSSecurity != nil ||
+		cmd.VLESSSni != nil || cmd.VLESSFingerprint != nil || cmd.VLESSAllowInsecure != nil ||
+		cmd.VLESSHost != nil || cmd.VLESSPath != nil || cmd.VLESSServiceName != nil ||
+		cmd.VLESSRealityPrivateKey != nil || cmd.VLESSRealityPublicKey != nil ||
+		cmd.VLESSRealityShortID != nil || cmd.VLESSRealitySpiderX != nil ||
+		// VMess fields
+		cmd.VMessAlterID != nil || cmd.VMessSecurity != nil || cmd.VMessTransportType != nil ||
+		cmd.VMessHost != nil || cmd.VMessPath != nil || cmd.VMessServiceName != nil ||
+		cmd.VMessTLS != nil || cmd.VMessSni != nil || cmd.VMessAllowInsecure != nil ||
+		// Hysteria2 fields
+		cmd.Hysteria2CongestionControl != nil || cmd.Hysteria2Obfs != nil || cmd.Hysteria2ObfsPassword != nil ||
+		cmd.Hysteria2UpMbps != nil || cmd.Hysteria2DownMbps != nil || cmd.Hysteria2Sni != nil ||
+		cmd.Hysteria2AllowInsecure != nil || cmd.Hysteria2Fingerprint != nil ||
+		// TUIC fields
+		cmd.TUICCongestionControl != nil || cmd.TUICUDPRelayMode != nil || cmd.TUICAlpn != nil ||
+		cmd.TUICSni != nil || cmd.TUICAllowInsecure != nil || cmd.TUICDisableSNI != nil ||
+		// AnyTLS fields
+		cmd.AnyTLSSni != nil || cmd.AnyTLSAllowInsecure != nil || cmd.AnyTLSFingerprint != nil ||
+		cmd.AnyTLSIdleSessionCheckInterval != nil || cmd.AnyTLSIdleSessionTimeout != nil ||
+		cmd.AnyTLSMinIdleSession != nil ||
+		// Expiration and cost label fields
+		cmd.ExpiresAt != nil || cmd.ClearExpiresAt || cmd.CostLabel != nil || cmd.ClearCostLabel
+
+	if !hasUpdate {
+		return errors.NewValidationError("at least one field must be provided for update")
+	}
+
+	if cmd.Name != nil && *cmd.Name == "" {
+		return errors.NewValidationError("node name cannot be empty")
+	}
+
+	if cmd.AgentPort != nil && *cmd.AgentPort == 0 {
+		return errors.NewValidationError("agent port cannot be zero")
+	}
+
+	if cmd.Method != nil && *cmd.Method == "" {
+		return errors.NewValidationError("encryption method cannot be empty")
+	}
+
+	// ClearRoute and Route are mutually exclusive
+	if cmd.ClearRoute && cmd.Route != nil {
+		return errors.NewValidationError("cannot set both ClearRoute and Route; use ClearRoute to remove config or Route to set new config")
 	}
 
 	return nil

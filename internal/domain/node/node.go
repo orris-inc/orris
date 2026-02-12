@@ -9,7 +9,6 @@ import (
 	"time"
 
 	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
-	"github.com/orris-inc/orris/internal/domain/shared"
 	"github.com/orris-inc/orris/internal/domain/shared/services"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 )
@@ -259,6 +258,8 @@ func ReconstructNode(
 	}, nil
 }
 
+// --- Getters ---
+
 // ID returns the node ID
 func (n *Node) ID() uint {
 	return n.id
@@ -363,57 +364,6 @@ func (n *Node) UserID() *uint {
 	return n.userID
 }
 
-// SetUserID sets the owner user ID
-func (n *Node) SetUserID(userID *uint) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	n.userID = userID
-	n.updatedAt = biztime.NowUTC()
-	n.version++
-}
-
-// SetGroupIDs sets the resource group IDs
-func (n *Node) SetGroupIDs(groupIDs []uint) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	n.groupIDs = groupIDs
-	n.updatedAt = biztime.NowUTC()
-	n.version++
-}
-
-// AddGroupID adds a resource group ID if not already present
-func (n *Node) AddGroupID(groupID uint) bool {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	newIDs, added := shared.AddToGroupIDs(n.groupIDs, groupID)
-	if added {
-		n.groupIDs = newIDs
-		n.updatedAt = biztime.NowUTC()
-		n.version++
-	}
-	return added
-}
-
-// RemoveGroupID removes a resource group ID
-func (n *Node) RemoveGroupID(groupID uint) bool {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-	newIDs, removed := shared.RemoveFromGroupIDs(n.groupIDs, groupID)
-	if removed {
-		n.groupIDs = newIDs
-		n.updatedAt = biztime.NowUTC()
-		n.version++
-	}
-	return removed
-}
-
-// HasGroupID checks if the node belongs to a specific resource group
-func (n *Node) HasGroupID(groupID uint) bool {
-	n.mu.RLock()
-	defer n.mu.RUnlock()
-	return shared.HasGroupID(n.groupIDs, groupID)
-}
-
 // TokenHash returns the API token hash
 func (n *Node) TokenHash() string {
 	return n.tokenHash
@@ -434,445 +384,9 @@ func (n *Node) RouteConfig() *vo.RouteConfig {
 	return n.routeConfig
 }
 
-// Version returns the aggregate version for optimistic locking
-func (n *Node) Version() int {
-	return n.version
-}
-
-// OriginalVersion returns the version when the entity was loaded from database.
-// This is used for optimistic locking to detect concurrent modifications.
-func (n *Node) OriginalVersion() int {
-	return n.originalVersion
-}
-
-// CreatedAt returns when the node was created
-func (n *Node) CreatedAt() time.Time {
-	return n.createdAt
-}
-
-// UpdatedAt returns when the node was last updated
-func (n *Node) UpdatedAt() time.Time {
-	return n.updatedAt
-}
-
-// SetID sets the node ID (only for persistence layer use)
-func (n *Node) SetID(id uint) error {
-	if n.id != 0 {
-		return fmt.Errorf("node ID is already set")
-	}
-	if id == 0 {
-		return fmt.Errorf("node ID cannot be zero")
-	}
-	n.id = id
-	return nil
-}
-
-// Activate activates the node
-func (n *Node) Activate() error {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	if n.status == vo.NodeStatusActive {
-		return nil
-	}
-
-	if !n.status.CanTransitionTo(vo.NodeStatusActive) {
-		return fmt.Errorf("cannot activate node with status %s", n.status)
-	}
-
-	n.status = vo.NodeStatusActive
-	n.updatedAt = biztime.NowUTC()
-	n.version++
-
-	return nil
-}
-
-// Deactivate deactivates the node
-func (n *Node) Deactivate() error {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	if n.status == vo.NodeStatusInactive {
-		return nil
-	}
-
-	if !n.status.CanTransitionTo(vo.NodeStatusInactive) {
-		return fmt.Errorf("cannot deactivate node with status %s", n.status)
-	}
-
-	n.status = vo.NodeStatusInactive
-	n.updatedAt = biztime.NowUTC()
-	n.version++
-
-	return nil
-}
-
-// EnterMaintenance puts the node into maintenance mode
-func (n *Node) EnterMaintenance(reason string) error {
-	if reason == "" {
-		return fmt.Errorf("maintenance reason is required")
-	}
-
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	if n.status == vo.NodeStatusMaintenance {
-		return nil
-	}
-
-	if !n.status.CanTransitionTo(vo.NodeStatusMaintenance) {
-		return fmt.Errorf("cannot enter maintenance mode from status %s", n.status)
-	}
-
-	n.status = vo.NodeStatusMaintenance
-	n.maintenanceReason = &reason
-	n.updatedAt = biztime.NowUTC()
-	n.version++
-
-	return nil
-}
-
-// ExitMaintenance exits maintenance mode and returns to active status
-func (n *Node) ExitMaintenance() error {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	if n.status != vo.NodeStatusMaintenance {
-		return fmt.Errorf("node is not in maintenance mode")
-	}
-
-	n.status = vo.NodeStatusActive
-	n.maintenanceReason = nil
-	n.updatedAt = biztime.NowUTC()
-	n.version++
-
-	return nil
-}
-
-// UpdateServerAddress updates the server address
-func (n *Node) UpdateServerAddress(address vo.ServerAddress) error {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	if n.serverAddress.Value() == address.Value() {
-		return nil
-	}
-
-	n.serverAddress = address
-	n.updatedAt = biztime.NowUTC()
-	n.version++
-
-	return nil
-}
-
-// UpdateAgentPort updates the agent connection port
-func (n *Node) UpdateAgentPort(port uint16) error {
-	if port == 0 {
-		return fmt.Errorf("agent port cannot be zero")
-	}
-
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	if n.agentPort == port {
-		return nil
-	}
-
-	n.agentPort = port
-	n.updatedAt = biztime.NowUTC()
-	n.version++
-
-	return nil
-}
-
-// UpdateSubscriptionPort updates the subscription port
-func (n *Node) UpdateSubscriptionPort(port *uint16) error {
-	if port != nil && *port == 0 {
-		return fmt.Errorf("subscription port cannot be zero")
-	}
-
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	// Check if values are equal
-	if n.subscriptionPort == nil && port == nil {
-		return nil
-	}
-	if n.subscriptionPort != nil && port != nil && *n.subscriptionPort == *port {
-		return nil
-	}
-
-	n.subscriptionPort = port
-	n.updatedAt = biztime.NowUTC()
-	n.version++
-
-	return nil
-}
-
-// UpdateEncryption updates the encryption configuration
-func (n *Node) UpdateEncryption(config vo.EncryptionConfig) error {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	n.encryptionConfig = config
-	n.updatedAt = biztime.NowUTC()
-	n.version++
-
-	return nil
-}
-
-// UpdatePlugin updates the plugin configuration
-func (n *Node) UpdatePlugin(config *vo.PluginConfig) error {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	n.pluginConfig = config
-	n.updatedAt = biztime.NowUTC()
-	n.version++
-
-	return nil
-}
-
-// UpdateTrojanConfig updates the trojan configuration
-func (n *Node) UpdateTrojanConfig(config *vo.TrojanConfig) error {
-	if !n.protocol.IsTrojan() {
-		return fmt.Errorf("cannot update trojan config for non-trojan protocol")
-	}
-
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	n.trojanConfig = config
-	n.updatedAt = biztime.NowUTC()
-	n.version++
-
-	return nil
-}
-
-// UpdateVLESSConfig updates the VLESS configuration
-func (n *Node) UpdateVLESSConfig(config *vo.VLESSConfig) error {
-	if !n.protocol.IsVLESS() {
-		return fmt.Errorf("cannot update vless config for non-vless protocol")
-	}
-
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	n.vlessConfig = config
-	n.updatedAt = biztime.NowUTC()
-	n.version++
-
-	return nil
-}
-
-// UpdateVMessConfig updates the VMess configuration
-func (n *Node) UpdateVMessConfig(config *vo.VMessConfig) error {
-	if !n.protocol.IsVMess() {
-		return fmt.Errorf("cannot update vmess config for non-vmess protocol")
-	}
-
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	n.vmessConfig = config
-	n.updatedAt = biztime.NowUTC()
-	n.version++
-
-	return nil
-}
-
-// UpdateHysteria2Config updates the Hysteria2 configuration
-func (n *Node) UpdateHysteria2Config(config *vo.Hysteria2Config) error {
-	if !n.protocol.IsHysteria2() {
-		return fmt.Errorf("cannot update hysteria2 config for non-hysteria2 protocol")
-	}
-
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	n.hysteria2Config = config
-	n.updatedAt = biztime.NowUTC()
-	n.version++
-
-	return nil
-}
-
-// UpdateTUICConfig updates the TUIC configuration
-func (n *Node) UpdateTUICConfig(config *vo.TUICConfig) error {
-	if !n.protocol.IsTUIC() {
-		return fmt.Errorf("cannot update tuic config for non-tuic protocol")
-	}
-
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	n.tuicConfig = config
-	n.updatedAt = biztime.NowUTC()
-	n.version++
-
-	return nil
-}
-
-// UpdateAnyTLSConfig updates the AnyTLS configuration
-func (n *Node) UpdateAnyTLSConfig(config *vo.AnyTLSConfig) error {
-	if !n.protocol.IsAnyTLS() {
-		return fmt.Errorf("cannot update anytls config for non-anytls protocol")
-	}
-
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	n.anytlsConfig = config
-	n.updatedAt = biztime.NowUTC()
-	n.version++
-
-	return nil
-}
-
-// UpdateMetadata updates the node metadata
-func (n *Node) UpdateMetadata(metadata vo.NodeMetadata) error {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	n.metadata = metadata
-	n.updatedAt = biztime.NowUTC()
-	n.version++
-
-	return nil
-}
-
-// UpdateName updates the node name
-func (n *Node) UpdateName(name string) error {
-	if name == "" {
-		return fmt.Errorf("node name cannot be empty")
-	}
-
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	if n.name == name {
-		return nil
-	}
-
-	n.name = name
-	n.updatedAt = biztime.NowUTC()
-	n.version++
-
-	return nil
-}
-
-// UpdateSortOrder updates the sort order
-func (n *Node) UpdateSortOrder(order int) error {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	n.sortOrder = order
-	n.updatedAt = biztime.NowUTC()
-	n.version++
-
-	return nil
-}
-
-// MuteNotification returns whether notifications are muted for this node
-func (n *Node) MuteNotification() bool {
-	return n.muteNotification
-}
-
-// SetMuteNotification sets the mute notification flag
-func (n *Node) SetMuteNotification(mute bool) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	n.muteNotification = mute
-	n.updatedAt = biztime.NowUTC()
-	n.version++
-}
-
-// UpdateRouteConfig updates the routing configuration
-func (n *Node) UpdateRouteConfig(config *vo.RouteConfig) error {
-	if config != nil {
-		if err := config.Validate(); err != nil {
-			return fmt.Errorf("invalid route config: %w", err)
-		}
-	}
-
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	n.routeConfig = config
-	n.updatedAt = biztime.NowUTC()
-	n.version++
-
-	return nil
-}
-
-// ClearRouteConfig removes the routing configuration
-func (n *Node) ClearRouteConfig() {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	n.routeConfig = nil
-	n.updatedAt = biztime.NowUTC()
-	n.version++
-}
-
-// HasRouteConfig checks if the node has a routing configuration
-func (n *Node) HasRouteConfig() bool {
-	return n.routeConfig != nil
-}
-
-func (n *Node) GenerateAPIToken() (string, error) {
-	if n.tokenGenerator == nil {
-		n.tokenGenerator = services.NewTokenGenerator()
-	}
-
-	plainToken, tokenHash, err := n.tokenGenerator.GenerateAPIToken("node")
-	if err != nil {
-		return "", fmt.Errorf("failed to generate API token: %w", err)
-	}
-
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	n.apiToken = plainToken
-	n.tokenHash = tokenHash
-	n.updatedAt = biztime.NowUTC()
-	n.version++
-
-	return plainToken, nil
-}
-
-func (n *Node) VerifyAPIToken(plainToken string) bool {
-	if n.tokenGenerator == nil {
-		n.tokenGenerator = services.NewTokenGenerator()
-	}
-	computedHash := n.tokenGenerator.HashToken(plainToken)
-	return subtle.ConstantTimeCompare([]byte(n.tokenHash), []byte(computedHash)) == 1
-}
-
-// IsAvailable checks if node is available for use
-func (n *Node) IsAvailable() bool {
-	return n.status == vo.NodeStatusActive
-}
-
-// IsUserOwned returns true if this node is owned by a user (not admin-created)
-func (n *Node) IsUserOwned() bool {
-	return n.userID != nil
-}
-
-// IsOwnedBy checks if the node is owned by the specified user
-func (n *Node) IsOwnedBy(userID uint) bool {
-	return n.userID != nil && *n.userID == userID
-}
-
 // LastSeenAt returns the last time the node agent reported status
 func (n *Node) LastSeenAt() *time.Time {
 	return n.lastSeenAt
-}
-
-// IsOnline checks if node agent is online (reported within 5 minutes)
-func (n *Node) IsOnline() bool {
-	return shared.IsOnline(n.lastSeenAt)
 }
 
 // PublicIPv4 returns the public IPv4 address reported by agent
@@ -900,45 +414,9 @@ func (n *Node) AgentArch() *string {
 	return n.arch
 }
 
-// EffectiveServerAddress returns the server address to use for outbound connections.
-// If serverAddress is configured, it returns that; otherwise, it falls back to publicIPv4.
-// Returns empty string if neither is available.
-func (n *Node) EffectiveServerAddress() string {
-	if n.serverAddress.Value() != "" {
-		return n.serverAddress.Value()
-	}
-	if n.publicIPv4 != nil && *n.publicIPv4 != "" {
-		return *n.publicIPv4
-	}
-	return ""
-}
-
-// GetAPIToken returns the plain API token (only available after creation)
-func (n *Node) GetAPIToken() string {
-	return n.apiToken
-}
-
-// ClearAPIToken clears the plain API token from memory
-func (n *Node) ClearAPIToken() {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	n.apiToken = ""
-}
-
 // ExpiresAt returns the expiration time (nil means never expires)
 func (n *Node) ExpiresAt() *time.Time {
 	return n.expiresAt
-}
-
-// SetExpiresAt sets the expiration time (nil to clear)
-func (n *Node) SetExpiresAt(t *time.Time) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	n.expiresAt = t
-	n.updatedAt = biztime.NowUTC()
-	n.version++
 }
 
 // CostLabel returns the cost label for display (nil means not set)
@@ -946,25 +424,47 @@ func (n *Node) CostLabel() *string {
 	return n.costLabel
 }
 
-// SetCostLabel sets the cost label (nil to clear)
-func (n *Node) SetCostLabel(label *string) {
-	n.mu.Lock()
-	defer n.mu.Unlock()
-
-	n.costLabel = label
-	n.updatedAt = biztime.NowUTC()
-	n.version++
+// MuteNotification returns whether notifications are muted for this node
+func (n *Node) MuteNotification() bool {
+	return n.muteNotification
 }
 
-// IsExpired checks if the node has expired
-func (n *Node) IsExpired() bool {
-	return shared.IsExpired(n.expiresAt)
+// Version returns the aggregate version for optimistic locking
+func (n *Node) Version() int {
+	return n.version
 }
 
-// IsExpiringSoon checks if the node will expire within the specified number of days
-func (n *Node) IsExpiringSoon(days int) bool {
-	return shared.IsExpiringSoon(n.expiresAt, days)
+// OriginalVersion returns the version when the entity was loaded from database.
+// This is used for optimistic locking to detect concurrent modifications.
+func (n *Node) OriginalVersion() int {
+	return n.originalVersion
 }
+
+// CreatedAt returns when the node was created
+func (n *Node) CreatedAt() time.Time {
+	return n.createdAt
+}
+
+// UpdatedAt returns when the node was last updated
+func (n *Node) UpdatedAt() time.Time {
+	return n.updatedAt
+}
+
+// --- SetID ---
+
+// SetID sets the node ID (only for persistence layer use)
+func (n *Node) SetID(id uint) error {
+	if n.id != 0 {
+		return fmt.Errorf("node ID is already set")
+	}
+	if id == 0 {
+		return fmt.Errorf("node ID cannot be zero")
+	}
+	n.id = id
+	return nil
+}
+
+// --- Validate ---
 
 // Validate performs domain-level validation
 func (n *Node) Validate() error {
@@ -1007,35 +507,48 @@ func (n *Node) Validate() error {
 	return nil
 }
 
-// GenerateSubscriptionURI generates a subscription URI for this node
-// The password parameter should be the subscription UUID
-// Uses EffectiveSubscriptionPort() for the port (subscriptionPort if set, otherwise agentPort)
-func (n *Node) GenerateSubscriptionURI(password string, remarks string) (string, error) {
-	factory := vo.NewProtocolConfigFactory()
-	serverAddr := n.serverAddress.Value()
-	port := n.EffectiveSubscriptionPort()
+// --- Token operations ---
 
-	switch n.protocol {
-	case vo.ProtocolShadowsocks:
-		ssConfig := vo.NewShadowsocksProtocolConfig(n.encryptionConfig, n.pluginConfig)
-		return factory.GenerateSubscriptionURI(n.protocol, ssConfig, serverAddr, port, password, remarks)
-
-	case vo.ProtocolTrojan:
-		if n.trojanConfig == nil {
-			return "", fmt.Errorf("trojan config is required for Trojan protocol")
-		}
-		trojanConfig := vo.NewTrojanProtocolConfig(*n.trojanConfig)
-		return factory.GenerateSubscriptionURI(n.protocol, trojanConfig, serverAddr, port, password, remarks)
-
-	case vo.ProtocolAnyTLS:
-		if n.anytlsConfig == nil {
-			return "", fmt.Errorf("anytls config is required for AnyTLS protocol")
-		}
-		return n.anytlsConfig.ToURI(serverAddr, port, remarks, password), nil
-
-	default:
-		return "", fmt.Errorf("unsupported protocol: %s", n.protocol)
+// GenerateAPIToken generates a new API token and its hash
+func (n *Node) GenerateAPIToken() (string, error) {
+	if n.tokenGenerator == nil {
+		n.tokenGenerator = services.NewTokenGenerator()
 	}
+
+	plainToken, tokenHash, err := n.tokenGenerator.GenerateAPIToken("node")
+	if err != nil {
+		return "", fmt.Errorf("failed to generate API token: %w", err)
+	}
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	n.apiToken = plainToken
+	n.tokenHash = tokenHash
+	n.updatedAt = biztime.NowUTC()
+	n.version++
+
+	return plainToken, nil
 }
 
-// generateAPIToken generates a new API token and its hash
+// VerifyAPIToken verifies a plain API token against the stored hash
+func (n *Node) VerifyAPIToken(plainToken string) bool {
+	if n.tokenGenerator == nil {
+		n.tokenGenerator = services.NewTokenGenerator()
+	}
+	computedHash := n.tokenGenerator.HashToken(plainToken)
+	return subtle.ConstantTimeCompare([]byte(n.tokenHash), []byte(computedHash)) == 1
+}
+
+// GetAPIToken returns the plain API token (only available after creation)
+func (n *Node) GetAPIToken() string {
+	return n.apiToken
+}
+
+// ClearAPIToken clears the plain API token from memory
+func (n *Node) ClearAPIToken() {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	n.apiToken = ""
+}
