@@ -73,6 +73,7 @@ type NodeConfigData struct {
 	SNI               string          `json:"sni,omitempty"`
 	AllowInsecure     bool            `json:"allow_insecure"`
 	Route             *RouteConfigDTO `json:"route,omitempty"`     // Routing configuration for traffic splitting
+	DNS               *DnsConfigDTO   `json:"dns,omitempty"`       // DNS configuration for DNS-based unlocking
 	Outbounds         []OutboundDTO   `json:"outbounds,omitempty"` // Outbound configs for nodes referenced in route rules
 
 	// VLESS specific fields
@@ -283,6 +284,11 @@ func ToNodeConfigData(n *node.Node, referencedNodes []*node.Node, serverKeyFunc 
 		if len(customDTOs) > 0 {
 			config.Outbounds = append(config.Outbounds, customDTOs...)
 		}
+	}
+
+	// Convert DNS configuration if present
+	if n.DnsConfig() != nil {
+		config.DNS = ToDnsConfigDTO(n.DnsConfig())
 	}
 
 	// Convert referenced nodes to outbounds

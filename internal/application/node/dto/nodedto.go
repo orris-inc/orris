@@ -101,6 +101,8 @@ type NodeDTO struct {
 	Owner *NodeOwnerDTO `json:"owner,omitempty" description:"Owner information for user-created nodes"`
 	// Route configuration for traffic splitting (sing-box compatible)
 	Route *RouteConfigDTO `json:"route,omitempty" description:"Routing configuration for traffic splitting"`
+	// DNS configuration for DNS-based unlocking (sing-box compatible)
+	DNS *DnsConfigDTO `json:"dns,omitempty" description:"DNS configuration for DNS-based unlocking"`
 }
 
 // NodeOwnerDTO represents the owner information for a user-created node
@@ -129,22 +131,7 @@ type CreateNodeDTO struct {
 	Tags             []string          `json:"tags,omitempty" example:"premium,fast" description:"Custom tags for categorization"`
 	SortOrder        int               `json:"sort_order" example:"100" description:"Display order for sorting nodes"`
 	Route            *RouteConfigDTO   `json:"route,omitempty" description:"Routing configuration for traffic splitting (sing-box compatible)"`
-}
-
-type UpdateNodeDTO struct {
-	Name             *string           `json:"name,omitempty" binding:"omitempty,min=2,max=100" example:"US-Node-01" description:"Display name of the node (2-100 characters)"`
-	ServerAddress    *string           `json:"server_address,omitempty" example:"proxy.example.com" description:"Server hostname or IP address"`
-	AgentPort        *uint16           `json:"agent_port,omitempty" binding:"omitempty,min=1,max=65535" example:"8388" description:"Port for agent connections (1-65535)"`
-	SubscriptionPort *uint16           `json:"subscription_port,omitempty" binding:"omitempty,min=1,max=65535" example:"8389" description:"Port for client subscriptions"`
-	EncryptionMethod *string           `json:"encryption_method,omitempty" example:"aes-256-gcm" enums:"aes-256-gcm,aes-128-gcm,chacha20-ietf-poly1305" description:"Encryption method for the proxy connection"`
-	Password         *string           `json:"password,omitempty" example:"mySecurePassword123" description:"Authentication password"`
-	Plugin           *string           `json:"plugin,omitempty" example:"obfs-local" description:"Optional plugin name"`
-	PluginOpts       map[string]string `json:"plugin_opts,omitempty" example:"obfs:http,obfs-host:example.com" description:"Plugin configuration options"`
-	Region           *string           `json:"region,omitempty" example:"us-west" description:"Geographic region or location identifier"`
-	Tags             []string          `json:"tags,omitempty" example:"premium,fast" description:"Custom tags for categorization"`
-	SortOrder        *int              `json:"sort_order,omitempty" example:"100" description:"Display order for sorting nodes"`
-	MuteNotification *bool             `json:"mute_notification,omitempty" example:"false" description:"Mute online/offline notifications for this node"`
-	Route            *RouteConfigDTO   `json:"route,omitempty" description:"Routing configuration for traffic splitting (sing-box compatible, null to clear)"`
+	DNS              *DnsConfigDTO     `json:"dns,omitempty" description:"DNS configuration for DNS-based unlocking (sing-box compatible)"`
 }
 
 type NodeListDTO struct {
@@ -304,6 +291,11 @@ func ToNodeDTO(n *node.Node) *NodeDTO {
 	// Map route configuration if present
 	if n.RouteConfig() != nil {
 		dto.Route = ToRouteConfigDTO(n.RouteConfig())
+	}
+
+	// Map DNS configuration if present
+	if n.DnsConfig() != nil {
+		dto.DNS = ToDnsConfigDTO(n.DnsConfig())
 	}
 
 	return dto

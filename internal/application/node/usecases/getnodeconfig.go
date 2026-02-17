@@ -66,20 +66,33 @@ func (uc *GetNodeConfigUseCase) Execute(ctx context.Context, cmd GetNodeConfigCo
 	// Node can be connected regardless of activation status.
 	// Status is only used for business logic (e.g., subscription routing).
 
-	// Fetch referenced nodes if route config has node references
+	// Collect all referenced node SIDs from route and DNS configs
 	var referencedNodes []*node.Node
+	var allReferencedSIDs []string
 	if n.RouteConfig() != nil && n.RouteConfig().HasNodeReferences() {
-		sids := n.RouteConfig().GetReferencedNodeSIDs()
-		if len(sids) > 0 {
-			referencedNodes, err = uc.nodeRepo.GetBySIDs(ctx, sids)
-			if err != nil {
-				uc.logger.Warnw("failed to fetch referenced nodes",
-					"node_id", cmd.NodeID,
-					"referenced_sids", sids,
-					"error", err,
-				)
-				// Continue without referenced nodes rather than failing
+		allReferencedSIDs = append(allReferencedSIDs, n.RouteConfig().GetReferencedNodeSIDs()...)
+	}
+	if n.DnsConfig() != nil && n.DnsConfig().HasNodeReferences() {
+		allReferencedSIDs = append(allReferencedSIDs, n.DnsConfig().GetReferencedNodeSIDs()...)
+	}
+	if len(allReferencedSIDs) > 0 {
+		// Deduplicate SIDs
+		seen := make(map[string]bool, len(allReferencedSIDs))
+		unique := make([]string, 0, len(allReferencedSIDs))
+		for _, sid := range allReferencedSIDs {
+			if !seen[sid] {
+				seen[sid] = true
+				unique = append(unique, sid)
 			}
+		}
+		referencedNodes, err = uc.nodeRepo.GetBySIDs(ctx, unique)
+		if err != nil {
+			uc.logger.Warnw("failed to fetch referenced nodes",
+				"node_id", cmd.NodeID,
+				"referenced_sids", unique,
+				"error", err,
+			)
+			// Continue without referenced nodes rather than failing
 		}
 	}
 

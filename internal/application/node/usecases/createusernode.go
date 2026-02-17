@@ -395,6 +395,7 @@ func (uc *CreateUserNodeUseCase) Execute(ctx context.Context, cmd CreateUserNode
 		metadata,
 		0,   // sortOrder not used for user nodes
 		nil, // routeConfig - can be set later via UpdateRouteConfig
+		nil, // dnsConfig - can be set later via UpdateDnsConfig
 		id.NewNodeID,
 	)
 	if err != nil {

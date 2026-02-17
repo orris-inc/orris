@@ -82,6 +82,42 @@ type RouteRuleJSON struct {
 	Outbound      string   `json:"outbound"`
 }
 
+// DnsConfigJSON represents the JSON structure for DnsConfig persistence
+type DnsConfigJSON struct {
+	Servers          []DnsServerJSON `json:"servers,omitempty"`
+	Rules            []DnsRuleJSON   `json:"rules,omitempty"`
+	Final            string          `json:"final"`
+	Strategy         string          `json:"strategy,omitempty"`
+	DisableCache     bool            `json:"disable_cache"`
+	DisableExpire    bool            `json:"disable_expire"`
+	IndependentCache bool            `json:"independent_cache"`
+	ReverseMapping   bool            `json:"reverse_mapping"`
+}
+
+// DnsServerJSON represents the JSON structure for a DNS server
+type DnsServerJSON struct {
+	Tag             string `json:"tag"`
+	Address         string `json:"address"`
+	AddressResolver string `json:"address_resolver,omitempty"`
+	AddressStrategy string `json:"address_strategy,omitempty"`
+	Strategy        string `json:"strategy,omitempty"`
+	Detour          string `json:"detour,omitempty"`
+}
+
+// DnsRuleJSON represents the JSON structure for a DNS rule
+type DnsRuleJSON struct {
+	Domain        []string `json:"domain,omitempty"`
+	DomainSuffix  []string `json:"domain_suffix,omitempty"`
+	DomainKeyword []string `json:"domain_keyword,omitempty"`
+	DomainRegex   []string `json:"domain_regex,omitempty"`
+	Geosite       []string `json:"geosite,omitempty"`
+	GeoIP         []string `json:"geoip,omitempty"`
+	RuleSet       []string `json:"rule_set,omitempty"`
+	Outbound      []string `json:"outbound,omitempty"`
+	Server        string   `json:"server"`
+	DisableCache  bool     `json:"disable_cache"`
+}
+
 // NodeMapperImpl is the concrete implementation of NodeMapper
 type NodeMapperImpl struct{}
 
@@ -156,6 +192,16 @@ func (m *NodeMapperImpl) ToEntity(model *models.NodeModel, encryptionConfig vo.E
 		routeConfig = routeConfigFromJSON(&routeJSON)
 	}
 
+	// Parse dnsConfig from JSON
+	var dnsConfig *vo.DnsConfig
+	if len(model.DnsConfig) > 0 {
+		var dnsJSON DnsConfigJSON
+		if err := json.Unmarshal(model.DnsConfig, &dnsJSON); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal dns_config: %w", err)
+		}
+		dnsConfig = dnsConfigFromJSON(&dnsJSON)
+	}
+
 	// Reconstruct the domain entity
 	// Protocol-specific configs are passed from caller
 	nodeEntity, err := node.ReconstructNode(
@@ -184,6 +230,7 @@ func (m *NodeMapperImpl) ToEntity(model *models.NodeModel, encryptionConfig vo.E
 		model.MuteNotification,
 		model.MaintenanceReason,
 		routeConfig,
+		dnsConfig,
 		model.LastSeenAt,
 		model.PublicIPv4,
 		model.PublicIPv6,
@@ -250,6 +297,17 @@ func (m *NodeMapperImpl) ToModel(entity *node.Node) (*models.NodeModel, error) {
 		routeConfigJSON = routeBytes
 	}
 
+	// Prepare dnsConfig JSON
+	var dnsConfigJSON datatypes.JSON
+	if entity.DnsConfig() != nil {
+		dJSON := dnsConfigToJSON(entity.DnsConfig())
+		dnsBytes, err := json.Marshal(dJSON)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal dns_config: %w", err)
+		}
+		dnsConfigJSON = dnsBytes
+	}
+
 	model := &models.NodeModel{
 		ID:                entity.ID(),
 		SID:               entity.SID(),
@@ -267,6 +325,7 @@ func (m *NodeMapperImpl) ToModel(entity *node.Node) (*models.NodeModel, error) {
 		MuteNotification:  entity.MuteNotification(),
 		MaintenanceReason: entity.MaintenanceReason(),
 		RouteConfig:       routeConfigJSON,
+		DnsConfig:         dnsConfigJSON,
 		TokenHash:         entity.TokenHash(),
 		APIToken:          entity.GetAPIToken(),
 		AgentVersion:      entity.AgentVersion(),
@@ -465,4 +524,98 @@ func routeConfigFromJSON(rcJSON *RouteConfigJSON) *vo.RouteConfig {
 	}
 
 	return vo.ReconstructRouteConfig(rules, finalAction, customOutbounds)
+}
+
+// dnsConfigToJSON converts domain DnsConfig to JSON structure
+func dnsConfigToJSON(dc *vo.DnsConfig) *DnsConfigJSON {
+	if dc == nil {
+		return nil
+	}
+
+	servers := make([]DnsServerJSON, 0, len(dc.Servers()))
+	for _, s := range dc.Servers() {
+		servers = append(servers, DnsServerJSON{
+			Tag:             s.Tag(),
+			Address:         s.Address(),
+			AddressResolver: s.AddressResolver(),
+			AddressStrategy: s.AddressStrategy().String(),
+			Strategy:        s.Strategy().String(),
+			Detour:          s.Detour(),
+		})
+	}
+
+	rules := make([]DnsRuleJSON, 0, len(dc.Rules()))
+	for _, r := range dc.Rules() {
+		rules = append(rules, DnsRuleJSON{
+			Domain:        r.Domain(),
+			DomainSuffix:  r.DomainSuffix(),
+			DomainKeyword: r.DomainKeyword(),
+			DomainRegex:   r.DomainRegex(),
+			Geosite:       r.Geosite(),
+			GeoIP:         r.GeoIP(),
+			RuleSet:       r.RuleSet(),
+			Outbound:      r.Outbound(),
+			Server:        r.Server(),
+			DisableCache:  r.DisableCache(),
+		})
+	}
+
+	return &DnsConfigJSON{
+		Servers:          servers,
+		Rules:            rules,
+		Final:            dc.Final(),
+		Strategy:         dc.Strategy().String(),
+		DisableCache:     dc.DisableCache(),
+		DisableExpire:    dc.DisableExpire(),
+		IndependentCache: dc.IndependentCache(),
+		ReverseMapping:   dc.ReverseMapping(),
+	}
+}
+
+// dnsConfigFromJSON converts JSON structure to domain DnsConfig
+func dnsConfigFromJSON(dj *DnsConfigJSON) *vo.DnsConfig {
+	if dj == nil {
+		return nil
+	}
+
+	servers := make([]vo.DnsServer, 0, len(dj.Servers))
+	for _, sj := range dj.Servers {
+		s := vo.ReconstructDnsServer(
+			sj.Tag,
+			sj.Address,
+			sj.AddressResolver,
+			vo.DnsStrategy(sj.AddressStrategy),
+			vo.DnsStrategy(sj.Strategy),
+			sj.Detour,
+		)
+		servers = append(servers, *s)
+	}
+
+	rules := make([]vo.DnsRule, 0, len(dj.Rules))
+	for _, rj := range dj.Rules {
+		r := vo.ReconstructDnsRule(
+			rj.Domain,
+			rj.DomainSuffix,
+			rj.DomainKeyword,
+			rj.DomainRegex,
+			rj.Geosite,
+			rj.GeoIP,
+			rj.RuleSet,
+			rj.Outbound,
+			rj.Server,
+			rj.DisableCache,
+		)
+		rules = append(rules, *r)
+	}
+
+	return vo.ReconstructDnsConfig(
+		servers,
+		rules,
+		dj.Final,
+		vo.DnsStrategy(dj.Strategy),
+		dj.DisableCache,
+		dj.DisableExpire,
+		dj.IndependentCache,
+		dj.ReverseMapping,
+	)
 }

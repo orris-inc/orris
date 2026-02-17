@@ -47,6 +47,7 @@ func newShadowsocksNode(t *testing.T) *Node {
 		meta,
 		0,   // sortOrder
 		nil, // routeConfig
+		nil, // dnsConfig
 		fakeSIDGenerator("node_test123"),
 	)
 	require.NoError(t, err)
@@ -80,7 +81,8 @@ func newTrojanNode(t *testing.T) *Node {
 		nil, // anytlsConfig
 		meta,
 		0,
-		nil,
+		nil, // routeConfig
+		nil, // dnsConfig
 		fakeSIDGenerator("node_trojan456"),
 	)
 	require.NoError(t, err)
@@ -131,6 +133,7 @@ func reconstructedNode(t *testing.T, status vo.NodeStatus) *Node {
 		false,  // muteNotification
 		reason, // maintenanceReason
 		nil,    // routeConfig
+		nil,    // dnsConfig
 		nil,    // lastSeenAt
 		nil,    // publicIPv4
 		nil,    // publicIPv6
@@ -168,7 +171,8 @@ func TestNewNode_ValidInput_Shadowsocks(t *testing.T) {
 		nil, nil, nil, nil, nil, nil, nil,
 		meta,
 		10,
-		nil,
+		nil, // routeConfig
+		nil, // dnsConfig
 		fakeSIDGenerator("node_abc123"),
 	)
 
@@ -216,7 +220,8 @@ func TestNewNode_ValidInput_Trojan(t *testing.T) {
 		nil, &trojanCfg, nil, nil, nil, nil, nil,
 		meta,
 		0,
-		nil,
+		nil, // routeConfig
+		nil, // dnsConfig
 		fakeSIDGenerator("node_tro789"),
 	)
 
@@ -262,7 +267,8 @@ func TestNewNode_ValidInput_VLESS(t *testing.T) {
 		nil, nil, &vlessCfg, nil, nil, nil, nil,
 		meta,
 		0,
-		nil,
+		nil, // routeConfig
+		nil, // dnsConfig
 		fakeSIDGenerator("node_vless001"),
 	)
 
@@ -301,7 +307,8 @@ func TestNewNode_ValidInput_VMess(t *testing.T) {
 		nil, nil, nil, &vmessCfg, nil, nil, nil,
 		meta,
 		0,
-		nil,
+		nil, // routeConfig
+		nil, // dnsConfig
 		fakeSIDGenerator("node_vmess001"),
 	)
 
@@ -340,7 +347,8 @@ func TestNewNode_ValidInput_Hysteria2(t *testing.T) {
 		nil, nil, nil, nil, &hy2Cfg, nil, nil,
 		meta,
 		0,
-		nil,
+		nil, // routeConfig
+		nil, // dnsConfig
 		fakeSIDGenerator("node_hy2001"),
 	)
 
@@ -378,7 +386,8 @@ func TestNewNode_ValidInput_TUIC(t *testing.T) {
 		nil, nil, nil, nil, nil, &tuicCfg, nil,
 		meta,
 		0,
-		nil,
+		nil, // routeConfig
+		nil, // dnsConfig
 		fakeSIDGenerator("node_tuic001"),
 	)
 
@@ -402,7 +411,8 @@ func TestNewNode_InvalidProtocol(t *testing.T) {
 		nil, nil, nil, nil, nil, nil, nil,
 		vo.NewNodeMetadata("", nil, ""),
 		0,
-		nil,
+		nil, // routeConfig
+		nil, // dnsConfig
 		fakeSIDGenerator("node_bad"),
 	)
 
@@ -427,7 +437,8 @@ func TestNewNode_MissingName(t *testing.T) {
 		nil, nil, nil, nil, nil, nil, nil,
 		vo.NewNodeMetadata("", nil, ""),
 		0,
-		nil,
+		nil, // routeConfig
+		nil, // dnsConfig
 		fakeSIDGenerator("node_noname"),
 	)
 
@@ -452,7 +463,8 @@ func TestNewNode_MissingAgentPort(t *testing.T) {
 		nil, nil, nil, nil, nil, nil, nil,
 		vo.NewNodeMetadata("", nil, ""),
 		0,
-		nil,
+		nil, // routeConfig
+		nil, // dnsConfig
 		fakeSIDGenerator("node_noport"),
 	)
 
@@ -474,7 +486,8 @@ func TestNewNode_ShadowsocksMissingEncryption(t *testing.T) {
 		nil, nil, nil, nil, nil, nil, nil,
 		vo.NewNodeMetadata("", nil, ""),
 		0,
-		nil,
+		nil, // routeConfig
+		nil, // dnsConfig
 		fakeSIDGenerator("node_noenc"),
 	)
 
@@ -496,7 +509,8 @@ func TestNewNode_TrojanMissingConfig(t *testing.T) {
 		nil, nil, nil, nil, nil, nil, nil, // trojanConfig = nil, anytlsConfig = nil
 		vo.NewNodeMetadata("", nil, ""),
 		0,
-		nil,
+		nil, // routeConfig
+		nil, // dnsConfig
 		fakeSIDGenerator("node_notrojan"),
 	)
 
@@ -518,7 +532,8 @@ func TestNewNode_VLESSMissingConfig(t *testing.T) {
 		nil, nil, nil, nil, nil, nil, nil, // vlessConfig = nil, anytlsConfig = nil
 		vo.NewNodeMetadata("", nil, ""),
 		0,
-		nil,
+		nil, // routeConfig
+		nil, // dnsConfig
 		fakeSIDGenerator("node_novless"),
 	)
 
@@ -540,7 +555,8 @@ func TestNewNode_VMessMissingConfig(t *testing.T) {
 		nil, nil, nil, nil, nil, nil, nil,
 		vo.NewNodeMetadata("", nil, ""),
 		0,
-		nil,
+		nil, // routeConfig
+		nil, // dnsConfig
 		fakeSIDGenerator("node_novmess"),
 	)
 
@@ -562,7 +578,8 @@ func TestNewNode_Hysteria2MissingConfig(t *testing.T) {
 		nil, nil, nil, nil, nil, nil, nil,
 		vo.NewNodeMetadata("", nil, ""),
 		0,
-		nil,
+		nil, // routeConfig
+		nil, // dnsConfig
 		fakeSIDGenerator("node_nohy2"),
 	)
 
@@ -584,7 +601,8 @@ func TestNewNode_TUICMissingConfig(t *testing.T) {
 		nil, nil, nil, nil, nil, nil, nil,
 		vo.NewNodeMetadata("", nil, ""),
 		0,
-		nil,
+		nil, // routeConfig
+		nil, // dnsConfig
 		fakeSIDGenerator("node_notuic"),
 	)
 
@@ -617,7 +635,8 @@ func TestNewNode_ValidInput_AnyTLS(t *testing.T) {
 		&anytlsCfg,   // anytlsConfig
 		meta,
 		0,
-		nil,
+		nil, // routeConfig
+		nil, // dnsConfig
 		fakeSIDGenerator("node_anytls789"),
 	)
 
@@ -644,7 +663,8 @@ func TestNewNode_AnyTLSMissingConfig(t *testing.T) {
 		nil, nil, nil, nil, nil, nil, nil, // anytlsConfig = nil
 		vo.NewNodeMetadata("", nil, ""),
 		0,
-		nil,
+		nil, // routeConfig
+		nil, // dnsConfig
 		fakeSIDGenerator("node_noanytls"),
 	)
 
@@ -688,7 +708,7 @@ func TestReconstructNode_ZeroID(t *testing.T) {
 		vo.NewNodeMetadata("", nil, ""),
 		nil, nil,
 		"abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234",
-		"", 0, false, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 1, now, now,
+		"", 0, false, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 1, now, now,
 	)
 
 	require.Error(t, err)
@@ -710,7 +730,7 @@ func TestReconstructNode_EmptySID(t *testing.T) {
 		vo.NewNodeMetadata("", nil, ""),
 		nil, nil,
 		"abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234",
-		"", 0, false, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 1, now, now,
+		"", 0, false, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 1, now, now,
 	)
 
 	require.Error(t, err)
@@ -732,7 +752,7 @@ func TestReconstructNode_EmptyTokenHash(t *testing.T) {
 		vo.NewNodeMetadata("", nil, ""),
 		nil, nil,
 		"", // empty tokenHash
-		"", 0, false, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 1, now, now,
+		"", 0, false, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 1, now, now,
 	)
 
 	require.Error(t, err)
@@ -1185,7 +1205,7 @@ func TestNode_IsOnline(t *testing.T) {
 			vo.NewNodeMetadata("", nil, ""),
 			nil, nil,
 			"abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234",
-			"", 0, false, nil, nil,
+			"", 0, false, nil, nil, nil,
 			&recentTime, // lastSeenAt = 1 minute ago
 			nil, nil, nil, nil, nil, nil, nil, 1, now, now,
 		)
@@ -1209,7 +1229,7 @@ func TestNode_IsOnline(t *testing.T) {
 			vo.NewNodeMetadata("", nil, ""),
 			nil, nil,
 			"abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234",
-			"", 0, false, nil, nil,
+			"", 0, false, nil, nil, nil,
 			&staleTime, // lastSeenAt = 10 minutes ago
 			nil, nil, nil, nil, nil, nil, nil, 1, now, now,
 		)
@@ -1390,7 +1410,7 @@ func TestNode_EffectiveServerAddress(t *testing.T) {
 			vo.NewNodeMetadata("", nil, ""),
 			nil, nil,
 			"abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234",
-			"", 0, false, nil, nil, nil,
+			"", 0, false, nil, nil, nil, nil,
 			&ipv4, // publicIPv4
 			nil, nil, nil, nil, nil, nil, 1, now, now,
 		)
@@ -1413,7 +1433,7 @@ func TestNode_EffectiveServerAddress(t *testing.T) {
 			vo.NewNodeMetadata("", nil, ""),
 			nil, nil,
 			"abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234",
-			"", 0, false, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 1, now, now,
+			"", 0, false, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 1, now, now,
 		)
 		require.NoError(t, err)
 		assert.Equal(t, "", n.EffectiveServerAddress())
@@ -1563,7 +1583,8 @@ func TestNode_UpdateAnyTLSConfig_CorrectProtocol(t *testing.T) {
 		nil, nil, nil, nil, nil, nil, &anytlsCfg,
 		vo.NewNodeMetadata("", nil, ""),
 		0,
-		nil,
+		nil, // routeConfig
+		nil, // dnsConfig
 		fakeSIDGenerator("node_anytlsupd"),
 	)
 	require.NoError(t, err)
@@ -1623,7 +1644,7 @@ func TestNode_Validate(t *testing.T) {
 			"abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234",
 			"", 0, false,
 			nil, // maintenanceReason = nil (invalid!)
-			nil, nil, nil, nil, nil, nil, nil, nil, nil, 1, now, now,
+			nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, 1, now, now,
 		)
 		require.NoError(t, err, "ReconstructNode does not validate maintenance reason")
 
@@ -1681,7 +1702,7 @@ func TestNode_AgentInfo(t *testing.T) {
 		vo.NewNodeMetadata("", nil, ""),
 		nil, nil,
 		"abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234",
-		"", 0, false, nil, nil, nil,
+		"", 0, false, nil, nil, nil, nil,
 		&ipv4, &ipv6, &agentVersion, &platform, &arch,
 		nil, nil, 1, now, now,
 	)
@@ -1760,13 +1781,170 @@ func TestNewNode_EmptyServerAddress(t *testing.T) {
 		nil, nil, nil, nil, nil, nil, nil,
 		vo.NewNodeMetadata("", nil, ""),
 		0,
-		nil,
+		nil, // routeConfig
+		nil, // dnsConfig
 		fakeSIDGenerator("node_emptyaddr"),
 	)
 
 	require.NoError(t, err)
 	assert.Equal(t, "", n.ServerAddress().Value())
 	assert.Equal(t, "", n.EffectiveServerAddress())
+}
+
+// --- DnsConfig Tests ---
+
+// validDnsConfig creates a valid DnsConfig for node-level testing.
+func validDnsConfig(t *testing.T) *vo.DnsConfig {
+	t.Helper()
+	s1, err := vo.NewDnsServer("remote", "https://1.1.1.1/dns-query")
+	require.NoError(t, err)
+	s1.WithDetour("proxy")
+
+	s2, err := vo.NewDnsServer("local", "223.5.5.5")
+	require.NoError(t, err)
+	s2.WithDetour("direct")
+
+	config, err := vo.NewDnsConfig("remote")
+	require.NoError(t, err)
+	require.NoError(t, config.SetServers([]vo.DnsServer{*s1, *s2}))
+
+	rule, err := vo.NewDnsRule("local")
+	require.NoError(t, err)
+	rule.WithGeosite("cn")
+	require.NoError(t, config.SetRules([]vo.DnsRule{*rule}))
+
+	require.NoError(t, config.Validate())
+	return config
+}
+
+func TestNewNode_WithDnsConfig(t *testing.T) {
+	addr, err := vo.NewServerAddress("1.2.3.4")
+	require.NoError(t, err)
+	enc, err := vo.NewEncryptionConfig(vo.MethodAES256GCM)
+	require.NoError(t, err)
+
+	dnsConfig := validDnsConfig(t)
+
+	n, err := NewNode(
+		"dns-node",
+		addr,
+		8388,
+		nil,
+		vo.ProtocolShadowsocks,
+		enc,
+		nil, nil, nil, nil, nil, nil, nil,
+		vo.NewNodeMetadata("us-west", nil, ""),
+		0,
+		nil,       // routeConfig
+		dnsConfig, // dnsConfig
+		fakeSIDGenerator("node_dns001"),
+	)
+	require.NoError(t, err)
+	require.NotNil(t, n)
+
+	require.NotNil(t, n.DnsConfig())
+	assert.Equal(t, "remote", n.DnsConfig().Final())
+	assert.Len(t, n.DnsConfig().Servers(), 2)
+	assert.Len(t, n.DnsConfig().Rules(), 1)
+}
+
+func TestNewNode_WithInvalidDnsConfig(t *testing.T) {
+	addr, err := vo.NewServerAddress("1.2.3.4")
+	require.NoError(t, err)
+	enc, err := vo.NewEncryptionConfig(vo.MethodAES256GCM)
+	require.NoError(t, err)
+
+	// Create a DnsConfig with final referencing a non-existent server
+	// Use Reconstruct to bypass normal validation
+	invalidConfig := vo.ReconstructDnsConfig(
+		nil,      // no servers
+		nil,      // no rules
+		"remote", // final references undefined server
+		"",
+		false, false, false, false,
+	)
+
+	_, err = NewNode(
+		"dns-invalid-node",
+		addr,
+		8388,
+		nil,
+		vo.ProtocolShadowsocks,
+		enc,
+		nil, nil, nil, nil, nil, nil, nil,
+		vo.NewNodeMetadata("", nil, ""),
+		0,
+		nil,
+		invalidConfig,
+		fakeSIDGenerator("node_dnsinvalid"),
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid dns config")
+}
+
+func TestNode_UpdateDnsConfig(t *testing.T) {
+	n := newShadowsocksNode(t)
+	assert.Nil(t, n.DnsConfig())
+	initialVersion := n.Version()
+
+	dnsConfig := validDnsConfig(t)
+	err := n.UpdateDnsConfig(dnsConfig)
+	require.NoError(t, err)
+
+	require.NotNil(t, n.DnsConfig())
+	assert.Equal(t, "remote", n.DnsConfig().Final())
+	assert.Equal(t, initialVersion+1, n.Version())
+}
+
+func TestNode_UpdateDnsConfig_Invalid(t *testing.T) {
+	n := newShadowsocksNode(t)
+
+	// Create an invalid DnsConfig (final references undefined server)
+	invalidConfig := vo.ReconstructDnsConfig(
+		nil,
+		nil,
+		"nonexistent",
+		"",
+		false, false, false, false,
+	)
+
+	err := n.UpdateDnsConfig(invalidConfig)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid dns config")
+	assert.Nil(t, n.DnsConfig(), "dns config should remain nil after failed update")
+}
+
+func TestNode_UpdateDnsConfig_Nil(t *testing.T) {
+	n := newShadowsocksNode(t)
+	dnsConfig := validDnsConfig(t)
+	err := n.UpdateDnsConfig(dnsConfig)
+	require.NoError(t, err)
+	require.NotNil(t, n.DnsConfig())
+
+	initialVersion := n.Version()
+
+	// Passing nil should clear the config
+	err = n.UpdateDnsConfig(nil)
+	require.NoError(t, err)
+	assert.Nil(t, n.DnsConfig())
+	assert.Equal(t, initialVersion+1, n.Version())
+}
+
+func TestNode_ClearDnsConfig(t *testing.T) {
+	n := newShadowsocksNode(t)
+
+	// Set DNS config first
+	dnsConfig := validDnsConfig(t)
+	err := n.UpdateDnsConfig(dnsConfig)
+	require.NoError(t, err)
+	require.NotNil(t, n.DnsConfig())
+
+	initialVersion := n.Version()
+
+	// Clear it
+	n.ClearDnsConfig()
+	assert.Nil(t, n.DnsConfig())
+	assert.Equal(t, initialVersion+1, n.Version())
 }
 
 // --- Metadata Tests ---

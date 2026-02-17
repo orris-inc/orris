@@ -273,6 +273,34 @@ func (n *Node) ClearRouteConfig() {
 	n.version++
 }
 
+// UpdateDnsConfig updates the DNS configuration
+func (n *Node) UpdateDnsConfig(config *vo.DnsConfig) error {
+	if config != nil {
+		if err := config.Validate(); err != nil {
+			return fmt.Errorf("invalid dns config: %w", err)
+		}
+	}
+
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	n.dnsConfig = config
+	n.updatedAt = biztime.NowUTC()
+	n.version++
+
+	return nil
+}
+
+// ClearDnsConfig removes the DNS configuration
+func (n *Node) ClearDnsConfig() {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+
+	n.dnsConfig = nil
+	n.updatedAt = biztime.NowUTC()
+	n.version++
+}
+
 // SetExpiresAt sets the expiration time (nil to clear)
 func (n *Node) SetExpiresAt(t *time.Time) {
 	n.mu.Lock()

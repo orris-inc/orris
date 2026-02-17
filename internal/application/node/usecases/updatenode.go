@@ -39,6 +39,9 @@ type UpdateNodeCommand struct {
 	// Route configuration for traffic splitting
 	Route      *dto.RouteConfigDTO // Route config to set (nil = no change)
 	ClearRoute bool                // If true, clear the route config
+	// DNS configuration for DNS-based unlocking
+	DNS      *dto.DnsConfigDTO // DNS config to set (nil = no change)
+	ClearDNS bool              // If true, clear the DNS config
 
 	// VLESS specific fields
 	VLESSTransportType     *string
@@ -242,6 +245,37 @@ func (uc *UpdateNodeUseCase) Execute(ctx context.Context, cmd UpdateNodeCommand)
 		if err := uc.validateRouteConfigNodeReferences(ctx, cmd.Route, existingNode); err != nil {
 			uc.logger.Errorw("failed to validate route config node references", "error", err, "sid", cmd.SID)
 			return nil, err
+		}
+	}
+
+	// Validate dns config node references if provided
+	if cmd.DNS != nil {
+		dnsConfig, err := dto.FromDnsConfigDTO(cmd.DNS)
+		if err != nil {
+			return nil, errors.NewValidationError("invalid dns config: " + err.Error())
+		}
+		if dnsConfig.HasNodeReferences() {
+			referencedSIDs := dnsConfig.GetReferencedNodeSIDs()
+			// Check self-reference
+			for _, sid := range referencedSIDs {
+				if sid == existingNode.SID() {
+					return nil, errors.NewValidationError("dns config cannot reference the node itself as detour")
+				}
+			}
+			var invalidSIDs []string
+			if existingNode.IsUserOwned() {
+				invalidSIDs, err = uc.nodeRepo.ValidateNodeSIDsForUser(ctx, referencedSIDs, *existingNode.UserID())
+			} else {
+				invalidSIDs, err = uc.nodeRepo.ValidateNodeSIDsExist(ctx, referencedSIDs)
+			}
+			if err != nil {
+				uc.logger.Errorw("failed to validate dns config node references", "error", err, "sid", cmd.SID)
+				return nil, errors.NewInternalError("failed to validate dns config")
+			}
+			if len(invalidSIDs) > 0 {
+				return nil, errors.NewValidationError(
+					fmt.Sprintf("invalid node SIDs in dns config detour (not found or unauthorized): %v", invalidSIDs))
+			}
 		}
 	}
 
@@ -480,6 +514,19 @@ func (uc *UpdateNodeUseCase) applyUpdates(n *node.Node, cmd UpdateNodeCommand) e
 		}
 		if err := n.UpdateRouteConfig(routeConfig); err != nil {
 			return errors.NewValidationError("failed to update route config: " + err.Error())
+		}
+	}
+
+	// Update dns config
+	if cmd.ClearDNS {
+		n.ClearDnsConfig()
+	} else if cmd.DNS != nil {
+		dnsConfig, err := dto.FromDnsConfigDTO(cmd.DNS)
+		if err != nil {
+			return errors.NewValidationError("invalid dns config: " + err.Error())
+		}
+		if err := n.UpdateDnsConfig(dnsConfig); err != nil {
+			return errors.NewValidationError("failed to update dns config: " + err.Error())
 		}
 	}
 
@@ -1070,6 +1117,7 @@ func (uc *UpdateNodeUseCase) validateCommand(cmd UpdateNodeCommand) error {
 		cmd.TrojanTransportProtocol != nil || cmd.TrojanHost != nil ||
 		cmd.TrojanPath != nil || cmd.TrojanSNI != nil || cmd.TrojanAllowInsecure != nil ||
 		cmd.Route != nil || cmd.ClearRoute ||
+		cmd.DNS != nil || cmd.ClearDNS ||
 		// VLESS fields
 		cmd.VLESSTransportType != nil || cmd.VLESSFlow != nil || cmd.VLESSSecurity != nil ||
 		cmd.VLESSSni != nil || cmd.VLESSFingerprint != nil || cmd.VLESSAllowInsecure != nil ||
@@ -1113,6 +1161,11 @@ func (uc *UpdateNodeUseCase) validateCommand(cmd UpdateNodeCommand) error {
 	// ClearRoute and Route are mutually exclusive
 	if cmd.ClearRoute && cmd.Route != nil {
 		return errors.NewValidationError("cannot set both ClearRoute and Route; use ClearRoute to remove config or Route to set new config")
+	}
+
+	// ClearDNS and DNS are mutually exclusive
+	if cmd.ClearDNS && cmd.DNS != nil {
+		return errors.NewValidationError("cannot set both ClearDNS and DNS; use ClearDNS to remove config or DNS to set new config")
 	}
 
 	return nil

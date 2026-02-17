@@ -36,6 +36,8 @@ type CreateNodeCommand struct {
 	AllowInsecure     bool
 	// Route configuration for traffic splitting
 	Route *dto.RouteConfigDTO
+	// DNS configuration for DNS-based unlocking
+	DNS *dto.DnsConfigDTO
 
 	// VLESS specific fields
 	VLESSTransportType     string
@@ -378,6 +380,29 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 		}
 	}
 
+	// Convert dns config from DTO if provided
+	var dnsConfig *vo.DnsConfig
+	if cmd.DNS != nil {
+		dnsConfig, err = dto.FromDnsConfigDTO(cmd.DNS)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Validate dns config node references if DNS has node references
+	if dnsConfig != nil && dnsConfig.HasNodeReferences() {
+		referencedSIDs := dnsConfig.GetReferencedNodeSIDs()
+		invalidSIDs, err := uc.nodeRepo.ValidateNodeSIDsExist(ctx, referencedSIDs)
+		if err != nil {
+			uc.logger.Errorw("failed to validate dns config node references", "error", err)
+			return nil, errors.NewInternalError("failed to validate dns config")
+		}
+		if len(invalidSIDs) > 0 {
+			return nil, errors.NewValidationError(
+				fmt.Sprintf("invalid node SIDs in dns config detour (not found): %v", invalidSIDs))
+		}
+	}
+
 	// Create node aggregate using domain constructor
 	nodeEntity, err := node.NewNode(
 		cmd.Name,
@@ -396,6 +421,7 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 		metadata,
 		cmd.SortOrder,
 		routeConfig,
+		dnsConfig,
 		id.NewNodeID,
 	)
 	if err != nil {

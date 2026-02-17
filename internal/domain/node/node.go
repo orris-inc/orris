@@ -41,6 +41,7 @@ type Node struct {
 	muteNotification  bool // mute online/offline notifications for this node
 	maintenanceReason *string
 	routeConfig       *vo.RouteConfig // routing configuration for traffic splitting
+	dnsConfig         *vo.DnsConfig   // DNS configuration for DNS-based unlocking
 	lastSeenAt        *time.Time      // last time the node agent reported status
 	publicIPv4        *string         // public IPv4 address reported by agent
 	publicIPv6        *string         // public IPv6 address reported by agent
@@ -74,6 +75,7 @@ func NewNode(
 	metadata vo.NodeMetadata,
 	sortOrder int,
 	routeConfig *vo.RouteConfig,
+	dnsConfig *vo.DnsConfig,
 	sidGenerator func() (string, error),
 ) (*Node, error) {
 	if name == "" {
@@ -116,6 +118,13 @@ func NewNode(
 		}
 	}
 
+	// Validate dns config if provided
+	if dnsConfig != nil {
+		if err := dnsConfig.Validate(); err != nil {
+			return nil, fmt.Errorf("invalid dns config: %w", err)
+		}
+	}
+
 	tokenGen := services.NewTokenGenerator()
 	plainToken, tokenHash, err := tokenGen.GenerateAPIToken("node")
 	if err != nil {
@@ -150,6 +159,7 @@ func NewNode(
 		tokenHash:        tokenHash,
 		sortOrder:        sortOrder,
 		routeConfig:      routeConfig,
+		dnsConfig:        dnsConfig,
 		version:          1,
 		createdAt:        now,
 		updatedAt:        now,
@@ -186,6 +196,7 @@ func ReconstructNode(
 	muteNotification bool,
 	maintenanceReason *string,
 	routeConfig *vo.RouteConfig,
+	dnsConfig *vo.DnsConfig,
 	lastSeenAt *time.Time,
 	publicIPv4 *string,
 	publicIPv6 *string,
@@ -242,6 +253,7 @@ func ReconstructNode(
 		muteNotification:  muteNotification,
 		maintenanceReason: maintenanceReason,
 		routeConfig:       routeConfig,
+		dnsConfig:         dnsConfig,
 		lastSeenAt:        lastSeenAt,
 		publicIPv4:        publicIPv4,
 		publicIPv6:        publicIPv6,
@@ -381,7 +393,16 @@ func (n *Node) MaintenanceReason() *string {
 
 // RouteConfig returns the routing configuration
 func (n *Node) RouteConfig() *vo.RouteConfig {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
 	return n.routeConfig
+}
+
+// DnsConfig returns the DNS configuration
+func (n *Node) DnsConfig() *vo.DnsConfig {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+	return n.dnsConfig
 }
 
 // LastSeenAt returns the last time the node agent reported status

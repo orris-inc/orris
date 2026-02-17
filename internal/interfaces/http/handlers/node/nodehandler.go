@@ -297,6 +297,8 @@ type CreateNodeRequest struct {
 	AllowInsecure     bool   `json:"allow_insecure,omitempty" example:"true" comment:"Allow insecure TLS connection (for self-signed certs)"`
 	// Route configuration for traffic splitting (sing-box compatible)
 	Route *dto.RouteConfigDTO `json:"route,omitempty" comment:"Route configuration for traffic splitting"`
+	// DNS configuration for DNS-based unlocking (sing-box compatible)
+	DNS *dto.DnsConfigDTO `json:"dns,omitempty" comment:"DNS configuration for DNS-based unlocking"`
 
 	// VLESS specific fields
 	VLESSTransportType     string `json:"vless_transport_type,omitempty" binding:"omitempty,oneof=tcp ws grpc h2" example:"tcp" comment:"VLESS transport type"`
@@ -372,6 +374,7 @@ func (r *CreateNodeRequest) ToCommand() usecases.CreateNodeCommand {
 		SNI:               r.SNI,
 		AllowInsecure:     r.AllowInsecure,
 		Route:             r.Route,
+		DNS:               r.DNS,
 		// VLESS
 		VLESSTransportType:     r.VLESSTransportType,
 		VLESSFlow:              r.VLESSFlow,
@@ -446,6 +449,9 @@ type UpdateNodeRequest struct {
 	// Route configuration for traffic splitting (sing-box compatible)
 	Route      *dto.RouteConfigDTO `json:"route,omitempty" comment:"Route configuration for traffic splitting"`
 	ClearRoute bool                `json:"clear_route,omitempty" comment:"Set to true to clear route configuration"`
+	// DNS configuration for DNS-based unlocking (sing-box compatible)
+	DNS      *dto.DnsConfigDTO `json:"dns,omitempty" comment:"DNS configuration for DNS-based unlocking"`
+	ClearDNS bool              `json:"clear_dns,omitempty" comment:"Set to true to clear DNS configuration"`
 
 	// VLESS specific fields
 	VLESSTransportType     *string `json:"vless_transport_type,omitempty" binding:"omitempty,oneof=tcp ws grpc h2" comment:"VLESS transport type"`
@@ -528,6 +534,8 @@ func (r *UpdateNodeRequest) ToCommand(sid string) usecases.UpdateNodeCommand {
 		TrojanAllowInsecure:     r.AllowInsecure,
 		Route:                   r.Route,
 		ClearRoute:              r.ClearRoute,
+		DNS:                     r.DNS,
+		ClearDNS:                r.ClearDNS,
 		// VLESS
 		VLESSTransportType:     r.VLESSTransportType,
 		VLESSFlow:              r.VLESSFlow,

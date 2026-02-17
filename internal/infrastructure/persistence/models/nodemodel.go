@@ -32,6 +32,7 @@ type NodeModel struct {
 	MuteNotification  bool           `gorm:"not null;default:false"` // mute online/offline notifications
 	MaintenanceReason *string        `gorm:"size:500"`
 	RouteConfig       datatypes.JSON `gorm:"column:route_config"`                          // routing configuration for traffic splitting (JSON)
+	DnsConfig         datatypes.JSON `gorm:"column:dns_config"`                            // DNS configuration for DNS-based unlocking (JSON)
 	TokenHash         string         `gorm:"not null;uniqueIndex:idx_token_hash;size:255"` // hashed API token for node authentication
 	APIToken          string         `gorm:"column:api_token;size:255"`                    // stored token for retrieval
 	LastSeenAt        *time.Time     `gorm:"index:idx_nodes_last_seen_at"`                 // last time the node agent reported status

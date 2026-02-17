@@ -99,20 +99,26 @@ func (s *NodeConfigSyncService) FullSyncToNode(ctx context.Context, nodeID uint)
 		return errors.NewNotFoundError("node not found")
 	}
 
-	// Fetch referenced nodes if route config has node references
+	// Collect all referenced node SIDs from route and DNS configs
 	var referencedNodes []*node.Node
+	var allReferencedSIDs []string
 	if n.RouteConfig() != nil && n.RouteConfig().HasNodeReferences() {
-		sids := n.RouteConfig().GetReferencedNodeSIDs()
-		if len(sids) > 0 {
-			referencedNodes, err = s.nodeRepo.GetBySIDs(ctx, sids)
-			if err != nil {
-				s.logger.Warnw("failed to fetch referenced nodes for config sync",
-					"node_id", nodeID,
-					"referenced_sids", sids,
-					"error", err,
-				)
-				// Continue without referenced nodes rather than failing
-			}
+		allReferencedSIDs = append(allReferencedSIDs, n.RouteConfig().GetReferencedNodeSIDs()...)
+	}
+	if n.DnsConfig() != nil && n.DnsConfig().HasNodeReferences() {
+		allReferencedSIDs = append(allReferencedSIDs, n.DnsConfig().GetReferencedNodeSIDs()...)
+	}
+	if len(allReferencedSIDs) > 0 {
+		// Deduplicate SIDs
+		allReferencedSIDs = uniqueStrings(allReferencedSIDs)
+		referencedNodes, err = s.nodeRepo.GetBySIDs(ctx, allReferencedSIDs)
+		if err != nil {
+			s.logger.Warnw("failed to fetch referenced nodes for config sync",
+				"node_id", nodeID,
+				"referenced_sids", allReferencedSIDs,
+				"error", err,
+			)
+			// Continue without referenced nodes rather than failing
 		}
 	}
 
@@ -176,6 +182,7 @@ func (s *NodeConfigSyncService) FullSyncToNode(ctx context.Context, nodeID uint)
 		"node_sid", n.SID(),
 		"version", version,
 		"has_route", configData.Route != nil,
+		"has_dns", configData.DNS != nil,
 	)
 
 	return nil
@@ -212,19 +219,25 @@ func (s *NodeConfigSyncService) NotifyConfigChange(ctx context.Context, nodeID u
 		return errors.NewNotFoundError("node not found")
 	}
 
-	// Fetch referenced nodes if route config has node references
+	// Collect all referenced node SIDs from route and DNS configs
 	var referencedNodes []*node.Node
+	var allReferencedSIDs []string
 	if n.RouteConfig() != nil && n.RouteConfig().HasNodeReferences() {
-		sids := n.RouteConfig().GetReferencedNodeSIDs()
-		if len(sids) > 0 {
-			referencedNodes, err = s.nodeRepo.GetBySIDs(ctx, sids)
-			if err != nil {
-				s.logger.Warnw("failed to fetch referenced nodes for config change",
-					"node_id", nodeID,
-					"referenced_sids", sids,
-					"error", err,
-				)
-			}
+		allReferencedSIDs = append(allReferencedSIDs, n.RouteConfig().GetReferencedNodeSIDs()...)
+	}
+	if n.DnsConfig() != nil && n.DnsConfig().HasNodeReferences() {
+		allReferencedSIDs = append(allReferencedSIDs, n.DnsConfig().GetReferencedNodeSIDs()...)
+	}
+	if len(allReferencedSIDs) > 0 {
+		// Deduplicate SIDs
+		allReferencedSIDs = uniqueStrings(allReferencedSIDs)
+		referencedNodes, err = s.nodeRepo.GetBySIDs(ctx, allReferencedSIDs)
+		if err != nil {
+			s.logger.Warnw("failed to fetch referenced nodes for config change",
+				"node_id", nodeID,
+				"referenced_sids", allReferencedSIDs,
+				"error", err,
+			)
 		}
 	}
 
@@ -288,7 +301,21 @@ func (s *NodeConfigSyncService) NotifyConfigChange(ctx context.Context, nodeID u
 		"node_sid", n.SID(),
 		"version", version,
 		"has_route", configData.Route != nil,
+		"has_dns", configData.DNS != nil,
 	)
 
 	return nil
+}
+
+// uniqueStrings returns a deduplicated copy of the input slice, preserving order.
+func uniqueStrings(input []string) []string {
+	seen := make(map[string]bool, len(input))
+	result := make([]string, 0, len(input))
+	for _, s := range input {
+		if !seen[s] {
+			seen[s] = true
+			result = append(result, s)
+		}
+	}
+	return result
 }

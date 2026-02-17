@@ -36,6 +36,7 @@ type NodeConfigResponse struct {
 	DeviceLimit       int             `json:"device_limit"`                                                                    // Device connection limit, 0 = unlimited
 	RuleListPath      string          `json:"rule_list_path,omitempty"`                                                        // Path to routing rule list file (deprecated, use Route)
 	Route             *RouteConfigDTO `json:"route,omitempty"`                                                                 // Routing configuration for traffic splitting
+	DNS               *DnsConfigDTO   `json:"dns,omitempty"`                                                                   // DNS configuration for DNS-based unlocking
 	Outbounds         []OutboundDTO   `json:"outbounds,omitempty"`                                                             // Outbound configs for nodes referenced in route rules
 
 	// VLESS specific fields
@@ -88,6 +89,42 @@ type CustomOutboundDTO struct {
 	Server   string         `json:"server"`                 // Server hostname or IP address
 	Port     int            `json:"server_port"`            // Server port number
 	Settings map[string]any `json:"settings,omitempty"`     // Protocol-specific configuration (password, uuid, method, tls, transport, etc.)
+}
+
+// DnsConfigDTO represents the DNS configuration for sing-box
+type DnsConfigDTO struct {
+	Servers          []DnsServerDTO `json:"servers,omitempty"`          // DNS servers
+	Rules            []DnsRuleDTO   `json:"rules,omitempty"`            // DNS routing rules
+	Final            string         `json:"final"`                      // Default DNS server tag
+	Strategy         string         `json:"strategy,omitempty"`         // Global DNS strategy (prefer_ipv4, prefer_ipv6, ipv4_only, ipv6_only)
+	DisableCache     bool           `json:"disable_cache"`    // Disable DNS cache
+	DisableExpire    bool           `json:"disable_expire"`   // Disable DNS cache expiration
+	IndependentCache bool           `json:"independent_cache"` // Independent cache per DNS server
+	ReverseMapping   bool           `json:"reverse_mapping"`  // Enable reverse DNS mapping
+}
+
+// DnsServerDTO represents a DNS server entry, compatible with sing-box dns.servers[]
+type DnsServerDTO struct {
+	Tag             string `json:"tag"`                          // Unique identifier
+	Address         string `json:"address"`                      // DNS address (e.g., "https://1.1.1.1/dns-query", "tls://8.8.8.8", "223.5.5.5")
+	AddressResolver string `json:"address_resolver,omitempty"`   // Tag of another server to resolve this server's address
+	AddressStrategy string `json:"address_strategy,omitempty"`   // Strategy for resolving this server's address
+	Strategy        string `json:"strategy,omitempty"`           // DNS resolution strategy for this server
+	Detour          string `json:"detour,omitempty"`             // Outbound tag (direct/proxy/node_xxx/custom_xxx)
+}
+
+// DnsRuleDTO represents a DNS routing rule, compatible with sing-box dns.rules[]
+type DnsRuleDTO struct {
+	Domain        []string `json:"domain,omitempty"`         // Exact domain match
+	DomainSuffix  []string `json:"domain_suffix,omitempty"`  // Domain suffix match
+	DomainKeyword []string `json:"domain_keyword,omitempty"` // Domain keyword match
+	DomainRegex   []string `json:"domain_regex,omitempty"`   // Domain regex match
+	Geosite       []string `json:"geosite,omitempty"`        // GeoSite categories
+	GeoIP         []string `json:"geoip,omitempty"`          // GeoIP country codes
+	RuleSet       []string `json:"rule_set,omitempty"`       // Rule set references
+	Outbound      []string `json:"outbound,omitempty"`       // Match by outbound tag
+	Server        string   `json:"server"`                   // Target DNS server tag
+	DisableCache  bool     `json:"disable_cache"`  // Disable cache for matched queries
 }
 
 // RouteRuleDTO represents a single routing rule, compatible with sing-box route rule
@@ -438,6 +475,11 @@ func ToNodeConfigResponse(n *node.Node, referencedNodes []*node.Node, serverKeyF
 		if len(customDTOs) > 0 {
 			config.Outbounds = append(config.Outbounds, customDTOs...)
 		}
+	}
+
+	// Convert DNS configuration if present
+	if n.DnsConfig() != nil {
+		config.DNS = ToDnsConfigDTO(n.DnsConfig())
 	}
 
 	// Convert referenced nodes to outbounds
@@ -955,6 +997,151 @@ func FromRouteRuleDTO(dto *RouteRuleDTO) (*vo.RouteRule, error) {
 	}
 
 	return rule, nil
+}
+
+// ToDnsConfigDTO converts domain DnsConfig to DTO
+func ToDnsConfigDTO(dc *vo.DnsConfig) *DnsConfigDTO {
+	if dc == nil {
+		return nil
+	}
+
+	servers := make([]DnsServerDTO, 0, len(dc.Servers()))
+	for _, s := range dc.Servers() {
+		servers = append(servers, DnsServerDTO{
+			Tag:             s.Tag(),
+			Address:         s.Address(),
+			AddressResolver: s.AddressResolver(),
+			AddressStrategy: s.AddressStrategy().String(),
+			Strategy:        s.Strategy().String(),
+			Detour:          s.Detour(),
+		})
+	}
+
+	rules := make([]DnsRuleDTO, 0, len(dc.Rules()))
+	for _, r := range dc.Rules() {
+		rules = append(rules, DnsRuleDTO{
+			Domain:        r.Domain(),
+			DomainSuffix:  r.DomainSuffix(),
+			DomainKeyword: r.DomainKeyword(),
+			DomainRegex:   r.DomainRegex(),
+			Geosite:       r.Geosite(),
+			GeoIP:         r.GeoIP(),
+			RuleSet:       r.RuleSet(),
+			Outbound:      r.Outbound(),
+			Server:        r.Server(),
+			DisableCache:  r.DisableCache(),
+		})
+	}
+
+	return &DnsConfigDTO{
+		Servers:          servers,
+		Rules:            rules,
+		Final:            dc.Final(),
+		Strategy:         dc.Strategy().String(),
+		DisableCache:     dc.DisableCache(),
+		DisableExpire:    dc.DisableExpire(),
+		IndependentCache: dc.IndependentCache(),
+		ReverseMapping:   dc.ReverseMapping(),
+	}
+}
+
+// FromDnsConfigDTO converts DnsConfigDTO to domain DnsConfig
+func FromDnsConfigDTO(dto *DnsConfigDTO) (*vo.DnsConfig, error) {
+	if dto == nil {
+		return nil, nil
+	}
+
+	finalTag := dto.Final
+	if finalTag == "" {
+		return nil, fmt.Errorf("dns config final server tag is required")
+	}
+
+	config, err := vo.NewDnsConfig(finalTag)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create dns config: %w", err)
+	}
+
+	// Convert and set servers
+	if len(dto.Servers) > 0 {
+		servers := make([]vo.DnsServer, 0, len(dto.Servers))
+		for i, sDTO := range dto.Servers {
+			s, err := vo.NewDnsServer(sDTO.Tag, sDTO.Address)
+			if err != nil {
+				return nil, fmt.Errorf("invalid dns server at index %d: %w", i, err)
+			}
+			if sDTO.AddressResolver != "" {
+				s.WithAddressResolver(sDTO.AddressResolver)
+			}
+			if sDTO.AddressStrategy != "" {
+				s.WithAddressStrategy(vo.DnsStrategy(sDTO.AddressStrategy))
+			}
+			if sDTO.Strategy != "" {
+				s.WithStrategy(vo.DnsStrategy(sDTO.Strategy))
+			}
+			if sDTO.Detour != "" {
+				s.WithDetour(sDTO.Detour)
+			}
+			servers = append(servers, *s)
+		}
+		if err := config.SetServers(servers); err != nil {
+			return nil, fmt.Errorf("failed to set dns servers: %w", err)
+		}
+	}
+
+	// Convert and set rules
+	if len(dto.Rules) > 0 {
+		rules := make([]vo.DnsRule, 0, len(dto.Rules))
+		for i, rDTO := range dto.Rules {
+			r, err := vo.NewDnsRule(rDTO.Server)
+			if err != nil {
+				return nil, fmt.Errorf("invalid dns rule at index %d: %w", i, err)
+			}
+			if len(rDTO.Domain) > 0 {
+				r.WithDomain(rDTO.Domain...)
+			}
+			if len(rDTO.DomainSuffix) > 0 {
+				r.WithDomainSuffix(rDTO.DomainSuffix...)
+			}
+			if len(rDTO.DomainKeyword) > 0 {
+				r.WithDomainKeyword(rDTO.DomainKeyword...)
+			}
+			if len(rDTO.DomainRegex) > 0 {
+				r.WithDomainRegex(rDTO.DomainRegex...)
+			}
+			if len(rDTO.Geosite) > 0 {
+				r.WithGeosite(rDTO.Geosite...)
+			}
+			if len(rDTO.GeoIP) > 0 {
+				r.WithGeoIP(rDTO.GeoIP...)
+			}
+			if len(rDTO.RuleSet) > 0 {
+				r.WithRuleSet(rDTO.RuleSet...)
+			}
+			if len(rDTO.Outbound) > 0 {
+				r.WithOutbound(rDTO.Outbound...)
+			}
+			if rDTO.DisableCache {
+				r.WithDisableCache(true)
+			}
+			rules = append(rules, *r)
+		}
+		if err := config.SetRules(rules); err != nil {
+			return nil, fmt.Errorf("failed to set dns rules: %w", err)
+		}
+	}
+
+	// Set optional fields
+	if dto.Strategy != "" {
+		if err := config.SetStrategy(vo.DnsStrategy(dto.Strategy)); err != nil {
+			return nil, err
+		}
+	}
+	config.SetDisableCache(dto.DisableCache)
+	config.SetDisableExpire(dto.DisableExpire)
+	config.SetIndependentCache(dto.IndependentCache)
+	config.SetReverseMapping(dto.ReverseMapping)
+
+	return config, nil
 }
 
 // customOutboundToDTO converts domain CustomOutbound to CustomOutboundDTO
