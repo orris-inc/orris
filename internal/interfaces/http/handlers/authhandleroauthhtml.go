@@ -41,6 +41,10 @@ func (h *AuthHandler) getAllowedOriginsJS() string {
 }
 
 // renderOAuthSuccess renders HTML success page with postMessage
+// Tokens are already set as HttpOnly cookies before this page renders.
+// The page notifies the opener via postMessage (best-effort) and always
+// attempts to close itself. If auto-close fails (COOP restrictions),
+// a manual close button is shown as fallback.
 func (h *AuthHandler) renderOAuthSuccess(c *gin.Context, result *usecases.HandleOAuthCallbackResult) {
 	userJSON, _ := json.Marshal(result.User.GetDisplayInfo())
 
@@ -49,98 +53,178 @@ func (h *AuthHandler) renderOAuthSuccess(c *gin.Context, result *usecases.Handle
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>OAuth Login Successful</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Successful</title>
     <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
-            margin: 0;
-            background: linear-gradient(135deg, #667eea 0%%, #764ba2 100%%);
+            min-height: 100vh;
+            background: #fafafa;
+            color: #111;
         }
-        .container {
+        @media (prefers-color-scheme: dark) {
+            body { background: #0a0a0a; color: #fafafa; }
+            .card { background: #18181b; border-color: #27272a; }
+            .hint { color: #a1a1aa; }
+            .close-btn { background: #27272a; color: #fafafa; border-color: #3f3f46; }
+            .close-btn:hover { background: #3f3f46; }
+        }
+        .card {
             text-align: center;
-            color: white;
+            padding: 48px 40px;
+            background: #fff;
+            border: 1px solid #e4e4e7;
+            border-radius: 16px;
+            max-width: 380px;
+            width: 90%%;
         }
-        .success-icon {
-            font-size: 48px;
-            margin-bottom: 20px;
+        .icon-wrap {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 24px;
+            border-radius: 50%%;
+            background: #dcfce7;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: scaleIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @media (prefers-color-scheme: dark) {
+            .icon-wrap { background: #14532d; }
+        }
+        .icon-wrap svg {
+            width: 32px;
+            height: 32px;
+            color: #16a34a;
+            animation: checkDraw 0.5s ease-out 0.2s both;
+        }
+        @keyframes scaleIn {
+            from { transform: scale(0); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        @keyframes checkDraw {
+            from { stroke-dashoffset: 24; opacity: 0; }
+            to { stroke-dashoffset: 0; opacity: 1; }
         }
         h1 {
-            margin: 0 0 20px 0;
-            font-size: 24px;
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            letter-spacing: -0.01em;
         }
-        .spinner {
-            border: 4px solid rgba(255,255,255,0.3);
-            border-top: 4px solid white;
+        .hint {
+            font-size: 14px;
+            color: #71717a;
+            line-height: 1.5;
+        }
+        .spinner-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 24px;
+        }
+        .dot-spinner {
+            display: flex;
+            gap: 4px;
+        }
+        .dot-spinner span {
+            width: 6px;
+            height: 6px;
             border-radius: 50%%;
-            width: 40px;
+            background: #a1a1aa;
+            animation: dotPulse 1.2s ease-in-out infinite;
+        }
+        .dot-spinner span:nth-child(2) { animation-delay: 0.15s; }
+        .dot-spinner span:nth-child(3) { animation-delay: 0.3s; }
+        @keyframes dotPulse {
+            0%%, 80%%, 100%% { opacity: 0.3; transform: scale(0.8); }
+            40%% { opacity: 1; transform: scale(1); }
+        }
+        .spinner-text {
+            font-size: 13px;
+            color: #a1a1aa;
+        }
+        .fallback {
+            display: none;
+            margin-top: 24px;
+        }
+        .close-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
+            padding: 0 20px;
+            font-size: 14px;
+            font-weight: 500;
+            border-radius: 8px;
+            border: 1px solid #e4e4e7;
+            background: #fff;
+            color: #111;
+            cursor: pointer;
+            transition: background 0.15s;
         }
-        @keyframes spin {
-            0%% { transform: rotate(0deg); }
-            100%% { transform: rotate(360deg); }
-        }
-        p {
-            margin: 10px 0;
-            font-size: 16px;
-        }
+        .close-btn:hover { background: #f4f4f5; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="success-icon">✅</div>
+    <div class="card">
+        <div class="icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12" stroke-dasharray="24" />
+            </svg>
+        </div>
         <h1>Login Successful</h1>
-        <div class="spinner"></div>
-        <p>Redirecting...</p>
+        <p class="hint" id="auto-hint">This window will close automatically.</p>
+        <div class="spinner-row" id="auto-spinner">
+            <div class="dot-spinner"><span></span><span></span><span></span></div>
+            <span class="spinner-text">Closing...</span>
+        </div>
+        <div class="fallback" id="fallback">
+            <p class="hint" style="margin-bottom: 16px;">Could not close this window automatically.</p>
+            <button class="close-btn" onclick="window.close()">Close Window</button>
+        </div>
     </div>
     <script>
-        const data = {
-            type: 'oauth_success',
-            access_token: %q,
-            refresh_token: %q,
-            token_type: 'Bearer',
-            expires_in: %d,
-            user: %s
-        };
-
+        // Best-effort: notify opener via postMessage (may fail due to COOP)
         if (window.opener) {
-            // Send message to all allowed origins
-            const allowedOrigins = [%s];
-            allowedOrigins.forEach(origin => {
+            var allowedOrigins = [%s];
+            allowedOrigins.forEach(function(origin) {
                 try {
-                    window.opener.postMessage(data, origin);
+                    window.opener.postMessage({
+                        type: 'oauth_success',
+                        user: %s
+                    }, origin);
                 } catch (e) {
-                    // Ignore cross-origin errors
+                    // Cross-origin errors are expected when COOP is active
                 }
             });
-
-            // Close popup after delay
-            setTimeout(() => window.close(), 1000);
-        } else {
-            // Fallback: redirect to frontend callback URL
-            const params = new URLSearchParams({
-                access_token: data.access_token,
-                refresh_token: data.refresh_token,
-                token_type: data.token_type,
-                expires_in: data.expires_in.toString()
-            });
-            window.location.href = '%s?' + params.toString();
         }
+
+        // Always attempt to close popup after a short delay.
+        // Cookies are already set; the opener polls /auth/me to detect login.
+        setTimeout(function() {
+            try { window.close(); } catch (e) {}
+        }, 1500);
+
+        // Fallback: if window is still open after 3 seconds, show manual close button
+        setTimeout(function() {
+            if (!window.closed) {
+                document.getElementById('auto-hint').style.display = 'none';
+                document.getElementById('auto-spinner').style.display = 'none';
+                document.getElementById('fallback').style.display = 'block';
+            }
+        }, 3000);
     </script>
 </body>
 </html>
     `,
-		result.AccessToken,
-		result.RefreshToken,
-		result.ExpiresIn,
-		string(userJSON),
 		h.getAllowedOriginsJS(),
-		h.frontendCallbackURL,
+		string(userJSON),
 	)
 
 	c.Header("Content-Type", "text/html; charset=utf-8")
@@ -154,73 +238,112 @@ func (h *AuthHandler) renderOAuthError(c *gin.Context, errorMsg string) {
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>OAuth Login Failed</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Failed</title>
     <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
-            margin: 0;
-            background: #f44336;
+            min-height: 100vh;
+            background: #fafafa;
+            color: #111;
         }
-        .container {
+        @media (prefers-color-scheme: dark) {
+            body { background: #0a0a0a; color: #fafafa; }
+            .card { background: #18181b; border-color: #27272a; }
+            .hint { color: #a1a1aa; }
+            .close-btn { background: #27272a; color: #fafafa; border-color: #3f3f46; }
+            .close-btn:hover { background: #3f3f46; }
+        }
+        .card {
             text-align: center;
-            color: white;
-            padding: 40px;
-            background: rgba(0,0,0,0.2);
-            border-radius: 8px;
-            max-width: 500px;
+            padding: 48px 40px;
+            background: #fff;
+            border: 1px solid #e4e4e7;
+            border-radius: 16px;
+            max-width: 380px;
+            width: 90%%;
         }
-        .error-icon {
-            font-size: 48px;
-            margin-bottom: 20px;
+        .icon-wrap {
+            width: 64px;
+            height: 64px;
+            margin: 0 auto 24px;
+            border-radius: 50%%;
+            background: #fee2e2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: scaleIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @media (prefers-color-scheme: dark) {
+            .icon-wrap { background: #450a0a; }
+        }
+        .icon-wrap svg {
+            width: 32px;
+            height: 32px;
+            color: #dc2626;
+        }
+        @keyframes scaleIn {
+            from { transform: scale(0); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
         }
         h1 {
-            margin: 0 0 20px 0;
-            font-size: 24px;
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 8px;
+            letter-spacing: -0.01em;
         }
-        p {
-            margin: 0 0 30px 0;
+        .hint {
+            font-size: 14px;
+            color: #71717a;
             line-height: 1.5;
-            font-size: 16px;
+            margin-bottom: 24px;
         }
-        button {
-            margin-top: 20px;
-            padding: 12px 24px;
-            cursor: pointer;
-            background: white;
-            border: none;
-            border-radius: 4px;
+        .close-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            height: 40px;
+            padding: 0 20px;
             font-size: 14px;
             font-weight: 500;
-            color: #f44336;
-            transition: background-color 0.2s;
+            border-radius: 8px;
+            border: 1px solid #e4e4e7;
+            background: #fff;
+            color: #111;
+            cursor: pointer;
+            transition: background 0.15s;
         }
-        button:hover {
-            background: #f0f0f0;
-        }
+        .close-btn:hover { background: #f4f4f5; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="error-icon">❌</div>
+    <div class="card">
+        <div class="icon-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+        </div>
         <h1>Login Failed</h1>
-        <p>%s</p>
-        <button onclick="window.close()">Close Window</button>
+        <p class="hint">%s</p>
+        <button class="close-btn" onclick="window.close()">Close Window</button>
     </div>
     <script>
+        // Best-effort: notify opener via postMessage
         if (window.opener) {
-            const allowedOrigins = [%s];
-            allowedOrigins.forEach(origin => {
+            var allowedOrigins = [%s];
+            allowedOrigins.forEach(function(origin) {
                 try {
                     window.opener.postMessage({
                         type: 'oauth_error',
                         error: %q
                     }, origin);
                 } catch (e) {
-                    // Ignore cross-origin errors
+                    // Cross-origin errors are expected
                 }
             });
         }

@@ -9,6 +9,7 @@ type RouteConfig struct {
 	rules            []RouteRule      // Ordered list of routing rules
 	finalAction      OutboundType     // Default action when no rules match
 	customOutbounds  []CustomOutbound // User-defined outbound configurations referenced by route rules via custom_xxx tags
+	ruleSetEntries   []RuleSetEntry   // Remote rule-set sources referenced by rules via rule_set tags
 }
 
 // NewRouteConfig creates a new route configuration
@@ -108,6 +109,43 @@ func (c *RouteConfig) HasCustomOutbounds() bool {
 	return len(c.customOutbounds) > 0
 }
 
+// RuleSetEntries returns a copy of the rule-set entries
+func (c *RouteConfig) RuleSetEntries() []RuleSetEntry {
+	if c.ruleSetEntries == nil {
+		return nil
+	}
+	result := make([]RuleSetEntry, len(c.ruleSetEntries))
+	copy(result, c.ruleSetEntries)
+	return result
+}
+
+// SetRuleSetEntries replaces all rule-set entries after validation.
+// Validates each entry and ensures tag uniqueness.
+func (c *RouteConfig) SetRuleSetEntries(entries []RuleSetEntry) error {
+	if len(entries) > maxRuleSetEntries {
+		return fmt.Errorf("too many rule-set entries: %d (max %d)", len(entries), maxRuleSetEntries)
+	}
+	seen := make(map[string]bool, len(entries))
+	for i, e := range entries {
+		if err := e.Validate(); err != nil {
+			return fmt.Errorf("invalid rule-set entry at index %d: %w", i, err)
+		}
+		if seen[e.Tag()] {
+			return fmt.Errorf("duplicate rule-set entry tag: %s", e.Tag())
+		}
+		seen[e.Tag()] = true
+	}
+	cp := make([]RuleSetEntry, len(entries))
+	copy(cp, entries)
+	c.ruleSetEntries = cp
+	return nil
+}
+
+// HasRuleSetEntries checks if the route config has rule-set entries
+func (c *RouteConfig) HasRuleSetEntries() bool {
+	return len(c.ruleSetEntries) > 0
+}
+
 // GetCustomOutboundByTag returns a copy of a custom outbound by its tag, or nil if not found
 func (c *RouteConfig) GetCustomOutboundByTag(tag string) *CustomOutbound {
 	for i := range c.customOutbounds {
@@ -159,6 +197,18 @@ func (c *RouteConfig) Validate() error {
 		}
 	}
 
+	// Validate rule-set entries: uniqueness and individual validity
+	rsTags := make(map[string]bool, len(c.ruleSetEntries))
+	for i, e := range c.ruleSetEntries {
+		if err := e.Validate(); err != nil {
+			return fmt.Errorf("invalid rule-set entry at index %d: %w", i, err)
+		}
+		if rsTags[e.Tag()] {
+			return fmt.Errorf("duplicate rule-set entry tag: %s", e.Tag())
+		}
+		rsTags[e.Tag()] = true
+	}
+
 	return nil
 }
 
@@ -196,6 +246,14 @@ func (c *RouteConfig) Equals(other *RouteConfig) bool {
 	}
 	for i, co := range c.customOutbounds {
 		if !co.Equals(&other.customOutbounds[i]) {
+			return false
+		}
+	}
+	if len(c.ruleSetEntries) != len(other.ruleSetEntries) {
+		return false
+	}
+	for i, e := range c.ruleSetEntries {
+		if !e.Equals(&other.ruleSetEntries[i]) {
 			return false
 		}
 	}
@@ -251,11 +309,12 @@ func (c *RouteConfig) HasNodeReferences() bool {
 }
 
 // ReconstructRouteConfig reconstructs a RouteConfig from persistence data
-func ReconstructRouteConfig(rules []RouteRule, finalAction OutboundType, customOutbounds []CustomOutbound) *RouteConfig {
+func ReconstructRouteConfig(rules []RouteRule, finalAction OutboundType, customOutbounds []CustomOutbound, ruleSetEntries []RuleSetEntry) *RouteConfig {
 	return &RouteConfig{
 		rules:           rules,
 		finalAction:     finalAction,
 		customOutbounds: customOutbounds,
+		ruleSetEntries:  ruleSetEntries,
 	}
 }
 
@@ -279,6 +338,10 @@ func NewCNDirectRouteConfig() *RouteConfig {
 	config := &RouteConfig{
 		rules:       make([]RouteRule, 0, 3),
 		finalAction: OutboundProxy,
+		ruleSetEntries: []RuleSetEntry{
+			*ReconstructRuleSetEntry("geoip-cn", "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs", RuleSetFormatBinary, "", "1d"),
+			*ReconstructRuleSetEntry("geosite-cn", "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs", RuleSetFormatBinary, "", "1d"),
+		},
 	}
 
 	// Rule 1: Private IPs direct
@@ -286,14 +349,14 @@ func NewCNDirectRouteConfig() *RouteConfig {
 	privateRule.WithIPIsPrivate(true)
 	config.rules = append(config.rules, *privateRule)
 
-	// Rule 2: China GeoIP direct
+	// Rule 2: China IPs direct (via rule-set)
 	geoIPRule := mustNewRouteRule(OutboundDirect)
-	geoIPRule.WithGeoIP("cn")
+	geoIPRule.WithRuleSet("geoip-cn")
 	config.rules = append(config.rules, *geoIPRule)
 
-	// Rule 3: China GeoSite direct
+	// Rule 3: China sites direct (via rule-set)
 	geoSiteRule := mustNewRouteRule(OutboundDirect)
-	geoSiteRule.WithGeoSite("cn")
+	geoSiteRule.WithRuleSet("geosite-cn")
 	config.rules = append(config.rules, *geoSiteRule)
 
 	return config
@@ -317,17 +380,17 @@ func NewGlobalProxyRouteConfig() *RouteConfig {
 }
 
 // NewWhitelistRouteConfig creates a "Whitelist" route config:
-// - Only specified categories go through proxy
+// - Only specified rule-set tags go through proxy
 // - Everything else goes direct
-func NewWhitelistRouteConfig(proxyCategories ...string) *RouteConfig {
+func NewWhitelistRouteConfig(ruleSetTags ...string) *RouteConfig {
 	config := &RouteConfig{
 		rules:       make([]RouteRule, 0, 1),
 		finalAction: OutboundDirect,
 	}
 
-	if len(proxyCategories) > 0 {
+	if len(ruleSetTags) > 0 {
 		proxyRule := mustNewRouteRule(OutboundProxy)
-		proxyRule.WithGeoSite(proxyCategories...)
+		proxyRule.WithRuleSet(ruleSetTags...)
 		config.rules = append(config.rules, *proxyRule)
 	}
 
@@ -335,7 +398,7 @@ func NewWhitelistRouteConfig(proxyCategories ...string) *RouteConfig {
 }
 
 // NewBlockAdsRouteConfig creates a route config that blocks ads:
-// - Ad domains are blocked
+// - Ad domains are blocked (via rule-set)
 // - Everything else uses specified default action
 // Returns error if defaultAction is invalid
 func NewBlockAdsRouteConfig(defaultAction OutboundType) (*RouteConfig, error) {
@@ -346,11 +409,14 @@ func NewBlockAdsRouteConfig(defaultAction OutboundType) (*RouteConfig, error) {
 	config := &RouteConfig{
 		rules:       make([]RouteRule, 0, 1),
 		finalAction: defaultAction,
+		ruleSetEntries: []RuleSetEntry{
+			*ReconstructRuleSetEntry("geosite-category-ads-all", "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-category-ads-all.srs", RuleSetFormatBinary, "", "1d"),
+		},
 	}
 
-	// Block ad categories
+	// Block ad categories via rule-set
 	blockRule := mustNewRouteRule(OutboundBlock)
-	blockRule.WithGeoSite("category-ads", "category-ads-all")
+	blockRule.WithRuleSet("geosite-category-ads-all")
 	config.rules = append(config.rules, *blockRule)
 
 	return config, nil

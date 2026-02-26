@@ -772,6 +772,9 @@ print_reverse_proxy_examples() {
       location /api/ {
           rewrite ^/api/(.*)\$ /\$1 break;
           proxy_pass http://127.0.0.1:8080;
+          proxy_http_version 1.1;
+          proxy_set_header Upgrade \$http_upgrade;
+          proxy_set_header Connection "upgrade";
           proxy_set_header Host \$host;
           proxy_set_header X-Real-IP \$remote_addr;
           proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -798,6 +801,9 @@ EOF
       location /api/ {
           rewrite ^/api/(.*)\$ /\$1 break;
           proxy_pass http://127.0.0.1:8080;
+          proxy_http_version 1.1;
+          proxy_set_header Upgrade \$http_upgrade;
+          proxy_set_header Connection "upgrade";
           proxy_set_header Host \$host;
           proxy_set_header X-Real-IP \$remote_addr;
           proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -896,10 +902,13 @@ server {
     ssl_certificate     /path/to/cert.pem;
     ssl_certificate_key /path/to/key.pem;
 
-    # API routes -> backend
+    # API routes -> backend (WebSocket/SSE supported)
     location /api/ {
         rewrite ^/api/(.*)\$ /\$1 break;
         proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -922,10 +931,13 @@ server {
     listen 80;
     server_name localhost;
 
-    # API routes -> backend
+    # API routes -> backend (WebSocket/SSE supported)
     location /api/ {
         rewrite ^/api/(.*)\$ /\$1 break;
         proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;

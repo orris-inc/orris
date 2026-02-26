@@ -77,6 +77,12 @@ func (c *GitHubOAuthClient) GetUserInfo(ctx context.Context, accessToken string)
 		return nil, err
 	}
 
+	// GitHub name can be empty; fall back to login (username) which is always present
+	name := userInfo.Name
+	if name == "" {
+		name = userInfo.Login
+	}
+
 	if userInfo.Email == "" {
 		email, verified, err := c.fetchPrimaryEmail(ctx, accessToken)
 		if err != nil {
@@ -85,7 +91,7 @@ func (c *GitHubOAuthClient) GetUserInfo(ctx context.Context, accessToken string)
 		userInfo.Email = email
 		return &OAuthUserInfo{
 			Email:         userInfo.Email,
-			Name:          userInfo.Name,
+			Name:          name,
 			Picture:       userInfo.AvatarURL,
 			EmailVerified: verified,
 			Provider:      "github",
@@ -95,7 +101,7 @@ func (c *GitHubOAuthClient) GetUserInfo(ctx context.Context, accessToken string)
 
 	return &OAuthUserInfo{
 		Email:         userInfo.Email,
-		Name:          userInfo.Name,
+		Name:          name,
 		Picture:       userInfo.AvatarURL,
 		EmailVerified: true,
 		Provider:      "github",

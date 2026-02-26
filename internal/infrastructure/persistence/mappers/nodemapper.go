@@ -52,6 +52,16 @@ type RouteConfigJSON struct {
 	Rules           []RouteRuleJSON      `json:"rules,omitempty"`
 	FinalAction     string               `json:"final_action"`
 	CustomOutbounds []CustomOutboundJSON `json:"custom_outbounds,omitempty"`
+	RuleSetEntries  []RuleSetEntryJSON   `json:"rule_set_entries,omitempty"`
+}
+
+// RuleSetEntryJSON represents the JSON structure for a remote rule-set source
+type RuleSetEntryJSON struct {
+	Tag            string `json:"tag"`
+	URL            string `json:"url"`
+	Format         string `json:"format"`
+	DownloadDetour string `json:"download_detour,omitempty"`
+	UpdateInterval string `json:"update_interval,omitempty"`
 }
 
 // CustomOutboundJSON represents the JSON structure for a custom outbound in persistence
@@ -472,6 +482,21 @@ func routeConfigToJSON(rc *vo.RouteConfig) *RouteConfigJSON {
 		}
 	}
 
+	// Serialize rule-set entries
+	if rc.HasRuleSetEntries() {
+		entries := rc.RuleSetEntries()
+		rcJSON.RuleSetEntries = make([]RuleSetEntryJSON, 0, len(entries))
+		for _, e := range entries {
+			rcJSON.RuleSetEntries = append(rcJSON.RuleSetEntries, RuleSetEntryJSON{
+				Tag:            e.Tag(),
+				URL:            e.URL(),
+				Format:         e.Format().String(),
+				DownloadDetour: e.DownloadDetour(),
+				UpdateInterval: e.UpdateInterval(),
+			})
+		}
+	}
+
 	return rcJSON
 }
 
@@ -523,7 +548,17 @@ func routeConfigFromJSON(rcJSON *RouteConfigJSON) *vo.RouteConfig {
 		}
 	}
 
-	return vo.ReconstructRouteConfig(rules, finalAction, customOutbounds)
+	// Deserialize rule-set entries
+	var ruleSetEntries []vo.RuleSetEntry
+	if len(rcJSON.RuleSetEntries) > 0 {
+		ruleSetEntries = make([]vo.RuleSetEntry, 0, len(rcJSON.RuleSetEntries))
+		for _, eJSON := range rcJSON.RuleSetEntries {
+			e := vo.ReconstructRuleSetEntry(eJSON.Tag, eJSON.URL, vo.RuleSetFormat(eJSON.Format), eJSON.DownloadDetour, eJSON.UpdateInterval)
+			ruleSetEntries = append(ruleSetEntries, *e)
+		}
+	}
+
+	return vo.ReconstructRouteConfig(rules, finalAction, customOutbounds, ruleSetEntries)
 }
 
 // dnsConfigToJSON converts domain DnsConfig to JSON structure

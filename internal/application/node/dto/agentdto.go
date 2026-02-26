@@ -76,9 +76,19 @@ type NodeConfigResponse struct {
 
 // RouteConfigDTO represents the routing configuration for sing-box
 type RouteConfigDTO struct {
-	Rules           []RouteRuleDTO      `json:"rules,omitempty"`            // Ordered list of routing rules
-	Final           string              `json:"final"`                      // Default outbound when no rules match (direct/block/proxy/node_xxx/custom_xxx)
-	CustomOutbounds []CustomOutboundDTO `json:"custom_outbounds,omitempty"` // User-defined outbound configurations
+	Rules           []RouteRuleDTO      `json:"rules,omitempty"`             // Ordered list of routing rules
+	Final           string              `json:"final"`                       // Default outbound when no rules match (direct/block/proxy/node_xxx/custom_xxx)
+	CustomOutbounds []CustomOutboundDTO `json:"custom_outbounds,omitempty"`  // User-defined outbound configurations
+	RuleSetEntries  []RuleSetEntryDTO   `json:"rule_set_entries,omitempty"`  // Remote rule-set sources referenced by rules
+}
+
+// RuleSetEntryDTO represents a remote rule-set source for sing-box route configuration.
+type RuleSetEntryDTO struct {
+	Tag            string `json:"tag"`                        // Unique identifier referenced by rules
+	URL            string `json:"url"`                        // Remote URL of the rule-set resource
+	Format         string `json:"format,omitempty"`           // Resource format: binary (default) or source
+	DownloadDetour string `json:"download_detour,omitempty"`  // Optional outbound tag for downloading
+	UpdateInterval string `json:"update_interval,omitempty"`  // Optional update interval (e.g. "1d", "12h")
 }
 
 // CustomOutboundDTO represents a user-defined sing-box outbound configuration.
@@ -167,9 +177,15 @@ type OutboundDTO struct {
 	Server string `json:"server"` // Server hostname or IP address
 	Port   int    `json:"server_port"`
 
+	// Auth fields
+	Username string `json:"username,omitempty"` // Username for SOCKS/HTTP outbound authentication
+	Password string `json:"password,omitempty"` // Password for SS/Trojan/Hysteria2/TUIC/SOCKS/HTTP
+
+	// Socks specific fields
+	Version string `json:"version,omitempty"` // SOCKS version (default: 5)
+
 	// Shadowsocks specific fields
-	Method     string `json:"method,omitempty"`      // Encryption method for SS
-	Password   string `json:"password,omitempty"`    // Password for SS/Trojan/Hysteria2/TUIC
+	Method string `json:"method,omitempty"` // Encryption method for SS
 	Plugin     string `json:"plugin,omitempty"`      // SIP003 plugin name
 	PluginOpts string `json:"plugin_opts,omitempty"` // Plugin options string
 
@@ -512,6 +528,21 @@ func ToRouteConfigDTO(rc *vo.RouteConfig) *RouteConfigDTO {
 		dto.CustomOutbounds = make([]CustomOutboundDTO, 0, len(customOutbounds))
 		for _, co := range customOutbounds {
 			dto.CustomOutbounds = append(dto.CustomOutbounds, customOutboundToDTO(&co))
+		}
+	}
+
+	// Convert rule-set entries
+	if rc.HasRuleSetEntries() {
+		entries := rc.RuleSetEntries()
+		dto.RuleSetEntries = make([]RuleSetEntryDTO, 0, len(entries))
+		for _, e := range entries {
+			dto.RuleSetEntries = append(dto.RuleSetEntries, RuleSetEntryDTO{
+				Tag:            e.Tag(),
+				URL:            e.URL(),
+				Format:         e.Format().String(),
+				DownloadDetour: e.DownloadDetour(),
+				UpdateInterval: e.UpdateInterval(),
+			})
 		}
 	}
 
@@ -916,6 +947,25 @@ func FromRouteConfigDTO(dto *RouteConfigDTO) (*vo.RouteConfig, error) {
 		}
 	}
 
+	// Convert and set rule-set entries
+	if len(dto.RuleSetEntries) > 0 {
+		entries := make([]vo.RuleSetEntry, 0, len(dto.RuleSetEntries))
+		for i, eDTO := range dto.RuleSetEntries {
+			format := vo.RuleSetFormat(eDTO.Format)
+			if !format.IsValid() {
+				format = vo.RuleSetFormatBinary // default to binary
+			}
+			e, err := vo.NewRuleSetEntry(eDTO.Tag, eDTO.URL, format, eDTO.DownloadDetour, eDTO.UpdateInterval)
+			if err != nil {
+				return nil, fmt.Errorf("invalid rule-set entry at index %d: %w", i, err)
+			}
+			entries = append(entries, *e)
+		}
+		if err := config.SetRuleSetEntries(entries); err != nil {
+			return nil, fmt.Errorf("failed to set rule-set entries: %w", err)
+		}
+	}
+
 	return config, nil
 }
 
@@ -1199,8 +1249,14 @@ func customOutboundToAgentDTO(co *vo.CustomOutbound) OutboundDTO {
 		return dto
 	}
 
-	// Common fields
+	// Auth fields (for SOCKS/HTTP outbound authentication)
+	dto.Username = getStringFromSettings(s, "username")
 	dto.Password = getStringFromSettings(s, "password")
+
+	// Socks specific fields
+	dto.Version = getStringFromSettings(s, "version")
+
+	// Common fields
 	dto.UUID = getStringFromSettings(s, "uuid")
 	dto.Method = getStringFromSettings(s, "method")
 	dto.Plugin = getStringFromSettings(s, "plugin")
