@@ -39,7 +39,13 @@ type GetNodeUseCase struct {
 	nodeRepo          domainNode.NodeRepository
 	resourceGroupRepo resource.Repository
 	statusQuerier     NodeSystemStatusQuerier
+	onlineSubCounter  NodeOnlineSubscriptionCounter
 	logger            logger.Interface
+}
+
+// SetOnlineSubscriptionCounter injects an optional NodeOnlineSubscriptionCounter.
+func (uc *GetNodeUseCase) SetOnlineSubscriptionCounter(c NodeOnlineSubscriptionCounter) {
+	uc.onlineSubCounter = c
 }
 
 // NewGetNodeUseCase creates a new get node use case
@@ -111,6 +117,19 @@ func (uc *GetNodeUseCase) Execute(ctx context.Context, query GetNodeQuery) (*Get
 		nodeDTO.AgentVersion = strings.TrimPrefix(systemStatus.AgentVersion, "v")
 		nodeDTO.Platform = systemStatus.Platform
 		nodeDTO.Arch = systemStatus.Arch
+	}
+
+	// Query online subscription count from Redis
+	if uc.onlineSubCounter != nil {
+		count, err := uc.onlineSubCounter.GetNodeOnlineSubscriptionCount(ctx, nodeEntity.ID())
+		if err != nil {
+			uc.logger.Warnw("failed to get node online subscription count, continuing without it",
+				"node_id", nodeEntity.ID(),
+				"error", err,
+			)
+		} else {
+			nodeDTO.OnlineSubscriptionCount = count
+		}
 	}
 
 	uc.logger.Debugw("node retrieved", "sid", nodeEntity.SID())

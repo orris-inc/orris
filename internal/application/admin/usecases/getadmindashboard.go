@@ -7,6 +7,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	dto "github.com/orris-inc/orris/internal/application/admin/dto"
+	nodeUsecases "github.com/orris-inc/orris/internal/application/node/usecases"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/domain/subscription"
@@ -25,7 +26,13 @@ type GetAdminDashboardUseCase struct {
 	forwardRuleRepo    forward.RuleQuerier
 	forwardAgentRepo   forward.AgentRepository
 	hourlyTrafficCache cache.HourlyTrafficCache
+	onlineSubCounter   nodeUsecases.NodeOnlineSubscriptionCounter
 	logger             logger.Interface
+}
+
+// SetOnlineSubscriptionCounter injects an optional NodeOnlineSubscriptionCounter.
+func (uc *GetAdminDashboardUseCase) SetOnlineSubscriptionCounter(c nodeUsecases.NodeOnlineSubscriptionCounter) {
+	uc.onlineSubCounter = c
 }
 
 // NewGetAdminDashboardUseCase creates a new GetAdminDashboardUseCase.
@@ -76,9 +83,10 @@ func (uc *GetAdminDashboardUseCase) Execute(ctx context.Context) (*dto.AdminDash
 		totalRules    int64
 		totalAgents   int64
 		onlineAgents  int64
-		trafficUpload   uint64
-		trafficDownload uint64
-		trafficTotal    uint64
+		trafficUpload            uint64
+		trafficDownload          uint64
+		trafficTotal             uint64
+		totalOnlineSubscriptions int64
 	)
 
 	g, gctx := errgroup.WithContext(ctx)
@@ -231,6 +239,41 @@ func (uc *GetAdminDashboardUseCase) Execute(ctx context.Context) (*dto.AdminDash
 		return nil
 	})
 
+	// Total online subscriptions across all online nodes
+	if uc.onlineSubCounter != nil {
+		g.Go(func() error {
+			// List all nodes to find online ones
+			nf := node.NodeFilter{}
+			nf.Page = 1
+			nf.PageSize = 1000
+			nodes, _, err := uc.nodeRepo.List(gctx, nf)
+			if err != nil {
+				uc.logger.Warnw("failed to list nodes for online subscription count", "error", err)
+				return nil
+			}
+			var onlineIDs []uint
+			for _, n := range nodes {
+				if n.LastSeenAt() != nil && n.LastSeenAt().After(onlineThreshold) {
+					onlineIDs = append(onlineIDs, n.ID())
+				}
+			}
+			if len(onlineIDs) == 0 {
+				return nil
+			}
+			countMap, err := uc.onlineSubCounter.GetNodeOnlineSubscriptionCounts(gctx, onlineIDs)
+			if err != nil {
+				uc.logger.Warnw("failed to get online subscription counts for dashboard", "error", err)
+				return nil
+			}
+			var total int64
+			for _, c := range countMap {
+				total += int64(c)
+			}
+			totalOnlineSubscriptions = total
+			return nil
+		})
+	}
+
 	if err := g.Wait(); err != nil {
 		uc.logger.Errorw("failed to fetch admin dashboard data", "error", err)
 		return nil, err
@@ -250,9 +293,10 @@ func (uc *GetAdminDashboardUseCase) Execute(ctx context.Context) (*dto.AdminDash
 			ExpiringIn7Days: expiring7Days,
 		},
 		Nodes: dto.DashboardNodesSection{
-			Total:   totalNodes,
-			Online:  onlineNodes,
-			Offline: totalNodes - onlineNodes,
+			Total:                    totalNodes,
+			Online:                   onlineNodes,
+			Offline:                  totalNodes - onlineNodes,
+			TotalOnlineSubscriptions: totalOnlineSubscriptions,
 		},
 		Forward: dto.DashboardForwardSection{
 			TotalRules:   totalRules,

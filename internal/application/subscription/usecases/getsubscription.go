@@ -15,11 +15,12 @@ type GetSubscriptionQuery struct {
 }
 
 type GetSubscriptionUseCase struct {
-	subscriptionRepo subscription.SubscriptionRepository
-	planRepo         subscription.PlanRepository
-	userRepo         user.Repository
-	logger           logger.Interface
-	baseURL          string
+	subscriptionRepo     subscription.SubscriptionRepository
+	planRepo             subscription.PlanRepository
+	userRepo             user.Repository
+	onlineDeviceCounter  OnlineDeviceCounter // optional, nil-safe
+	logger               logger.Interface
+	baseURL              string
 }
 
 func NewGetSubscriptionUseCase(
@@ -28,13 +29,15 @@ func NewGetSubscriptionUseCase(
 	userRepo user.Repository,
 	logger logger.Interface,
 	baseURL string,
+	onlineDeviceCounter OnlineDeviceCounter,
 ) *GetSubscriptionUseCase {
 	return &GetSubscriptionUseCase{
-		subscriptionRepo: subscriptionRepo,
-		planRepo:         planRepo,
-		userRepo:         userRepo,
-		logger:           logger,
-		baseURL:          baseURL,
+		subscriptionRepo:    subscriptionRepo,
+		planRepo:            planRepo,
+		userRepo:            userRepo,
+		onlineDeviceCounter: onlineDeviceCounter,
+		logger:              logger,
+		baseURL:             baseURL,
 	}
 }
 
@@ -61,7 +64,8 @@ func (uc *GetSubscriptionUseCase) Execute(ctx context.Context, query GetSubscrip
 		}
 	}
 
-	result := dto.ToSubscriptionDTO(sub, plan, subscriptionUser, uc.baseURL)
+	opts := uc.buildDTOOptions(ctx, sub.ID(), plan)
+	result := dto.ToSubscriptionDTO(sub, plan, subscriptionUser, uc.baseURL, opts...)
 
 	uc.logger.Debugw("subscription retrieved successfully",
 		"subscription_id", query.SubscriptionID,
@@ -96,7 +100,8 @@ func (uc *GetSubscriptionUseCase) ExecuteBySID(ctx context.Context, sid string) 
 		}
 	}
 
-	result := dto.ToSubscriptionDTO(sub, plan, subscriptionUser, uc.baseURL)
+	opts := uc.buildDTOOptions(ctx, sub.ID(), plan)
+	result := dto.ToSubscriptionDTO(sub, plan, subscriptionUser, uc.baseURL, opts...)
 
 	uc.logger.Debugw("subscription retrieved successfully by SID",
 		"subscription_sid", sid,
@@ -106,4 +111,28 @@ func (uc *GetSubscriptionUseCase) ExecuteBySID(ctx context.Context, sid string) 
 	)
 
 	return result, nil
+}
+
+// buildDTOOptions builds DTO options for online device count and device limit.
+func (uc *GetSubscriptionUseCase) buildDTOOptions(ctx context.Context, subID uint, plan *subscription.Plan) []dto.SubscriptionDTOOption {
+	var opts []dto.SubscriptionDTOOption
+
+	// Extract device limit from plan features
+	if plan != nil && plan.Features() != nil {
+		if deviceLimit, err := plan.Features().GetDeviceLimit(); err == nil {
+			opts = append(opts, dto.WithDeviceLimit(deviceLimit))
+		}
+	}
+
+	// Query online device count
+	if uc.onlineDeviceCounter != nil {
+		count, err := uc.onlineDeviceCounter.GetOnlineDeviceCount(ctx, subID)
+		if err != nil {
+			uc.logger.Warnw("failed to get online device count", "error", err, "subscription_id", subID)
+		} else {
+			opts = append(opts, dto.WithOnlineDeviceCount(count))
+		}
+	}
+
+	return opts
 }

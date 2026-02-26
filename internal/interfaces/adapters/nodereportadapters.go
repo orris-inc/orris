@@ -105,36 +105,239 @@ func (a *SubscriptionUsageRecorderAdapter) BatchRecordSubscriptionUsage(_ contex
 	return nil
 }
 
-// OnlineSubscriptionTrackerAdapter adapts to OnlineSubscriptionTracker interface
+// OnlineSubscriptionTrackerAdapter adapts to OnlineSubscriptionTracker interface.
+// Uses Redis sorted sets to track online device IPs per subscription.
 type OnlineSubscriptionTrackerAdapter struct {
-	logger logger.Interface
+	redisClient *redis.Client
+	logger      logger.Interface
 }
 
-// NewOnlineSubscriptionTrackerAdapter creates a new online subscription tracker adapter
+// NewOnlineSubscriptionTrackerAdapter creates a new online subscription tracker adapter.
+// Returns concrete type so it can satisfy both OnlineSubscriptionTracker and OnlineDeviceCounter interfaces.
 func NewOnlineSubscriptionTrackerAdapter(
+	redisClient *redis.Client,
 	logger logger.Interface,
-) nodeUsecases.OnlineSubscriptionTracker {
+) *OnlineSubscriptionTrackerAdapter {
 	return &OnlineSubscriptionTrackerAdapter{
-		logger: logger,
+		redisClient: redisClient,
+		logger:      logger,
 	}
 }
 
-// UpdateOnlineSubscriptions updates online subscriptions tracking
+const (
+	// deviceOnlineKeyPrefix is the Redis key prefix for online device tracking.
+	// Key format: device_online:{subscriptionID}
+	deviceOnlineKeyPrefix = "device_online:"
+	// deviceOnlineTTL is the expiry for each subscription's device set.
+	deviceOnlineTTL = 5 * time.Minute
+	// deviceOnlineStaleThreshold is the max age before a device entry is considered stale.
+	deviceOnlineStaleThreshold = 5 * time.Minute
+
+	// nodeOnlineSubsKeyPrefix is the Redis key prefix for per-node online subscription tracking.
+	// Key format: node_online_subs:{nodeID}
+	nodeOnlineSubsKeyPrefix = "node_online_subs:"
+	// nodeOnlineSubsTTL is the expiry for each node's online subscription set.
+	nodeOnlineSubsTTL = 5 * time.Minute
+	// nodeOnlineSubsStaleThreshold is the max age before a subscription entry is considered stale.
+	nodeOnlineSubsStaleThreshold = 5 * time.Minute
+)
+
+// UpdateOnlineSubscriptions updates online subscriptions tracking in Redis.
+// For each subscription, it stores connected IPs in a sorted set with timestamps,
+// removes stale entries, and sets a TTL on the key.
 func (a *OnlineSubscriptionTrackerAdapter) UpdateOnlineSubscriptions(ctx context.Context, nodeID uint, subscriptions []nodeUsecases.OnlineSubscriptionInfo) error {
-	// For now, we just log the online subscriptions
-	// A full implementation would need a cache (Redis) or database table to track online subscriptions
-	a.logger.Debugw("online subscriptions updated",
+	if len(subscriptions) == 0 {
+		return nil
+	}
+
+	// Group IPs by subscription ID
+	subIPs := make(map[uint][]string)
+	for _, s := range subscriptions {
+		subIPs[s.SubscriptionID] = append(subIPs[s.SubscriptionID], s.IP)
+	}
+
+	now := float64(biztime.NowUTC().Unix())
+	staleThreshold := now - deviceOnlineStaleThreshold.Seconds()
+
+	pipe := a.redisClient.Pipeline()
+	for subID, ips := range subIPs {
+		key := fmt.Sprintf("%s%d", deviceOnlineKeyPrefix, subID)
+
+		// Add each IP with current timestamp as score
+		members := make([]redis.Z, 0, len(ips))
+		for _, ip := range ips {
+			members = append(members, redis.Z{Score: now, Member: ip})
+		}
+		pipe.ZAdd(ctx, key, members...)
+
+		// Remove stale entries (score < staleThreshold)
+		pipe.ZRemRangeByScore(ctx, key, "-inf", fmt.Sprintf("%f", staleThreshold))
+
+		// Set TTL
+		pipe.Expire(ctx, key, deviceOnlineTTL)
+	}
+
+	// Maintain per-node online subscription set
+	nodeKey := fmt.Sprintf("%s%d", nodeOnlineSubsKeyPrefix, nodeID)
+	nodeMembers := make([]redis.Z, 0, len(subIPs))
+	for subID := range subIPs {
+		nodeMembers = append(nodeMembers, redis.Z{Score: now, Member: fmt.Sprintf("%d", subID)})
+	}
+	nodeStaleThreshold := now - nodeOnlineSubsStaleThreshold.Seconds()
+	pipe.ZAdd(ctx, nodeKey, nodeMembers...)
+	pipe.ZRemRangeByScore(ctx, nodeKey, "-inf", fmt.Sprintf("%f", nodeStaleThreshold))
+	pipe.Expire(ctx, nodeKey, nodeOnlineSubsTTL)
+
+	_, err := pipe.Exec(ctx)
+	if err != nil {
+		a.logger.Errorw("failed to update online subscriptions in redis",
+			"error", err,
+			"node_id", nodeID,
+			"subscription_count", len(subIPs),
+		)
+		return fmt.Errorf("failed to update online subscriptions: %w", err)
+	}
+
+	a.logger.Debugw("online subscriptions updated in redis",
 		"node_id", nodeID,
-		"count", len(subscriptions),
+		"subscription_count", len(subIPs),
 	)
 
-	// TODO: Implement Redis-based online subscription tracking if needed
-	// This would involve:
-	// 1. Store subscription IPs and timestamps in Redis with expiry
-	// 2. Use sorted sets for efficient querying
-	// 3. Clean up expired entries
-
 	return nil
+}
+
+// GetOnlineDeviceCount returns the number of online devices for a single subscription.
+// Removes stale entries before counting.
+func (a *OnlineSubscriptionTrackerAdapter) GetOnlineDeviceCount(ctx context.Context, subscriptionID uint) (int, error) {
+	key := fmt.Sprintf("%s%d", deviceOnlineKeyPrefix, subscriptionID)
+	staleThreshold := fmt.Sprintf("%f", float64(biztime.NowUTC().Unix())-deviceOnlineStaleThreshold.Seconds())
+
+	// Remove stale entries first
+	a.redisClient.ZRemRangeByScore(ctx, key, "-inf", staleThreshold)
+
+	count, err := a.redisClient.ZCard(ctx, key).Result()
+	if err != nil {
+		a.logger.Errorw("failed to get online device count",
+			"error", err,
+			"subscription_id", subscriptionID,
+		)
+		return 0, fmt.Errorf("failed to get online device count: %w", err)
+	}
+
+	return int(count), nil
+}
+
+// GetOnlineDeviceCounts returns online device counts for multiple subscriptions in batch.
+// Uses Redis pipeline for efficiency. Removes stale entries before counting.
+func (a *OnlineSubscriptionTrackerAdapter) GetOnlineDeviceCounts(ctx context.Context, subscriptionIDs []uint) (map[uint]int, error) {
+	result := make(map[uint]int, len(subscriptionIDs))
+	if len(subscriptionIDs) == 0 {
+		return result, nil
+	}
+
+	staleThreshold := fmt.Sprintf("%f", float64(biztime.NowUTC().Unix())-deviceOnlineStaleThreshold.Seconds())
+
+	// First pipeline: remove stale entries
+	cleanPipe := a.redisClient.Pipeline()
+	for _, subID := range subscriptionIDs {
+		key := fmt.Sprintf("%s%d", deviceOnlineKeyPrefix, subID)
+		cleanPipe.ZRemRangeByScore(ctx, key, "-inf", staleThreshold)
+	}
+	_, _ = cleanPipe.Exec(ctx) // Best-effort cleanup
+
+	// Second pipeline: count entries
+	countPipe := a.redisClient.Pipeline()
+	cmds := make(map[uint]*redis.IntCmd, len(subscriptionIDs))
+	for _, subID := range subscriptionIDs {
+		key := fmt.Sprintf("%s%d", deviceOnlineKeyPrefix, subID)
+		cmds[subID] = countPipe.ZCard(ctx, key)
+	}
+
+	_, err := countPipe.Exec(ctx)
+	if err != nil && err != redis.Nil {
+		a.logger.Errorw("failed to batch get online device counts",
+			"error", err,
+			"subscription_count", len(subscriptionIDs),
+		)
+		return result, fmt.Errorf("failed to batch get online device counts: %w", err)
+	}
+
+	for subID, cmd := range cmds {
+		count, err := cmd.Result()
+		if err != nil {
+			continue
+		}
+		result[subID] = int(count)
+	}
+
+	return result, nil
+}
+
+// GetNodeOnlineSubscriptionCount returns the number of online subscriptions for a single node.
+// Removes stale entries before counting.
+func (a *OnlineSubscriptionTrackerAdapter) GetNodeOnlineSubscriptionCount(ctx context.Context, nodeID uint) (int, error) {
+	key := fmt.Sprintf("%s%d", nodeOnlineSubsKeyPrefix, nodeID)
+	staleThreshold := fmt.Sprintf("%f", float64(biztime.NowUTC().Unix())-nodeOnlineSubsStaleThreshold.Seconds())
+
+	// Remove stale entries first
+	a.redisClient.ZRemRangeByScore(ctx, key, "-inf", staleThreshold)
+
+	count, err := a.redisClient.ZCard(ctx, key).Result()
+	if err != nil {
+		a.logger.Errorw("failed to get node online subscription count",
+			"error", err,
+			"node_id", nodeID,
+		)
+		return 0, fmt.Errorf("failed to get node online subscription count: %w", err)
+	}
+
+	return int(count), nil
+}
+
+// GetNodeOnlineSubscriptionCounts returns online subscription counts for multiple nodes in batch.
+// Uses Redis pipeline for efficiency. Removes stale entries before counting.
+func (a *OnlineSubscriptionTrackerAdapter) GetNodeOnlineSubscriptionCounts(ctx context.Context, nodeIDs []uint) (map[uint]int, error) {
+	result := make(map[uint]int, len(nodeIDs))
+	if len(nodeIDs) == 0 {
+		return result, nil
+	}
+
+	staleThreshold := fmt.Sprintf("%f", float64(biztime.NowUTC().Unix())-nodeOnlineSubsStaleThreshold.Seconds())
+
+	// First pipeline: remove stale entries
+	cleanPipe := a.redisClient.Pipeline()
+	for _, nodeID := range nodeIDs {
+		key := fmt.Sprintf("%s%d", nodeOnlineSubsKeyPrefix, nodeID)
+		cleanPipe.ZRemRangeByScore(ctx, key, "-inf", staleThreshold)
+	}
+	_, _ = cleanPipe.Exec(ctx) // Best-effort cleanup
+
+	// Second pipeline: count entries
+	countPipe := a.redisClient.Pipeline()
+	cmds := make(map[uint]*redis.IntCmd, len(nodeIDs))
+	for _, nodeID := range nodeIDs {
+		key := fmt.Sprintf("%s%d", nodeOnlineSubsKeyPrefix, nodeID)
+		cmds[nodeID] = countPipe.ZCard(ctx, key)
+	}
+
+	_, err := countPipe.Exec(ctx)
+	if err != nil && err != redis.Nil {
+		a.logger.Errorw("failed to batch get node online subscription counts",
+			"error", err,
+			"node_count", len(nodeIDs),
+		)
+		return result, fmt.Errorf("failed to batch get node online subscription counts: %w", err)
+	}
+
+	for nodeID, cmd := range cmds {
+		count, err := cmd.Result()
+		if err != nil {
+			continue
+		}
+		result[nodeID] = int(count)
+	}
+
+	return result, nil
 }
 
 // NodeSystemStatusUpdaterAdapter adapts to NodeSystemStatusUpdater interface

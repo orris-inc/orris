@@ -62,7 +62,13 @@ type ListNodesUseCase struct {
 	userRepo          user.Repository
 	statusQuerier     MultipleNodeSystemStatusQuerier
 	versionQuerier    LatestVersionQuerier
+	onlineSubCounter  NodeOnlineSubscriptionCounter
 	logger            logger.Interface
+}
+
+// SetOnlineSubscriptionCounter injects an optional NodeOnlineSubscriptionCounter.
+func (uc *ListNodesUseCase) SetOnlineSubscriptionCounter(c NodeOnlineSubscriptionCounter) {
+	uc.onlineSubCounter = c
 }
 
 func NewListNodesUseCase(
@@ -244,6 +250,22 @@ func (uc *ListNodesUseCase) Execute(ctx context.Context, query ListNodesQuery) (
 					nodeDTOs[idx].AgentVersion = strings.TrimPrefix(status.AgentVersion, "v")
 					nodeDTOs[idx].Platform = status.Platform
 					nodeDTOs[idx].Arch = status.Arch
+				}
+			}
+		}
+	}
+
+	// Query online subscription counts for all nodes from Redis
+	if len(nodeIDs) > 0 && uc.onlineSubCounter != nil {
+		countMap, err := uc.onlineSubCounter.GetNodeOnlineSubscriptionCounts(ctx, nodeIDs)
+		if err != nil {
+			uc.logger.Warnw("failed to get node online subscription counts, continuing without it",
+				"error", err,
+			)
+		} else {
+			for nodeID, count := range countMap {
+				if idx, ok := idToIndexMap[nodeID]; ok {
+					nodeDTOs[idx].OnlineSubscriptionCount = count
 				}
 			}
 		}

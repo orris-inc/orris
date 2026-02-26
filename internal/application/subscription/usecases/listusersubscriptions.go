@@ -34,11 +34,12 @@ type ListUserSubscriptionsResult struct {
 }
 
 type ListUserSubscriptionsUseCase struct {
-	subscriptionRepo subscription.SubscriptionRepository
-	planRepo         subscription.PlanRepository
-	userRepo         user.Repository
-	logger           logger.Interface
-	baseURL          string
+	subscriptionRepo    subscription.SubscriptionRepository
+	planRepo            subscription.PlanRepository
+	userRepo            user.Repository
+	onlineDeviceCounter OnlineDeviceCounter // optional, nil-safe
+	logger              logger.Interface
+	baseURL             string
 }
 
 func NewListUserSubscriptionsUseCase(
@@ -47,13 +48,15 @@ func NewListUserSubscriptionsUseCase(
 	userRepo user.Repository,
 	logger logger.Interface,
 	baseURL string,
+	onlineDeviceCounter OnlineDeviceCounter,
 ) *ListUserSubscriptionsUseCase {
 	return &ListUserSubscriptionsUseCase{
-		subscriptionRepo: subscriptionRepo,
-		planRepo:         planRepo,
-		userRepo:         userRepo,
-		logger:           logger,
-		baseURL:          baseURL,
+		subscriptionRepo:    subscriptionRepo,
+		planRepo:            planRepo,
+		userRepo:            userRepo,
+		onlineDeviceCounter: onlineDeviceCounter,
+		logger:              logger,
+		baseURL:             baseURL,
 	}
 }
 
@@ -134,12 +137,40 @@ func (uc *ListUserSubscriptionsUseCase) Execute(ctx context.Context, query ListU
 		}
 	}
 
+	// Batch query online device counts
+	subIDs := make([]uint, 0, len(subscriptions))
+	for _, sub := range subscriptions {
+		subIDs = append(subIDs, sub.ID())
+	}
+	onlineCounts := make(map[uint]int)
+	if uc.onlineDeviceCounter != nil && len(subIDs) > 0 {
+		var err error
+		onlineCounts, err = uc.onlineDeviceCounter.GetOnlineDeviceCounts(ctx, subIDs)
+		if err != nil {
+			uc.logger.Warnw("failed to batch get online device counts", "error", err)
+			onlineCounts = make(map[uint]int)
+		}
+	}
+
 	// Build DTOs with embedded user and plan info
 	dtos := make([]*dto.SubscriptionDTO, 0, len(subscriptions))
 	for _, sub := range subscriptions {
 		plan := plans[sub.PlanID()]
 		subscriptionUser := users[sub.UserID()]
-		result := dto.ToSubscriptionDTO(sub, plan, subscriptionUser, uc.baseURL)
+
+		var opts []dto.SubscriptionDTOOption
+		// Set device limit from plan features
+		if plan != nil && plan.Features() != nil {
+			if deviceLimit, err := plan.Features().GetDeviceLimit(); err == nil {
+				opts = append(opts, dto.WithDeviceLimit(deviceLimit))
+			}
+		}
+		// Set online device count
+		if count, ok := onlineCounts[sub.ID()]; ok {
+			opts = append(opts, dto.WithOnlineDeviceCount(count))
+		}
+
+		result := dto.ToSubscriptionDTO(sub, plan, subscriptionUser, uc.baseURL, opts...)
 		dtos = append(dtos, result)
 	}
 

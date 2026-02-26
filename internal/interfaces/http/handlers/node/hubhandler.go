@@ -36,6 +36,9 @@ const (
 	// eventTypeTraffic is the event type for traffic updates from node agents.
 	eventTypeTraffic = "traffic"
 
+	// eventTypeOnlineSubscriptions is the event type for online subscription reports from node agents.
+	eventTypeOnlineSubscriptions = "online_subscriptions"
+
 	// maxTrafficPerReport is the maximum traffic bytes allowed per single report (1TB).
 	// Prevents integer overflow attacks.
 	maxNodeTrafficPerReport int64 = 1 << 40
@@ -136,6 +139,9 @@ type NodeHubHandler struct {
 
 	// quotaLoader loads quota from database when cache miss occurs (lazy loading)
 	quotaLoader NodeSubscriptionQuotaLoader
+
+	// reportOnlineSubscriptionsUC handles online subscription reports via WebSocket
+	reportOnlineSubscriptionsUC *usecases.ReportOnlineSubscriptionsUseCase
 }
 
 // NewNodeHubHandler creates a new NodeHubHandler.
@@ -188,6 +194,11 @@ func (h *NodeHubHandler) SetUsageReader(reader NodeSubscriptionUsageReader) {
 // SetQuotaLoader sets the quota loader for lazy loading when cache miss occurs (optional).
 func (h *NodeHubHandler) SetQuotaLoader(loader NodeSubscriptionQuotaLoader) {
 	h.quotaLoader = loader
+}
+
+// SetReportOnlineSubscriptionsUC sets the online subscriptions reporting use case (optional).
+func (h *NodeHubHandler) SetReportOnlineSubscriptionsUC(uc *usecases.ReportOnlineSubscriptionsUseCase) {
+	h.reportOnlineSubscriptionsUC = uc
 }
 
 // NodeAgentWS handles WebSocket connections from node agents.
@@ -448,6 +459,12 @@ func (h *NodeHubHandler) handleNodeEvent(nodeID uint, data any) {
 		return
 	}
 
+	// Handle online subscriptions event
+	if event.EventType == eventTypeOnlineSubscriptions {
+		h.handleOnlineSubscriptionsEvent(nodeID, event.Extra)
+		return
+	}
+
 	h.logger.Debugw("node agent event received",
 		"node_id", nodeID,
 		"event_type", event.EventType,
@@ -556,6 +573,65 @@ func (h *NodeHubHandler) handleTrafficEvent(nodeID uint, extra any) {
 		h.checkAndEnforceTrafficLimit(ctx, subID)
 	}
 
+}
+
+// onlineSubscriptionItem represents an online subscription connection from node agent.
+// Matches the JSON structure sent by orrisp via SendEvent.
+type onlineSubscriptionItem struct {
+	SubscriptionSID string `json:"subscription_id"`
+	IP              string `json:"ip"`
+}
+
+// handleOnlineSubscriptionsEvent processes online subscription reports from node agent.
+func (h *NodeHubHandler) handleOnlineSubscriptionsEvent(nodeID uint, extra any) {
+	if h.reportOnlineSubscriptionsUC == nil {
+		h.logger.Debugw("online subscriptions event ignored, use case not configured",
+			"node_id", nodeID,
+		)
+		return
+	}
+
+	// Parse online subscription data from Extra field
+	extraBytes, err := json.Marshal(extra)
+	if err != nil {
+		h.logger.Warnw("failed to marshal online subscriptions extra data",
+			"error", err,
+			"node_id", nodeID,
+		)
+		return
+	}
+
+	var items []onlineSubscriptionItem
+	if err := json.Unmarshal(extraBytes, &items); err != nil {
+		h.logger.Warnw("failed to parse online subscription items",
+			"error", err,
+			"node_id", nodeID,
+		)
+		return
+	}
+
+	// Convert to DTO format
+	dtoItems := make([]dto.OnlineSubscriptionItem, len(items))
+	for i, item := range items {
+		dtoItems[i] = dto.OnlineSubscriptionItem{
+			SubscriptionSID: item.SubscriptionSID,
+			IP:              item.IP,
+		}
+	}
+
+	// Execute use case
+	ctx := context.Background()
+	cmd := usecases.ReportOnlineSubscriptionsCommand{
+		NodeID:        nodeID,
+		Subscriptions: dtoItems,
+	}
+	if _, err := h.reportOnlineSubscriptionsUC.Execute(ctx, cmd); err != nil {
+		h.logger.Warnw("failed to process online subscriptions event",
+			"error", err,
+			"node_id", nodeID,
+			"count", len(items),
+		)
+	}
 }
 
 // checkAndEnforceTrafficLimit performs real-time traffic limit check using cached quota.

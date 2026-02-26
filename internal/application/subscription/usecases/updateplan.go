@@ -20,10 +20,21 @@ type UpdatePlanCommand struct {
 	Pricings    *[]dto.PricingOptionInput // Optional: update pricing options
 }
 
+// PlanChangeNotifier notifies nodes when plan features change
+type PlanChangeNotifier interface {
+	NotifyPlanFeaturesChanged(ctx context.Context, planID uint) error
+}
+
 type UpdatePlanUseCase struct {
-	planRepo    subscription.PlanRepository
-	pricingRepo subscription.PlanPricingRepository
-	logger      logger.Interface
+	planRepo           subscription.PlanRepository
+	pricingRepo        subscription.PlanPricingRepository
+	planChangeNotifier PlanChangeNotifier
+	logger             logger.Interface
+}
+
+// SetPlanChangeNotifier sets the notifier for plan feature changes.
+func (uc *UpdatePlanUseCase) SetPlanChangeNotifier(notifier PlanChangeNotifier) {
+	uc.planChangeNotifier = notifier
 }
 
 func NewUpdatePlanUseCase(
@@ -85,6 +96,17 @@ func (uc *UpdatePlanUseCase) Execute(
 	}
 
 	planID := plan.ID()
+
+	// Notify affected nodes when plan features (e.g. device_limit) change
+	if cmd.Limits != nil && uc.planChangeNotifier != nil {
+		if err := uc.planChangeNotifier.NotifyPlanFeaturesChanged(ctx, planID); err != nil {
+			uc.logger.Warnw("failed to notify nodes of plan features change",
+				"plan_id", planID,
+				"error", err,
+			)
+			// Don't fail the update operation
+		}
+	}
 
 	// Sync pricing options if provided (delete old, create new)
 	if cmd.Pricings != nil {

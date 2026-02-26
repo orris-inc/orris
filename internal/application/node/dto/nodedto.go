@@ -82,7 +82,8 @@ type NodeDTO struct {
 	AnyTLSIdleSessionTimeout       string `json:"anytls_idle_session_timeout,omitempty" description:"AnyTLS idle session timeout"`
 	AnyTLSMinIdleSession           int    `json:"anytls_min_idle_session,omitempty" description:"AnyTLS minimum idle sessions"`
 
-	IsOnline bool `json:"is_online" example:"true" description:"Indicates if the node agent is online (reported within 5 minutes)"`
+	IsOnline                bool `json:"is_online" example:"true" description:"Indicates if the node agent is online (reported within 5 minutes)"`
+	OnlineSubscriptionCount int  `json:"online_subscription_count" description:"Number of online subscriptions on this node"`
 	LastSeenAt            *time.Time `json:"last_seen_at,omitempty" example:"2024-01-15T14:20:00Z" description:"Last time the node agent reported status"`
 	ExpiresAt             *string    `json:"expires_at,omitempty" example:"2025-12-31T23:59:59Z" description:"Expiration time in ISO8601 format (null = never expires)"`
 	CostLabel             string     `json:"cost_label,omitempty" example:"35$/m" description:"Cost label for display (e.g., '35$/m', '35¥/y')"`

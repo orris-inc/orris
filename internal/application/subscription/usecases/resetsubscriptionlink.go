@@ -15,11 +15,12 @@ type ResetSubscriptionLinkCommand struct {
 }
 
 type ResetSubscriptionLinkUseCase struct {
-	subscriptionRepo subscription.SubscriptionRepository
-	planRepo         subscription.PlanRepository
-	userRepo         user.Repository
-	logger           logger.Interface
-	baseURL          string
+	subscriptionRepo    subscription.SubscriptionRepository
+	planRepo            subscription.PlanRepository
+	userRepo            user.Repository
+	onlineDeviceCounter OnlineDeviceCounter // optional, nil-safe
+	logger              logger.Interface
+	baseURL             string
 }
 
 func NewResetSubscriptionLinkUseCase(
@@ -28,13 +29,15 @@ func NewResetSubscriptionLinkUseCase(
 	userRepo user.Repository,
 	logger logger.Interface,
 	baseURL string,
+	onlineDeviceCounter OnlineDeviceCounter,
 ) *ResetSubscriptionLinkUseCase {
 	return &ResetSubscriptionLinkUseCase{
-		subscriptionRepo: subscriptionRepo,
-		planRepo:         planRepo,
-		userRepo:         userRepo,
-		logger:           logger,
-		baseURL:          baseURL,
+		subscriptionRepo:    subscriptionRepo,
+		planRepo:            planRepo,
+		userRepo:            userRepo,
+		onlineDeviceCounter: onlineDeviceCounter,
+		logger:              logger,
+		baseURL:             baseURL,
 	}
 }
 
@@ -74,7 +77,23 @@ func (uc *ResetSubscriptionLinkUseCase) Execute(ctx context.Context, cmd ResetSu
 		}
 	}
 
-	result := dto.ToSubscriptionDTO(sub, plan, subscriptionUser, uc.baseURL)
+	// Build DTO options for online device count and device limit
+	var opts []dto.SubscriptionDTOOption
+	if plan != nil && plan.Features() != nil {
+		if deviceLimit, dlErr := plan.Features().GetDeviceLimit(); dlErr == nil {
+			opts = append(opts, dto.WithDeviceLimit(deviceLimit))
+		}
+	}
+	if uc.onlineDeviceCounter != nil {
+		count, dcErr := uc.onlineDeviceCounter.GetOnlineDeviceCount(ctx, sub.ID())
+		if dcErr != nil {
+			uc.logger.Warnw("failed to get online device count", "error", dcErr, "subscription_id", sub.ID())
+		} else {
+			opts = append(opts, dto.WithOnlineDeviceCount(count))
+		}
+	}
+
+	result := dto.ToSubscriptionDTO(sub, plan, subscriptionUser, uc.baseURL, opts...)
 
 	uc.logger.Infow("subscription link reset successfully",
 		"subscription_id", cmd.SubscriptionID,

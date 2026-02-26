@@ -33,6 +33,8 @@ type SubscriptionDTO struct {
 	CurrentPeriodEnd   time.Time            `json:"current_period_end"`
 	IsExpired          bool                 `json:"is_expired"`
 	IsActive           bool                 `json:"is_active"`
+	OnlineDeviceCount  int                  `json:"online_device_count"`           // Current online device count
+	DeviceLimit        int                  `json:"device_limit"`                  // Max concurrent devices (0=unlimited)
 	CancelledAt        *time.Time           `json:"cancelled_at,omitempty"`
 	CancelReason       *string              `json:"cancel_reason,omitempty"`
 	CreatedAt          time.Time            `json:"created_at"`
@@ -86,6 +88,9 @@ type SubscriptionTokenDTO struct {
 }
 
 var (
+	// SubscriptionMapper is a generic mapper for basic conversions.
+	// WARNING: Does not populate OnlineDeviceCount or DeviceLimit.
+	// For API responses, use ToSubscriptionDTO with SubscriptionDTOOption instead.
 	SubscriptionMapper = mapper.New(
 		func(sub *subscription.Subscription) *SubscriptionDTO {
 			return toSubscriptionDTOInternal(sub, nil, nil, "")
@@ -126,11 +131,28 @@ func ToSubscriptionUserDTO(u *user.User) *SubscriptionUserDTO {
 // ToSubscriptionDTO converts a domain subscription to DTO with subscribe URL.
 // baseURL is used to construct the full subscribe URL (e.g., "https://api.example.com").
 // u is the subscription owner, can be nil if user info is not available.
-func ToSubscriptionDTO(sub *subscription.Subscription, plan *subscription.Plan, u *user.User, baseURL string) *SubscriptionDTO {
-	return toSubscriptionDTOInternal(sub, plan, u, baseURL)
+func ToSubscriptionDTO(sub *subscription.Subscription, plan *subscription.Plan, u *user.User, baseURL string, opts ...SubscriptionDTOOption) *SubscriptionDTO {
+	return toSubscriptionDTOInternal(sub, plan, u, baseURL, opts...)
 }
 
-func toSubscriptionDTOInternal(sub *subscription.Subscription, plan *subscription.Plan, u *user.User, baseURL string) *SubscriptionDTO {
+// SubscriptionDTOOption configures optional fields on SubscriptionDTO.
+type SubscriptionDTOOption func(*SubscriptionDTO)
+
+// WithOnlineDeviceCount sets the online device count on the DTO.
+func WithOnlineDeviceCount(count int) SubscriptionDTOOption {
+	return func(d *SubscriptionDTO) {
+		d.OnlineDeviceCount = count
+	}
+}
+
+// WithDeviceLimit sets the device limit on the DTO.
+func WithDeviceLimit(limit int) SubscriptionDTOOption {
+	return func(d *SubscriptionDTO) {
+		d.DeviceLimit = limit
+	}
+}
+
+func toSubscriptionDTOInternal(sub *subscription.Subscription, plan *subscription.Plan, u *user.User, baseURL string, opts ...SubscriptionDTOOption) *SubscriptionDTO {
 	if sub == nil {
 		return nil
 	}
@@ -181,6 +203,10 @@ func toSubscriptionDTOInternal(sub *subscription.Subscription, plan *subscriptio
 
 	if plan != nil {
 		dto.Plan = ToPlanDTO(plan)
+	}
+
+	for _, opt := range opts {
+		opt(dto)
 	}
 
 	return dto

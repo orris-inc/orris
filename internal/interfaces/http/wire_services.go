@@ -165,11 +165,16 @@ func (c *Container) initSubscription() {
 		repos.planPricingRepo, repos.userRepo, tokenGenerator, txMgr, log,
 	)
 	ucs.activateSubscriptionUC = subscriptionUsecases.NewActivateSubscriptionUseCase(repos.subscriptionRepo, log)
+	// Create online subscription tracker adapter (also implements OnlineDeviceCounter)
+	c.onlineSubscriptionTracker = adapters.NewOnlineSubscriptionTrackerAdapter(c.redis, log)
+
 	ucs.getSubscriptionUC = subscriptionUsecases.NewGetSubscriptionUseCase(
 		repos.subscriptionRepo, repos.subscriptionPlanRepo, repos.userRepo, log, subscriptionBaseURL,
+		c.onlineSubscriptionTracker,
 	)
 	ucs.listUserSubscriptionsUC = subscriptionUsecases.NewListUserSubscriptionsUseCase(
 		repos.subscriptionRepo, repos.subscriptionPlanRepo, repos.userRepo, log, subscriptionBaseURL,
+		c.onlineSubscriptionTracker,
 	)
 	ucs.cancelSubscriptionUC = subscriptionUsecases.NewCancelSubscriptionUseCase(repos.subscriptionRepo, repos.subscriptionTokenRepo, log)
 	ucs.suspendSubscriptionUC = subscriptionUsecases.NewSuspendSubscriptionUseCase(repos.subscriptionRepo, log)
@@ -184,6 +189,7 @@ func (c *Container) initSubscription() {
 	)
 	ucs.resetSubscriptionLinkUC = subscriptionUsecases.NewResetSubscriptionLinkUseCase(
 		repos.subscriptionRepo, repos.subscriptionPlanRepo, repos.userRepo, log, subscriptionBaseURL,
+		c.onlineSubscriptionTracker,
 	)
 	ucs.aggregateUsageUC = subscriptionUsecases.NewAggregateUsageUseCase(
 		repos.subscriptionUsageRepo, repos.subscriptionUsageStatsRepo, c.hourlyTrafficCache, log,
@@ -303,9 +309,11 @@ func (c *Container) initNode() {
 	// Initialize node use cases
 	ucs.createNodeUC = nodeUsecases.NewCreateNodeUseCase(repos.nodeRepoImpl, repos.resourceGroupRepo, log)
 	ucs.getNodeUC = nodeUsecases.NewGetNodeUseCase(repos.nodeRepoImpl, repos.resourceGroupRepo, c.nodeStatusQuerier, log)
+	ucs.getNodeUC.SetOnlineSubscriptionCounter(c.onlineSubscriptionTracker)
 	ucs.updateNodeUC = nodeUsecases.NewUpdateNodeUseCase(log, repos.nodeRepoImpl, repos.resourceGroupRepo)
 	ucs.deleteNodeUC = nodeUsecases.NewDeleteNodeUseCase(repos.nodeRepoImpl, repos.forwardRuleRepo, log)
 	ucs.listNodesUC = nodeUsecases.NewListNodesUseCase(repos.nodeRepoImpl, repos.resourceGroupRepo, repos.userRepo, c.nodeStatusQuerier, c.nodeAgentReleaseService, log)
+	ucs.listNodesUC.SetOnlineSubscriptionCounter(c.onlineSubscriptionTracker)
 	ucs.generateNodeTokenUC = nodeUsecases.NewGenerateNodeTokenUseCase(repos.nodeRepoImpl, log)
 	ucs.generateNodeInstallScriptUC = nodeUsecases.NewGenerateNodeInstallScriptUseCase(repos.nodeRepoImpl, log)
 	ucs.generateBatchInstallScriptUC = nodeUsecases.NewGenerateBatchInstallScriptUseCase(repos.nodeRepoImpl, log)
@@ -664,7 +672,7 @@ func (c *Container) initForward() {
 
 	// Agent API handler use cases
 	ucs.getNodeConfigUC = nodeUsecases.NewGetNodeConfigUseCase(repos.nodeRepoImpl, log)
-	ucs.getNodeSubscriptionsUC = nodeUsecases.NewGetNodeSubscriptionsUseCase(repos.subscriptionRepo, repos.nodeRepoImpl, log)
+	ucs.getNodeSubscriptionsUC = nodeUsecases.NewGetNodeSubscriptionsUseCase(repos.subscriptionRepo, repos.nodeRepoImpl, repos.subscriptionPlanRepo, log)
 
 	// Initialize subscription traffic cache and buffer for RESTful agent traffic reporting
 	c.subscriptionTrafficCache = cache.NewRedisSubscriptionTrafficCache(
@@ -699,7 +707,7 @@ func (c *Container) initForward() {
 	// Initialize agent report use cases with adapters
 	subscriptionUsageRecorder := adapters.NewSubscriptionUsageRecorderAdapter(c.subscriptionTrafficBuffer, log)
 	c.systemStatusUpdater = adapters.NewNodeSystemStatusUpdaterAdapter(c.redis, log)
-	onlineSubscriptionTracker := adapters.NewOnlineSubscriptionTrackerAdapter(log)
+	onlineSubscriptionTracker := c.onlineSubscriptionTracker
 	c.subscriptionIDResolver = adapters.NewSubscriptionIDResolverAdapter(repos.subscriptionRepo, log)
 	ucs.reportSubscriptionUsageUC = nodeUsecases.NewReportSubscriptionUsageUseCase(subscriptionUsageRecorder, c.subscriptionIDResolver, log)
 	ucs.reportNodeStatusUC = nodeUsecases.NewReportNodeStatusUseCase(c.systemStatusUpdater, repos.nodeRepoImpl, repos.nodeRepoImpl, log)
@@ -764,6 +772,7 @@ func (c *Container) initForward() {
 	ucs.getAdminNodeTrafficStatsUC = adminUsecases.NewGetAdminNodeTrafficStatsUseCase(
 		repos.subscriptionUsageStatsRepo, c.hourlyTrafficCache, repos.nodeRepoImpl, log,
 	)
+	ucs.getAdminNodeTrafficStatsUC.SetOnlineSubscriptionCounter(c.onlineSubscriptionTracker)
 	ucs.getTrafficRankingUC = adminUsecases.NewGetTrafficRankingUseCase(
 		repos.subscriptionUsageStatsRepo, c.hourlyTrafficCache, repos.subscriptionRepo, repos.userRepo, log,
 	)
@@ -781,6 +790,7 @@ func (c *Container) initForward() {
 		repos.userRepo, repos.subscriptionRepo, repos.nodeRepoImpl,
 		repos.forwardRuleRepo, repos.forwardAgentRepo, c.hourlyTrafficCache, log,
 	)
+	ucs.getAdminDashboardUC.SetOnlineSubscriptionCounter(c.onlineSubscriptionTracker)
 	hdlrs.adminDashboardHandler = adminHandlers.NewAdminDashboardHandler(ucs.getAdminDashboardUC, log)
 
 	// Initialize forward agent components
@@ -1035,7 +1045,7 @@ func (c *Container) initForward() {
 	c.nodeConfigSyncService = nodeServices.NewNodeConfigSyncService(repos.nodeRepoImpl, c.agentHub, log)
 
 	// Initialize subscription sync service
-	c.subscriptionSyncService = nodeServices.NewSubscriptionSyncService(repos.nodeRepoImpl, repos.subscriptionRepo, repos.resourceGroupRepo, c.agentHub, log)
+	c.subscriptionSyncService = nodeServices.NewSubscriptionSyncService(repos.nodeRepoImpl, repos.subscriptionRepo, repos.subscriptionPlanRepo, repos.resourceGroupRepo, c.agentHub, log)
 
 	// Initialize Redis Pub/Sub event bus
 	subscriptionEventBus := pubsub.NewRedisSubscriptionEventBus(c.redis, log)
@@ -1324,6 +1334,9 @@ func (c *Container) initCallbacksAndNotifiers() {
 	ucs.resetSubscriptionUsageUC.SetSubscriptionNotifier(c.subscriptionSyncService)
 	ucs.resetSubscriptionUsageUC.SetQuotaCacheManager(c.quotaCacheSyncService)
 	ucs.renewSubscriptionUC.SetSubscriptionNotifier(c.subscriptionSyncService)
+
+	// Set plan change notifier to propagate plan feature changes (e.g. device_limit) to nodes
+	ucs.updatePlanUC.SetPlanChangeNotifier(c.subscriptionSyncService)
 }
 
 // ============================================================
@@ -1383,6 +1396,7 @@ func (c *Container) initRemainingHandlers() {
 	hdlrs.nodeHubHandler.SetQuotaCache(c.nodeQuotaCacheAdapter)
 	hdlrs.nodeHubHandler.SetQuotaLoader(c.nodeQuotaLoaderAdapter)
 	hdlrs.nodeHubHandler.SetUsageReader(c.nodeUsageReaderAdapter)
+	hdlrs.nodeHubHandler.SetReportOnlineSubscriptionsUC(ucs.reportOnlineSubscriptionsUC)
 
 	// Initialize node SSE handler
 	hdlrs.nodeSSEHandler = nodeHandlers.NewNodeSSEHandler(c.adminHub, log)

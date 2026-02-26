@@ -79,12 +79,13 @@ type SubscriptionTrafficStatsResponse struct {
 
 // NodeTrafficStatsItem represents traffic statistics for a single node
 type NodeTrafficStatsItem struct {
-	NodeSID  string `json:"node_id"`
-	NodeName string `json:"node_name"`
-	Status   string `json:"status"`
-	Upload   uint64 `json:"upload"`
-	Download uint64 `json:"download"`
-	Total    uint64 `json:"total"`
+	NodeSID                 string `json:"node_id"`
+	NodeName                string `json:"node_name"`
+	Status                  string `json:"status"`
+	Upload                  uint64 `json:"upload"`
+	Download                uint64 `json:"download"`
+	Total                   uint64 `json:"total"`
+	OnlineSubscriptionCount int    `json:"online_subscription_count"`
 }
 
 // NodeTrafficStatsResponse represents paginated node traffic statistics

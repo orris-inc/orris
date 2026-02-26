@@ -27,9 +27,10 @@ type DashboardSubscriptionsSection struct {
 
 // DashboardNodesSection holds node-related dashboard metrics.
 type DashboardNodesSection struct {
-	Total  int64 `json:"total"`
-	Online int64 `json:"online"`
-	Offline int64 `json:"offline"`
+	Total                   int64 `json:"total"`
+	Online                  int64 `json:"online"`
+	Offline                 int64 `json:"offline"`
+	TotalOnlineSubscriptions int64 `json:"total_online_subscriptions"`
 }
 
 // DashboardForwardSection holds forward-related dashboard metrics.

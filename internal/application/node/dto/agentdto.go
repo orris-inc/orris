@@ -290,7 +290,7 @@ type OnlineSubscriptionItem struct {
 
 // ReportOnlineSubscriptionsRequest represents online subscriptions report request
 type ReportOnlineSubscriptionsRequest struct {
-	Subscriptions []OnlineSubscriptionItem `json:"subscriptions" binding:"required,dive"` // Array of currently online subscriptions
+	Subscriptions []OnlineSubscriptionItem `json:"subscriptions" binding:"required,max=10000,dive"` // Array of currently online subscriptions (max 10000)
 }
 
 // ToNodeConfigResponse converts a domain node entity to agent node config response.
@@ -848,10 +848,11 @@ func ToOutboundDTOs(nodes []*node.Node, serverKeyFunc func(n *node.Node) string)
 	return dtos
 }
 
-// ToNodeSubscriptionsResponse converts subscription list to agent subscriptions response
-// The hmacSecret is used to generate HMAC-signed passwords from subscription UUIDs
-// The encryptionMethod parameter determines the password encoding format (hex for traditional SS, base64 for SS2022)
-func ToNodeSubscriptionsResponse(subscriptions []*subscription.Subscription, hmacSecret string, encryptionMethod string) *NodeSubscriptionsResponse {
+// ToNodeSubscriptionsResponse converts subscription list to agent subscriptions response.
+// The hmacSecret is used to generate HMAC-signed passwords from subscription UUIDs.
+// The encryptionMethod parameter determines the password encoding format (hex for traditional SS, base64 for SS2022).
+// planDeviceLimits maps planID -> device limit count (0 = unlimited). Can be nil to use 0 for all.
+func ToNodeSubscriptionsResponse(subscriptions []*subscription.Subscription, hmacSecret string, encryptionMethod string, planDeviceLimits map[uint]int) *NodeSubscriptionsResponse {
 	if subscriptions == nil {
 		return &NodeSubscriptionsResponse{
 			Subscriptions: []NodeSubscriptionInfo{},
@@ -869,12 +870,20 @@ func ToNodeSubscriptionsResponse(subscriptions []*subscription.Subscription, hma
 			continue
 		}
 
+		// Look up device limit from plan
+		deviceLimit := 0
+		if planDeviceLimits != nil {
+			if limit, ok := planDeviceLimits[sub.PlanID()]; ok {
+				deviceLimit = limit
+			}
+		}
+
 		subscriptionInfo := NodeSubscriptionInfo{
 			SubscriptionSID: sub.SID(), // Using subscription SID for traffic tracking
 			Password:        generatePasswordForEncryptionMethod(sub, hmacSecret, encryptionMethod),
 			Name:            generateSubscriptionName(sub),
 			SpeedLimit:      0, // 0 = unlimited, can be set from subscription plan limits
-			DeviceLimit:     0, // 0 = unlimited, can be set from subscription plan limits
+			DeviceLimit:     deviceLimit,
 			ExpireTime:      sub.EndDate().Unix(),
 		}
 
@@ -887,6 +896,21 @@ func ToNodeSubscriptionsResponse(subscriptions []*subscription.Subscription, hma
 }
 
 // Helper functions
+
+// BuildPlanDeviceLimits extracts device limits from plans into a map of planID -> limit count.
+// Plans with no features or limit <= 0 are omitted (defaulting to 0 = unlimited).
+func BuildPlanDeviceLimits(plans []*subscription.Plan) map[uint]int {
+	result := make(map[uint]int, len(plans))
+	for _, plan := range plans {
+		if plan.Features() != nil {
+			limit, err := plan.Features().GetDeviceLimit()
+			if err == nil && limit > 0 {
+				result[plan.ID()] = limit
+			}
+		}
+	}
+	return result
+}
 
 // generateSubscriptionName generates name identifier for subscription (sing-box compatible)
 // Format: user{userId}-sub{subscriptionId}

@@ -7,6 +7,7 @@ import (
 
 	dto "github.com/orris-inc/orris/internal/application/admin/dto"
 	"github.com/orris-inc/orris/internal/application/admin/usecases/trafficstatsutil"
+	nodeUsecases "github.com/orris-inc/orris/internal/application/node/usecases"
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/infrastructure/cache"
@@ -35,7 +36,13 @@ type GetAdminNodeTrafficStatsUseCase struct {
 	usageStatsRepo     subscription.SubscriptionUsageStatsRepository
 	hourlyTrafficCache cache.HourlyTrafficCache
 	nodeRepo           node.NodeRepository
+	onlineSubCounter   nodeUsecases.NodeOnlineSubscriptionCounter
 	logger             logger.Interface
+}
+
+// SetOnlineSubscriptionCounter injects an optional NodeOnlineSubscriptionCounter.
+func (uc *GetAdminNodeTrafficStatsUseCase) SetOnlineSubscriptionCounter(c nodeUsecases.NodeOnlineSubscriptionCounter) {
+	uc.onlineSubCounter = c
 }
 
 // NewGetAdminNodeTrafficStatsUseCase creates a new GetAdminNodeTrafficStatsUseCase
@@ -210,6 +217,29 @@ func (uc *GetAdminNodeTrafficStatsUseCase) Execute(
 			Download: usage.Download,
 			Total:    usage.Total,
 		})
+	}
+
+	// Batch query online subscription counts for paged nodes
+	if len(nodeIDs) > 0 && uc.onlineSubCounter != nil {
+		countMap, err := uc.onlineSubCounter.GetNodeOnlineSubscriptionCounts(ctx, nodeIDs)
+		if err != nil {
+			uc.logger.Warnw("failed to get node online subscription counts, continuing without it",
+				"error", err,
+			)
+		} else {
+			// Build nodeID -> items index map
+			sidToIndex := make(map[string]int, len(items))
+			for i, item := range items {
+				sidToIndex[item.NodeSID] = i
+			}
+			for nodeID, count := range countMap {
+				if n, ok := nodesMap[nodeID]; ok {
+					if idx, ok := sidToIndex[n.SID()]; ok {
+						items[idx].OnlineSubscriptionCount = count
+					}
+				}
+			}
+		}
 	}
 
 	response := &dto.NodeTrafficStatsResponse{

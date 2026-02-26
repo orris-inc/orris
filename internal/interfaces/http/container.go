@@ -120,6 +120,7 @@ type Container struct {
 	nodeQuotaCacheAdapter          *adapters.NodeSubscriptionQuotaCacheAdapter
 	nodeQuotaLoaderAdapter         *adapters.NodeSubscriptionQuotaLoaderAdapter
 	nodeUsageReaderAdapter         *adapters.NodeSubscriptionUsageReaderAdapter
+	onlineSubscriptionTracker      *adapters.OnlineSubscriptionTrackerAdapter
 
 	// User service (passed from outside)
 	userService *user.ServiceDDD

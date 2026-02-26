@@ -25,6 +25,7 @@ type GetNodeSubscriptionsResult struct {
 // GetNodeSubscriptionsUseCase handles fetching subscription list for node agents
 type GetNodeSubscriptionsUseCase struct {
 	subscriptionRepo subscription.SubscriptionRepository
+	planRepo         subscription.PlanRepository
 	nodeRepo         node.NodeRepository
 	logger           logger.Interface
 }
@@ -33,10 +34,12 @@ type GetNodeSubscriptionsUseCase struct {
 func NewGetNodeSubscriptionsUseCase(
 	subscriptionRepo subscription.SubscriptionRepository,
 	nodeRepo node.NodeRepository,
+	planRepo subscription.PlanRepository,
 	logger logger.Interface,
 ) *GetNodeSubscriptionsUseCase {
 	return &GetNodeSubscriptionsUseCase{
 		subscriptionRepo: subscriptionRepo,
+		planRepo:         planRepo,
 		nodeRepo:         nodeRepo,
 		logger:           logger,
 	}
@@ -74,11 +77,14 @@ func (uc *GetNodeSubscriptionsUseCase) Execute(ctx context.Context, cmd GetNodeS
 		return nil, fmt.Errorf("failed to retrieve subscriptions for node")
 	}
 
+	// Collect unique plan IDs and batch load device limits
+	planDeviceLimits := uc.loadPlanDeviceLimits(ctx, subscriptions)
+
 	// Get HMAC secret from config for password generation
 	hmacSecret := config.Get().Auth.JWT.Secret
 
 	// Convert subscriptions to agent subscriptions response
-	subscriptionInfos := dto.ToNodeSubscriptionsResponse(subscriptions, hmacSecret, encryptionMethod)
+	subscriptionInfos := dto.ToNodeSubscriptionsResponse(subscriptions, hmacSecret, encryptionMethod, planDeviceLimits)
 
 	// Add a special node-to-node forwarding user
 	// This allows other nodes to forward traffic to this node using a derived password
@@ -111,4 +117,36 @@ func (uc *GetNodeSubscriptionsUseCase) Execute(ctx context.Context, cmd GetNodeS
 	return &GetNodeSubscriptionsResult{
 		Subscriptions: subscriptionInfos,
 	}, nil
+}
+
+// loadPlanDeviceLimits collects unique plan IDs from subscriptions, batch loads plans,
+// and returns a map of planID -> device limit count.
+func (uc *GetNodeSubscriptionsUseCase) loadPlanDeviceLimits(ctx context.Context, subscriptions []*subscription.Subscription) map[uint]int {
+	if uc.planRepo == nil {
+		return nil
+	}
+
+	// Collect unique plan IDs
+	planIDSet := make(map[uint]struct{})
+	for _, sub := range subscriptions {
+		if sub != nil && sub.IsActive() {
+			planIDSet[sub.PlanID()] = struct{}{}
+		}
+	}
+	if len(planIDSet) == 0 {
+		return nil
+	}
+
+	planIDs := make([]uint, 0, len(planIDSet))
+	for id := range planIDSet {
+		planIDs = append(planIDs, id)
+	}
+
+	plans, err := uc.planRepo.GetByIDs(ctx, planIDs)
+	if err != nil {
+		uc.logger.Errorw("failed to load plans for device limits, all limits will be disabled", "error", err, "plan_ids", planIDs)
+		return nil
+	}
+
+	return dto.BuildPlanDeviceLimits(plans)
 }

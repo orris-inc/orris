@@ -27,6 +27,7 @@ type CreateSubscriptionCommand struct {
 
 type CreateSubscriptionResult struct {
 	Subscription *subscription.Subscription
+	Plan         *subscription.Plan             // Plan used for this subscription (for DTO device_limit)
 	Token        *subscription.SubscriptionToken
 	PlainToken   string // Plain token value, only available at creation time
 }
@@ -233,6 +234,7 @@ func (uc *CreateSubscriptionUseCase) Execute(ctx context.Context, cmd CreateSubs
 
 	return &CreateSubscriptionResult{
 		Subscription: sub,
+		Plan:         plan,
 		Token:        token,
 		PlainToken:   plainToken,
 	}, nil

@@ -156,7 +156,14 @@ func (h *Handler) Create(c *gin.Context) {
 	}
 
 	// Convert domain entities to DTOs for proper JSON serialization
-	subscriptionDTO := subdto.ToSubscriptionDTO(result.Subscription, nil, nil, "")
+	// Newly created subscription has 0 online devices; set device_limit from plan
+	opts := []subdto.SubscriptionDTOOption{subdto.WithOnlineDeviceCount(0)}
+	if result.Plan != nil && result.Plan.Features() != nil {
+		if deviceLimit, err := result.Plan.Features().GetDeviceLimit(); err == nil {
+			opts = append(opts, subdto.WithDeviceLimit(deviceLimit))
+		}
+	}
+	subscriptionDTO := subdto.ToSubscriptionDTO(result.Subscription, nil, nil, "", opts...)
 	tokenDTO := subdto.ToSubscriptionTokenDTOWithPlainToken(result.Token, result.Subscription.SID(), result.PlainToken)
 
 	utils.CreatedResponse(c, CreateSubscriptionResponse{

@@ -163,8 +163,10 @@ func TestSubscriptionHandler_CreateSubscription_Success(t *testing.T) {
 		vo.TokenScopeReadOnly,
 		&expiresAt,
 	)
+	plan, _ := subscription.NewPlan("Basic Plan", "basic", "A basic plan", vo.PlanTypeNode)
 	mockResult := &usecases.CreateSubscriptionResult{
 		Subscription: sub,
+		Plan:         plan,
 		Token:        token,
 		PlainToken:   "plain_token_value",
 	}

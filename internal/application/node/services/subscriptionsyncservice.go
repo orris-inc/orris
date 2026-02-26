@@ -21,6 +21,7 @@ import (
 type SubscriptionSyncService struct {
 	nodeRepo          node.NodeRepository
 	subscriptionRepo  subscription.SubscriptionRepository
+	planRepo          subscription.PlanRepository
 	resourceGroupRepo resource.Repository
 	hub               NodeSyncHub
 	eventPublisher    pubsub.SubscriptionEventPublisher
@@ -31,6 +32,7 @@ type SubscriptionSyncService struct {
 func NewSubscriptionSyncService(
 	nodeRepo node.NodeRepository,
 	subscriptionRepo subscription.SubscriptionRepository,
+	planRepo subscription.PlanRepository,
 	resourceGroupRepo resource.Repository,
 	hub NodeSyncHub,
 	log logger.Interface,
@@ -38,6 +40,7 @@ func NewSubscriptionSyncService(
 	return &SubscriptionSyncService{
 		nodeRepo:          nodeRepo,
 		subscriptionRepo:  subscriptionRepo,
+		planRepo:          planRepo,
 		resourceGroupRepo: resourceGroupRepo,
 		hub:               hub,
 		logger:            log,
@@ -48,6 +51,92 @@ func NewSubscriptionSyncService(
 // This should be called after creating the service to enable Redis Pub/Sub.
 func (s *SubscriptionSyncService) SetEventPublisher(publisher pubsub.SubscriptionEventPublisher) {
 	s.eventPublisher = publisher
+}
+
+// NotifyPlanFeaturesChanged handles plan features changes by re-syncing subscriptions
+// to all affected nodes. This ensures device limits and other plan-derived settings
+// are propagated to node agents.
+func (s *SubscriptionSyncService) NotifyPlanFeaturesChanged(ctx context.Context, planID uint) error {
+	s.logger.Infow("notifying nodes of plan features change", "plan_id", planID)
+
+	// Get resource groups for this plan
+	groups, err := s.resourceGroupRepo.GetByPlanID(ctx, planID)
+	if err != nil {
+		s.logger.Errorw("failed to get resource groups for plan features change",
+			"plan_id", planID,
+			"error", err,
+		)
+		return err
+	}
+
+	if len(groups) == 0 {
+		s.logger.Debugw("no resource groups found for plan, skipping plan features notification",
+			"plan_id", planID,
+		)
+		return nil
+	}
+
+	// Collect active group IDs
+	groupIDs := make([]uint, 0, len(groups))
+	for _, g := range groups {
+		if g.IsActive() {
+			groupIDs = append(groupIDs, g.ID())
+		}
+	}
+
+	if len(groupIDs) == 0 {
+		s.logger.Debugw("no active resource groups found for plan features change",
+			"plan_id", planID,
+		)
+		return nil
+	}
+
+	// Get nodes in those resource groups
+	nodes, _, err := s.nodeRepo.List(ctx, node.NodeFilter{
+		GroupIDs: groupIDs,
+	})
+	if err != nil {
+		s.logger.Errorw("failed to get nodes for plan features change",
+			"group_ids", groupIDs,
+			"error", err,
+		)
+		return err
+	}
+
+	if len(nodes) == 0 {
+		s.logger.Debugw("no nodes found for plan features change",
+			"group_ids", groupIDs,
+		)
+		return nil
+	}
+
+	// Re-sync subscriptions on each online node to propagate updated plan features
+	syncedCount := 0
+	for _, n := range nodes {
+		if !s.hub.IsNodeOnline(n.ID()) {
+			continue
+		}
+
+		if err := s.SyncSubscriptionsOnNodeConnect(ctx, n.ID()); err != nil {
+			s.logger.Warnw("failed to re-sync subscriptions for plan features change",
+				"node_id", n.ID(),
+				"node_sid", n.SID(),
+				"plan_id", planID,
+				"error", err,
+			)
+			continue
+		}
+
+		syncedCount++
+	}
+
+	s.logger.Infow("plan features change notification completed",
+		"plan_id", planID,
+		"total_nodes", len(nodes),
+		"synced_nodes", syncedCount,
+	)
+
+	return nil
 }
 
 // NotifySubscriptionChange notifies relevant nodes about subscription changes.
@@ -122,6 +211,22 @@ func (s *SubscriptionSyncService) NotifySubscriptionChange(
 	// Get HMAC secret from config for password generation
 	hmacSecret := config.Get().Auth.JWT.Secret
 
+	// Look up device limit from plan
+	deviceLimit := 0
+	if s.planRepo != nil {
+		plan, err := s.planRepo.GetByID(ctx, sub.PlanID())
+		if err != nil {
+			s.logger.Errorw("failed to get plan for device limit, limit will be disabled",
+				"plan_id", sub.PlanID(),
+				"error", err,
+			)
+		} else if plan != nil && plan.Features() != nil {
+			if limit, err := plan.Features().GetDeviceLimit(); err == nil {
+				deviceLimit = limit
+			}
+		}
+	}
+
 	// Notify each online node
 	notifiedCount := 0
 	for _, n := range nodes {
@@ -136,7 +241,7 @@ func (s *SubscriptionSyncService) NotifySubscriptionChange(
 		}
 
 		// Build subscription info for this node
-		subscriptionInfo := s.buildSubscriptionInfo(sub, hmacSecret, encryptionMethod)
+		subscriptionInfo := s.buildSubscriptionInfo(sub, hmacSecret, encryptionMethod, deviceLimit)
 
 		if err := s.sendSubscriptionSync(n, changeType, []dto.NodeSubscriptionInfo{subscriptionInfo}); err != nil {
 			s.logger.Warnw("failed to send subscription sync to node",
@@ -244,6 +349,7 @@ func (s *SubscriptionSyncService) buildSubscriptionInfo(
 	sub *subscription.Subscription,
 	hmacSecret string,
 	encryptionMethod string,
+	deviceLimit int,
 ) dto.NodeSubscriptionInfo {
 	// Use the same password generation logic as GetNodeSubscriptions
 	password := s.generatePassword(sub, hmacSecret, encryptionMethod)
@@ -253,7 +359,7 @@ func (s *SubscriptionSyncService) buildSubscriptionInfo(
 		Password:        password,
 		Name:            s.generateSubscriptionName(sub),
 		SpeedLimit:      0, // Can be set from plan limits
-		DeviceLimit:     0, // Can be set from plan limits
+		DeviceLimit:     deviceLimit,
 		ExpireTime:      sub.EndDate().Unix(),
 	}
 }
@@ -270,7 +376,7 @@ func (s *SubscriptionSyncService) generatePassword(
 
 	// Delegate to the shared password generation logic
 	subs := []*subscription.Subscription{sub}
-	response := dto.ToNodeSubscriptionsResponse(subs, secret, method)
+	response := dto.ToNodeSubscriptionsResponse(subs, secret, method, nil)
 	if len(response.Subscriptions) > 0 {
 		return response.Subscriptions[0].Password
 	}
@@ -282,7 +388,7 @@ func (s *SubscriptionSyncService) generateSubscriptionName(sub *subscription.Sub
 	if sub == nil {
 		return ""
 	}
-	response := dto.ToNodeSubscriptionsResponse([]*subscription.Subscription{sub}, "", "")
+	response := dto.ToNodeSubscriptionsResponse([]*subscription.Subscription{sub}, "", "", nil)
 	if len(response.Subscriptions) > 0 {
 		return response.Subscriptions[0].Name
 	}
@@ -371,13 +477,22 @@ func (s *SubscriptionSyncService) FullSyncSubscriptionsToNode(
 	// Get HMAC secret
 	hmacSecret := config.Get().Auth.JWT.Secret
 
+	// Batch load plan device limits
+	planDeviceLimits := s.loadPlanDeviceLimits(ctx, subscriptions)
+
 	// Convert subscriptions to NodeSubscriptionInfo
 	subscriptionInfos := make([]dto.NodeSubscriptionInfo, 0, len(subscriptions))
 	for _, sub := range subscriptions {
 		if sub == nil || !sub.IsActive() {
 			continue
 		}
-		info := s.buildSubscriptionInfo(sub, hmacSecret, encryptionMethod)
+		deviceLimit := 0
+		if planDeviceLimits != nil {
+			if limit, ok := planDeviceLimits[sub.PlanID()]; ok {
+				deviceLimit = limit
+			}
+		}
+		info := s.buildSubscriptionInfo(sub, hmacSecret, encryptionMethod, deviceLimit)
 		subscriptionInfos = append(subscriptionInfos, info)
 	}
 
@@ -445,4 +560,35 @@ func (s *SubscriptionSyncService) SyncSubscriptionsOnNodeConnect(ctx context.Con
 	}
 
 	return s.FullSyncSubscriptionsToNode(ctx, nodeID, subscriptions)
+}
+
+// loadPlanDeviceLimits collects unique plan IDs from subscriptions, batch loads plans,
+// and returns a map of planID -> device limit count.
+func (s *SubscriptionSyncService) loadPlanDeviceLimits(ctx context.Context, subscriptions []*subscription.Subscription) map[uint]int {
+	if s.planRepo == nil {
+		return nil
+	}
+
+	planIDSet := make(map[uint]struct{})
+	for _, sub := range subscriptions {
+		if sub != nil && sub.IsActive() {
+			planIDSet[sub.PlanID()] = struct{}{}
+		}
+	}
+	if len(planIDSet) == 0 {
+		return nil
+	}
+
+	planIDs := make([]uint, 0, len(planIDSet))
+	for id := range planIDSet {
+		planIDs = append(planIDs, id)
+	}
+
+	plans, err := s.planRepo.GetByIDs(ctx, planIDs)
+	if err != nil {
+		s.logger.Errorw("failed to load plans for device limits, all limits will be disabled", "error", err, "plan_ids", planIDs)
+		return nil
+	}
+
+	return dto.BuildPlanDeviceLimits(plans)
 }

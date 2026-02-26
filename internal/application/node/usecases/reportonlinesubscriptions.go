@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 	"fmt"
+	"net"
 
 	"github.com/orris-inc/orris/internal/application/node/dto"
 	"github.com/orris-inc/orris/internal/shared/id"
@@ -76,7 +77,7 @@ func (uc *ReportOnlineSubscriptionsUseCase) Execute(ctx context.Context, cmd Rep
 
 	// Collect valid SIDs for batch lookup
 	validSIDs := make([]string, 0, len(cmd.Subscriptions))
-	ipMap := make(map[string]string) // SID -> IP
+	ipMap := make(map[string][]string) // SID -> IPs
 
 	for _, s := range cmd.Subscriptions {
 		// Validate SID format
@@ -88,8 +89,20 @@ func (uc *ReportOnlineSubscriptionsUseCase) Execute(ctx context.Context, cmd Rep
 			continue
 		}
 
-		validSIDs = append(validSIDs, s.SubscriptionSID)
-		ipMap[s.SubscriptionSID] = s.IP
+		// Validate IP format
+		if net.ParseIP(s.IP) == nil {
+			uc.logger.Warnw("skipping online subscription with invalid IP",
+				"node_id", cmd.NodeID,
+				"subscription_sid", s.SubscriptionSID,
+				"ip", s.IP,
+			)
+			continue
+		}
+
+		if _, seen := ipMap[s.SubscriptionSID]; !seen {
+			validSIDs = append(validSIDs, s.SubscriptionSID)
+		}
+		ipMap[s.SubscriptionSID] = append(ipMap[s.SubscriptionSID], s.IP)
 	}
 
 	if len(validSIDs) == 0 {
@@ -113,13 +126,15 @@ func (uc *ReportOnlineSubscriptionsUseCase) Execute(ctx context.Context, cmd Rep
 		return nil, fmt.Errorf("failed to lookup subscription IDs: %w", err)
 	}
 
-	// Build online subscription info with internal IDs
+	// Build online subscription info with internal IDs (one entry per IP)
 	subscriptions := make([]OnlineSubscriptionInfo, 0, len(sidToID))
 	for sid, internalID := range sidToID {
-		subscriptions = append(subscriptions, OnlineSubscriptionInfo{
-			SubscriptionID: internalID,
-			IP:             ipMap[sid],
-		})
+		for _, ip := range ipMap[sid] {
+			subscriptions = append(subscriptions, OnlineSubscriptionInfo{
+				SubscriptionID: internalID,
+				IP:             ip,
+			})
+		}
 	}
 
 	// Update online subscriptions tracking
