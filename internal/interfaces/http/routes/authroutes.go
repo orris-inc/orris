@@ -29,7 +29,7 @@ func SetupAuthRoutes(engine *gin.Engine, cfg *AuthRouteConfig) {
 		auth.GET("/oauth/:provider", cfg.AuthHandler.InitiateOAuth)
 		auth.GET("/oauth/:provider/callback", cfg.AuthHandler.HandleOAuthCallback)
 
-		auth.POST("/refresh", cfg.AuthHandler.RefreshToken)
+		auth.POST("/refresh", cfg.RateLimiter.Limit(), cfg.AuthHandler.RefreshToken)
 		auth.POST("/logout", cfg.AuthMiddleware.RequireAuth(), cfg.AuthHandler.Logout)
 		auth.GET("/me", cfg.AuthMiddleware.RequireAuth(), cfg.AuthHandler.GetCurrentUser)
 

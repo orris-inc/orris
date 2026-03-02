@@ -7,6 +7,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 const (
@@ -56,6 +57,9 @@ func (uc *GenerateInstallScriptUseCase) Execute(ctx context.Context, query Gener
 	if query.ServerURL == "" {
 		return nil, errors.NewValidationError("server URL is required")
 	}
+	if err := utils.ValidateAPIURL(query.ServerURL); err != nil {
+		return nil, err
+	}
 
 	uc.logger.Infow("executing generate install script use case", "short_id", query.ShortID)
 
@@ -78,7 +82,7 @@ func (uc *GenerateInstallScriptUseCase) Execute(ctx context.Context, query Gener
 	}
 
 	// Generate install and uninstall commands
-	installCmd := fmt.Sprintf("curl -fsSL %s | sudo bash -s -- --server %s --token %s", InstallScriptURL, query.ServerURL, token)
+	installCmd := fmt.Sprintf("curl -fsSL %s | sudo bash -s -- --server %s --token %s", InstallScriptURL, utils.ShellQuote(query.ServerURL), utils.ShellQuote(token))
 	uninstallCmd := fmt.Sprintf("curl -fsSL %s | sudo bash -s -- uninstall", InstallScriptURL)
 
 	result := &GenerateInstallScriptResult{

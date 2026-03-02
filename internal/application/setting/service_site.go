@@ -80,12 +80,12 @@ func (s *ServiceDDD) GetPublicBranding(ctx context.Context) (*dto.PublicBranding
 // GetSecuritySettings retrieves security settings
 func (s *ServiceDDD) GetSecuritySettings(ctx context.Context) (*dto.SecuritySettingsResponse, error) {
 	return &dto.SecuritySettingsResponse{
-		// Password policy
-		PasswordMinLength:        s.getSettingWithSourceInt(ctx, "security", "password_min_length", 8),
-		PasswordRequireUppercase: s.getSettingWithSourceBool(ctx, "security", "password_require_uppercase"),
-		PasswordRequireLowercase: s.getSettingWithSourceBool(ctx, "security", "password_require_lowercase"),
-		PasswordRequireNumber:    s.getSettingWithSourceBool(ctx, "security", "password_require_number"),
-		PasswordRequireSpecial:   s.getSettingWithSourceBool(ctx, "security", "password_require_special"),
+		// Password policy (defaults must match GetPasswordPolicy and GetPublicPasswordPolicy)
+		PasswordMinLength:        s.getSettingWithSourceInt(ctx, "security", "password_min_length", 12),
+		PasswordRequireUppercase: s.getSettingWithSourceBoolDefault(ctx, "security", "password_require_uppercase", true),
+		PasswordRequireLowercase: s.getSettingWithSourceBoolDefault(ctx, "security", "password_require_lowercase", true),
+		PasswordRequireNumber:    s.getSettingWithSourceBoolDefault(ctx, "security", "password_require_number", true),
+		PasswordRequireSpecial:   s.getSettingWithSourceBoolDefault(ctx, "security", "password_require_special", true),
 		PasswordExpiryDays:       s.getSettingWithSourceInt(ctx, "security", "password_expiry_days", 0),
 
 		// Session settings
@@ -173,11 +173,11 @@ func (s *ServiceDDD) UpdateSecuritySettings(ctx context.Context, req dto.UpdateS
 // Implements user.PasswordPolicyProvider interface
 func (s *ServiceDDD) GetPasswordPolicy(ctx context.Context) *userVO.PasswordPolicy {
 	return &userVO.PasswordPolicy{
-		MinLength:        s.getIntValue(ctx, "security", "password_min_length", 8),
-		RequireUppercase: s.getBoolValue(ctx, "security", "password_require_uppercase", false),
-		RequireLowercase: s.getBoolValue(ctx, "security", "password_require_lowercase", false),
-		RequireNumber:    s.getBoolValue(ctx, "security", "password_require_number", false),
-		RequireSpecial:   s.getBoolValue(ctx, "security", "password_require_special", false),
+		MinLength:        s.getIntValue(ctx, "security", "password_min_length", 12),
+		RequireUppercase: s.getBoolValue(ctx, "security", "password_require_uppercase", true),
+		RequireLowercase: s.getBoolValue(ctx, "security", "password_require_lowercase", true),
+		RequireNumber:    s.getBoolValue(ctx, "security", "password_require_number", true),
+		RequireSpecial:   s.getBoolValue(ctx, "security", "password_require_special", true),
 	}
 }
 
@@ -193,12 +193,12 @@ func (s *ServiceDDD) GetSecurityPolicy(ctx context.Context) *userDomain.Security
 // GetPublicPasswordPolicy retrieves public password policy (no auth required)
 // Used by frontend to display password requirements during registration/password change
 func (s *ServiceDDD) GetPublicPasswordPolicy(ctx context.Context) (*dto.PublicPasswordPolicyResponse, error) {
-	minLength := s.getIntValue(ctx, "security", "password_min_length", 8)
+	minLength := s.getIntValue(ctx, "security", "password_min_length", 12)
 	maxLength := 72 // bcrypt limitation
-	requireUppercase := s.getBoolValue(ctx, "security", "password_require_uppercase", false)
-	requireLowercase := s.getBoolValue(ctx, "security", "password_require_lowercase", false)
-	requireNumber := s.getBoolValue(ctx, "security", "password_require_number", false)
-	requireSpecial := s.getBoolValue(ctx, "security", "password_require_special", false)
+	requireUppercase := s.getBoolValue(ctx, "security", "password_require_uppercase", true)
+	requireLowercase := s.getBoolValue(ctx, "security", "password_require_lowercase", true)
+	requireNumber := s.getBoolValue(ctx, "security", "password_require_number", true)
+	requireSpecial := s.getBoolValue(ctx, "security", "password_require_special", true)
 
 	// Build rules array for frontend display
 	rules := []dto.PasswordPolicyRule{
