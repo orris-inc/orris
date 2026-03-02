@@ -38,8 +38,14 @@ type ListUserSubscriptionsUseCase struct {
 	planRepo            subscription.PlanRepository
 	userRepo            user.Repository
 	onlineDeviceCounter OnlineDeviceCounter // optional, nil-safe
+	quotaService        QuotaService        // optional, nil-safe
 	logger              logger.Interface
 	baseURL             string
+}
+
+// SetQuotaService sets the quota service for data usage reporting (optional).
+func (uc *ListUserSubscriptionsUseCase) SetQuotaService(qs QuotaService) {
+	uc.quotaService = qs
 }
 
 func NewListUserSubscriptionsUseCase(
@@ -168,6 +174,15 @@ func (uc *ListUserSubscriptionsUseCase) Execute(ctx context.Context, query ListU
 		// Set online device count
 		if count, ok := onlineCounts[sub.ID()]; ok {
 			opts = append(opts, dto.WithOnlineDeviceCount(count))
+		}
+		// Set data usage from QuotaService
+		if uc.quotaService != nil && plan != nil {
+			quota, err := uc.quotaService.GetSubscriptionQuotaPreloaded(ctx, sub, plan)
+			if err != nil {
+				uc.logger.Warnw("failed to get subscription quota", "error", err, "subscription_id", sub.ID())
+			} else if quota != nil {
+				opts = append(opts, dto.WithDataUsage(quota.UsedBytes, quota.LimitBytes))
+			}
 		}
 
 		result := dto.ToSubscriptionDTO(sub, plan, subscriptionUser, uc.baseURL, opts...)

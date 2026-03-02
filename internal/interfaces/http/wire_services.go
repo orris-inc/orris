@@ -1379,6 +1379,7 @@ func (c *Container) initRemainingHandlers() {
 
 	// Set QuotaService on use cases that need real-time usage data
 	ucs.getSubscriptionUC.SetQuotaService(ucs.quotaService)
+	ucs.listUserSubscriptionsUC.SetQuotaService(ucs.quotaService)
 	ucs.updateSubscriptionUC.SetQuotaService(ucs.quotaService)
 
 	// Initialize forward quota middleware with QuotaService

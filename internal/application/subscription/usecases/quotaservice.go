@@ -31,6 +31,10 @@ type QuotaService interface {
 	// GetSubscriptionQuota returns the quota usage for a single subscription.
 	GetSubscriptionQuota(ctx context.Context, subscriptionID uint) (*QuotaCheckResult, error)
 
+	// GetSubscriptionQuotaPreloaded returns quota usage using pre-fetched subscription and plan.
+	// This avoids redundant DB lookups when subscription and plan are already available (e.g., in list endpoints).
+	GetSubscriptionQuotaPreloaded(ctx context.Context, sub *subscription.Subscription, plan *subscription.Plan) (*QuotaCheckResult, error)
+
 	// GetUserForwardQuota returns quota usage for all Forward-type subscriptions of a user.
 	GetUserForwardQuota(ctx context.Context, userID uint) ([]*QuotaCheckResult, error)
 
@@ -113,6 +117,19 @@ func (s *QuotaServiceImpl) GetSubscriptionQuota(ctx context.Context, subscriptio
 			"subscription_id", subscriptionID,
 			"plan_id", sub.PlanID(),
 		)
+		return nil, nil
+	}
+
+	return s.buildQuotaResult(ctx, sub, plan)
+}
+
+// GetSubscriptionQuotaPreloaded returns quota usage using pre-fetched subscription and plan.
+func (s *QuotaServiceImpl) GetSubscriptionQuotaPreloaded(ctx context.Context, sub *subscription.Subscription, plan *subscription.Plan) (*QuotaCheckResult, error) {
+	if sub == nil || plan == nil {
+		return nil, nil
+	}
+
+	if sub.Status() == vo.StatusSuspended {
 		return nil, nil
 	}
 
