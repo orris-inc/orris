@@ -109,6 +109,25 @@ func (s *TrafficLimitEnforcementService) CheckAndEnforceLimit(ctx context.Contex
 		)
 		return fmt.Errorf("failed to get total traffic: %w", err)
 	}
+
+	// Apply traffic used adjustments from all forward subscriptions
+	for _, sub := range activeSubscriptions {
+		if adj := sub.TrafficUsedAdjustment(); adj != 0 {
+			// Only apply adjustments for forward subscriptions in our set
+			for _, fwdID := range forwardSubscriptionIDs {
+				if sub.ID() == fwdID {
+					adjusted := int64(usedTraffic) + adj
+					if adjusted < 0 {
+						usedTraffic = 0
+					} else {
+						usedTraffic = uint64(adjusted)
+					}
+					break
+				}
+			}
+		}
+	}
+
 	if usedTraffic <= trafficLimit {
 		s.logger.Debugw("traffic within limit",
 			"user_id", userID,
@@ -293,29 +312,35 @@ func (s *TrafficLimitEnforcementService) getHighestTrafficLimitAndIDs(ctx contex
 		// Collect Forward-type subscription ID
 		forwardSubscriptionIDs = append(forwardSubscriptionIDs, sub.ID())
 
-		// Check if plan has unlimited traffic
-		if plan.IsUnlimitedTraffic() {
-			s.logger.Debugw("forward plan has unlimited traffic",
-				"subscription_id", sub.ID(),
-				"plan_id", sub.PlanID(),
-			)
-			return 0, false, forwardSubscriptionIDs, nil // Unlimited traffic - don't enforce
-		}
+		// Determine traffic limit: subscription override takes priority over plan
+		var limit uint64
+		if sub.TrafficLimitOverride() != nil {
+			limit = *sub.TrafficLimitOverride()
+		} else {
+			// Check if plan has unlimited traffic
+			if plan.IsUnlimitedTraffic() {
+				s.logger.Debugw("forward plan has unlimited traffic",
+					"subscription_id", sub.ID(),
+					"plan_id", sub.PlanID(),
+				)
+				return 0, false, forwardSubscriptionIDs, nil // Unlimited traffic - don't enforce
+			}
 
-		// Get the traffic limit from plan features
-		limit, err := s.getForwardTrafficLimit(plan)
-		if err != nil {
-			s.logger.Warnw("failed to get traffic limit from plan",
-				"subscription_id", sub.ID(),
-				"plan_id", sub.PlanID(),
-				"error", err,
-			)
-			continue
+			var err error
+			limit, err = s.getForwardTrafficLimit(plan)
+			if err != nil {
+				s.logger.Warnw("failed to get traffic limit from plan",
+					"subscription_id", sub.ID(),
+					"plan_id", sub.PlanID(),
+					"error", err,
+				)
+				continue
+			}
 		}
 
 		// If limit is 0, it means unlimited
 		if limit == 0 {
-			s.logger.Debugw("forward plan has unlimited traffic",
+			s.logger.Debugw("forward subscription has unlimited traffic",
 				"subscription_id", sub.ID(),
 				"plan_id", sub.PlanID(),
 			)

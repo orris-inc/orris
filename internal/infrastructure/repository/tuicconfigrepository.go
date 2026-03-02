@@ -127,9 +127,9 @@ func (r *TUICConfigRepository) Update(ctx context.Context, nodeID uint, config *
 	return nil
 }
 
-// DeleteByNodeID deletes the TUICConfig for a node
+// DeleteByNodeID permanently deletes the TUICConfig for a node.
 func (r *TUICConfigRepository) DeleteByNodeID(ctx context.Context, nodeID uint) error {
-	result := r.db.WithContext(ctx).Where("node_id = ?", nodeID).Delete(&models.TUICConfigModel{})
+	result := r.db.WithContext(ctx).Unscoped().Where("node_id = ?", nodeID).Delete(&models.TUICConfigModel{})
 	if result.Error != nil {
 		r.logger.Errorw("failed to delete TUIC config", "node_id", nodeID, "error", result.Error)
 		return fmt.Errorf("failed to delete TUIC config: %w", result.Error)
@@ -188,12 +188,12 @@ func (r *TUICConfigRepository) UpdateInTx(tx *gorm.DB, nodeID uint, config *vo.T
 	return nil
 }
 
-// deleteInTx deletes a TUICConfig record within a transaction
+// deleteInTx permanently deletes a TUICConfig record within a transaction.
 func (r *TUICConfigRepository) deleteInTx(tx *gorm.DB, nodeID uint) error {
-	return tx.Where("node_id = ?", nodeID).Delete(&models.TUICConfigModel{}).Error
+	return tx.Unscoped().Where("node_id = ?", nodeID).Delete(&models.TUICConfigModel{}).Error
 }
 
-// DeleteInTx deletes a TUICConfig record within a transaction (public method)
+// DeleteInTx permanently deletes a TUICConfig record within a transaction.
 func (r *TUICConfigRepository) DeleteInTx(tx *gorm.DB, nodeID uint) error {
 	return r.deleteInTx(tx, nodeID)
 }

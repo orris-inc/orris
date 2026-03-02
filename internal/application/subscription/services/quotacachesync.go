@@ -52,10 +52,15 @@ func (s *QuotaCacheSyncService) SyncQuotaFromSubscription(ctx context.Context, s
 		return nil
 	}
 
-	// Get traffic limit
-	trafficLimit, err := plan.GetTrafficLimit()
-	if err != nil {
-		return fmt.Errorf("failed to get traffic limit: %w", err)
+	// Get traffic limit: prefer subscription override, fallback to plan
+	var trafficLimit uint64
+	if sub.TrafficLimitOverride() != nil {
+		trafficLimit = *sub.TrafficLimitOverride()
+	} else {
+		trafficLimit, err = plan.GetTrafficLimit()
+		if err != nil {
+			return fmt.Errorf("failed to get traffic limit: %w", err)
+		}
 	}
 
 	// Build cached quota object
@@ -114,10 +119,15 @@ func (s *QuotaCacheSyncService) LoadQuotaByID(ctx context.Context, subscriptionI
 		return nil, nil
 	}
 
-	// Get traffic limit
-	trafficLimit, err := plan.GetTrafficLimit()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get traffic limit: %w", err)
+	// Get traffic limit: prefer subscription override, fallback to plan
+	var trafficLimit uint64
+	if sub.TrafficLimitOverride() != nil {
+		trafficLimit = *sub.TrafficLimitOverride()
+	} else {
+		trafficLimit, err = plan.GetTrafficLimit()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get traffic limit: %w", err)
+		}
 	}
 
 	// Build cached quota object

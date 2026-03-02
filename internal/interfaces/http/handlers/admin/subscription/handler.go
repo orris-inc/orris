@@ -2,7 +2,9 @@
 package subscription
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -34,6 +36,7 @@ type Handler struct {
 	suspendUseCase    *usecases.SuspendSubscriptionUseCase
 	unsuspendUseCase  *usecases.UnsuspendSubscriptionUseCase
 	resetUsageUseCase *usecases.ResetSubscriptionUsageUseCase
+	updateUseCase     *usecases.UpdateSubscriptionUseCase
 	logger            logger.Interface
 }
 
@@ -51,6 +54,7 @@ func NewHandler(
 	suspendUC *usecases.SuspendSubscriptionUseCase,
 	unsuspendUC *usecases.UnsuspendSubscriptionUseCase,
 	resetUsageUC *usecases.ResetSubscriptionUsageUseCase,
+	updateUC *usecases.UpdateSubscriptionUseCase,
 	logger logger.Interface,
 ) *Handler {
 	return &Handler{
@@ -66,6 +70,7 @@ func NewHandler(
 		suspendUseCase:    suspendUC,
 		unsuspendUseCase:  unsuspendUC,
 		resetUsageUseCase: resetUsageUC,
+		updateUseCase:     updateUC,
 		logger:            logger,
 	}
 }
@@ -332,4 +337,88 @@ func (h *Handler) Delete(c *gin.Context) {
 	}
 
 	utils.NoContentResponse(c)
+}
+
+// updateSubscriptionRawRequest is used for raw JSON parsing to detect explicit null vs absent fields.
+type updateSubscriptionRawRequest struct {
+	StartDate      *time.Time       `json:"start_date"`
+	EndDate        *time.Time       `json:"end_date"`
+	DataLimitBytes *json.RawMessage `json:"data_limit_bytes"` // RawMessage to distinguish null from absent
+	DataUsedBytes  *uint64          `json:"data_used_bytes"`
+}
+
+func (h *Handler) Update(c *gin.Context) {
+	subscriptionID, err := h.ParseSubscriptionID(c)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid subscription ID")
+		return
+	}
+	if subscriptionID == 0 {
+		utils.ErrorResponse(c, http.StatusNotFound, "subscription not found")
+		return
+	}
+
+	body, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "failed to read request body")
+		return
+	}
+
+	var raw updateSubscriptionRawRequest
+	if err := json.Unmarshal(body, &raw); err != nil {
+		h.logger.Warnw("invalid request body for admin update subscription", "error", err)
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+
+	// Parse DataLimitBytes: nil RawMessage = key absent, null RawMessage = explicit null
+	var dataLimitBytes *uint64
+	clearDataLimit := false
+	if raw.DataLimitBytes != nil {
+		// Key is present in JSON
+		if string(*raw.DataLimitBytes) == "null" {
+			// Explicit null → clear the override
+			clearDataLimit = true
+		} else {
+			// Has a value → parse as uint64
+			var limit uint64
+			if err := json.Unmarshal(*raw.DataLimitBytes, &limit); err != nil {
+				utils.ErrorResponse(c, http.StatusBadRequest, "invalid data_limit_bytes value")
+				return
+			}
+			dataLimitBytes = &limit
+		}
+	}
+
+	// Check if at least one field is provided
+	if raw.StartDate == nil && raw.EndDate == nil && raw.DataLimitBytes == nil && raw.DataUsedBytes == nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "at least one field must be provided")
+		return
+	}
+
+	cmd := usecases.UpdateSubscriptionCommand{
+		SubscriptionID: subscriptionID,
+		StartDate:      raw.StartDate,
+		EndDate:        raw.EndDate,
+		DataLimitBytes: dataLimitBytes,
+		ClearDataLimit: clearDataLimit,
+		DataUsedBytes:  raw.DataUsedBytes,
+	}
+
+	if err := h.updateUseCase.Execute(c.Request.Context(), cmd); err != nil {
+		h.logger.Errorw("failed to update subscription", "error", err, "subscription_id", subscriptionID)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	// Return updated subscription
+	query := usecases.GetSubscriptionQuery{SubscriptionID: subscriptionID}
+	sub, err := h.getUseCase.Execute(c.Request.Context(), query)
+	if err != nil {
+		h.logger.Errorw("failed to get updated subscription", "error", err, "subscription_id", subscriptionID)
+		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "Subscription updated successfully", sub)
 }

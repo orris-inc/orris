@@ -359,21 +359,23 @@ func (r *SubscriptionRepositoryImpl) Update(ctx context.Context, subscriptionEnt
 	result := tx.Model(model).
 		Where("id = ?", model.ID).
 		Updates(map[string]interface{}{
-			"user_id":              model.UserID,
-			"plan_id":              model.PlanID,
-			"status":               model.Status,
-			"start_date":           model.StartDate,
-			"end_date":             model.EndDate,
-			"auto_renew":           model.AutoRenew,
-			"billing_cycle":        model.BillingCycle,
-			"current_period_start": model.CurrentPeriodStart,
-			"current_period_end":   model.CurrentPeriodEnd,
-			"link_token":           model.LinkToken,
-			"cancelled_at":         model.CancelledAt,
-			"cancel_reason":        model.CancelReason,
-			"metadata":             model.Metadata,
-			"version":              model.Version,
-			"updated_at":           model.UpdatedAt,
+			"user_id":                 model.UserID,
+			"plan_id":                 model.PlanID,
+			"status":                  model.Status,
+			"start_date":              model.StartDate,
+			"end_date":                model.EndDate,
+			"auto_renew":              model.AutoRenew,
+			"billing_cycle":           model.BillingCycle,
+			"current_period_start":    model.CurrentPeriodStart,
+			"current_period_end":      model.CurrentPeriodEnd,
+			"link_token":              model.LinkToken,
+			"cancelled_at":            model.CancelledAt,
+			"cancel_reason":           model.CancelReason,
+			"traffic_limit_override":  model.TrafficLimitOverride,
+			"traffic_used_adjustment": model.TrafficUsedAdjustment,
+			"metadata":                model.Metadata,
+			"version":                 model.Version,
+			"updated_at":              model.UpdatedAt,
 		})
 
 	if result.Error != nil {

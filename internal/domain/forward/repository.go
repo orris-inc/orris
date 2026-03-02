@@ -125,8 +125,12 @@ type RuleWriter interface {
 	// Update updates an existing forward rule.
 	Update(ctx context.Context, rule *ForwardRule) error
 
-	// Delete removes a forward rule.
+	// Delete soft-deletes a forward rule.
 	Delete(ctx context.Context, id uint) error
+
+	// HardDelete permanently removes a forward rule from the database.
+	// Used for external rules that should not be retained after deletion.
+	HardDelete(ctx context.Context, id uint) error
 
 	// UpdateTraffic updates the traffic counters for a rule.
 	UpdateTraffic(ctx context.Context, id uint, upload, download int64) error

@@ -126,9 +126,9 @@ func (r *ShadowsocksConfigRepository) Update(ctx context.Context, nodeID uint, e
 	return nil
 }
 
-// DeleteByNodeID deletes the ShadowsocksConfig for a node
+// DeleteByNodeID permanently deletes the ShadowsocksConfig for a node.
 func (r *ShadowsocksConfigRepository) DeleteByNodeID(ctx context.Context, nodeID uint) error {
-	result := r.db.WithContext(ctx).Where("node_id = ?", nodeID).Delete(&models.ShadowsocksConfigModel{})
+	result := r.db.WithContext(ctx).Unscoped().Where("node_id = ?", nodeID).Delete(&models.ShadowsocksConfigModel{})
 	if result.Error != nil {
 		r.logger.Errorw("failed to delete shadowsocks config", "node_id", nodeID, "error", result.Error)
 		return fmt.Errorf("failed to delete shadowsocks config: %w", result.Error)
@@ -179,7 +179,7 @@ func (r *ShadowsocksConfigRepository) UpdateInTx(tx *gorm.DB, nodeID uint, encry
 	return nil
 }
 
-// DeleteInTx deletes a ShadowsocksConfig record within a transaction
+// DeleteInTx permanently deletes a ShadowsocksConfig record within a transaction.
 func (r *ShadowsocksConfigRepository) DeleteInTx(tx *gorm.DB, nodeID uint) error {
-	return tx.Where("node_id = ?", nodeID).Delete(&models.ShadowsocksConfigModel{}).Error
+	return tx.Unscoped().Where("node_id = ?", nodeID).Delete(&models.ShadowsocksConfigModel{}).Error
 }

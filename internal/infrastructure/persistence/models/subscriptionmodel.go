@@ -27,9 +27,11 @@ type SubscriptionModel struct {
 	BillingCycle       *string   `gorm:"column:billing_cycle;size:20;index:idx_subscriptions_billing_cycle;comment:billing cycle (weekly, monthly, quarterly, etc.)"`
 	CurrentPeriodStart time.Time `gorm:"not null"`
 	CurrentPeriodEnd   time.Time `gorm:"not null"`
-	CancelledAt        *time.Time
-	CancelReason       *string `gorm:"size:500"`
-	Metadata           datatypes.JSON
+	CancelledAt           *time.Time
+	CancelReason          *string `gorm:"size:500"`
+	TrafficLimitOverride  *uint64 `gorm:"column:traffic_limit_override;comment:override plan traffic limit (nil=use plan default)"`
+	TrafficUsedAdjustment int64   `gorm:"column:traffic_used_adjustment;not null;default:0;comment:adjustment to actual traffic usage"`
+	Metadata              datatypes.JSON
 	Version            int `gorm:"not null;default:1"`
 	CreatedAt          time.Time
 	UpdatedAt          time.Time

@@ -283,3 +283,21 @@ func (r *ForwardRuleRepositoryImpl) Delete(ctx context.Context, id uint) error {
 	r.logger.Infow("forward rule deleted successfully", "id", id)
 	return nil
 }
+
+// HardDelete permanently removes a forward rule from the database.
+func (r *ForwardRuleRepositoryImpl) HardDelete(ctx context.Context, id uint) error {
+	tx := db.GetTxFromContext(ctx, r.db)
+	result := tx.Unscoped().Delete(&models.ForwardRuleModel{}, id)
+
+	if result.Error != nil {
+		r.logger.Errorw("failed to hard delete forward rule", "id", id, "error", result.Error)
+		return fmt.Errorf("failed to hard delete forward rule: %w", result.Error)
+	}
+
+	if result.RowsAffected == 0 {
+		return errors.NewNotFoundError("forward rule", fmt.Sprintf("%d", id))
+	}
+
+	r.logger.Infow("forward rule hard deleted successfully", "id", id)
+	return nil
+}

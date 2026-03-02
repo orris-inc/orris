@@ -128,9 +128,9 @@ func (r *Hysteria2ConfigRepository) Update(ctx context.Context, nodeID uint, con
 	return nil
 }
 
-// DeleteByNodeID deletes the Hysteria2Config for a node
+// DeleteByNodeID permanently deletes the Hysteria2Config for a node.
 func (r *Hysteria2ConfigRepository) DeleteByNodeID(ctx context.Context, nodeID uint) error {
-	result := r.db.WithContext(ctx).Where("node_id = ?", nodeID).Delete(&models.Hysteria2ConfigModel{})
+	result := r.db.WithContext(ctx).Unscoped().Where("node_id = ?", nodeID).Delete(&models.Hysteria2ConfigModel{})
 	if result.Error != nil {
 		r.logger.Errorw("failed to delete hysteria2 config", "node_id", nodeID, "error", result.Error)
 		return fmt.Errorf("failed to delete hysteria2 config: %w", result.Error)
@@ -189,12 +189,12 @@ func (r *Hysteria2ConfigRepository) UpdateInTx(tx *gorm.DB, nodeID uint, config 
 	return nil
 }
 
-// deleteInTx deletes a Hysteria2Config record within a transaction
+// deleteInTx permanently deletes a Hysteria2Config record within a transaction.
 func (r *Hysteria2ConfigRepository) deleteInTx(tx *gorm.DB, nodeID uint) error {
-	return tx.Where("node_id = ?", nodeID).Delete(&models.Hysteria2ConfigModel{}).Error
+	return tx.Unscoped().Where("node_id = ?", nodeID).Delete(&models.Hysteria2ConfigModel{}).Error
 }
 
-// DeleteInTx deletes a Hysteria2Config record within a transaction (public method)
+// DeleteInTx permanently deletes a Hysteria2Config record within a transaction.
 func (r *Hysteria2ConfigRepository) DeleteInTx(tx *gorm.DB, nodeID uint) error {
 	return r.deleteInTx(tx, nodeID)
 }

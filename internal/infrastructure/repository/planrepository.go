@@ -149,9 +149,10 @@ func (r *PlanRepositoryImpl) Update(ctx context.Context, plan *subscription.Plan
 	return nil
 }
 
+// Delete permanently removes a subscription plan from the database.
 func (r *PlanRepositoryImpl) Delete(ctx context.Context, id uint) error {
 	tx := db.GetTxFromContext(ctx, r.db)
-	result := tx.Delete(&models.PlanModel{}, id)
+	result := tx.Unscoped().Delete(&models.PlanModel{}, id)
 	if result.Error != nil {
 		r.logger.Errorw("failed to delete subscription plan", "error", result.Error, "plan_id", id)
 		return fmt.Errorf("failed to delete subscription plan: %w", result.Error)

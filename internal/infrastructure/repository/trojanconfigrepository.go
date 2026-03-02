@@ -126,9 +126,9 @@ func (r *TrojanConfigRepository) Update(ctx context.Context, nodeID uint, config
 	return nil
 }
 
-// DeleteByNodeID deletes the TrojanConfig for a node
+// DeleteByNodeID permanently deletes the TrojanConfig for a node.
 func (r *TrojanConfigRepository) DeleteByNodeID(ctx context.Context, nodeID uint) error {
-	result := r.db.WithContext(ctx).Where("node_id = ?", nodeID).Delete(&models.TrojanConfigModel{})
+	result := r.db.WithContext(ctx).Unscoped().Where("node_id = ?", nodeID).Delete(&models.TrojanConfigModel{})
 	if result.Error != nil {
 		r.logger.Errorw("failed to delete trojan config", "node_id", nodeID, "error", result.Error)
 		return fmt.Errorf("failed to delete trojan config: %w", result.Error)
@@ -187,12 +187,12 @@ func (r *TrojanConfigRepository) UpdateInTx(tx *gorm.DB, nodeID uint, config *vo
 	return nil
 }
 
-// deleteInTx deletes a TrojanConfig record within a transaction
+// deleteInTx permanently deletes a TrojanConfig record within a transaction.
 func (r *TrojanConfigRepository) deleteInTx(tx *gorm.DB, nodeID uint) error {
-	return tx.Where("node_id = ?", nodeID).Delete(&models.TrojanConfigModel{}).Error
+	return tx.Unscoped().Where("node_id = ?", nodeID).Delete(&models.TrojanConfigModel{}).Error
 }
 
-// DeleteInTx deletes a TrojanConfig record within a transaction (public method)
+// DeleteInTx permanently deletes a TrojanConfig record within a transaction.
 func (r *TrojanConfigRepository) DeleteInTx(tx *gorm.DB, nodeID uint) error {
 	return r.deleteInTx(tx, nodeID)
 }

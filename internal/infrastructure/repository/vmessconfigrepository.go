@@ -128,9 +128,9 @@ func (r *VMessConfigRepository) Update(ctx context.Context, nodeID uint, config 
 	return nil
 }
 
-// DeleteByNodeID deletes the VMessConfig for a node
+// DeleteByNodeID permanently deletes the VMessConfig for a node.
 func (r *VMessConfigRepository) DeleteByNodeID(ctx context.Context, nodeID uint) error {
-	result := r.db.WithContext(ctx).Where("node_id = ?", nodeID).Delete(&models.VMessConfigModel{})
+	result := r.db.WithContext(ctx).Unscoped().Where("node_id = ?", nodeID).Delete(&models.VMessConfigModel{})
 	if result.Error != nil {
 		r.logger.Errorw("failed to delete vmess config", "node_id", nodeID, "error", result.Error)
 		return fmt.Errorf("failed to delete vmess config: %w", result.Error)
@@ -189,12 +189,12 @@ func (r *VMessConfigRepository) UpdateInTx(tx *gorm.DB, nodeID uint, config *vo.
 	return nil
 }
 
-// deleteInTx deletes a VMessConfig record within a transaction
+// deleteInTx permanently deletes a VMessConfig record within a transaction.
 func (r *VMessConfigRepository) deleteInTx(tx *gorm.DB, nodeID uint) error {
-	return tx.Where("node_id = ?", nodeID).Delete(&models.VMessConfigModel{}).Error
+	return tx.Unscoped().Where("node_id = ?", nodeID).Delete(&models.VMessConfigModel{}).Error
 }
 
-// DeleteInTx deletes a VMessConfig record within a transaction (public method)
+// DeleteInTx permanently deletes a VMessConfig record within a transaction.
 func (r *VMessConfigRepository) DeleteInTx(tx *gorm.DB, nodeID uint) error {
 	return r.deleteInTx(tx, nodeID)
 }

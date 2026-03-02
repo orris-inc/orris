@@ -128,9 +128,9 @@ func (r *VLESSConfigRepository) Update(ctx context.Context, nodeID uint, config 
 	return nil
 }
 
-// DeleteByNodeID deletes the VLESSConfig for a node
+// DeleteByNodeID permanently deletes the VLESSConfig for a node.
 func (r *VLESSConfigRepository) DeleteByNodeID(ctx context.Context, nodeID uint) error {
-	result := r.db.WithContext(ctx).Where("node_id = ?", nodeID).Delete(&models.VLESSConfigModel{})
+	result := r.db.WithContext(ctx).Unscoped().Where("node_id = ?", nodeID).Delete(&models.VLESSConfigModel{})
 	if result.Error != nil {
 		r.logger.Errorw("failed to delete VLESS config", "node_id", nodeID, "error", result.Error)
 		return fmt.Errorf("failed to delete VLESS config: %w", result.Error)
@@ -189,12 +189,12 @@ func (r *VLESSConfigRepository) UpdateInTx(tx *gorm.DB, nodeID uint, config *vo.
 	return nil
 }
 
-// deleteInTx deletes a VLESSConfig record within a transaction
+// deleteInTx permanently deletes a VLESSConfig record within a transaction.
 func (r *VLESSConfigRepository) deleteInTx(tx *gorm.DB, nodeID uint) error {
-	return tx.Where("node_id = ?", nodeID).Delete(&models.VLESSConfigModel{}).Error
+	return tx.Unscoped().Where("node_id = ?", nodeID).Delete(&models.VLESSConfigModel{}).Error
 }
 
-// DeleteInTx deletes a VLESSConfig record within a transaction (public method)
+// DeleteInTx permanently deletes a VLESSConfig record within a transaction.
 func (r *VLESSConfigRepository) DeleteInTx(tx *gorm.DB, nodeID uint) error {
 	return r.deleteInTx(tx, nodeID)
 }

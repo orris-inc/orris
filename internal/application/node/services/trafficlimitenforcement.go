@@ -114,27 +114,33 @@ func (s *NodeTrafficLimitEnforcementService) CheckAndEnforceLimitForNode(ctx con
 		return nil
 	}
 
-	// Check if plan has unlimited traffic
-	if plan.IsUnlimitedTraffic() {
-		s.logger.Debugw("plan has unlimited traffic, skipping",
-			"subscription_id", subscriptionID,
-		)
-		return nil
-	}
+	// Determine traffic limit: subscription override takes priority over plan
+	var trafficLimit uint64
+	if sub.TrafficLimitOverride() != nil {
+		trafficLimit = *sub.TrafficLimitOverride()
+	} else {
+		// Check if plan has unlimited traffic
+		if plan.IsUnlimitedTraffic() {
+			s.logger.Debugw("plan has unlimited traffic, skipping",
+				"subscription_id", subscriptionID,
+			)
+			return nil
+		}
 
-	// Get traffic limit
-	trafficLimit, err := plan.GetTrafficLimit()
-	if err != nil {
-		s.logger.Errorw("failed to get traffic limit",
-			"subscription_id", subscriptionID,
-			"error", err,
-		)
-		return fmt.Errorf("failed to get traffic limit: %w", err)
+		var err error
+		trafficLimit, err = plan.GetTrafficLimit()
+		if err != nil {
+			s.logger.Errorw("failed to get traffic limit",
+				"subscription_id", subscriptionID,
+				"error", err,
+			)
+			return fmt.Errorf("failed to get traffic limit: %w", err)
+		}
 	}
 
 	// If limit is 0, it means unlimited
 	if trafficLimit == 0 {
-		s.logger.Debugw("plan has unlimited traffic (limit=0), skipping",
+		s.logger.Debugw("traffic limit is 0 (unlimited), skipping",
 			"subscription_id", subscriptionID,
 		)
 		return nil
@@ -148,6 +154,16 @@ func (s *NodeTrafficLimitEnforcementService) CheckAndEnforceLimitForNode(ctx con
 			"error", err,
 		)
 		return fmt.Errorf("failed to get total traffic: %w", err)
+	}
+
+	// Apply traffic used adjustment
+	if adj := sub.TrafficUsedAdjustment(); adj != 0 {
+		adjusted := int64(usedTraffic) + adj
+		if adjusted < 0 {
+			usedTraffic = 0
+		} else {
+			usedTraffic = uint64(adjusted)
+		}
 	}
 
 	// Check if traffic exceeds limit

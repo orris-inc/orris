@@ -106,10 +106,15 @@ func (a *NodeSubscriptionQuotaLoaderAdapter) LoadQuotaByID(ctx context.Context, 
 		return nil, nil
 	}
 
-	// Get traffic limit
-	trafficLimit, err := plan.GetTrafficLimit()
-	if err != nil {
-		return nil, err
+	// Get traffic limit: prefer subscription override, fallback to plan
+	var trafficLimit uint64
+	if sub.TrafficLimitOverride() != nil {
+		trafficLimit = *sub.TrafficLimitOverride()
+	} else {
+		trafficLimit, err = plan.GetTrafficLimit()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Build cached quota object

@@ -180,6 +180,9 @@ func (c *Container) initSubscription() {
 	ucs.suspendSubscriptionUC = subscriptionUsecases.NewSuspendSubscriptionUseCase(repos.subscriptionRepo, log)
 	ucs.unsuspendSubscriptionUC = subscriptionUsecases.NewUnsuspendSubscriptionUseCase(repos.subscriptionRepo, log)
 	ucs.resetSubscriptionUsageUC = subscriptionUsecases.NewResetSubscriptionUsageUseCase(repos.subscriptionRepo, log)
+	ucs.updateSubscriptionUC = subscriptionUsecases.NewUpdateSubscriptionUseCase(
+		repos.subscriptionRepo, repos.subscriptionPlanRepo, nil, log,
+	)
 	ucs.deleteSubscriptionUC = subscriptionUsecases.NewDeleteSubscriptionUseCase(repos.subscriptionRepo, repos.subscriptionTokenRepo, txMgr, log)
 	ucs.renewSubscriptionUC = subscriptionUsecases.NewRenewSubscriptionUseCase(repos.subscriptionRepo, repos.subscriptionPlanRepo, repos.planPricingRepo, log)
 	ucs.changePlanUC = subscriptionUsecases.NewChangePlanUseCase(repos.subscriptionRepo, repos.subscriptionPlanRepo, log)
@@ -263,7 +266,7 @@ func (c *Container) initSubscription() {
 		repos.subscriptionRepo, ucs.createSubscriptionUC, ucs.getSubscriptionUC, ucs.listUserSubscriptionsUC,
 		ucs.cancelSubscriptionUC, ucs.deleteSubscriptionUC, ucs.renewSubscriptionUC, ucs.changePlanUC,
 		ucs.activateSubscriptionUC, ucs.suspendSubscriptionUC, ucs.unsuspendSubscriptionUC,
-		ucs.resetSubscriptionUsageUC, log,
+		ucs.resetSubscriptionUsageUC, ucs.updateSubscriptionUC, log,
 	)
 	c.subscriptionOwnerMiddleware = middleware.NewSubscriptionOwnerMiddleware(repos.subscriptionRepo, log)
 
@@ -1333,6 +1336,8 @@ func (c *Container) initCallbacksAndNotifiers() {
 	ucs.unsuspendSubscriptionUC.SetQuotaCacheManager(c.quotaCacheSyncService)
 	ucs.resetSubscriptionUsageUC.SetSubscriptionNotifier(c.subscriptionSyncService)
 	ucs.resetSubscriptionUsageUC.SetQuotaCacheManager(c.quotaCacheSyncService)
+	ucs.updateSubscriptionUC.SetSubscriptionNotifier(c.subscriptionSyncService)
+	ucs.updateSubscriptionUC.SetQuotaCacheManager(c.quotaCacheSyncService)
 	ucs.renewSubscriptionUC.SetSubscriptionNotifier(c.subscriptionSyncService)
 
 	// Set plan change notifier to propagate plan feature changes (e.g. device_limit) to nodes
@@ -1357,6 +1362,10 @@ func (c *Container) initRemainingHandlers() {
 		repos.subscriptionRepo, repos.subscriptionUsageStatsRepo,
 		c.hourlyTrafficCache, repos.subscriptionPlanRepo, log,
 	)
+
+	// Set QuotaService on use cases that need real-time usage data
+	ucs.getSubscriptionUC.SetQuotaService(ucs.quotaService)
+	ucs.updateSubscriptionUC.SetQuotaService(ucs.quotaService)
 
 	// Initialize forward quota middleware with QuotaService
 	c.forwardQuotaMiddleware = middleware.NewForwardQuotaMiddleware(

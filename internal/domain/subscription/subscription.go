@@ -27,27 +27,29 @@ func generateLinkToken() (string, error) {
 
 // SubscriptionReconstructParams contains all parameters needed to reconstruct a Subscription from persistence
 type SubscriptionReconstructParams struct {
-	ID                 uint
-	UserID             uint
-	PlanID             uint
-	SubjectType        string
-	SubjectID          uint
-	SID                string
-	UUID               string
-	LinkToken          string
-	Status             vo.SubscriptionStatus
-	StartDate          time.Time
-	EndDate            time.Time
-	AutoRenew          bool
-	CurrentPeriodStart time.Time
-	CurrentPeriodEnd   time.Time
-	CancelledAt        *time.Time
-	CancelReason       *string
-	Metadata           map[string]interface{}
-	Version            int
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
-	BillingCycle       *vo.BillingCycle
+	ID                      uint
+	UserID                  uint
+	PlanID                  uint
+	SubjectType             string
+	SubjectID               uint
+	SID                     string
+	UUID                    string
+	LinkToken               string
+	Status                  vo.SubscriptionStatus
+	StartDate               time.Time
+	EndDate                 time.Time
+	AutoRenew               bool
+	CurrentPeriodStart      time.Time
+	CurrentPeriodEnd        time.Time
+	CancelledAt             *time.Time
+	CancelReason            *string
+	Metadata                map[string]interface{}
+	Version                 int
+	CreatedAt               time.Time
+	UpdatedAt               time.Time
+	BillingCycle            *vo.BillingCycle
+	TrafficLimitOverride    *uint64
+	TrafficUsedAdjustment   int64
 }
 
 // Subscription represents the subscription aggregate root
@@ -67,12 +69,14 @@ type Subscription struct {
 	currentPeriodStart time.Time
 	currentPeriodEnd   time.Time
 	billingCycle       *vo.BillingCycle
-	cancelledAt        *time.Time
-	cancelReason       *string
-	metadata           map[string]interface{}
-	version            int
-	createdAt          time.Time
-	updatedAt          time.Time
+	cancelledAt           *time.Time
+	cancelReason          *string
+	trafficLimitOverride  *uint64 // nil = use plan default; non-nil = override plan limit (0 = unlimited)
+	trafficUsedAdjustment int64   // adjustment to actual usage (default 0)
+	metadata              map[string]interface{}
+	version               int
+	createdAt             time.Time
+	updatedAt             time.Time
 }
 
 // NewSubscription creates a new subscription
@@ -168,27 +172,29 @@ func ReconstructSubscriptionWithParams(params SubscriptionReconstructParams) (*S
 	}
 
 	return &Subscription{
-		id:                 params.ID,
-		sid:                params.SID,
-		uuid:               params.UUID,
-		linkToken:          params.LinkToken,
-		userID:             params.UserID,
-		subjectType:        params.SubjectType,
-		subjectID:          params.SubjectID,
-		planID:             params.PlanID,
-		status:             params.Status,
-		startDate:          params.StartDate,
-		endDate:            params.EndDate,
-		autoRenew:          params.AutoRenew,
-		currentPeriodStart: params.CurrentPeriodStart,
-		currentPeriodEnd:   params.CurrentPeriodEnd,
-		billingCycle:       params.BillingCycle,
-		cancelledAt:        params.CancelledAt,
-		cancelReason:       params.CancelReason,
-		metadata:           params.Metadata,
-		version:            params.Version,
-		createdAt:          params.CreatedAt,
-		updatedAt:          params.UpdatedAt,
+		id:                    params.ID,
+		sid:                   params.SID,
+		uuid:                  params.UUID,
+		linkToken:             params.LinkToken,
+		userID:                params.UserID,
+		subjectType:           params.SubjectType,
+		subjectID:             params.SubjectID,
+		planID:                params.PlanID,
+		status:                params.Status,
+		startDate:             params.StartDate,
+		endDate:               params.EndDate,
+		autoRenew:             params.AutoRenew,
+		currentPeriodStart:    params.CurrentPeriodStart,
+		currentPeriodEnd:      params.CurrentPeriodEnd,
+		billingCycle:          params.BillingCycle,
+		cancelledAt:           params.CancelledAt,
+		cancelReason:          params.CancelReason,
+		trafficLimitOverride:  params.TrafficLimitOverride,
+		trafficUsedAdjustment: params.TrafficUsedAdjustment,
+		metadata:              params.Metadata,
+		version:               params.Version,
+		createdAt:             params.CreatedAt,
+		updatedAt:             params.UpdatedAt,
 	}, nil
 }
 
@@ -292,6 +298,70 @@ func (s *Subscription) CancelledAt() *time.Time {
 // CancelReason returns the cancellation reason
 func (s *Subscription) CancelReason() *string {
 	return s.cancelReason
+}
+
+// TrafficLimitOverride returns the traffic limit override (nil = use plan default)
+func (s *Subscription) TrafficLimitOverride() *uint64 {
+	return s.trafficLimitOverride
+}
+
+// SetTrafficLimitOverride sets the traffic limit override.
+// Note: limit=0 means unlimited traffic in the enforcement layer.
+func (s *Subscription) SetTrafficLimitOverride(limit uint64) {
+	s.trafficLimitOverride = &limit
+	s.updatedAt = biztime.NowUTC()
+	s.version++
+}
+
+// ClearTrafficLimitOverride removes the traffic limit override, reverting to plan default
+func (s *Subscription) ClearTrafficLimitOverride() {
+	s.trafficLimitOverride = nil
+	s.updatedAt = biztime.NowUTC()
+	s.version++
+}
+
+// TrafficUsedAdjustment returns the traffic used adjustment value
+func (s *Subscription) TrafficUsedAdjustment() int64 {
+	return s.trafficUsedAdjustment
+}
+
+// SetTrafficUsedAdjustment sets the traffic used adjustment
+func (s *Subscription) SetTrafficUsedAdjustment(adjustment int64) {
+	s.trafficUsedAdjustment = adjustment
+	s.updatedAt = biztime.NowUTC()
+	s.version++
+}
+
+// UpdateDates updates the subscription start and/or end dates (admin-level operation, no status restriction).
+// Each parameter is optional (nil = no change).
+// Note: changing startDate also resets currentPeriodStart; changing endDate also resets currentPeriodEnd.
+func (s *Subscription) UpdateDates(startDate, endDate *time.Time) error {
+	newStart := s.startDate
+	newEnd := s.endDate
+
+	if startDate != nil {
+		newStart = *startDate
+	}
+	if endDate != nil {
+		newEnd = *endDate
+	}
+
+	if newEnd.Before(newStart) {
+		return fmt.Errorf("end date must be after start date")
+	}
+
+	if startDate != nil {
+		s.startDate = newStart
+		s.currentPeriodStart = newStart
+	}
+	if endDate != nil {
+		s.endDate = newEnd
+		s.currentPeriodEnd = newEnd
+	}
+
+	s.updatedAt = biztime.NowUTC()
+	s.version++
+	return nil
 }
 
 // Metadata returns the subscription metadata
@@ -449,6 +519,7 @@ func (s *Subscription) ResetUsage() error {
 
 	// Reset period start to now, keeping period end unchanged
 	s.currentPeriodStart = biztime.NowUTC()
+	s.trafficUsedAdjustment = 0
 	s.updatedAt = biztime.NowUTC()
 	s.version++
 
@@ -468,6 +539,7 @@ func (s *Subscription) Renew(endDate time.Time) error {
 	s.endDate = endDate
 	s.currentPeriodStart = s.currentPeriodEnd
 	s.currentPeriodEnd = endDate
+	s.trafficUsedAdjustment = 0
 	s.updatedAt = biztime.NowUTC()
 	s.version++
 

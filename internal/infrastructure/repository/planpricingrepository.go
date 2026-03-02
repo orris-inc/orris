@@ -235,9 +235,9 @@ func (r *PlanPricingRepositoryImpl) Update(ctx context.Context, pricing *vo.Plan
 	return nil
 }
 
-// Delete soft deletes a pricing record
+// Delete permanently removes a pricing record from the database.
 func (r *PlanPricingRepositoryImpl) Delete(ctx context.Context, id uint) error {
-	result := r.db.WithContext(ctx).Delete(&models.PlanPricingModel{}, id)
+	result := r.db.WithContext(ctx).Unscoped().Delete(&models.PlanPricingModel{}, id)
 
 	if result.Error != nil {
 		r.logger.Errorw("failed to delete pricing", "id", id, "error", result.Error)

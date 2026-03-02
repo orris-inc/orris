@@ -42,6 +42,7 @@ func SetupAdminRoutes(engine *gin.Engine, cfg *AdminRouteConfig) {
 		adminSubscriptions.POST("/:id/unsuspend", cfg.AdminSubscriptionHandler.Unsuspend)
 		adminSubscriptions.POST("/:id/reset-usage", cfg.AdminSubscriptionHandler.ResetUsage)
 		adminSubscriptions.POST("/:id/renew", cfg.AdminSubscriptionHandler.Renew)
+		adminSubscriptions.PATCH("/:id", cfg.AdminSubscriptionHandler.Update)
 		adminSubscriptions.DELETE("/:id", cfg.AdminSubscriptionHandler.Delete)
 	}
 

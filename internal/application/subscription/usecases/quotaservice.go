@@ -244,15 +244,21 @@ func (s *QuotaServiceImpl) buildQuotaResult(
 	periodStart := period.Start
 	periodEnd := period.End
 
-	// Get traffic limit from plan
-	limitBytes, err := plan.GetTrafficLimit()
-	if err != nil {
-		s.logger.Warnw("failed to get traffic limit from plan",
-			"subscription_id", sub.ID(),
-			"plan_id", plan.ID(),
-			"error", err,
-		)
-		limitBytes = 0 // Treat as unlimited on error
+	// Get traffic limit: prefer subscription override, fallback to plan
+	var limitBytes uint64
+	if sub.TrafficLimitOverride() != nil {
+		limitBytes = *sub.TrafficLimitOverride()
+	} else {
+		var err error
+		limitBytes, err = plan.GetTrafficLimit()
+		if err != nil {
+			s.logger.Warnw("failed to get traffic limit from plan",
+				"subscription_id", sub.ID(),
+				"plan_id", plan.ID(),
+				"error", err,
+			)
+			limitBytes = 0 // Treat as unlimited on error
+		}
 	}
 
 	// Determine resource type based on plan type
@@ -277,6 +283,16 @@ func (s *QuotaServiceImpl) buildQuotaResult(
 			"error", err,
 		)
 		return nil, err
+	}
+
+	// Apply traffic used adjustment
+	if adj := sub.TrafficUsedAdjustment(); adj != 0 {
+		adjusted := int64(usedBytes) + adj
+		if adjusted < 0 {
+			usedBytes = 0
+		} else {
+			usedBytes = uint64(adjusted)
+		}
 	}
 
 	// Calculate quota status

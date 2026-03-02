@@ -35,6 +35,7 @@ type allUseCases struct {
 	suspendSubscriptionUC       *subscriptionUsecases.SuspendSubscriptionUseCase
 	unsuspendSubscriptionUC     *subscriptionUsecases.UnsuspendSubscriptionUseCase
 	resetSubscriptionUsageUC    *subscriptionUsecases.ResetSubscriptionUsageUseCase
+	updateSubscriptionUC        *subscriptionUsecases.UpdateSubscriptionUseCase
 	deleteSubscriptionUC        *subscriptionUsecases.DeleteSubscriptionUseCase
 	renewSubscriptionUC         *subscriptionUsecases.RenewSubscriptionUseCase
 	changePlanUC                *subscriptionUsecases.ChangePlanUseCase

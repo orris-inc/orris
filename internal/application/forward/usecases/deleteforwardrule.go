@@ -65,11 +65,20 @@ func (uc *DeleteForwardRuleUseCase) Execute(ctx context.Context, cmd DeleteForwa
 
 	// Store rule ID for cache cleanup
 	ruleID := rule.ID()
+	isExternal := rule.IsExternal()
 
 	// Delete the rule using the internal ID
-	if err := uc.repo.Delete(ctx, ruleID); err != nil {
-		uc.logger.Errorw("failed to delete forward rule", "short_id", cmd.ShortID, "error", err)
-		return fmt.Errorf("failed to delete forward rule: %w", err)
+	// External rules are hard-deleted; others are soft-deleted
+	if isExternal {
+		if err := uc.repo.HardDelete(ctx, ruleID); err != nil {
+			uc.logger.Errorw("failed to hard delete external forward rule", "short_id", cmd.ShortID, "error", err)
+			return fmt.Errorf("failed to hard delete forward rule: %w", err)
+		}
+	} else {
+		if err := uc.repo.Delete(ctx, ruleID); err != nil {
+			uc.logger.Errorw("failed to delete forward rule", "short_id", cmd.ShortID, "error", err)
+			return fmt.Errorf("failed to delete forward rule: %w", err)
+		}
 	}
 
 	// Clean up traffic cache (non-blocking, log warning on failure)
@@ -83,10 +92,15 @@ func (uc *DeleteForwardRuleUseCase) Execute(ctx context.Context, cmd DeleteForwa
 		}
 	}
 
-	uc.logger.Infow("forward rule deleted successfully", "short_id", cmd.ShortID)
+	deleteMode := "soft"
+	if isExternal {
+		deleteMode = "hard"
+	}
+	uc.logger.Infow("forward rule deleted successfully", "short_id", cmd.ShortID, "delete_mode", deleteMode)
 
 	// Notify config sync asynchronously if rule was enabled (failure only logs warning, doesn't block)
-	if wasEnabled && uc.configSyncSvc != nil {
+	// External rules have no agents (agentID=0), skip notification entirely
+	if wasEnabled && !isExternal && uc.configSyncSvc != nil {
 		// Notify entry agent
 		goroutine.SafeGo(uc.logger, "delete-rule-notify-entry-agent", func() {
 			if err := uc.configSyncSvc.NotifyRuleChange(context.Background(), agentID, ruleShortID, "removed"); err != nil {

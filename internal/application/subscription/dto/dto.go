@@ -33,6 +33,8 @@ type SubscriptionDTO struct {
 	CurrentPeriodEnd   time.Time            `json:"current_period_end"`
 	IsExpired          bool                 `json:"is_expired"`
 	IsActive           bool                 `json:"is_active"`
+	DataUsedBytes      uint64               `json:"data_used_bytes"`               // Current traffic used in bytes
+	DataLimitBytes     uint64               `json:"data_limit_bytes"`              // Traffic limit in bytes (0=unlimited)
 	OnlineDeviceCount  int                  `json:"online_device_count"`           // Current online device count
 	DeviceLimit        int                  `json:"device_limit"`                  // Max concurrent devices (0=unlimited)
 	CancelledAt        *time.Time           `json:"cancelled_at,omitempty"`
@@ -89,7 +91,7 @@ type SubscriptionTokenDTO struct {
 
 var (
 	// SubscriptionMapper is a generic mapper for basic conversions.
-	// WARNING: Does not populate OnlineDeviceCount or DeviceLimit.
+	// WARNING: Does not populate OnlineDeviceCount, DeviceLimit, DataUsedBytes, or DataLimitBytes.
 	// For API responses, use ToSubscriptionDTO with SubscriptionDTOOption instead.
 	SubscriptionMapper = mapper.New(
 		func(sub *subscription.Subscription) *SubscriptionDTO {
@@ -149,6 +151,14 @@ func WithOnlineDeviceCount(count int) SubscriptionDTOOption {
 func WithDeviceLimit(limit int) SubscriptionDTOOption {
 	return func(d *SubscriptionDTO) {
 		d.DeviceLimit = limit
+	}
+}
+
+// WithDataUsage sets the data usage and limit on the DTO.
+func WithDataUsage(used, limit uint64) SubscriptionDTOOption {
+	return func(d *SubscriptionDTO) {
+		d.DataUsedBytes = used
+		d.DataLimitBytes = limit
 	}
 }
 

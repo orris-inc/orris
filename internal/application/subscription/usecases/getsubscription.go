@@ -19,6 +19,7 @@ type GetSubscriptionUseCase struct {
 	planRepo             subscription.PlanRepository
 	userRepo             user.Repository
 	onlineDeviceCounter  OnlineDeviceCounter // optional, nil-safe
+	quotaService         QuotaService        // optional, nil-safe
 	logger               logger.Interface
 	baseURL              string
 }
@@ -39,6 +40,11 @@ func NewGetSubscriptionUseCase(
 		logger:              logger,
 		baseURL:             baseURL,
 	}
+}
+
+// SetQuotaService sets the quota service for data usage reporting (optional).
+func (uc *GetSubscriptionUseCase) SetQuotaService(qs QuotaService) {
+	uc.quotaService = qs
 }
 
 func (uc *GetSubscriptionUseCase) Execute(ctx context.Context, query GetSubscriptionQuery) (*dto.SubscriptionDTO, error) {
@@ -113,7 +119,7 @@ func (uc *GetSubscriptionUseCase) ExecuteBySID(ctx context.Context, sid string) 
 	return result, nil
 }
 
-// buildDTOOptions builds DTO options for online device count and device limit.
+// buildDTOOptions builds DTO options for online device count, device limit, and data usage.
 func (uc *GetSubscriptionUseCase) buildDTOOptions(ctx context.Context, subID uint, plan *subscription.Plan) []dto.SubscriptionDTOOption {
 	var opts []dto.SubscriptionDTOOption
 
@@ -131,6 +137,16 @@ func (uc *GetSubscriptionUseCase) buildDTOOptions(ctx context.Context, subID uin
 			uc.logger.Warnw("failed to get online device count", "error", err, "subscription_id", subID)
 		} else {
 			opts = append(opts, dto.WithOnlineDeviceCount(count))
+		}
+	}
+
+	// Query data usage from QuotaService
+	if uc.quotaService != nil {
+		quota, err := uc.quotaService.GetSubscriptionQuota(ctx, subID)
+		if err != nil {
+			uc.logger.Warnw("failed to get subscription quota", "error", err, "subscription_id", subID)
+		} else if quota != nil {
+			opts = append(opts, dto.WithDataUsage(quota.UsedBytes, quota.LimitBytes))
 		}
 	}
 
