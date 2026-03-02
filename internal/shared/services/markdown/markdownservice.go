@@ -41,6 +41,8 @@ func NewMarkdownService() MarkdownService {
 	)
 
 	policy := bluemonday.UGCPolicy()
+	// Explicitly restrict URL schemes to block javascript: protocol in href attributes
+	policy.AllowURLSchemes("http", "https", "mailto")
 	policy.AllowAttrs("class").Matching(bluemonday.SpaceSeparatedTokens).OnElements("code", "span", "div", "pre")
 	policy.AllowAttrs("id").Matching(bluemonday.SpaceSeparatedTokens).OnElements("h1", "h2", "h3", "h4", "h5", "h6")
 

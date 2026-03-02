@@ -7,7 +7,7 @@ import (
 )
 
 type MarkdownService interface {
-	ToHTML(markdown string) (string, error)
+	ToHTMLSanitized(markdown string) (string, error)
 }
 
 type Announcement interface {
@@ -54,7 +54,7 @@ func ToAnnouncementResponse(announcement Announcement, markdownSvc MarkdownServi
 
 	contentHTML := ""
 	if markdownSvc != nil {
-		html, err := markdownSvc.ToHTML(announcement.Content())
+		html, err := markdownSvc.ToHTMLSanitized(announcement.Content())
 		if err == nil {
 			contentHTML = html
 		}
@@ -90,7 +90,7 @@ func ToNotificationResponse(notification Notification, markdownSvc MarkdownServi
 
 	contentHTML := ""
 	if markdownSvc != nil {
-		html, err := markdownSvc.ToHTML(notification.Content())
+		html, err := markdownSvc.ToHTMLSanitized(notification.Content())
 		if err == nil {
 			contentHTML = html
 		}

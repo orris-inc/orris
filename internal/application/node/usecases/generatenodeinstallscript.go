@@ -7,6 +7,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 const (
@@ -87,7 +88,7 @@ func (uc *GenerateNodeInstallScriptUseCase) Execute(ctx context.Context, query G
 	// Generate install and uninstall commands
 	// Format: curl -fsSL <script_url> | sudo bash -s -- --api-url <api_url> --node <sid>:<token>
 	nodeArg := fmt.Sprintf("%s:%s", nodeSID, token)
-	installCmd := fmt.Sprintf("curl -fsSL %s | sudo bash -s -- --api-url %s --node %s", NodeInstallScriptURL, query.APIURL, nodeArg)
+	installCmd := fmt.Sprintf("curl -fsSL %s | sudo bash -s -- --api-url %s --node %s", NodeInstallScriptURL, utils.ShellQuote(query.APIURL), nodeArg)
 	uninstallCmd := fmt.Sprintf("curl -fsSL %s | sudo bash -s -- uninstall", NodeInstallScriptURL)
 
 	result := &GenerateNodeInstallScriptResult{
@@ -109,6 +110,9 @@ func (uc *GenerateNodeInstallScriptUseCase) validateQuery(query GenerateNodeInst
 	}
 	if query.APIURL == "" {
 		return errors.NewValidationError("API URL is required")
+	}
+	if err := utils.ValidateAPIURL(query.APIURL); err != nil {
+		return err
 	}
 	return nil
 }

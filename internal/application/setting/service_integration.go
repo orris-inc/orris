@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/orris-inc/orris/internal/application/setting/dto"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 // ============================================================================
@@ -164,6 +165,10 @@ func (s *ServiceDDD) UpdateEmailSettings(ctx context.Context, req dto.UpdateEmai
 	changes := make(map[string]any)
 
 	if req.SMTPHost != nil {
+		// Validate SMTP host to prevent SSRF via private/reserved IP addresses
+		if err := utils.ValidateServerAddress(*req.SMTPHost); err != nil {
+			return err
+		}
 		if err := s.upsertSetting(ctx, "email", "smtp_host", *req.SMTPHost, updatedBy); err != nil {
 			return err
 		}

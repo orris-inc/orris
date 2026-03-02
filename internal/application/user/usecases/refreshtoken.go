@@ -83,7 +83,9 @@ func (uc *RefreshTokenUseCase) Execute(ctx context.Context, cmd RefreshTokenComm
 		return nil, fmt.Errorf("account is not active")
 	}
 
-	tokenPair, err := uc.jwtService.Refresh(cmd.RefreshToken)
+	// Pass the user's current role from the database so newly generated tokens
+	// reflect any role changes (e.g. admin demotion) instead of copying the stale role.
+	tokenPair, err := uc.jwtService.Refresh(cmd.RefreshToken, existingUser.Role())
 	if err != nil {
 		uc.logger.Errorw("failed to refresh token", "error", err)
 		return nil, fmt.Errorf("failed to refresh token: %w", err)

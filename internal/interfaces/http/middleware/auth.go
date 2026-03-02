@@ -8,6 +8,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/user"
 	"github.com/orris-inc/orris/internal/infrastructure/auth"
+	"github.com/orris-inc/orris/internal/shared/authorization"
 	"github.com/orris-inc/orris/internal/shared/config"
 	"github.com/orris-inc/orris/internal/shared/constants"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -80,20 +81,24 @@ func (m *AuthMiddleware) RequireAuth() gin.HandlerFunc {
 		c.Set("user_id", foundUser.ID())
 		c.Set("user_uuid", claims.UserUUID)
 		c.Set("session_id", claims.SessionID)
-		c.Set(constants.ContextKeyUserRole, string(claims.Role))
+		// Use the current role from database, not the stale role from JWT claims.
+		// This ensures role changes (e.g. admin demotion) take effect immediately.
+		c.Set(constants.ContextKeyUserRole, string(foundUser.Role()))
 
 		// Auto-refresh: if token is about to expire, generate a new one
 		if m.jwtService.ShouldRefresh(claims) {
-			m.refreshAccessToken(c, claims)
+			m.refreshAccessToken(c, claims, foundUser.Role())
 		}
 
 		c.Next()
 	}
 }
 
-// refreshAccessToken generates a new access token and sets it in the cookie
-func (m *AuthMiddleware) refreshAccessToken(c *gin.Context, claims *auth.Claims) {
-	newToken, err := m.jwtService.RefreshAccessToken(claims)
+// refreshAccessToken generates a new access token and sets it in the cookie.
+// freshRole is the user's current role from the database, ensuring the refreshed
+// token reflects any role changes (e.g. demotion from admin).
+func (m *AuthMiddleware) refreshAccessToken(c *gin.Context, claims *auth.Claims, freshRole authorization.UserRole) {
+	newToken, err := m.jwtService.RefreshAccessToken(claims, freshRole)
 	if err != nil {
 		m.logger.Warnw("failed to auto-refresh access token", "error", err, "user_uuid", claims.UserUUID)
 		return
@@ -139,7 +144,8 @@ func (m *AuthMiddleware) OptionalAuth() gin.HandlerFunc {
 				c.Set("user_id", foundUser.ID())
 				c.Set("user_uuid", claims.UserUUID)
 				c.Set("session_id", claims.SessionID)
-				c.Set(constants.ContextKeyUserRole, string(claims.Role))
+				// Use the current role from database, not the stale role from JWT claims.
+				c.Set(constants.ContextKeyUserRole, string(foundUser.Role()))
 			}
 		}
 

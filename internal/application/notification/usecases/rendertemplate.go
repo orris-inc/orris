@@ -44,7 +44,7 @@ func (uc *RenderTemplateUseCase) Execute(ctx context.Context, req dto.RenderTemp
 
 	contentHTML := ""
 	if uc.markdownService != nil {
-		html, err := uc.markdownService.ToHTML(content)
+		html, err := uc.markdownService.ToHTMLSanitized(content)
 		if err == nil {
 			contentHTML = html
 		} else {

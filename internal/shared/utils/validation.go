@@ -3,6 +3,7 @@ package utils
 import (
 	"fmt"
 	"net"
+	"net/url"
 	"reflect"
 	"regexp"
 	"strings"
@@ -219,6 +220,42 @@ func isValidDomain(domain string) bool {
 		return false
 	}
 	return domainRegex.MatchString(domain)
+}
+
+// shellMetacharacters contains characters that can be used for shell command injection.
+var shellMetacharacters = regexp.MustCompile("[;&|$`(){}><\n\r]")
+
+// ValidateAPIURL validates that a URL is suitable as an API endpoint.
+// It requires http or https scheme and a non-empty host.
+// It also rejects shell metacharacters to prevent command injection
+// when the URL is interpolated into shell commands.
+func ValidateAPIURL(rawURL string) error {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return errors.NewValidationError("API URL is malformed")
+	}
+
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return errors.NewValidationError("API URL scheme must be http or https")
+	}
+
+	if parsed.Host == "" {
+		return errors.NewValidationError("API URL must have a valid host")
+	}
+
+	if shellMetacharacters.MatchString(rawURL) {
+		return errors.NewValidationError("API URL contains invalid characters")
+	}
+
+	return nil
+}
+
+// ShellQuote wraps a string in single quotes with proper escaping,
+// making it safe for interpolation into shell commands.
+// Any existing single quotes are replaced with the standard shell idiom '\'' .
+func ShellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }
 
 // ValidateListenPort validates that a port number is in a safe range.

@@ -25,7 +25,7 @@ type TokenPair struct {
 
 type JWTService interface {
 	Generate(userUUID string, sessionID string, role authorization.UserRole) (*TokenPair, error)
-	Refresh(refreshToken string) (*TokenPair, error)
+	Refresh(refreshToken string, freshRole authorization.UserRole) (*TokenPair, error)
 }
 
 type LoginWithPasswordCommand struct {

@@ -3,7 +3,7 @@ package notification
 import (
 	"bytes"
 	"fmt"
-	"text/template"
+	"html/template"
 	"time"
 
 	vo "github.com/orris-inc/orris/internal/domain/notification/valueobjects"

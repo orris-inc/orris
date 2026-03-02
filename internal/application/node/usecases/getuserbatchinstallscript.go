@@ -9,6 +9,7 @@ import (
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 // GetUserBatchInstallScriptQuery represents the input for getting user batch install script.
@@ -102,7 +103,7 @@ func (uc *GetUserBatchInstallScriptUseCase) Execute(ctx context.Context, query G
 
 	// Generate install and uninstall commands
 	// Format: curl -fsSL <script_url> | sudo bash -s -- --api-url <api_url> --node node_xxx:token1 --node node_yyy:token2
-	installCmd := fmt.Sprintf("curl -fsSL %s | sudo bash -s -- --api-url %s %s", NodeInstallScriptURL, query.APIURL, strings.Join(nodeArgs, " "))
+	installCmd := fmt.Sprintf("curl -fsSL %s | sudo bash -s -- --api-url %s %s", NodeInstallScriptURL, utils.ShellQuote(query.APIURL), strings.Join(nodeArgs, " "))
 	uninstallCmd := fmt.Sprintf("curl -fsSL %s | sudo bash -s -- uninstall", NodeInstallScriptURL)
 
 	result := &GetUserBatchInstallScriptResult{
@@ -129,6 +130,9 @@ func (uc *GetUserBatchInstallScriptUseCase) validateQuery(query GetUserBatchInst
 	}
 	if query.APIURL == "" {
 		return errors.NewValidationError("API URL is required")
+	}
+	if err := utils.ValidateAPIURL(query.APIURL); err != nil {
+		return err
 	}
 
 	// Validate all node ID formats

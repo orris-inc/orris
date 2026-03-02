@@ -7,6 +7,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/logger"
+	"github.com/orris-inc/orris/internal/shared/utils"
 )
 
 // GetUserNodeInstallScriptQuery represents the input for getting user node install script.
@@ -85,7 +86,7 @@ func (uc *GetUserNodeInstallScriptUseCase) Execute(ctx context.Context, query Ge
 	// Generate install and uninstall commands
 	// Format: curl -fsSL <script_url> | sudo bash -s -- --api-url <api_url> --node <sid>:<token>
 	nodeArg := fmt.Sprintf("%s:%s", nodeSID, token)
-	installCmd := fmt.Sprintf("curl -fsSL %s | sudo bash -s -- --api-url %s --node %s", NodeInstallScriptURL, query.APIURL, nodeArg)
+	installCmd := fmt.Sprintf("curl -fsSL %s | sudo bash -s -- --api-url %s --node %s", NodeInstallScriptURL, utils.ShellQuote(query.APIURL), nodeArg)
 	uninstallCmd := fmt.Sprintf("curl -fsSL %s | sudo bash -s -- uninstall", NodeInstallScriptURL)
 
 	result := &GetUserNodeInstallScriptResult{
@@ -110,6 +111,9 @@ func (uc *GetUserNodeInstallScriptUseCase) validateQuery(query GetUserNodeInstal
 	}
 	if query.APIURL == "" {
 		return errors.NewValidationError("API URL is required")
+	}
+	if err := utils.ValidateAPIURL(query.APIURL); err != nil {
+		return err
 	}
 	return nil
 }

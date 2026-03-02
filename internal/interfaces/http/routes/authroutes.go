@@ -21,10 +21,10 @@ func SetupAuthRoutes(engine *gin.Engine, cfg *AuthRouteConfig) {
 	{
 		auth.POST("/register", cfg.RateLimiter.Limit(), cfg.AuthHandler.Register)
 		auth.POST("/login", cfg.RateLimiter.Limit(), cfg.AuthHandler.Login)
-		auth.POST("/verify-email", cfg.AuthHandler.VerifyEmail)
-		auth.GET("/verify-email", cfg.AuthHandler.VerifyEmail)
+		auth.POST("/verify-email", cfg.RateLimiter.Limit(), cfg.AuthHandler.VerifyEmail)
+		auth.GET("/verify-email", cfg.RateLimiter.Limit(), cfg.AuthHandler.VerifyEmail)
 		auth.POST("/forgot-password", cfg.RateLimiter.Limit(), cfg.AuthHandler.ForgotPassword)
-		auth.POST("/reset-password", cfg.AuthHandler.ResetPassword)
+		auth.POST("/reset-password", cfg.RateLimiter.Limit(), cfg.AuthHandler.ResetPassword)
 
 		auth.GET("/oauth/:provider", cfg.AuthHandler.InitiateOAuth)
 		auth.GET("/oauth/:provider/callback", cfg.AuthHandler.HandleOAuthCallback)

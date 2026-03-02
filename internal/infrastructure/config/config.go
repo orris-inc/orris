@@ -122,6 +122,9 @@ func setDefaults() {
 	viper.SetDefault("auth.password.bcrypt_cost", 12)
 	viper.SetDefault("auth.token.verification_expires_hours", 24)
 	viper.SetDefault("auth.token.reset_expires_minutes", 30)
+	// WARNING: This default is for development only. In production, set a strong
+	// secret (>= 32 chars) via config file or ORRIS_AUTH_JWT_SECRET env var.
+	// The application will refuse to start in non-debug mode with the default value.
 	viper.SetDefault("auth.jwt.secret", "change-me-in-production")
 	viper.SetDefault("auth.jwt.access_exp_minutes", 15)
 	viper.SetDefault("auth.jwt.refresh_exp_days", 7)
@@ -156,6 +159,9 @@ func setDefaults() {
 	viper.SetDefault("redis.db", 0)
 
 	// Forward defaults
+	// WARNING: This default is for development only. In production, set a strong
+	// secret (>= 32 chars) via config file or ORRIS_FORWARD_TOKEN_SIGNING_SECRET env var.
+	// The application will refuse to start in non-debug mode with the default value.
 	viper.SetDefault("forward.token_signing_secret", "change-me-in-production")
 
 	// Subscription defaults

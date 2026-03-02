@@ -32,8 +32,8 @@ func (a *jwtServiceAdapter) Generate(userUUID string, sessionID string, role aut
 	}, nil
 }
 
-func (a *jwtServiceAdapter) Refresh(refreshToken string) (*usecases.TokenPair, error) {
-	pair, err := a.JWTService.Refresh(refreshToken)
+func (a *jwtServiceAdapter) Refresh(refreshToken string, freshRole authorization.UserRole) (*usecases.TokenPair, error) {
+	pair, err := a.JWTService.Refresh(refreshToken, freshRole)
 	if err != nil {
 		return nil, err
 	}

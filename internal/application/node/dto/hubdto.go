@@ -61,6 +61,7 @@ type NodeConfigSyncData struct {
 // NodeConfigData represents the node configuration to sync.
 type NodeConfigData struct {
 	NodeSID           string          `json:"node_id"`
+	Status            string          `json:"status"`   // active, inactive, maintenance
 	Protocol          string          `json:"protocol"`
 	ServerHost        string          `json:"server_host"`
 	ServerPort        int             `json:"server_port"`
@@ -120,6 +121,7 @@ func ToNodeConfigData(n *node.Node, referencedNodes []*node.Node, serverKeyFunc 
 
 	config := &NodeConfigData{
 		NodeSID:           n.SID(),
+		Status:            string(n.Status()),
 		ServerHost:        n.EffectiveServerAddress(),
 		ServerPort:        int(n.AgentPort()),
 		TransportProtocol: "tcp", // Default to TCP

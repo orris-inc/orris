@@ -79,9 +79,23 @@ func (c *Container) initInfrastructure() {
 	// Initialize all repositories
 	c.repos = newRepositories(db, log)
 
-	// Initialize auth services
-	c.jwtSvc = auth.NewJWTService(cfg.Auth.JWT.Secret, cfg.Auth.JWT.AccessExpMinutes, cfg.Auth.JWT.RefreshExpDays)
+	// Initialize auth services (validates signing key strength in non-debug modes)
+	jwtSvc, err := auth.NewJWTService(
+		cfg.Auth.JWT.Secret,
+		cfg.Auth.JWT.AccessExpMinutes,
+		cfg.Auth.JWT.RefreshExpDays,
+		cfg.Server.Mode,
+	)
+	if err != nil {
+		log.Fatalw("JWT service initialization failed", "error", err)
+	}
+	c.jwtSvc = jwtSvc
 	c.jwtService = &jwtServiceAdapter{c.jwtSvc}
+
+	// Validate forward token signing secret before creating the agent token service
+	if err := auth.ValidateSigningKey(cfg.Forward.TokenSigningSecret, cfg.Server.Mode, "forward.token_signing_secret"); err != nil {
+		log.Fatalw("agent token service initialization failed", "error", err)
+	}
 
 	// Initialize HMAC-based agent token service for local token verification
 	c.agentTokenSvc = auth.NewAgentTokenService(cfg.Forward.TokenSigningSecret)

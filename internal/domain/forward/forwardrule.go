@@ -351,13 +351,14 @@ func ReconstructForwardRule(
 }
 
 // validateAddress validates the target address format.
-// It accepts valid IP addresses or RFC 1123 compliant domain names.
+// It accepts valid IP addresses (including private/internal) or RFC 1123 compliant domain names.
+// Private IPs are allowed because the forwarding agent (not the backend) connects to these addresses.
 func validateAddress(address string) error {
 	if address == "" {
 		return fmt.Errorf("address cannot be empty")
 	}
 
-	// Check if it's a valid IP
+	// Check if it's a valid IP (private IPs are allowed for internal network forwarding)
 	if ip := net.ParseIP(address); ip != nil {
 		return nil
 	}
