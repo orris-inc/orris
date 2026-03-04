@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/orris-inc/orris/internal/domain/node/valueobjects"
@@ -40,12 +41,14 @@ type SubscriptionUserInfo struct {
 }
 
 type SubscriptionValidationResult struct {
-	SubscriptionID     uint
-	SubscriptionUUID   string
-	PlanID             uint
-	EndDate            time.Time
-	CurrentPeriodStart time.Time
-	CurrentPeriodEnd   time.Time
+	SubscriptionID        uint
+	SubscriptionUUID      string
+	PlanID                uint
+	EndDate               time.Time
+	CurrentPeriodStart    time.Time
+	CurrentPeriodEnd      time.Time
+	TrafficLimitOverride  *uint64 // Override plan traffic limit (nil = use plan default, 0 = unlimited)
+	TrafficUsedAdjustment int64   // Adjustment to actual traffic usage
 }
 
 type SubscriptionTokenValidator interface {
@@ -323,18 +326,48 @@ func (uc *GenerateSubscriptionUseCase) buildUserInfo(ctx context.Context, valida
 		}
 	}
 
-	// Get traffic limit from plan (0 = unlimited)
-	trafficLimit, err := plan.GetTrafficLimit()
-	if err != nil {
-		uc.logger.Warnw("failed to get traffic limit from plan",
-			"plan_id", validation.PlanID,
-			"error", err,
-		)
-		trafficLimit = 0 // Treat as unlimited on error
+	// Get traffic limit: prefer subscription override, fallback to plan
+	var trafficLimit uint64
+	if validation.TrafficLimitOverride != nil {
+		trafficLimit = *validation.TrafficLimitOverride
+	} else {
+		var err error
+		trafficLimit, err = plan.GetTrafficLimit()
+		if err != nil {
+			uc.logger.Warnw("failed to get traffic limit from plan",
+				"plan_id", validation.PlanID,
+				"error", err,
+			)
+			trafficLimit = 0 // Treat as unlimited on error
+		}
 	}
 
 	// Calculate current period traffic usage
 	upload, download := uc.calculatePeriodTraffic(ctx, validation, plan)
+
+	// Apply traffic used adjustment
+	if adj := validation.TrafficUsedAdjustment; adj != 0 {
+		sum := upload + download
+		// Guard against uint64 -> int64 overflow (> 9.2 EB)
+		if sum > uint64(math.MaxInt64) {
+			sum = uint64(math.MaxInt64)
+		}
+		total := int64(sum) + adj
+		if total < 0 {
+			total = 0
+		}
+		// Distribute adjustment proportionally between upload and download
+		if upload+download > 0 {
+			ratio := float64(upload) / float64(upload+download)
+			upload = uint64(float64(total) * ratio)
+			download = uint64(total) - upload
+		} else {
+			// No traffic yet, apply adjustment to download
+			if total > 0 {
+				download = uint64(total)
+			}
+		}
+	}
 
 	return &SubscriptionUserInfo{
 		Upload:   upload,
