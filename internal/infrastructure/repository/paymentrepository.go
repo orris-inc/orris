@@ -12,17 +12,20 @@ import (
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/db"
+	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
 type PaymentRepository struct {
 	db     *gorm.DB
 	mapper mappers.PaymentMapper
+	log    logger.Interface
 }
 
-func NewPaymentRepository(db *gorm.DB) *PaymentRepository {
+func NewPaymentRepository(db *gorm.DB, log logger.Interface) *PaymentRepository {
 	return &PaymentRepository{
 		db:     db,
 		mapper: mappers.NewPaymentMapper(),
+		log:    log,
 	}
 }
 

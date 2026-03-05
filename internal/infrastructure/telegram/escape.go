@@ -1,15 +1,8 @@
 package telegram
 
-import "strings"
+import "html"
 
-// EscapeMarkdownV1 escapes Telegram Markdown V1 special characters.
-// Special chars: _ * ` [
-func EscapeMarkdownV1(s string) string {
-	replacer := strings.NewReplacer(
-		`_`, `\_`,
-		`*`, `\*`,
-		"`", "\\`",
-		`[`, `\[`,
-	)
-	return replacer.Replace(s)
+// EscapeHTML escapes HTML special characters for safe Telegram message formatting.
+func EscapeHTML(s string) string {
+	return html.EscapeString(s)
 }

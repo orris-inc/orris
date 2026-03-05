@@ -2,6 +2,7 @@ package telegram
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/orris-inc/orris/internal/infrastructure/telegram/i18n"
@@ -55,6 +56,9 @@ func (h *PollingUpdateHandler) HandleUpdate(ctx context.Context, update *Update)
 		return h.handleUnbindCommand(ctx, telegramUserID, lang)
 	case text == "/status":
 		return h.handleStatusCommand(ctx, telegramUserID, lang)
+	case text == "/lang" || strings.HasPrefix(text, "/lang "):
+		args := strings.TrimSpace(strings.TrimPrefix(text, "/lang"))
+		return h.handleLangCommand(ctx, telegramUserID, lang, args)
 	case strings.HasPrefix(text, "/adminbind "):
 		code := strings.TrimSpace(strings.TrimPrefix(text, "/adminbind "))
 		return h.handleAdminBindCommand(ctx, telegramUserID, username, lang, code)
@@ -93,7 +97,7 @@ func (h *PollingUpdateHandler) handleBindCommand(ctx context.Context, telegramUs
 		return h.service.SendBotMessage(telegramUserID, i18n.MsgBindMissingCode(lang))
 	}
 
-	_ = h.service.SendBotChatAction(telegramUserID, "typing")
+	_ = h.service.SendBotMessageDraft(telegramUserID, i18n.MsgDraftProcessing(lang))
 	err := h.service.BindFromWebhookForPolling(ctx, telegramUserID, username, code)
 	if err != nil {
 		h.logger.Errorw("failed to bind telegram from polling",
@@ -125,7 +129,7 @@ func (h *PollingUpdateHandler) handleUnbindCommand(ctx context.Context, telegram
 }
 
 func (h *PollingUpdateHandler) handleStatusCommand(ctx context.Context, telegramUserID int64, lang i18n.Lang) error {
-	_ = h.service.SendBotChatAction(telegramUserID, "typing")
+	_ = h.service.SendBotMessageDraft(telegramUserID, i18n.MsgDraftLoading(lang))
 	isBound, err := h.service.IsBoundByTelegramID(ctx, telegramUserID)
 	if err != nil {
 		h.logger.Errorw("failed to get binding status from polling",
@@ -146,6 +150,59 @@ func (h *PollingUpdateHandler) handleStatusCommand(ctx context.Context, telegram
 
 	// For bound status, just send a generic message since we don't have detailed info in polling mode
 	return h.service.SendBotMessage(telegramUserID, i18n.MsgStatusConnectedSimple(lang))
+}
+
+func (h *PollingUpdateHandler) handleLangCommand(ctx context.Context, telegramUserID int64, lang i18n.Lang, args string) error {
+	if args == "" {
+		// Show current language
+		storedLang, err := h.service.GetBindingLanguageByTelegramID(ctx, telegramUserID)
+		if err != nil {
+			if errors.Is(err, ErrBindingNotFound) {
+				return h.service.SendBotMessage(telegramUserID, i18n.MsgLangNotBound(lang))
+			}
+			h.logger.Errorw("failed to get binding language", "telegram_user_id", telegramUserID, "error", err)
+			return h.service.SendBotMessage(telegramUserID, i18n.MsgStatusError(lang))
+		}
+		currentLang := i18n.ParseLang(storedLang)
+		return h.service.SendBotMessage(telegramUserID, i18n.MsgLangCurrent(currentLang))
+	}
+
+	// Validate language argument
+	if args != "en" && args != "zh" {
+		return h.service.SendBotMessage(telegramUserID, i18n.MsgLangInvalid(lang))
+	}
+
+	// Check if user is bound before attempting update
+	if _, err := h.service.GetBindingLanguageByTelegramID(ctx, telegramUserID); err != nil {
+		if errors.Is(err, ErrBindingNotFound) {
+			return h.service.SendBotMessage(telegramUserID, i18n.MsgLangNotBound(lang))
+		}
+		h.logger.Errorw("failed to get binding language", "telegram_user_id", telegramUserID, "error", err)
+		return h.service.SendBotMessage(telegramUserID, i18n.MsgStatusError(lang))
+	}
+
+	newLang := i18n.Lang(args)
+
+	// Update user binding language
+	if err := h.service.UpdateBindingLanguage(ctx, telegramUserID, args); err != nil {
+		h.logger.Errorw("failed to update binding language for /lang command",
+			"telegram_user_id", telegramUserID,
+			"language", args,
+			"error", err,
+		)
+		return h.service.SendBotMessage(telegramUserID, i18n.MsgStatusError(lang))
+	}
+
+	// Also update admin binding language (best-effort)
+	if err := h.service.UpdateAdminBindingLanguage(ctx, telegramUserID, args); err != nil {
+		h.logger.Debugw("failed to update admin binding language for /lang command",
+			"telegram_user_id", telegramUserID,
+			"error", err,
+		)
+	}
+
+	// Reply in the new language
+	return h.service.SendBotMessage(telegramUserID, i18n.MsgLangSwitched(newLang))
 }
 
 func (h *PollingUpdateHandler) handleHelpCommand(telegramUserID int64, lang i18n.Lang) error {
@@ -201,6 +258,9 @@ func (h *PollingUpdateHandler) handleAdminStatusCommand(ctx context.Context, tel
 	return h.service.SendBotMessage(telegramUserID, i18n.MsgAdminStatusBound(lang))
 }
 
+// maxCallbackDataBytes is the maximum length of callback_data per Telegram Bot API spec (1-64 bytes).
+const maxCallbackDataBytes = 64
+
 // handleCallbackQuery handles callback queries from inline keyboard buttons
 func (h *PollingUpdateHandler) handleCallbackQuery(ctx context.Context, query *CallbackQuery) error {
 	if query == nil || query.Data == "" {
@@ -211,6 +271,13 @@ func (h *PollingUpdateHandler) handleCallbackQuery(ctx context.Context, query *C
 	lang := i18n.ZH
 	if query.From != nil && query.From.LanguageCode != "" {
 		lang = i18n.DetectLang(query.From.LanguageCode)
+	}
+
+	// Validate callback data length (Telegram spec: 1-64 bytes)
+	if len(query.Data) > maxCallbackDataBytes {
+		h.logger.Warnw("callback data exceeds max length", "len", len(query.Data))
+		_ = h.service.AnswerCallbackQuery(query.ID, i18n.MsgCallbackInvalidAction(lang), true)
+		return nil
 	}
 
 	// Parse callback data: format is "action:type:sid"

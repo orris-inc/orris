@@ -220,9 +220,9 @@ func newTestAuthHandler(
 	return NewAuthHandler(
 		registerUC, loginUC, verifyEmailUC, requestResetUC, resetPasswordUC,
 		initiateOAuthUC, handleOAuthUC, refreshTokenUC, logoutUC,
-		userRepo, testutil.NewMockLogger(),
+		userRepo,
 		config.CookieConfig{}, config.JWTConfig{}, config.SessionConfig{},
-		"http://localhost:3000/callback", nil, emailChecker,
+		"http://localhost:3000/callback", nil, emailChecker, testutil.NewMockLogger(),
 	)
 }
 

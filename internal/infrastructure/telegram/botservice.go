@@ -210,16 +210,42 @@ func (s *BotService) GetUpdatesWithContext(ctx context.Context, offset int64, ti
 	return result.Result, nil
 }
 
+// linkPreviewDisabled is the standard link_preview_options to disable link previews
+// in notification messages, preventing unwanted URL expansion.
+var linkPreviewDisabled = map[string]any{"is_disabled": true}
+
 // SendMessage sends a plain text message to a chat (HTML format).
 // Long messages are automatically split into multiple chunks.
+// Link previews are disabled by default for notification messages.
 func (s *BotService) SendMessage(chatID int64, text string) error {
 	chunks := splitMessage(text, maxMessageLength)
 	for _, chunk := range chunks {
 		url := fmt.Sprintf("%s/sendMessage", s.baseURL)
 		body := map[string]any{
-			"chat_id":    chatID,
-			"text":       chunk,
-			"parse_mode": "HTML",
+			"chat_id":              chatID,
+			"text":                 chunk,
+			"parse_mode":           "HTML",
+			"link_preview_options": linkPreviewDisabled,
+		}
+		if err := s.makeRequest(url, body); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// SendMessageSilent sends a message silently (no notification sound) with HTML format.
+// Suitable for non-urgent notifications like daily summaries, recovery alerts, etc.
+func (s *BotService) SendMessageSilent(chatID int64, text string) error {
+	chunks := splitMessage(text, maxMessageLength)
+	for _, chunk := range chunks {
+		url := fmt.Sprintf("%s/sendMessage", s.baseURL)
+		body := map[string]any{
+			"chat_id":              chatID,
+			"text":                 chunk,
+			"parse_mode":           "HTML",
+			"disable_notification": true,
+			"link_preview_options": linkPreviewDisabled,
 		}
 		if err := s.makeRequest(url, body); err != nil {
 			return err
@@ -245,33 +271,15 @@ func (s *BotService) SendMessagePlain(chatID int64, text string) error {
 	return nil
 }
 
-// SendMessageMarkdown sends a markdown formatted message to a chat.
-// Deprecated: Use SendMessage with HTML format instead.
-// Long messages are automatically split into multiple chunks.
-func (s *BotService) SendMessageMarkdown(chatID int64, text string) error {
-	chunks := splitMessage(text, maxMessageLength)
-	for _, chunk := range chunks {
-		url := fmt.Sprintf("%s/sendMessage", s.baseURL)
-		body := map[string]any{
-			"chat_id":    chatID,
-			"text":       chunk,
-			"parse_mode": "Markdown",
-		}
-		if err := s.makeRequest(url, body); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // SendMessageWithKeyboard sends a message with a reply keyboard (HTML format)
 func (s *BotService) SendMessageWithKeyboard(chatID int64, text string, keyboard any) error {
 	url := fmt.Sprintf("%s/sendMessage", s.baseURL)
 	body := map[string]any{
-		"chat_id":      chatID,
-		"text":         text,
-		"parse_mode":   "HTML",
-		"reply_markup": keyboard,
+		"chat_id":              chatID,
+		"text":                 text,
+		"parse_mode":           "HTML",
+		"link_preview_options": linkPreviewDisabled,
+		"reply_markup":         keyboard,
 	}
 
 	return s.makeRequest(url, body)
@@ -281,10 +289,27 @@ func (s *BotService) SendMessageWithKeyboard(chatID int64, text string, keyboard
 func (s *BotService) SendMessageWithInlineKeyboard(chatID int64, text string, keyboard any) error {
 	url := fmt.Sprintf("%s/sendMessage", s.baseURL)
 	body := map[string]any{
-		"chat_id":      chatID,
-		"text":         text,
-		"parse_mode":   "HTML",
-		"reply_markup": keyboard,
+		"chat_id":              chatID,
+		"text":                 text,
+		"parse_mode":           "HTML",
+		"link_preview_options": linkPreviewDisabled,
+		"reply_markup":         keyboard,
+	}
+
+	return s.makeRequest(url, body)
+}
+
+// SendMessageSilentWithInlineKeyboard sends a silent message with an inline keyboard (HTML format).
+// Suitable for non-urgent notifications that include interactive buttons.
+func (s *BotService) SendMessageSilentWithInlineKeyboard(chatID int64, text string, keyboard any) error {
+	url := fmt.Sprintf("%s/sendMessage", s.baseURL)
+	body := map[string]any{
+		"chat_id":              chatID,
+		"text":                 text,
+		"parse_mode":           "HTML",
+		"disable_notification": true,
+		"link_preview_options": linkPreviewDisabled,
+		"reply_markup":         keyboard,
 	}
 
 	return s.makeRequest(url, body)
@@ -294,10 +319,11 @@ func (s *BotService) SendMessageWithInlineKeyboard(chatID int64, text string, ke
 func (s *BotService) EditMessageText(chatID int64, messageID int64, text string) error {
 	url := fmt.Sprintf("%s/editMessageText", s.baseURL)
 	body := map[string]any{
-		"chat_id":    chatID,
-		"message_id": messageID,
-		"text":       text,
-		"parse_mode": "HTML",
+		"chat_id":              chatID,
+		"message_id":           messageID,
+		"text":                 text,
+		"parse_mode":           "HTML",
+		"link_preview_options": linkPreviewDisabled,
 	}
 
 	return s.makeRequest(url, body)
@@ -307,11 +333,12 @@ func (s *BotService) EditMessageText(chatID int64, messageID int64, text string)
 func (s *BotService) EditMessageWithInlineKeyboard(chatID int64, messageID int64, text string, keyboard any) error {
 	url := fmt.Sprintf("%s/editMessageText", s.baseURL)
 	body := map[string]any{
-		"chat_id":      chatID,
-		"message_id":   messageID,
-		"text":         text,
-		"parse_mode":   "HTML",
-		"reply_markup": keyboard,
+		"chat_id":              chatID,
+		"message_id":           messageID,
+		"text":                 text,
+		"parse_mode":           "HTML",
+		"link_preview_options": linkPreviewDisabled,
+		"reply_markup":         keyboard,
 	}
 
 	return s.makeRequest(url, body)
@@ -580,6 +607,25 @@ func (s *BotService) SendChatAction(chatID int64, action string) error {
 	}
 	url := fmt.Sprintf("%s/sendChatAction", s.baseURL)
 	body := map[string]any{"chat_id": chatID, "action": action}
+	return s.doRequest(url, body)
+}
+
+// SendMessageDraft sends a draft message that appears as a "typing" bubble
+// with real-time text preview (Bot API 9.5+).
+// This replaces sendChatAction("typing") for a richer streaming experience.
+// Fire-and-forget like SendChatAction: skip retry, respect circuit breaker.
+// IMPORTANT: text is rendered as HTML. Callers must ensure text is HTML-safe
+// (use html.EscapeString for any user-provided data).
+func (s *BotService) SendMessageDraft(chatID int64, text string) error {
+	if s.cb.State() == gobreaker.StateOpen {
+		return ErrCircuitOpen
+	}
+	url := fmt.Sprintf("%s/sendMessageDraft", s.baseURL)
+	body := map[string]any{
+		"chat_id":    chatID,
+		"text":       text,
+		"parse_mode": "HTML",
+	}
 	return s.doRequest(url, body)
 }
 

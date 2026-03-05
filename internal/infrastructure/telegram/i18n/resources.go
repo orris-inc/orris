@@ -31,30 +31,38 @@ func BuildResourceExpiringMessage(lang Lang, agents []ExpiringResourceInfo, node
 
 		// Forward Agents section
 		if len(agents) > 0 {
-			msg += fmt.Sprintf("\n📡 <b>Forward Agent (%d)</b>\n", len(agents))
-			for _, a := range agents {
+			msg += fmt.Sprintf("\n📡 <b>Forward Agent (%d)</b>\n<blockquote>", len(agents))
+			for i, a := range agents {
+				if i > 0 {
+					msg += "\n"
+				}
 				urgencyIcon := getUrgencyIcon(a.DaysRemaining)
 				expiresAtStr := biztime.FormatInBizTimezone(a.ExpiresAt, "2006-01-02")
-				msg += fmt.Sprintf("%s <code>%s</code> - %s\n", urgencyIcon, a.SID, html.EscapeString(a.Name))
-				msg += fmt.Sprintf("   └ %s (%s)\n", formatDaysRemainingEN(a.DaysRemaining), expiresAtStr)
+				msg += fmt.Sprintf("%s <code>%s</code> - %s\n", urgencyIcon, html.EscapeString(a.SID), html.EscapeString(a.Name))
+				msg += fmt.Sprintf("   └ %s (%s)", formatDaysRemainingEN(a.DaysRemaining), expiresAtStr)
 				if a.CostLabel != nil && *a.CostLabel != "" {
-					msg += fmt.Sprintf("   └ Cost: %s\n", html.EscapeString(*a.CostLabel))
+					msg += fmt.Sprintf("\n   └ Cost: %s", html.EscapeString(*a.CostLabel))
 				}
 			}
+			msg += "</blockquote>\n"
 		}
 
 		// Nodes section
 		if len(nodes) > 0 {
-			msg += fmt.Sprintf("\n🖥 <b>Node (%d)</b>\n", len(nodes))
-			for _, n := range nodes {
+			msg += fmt.Sprintf("\n🖥 <b>Node (%d)</b>\n<blockquote>", len(nodes))
+			for i, n := range nodes {
+				if i > 0 {
+					msg += "\n"
+				}
 				urgencyIcon := getUrgencyIcon(n.DaysRemaining)
 				expiresAtStr := biztime.FormatInBizTimezone(n.ExpiresAt, "2006-01-02")
-				msg += fmt.Sprintf("%s <code>%s</code> - %s\n", urgencyIcon, n.SID, html.EscapeString(n.Name))
-				msg += fmt.Sprintf("   └ %s (%s)\n", formatDaysRemainingEN(n.DaysRemaining), expiresAtStr)
+				msg += fmt.Sprintf("%s <code>%s</code> - %s\n", urgencyIcon, html.EscapeString(n.SID), html.EscapeString(n.Name))
+				msg += fmt.Sprintf("   └ %s (%s)", formatDaysRemainingEN(n.DaysRemaining), expiresAtStr)
 				if n.CostLabel != nil && *n.CostLabel != "" {
-					msg += fmt.Sprintf("   └ Cost: %s\n", html.EscapeString(*n.CostLabel))
+					msg += fmt.Sprintf("\n   └ Cost: %s", html.EscapeString(*n.CostLabel))
 				}
 			}
+			msg += "</blockquote>\n"
 		}
 
 		msg += "\n💡 Please renew in time to avoid service interruption"
@@ -63,30 +71,38 @@ func BuildResourceExpiringMessage(lang Lang, agents []ExpiringResourceInfo, node
 
 		// Forward Agents section
 		if len(agents) > 0 {
-			msg += fmt.Sprintf("\n📡 <b>Forward Agent (%d个)</b>\n", len(agents))
-			for _, a := range agents {
+			msg += fmt.Sprintf("\n📡 <b>Forward Agent (%d个)</b>\n<blockquote>", len(agents))
+			for i, a := range agents {
+				if i > 0 {
+					msg += "\n"
+				}
 				urgencyIcon := getUrgencyIcon(a.DaysRemaining)
 				expiresAtStr := biztime.FormatInBizTimezone(a.ExpiresAt, "2006-01-02")
-				msg += fmt.Sprintf("%s <code>%s</code> - %s\n", urgencyIcon, a.SID, html.EscapeString(a.Name))
-				msg += fmt.Sprintf("   └ %s (%s)\n", formatDaysRemainingZH(a.DaysRemaining), expiresAtStr)
+				msg += fmt.Sprintf("%s <code>%s</code> - %s\n", urgencyIcon, html.EscapeString(a.SID), html.EscapeString(a.Name))
+				msg += fmt.Sprintf("   └ %s (%s)", formatDaysRemainingZH(a.DaysRemaining), expiresAtStr)
 				if a.CostLabel != nil && *a.CostLabel != "" {
-					msg += fmt.Sprintf("   └ 费用: %s\n", html.EscapeString(*a.CostLabel))
+					msg += fmt.Sprintf("\n   └ 费用: %s", html.EscapeString(*a.CostLabel))
 				}
 			}
+			msg += "</blockquote>\n"
 		}
 
 		// Nodes section
 		if len(nodes) > 0 {
-			msg += fmt.Sprintf("\n🖥 <b>Node (%d个)</b>\n", len(nodes))
-			for _, n := range nodes {
+			msg += fmt.Sprintf("\n🖥 <b>Node (%d个)</b>\n<blockquote>", len(nodes))
+			for i, n := range nodes {
+				if i > 0 {
+					msg += "\n"
+				}
 				urgencyIcon := getUrgencyIcon(n.DaysRemaining)
 				expiresAtStr := biztime.FormatInBizTimezone(n.ExpiresAt, "2006-01-02")
-				msg += fmt.Sprintf("%s <code>%s</code> - %s\n", urgencyIcon, n.SID, html.EscapeString(n.Name))
-				msg += fmt.Sprintf("   └ %s (%s)\n", formatDaysRemainingZH(n.DaysRemaining), expiresAtStr)
+				msg += fmt.Sprintf("%s <code>%s</code> - %s\n", urgencyIcon, html.EscapeString(n.SID), html.EscapeString(n.Name))
+				msg += fmt.Sprintf("   └ %s (%s)", formatDaysRemainingZH(n.DaysRemaining), expiresAtStr)
 				if n.CostLabel != nil && *n.CostLabel != "" {
-					msg += fmt.Sprintf("   └ 费用: %s\n", html.EscapeString(*n.CostLabel))
+					msg += fmt.Sprintf("\n   └ 费用: %s", html.EscapeString(*n.CostLabel))
 				}
 			}
+			msg += "</blockquote>\n"
 		}
 
 		msg += "\n💡 请及时续费，避免服务中断"

@@ -73,7 +73,7 @@ func (uc *SendPaymentSuccessUseCase) SendAlert(ctx context.Context, payment dto.
 			payment.PaidAt,
 		)
 
-		if err := uc.botService.SendMessage(binding.TelegramUserID(), message); err != nil {
+		if err := uc.botService.SendMessageSilent(binding.TelegramUserID(), message); err != nil {
 			if telegram.IsBotBlocked(err) {
 				uc.logger.Warnw("bot blocked by user, skipping notification",
 					"telegram_user_id", binding.TelegramUserID())

@@ -29,7 +29,7 @@ func (s *ServiceDDD) NotifyNewUser(ctx context.Context, cmd NotifyNewUserCommand
 	for i, binding := range bindings {
 		lang := i18n.ParseLang(binding.Language())
 		message := i18n.BuildNewUserMessage(lang, cmd.UserSID, cmd.Email, cmd.Name, cmd.Source, cmd.CreatedAt)
-		if err := s.botService.SendMessage(binding.TelegramUserID(), message); err != nil {
+		if err := s.botService.SendMessageSilent(binding.TelegramUserID(), message); err != nil {
 			if telegram.IsBotBlocked(err) {
 				s.logger.Warnw("bot blocked by user, skipping notification",
 					"telegram_user_id", binding.TelegramUserID())
@@ -81,7 +81,7 @@ func (s *ServiceDDD) NotifyPaymentSuccess(ctx context.Context, cmd NotifyPayment
 			cmd.TransactionID,
 			cmd.PaidAt,
 		)
-		if err := s.botService.SendMessage(binding.TelegramUserID(), message); err != nil {
+		if err := s.botService.SendMessageSilent(binding.TelegramUserID(), message); err != nil {
 			if telegram.IsBotBlocked(err) {
 				s.logger.Warnw("bot blocked by user, skipping notification",
 					"telegram_user_id", binding.TelegramUserID())
@@ -143,7 +143,7 @@ func (s *ServiceDDD) NotifyNodeOnline(ctx context.Context, cmd NotifyNodeOnlineC
 		lang := i18n.ParseLang(binding.Language())
 		message := i18n.BuildNodeOnlineMessage(lang, cmd.NodeSID, cmd.NodeName, biztime.NowUTC())
 		keyboard := i18n.BuildMuteKeyboard(lang, "node", cmd.NodeSID)
-		if err := s.botService.SendMessageWithInlineKeyboard(binding.TelegramUserID(), message, keyboard); err != nil {
+		if err := s.botService.SendMessageSilentWithInlineKeyboard(binding.TelegramUserID(), message, keyboard); err != nil {
 			if telegram.IsBotBlocked(err) {
 				s.logger.Warnw("bot blocked by user, skipping notification",
 					"telegram_user_id", binding.TelegramUserID())
@@ -256,7 +256,7 @@ func (s *ServiceDDD) NotifyAgentOnline(ctx context.Context, cmd NotifyAgentOnlin
 		lang := i18n.ParseLang(binding.Language())
 		message := i18n.BuildAgentOnlineMessage(lang, cmd.AgentSID, cmd.AgentName, biztime.NowUTC())
 		keyboard := i18n.BuildMuteKeyboard(lang, "agent", cmd.AgentSID)
-		if err := s.botService.SendMessageWithInlineKeyboard(binding.TelegramUserID(), message, keyboard); err != nil {
+		if err := s.botService.SendMessageSilentWithInlineKeyboard(binding.TelegramUserID(), message, keyboard); err != nil {
 			if telegram.IsBotBlocked(err) {
 				s.logger.Warnw("bot blocked by user, skipping notification",
 					"telegram_user_id", binding.TelegramUserID())
@@ -359,7 +359,7 @@ func (s *ServiceDDD) NotifyNodeRecovery(ctx context.Context, cmd NotifyNodeRecov
 	for i, binding := range bindings {
 		lang := i18n.ParseLang(binding.Language())
 		message := i18n.BuildNodeRecoveryMessage(lang, cmd.NodeSID, cmd.NodeName, cmd.OnlineAt, cmd.DowntimeMinutes)
-		if err := s.botService.SendMessage(binding.TelegramUserID(), message); err != nil {
+		if err := s.botService.SendMessageSilent(binding.TelegramUserID(), message); err != nil {
 			if telegram.IsBotBlocked(err) {
 				s.logger.Warnw("bot blocked by user, skipping notification",
 					"telegram_user_id", binding.TelegramUserID())
@@ -411,7 +411,7 @@ func (s *ServiceDDD) NotifyAgentRecovery(ctx context.Context, cmd NotifyAgentRec
 	for i, binding := range bindings {
 		lang := i18n.ParseLang(binding.Language())
 		message := i18n.BuildAgentRecoveryMessage(lang, cmd.AgentSID, cmd.AgentName, cmd.OnlineAt, cmd.DowntimeMinutes)
-		if err := s.botService.SendMessage(binding.TelegramUserID(), message); err != nil {
+		if err := s.botService.SendMessageSilent(binding.TelegramUserID(), message); err != nil {
 			if telegram.IsBotBlocked(err) {
 				s.logger.Warnw("bot blocked by user, skipping notification",
 					"telegram_user_id", binding.TelegramUserID())

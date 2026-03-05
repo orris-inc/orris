@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/orris-inc/orris/internal/application/telegram/admin/dto"
+	"github.com/orris-inc/orris/internal/application/telegram/admin/usecases"
 	telegramAdmin "github.com/orris-inc/orris/internal/domain/telegram/admin"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -23,12 +24,8 @@ const (
 	startupCooldown = 60 * time.Second
 )
 
-// TelegramMessageSender sends messages via Telegram (HTML format)
-type TelegramMessageSender interface {
-	SendMessage(chatID int64, text string) error
-	SendMessageWithInlineKeyboard(chatID int64, text string, keyboard any) error
-	SendChatAction(chatID int64, action string) error
-}
+// TelegramMessageSender is an alias to the canonical definition in usecases package.
+type TelegramMessageSender = usecases.TelegramMessageSender
 
 // BotLinkProvider provides the Telegram bot link
 type BotLinkProvider interface {

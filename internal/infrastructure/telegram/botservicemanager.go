@@ -126,23 +126,22 @@ func (m *BotServiceManager) startWebhookMode() error {
 	return nil
 }
 
-// setupBotCommands sets up the bot command menu for auto-completion
+// setupBotCommands sets up the bot command menu for auto-completion.
+// Sets user commands as the default scope so regular users don't see admin commands.
 func (m *BotServiceManager) setupBotCommands() {
 	if m.botService == nil {
 		return
 	}
 
-	// Use admin commands as default (includes all commands)
-	// Regular users will just see commands they don't have access to fail gracefully
-	commands := GetAdminCommands()
-
-	if err := m.botService.SetMyCommands(commands); err != nil {
-		m.logger.Warnw("failed to set bot commands", "error", err)
+	// Set user commands as the default scope
+	userCommands := GetDefaultUserCommands()
+	if err := m.botService.SetMyCommands(userCommands); err != nil {
+		m.logger.Warnw("failed to set default bot commands", "error", err)
 		return
 	}
 
 	m.logger.Infow("bot commands configured for auto-completion",
-		"command_count", len(commands),
+		"default_command_count", len(userCommands),
 	)
 }
 
@@ -351,14 +350,14 @@ func (d *DynamicBotService) SendMessage(chatID int64, text string) error {
 	return botService.SendMessage(chatID, text)
 }
 
-// SendMessageMarkdown sends a markdown formatted message to a chat
-func (d *DynamicBotService) SendMessageMarkdown(chatID int64, text string) error {
+// SendMessageSilent sends a silent message (no notification sound) with HTML format
+func (d *DynamicBotService) SendMessageSilent(chatID int64, text string) error {
 	botService := d.manager.GetBotService()
 	if botService == nil {
-		d.logger.Debugw("telegram markdown message skipped: bot service not available", "chat_id", chatID)
+		d.logger.Debugw("telegram silent message skipped: bot service not available", "chat_id", chatID)
 		return nil
 	}
-	return botService.SendMessageMarkdown(chatID, text)
+	return botService.SendMessageSilent(chatID, text)
 }
 
 // SendMessageWithKeyboard sends a message with a reply keyboard
@@ -379,6 +378,16 @@ func (d *DynamicBotService) SendMessageWithInlineKeyboard(chatID int64, text str
 		return nil
 	}
 	return botService.SendMessageWithInlineKeyboard(chatID, text, keyboard)
+}
+
+// SendMessageSilentWithInlineKeyboard sends a silent message with an inline keyboard
+func (d *DynamicBotService) SendMessageSilentWithInlineKeyboard(chatID int64, text string, keyboard any) error {
+	botService := d.manager.GetBotService()
+	if botService == nil {
+		d.logger.Debugw("telegram silent message with inline keyboard skipped: bot service not available", "chat_id", chatID)
+		return nil
+	}
+	return botService.SendMessageSilentWithInlineKeyboard(chatID, text, keyboard)
 }
 
 // GetDefaultReplyKeyboard returns the default reply keyboard with common commands
@@ -432,4 +441,14 @@ func (d *DynamicBotService) SendChatAction(chatID int64, action string) error {
 		return nil
 	}
 	return botService.SendChatAction(chatID, action)
+}
+
+// SendMessageDraft sends a draft message that appears in the typing bubble
+func (d *DynamicBotService) SendMessageDraft(chatID int64, text string) error {
+	botService := d.manager.GetBotService()
+	if botService == nil {
+		d.logger.Debugw("telegram draft message skipped: bot service not available", "chat_id", chatID)
+		return nil
+	}
+	return botService.SendMessageDraft(chatID, text)
 }

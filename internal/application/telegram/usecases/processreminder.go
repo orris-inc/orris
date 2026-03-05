@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 	"fmt"
+	"html"
 	"math"
 	"strings"
 	"time"
@@ -15,9 +16,9 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
-// TelegramMessageSender sends messages via Telegram
+// TelegramMessageSender sends messages via Telegram (HTML format)
 type TelegramMessageSender interface {
-	SendMessageMarkdown(chatID int64, text string) error
+	SendMessage(chatID int64, text string) error
 	SendChatAction(chatID int64, action string) error
 }
 
@@ -156,7 +157,7 @@ func (uc *ProcessReminderUseCase) processExpiringSubscriptions(ctx context.Conte
 
 		// Send message
 		_ = uc.botService.SendChatAction(binding.TelegramUserID(), "typing")
-		if err := uc.botService.SendMessageMarkdown(binding.TelegramUserID(), message); err != nil {
+		if err := uc.botService.SendMessage(binding.TelegramUserID(), message); err != nil {
 			if telegramInfra.IsBotBlocked(err) {
 				uc.logger.Warnw("bot blocked by user, skipping notification",
 					"telegram_user_id", binding.TelegramUserID())
@@ -297,7 +298,7 @@ func (uc *ProcessReminderUseCase) processTrafficUsage(ctx context.Context) (int,
 
 		// Send message
 		_ = uc.botService.SendChatAction(binding.TelegramUserID(), "typing")
-		if err := uc.botService.SendMessageMarkdown(binding.TelegramUserID(), message); err != nil {
+		if err := uc.botService.SendMessage(binding.TelegramUserID(), message); err != nil {
 			if telegramInfra.IsBotBlocked(err) {
 				uc.logger.Warnw("bot blocked by user, skipping notification",
 					"telegram_user_id", binding.TelegramUserID())
@@ -319,10 +320,13 @@ func (uc *ProcessReminderUseCase) processTrafficUsage(ctx context.Context) (int,
 }
 
 func (uc *ProcessReminderUseCase) buildExpiringMessage(subs []*subscription.Subscription, days int) string {
-	msg := fmt.Sprintf("⏰ *订阅即将到期 / Expiring Soon*\n\n"+
+	msg := fmt.Sprintf("⏰ <b>订阅即将到期 / Expiring Soon</b>\n\n"+
 		"您有 %d 个订阅将在 %d 天内到期\n"+
-		"%d subscription(s) expiring within %d days:\n\n", len(subs), days, len(subs), days)
-	for _, sub := range subs {
+		"%d subscription(s) expiring within %d days:\n\n<blockquote>", len(subs), days, len(subs), days)
+	for i, sub := range subs {
+		if i > 0 {
+			msg += "\n"
+		}
 		// Use ceiling to ensure 23.5 hours shows as 1 day, not 0
 		hoursLeft := time.Until(sub.EndDate()).Hours()
 		daysLeft := int(math.Ceil(hoursLeft / 24))
@@ -335,28 +339,28 @@ func (uc *ProcessReminderUseCase) buildExpiringMessage(subs []*subscription.Subs
 		} else if daysLeft <= 3 {
 			urgency = "🟠"
 		}
-		msg += fmt.Sprintf("%s `%s`\n   └ *%d 天后到期* / Expires in *%d day(s)*\n   └ %s\n",
+		msg += fmt.Sprintf("%s <code>%s</code>\n   └ <b>%d 天后到期</b> / Expires in <b>%d day(s)</b>\n   └ %s",
 			urgency,
-			sub.SID(),
+			html.EscapeString(sub.SID()),
 			daysLeft,
 			daysLeft,
 			biztime.FormatInBizTimezone(sub.EndDate(), "2006-01-02"),
 		)
 	}
-	msg += "\n💡 请及时续费，避免服务中断\nRenew now to avoid interruption"
+	msg += "</blockquote>\n\n💡 请及时续费，避免服务中断\nRenew now to avoid interruption"
 	return msg
 }
 
 func (uc *ProcessReminderUseCase) buildTrafficMessage(subs []highUsageInfo, threshold int) string {
-	msg := fmt.Sprintf("📊 *流量使用警告 / Traffic Alert*\n\n"+
+	msg := fmt.Sprintf("📊 <b>流量使用警告 / Traffic Alert</b>\n\n"+
 		"以下套餐已使用超过 %d%% 流量\n"+
 		"Plans exceeded %d%% traffic usage:\n\n", threshold, threshold)
 	for _, item := range subs {
 		bar := buildProgressBar(item.Percent)
-		msg += fmt.Sprintf("📦 `%s`\n"+
-			"   %s *%d%%*\n"+
+		msg += fmt.Sprintf("📦 <code>%s</code>\n"+
+			"   %s <b>%d%%</b>\n"+
 			"   已用 Used: %s / %s\n\n",
-			telegramInfra.EscapeMarkdownV1(item.PlanName),
+			html.EscapeString(item.PlanName),
 			bar,
 			item.Percent,
 			formatBytes(item.UsedBytes),

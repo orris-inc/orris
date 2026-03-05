@@ -2,6 +2,8 @@ package telegram
 
 import (
 	"context"
+	"errors"
+	"strings"
 )
 
 // TelegramServiceForPolling defines the interface for telegram service operations needed by polling
@@ -12,6 +14,8 @@ type TelegramServiceForPolling interface {
 	SendBotMessage(chatID int64, text string) error
 	SendBotMessageWithKeyboard(chatID int64, text string) error
 	SendBotChatAction(chatID int64, action string) error
+	SendBotMessageDraft(chatID int64, text string) error
+	GetBindingLanguageByTelegramID(ctx context.Context, telegramUserID int64) (string, error)
 	UpdateBindingLanguage(ctx context.Context, telegramUserID int64, language string) error
 	UpdateAdminBindingLanguage(ctx context.Context, telegramUserID int64, language string) error
 	// Admin binding
@@ -69,6 +73,7 @@ type ServiceAdapter struct {
 	callbackAnswerer     CallbackAnswerer
 	bindFunc             func(ctx context.Context, telegramUserID int64, telegramUsername, verifyCode string) error
 	getBindingStatus     func(ctx context.Context, telegramUserID int64) (bool, error)
+	getBindingLangFunc   func(ctx context.Context, telegramUserID int64) (string, error)
 	updateLanguageFunc   func(ctx context.Context, telegramUserID int64, language string) error
 	updateAdminLangFunc  func(ctx context.Context, telegramUserID int64, language string) error
 }
@@ -79,6 +84,7 @@ func NewServiceAdapter(service interface {
 },
 	bindFunc func(ctx context.Context, telegramUserID int64, telegramUsername, verifyCode string) error,
 	getBindingStatus func(ctx context.Context, telegramUserID int64) (bool, error),
+	getBindingLangFunc func(ctx context.Context, telegramUserID int64) (string, error),
 	updateLanguageFunc func(ctx context.Context, telegramUserID int64, language string) error,
 	updateAdminLangFunc func(ctx context.Context, telegramUserID int64, language string) error,
 ) *ServiceAdapter {
@@ -86,6 +92,7 @@ func NewServiceAdapter(service interface {
 		binder:              service,
 		bindFunc:            bindFunc,
 		getBindingStatus:    getBindingStatus,
+		getBindingLangFunc:  getBindingLangFunc,
 		updateLanguageFunc:  updateLanguageFunc,
 		updateAdminLangFunc: updateAdminLangFunc,
 	}
@@ -113,6 +120,9 @@ func (a *ServiceAdapter) IsBoundByTelegramID(ctx context.Context, telegramUserID
 
 // SendBotMessage implements TelegramServiceForPolling
 func (a *ServiceAdapter) SendBotMessage(chatID int64, text string) error {
+	if a.botServiceGetter == nil {
+		return nil
+	}
 	botService := a.botServiceGetter.GetBotService()
 	if botService == nil {
 		return nil
@@ -122,6 +132,9 @@ func (a *ServiceAdapter) SendBotMessage(chatID int64, text string) error {
 
 // SendBotMessageWithKeyboard implements TelegramServiceForPolling
 func (a *ServiceAdapter) SendBotMessageWithKeyboard(chatID int64, text string) error {
+	if a.botServiceGetter == nil {
+		return nil
+	}
 	botService := a.botServiceGetter.GetBotService()
 	if botService == nil {
 		return nil
@@ -132,11 +145,26 @@ func (a *ServiceAdapter) SendBotMessageWithKeyboard(chatID int64, text string) e
 
 // SendBotChatAction implements TelegramServiceForPolling
 func (a *ServiceAdapter) SendBotChatAction(chatID int64, action string) error {
+	if a.botServiceGetter == nil {
+		return nil
+	}
 	botService := a.botServiceGetter.GetBotService()
 	if botService == nil {
 		return nil
 	}
 	return botService.SendChatAction(chatID, action)
+}
+
+// SendBotMessageDraft implements TelegramServiceForPolling
+func (a *ServiceAdapter) SendBotMessageDraft(chatID int64, text string) error {
+	if a.botServiceGetter == nil {
+		return nil
+	}
+	botService := a.botServiceGetter.GetBotService()
+	if botService == nil {
+		return nil
+	}
+	return botService.SendMessageDraft(chatID, text)
 }
 
 // SetAdminBinder sets the admin binder service (used to break circular dependency)
@@ -237,6 +265,23 @@ func (a *ServiceAdapter) EditMessageReplyMarkup(chatID int64, messageID int64, k
 		return nil
 	}
 	return a.callbackAnswerer.EditMessageReplyMarkup(chatID, messageID, keyboard)
+}
+
+// GetBindingLanguageByTelegramID implements TelegramServiceForPolling.
+// Translates domain ErrBindingNotFound to the local ErrBindingNotFound sentinel.
+func (a *ServiceAdapter) GetBindingLanguageByTelegramID(ctx context.Context, telegramUserID int64) (string, error) {
+	if a.getBindingLangFunc == nil {
+		return "", errors.New("get binding language not configured")
+	}
+	lang, err := a.getBindingLangFunc(ctx, telegramUserID)
+	if err != nil {
+		// Translate domain "not found" errors to local sentinel
+		if strings.Contains(err.Error(), "binding not found") {
+			return "", ErrBindingNotFound
+		}
+		return "", err
+	}
+	return lang, nil
 }
 
 // UpdateBindingLanguage implements TelegramServiceForPolling

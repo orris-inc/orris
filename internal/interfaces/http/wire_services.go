@@ -137,7 +137,7 @@ func newRepositories(db *gorm.DB, log logger.Interface) *repositories {
 		subscriptionUsageRepo:      repository.NewSubscriptionUsageRepository(db, log),
 		subscriptionUsageStatsRepo: repository.NewSubscriptionUsageStatsRepository(db, log),
 		planPricingRepo:            repository.NewPlanPricingRepository(db, log),
-		paymentRepo:                repository.NewPaymentRepository(db),
+		paymentRepo:                repository.NewPaymentRepository(db, log),
 		nodeRepoImpl:               repository.NewNodeRepository(db, log),
 		forwardRuleRepo:            repository.NewForwardRuleRepository(db, log),
 		forwardAgentRepo:           repository.NewForwardAgentRepository(db, log),
@@ -486,10 +486,10 @@ func (c *Container) initSettingsAndAuth() {
 
 	hdlrs.authHandler = handlers.NewAuthHandler(
 		ucs.registerUC, ucs.loginUC, ucs.verifyEmailUC, ucs.requestResetUC, ucs.resetPasswordUC,
-		ucs.initiateOAuthUC, ucs.handleOAuthUC, ucs.refreshTokenUC, ucs.logoutUC, repos.userRepo, log,
+		ucs.initiateOAuthUC, ucs.handleOAuthUC, ucs.refreshTokenUC, ucs.logoutUC, repos.userRepo,
 		cfg.Auth.Cookie, cfg.Auth.JWT, cfg.Auth.Session,
 		cfg.Server.FrontendCallbackURL, cfg.Server.AllowedOrigins,
-		c.emailManager,
+		c.emailManager, log,
 	)
 
 	// Initialize Passkey (WebAuthn) components if configured
@@ -609,6 +609,9 @@ func (c *Container) initTelegram() {
 			}
 			return status.IsBound, nil
 		},
+		func(ctx context.Context, telegramUserID int64) (string, error) {
+			return c.telegramServiceDDD.GetBindingLanguageByTelegramID(ctx, telegramUserID)
+		},
 		func(ctx context.Context, telegramUserID int64, language string) error {
 			return c.telegramServiceDDD.UpdateBindingLanguage(ctx, telegramUserID, language)
 		},
@@ -643,7 +646,7 @@ func (c *Container) initTelegram() {
 
 	// Initialize Telegram Handler
 	initialWebhookSecret := cfg.Telegram.WebhookSecret
-	hdlrs.telegramHandler = telegramHandlers.NewHandler(c.telegramServiceDDD, log, initialWebhookSecret)
+	hdlrs.telegramHandler = telegramHandlers.NewHandler(c.telegramServiceDDD, initialWebhookSecret, log)
 
 	// Inject SettingProvider for hot-reload support of webhook secret from database
 	settingProvider := c.settingServiceDDD.GetSettingProvider()

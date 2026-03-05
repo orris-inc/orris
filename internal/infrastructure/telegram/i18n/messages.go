@@ -20,15 +20,15 @@ func MsgBindMissingCode(lang Lang) string {
 func MsgBindSuccess(lang Lang) string {
 	if lang == EN {
 		return "✅ <b>Binding Successful</b>\n\n" +
-			"🔔 You will receive notifications for:\n" +
-			"  - Subscription expiry reminders\n" +
-			"  - Traffic usage alerts\n\n" +
+			"<blockquote>🔔 You will receive:\n" +
+			"• Subscription expiry reminders\n" +
+			"• Traffic usage alerts</blockquote>\n\n" +
 			"Use /status to view settings, /unbind to unlink"
 	}
 	return "✅ <b>绑定成功</b>\n\n" +
-		"🔔 您将收到以下通知：\n" +
-		"  - 订阅到期提醒\n" +
-		"  - 流量使用警告\n\n" +
+		"<blockquote>🔔 您将收到：\n" +
+		"• 订阅到期提醒\n" +
+		"• 流量使用警告</blockquote>\n\n" +
 		"使用 /status 查看设置，/unbind 解绑"
 }
 
@@ -63,11 +63,11 @@ func MsgUnbindSuccess(lang Lang) string {
 	if lang == EN {
 		return "✅ <b>Unlinked</b>\n\n" +
 			"🔕 You will no longer receive notifications\n\n" +
-			"Use /bind &lt;code&gt; to reconnect anytime"
+			"Use <code>/bind &lt;code&gt;</code> to reconnect anytime"
 	}
 	return "✅ <b>已解绑</b>\n\n" +
 		"🔕 您将不再收到通知\n\n" +
-		"随时使用 /bind &lt;code&gt; 重新连接"
+		"随时使用 <code>/bind &lt;code&gt;</code> 重新连接"
 }
 
 // MsgUnbindFailed is shown when user unbinding fails
@@ -97,19 +97,19 @@ func MsgStatusNotConnected(lang Lang) string {
 	if lang == EN {
 		return "🔗 <b>Not Connected</b>\n\n" +
 			"Your Telegram is not linked to an account\n\n" +
-			"<b>How to bind:</b>\n" +
+			"<blockquote><b>How to bind:</b>\n" +
 			"1️⃣ Go to website settings\n" +
 			"2️⃣ Click \"Bind Telegram\"\n" +
 			"3️⃣ Copy the verification code\n" +
-			"4️⃣ Send <code>/bind &lt;code&gt;</code>"
+			"4️⃣ Send <code>/bind &lt;code&gt;</code></blockquote>"
 	}
 	return "🔗 <b>未连接</b>\n\n" +
 		"您的 Telegram 尚未绑定账户\n\n" +
-		"<b>绑定步骤：</b>\n" +
+		"<blockquote><b>绑定步骤：</b>\n" +
 		"1️⃣ 访问网站设置页面\n" +
 		"2️⃣ 点击「绑定 Telegram」\n" +
 		"3️⃣ 复制验证码\n" +
-		"4️⃣ 发送 <code>/bind &lt;验证码&gt;</code>"
+		"4️⃣ 发送 <code>/bind &lt;验证码&gt;</code></blockquote>"
 }
 
 // MsgStatusConnectedSimple is shown in polling mode when user is bound
@@ -129,22 +129,18 @@ func BuildStatusConnectedMessage(lang Lang, notifyExpiring bool, expiringDays in
 	if lang == EN {
 		return "📊 <b>Notification Settings</b>\n\n" +
 			"<b>Status:</b> 🟢 Connected\n\n" +
-			"<b>Expiry Reminder</b>\n" +
-			"  " + boolToStatus(lang, notifyExpiring) + "\n" +
-			"  " + strconv.Itoa(expiringDays) + " days before expiry\n\n" +
-			"<b>Traffic Alert</b>\n" +
-			"  " + boolToStatus(lang, notifyTraffic) + "\n" +
-			"  Threshold: " + strconv.Itoa(trafficThreshold) + "%\n\n" +
+			"<blockquote><b>Expiry Reminder</b> " + boolToStatus(lang, notifyExpiring) + "\n" +
+			"Notify " + strconv.Itoa(expiringDays) + " days before expiry\n\n" +
+			"<b>Traffic Alert</b> " + boolToStatus(lang, notifyTraffic) + "\n" +
+			"Threshold: " + strconv.Itoa(trafficThreshold) + "%</blockquote>\n\n" +
 			"<i>Modify settings on the website</i>"
 	}
 	return "📊 <b>通知设置</b>\n\n" +
 		"<b>状态：</b> 🟢 已连接\n\n" +
-		"<b>到期提醒</b>\n" +
-		"  " + boolToStatus(lang, notifyExpiring) + "\n" +
-		"  提前 " + strconv.Itoa(expiringDays) + " 天提醒\n\n" +
-		"<b>流量警告</b>\n" +
-		"  " + boolToStatus(lang, notifyTraffic) + "\n" +
-		"  阈值：" + strconv.Itoa(trafficThreshold) + "%\n\n" +
+		"<blockquote><b>到期提醒</b> " + boolToStatus(lang, notifyExpiring) + "\n" +
+		"提前 " + strconv.Itoa(expiringDays) + " 天提醒\n\n" +
+		"<b>流量警告</b> " + boolToStatus(lang, notifyTraffic) + "\n" +
+		"阈值：" + strconv.Itoa(trafficThreshold) + "%</blockquote>\n\n" +
 		"<i>在网站修改设置</i>"
 }
 
@@ -155,23 +151,21 @@ func MsgHelpUser(lang Lang) string {
 	if lang == EN {
 		return "🤖 <b>Orris Notification Bot</b>\n\n" +
 			"Subscription expiry and traffic usage alerts\n\n" +
-			"<b>Commands:</b>\n" +
-			"  /bind <code>&lt;code&gt;</code> — Link account\n" +
-			"  /status — View settings\n" +
-			"  /unbind — Unlink account\n" +
-			"  /help — Show help\n\n" +
-			"<b>Getting started:</b>\n" +
-			"Get your verification code from the website settings, then send <code>/bind &lt;code&gt;</code>"
+			"<blockquote>/bind <code>&lt;code&gt;</code> — Link account\n" +
+			"/status — View settings\n" +
+			"/unbind — Unlink account\n" +
+			"/lang — Switch language\n" +
+			"/help — Show help</blockquote>\n\n" +
+			"💡 Get your code from website settings, then <code>/bind &lt;code&gt;</code>"
 	}
 	return "🤖 <b>Orris 通知机器人</b>\n\n" +
 		"订阅到期和流量使用提醒服务\n\n" +
-		"<b>命令：</b>\n" +
-		"  /bind <code>&lt;code&gt;</code> — 绑定账户\n" +
-		"  /status — 查看设置\n" +
-		"  /unbind — 解绑账户\n" +
-		"  /help — 显示帮助\n\n" +
-		"<b>开始使用：</b>\n" +
-		"在网站设置页面获取验证码，然后发送 <code>/bind &lt;code&gt;</code> 完成绑定"
+		"<blockquote>/bind <code>&lt;code&gt;</code> — 绑定账户\n" +
+		"/status — 查看设置\n" +
+		"/unbind — 解绑账户\n" +
+		"/lang — 切换语言\n" +
+		"/help — 显示帮助</blockquote>\n\n" +
+		"💡 在网站设置页面获取验证码，然后 <code>/bind &lt;code&gt;</code>"
 }
 
 // MsgHelpFull is the full help message with admin commands (used in polling mode)
@@ -179,27 +173,27 @@ func MsgHelpFull(lang Lang) string {
 	if lang == EN {
 		return "🤖 <b>Orris Notification Bot</b>\n\n" +
 			"Subscription expiry and traffic usage alerts\n\n" +
-			"<b>User commands:</b>\n" +
-			"  /bind <code>&lt;code&gt;</code> — Link account\n" +
-			"  /status — View settings\n" +
-			"  /unbind — Unlink account\n" +
-			"  /help — Show help\n\n" +
-			"<b>Admin commands:</b>\n" +
-			"  /adminbind <code>&lt;code&gt;</code> — Link admin\n\n" +
-			"<b>Getting started:</b>\n" +
-			"Get your verification code from the website settings, then send <code>/bind &lt;code&gt;</code>"
+			"<blockquote><b>User commands</b>\n" +
+			"/bind <code>&lt;code&gt;</code> — Link account\n" +
+			"/status — View settings\n" +
+			"/unbind — Unlink account\n" +
+			"/lang — Switch language\n" +
+			"/help — Show help\n\n" +
+			"<b>Admin commands</b>\n" +
+			"/adminbind <code>&lt;code&gt;</code> — Link admin</blockquote>\n\n" +
+			"💡 Get your code from website settings, then <code>/bind &lt;code&gt;</code>"
 	}
 	return "🤖 <b>Orris 通知机器人</b>\n\n" +
 		"订阅到期和流量使用提醒服务\n\n" +
-		"<b>用户命令：</b>\n" +
-		"  /bind <code>&lt;code&gt;</code> — 绑定账户\n" +
-		"  /status — 查看设置\n" +
-		"  /unbind — 解绑账户\n" +
-		"  /help — 显示帮助\n\n" +
-		"<b>管理员命令：</b>\n" +
-		"  /adminbind <code>&lt;code&gt;</code> — 绑定管理员\n\n" +
-		"<b>开始使用：</b>\n" +
-		"在网站设置页面获取验证码，然后发送 <code>/bind &lt;code&gt;</code> 完成绑定"
+		"<blockquote><b>用户命令</b>\n" +
+		"/bind <code>&lt;code&gt;</code> — 绑定账户\n" +
+		"/status — 查看设置\n" +
+		"/unbind — 解绑账户\n" +
+		"/lang — 切换语言\n" +
+		"/help — 显示帮助\n\n" +
+		"<b>管理员命令</b>\n" +
+		"/adminbind <code>&lt;code&gt;</code> — 绑定管理员</blockquote>\n\n" +
+		"💡 在网站设置页面获取验证码，然后 <code>/bind &lt;code&gt;</code>"
 }
 
 // Admin binding related messages
@@ -236,16 +230,16 @@ func MsgAdminBindMissingCode(lang Lang) string {
 func MsgAdminBindFailed(lang Lang) string {
 	if lang == EN {
 		return "❌ <b>Binding Failed</b>\n\n" +
-			"Possible reasons:\n" +
-			"  - Invalid or expired verification code\n" +
-			"  - You are not an admin\n" +
-			"  - This Telegram is already bound to another admin"
+			"<blockquote>Possible reasons:\n" +
+			"• Invalid or expired verification code\n" +
+			"• You are not an admin\n" +
+			"• This Telegram is already bound to another admin</blockquote>"
 	}
 	return "❌ <b>绑定失败</b>\n\n" +
-		"可能原因：\n" +
-		"  - 验证码无效或已过期\n" +
-		"  - 您不是管理员账户\n" +
-		"  - 此 Telegram 已被其他管理员绑定"
+		"<blockquote>可能原因：\n" +
+		"• 验证码无效或已过期\n" +
+		"• 您不是管理员账户\n" +
+		"• 此 Telegram 已被其他管理员绑定</blockquote>"
 }
 
 // MsgAdminBindFailedPolling is shown when admin binding fails (polling mode)
@@ -264,19 +258,19 @@ func MsgAdminBindFailedPolling(lang Lang) string {
 func MsgAdminBindSuccess(lang Lang) string {
 	if lang == EN {
 		return "✅ <b>Admin Binding Successful</b>\n\n" +
-			"🔔 You will receive admin notifications:\n" +
-			"  - Node/agent offline alerts\n" +
-			"  - New user registration\n" +
-			"  - Payment success\n" +
-			"  - Daily/weekly business summaries\n\n" +
+			"<blockquote>🔔 You will receive:\n" +
+			"• Node/agent offline alerts\n" +
+			"• New user registration\n" +
+			"• Payment success\n" +
+			"• Daily/weekly business summaries</blockquote>\n\n" +
 			"Use /adminstatus to view settings, /adminunbind to unlink"
 	}
 	return "✅ <b>管理员绑定成功</b>\n\n" +
-		"🔔 您将收到以下管理员通知：\n" +
-		"  - 节点/代理离线告警\n" +
-		"  - 新用户注册通知\n" +
-		"  - 支付成功通知\n" +
-		"  - 每日/每周业务摘要\n\n" +
+		"<blockquote>🔔 您将收到：\n" +
+		"• 节点/代理离线告警\n" +
+		"• 新用户注册通知\n" +
+		"• 支付成功通知\n" +
+		"• 每日/每周业务摘要</blockquote>\n\n" +
 		"使用 /adminstatus 查看设置，/adminunbind 解绑"
 }
 
@@ -284,18 +278,18 @@ func MsgAdminBindSuccess(lang Lang) string {
 func MsgAdminBindSuccessPolling(lang Lang) string {
 	if lang == EN {
 		return "✅ <b>Admin Binding Successful</b>\n\n" +
-			"🔔 You will receive notifications:\n" +
-			"  - Node offline alerts\n" +
-			"  - New user registration\n" +
-			"  - Payment success\n" +
-			"  - Daily/weekly reports"
+			"<blockquote>🔔 You will receive:\n" +
+			"• Node offline alerts\n" +
+			"• New user registration\n" +
+			"• Payment success\n" +
+			"• Daily/weekly reports</blockquote>"
 	}
 	return "✅ <b>管理员绑定成功</b>\n\n" +
-		"🔔 您将收到以下通知：\n" +
-		"  - 节点离线告警\n" +
-		"  - 新用户注册\n" +
-		"  - 支付成功通知\n" +
-		"  - 每日/每周报告"
+		"<blockquote>🔔 您将收到：\n" +
+		"• 节点离线告警\n" +
+		"• 新用户注册\n" +
+		"• 支付成功通知\n" +
+		"• 每日/每周报告</blockquote>"
 }
 
 // MsgAdminBindRateLimited is shown when admin has too many failed attempts
@@ -438,6 +432,64 @@ func ResourceName(lang Lang, resourceType string) string {
 	default:
 		return resourceType
 	}
+}
+
+// Lang command related messages
+
+// MsgLangCurrent shows the current language and usage instructions
+func MsgLangCurrent(lang Lang) string {
+	if lang == EN {
+		return "🌐 <b>Language Settings</b>\n\n" +
+			"Current language: <b>English</b>\n\n" +
+			"Switch: <code>/lang zh</code> or <code>/lang en</code>"
+	}
+	return "🌐 <b>语言设置</b>\n\n" +
+		"当前语言：<b>中文</b>\n\n" +
+		"切换：<code>/lang en</code> 或 <code>/lang zh</code>"
+}
+
+// MsgLangSwitched shows the language switch success message (in the NEW language)
+func MsgLangSwitched(lang Lang) string {
+	if lang == EN {
+		return "✅ Language switched to <b>English</b>"
+	}
+	return "✅ 语言已切换为<b>中文</b>"
+}
+
+// MsgLangInvalid shows when an invalid language argument is provided
+func MsgLangInvalid(lang Lang) string {
+	if lang == EN {
+		return "⚠️ <b>Invalid Language</b>\n\n" +
+			"Supported: <code>/lang en</code> or <code>/lang zh</code>"
+	}
+	return "⚠️ <b>无效语言</b>\n\n" +
+		"支持：<code>/lang en</code> 或 <code>/lang zh</code>"
+}
+
+// MsgLangNotBound shows when an unbound user tries to use /lang
+func MsgLangNotBound(lang Lang) string {
+	if lang == EN {
+		return "🔗 <b>Not Connected</b>\n\n" +
+			"Please bind your account first with <code>/bind &lt;code&gt;</code>"
+	}
+	return "🔗 <b>未连接</b>\n\n" +
+		"请先使用 <code>/bind &lt;code&gt;</code> 绑定账户"
+}
+
+// MsgDraftProcessing is a neutral draft message shown while processing a command
+func MsgDraftProcessing(lang Lang) string {
+	if lang == EN {
+		return "⏳ Processing..."
+	}
+	return "⏳ 处理中..."
+}
+
+// MsgDraftLoading is a neutral draft message shown while loading data
+func MsgDraftLoading(lang Lang) string {
+	if lang == EN {
+		return "⏳ Loading..."
+	}
+	return "⏳ 加载中..."
 }
 
 // boolToStatus converts a boolean to a status string

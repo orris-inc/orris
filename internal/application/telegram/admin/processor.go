@@ -123,25 +123,43 @@ type dynamicBotServiceWrapper struct {
 func (w *dynamicBotServiceWrapper) SendMessage(chatID int64, text string) error {
 	botService := w.provider.GetBotService()
 	if botService == nil {
-		return nil // Bot service not available, skip silently
+		return nil
 	}
 	return botService.SendMessage(chatID, text)
+}
+
+// SendMessageSilent implements TelegramMessageSender (silent HTML format)
+func (w *dynamicBotServiceWrapper) SendMessageSilent(chatID int64, text string) error {
+	botService := w.provider.GetBotService()
+	if botService == nil {
+		return nil
+	}
+	return botService.SendMessageSilent(chatID, text)
 }
 
 // SendMessageWithInlineKeyboard implements TelegramMessageSender (HTML format with inline keyboard)
 func (w *dynamicBotServiceWrapper) SendMessageWithInlineKeyboard(chatID int64, text string, keyboard any) error {
 	botService := w.provider.GetBotService()
 	if botService == nil {
-		return nil // Bot service not available, skip silently
+		return nil
 	}
 	return botService.SendMessageWithInlineKeyboard(chatID, text, keyboard)
+}
+
+// SendMessageSilentWithInlineKeyboard implements TelegramMessageSender (silent with inline keyboard)
+func (w *dynamicBotServiceWrapper) SendMessageSilentWithInlineKeyboard(chatID int64, text string, keyboard any) error {
+	botService := w.provider.GetBotService()
+	if botService == nil {
+		return nil
+	}
+	return botService.SendMessageSilentWithInlineKeyboard(chatID, text, keyboard)
 }
 
 // SendChatAction implements TelegramMessageSender
 func (w *dynamicBotServiceWrapper) SendChatAction(chatID int64, action string) error {
 	botService := w.provider.GetBotService()
 	if botService == nil {
-		return nil // Bot service not available, skip silently
+		return nil
 	}
 	return botService.SendChatAction(chatID, action)
 }

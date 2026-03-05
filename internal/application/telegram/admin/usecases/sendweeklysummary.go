@@ -111,7 +111,7 @@ func (uc *SendWeeklySummaryUseCase) SendSummary(ctx context.Context) error {
 		message := uc.buildWeeklySummaryMessage(summary, lang)
 
 		_ = uc.botService.SendChatAction(binding.TelegramUserID(), "typing")
-		if err := uc.botService.SendMessage(binding.TelegramUserID(), message); err != nil {
+		if err := uc.botService.SendMessageSilent(binding.TelegramUserID(), message); err != nil {
 			if telegram.IsBotBlocked(err) {
 				uc.logger.Warnw("bot blocked by user, skipping notification",
 					"telegram_user_id", binding.TelegramUserID())

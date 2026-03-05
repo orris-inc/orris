@@ -30,13 +30,13 @@ type AuthHandler struct {
 	refreshTokenUseCase  refreshTokenUseCase
 	logoutUseCase        logoutUseCase
 	userRepo             user.Repository
-	logger               logger.Interface
 	cookieConfig         config.CookieConfig
 	jwtConfig            config.JWTConfig
 	sessionConfig        config.SessionConfig
 	frontendCallbackURL  string
 	allowedOrigins       []string
 	emailChecker         EmailConfigChecker
+	logger               logger.Interface
 }
 
 func NewAuthHandler(
@@ -50,13 +50,13 @@ func NewAuthHandler(
 	refreshTokenUC refreshTokenUseCase,
 	logoutUC logoutUseCase,
 	userRepo user.Repository,
-	logger logger.Interface,
 	cookieConfig config.CookieConfig,
 	jwtConfig config.JWTConfig,
 	sessionConfig config.SessionConfig,
 	frontendCallbackURL string,
 	allowedOrigins []string,
 	emailChecker EmailConfigChecker,
+	log logger.Interface,
 ) *AuthHandler {
 	return &AuthHandler{
 		registerUseCase:      registerUC,
@@ -69,13 +69,13 @@ func NewAuthHandler(
 		refreshTokenUseCase:  refreshTokenUC,
 		logoutUseCase:        logoutUC,
 		userRepo:             userRepo,
-		logger:               logger,
 		cookieConfig:         cookieConfig,
 		jwtConfig:            jwtConfig,
 		sessionConfig:        sessionConfig,
 		frontendCallbackURL:  frontendCallbackURL,
 		allowedOrigins:       allowedOrigins,
 		emailChecker:         emailChecker,
+		logger:               log,
 	}
 }
 

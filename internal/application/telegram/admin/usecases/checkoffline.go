@@ -16,10 +16,13 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
-// TelegramMessageSender sends messages via Telegram (HTML format)
+// TelegramMessageSender sends messages via Telegram (HTML format).
+// This is the canonical definition; admin/serviceddd.go references this type.
 type TelegramMessageSender interface {
 	SendMessage(chatID int64, text string) error
+	SendMessageSilent(chatID int64, text string) error
 	SendMessageWithInlineKeyboard(chatID int64, text string, keyboard any) error
+	SendMessageSilentWithInlineKeyboard(chatID int64, text string, keyboard any) error
 	SendChatAction(chatID int64, action string) error
 }
 

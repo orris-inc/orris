@@ -72,7 +72,7 @@ func (uc *SendNewUserAlertUseCase) SendAlert(ctx context.Context, newUser *user.
 		lang := i18n.ParseLang(binding.Language())
 		message := i18n.BuildNewUserMessage(lang, userInfo.SID, userInfo.Email, userInfo.Name, userInfo.Source, userInfo.CreatedAt)
 
-		if err := uc.botService.SendMessage(binding.TelegramUserID(), message); err != nil {
+		if err := uc.botService.SendMessageSilent(binding.TelegramUserID(), message); err != nil {
 			if telegram.IsBotBlocked(err) {
 				uc.logger.Warnw("bot blocked by user, skipping notification",
 					"telegram_user_id", binding.TelegramUserID())
@@ -132,7 +132,7 @@ func (uc *SendNewUserAlertUseCase) SendAlertWithInfo(ctx context.Context, userIn
 		lang := i18n.ParseLang(binding.Language())
 		message := i18n.BuildNewUserMessage(lang, userInfo.SID, userInfo.Email, userInfo.Name, userInfo.Source, userInfo.CreatedAt)
 
-		if err := uc.botService.SendMessage(binding.TelegramUserID(), message); err != nil {
+		if err := uc.botService.SendMessageSilent(binding.TelegramUserID(), message); err != nil {
 			if telegram.IsBotBlocked(err) {
 				uc.logger.Warnw("bot blocked by user, skipping notification",
 					"telegram_user_id", binding.TelegramUserID())

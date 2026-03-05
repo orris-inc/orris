@@ -8,6 +8,10 @@ import (
 // ErrCircuitOpen is returned when the circuit breaker is open and requests are rejected.
 var ErrCircuitOpen = errors.New("telegram: circuit breaker is open")
 
+// ErrBindingNotFound is returned when a telegram binding is not found.
+// This mirrors the domain error to avoid cross-package import issues.
+var ErrBindingNotFound = errors.New("telegram: binding not found")
+
 // IsCircuitOpen returns true if the error is a circuit breaker open error.
 func IsCircuitOpen(err error) bool {
 	return errors.Is(err, ErrCircuitOpen)

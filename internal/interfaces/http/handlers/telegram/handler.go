@@ -56,10 +56,10 @@ type Handler struct {
 }
 
 // NewHandler creates a new telegram handler
-func NewHandler(service *telegramApp.ServiceDDD, logger logger.Interface, webhookSecret string) *Handler {
+func NewHandler(service *telegramApp.ServiceDDD, webhookSecret string, log logger.Interface) *Handler {
 	return &Handler{
 		service:       service,
-		logger:        logger,
+		logger:        log,
 		webhookSecret: webhookSecret,
 	}
 }
@@ -220,6 +220,9 @@ func (h *Handler) HandleWebhook(c *gin.Context) {
 		h.handleUnbindCommand(c, telegramUserID, lang)
 	case text == "/status":
 		h.handleStatusCommand(c, telegramUserID, lang)
+	case text == "/lang" || strings.HasPrefix(text, "/lang "):
+		args := strings.TrimSpace(strings.TrimPrefix(text, "/lang"))
+		h.handleLangCommand(c, telegramUserID, lang, args)
 	case text == "/start" || text == "/help":
 		h.handleHelpCommand(c, telegramUserID, lang)
 	case strings.HasPrefix(text, "/adminbind "):
@@ -262,7 +265,7 @@ func (h *Handler) handleBindCommand(c *gin.Context, telegramUserID int64, userna
 		return
 	}
 
-	_ = h.service.SendBotChatAction(telegramUserID, "typing")
+	_ = h.service.SendBotMessageDraft(telegramUserID, i18n.MsgDraftProcessing(lang))
 	resp, err := h.service.BindFromWebhook(c.Request.Context(), telegramUserID, username, code)
 	if err != nil {
 		h.logger.Errorw("failed to bind telegram from webhook",
@@ -301,7 +304,7 @@ func (h *Handler) handleUnbindCommand(c *gin.Context, telegramUserID int64, lang
 }
 
 func (h *Handler) handleStatusCommand(c *gin.Context, telegramUserID int64, lang i18n.Lang) {
-	_ = h.service.SendBotChatAction(telegramUserID, "typing")
+	_ = h.service.SendBotMessageDraft(telegramUserID, i18n.MsgDraftLoading(lang))
 	status, err := h.service.GetBindingStatusByTelegramID(c.Request.Context(), telegramUserID)
 	if err != nil {
 		h.logger.Errorw("failed to get binding status from webhook",
@@ -330,6 +333,64 @@ func (h *Handler) handleStatusCommand(c *gin.Context, telegramUserID int64, lang
 		)
 		_ = h.service.SendBotMessage(telegramUserID, msg)
 	}
+	utils.SuccessResponse(c, http.StatusOK, "success", nil)
+}
+
+func (h *Handler) handleLangCommand(c *gin.Context, telegramUserID int64, lang i18n.Lang, args string) {
+	if args == "" {
+		// Show current language
+		storedLang, err := h.service.GetBindingLanguageByTelegramID(c.Request.Context(), telegramUserID)
+		if err != nil {
+			_ = h.service.SendBotMessage(telegramUserID, i18n.MsgLangNotBound(lang))
+			utils.SuccessResponse(c, http.StatusOK, "error", gin.H{"message": "not bound"})
+			return
+		}
+		currentLang := i18n.ParseLang(storedLang)
+		_ = h.service.SendBotMessage(telegramUserID, i18n.MsgLangCurrent(currentLang))
+		utils.SuccessResponse(c, http.StatusOK, "success", nil)
+		return
+	}
+
+	// Validate language argument
+	if args != "en" && args != "zh" {
+		_ = h.service.SendBotMessage(telegramUserID, i18n.MsgLangInvalid(lang))
+		utils.SuccessResponse(c, http.StatusOK, "error", gin.H{"message": "invalid language"})
+		return
+	}
+
+	// Check if user is bound before attempting update
+	if _, err := h.service.GetBindingLanguageByTelegramID(c.Request.Context(), telegramUserID); err != nil {
+		_ = h.service.SendBotMessage(telegramUserID, i18n.MsgLangNotBound(lang))
+		utils.SuccessResponse(c, http.StatusOK, "error", gin.H{"message": "not bound"})
+		return
+	}
+
+	newLang := i18n.Lang(args)
+
+	// Update user binding language
+	if err := h.service.UpdateBindingLanguage(c.Request.Context(), telegramUserID, args); err != nil {
+		h.logger.Errorw("failed to update binding language for /lang command",
+			"telegram_user_id", telegramUserID,
+			"language", args,
+			"error", err,
+		)
+		_ = h.service.SendBotMessage(telegramUserID, i18n.MsgStatusError(lang))
+		utils.SuccessResponse(c, http.StatusOK, "error", gin.H{"message": "update failed"})
+		return
+	}
+
+	// Also update admin binding language if available (best-effort)
+	if h.adminService != nil {
+		if err := h.adminService.UpdateAdminBindingLanguage(c.Request.Context(), telegramUserID, args); err != nil {
+			h.logger.Debugw("failed to update admin binding language for /lang command",
+				"telegram_user_id", telegramUserID,
+				"error", err,
+			)
+		}
+	}
+
+	// Reply in the new language
+	_ = h.service.SendBotMessage(telegramUserID, i18n.MsgLangSwitched(newLang))
 	utils.SuccessResponse(c, http.StatusOK, "success", nil)
 }
 

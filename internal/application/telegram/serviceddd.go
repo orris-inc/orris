@@ -22,9 +22,8 @@ type VerifyCodeStore interface {
 type BotService interface {
 	usecases.TelegramMessageSender
 	usecases.BotLinkProvider
-	SendMessage(chatID int64, text string) error
 	SendMessageWithKeyboard(chatID int64, text string, keyboard any) error
-	SendChatAction(chatID int64, action string) error
+	SendMessageDraft(chatID int64, text string) error
 	GetDefaultReplyKeyboard() any
 }
 
@@ -157,6 +156,34 @@ func (s *ServiceDDD) SendBotChatAction(chatID int64, action string) error {
 		return nil
 	}
 	return s.botService.SendChatAction(chatID, action)
+}
+
+// SendBotMessageDraft sends a draft message that appears in the typing bubble
+func (s *ServiceDDD) SendBotMessageDraft(chatID int64, text string) error {
+	if s.botService == nil {
+		s.logger.Debugw("telegram draft message skipped: bot service not available", "chat_id", chatID)
+		return nil
+	}
+	return s.botService.SendMessageDraft(chatID, text)
+}
+
+// GetBindingLanguageByTelegramID returns the stored language for a binding
+func (s *ServiceDDD) GetBindingLanguageByTelegramID(ctx context.Context, telegramUserID int64) (string, error) {
+	binding, err := s.bindingRepo.GetByTelegramUserID(ctx, telegramUserID)
+	if err != nil {
+		if errors.Is(err, telegram.ErrBindingNotFound) {
+			return "", telegram.ErrBindingNotFound
+		}
+		s.logger.Errorw("failed to get binding language by telegram user ID",
+			"telegram_user_id", telegramUserID,
+			"error", err,
+		)
+		return "", err
+	}
+	if binding == nil {
+		return "", telegram.ErrBindingNotFound
+	}
+	return binding.Language(), nil
 }
 
 // UpdateBindingLanguage updates the language preference for a binding
