@@ -166,6 +166,7 @@ func (h *Handler) BatchCreateRules(c *gin.Context) {
 			SortOrder:          r.SortOrder,
 			Remark:             r.Remark,
 			GroupSIDs:          r.GroupSIDs,
+			Route:             r.Route,
 		})
 		cmdIndices = append(cmdIndices, i)
 	}

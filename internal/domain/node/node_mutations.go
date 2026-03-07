@@ -6,6 +6,7 @@ import (
 
 	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/shared"
+	"github.com/orris-inc/orris/internal/domain/shared/routing"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 )
 
@@ -246,7 +247,7 @@ func (n *Node) SetMuteNotification(mute bool) {
 }
 
 // UpdateRouteConfig updates the routing configuration
-func (n *Node) UpdateRouteConfig(config *vo.RouteConfig) error {
+func (n *Node) UpdateRouteConfig(config *routing.RouteConfig) error {
 	if config != nil {
 		if err := config.Validate(); err != nil {
 			return fmt.Errorf("invalid route config: %w", err)

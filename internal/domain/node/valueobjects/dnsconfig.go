@@ -3,6 +3,8 @@ package valueobjects
 import (
 	"fmt"
 	"regexp"
+
+	"github.com/orris-inc/orris/internal/domain/shared/routing"
 )
 
 // DnsStrategy defines DNS resolution strategy.
@@ -134,7 +136,7 @@ func (s *DnsServer) Validate() error {
 		return fmt.Errorf("invalid strategy: %s", s.strategy)
 	}
 	if s.detour != "" {
-		ot := OutboundType(s.detour)
+		ot := routing.OutboundType(s.detour)
 		if !ot.IsValid() {
 			return fmt.Errorf("invalid detour: %s", s.detour)
 		}
@@ -411,6 +413,19 @@ func copyStringSlice(s []string) []string {
 	return cp
 }
 
+// stringSliceEqual compares two string slices for equality.
+func stringSliceEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i, v := range a {
+		if v != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // DnsConfig represents the DNS configuration for a node.
 // Compatible with sing-box dns configuration.
 type DnsConfig struct {
@@ -605,7 +620,7 @@ func (c *DnsConfig) HasNodeReferences() bool {
 		return false
 	}
 	for _, s := range c.servers {
-		ot := OutboundType(s.detour)
+		ot := routing.OutboundType(s.detour)
 		if ot.IsNodeReference() {
 			return true
 		}
@@ -621,7 +636,7 @@ func (c *DnsConfig) GetReferencedNodeSIDs() []string {
 	seen := make(map[string]bool)
 	var sids []string
 	for _, s := range c.servers {
-		ot := OutboundType(s.detour)
+		ot := routing.OutboundType(s.detour)
 		if ot.IsNodeReference() {
 			sid := ot.NodeSID()
 			if !seen[sid] {

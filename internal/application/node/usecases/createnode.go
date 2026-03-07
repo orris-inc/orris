@@ -9,6 +9,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/node"
 	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/resource"
+	"github.com/orris-inc/orris/internal/domain/shared/routing"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/id"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -367,7 +368,7 @@ func (uc *CreateNodeUseCase) Execute(ctx context.Context, cmd CreateNodeCommand)
 	metadata := vo.NewNodeMetadata(cmd.Region, cmd.Tags, cmd.Description)
 
 	// Convert route config from DTO if provided
-	var routeConfig *vo.RouteConfig
+	var routeConfig *routing.RouteConfig
 	if cmd.Route != nil {
 		routeConfig, err = dto.FromRouteConfigDTO(cmd.Route)
 		if err != nil {
@@ -766,7 +767,7 @@ func (uc *CreateNodeUseCase) validateProtocolMethodCompatibility(protocol vo.Pro
 
 // validateRouteConfigNodeReferences validates that all node SIDs referenced in route config exist.
 // For admin nodes (created via this use case), any existing node can be referenced.
-func (uc *CreateNodeUseCase) validateRouteConfigNodeReferences(ctx context.Context, routeConfig *vo.RouteConfig) error {
+func (uc *CreateNodeUseCase) validateRouteConfigNodeReferences(ctx context.Context, routeConfig *routing.RouteConfig) error {
 	if routeConfig == nil {
 		return nil
 	}

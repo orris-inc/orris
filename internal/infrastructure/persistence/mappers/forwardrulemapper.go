@@ -8,6 +8,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/forward"
 	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
+	"github.com/orris-inc/orris/internal/domain/shared/routing"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 )
 
@@ -124,6 +125,16 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 		}
 	}
 
+	// Parse route_config JSON
+	var routeConfig *routing.RouteConfig
+	if len(model.RouteConfig) > 0 {
+		var routeJSON RouteConfigJSON
+		if err := json.Unmarshal(model.RouteConfig, &routeJSON); err != nil {
+			return nil, fmt.Errorf("failed to parse route_config: %w", err)
+		}
+		routeConfig = RouteConfigFromJSON(&routeJSON)
+	}
+
 	ipVersion := vo.IPVersion(model.IPVersion)
 	tunnelType := vo.TunnelType(model.TunnelType)
 	loadBalanceStrategy := vo.ParseLoadBalanceStrategy(model.LoadBalanceStrategy)
@@ -171,6 +182,7 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 		model.TrafficMultiplier,
 		model.SortOrder,
 		groupIDs,
+		routeConfig,
 		serverAddress,
 		externalSource,
 		externalRuleID,
@@ -265,6 +277,17 @@ func (m *ForwardRuleMapperImpl) ToModel(entity *forward.ForwardRule) (*models.Fo
 		groupIDsJSON = jsonBytes
 	}
 
+	// Serialize route_config to JSON
+	var routeConfigJSON datatypes.JSON
+	if entity.RouteConfig() != nil {
+		rcJSON := RouteConfigToJSON(entity.RouteConfig())
+		rcBytes, err := json.Marshal(rcJSON)
+		if err != nil {
+			return nil, fmt.Errorf("failed to serialize route_config: %w", err)
+		}
+		routeConfigJSON = rcBytes
+	}
+
 	// Handle external rule fields
 	var serverAddress *string
 	if entity.ServerAddress() != "" {
@@ -311,6 +334,7 @@ func (m *ForwardRuleMapperImpl) ToModel(entity *forward.ForwardRule) (*models.Fo
 		TrafficMultiplier:   entity.GetTrafficMultiplier(),
 		SortOrder:           entity.SortOrder(),
 		GroupIDs:            groupIDsJSON,
+		RouteConfig:         routeConfigJSON,
 		ServerAddress:       serverAddress,
 		ExternalSource:      externalSource,
 		ExternalRuleID:      externalRuleID,

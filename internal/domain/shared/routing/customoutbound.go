@@ -1,11 +1,17 @@
-package valueobjects
+package routing
 
 import (
+	"encoding/json"
 	"fmt"
 	"net"
 	"reflect"
 	"regexp"
 	"strings"
+)
+
+const (
+	maxSettingsDepth = 10    // Maximum nesting depth for settings
+	maxSettingsSize  = 65536 // Maximum total serialized size in bytes (64KB)
 )
 
 // customOutboundTagSuffixPattern validates the suffix part of a custom outbound tag.
@@ -39,13 +45,18 @@ type CustomOutbound struct {
 
 // NewCustomOutbound creates a new CustomOutbound with validation.
 // The settings map is deep-copied to prevent external mutation.
+// Returns an error if settings nesting exceeds maxSettingsDepth.
 func NewCustomOutbound(tag, protocol, server string, port uint16, settings map[string]any) (*CustomOutbound, error) {
+	copiedSettings, err := deepCopyMapWithDepth(settings, 0)
+	if err != nil {
+		return nil, fmt.Errorf("invalid settings: %w", err)
+	}
 	co := &CustomOutbound{
 		tag:      tag,
 		protocol: protocol,
 		server:   server,
 		port:     port,
-		settings: deepCopyMap(settings),
+		settings: copiedSettings,
 	}
 	if err := co.Validate(); err != nil {
 		return nil, err
@@ -103,6 +114,53 @@ func deepCopyValue(v any) any {
 	}
 }
 
+// deepCopyMapWithDepth performs a deep copy of a map[string]any with nesting depth limit.
+// Returns an error if the nesting depth exceeds maxSettingsDepth.
+func deepCopyMapWithDepth(m map[string]any, depth int) (map[string]any, error) {
+	if depth > maxSettingsDepth {
+		return nil, fmt.Errorf("settings nesting too deep: exceeds max depth %d", maxSettingsDepth)
+	}
+	result := make(map[string]any, len(m))
+	for k, v := range m {
+		copied, err := deepCopyValueWithDepth(v, depth)
+		if err != nil {
+			return nil, err
+		}
+		result[k] = copied
+	}
+	return result, nil
+}
+
+// deepCopySliceWithDepth performs a deep copy of a []any with nesting depth limit.
+// Returns an error if the nesting depth exceeds maxSettingsDepth.
+func deepCopySliceWithDepth(s []any, depth int) ([]any, error) {
+	if depth > maxSettingsDepth {
+		return nil, fmt.Errorf("settings nesting too deep: exceeds max depth %d", maxSettingsDepth)
+	}
+	result := make([]any, len(s))
+	for i, v := range s {
+		copied, err := deepCopyValueWithDepth(v, depth)
+		if err != nil {
+			return nil, err
+		}
+		result[i] = copied
+	}
+	return result, nil
+}
+
+// deepCopyValueWithDepth performs a deep copy of a single value with nesting depth limit.
+// Returns an error if the nesting depth exceeds maxSettingsDepth.
+func deepCopyValueWithDepth(v any, depth int) (any, error) {
+	switch val := v.(type) {
+	case map[string]any:
+		return deepCopyMapWithDepth(val, depth+1)
+	case []any:
+		return deepCopySliceWithDepth(val, depth+1)
+	default:
+		return v, nil
+	}
+}
+
 // Validate validates the custom outbound configuration
 func (co *CustomOutbound) Validate() error {
 	// Validate tag format
@@ -147,6 +205,17 @@ func (co *CustomOutbound) Validate() error {
 	// Validate settings size to prevent DoS via oversized configurations
 	if len(co.settings) > 50 {
 		return fmt.Errorf("custom outbound settings has too many keys: %d (max 50)", len(co.settings))
+	}
+
+	// Validate total serialized size of settings
+	if len(co.settings) > 0 {
+		settingsBytes, err := json.Marshal(co.settings)
+		if err != nil {
+			return fmt.Errorf("custom outbound settings cannot be serialized: %w", err)
+		}
+		if len(settingsBytes) > maxSettingsSize {
+			return fmt.Errorf("custom outbound settings too large: %d bytes (max %d)", len(settingsBytes), maxSettingsSize)
+		}
 	}
 
 	return nil

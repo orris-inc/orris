@@ -691,7 +691,7 @@ func (c *Container) initForward() {
 	hdlrs := c.hdlrs
 
 	// Agent API handler use cases
-	ucs.getNodeConfigUC = nodeUsecases.NewGetNodeConfigUseCase(repos.nodeRepoImpl, log)
+	ucs.getNodeConfigUC = nodeUsecases.NewGetNodeConfigUseCase(repos.nodeRepoImpl, repos.forwardRuleRepo, log)
 	ucs.getNodeSubscriptionsUC = nodeUsecases.NewGetNodeSubscriptionsUseCase(repos.subscriptionRepo, repos.nodeRepoImpl, repos.subscriptionPlanRepo, log)
 
 	// Initialize subscription traffic cache and buffer for RESTful agent traffic reporting

@@ -52,6 +52,13 @@ func (r *ForwardRule) Validate() error {
 		return fmt.Errorf("invalid load balance strategy: %s", r.loadBalanceStrategy)
 	}
 
+	// Validate route config if present
+	if r.routeConfig != nil {
+		if err := r.routeConfig.Validate(); err != nil {
+			return fmt.Errorf("invalid route config: %w", err)
+		}
+	}
+
 	// Validate required fields based on rule type
 	switch r.ruleType {
 	case vo.ForwardRuleTypeDirect:

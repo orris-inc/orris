@@ -9,6 +9,7 @@ import (
 	"time"
 
 	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
+	"github.com/orris-inc/orris/internal/domain/shared/routing"
 	"github.com/orris-inc/orris/internal/domain/shared/services"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 )
@@ -40,16 +41,16 @@ type Node struct {
 	sortOrder         int
 	muteNotification  bool // mute online/offline notifications for this node
 	maintenanceReason *string
-	routeConfig       *vo.RouteConfig // routing configuration for traffic splitting
-	dnsConfig         *vo.DnsConfig   // DNS configuration for DNS-based unlocking
-	lastSeenAt        *time.Time      // last time the node agent reported status
-	publicIPv4        *string         // public IPv4 address reported by agent
-	publicIPv6        *string         // public IPv6 address reported by agent
-	agentVersion      *string         // agent software version (e.g., "1.2.3")
-	platform          *string         // OS platform (linux, darwin, windows)
-	arch              *string         // CPU architecture (amd64, arm64, arm, 386)
-	expiresAt         *time.Time      // expiration time (nil = never expires)
-	costLabel         *string         // cost label for display (e.g., "35$/m", "35¥/y")
+	routeConfig       *routing.RouteConfig // routing configuration for traffic splitting
+	dnsConfig         *vo.DnsConfig        // DNS configuration for DNS-based unlocking
+	lastSeenAt        *time.Time           // last time the node agent reported status
+	publicIPv4        *string              // public IPv4 address reported by agent
+	publicIPv6        *string              // public IPv6 address reported by agent
+	agentVersion      *string              // agent software version (e.g., "1.2.3")
+	platform          *string              // OS platform (linux, darwin, windows)
+	arch              *string              // CPU architecture (amd64, arm64, arm, 386)
+	expiresAt         *time.Time           // expiration time (nil = never expires)
+	costLabel         *string              // cost label for display (e.g., "35$/m", "35¥/y")
 	version           int
 	originalVersion   int // version when loaded from database, for optimistic locking
 	createdAt         time.Time
@@ -74,7 +75,7 @@ func NewNode(
 	anytlsConfig *vo.AnyTLSConfig,
 	metadata vo.NodeMetadata,
 	sortOrder int,
-	routeConfig *vo.RouteConfig,
+	routeConfig *routing.RouteConfig,
 	dnsConfig *vo.DnsConfig,
 	sidGenerator func() (string, error),
 ) (*Node, error) {
@@ -195,7 +196,7 @@ func ReconstructNode(
 	sortOrder int,
 	muteNotification bool,
 	maintenanceReason *string,
-	routeConfig *vo.RouteConfig,
+	routeConfig *routing.RouteConfig,
 	dnsConfig *vo.DnsConfig,
 	lastSeenAt *time.Time,
 	publicIPv4 *string,
@@ -392,7 +393,7 @@ func (n *Node) MaintenanceReason() *string {
 }
 
 // RouteConfig returns the routing configuration
-func (n *Node) RouteConfig() *vo.RouteConfig {
+func (n *Node) RouteConfig() *routing.RouteConfig {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
 	return n.routeConfig

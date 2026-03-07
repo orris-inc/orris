@@ -571,6 +571,7 @@ func mustCreateDirectRule(t *testing.T, agentID uint, name string, listenPort ui
 		nil,                           // trafficMultiplier
 		0,                             // sortOrder
 		nil,                           // groupIDs
+		nil,                           // routeConfig
 		"",                            // serverAddress
 		"",                            // externalSource
 		"",                            // externalRuleID
@@ -614,6 +615,7 @@ func mustCreateDirectRuleWithTargetNode(t *testing.T, agentID uint, name string,
 		nil,                           // trafficMultiplier
 		0,                             // sortOrder
 		nil,                           // groupIDs
+		nil,                           // routeConfig
 		"",                            // serverAddress
 		"",                            // externalSource
 		"",                            // externalRuleID
@@ -657,6 +659,7 @@ func mustCreateExternalRule(t *testing.T, serverAddr string, listenPort uint16, 
 		nil,                           // trafficMultiplier
 		0,                             // sortOrder
 		nil,                           // groupIDs
+		nil,                           // routeConfig
 		serverAddr,                    // serverAddress
 		externalSource,                // externalSource
 		"",                            // externalRuleID

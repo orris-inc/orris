@@ -2,6 +2,7 @@
 package dto
 
 import (
+	nodedto "github.com/orris-inc/orris/internal/application/node/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
 	"github.com/orris-inc/orris/internal/shared/mapper"
@@ -92,6 +93,9 @@ type ForwardRuleDTO struct {
 	NextHopPort            uint16 `json:"next_hop_port,omitempty"`             // next agent's listen port (for direct_chain type)
 	NextHopConnectionToken string `json:"next_hop_connection_token,omitempty"` // short-term JWT for next hop authentication
 
+	// Per-rule routing configuration
+	Route *nodedto.RouteConfigDTO `json:"route,omitempty"` // per-rule routing configuration
+
 	// Resource group IDs (admin only)
 	GroupSIDs []string `json:"group_sids,omitempty"` // resource group SIDs
 
@@ -166,6 +170,7 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 		SortOrder:                  rule.SortOrder(),
 		TunnelType:                 tunnelType,
 		TunnelHops:                 rule.TunnelHops(),
+		Route:                      nodedto.ToRouteConfigDTO(rule.RouteConfig()),
 		ServerAddress:              rule.ServerAddress(),
 		ExternalSource:             rule.ExternalSource(),
 		ExternalRuleID:             rule.ExternalRuleID(),

@@ -6,6 +6,7 @@ import (
 
 	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/shared"
+	"github.com/orris-inc/orris/internal/domain/shared/routing"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 )
 
@@ -554,6 +555,24 @@ func (r *ForwardRule) UpdateDirectChainConfig(chainAgentIDs []uint, chainPortCon
 	// All validations passed, update both fields atomically
 	r.chainAgentIDs = chainAgentIDs
 	r.chainPortConfig = chainPortConfig
+	r.updatedAt = biztime.NowUTC()
+	return nil
+}
+
+// SetRouteConfig sets the per-rule routing configuration without validation.
+func (r *ForwardRule) SetRouteConfig(rc *routing.RouteConfig) {
+	r.routeConfig = rc
+	r.updatedAt = biztime.NowUTC()
+}
+
+// UpdateRouteConfig validates and updates the per-rule routing configuration.
+func (r *ForwardRule) UpdateRouteConfig(rc *routing.RouteConfig) error {
+	if rc != nil {
+		if err := rc.Validate(); err != nil {
+			return fmt.Errorf("invalid route config: %w", err)
+		}
+	}
+	r.routeConfig = rc
 	r.updatedAt = biztime.NowUTC()
 	return nil
 }

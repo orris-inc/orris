@@ -162,6 +162,7 @@ func (h *Handler) CreateRule(c *gin.Context) {
 		SortOrder:           req.SortOrder,
 		Remark:              req.Remark,
 		GroupSIDs:           req.GroupSIDs,
+		Route:              req.Route,
 		// External rule fields
 		ServerAddress:  req.ServerAddress,
 		ExternalSource: req.ExternalSource,
@@ -327,6 +328,8 @@ func (h *Handler) UpdateRule(c *gin.Context) {
 		SortOrder:           req.SortOrder,
 		Remark:              req.Remark,
 		GroupSIDs:           req.GroupSIDs,
+		Route:              req.Route,
+		ClearRoute:         req.ClearRoute,
 	}
 
 	if err := h.updateRuleUC.Execute(c.Request.Context(), cmd); err != nil {

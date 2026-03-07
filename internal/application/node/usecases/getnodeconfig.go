@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/orris-inc/orris/internal/application/node/dto"
+	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
 	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
 	apperrors "github.com/orris-inc/orris/internal/shared/errors"
@@ -27,20 +28,28 @@ type NodeConfigRepository interface {
 	GetByID(ctx context.Context, id uint) (*node.Node, error)
 }
 
+// ForwardRuleQuerier defines a narrow interface for querying forward rules.
+type ForwardRuleQuerier interface {
+	ListEnabledByTargetNodeID(ctx context.Context, nodeID uint) ([]*forward.ForwardRule, error)
+}
+
 // GetNodeConfigUseCase handles fetching node configuration for node agents
 type GetNodeConfigUseCase struct {
-	nodeRepo node.NodeRepository
-	logger   logger.Interface
+	nodeRepo        node.NodeRepository
+	forwardRuleRepo ForwardRuleQuerier
+	logger          logger.Interface
 }
 
 // NewGetNodeConfigUseCase creates a new instance of GetNodeConfigUseCase
 func NewGetNodeConfigUseCase(
 	nodeRepo node.NodeRepository,
+	forwardRuleRepo ForwardRuleQuerier,
 	logger logger.Interface,
 ) *GetNodeConfigUseCase {
 	return &GetNodeConfigUseCase{
-		nodeRepo: nodeRepo,
-		logger:   logger,
+		nodeRepo:        nodeRepo,
+		forwardRuleRepo: forwardRuleRepo,
+		logger:          logger,
 	}
 }
 
@@ -66,6 +75,26 @@ func (uc *GetNodeConfigUseCase) Execute(ctx context.Context, cmd GetNodeConfigCo
 	// Node can be connected regardless of activation status.
 	// Status is only used for business logic (e.g., subscription routing).
 
+	// Query forward rules targeting this node (for per-rule routing)
+	var forwardRules []*forward.ForwardRule
+	if uc.forwardRuleRepo != nil {
+		frs, err := uc.forwardRuleRepo.ListEnabledByTargetNodeID(ctx, n.ID())
+		if err != nil {
+			uc.logger.Warnw("failed to fetch forward rules for node",
+				"node_id", cmd.NodeID,
+				"error", err,
+			)
+			// Continue without forward rules rather than failing
+		} else {
+			// Filter to only rules with RouteConfig
+			for _, fr := range frs {
+				if fr.RouteConfig() != nil {
+					forwardRules = append(forwardRules, fr)
+				}
+			}
+		}
+	}
+
 	// Collect all referenced node SIDs from route and DNS configs
 	var referencedNodes []*node.Node
 	var allReferencedSIDs []string
@@ -74,6 +103,12 @@ func (uc *GetNodeConfigUseCase) Execute(ctx context.Context, cmd GetNodeConfigCo
 	}
 	if n.DnsConfig() != nil && n.DnsConfig().HasNodeReferences() {
 		allReferencedSIDs = append(allReferencedSIDs, n.DnsConfig().GetReferencedNodeSIDs()...)
+	}
+	// Collect referenced node SIDs from per-forward-rule RouteConfigs
+	for _, fr := range forwardRules {
+		if fr.RouteConfig().HasNodeReferences() {
+			allReferencedSIDs = append(allReferencedSIDs, fr.RouteConfig().GetReferencedNodeSIDs()...)
+		}
 	}
 	if len(allReferencedSIDs) > 0 {
 		// Deduplicate SIDs
@@ -113,7 +148,7 @@ func (uc *GetNodeConfigUseCase) Execute(ctx context.Context, cmd GetNodeConfigCo
 	}
 
 	// Convert domain node to agent config response
-	config := dto.ToNodeConfigResponse(n, referencedNodes, serverKeyFunc)
+	config := dto.ToNodeConfigResponse(n, referencedNodes, serverKeyFunc, forwardRules)
 	if config == nil {
 		uc.logger.Errorw("failed to convert node to config response",
 			"node_id", cmd.NodeID,

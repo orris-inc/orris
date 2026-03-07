@@ -2,6 +2,7 @@
 package rule
 
 import (
+	nodedto "github.com/orris-inc/orris/internal/application/node/dto"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
@@ -86,7 +87,8 @@ type CreateForwardRuleRequest struct {
 	TrafficMultiplier   *float64           `json:"traffic_multiplier,omitempty" binding:"omitempty,gte=0,lte=1000000" example:"1.5"`
 	SortOrder           *int               `json:"sort_order,omitempty" binding:"omitempty,gte=0" example:"100"`
 	Remark              string             `json:"remark,omitempty" example:"Forward to internal MySQL server"`
-	GroupSIDs           []string           `json:"group_sids,omitempty" example:"[\"rg_xxx\",\"rg_yyy\"]"`
+	GroupSIDs           []string                `json:"group_sids,omitempty" example:"[\"rg_xxx\",\"rg_yyy\"]"`
+	Route               *nodedto.RouteConfigDTO `json:"route,omitempty"` // per-rule routing configuration
 	// External rule fields (only for rule_type=external)
 	ServerAddress  string `json:"server_address,omitempty" example:"example.com"`
 	ExternalSource string `json:"external_source,omitempty" example:"third-party-provider"`
@@ -114,7 +116,9 @@ type UpdateForwardRuleRequest struct {
 	TrafficMultiplier   *float64           `json:"traffic_multiplier,omitempty" binding:"omitempty,gte=0,lte=1000000" example:"1.5"`
 	SortOrder           *int               `json:"sort_order,omitempty" example:"100"`
 	Remark              *string            `json:"remark,omitempty" example:"Updated remark"`
-	GroupSIDs           *[]string          `json:"group_sids,omitempty" example:"[\"rg_xxx\",\"rg_yyy\"]"`
+	GroupSIDs           *[]string               `json:"group_sids,omitempty" example:"[\"rg_xxx\",\"rg_yyy\"]"`
+	Route               *nodedto.RouteConfigDTO `json:"route,omitempty"` // per-rule routing configuration
+	ClearRoute          *bool                   `json:"clear_route,omitempty"` // true to clear route config
 }
 
 // UpdateStatusRequest represents a request to update forward rule status.

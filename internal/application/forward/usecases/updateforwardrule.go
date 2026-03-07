@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	nodedto "github.com/orris-inc/orris/internal/application/node/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/node"
@@ -38,7 +39,9 @@ type UpdateForwardRuleCommand struct {
 	TrafficMultiplier   *float64 // nil means no update (0-1000000)
 	SortOrder           *int     // nil means no update
 	Remark              *string
-	GroupSIDs           *[]string // nil means no update, empty slice means clear, non-nil means set
+	GroupSIDs           *[]string                // nil means no update, empty slice means clear, non-nil means set
+	Route               *nodedto.RouteConfigDTO  // nil means no update, non-nil means set
+	ClearRoute          *bool                    // true means clear route config
 }
 
 // UpdateForwardRuleUseCase handles forward rule updates.
@@ -477,6 +480,21 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 
 	if cmd.Remark != nil {
 		if err := rule.UpdateRemark(*cmd.Remark); err != nil {
+			return errors.NewValidationError(err.Error())
+		}
+	}
+
+	// Update route config if provided
+	if cmd.ClearRoute != nil && *cmd.ClearRoute {
+		if err := rule.UpdateRouteConfig(nil); err != nil {
+			return errors.NewValidationError(err.Error())
+		}
+	} else if cmd.Route != nil {
+		rc, err := nodedto.FromRouteConfigDTO(cmd.Route)
+		if err != nil {
+			return errors.NewValidationError(fmt.Sprintf("invalid route config: %s", err.Error()))
+		}
+		if err := rule.UpdateRouteConfig(rc); err != nil {
 			return errors.NewValidationError(err.Error())
 		}
 	}

@@ -240,6 +240,7 @@ func (r *ForwardRuleRepositoryImpl) Update(ctx context.Context, rule *forward.Fo
 			"traffic_multiplier": model.TrafficMultiplier,
 			"sort_order":         model.SortOrder,
 			"group_ids":          model.GroupIDs,
+			"route_config":      model.RouteConfig,
 			"updated_at":         model.UpdatedAt,
 		})
 

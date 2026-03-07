@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand"
 
+	nodedto "github.com/orris-inc/orris/internal/application/node/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/node"
@@ -45,7 +46,8 @@ type CreateForwardRuleCommand struct {
 	TrafficMultiplier   *float64 // optional traffic multiplier (nil for auto-calculation, 0-1000000)
 	SortOrder           *int     // optional sort order (nil defaults to 0)
 	Remark              string
-	GroupSIDs           []string // optional resource group SIDs (admin only)
+	GroupSIDs           []string                // optional resource group SIDs (admin only)
+	Route               *nodedto.RouteConfigDTO // optional per-rule routing configuration
 	// External rule fields (only for rule_type=external)
 	ServerAddress  string // required for external type - server address for subscription delivery
 	ExternalSource string // required for external type - source identifier
@@ -405,6 +407,15 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	// Set group IDs if provided
 	if len(groupIDs) > 0 {
 		rule.SetGroupIDs(groupIDs)
+	}
+
+	// Set route config if provided
+	if cmd.Route != nil {
+		rc, err := nodedto.FromRouteConfigDTO(cmd.Route)
+		if err != nil {
+			return nil, errors.NewValidationError(fmt.Sprintf("invalid route config: %s", err.Error()))
+		}
+		rule.SetRouteConfig(rc)
 	}
 
 	// Persist

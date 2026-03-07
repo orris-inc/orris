@@ -8,6 +8,7 @@ import (
 	"time"
 
 	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
+	"github.com/orris-inc/orris/internal/domain/shared/routing"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 )
 
@@ -26,21 +27,22 @@ type ForwardRule struct {
 	chainPortConfig     map[uint]uint16        // map of agent_id -> listen_port for direct_chain type or hybrid chain direct hops
 	tunnelHops          *int                   // number of hops using tunnel (nil=full tunnel, N=first N hops use tunnel)
 	tunnelType          vo.TunnelType          // tunnel type: ws or tls (default: ws)
-	name              string
-	listenPort        uint16
-	targetAddress     string // final target address (required for direct and exit types if targetNodeID is not set)
-	targetPort        uint16 // final target port (required for direct and exit types if targetNodeID is not set)
-	targetNodeID      *uint  // target node ID for dynamic address resolution (mutually exclusive with targetAddress/targetPort)
-	bindIP            string // bind IP address for outbound connections (optional)
-	ipVersion         vo.IPVersion
-	protocol          vo.ForwardProtocol
-	status            vo.ForwardStatus
-	remark            string
-	uploadBytes       int64
-	downloadBytes     int64
-	trafficMultiplier *float64 // traffic multiplier for display. nil means auto-calculate based on node count
-	sortOrder         int
-	groupIDs          []uint // resource group IDs for access control
+	name                string
+	listenPort          uint16
+	targetAddress       string // final target address (required for direct and exit types if targetNodeID is not set)
+	targetPort          uint16 // final target port (required for direct and exit types if targetNodeID is not set)
+	targetNodeID        *uint  // target node ID for dynamic address resolution (mutually exclusive with targetAddress/targetPort)
+	bindIP              string // bind IP address for outbound connections (optional)
+	ipVersion           vo.IPVersion
+	protocol            vo.ForwardProtocol
+	status              vo.ForwardStatus
+	remark              string
+	uploadBytes         int64
+	downloadBytes       int64
+	trafficMultiplier   *float64 // traffic multiplier for display. nil means auto-calculate based on node count
+	sortOrder           int
+	groupIDs            []uint               // resource group IDs for access control
+	routeConfig         *routing.RouteConfig // per-rule routing configuration (sing-box route rules)
 	// External rule fields (used when ruleType = external)
 	serverAddress  string // server address for external rules (replaces agent's public address)
 	externalSource string // external source identifier (required for external rules)
@@ -248,6 +250,7 @@ func ReconstructForwardRule(
 	trafficMultiplier *float64,
 	sortOrder int,
 	groupIDs []uint,
+	routeConfig *routing.RouteConfig,
 	serverAddress string,
 	externalSource string,
 	externalRuleID string,
@@ -335,6 +338,7 @@ func ReconstructForwardRule(
 		trafficMultiplier:   trafficMultiplier,
 		sortOrder:           sortOrder,
 		groupIDs:            groupIDs,
+		routeConfig:         routeConfig,
 		serverAddress:       serverAddress,
 		externalSource:      externalSource,
 		externalRuleID:      externalRuleID,
@@ -497,6 +501,11 @@ func (r *ForwardRule) SortOrder() int {
 // GroupIDs returns the resource group IDs.
 func (r *ForwardRule) GroupIDs() []uint {
 	return r.groupIDs
+}
+
+// RouteConfig returns the per-rule routing configuration.
+func (r *ForwardRule) RouteConfig() *routing.RouteConfig {
+	return r.routeConfig
 }
 
 // ServerAddress returns the server address for external rules.

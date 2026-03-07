@@ -6,10 +6,14 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
+	"log/slog"
+	"strings"
 
 	commondto "github.com/orris-inc/orris/internal/application/common/dto"
+	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
 	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
+	"github.com/orris-inc/orris/internal/domain/shared/routing"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 )
 
@@ -18,26 +22,27 @@ import (
 // NodeConfigResponse represents node configuration data for node agents
 // Compatible with sing-box inbound configuration
 type NodeConfigResponse struct {
-	NodeSID           string          `json:"node_id" binding:"required"`                                                      // Node SID (Stripe-style: node_xxx)
-	Protocol          string          `json:"protocol" binding:"required,oneof=shadowsocks trojan vless vmess hysteria2 tuic anytls"` // Protocol type
-	ServerHost        string          `json:"server_host" binding:"required"`                                                  // Server hostname or IP address
-	ServerPort        int             `json:"server_port" binding:"required,min=1,max=65535"`                                  // Server port number
-	EncryptionMethod  string          `json:"encryption_method,omitempty"`                                                     // Encryption method for Shadowsocks
-	ServerKey         string          `json:"server_key,omitempty"`                                                            // Server password for SS
-	TransportProtocol string          `json:"transport_protocol,omitempty"`                                                    // Transport protocol (tcp, ws, grpc, h2, http, quic)
-	Host              string          `json:"host,omitempty"`                                                                  // WebSocket/HTTP host header
-	Path              string          `json:"path,omitempty"`                                                                  // WebSocket/HTTP path
-	ServiceName       string          `json:"service_name,omitempty"`                                                          // gRPC service name
-	SNI               string          `json:"sni,omitempty"`                                                                   // TLS Server Name Indication
-	AllowInsecure     bool            `json:"allow_insecure"`                                                                  // Allow insecure TLS connection
-	EnableVless       bool            `json:"enable_vless"`                                                                    // Enable VLESS protocol (deprecated, use Protocol=vless)
-	EnableXTLS        bool            `json:"enable_xtls"`                                                                     // Enable XTLS (deprecated, use VLESSFlow)
-	SpeedLimit        uint64          `json:"speed_limit"`                                                                     // Speed limit in Mbps, 0 = unlimited
-	DeviceLimit       int             `json:"device_limit"`                                                                    // Device connection limit, 0 = unlimited
-	RuleListPath      string          `json:"rule_list_path,omitempty"`                                                        // Path to routing rule list file (deprecated, use Route)
-	Route             *RouteConfigDTO `json:"route,omitempty"`                                                                 // Routing configuration for traffic splitting
-	DNS               *DnsConfigDTO   `json:"dns,omitempty"`                                                                   // DNS configuration for DNS-based unlocking
-	Outbounds         []OutboundDTO   `json:"outbounds,omitempty"`                                                             // Outbound configs for nodes referenced in route rules
+	NodeSID           string                `json:"node_id" binding:"required"`                                                             // Node SID (Stripe-style: node_xxx)
+	Protocol          string                `json:"protocol" binding:"required,oneof=shadowsocks trojan vless vmess hysteria2 tuic anytls"` // Protocol type
+	ServerHost        string                `json:"server_host" binding:"required"`                                                         // Server hostname or IP address
+	ServerPort        int                   `json:"server_port" binding:"required,min=1,max=65535"`                                         // Server port number
+	EncryptionMethod  string                `json:"encryption_method,omitempty"`                                                            // Encryption method for Shadowsocks
+	ServerKey         string                `json:"server_key,omitempty"`                                                                   // Server password for SS
+	TransportProtocol string                `json:"transport_protocol,omitempty"`                                                           // Transport protocol (tcp, ws, grpc, h2, http, quic)
+	Host              string                `json:"host,omitempty"`                                                                         // WebSocket/HTTP host header
+	Path              string                `json:"path,omitempty"`                                                                         // WebSocket/HTTP path
+	ServiceName       string                `json:"service_name,omitempty"`                                                                 // gRPC service name
+	SNI               string                `json:"sni,omitempty"`                                                                          // TLS Server Name Indication
+	AllowInsecure     bool                  `json:"allow_insecure"`                                                                         // Allow insecure TLS connection
+	EnableVless       bool                  `json:"enable_vless"`                                                                           // Enable VLESS protocol (deprecated, use Protocol=vless)
+	EnableXTLS        bool                  `json:"enable_xtls"`                                                                            // Enable XTLS (deprecated, use VLESSFlow)
+	SpeedLimit        uint64                `json:"speed_limit"`                                                                            // Speed limit in Mbps, 0 = unlimited
+	DeviceLimit       int                   `json:"device_limit"`                                                                           // Device connection limit, 0 = unlimited
+	RuleListPath      string                `json:"rule_list_path,omitempty"`                                                               // Path to routing rule list file (deprecated, use Route)
+	Route             *RouteConfigDTO       `json:"route,omitempty"`                                                                        // Routing configuration for traffic splitting
+	DNS               *DnsConfigDTO         `json:"dns,omitempty"`                                                                          // DNS configuration for DNS-based unlocking
+	Outbounds         []OutboundDTO         `json:"outbounds,omitempty"`                                                                    // Outbound configs for nodes referenced in route rules
+	ForwardRuleRoutes []ForwardRuleRouteDTO `json:"forward_rule_routes,omitempty"`                                                          // Per-forward-rule routing configurations
 
 	// VLESS specific fields
 	VLESSFlow              string `json:"vless_flow,omitempty"`                // VLESS flow control (xtls-rprx-vision)
@@ -68,59 +73,65 @@ type NodeConfigResponse struct {
 	TUICDisableSNI        bool   `json:"tuic_disable_sni,omitempty"`        // Disable SNI
 
 	// AnyTLS specific fields
-	AnyTLSFingerprint              string `json:"anytls_fingerprint,omitempty"`                // TLS fingerprint for AnyTLS
+	AnyTLSFingerprint              string `json:"anytls_fingerprint,omitempty"`                 // TLS fingerprint for AnyTLS
 	AnyTLSIdleSessionCheckInterval string `json:"anytls_idle_session_check_interval,omitempty"` // Idle session check interval
 	AnyTLSIdleSessionTimeout       string `json:"anytls_idle_session_timeout,omitempty"`        // Idle session timeout
-	AnyTLSMinIdleSession           int    `json:"anytls_min_idle_session,omitempty"`             // Minimum idle sessions
+	AnyTLSMinIdleSession           int    `json:"anytls_min_idle_session,omitempty"`            // Minimum idle sessions
 }
 
 // RouteConfigDTO represents the routing configuration for sing-box
 type RouteConfigDTO struct {
-	Rules           []RouteRuleDTO      `json:"rules,omitempty"`             // Ordered list of routing rules
-	Final           string              `json:"final"`                       // Default outbound when no rules match (direct/block/proxy/node_xxx/custom_xxx)
-	CustomOutbounds []CustomOutboundDTO `json:"custom_outbounds,omitempty"`  // User-defined outbound configurations
-	RuleSetEntries  []RuleSetEntryDTO   `json:"rule_set_entries,omitempty"`  // Remote rule-set sources referenced by rules
+	Rules           []RouteRuleDTO      `json:"rules,omitempty"`            // Ordered list of routing rules
+	Final           string              `json:"final"`                      // Default outbound when no rules match (direct/block/proxy/node_xxx/custom_xxx)
+	CustomOutbounds []CustomOutboundDTO `json:"custom_outbounds,omitempty"` // User-defined outbound configurations
+	RuleSetEntries  []RuleSetEntryDTO   `json:"rule_set_entries,omitempty"` // Remote rule-set sources referenced by rules
 }
 
 // RuleSetEntryDTO represents a remote rule-set source for sing-box route configuration.
 type RuleSetEntryDTO struct {
-	Tag            string `json:"tag"`                        // Unique identifier referenced by rules
-	URL            string `json:"url"`                        // Remote URL of the rule-set resource
-	Format         string `json:"format,omitempty"`           // Resource format: binary (default) or source
-	DownloadDetour string `json:"download_detour,omitempty"`  // Optional outbound tag for downloading
-	UpdateInterval string `json:"update_interval,omitempty"`  // Optional update interval (e.g. "1d", "12h")
+	Tag            string `json:"tag"`                       // Unique identifier referenced by rules
+	URL            string `json:"url"`                       // Remote URL of the rule-set resource
+	Format         string `json:"format,omitempty"`          // Resource format: binary (default) or source
+	DownloadDetour string `json:"download_detour,omitempty"` // Optional outbound tag for downloading
+	UpdateInterval string `json:"update_interval,omitempty"` // Optional update interval (e.g. "1d", "12h")
+}
+
+// ForwardRuleRouteDTO represents per-forward-rule routing configuration.
+type ForwardRuleRouteDTO struct {
+	RuleSID string          `json:"rule_sid"` // Forward rule SID (e.g., "fr_xxx")
+	Route   *RouteConfigDTO `json:"route"`    // Route configuration for this rule
 }
 
 // CustomOutboundDTO represents a user-defined sing-box outbound configuration.
 // Route rules reference these via custom_xxx tags.
 type CustomOutboundDTO struct {
-	Tag      string         `json:"tag"`                    // Unique identifier, must start with "custom_"
-	Type     string         `json:"type"`                   // Protocol type (shadowsocks, trojan, vless, vmess, hysteria2, tuic, anytls, socks, http)
-	Server   string         `json:"server"`                 // Server hostname or IP address
-	Port     int            `json:"server_port"`            // Server port number
-	Settings map[string]any `json:"settings,omitempty"`     // Protocol-specific configuration (password, uuid, method, tls, transport, etc.)
+	Tag      string         `json:"tag"`                // Unique identifier, must start with "custom_"
+	Type     string         `json:"type"`               // Protocol type (shadowsocks, trojan, vless, vmess, hysteria2, tuic, anytls, socks, http)
+	Server   string         `json:"server"`             // Server hostname or IP address
+	Port     int            `json:"server_port"`        // Server port number
+	Settings map[string]any `json:"settings,omitempty"` // Protocol-specific configuration (password, uuid, method, tls, transport, etc.)
 }
 
 // DnsConfigDTO represents the DNS configuration for sing-box
 type DnsConfigDTO struct {
-	Servers          []DnsServerDTO `json:"servers,omitempty"`          // DNS servers
-	Rules            []DnsRuleDTO   `json:"rules,omitempty"`            // DNS routing rules
-	Final            string         `json:"final"`                      // Default DNS server tag
-	Strategy         string         `json:"strategy,omitempty"`         // Global DNS strategy (prefer_ipv4, prefer_ipv6, ipv4_only, ipv6_only)
-	DisableCache     bool           `json:"disable_cache"`    // Disable DNS cache
-	DisableExpire    bool           `json:"disable_expire"`   // Disable DNS cache expiration
-	IndependentCache bool           `json:"independent_cache"` // Independent cache per DNS server
-	ReverseMapping   bool           `json:"reverse_mapping"`  // Enable reverse DNS mapping
+	Servers          []DnsServerDTO `json:"servers,omitempty"`  // DNS servers
+	Rules            []DnsRuleDTO   `json:"rules,omitempty"`    // DNS routing rules
+	Final            string         `json:"final"`              // Default DNS server tag
+	Strategy         string         `json:"strategy,omitempty"` // Global DNS strategy (prefer_ipv4, prefer_ipv6, ipv4_only, ipv6_only)
+	DisableCache     bool           `json:"disable_cache"`      // Disable DNS cache
+	DisableExpire    bool           `json:"disable_expire"`     // Disable DNS cache expiration
+	IndependentCache bool           `json:"independent_cache"`  // Independent cache per DNS server
+	ReverseMapping   bool           `json:"reverse_mapping"`    // Enable reverse DNS mapping
 }
 
 // DnsServerDTO represents a DNS server entry, compatible with sing-box dns.servers[]
 type DnsServerDTO struct {
-	Tag             string `json:"tag"`                          // Unique identifier
-	Address         string `json:"address"`                      // DNS address (e.g., "https://1.1.1.1/dns-query", "tls://8.8.8.8", "223.5.5.5")
-	AddressResolver string `json:"address_resolver,omitempty"`   // Tag of another server to resolve this server's address
-	AddressStrategy string `json:"address_strategy,omitempty"`   // Strategy for resolving this server's address
-	Strategy        string `json:"strategy,omitempty"`           // DNS resolution strategy for this server
-	Detour          string `json:"detour,omitempty"`             // Outbound tag (direct/proxy/node_xxx/custom_xxx)
+	Tag             string `json:"tag"`                        // Unique identifier
+	Address         string `json:"address"`                    // DNS address (e.g., "https://1.1.1.1/dns-query", "tls://8.8.8.8", "223.5.5.5")
+	AddressResolver string `json:"address_resolver,omitempty"` // Tag of another server to resolve this server's address
+	AddressStrategy string `json:"address_strategy,omitempty"` // Strategy for resolving this server's address
+	Strategy        string `json:"strategy,omitempty"`         // DNS resolution strategy for this server
+	Detour          string `json:"detour,omitempty"`           // Outbound tag (direct/proxy/node_xxx/custom_xxx)
 }
 
 // DnsRuleDTO represents a DNS routing rule, compatible with sing-box dns.rules[]
@@ -134,11 +145,14 @@ type DnsRuleDTO struct {
 	RuleSet       []string `json:"rule_set,omitempty"`       // Rule set references
 	Outbound      []string `json:"outbound,omitempty"`       // Match by outbound tag
 	Server        string   `json:"server"`                   // Target DNS server tag
-	DisableCache  bool     `json:"disable_cache"`  // Disable cache for matched queries
+	DisableCache  bool     `json:"disable_cache"`            // Disable cache for matched queries
 }
 
 // RouteRuleDTO represents a single routing rule, compatible with sing-box route rule
 type RouteRuleDTO struct {
+	// Inbound matching (for per-forward-rule routing)
+	Inbound []string `json:"inbound,omitempty"` // Match by inbound tag (forward rule SID)
+
 	// Domain matching
 	Domain        []string `json:"domain,omitempty"`         // Exact domain match
 	DomainSuffix  []string `json:"domain_suffix,omitempty"`  // Domain suffix match
@@ -185,7 +199,7 @@ type OutboundDTO struct {
 	Version string `json:"version,omitempty"` // SOCKS version (default: 5)
 
 	// Shadowsocks specific fields
-	Method string `json:"method,omitempty"` // Encryption method for SS
+	Method     string `json:"method,omitempty"`      // Encryption method for SS
 	Plugin     string `json:"plugin,omitempty"`      // SIP003 plugin name
 	PluginOpts string `json:"plugin_opts,omitempty"` // Plugin options string
 
@@ -216,10 +230,10 @@ type OutboundDTO struct {
 	TUICUDPRelayMode      string `json:"udp_relay_mode,omitempty"`     // UDP relay mode
 
 	// AnyTLS specific fields
-	AnyTLSFingerprint              string `json:"anytls_fingerprint,omitempty"`                // TLS fingerprint
+	AnyTLSFingerprint              string `json:"anytls_fingerprint,omitempty"`                 // TLS fingerprint
 	AnyTLSIdleSessionCheckInterval string `json:"anytls_idle_session_check_interval,omitempty"` // Idle session check interval
 	AnyTLSIdleSessionTimeout       string `json:"anytls_idle_session_timeout,omitempty"`        // Idle session timeout
-	AnyTLSMinIdleSession           int    `json:"anytls_min_idle_session,omitempty"`             // Minimum idle sessions
+	AnyTLSMinIdleSession           int    `json:"anytls_min_idle_session,omitempty"`            // Minimum idle sessions
 }
 
 // OutboundTLSDTO represents TLS configuration for outbound.
@@ -297,7 +311,8 @@ type ReportOnlineSubscriptionsRequest struct {
 // Supports Shadowsocks, Trojan, VLESS, VMess, Hysteria2, and TUIC protocols with sing-box compatible configuration.
 // referencedNodes: nodes referenced by route rules (outbound: "node_xxx"), can be nil.
 // serverKeyFunc: generates server key for each referenced node, can be nil.
-func ToNodeConfigResponse(n *node.Node, referencedNodes []*node.Node, serverKeyFunc func(*node.Node) string) *NodeConfigResponse {
+// forwardRules: forward rules targeting this node that have per-rule RouteConfig, can be nil.
+func ToNodeConfigResponse(n *node.Node, referencedNodes []*node.Node, serverKeyFunc func(*node.Node) string, forwardRules []*forward.ForwardRule) *NodeConfigResponse {
 	if n == nil {
 		return nil
 	}
@@ -503,11 +518,139 @@ func ToNodeConfigResponse(n *node.Node, referencedNodes []*node.Node, serverKeyF
 		config.Outbounds = append(config.Outbounds, ToOutboundDTOs(referencedNodes, serverKeyFunc)...)
 	}
 
+	// Merge per-forward-rule routing configurations
+	if len(forwardRules) > 0 {
+		mergeForwardRuleRoutes(config, forwardRules)
+	}
+
 	return config
 }
 
+// mergeForwardRuleRoutes merges per-forward-rule RouteConfig into the NodeConfigResponse.
+// For each forward rule with a RouteConfig:
+// 1. Route rules get inbound: [rule.SID()] for per-inbound matching
+// 2. Custom outbound tags are namespaced: {rule_sid}:custom_xxx
+// 3. Per-rule final action becomes a catch-all rule with inbound filter
+// 4. Per-rule routes are prepended before node default routes
+// 5. Custom outbounds and rule_set_entries are merged
+func mergeForwardRuleRoutes(config *NodeConfigResponse, forwardRules []*forward.ForwardRule) {
+	var perRuleRouteRules []RouteRuleDTO
+	var perRuleOutbounds []OutboundDTO
+	var forwardRuleRoutes []ForwardRuleRouteDTO
+	ruleSetURLs := make(map[string]string)
+
+	// Track existing rule_set entries from node config
+	if config.Route != nil {
+		for _, e := range config.Route.RuleSetEntries {
+			ruleSetURLs[e.Tag] = e.URL
+		}
+	}
+
+	for _, fr := range forwardRules {
+		rc := fr.RouteConfig()
+		if rc == nil {
+			continue
+		}
+
+		ruleSID := fr.SID()
+		inbound := []string{ruleSID}
+
+		// Convert RouteConfig to DTO for the informational field
+		routeDTO := ToRouteConfigDTO(rc)
+		forwardRuleRoutes = append(forwardRuleRoutes, ForwardRuleRouteDTO{
+			RuleSID: ruleSID,
+			Route:   routeDTO,
+		})
+
+		// Convert route rules with inbound filter
+		for _, rule := range rc.Rules() {
+			ruleDTO := ToRouteRuleDTO(&rule)
+			ruleDTO.Inbound = inbound
+
+			// Namespace custom outbound references
+			outbound := rule.Outbound().String()
+			if isCustomOutbound(outbound) {
+				ruleDTO.Outbound = ruleSID + ":" + outbound
+			}
+
+			perRuleRouteRules = append(perRuleRouteRules, ruleDTO)
+		}
+
+		// Add per-rule final action as a catch-all rule with inbound filter
+		finalAction := rc.FinalAction().String()
+		if isCustomOutbound(finalAction) {
+			finalAction = ruleSID + ":" + finalAction
+		}
+		perRuleRouteRules = append(perRuleRouteRules, RouteRuleDTO{
+			Inbound:  inbound,
+			Outbound: finalAction,
+		})
+
+		// Namespace and collect custom outbounds
+		if rc.HasCustomOutbounds() {
+			customDTOs := CustomOutboundsToAgentDTOs(rc)
+			for i := range customDTOs {
+				customDTOs[i].Tag = ruleSID + ":" + customDTOs[i].Tag
+			}
+			perRuleOutbounds = append(perRuleOutbounds, customDTOs...)
+		}
+
+		// Merge rule_set entries (deduplicate by tag, warn on URL conflict)
+		if rc.HasRuleSetEntries() {
+			for _, e := range rc.RuleSetEntries() {
+				if existingURL, exists := ruleSetURLs[e.Tag()]; exists {
+					if existingURL != e.URL() {
+						slog.Warn("rule_set entry tag conflict: same tag with different URL, keeping first",
+							"tag", e.Tag(),
+							"existing_url", existingURL,
+							"conflict_url", e.URL(),
+							"forward_rule_sid", ruleSID,
+						)
+					}
+				} else {
+					ruleSetURLs[e.Tag()] = e.URL()
+					entry := RuleSetEntryDTO{
+						Tag:            e.Tag(),
+						URL:            e.URL(),
+						Format:         e.Format().String(),
+						DownloadDetour: e.DownloadDetour(),
+						UpdateInterval: e.UpdateInterval(),
+					}
+					if config.Route == nil {
+						config.Route = &RouteConfigDTO{Final: "direct"}
+					}
+					config.Route.RuleSetEntries = append(config.Route.RuleSetEntries, entry)
+				}
+			}
+		}
+	}
+
+	// Prepend per-rule routes before node default routes
+	if len(perRuleRouteRules) > 0 {
+		if config.Route == nil {
+			config.Route = &RouteConfigDTO{Final: "direct"}
+		}
+		config.Route.Rules = append(perRuleRouteRules, config.Route.Rules...)
+	}
+
+	// Merge custom outbounds
+	if len(perRuleOutbounds) > 0 {
+		config.Outbounds = append(config.Outbounds, perRuleOutbounds...)
+	}
+
+	// Set informational field
+	if len(forwardRuleRoutes) > 0 {
+		config.ForwardRuleRoutes = forwardRuleRoutes
+	}
+}
+
+// isCustomOutbound checks if an outbound reference is a custom outbound (starts with "custom_").
+func isCustomOutbound(outbound string) bool {
+	return strings.HasPrefix(outbound, "custom_") && len(outbound) > len("custom_")
+}
+
 // ToRouteConfigDTO converts domain RouteConfig to DTO
-func ToRouteConfigDTO(rc *vo.RouteConfig) *RouteConfigDTO {
+func ToRouteConfigDTO(rc *routing.RouteConfig) *RouteConfigDTO {
 	if rc == nil {
 		return nil
 	}
@@ -550,7 +693,7 @@ func ToRouteConfigDTO(rc *vo.RouteConfig) *RouteConfigDTO {
 }
 
 // ToRouteRuleDTO converts domain RouteRule to DTO
-func ToRouteRuleDTO(rule *vo.RouteRule) RouteRuleDTO {
+func ToRouteRuleDTO(rule *routing.RouteRule) RouteRuleDTO {
 	dto := RouteRuleDTO{
 		Domain:        rule.Domain(),
 		DomainSuffix:  rule.DomainSuffix(),
@@ -922,7 +1065,7 @@ func generateSubscriptionName(sub *subscription.Subscription) string {
 }
 
 // FromRouteConfigDTO converts RouteConfigDTO to domain RouteConfig
-func FromRouteConfigDTO(dto *RouteConfigDTO) (*vo.RouteConfig, error) {
+func FromRouteConfigDTO(dto *RouteConfigDTO) (*routing.RouteConfig, error) {
 	if dto == nil {
 		return nil, nil
 	}
@@ -934,13 +1077,13 @@ func FromRouteConfigDTO(dto *RouteConfigDTO) (*vo.RouteConfig, error) {
 	}
 
 	// Parse and validate final action
-	finalAction, err := vo.ParseOutboundType(finalStr)
+	finalAction, err := routing.ParseOutboundType(finalStr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid final action: %w", err)
 	}
 
 	// Create route config
-	config, err := vo.NewRouteConfig(finalAction)
+	config, err := routing.NewRouteConfig(finalAction)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create route config: %w", err)
 	}
@@ -958,7 +1101,7 @@ func FromRouteConfigDTO(dto *RouteConfigDTO) (*vo.RouteConfig, error) {
 
 	// Convert and set custom outbounds
 	if len(dto.CustomOutbounds) > 0 {
-		customOutbounds := make([]vo.CustomOutbound, 0, len(dto.CustomOutbounds))
+		customOutbounds := make([]routing.CustomOutbound, 0, len(dto.CustomOutbounds))
 		for i, coDTO := range dto.CustomOutbounds {
 			co, err := customOutboundFromDTO(&coDTO)
 			if err != nil {
@@ -973,13 +1116,13 @@ func FromRouteConfigDTO(dto *RouteConfigDTO) (*vo.RouteConfig, error) {
 
 	// Convert and set rule-set entries
 	if len(dto.RuleSetEntries) > 0 {
-		entries := make([]vo.RuleSetEntry, 0, len(dto.RuleSetEntries))
+		entries := make([]routing.RuleSetEntry, 0, len(dto.RuleSetEntries))
 		for i, eDTO := range dto.RuleSetEntries {
-			format := vo.RuleSetFormat(eDTO.Format)
+			format := routing.RuleSetFormat(eDTO.Format)
 			if !format.IsValid() {
-				format = vo.RuleSetFormatBinary // default to binary
+				format = routing.RuleSetFormatBinary // default to binary
 			}
-			e, err := vo.NewRuleSetEntry(eDTO.Tag, eDTO.URL, format, eDTO.DownloadDetour, eDTO.UpdateInterval)
+			e, err := routing.NewRuleSetEntry(eDTO.Tag, eDTO.URL, format, eDTO.DownloadDetour, eDTO.UpdateInterval)
 			if err != nil {
 				return nil, fmt.Errorf("invalid rule-set entry at index %d: %w", i, err)
 			}
@@ -994,19 +1137,19 @@ func FromRouteConfigDTO(dto *RouteConfigDTO) (*vo.RouteConfig, error) {
 }
 
 // FromRouteRuleDTO converts RouteRuleDTO to domain RouteRule
-func FromRouteRuleDTO(dto *RouteRuleDTO) (*vo.RouteRule, error) {
+func FromRouteRuleDTO(dto *RouteRuleDTO) (*routing.RouteRule, error) {
 	if dto == nil {
 		return nil, nil
 	}
 
 	// Parse and validate outbound type
-	outbound, err := vo.ParseOutboundType(dto.Outbound)
+	outbound, err := routing.ParseOutboundType(dto.Outbound)
 	if err != nil {
 		return nil, fmt.Errorf("invalid outbound type: %w", err)
 	}
 
 	// Create rule with outbound action
-	rule, err := vo.NewRouteRule(outbound)
+	rule, err := routing.NewRouteRule(outbound)
 	if err != nil {
 		return nil, err
 	}
@@ -1219,7 +1362,7 @@ func FromDnsConfigDTO(dto *DnsConfigDTO) (*vo.DnsConfig, error) {
 }
 
 // customOutboundToDTO converts domain CustomOutbound to CustomOutboundDTO
-func customOutboundToDTO(co *vo.CustomOutbound) CustomOutboundDTO {
+func customOutboundToDTO(co *routing.CustomOutbound) CustomOutboundDTO {
 	return CustomOutboundDTO{
 		Tag:      co.Tag(),
 		Type:     co.Protocol(),
@@ -1230,7 +1373,7 @@ func customOutboundToDTO(co *vo.CustomOutbound) CustomOutboundDTO {
 }
 
 // customOutboundFromDTO converts CustomOutboundDTO to domain CustomOutbound
-func customOutboundFromDTO(dto *CustomOutboundDTO) (*vo.CustomOutbound, error) {
+func customOutboundFromDTO(dto *CustomOutboundDTO) (*routing.CustomOutbound, error) {
 	if dto == nil {
 		return nil, nil
 	}
@@ -1238,13 +1381,13 @@ func customOutboundFromDTO(dto *CustomOutboundDTO) (*vo.CustomOutbound, error) {
 	if port < 1 || port > 65535 {
 		return nil, fmt.Errorf("invalid port number: %d (must be 1-65535)", port)
 	}
-	return vo.NewCustomOutbound(dto.Tag, dto.Type, dto.Server, uint16(port), dto.Settings)
+	return routing.NewCustomOutbound(dto.Tag, dto.Type, dto.Server, uint16(port), dto.Settings)
 }
 
 // CustomOutboundsToAgentDTOs converts custom outbounds from a RouteConfig into OutboundDTOs
 // for the agent sync protocol. The settings map is flattened into OutboundDTO fields
 // using JSON marshal/unmarshal for automatic field mapping.
-func CustomOutboundsToAgentDTOs(rc *vo.RouteConfig) []OutboundDTO {
+func CustomOutboundsToAgentDTOs(rc *routing.RouteConfig) []OutboundDTO {
 	if rc == nil || !rc.HasCustomOutbounds() {
 		return nil
 	}
@@ -1260,7 +1403,7 @@ func CustomOutboundsToAgentDTOs(rc *vo.RouteConfig) []OutboundDTO {
 
 // customOutboundToAgentDTO converts a domain CustomOutbound to an OutboundDTO
 // for the agent sync protocol by mapping settings to typed fields.
-func customOutboundToAgentDTO(co *vo.CustomOutbound) OutboundDTO {
+func customOutboundToAgentDTO(co *routing.CustomOutbound) OutboundDTO {
 	dto := OutboundDTO{
 		Tag:    co.Tag(),
 		Type:   co.Protocol(),

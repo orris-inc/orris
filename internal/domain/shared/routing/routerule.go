@@ -1,6 +1,19 @@
-package valueobjects
+package routing
 
-import "fmt"
+import (
+	"fmt"
+	"net"
+	"regexp"
+)
+
+const (
+	// maxConditionItems is the upper bound for most condition arrays in a route rule.
+	maxConditionItems = 1000
+	// maxDomainLen is the maximum length of a single domain value (RFC 1035).
+	maxDomainLen = 253
+	// maxRegexLen is the maximum length of a single domain regex pattern.
+	maxRegexLen = 1024
+)
 
 // RouteRule represents a single routing rule for traffic matching.
 // Compatible with sing-box route rule configuration.
@@ -158,7 +171,72 @@ func (r *RouteRule) Validate() error {
 	if !r.outbound.IsValid() {
 		return fmt.Errorf("invalid outbound type: %s", r.outbound)
 	}
-	// A rule without conditions is valid (acts as catch-all)
+
+	// --- 1. Array length limits ---
+	checks := []struct {
+		name string
+		len  int
+		max  int
+	}{
+		{"domain", len(r.domain), maxConditionItems},
+		{"domain_suffix", len(r.domainSuffix), maxConditionItems},
+		{"domain_keyword", len(r.domainKeyword), maxConditionItems},
+		{"domain_regex", len(r.domainRegex), maxConditionItems},
+		{"ip_cidr", len(r.ipCIDR), maxConditionItems},
+		{"source_ip_cidr", len(r.sourceIPCIDR), maxConditionItems},
+		{"geo_ip", len(r.geoIP), 100},
+		{"geo_site", len(r.geoSite), 100},
+		{"port", len(r.port), maxConditionItems},
+		{"source_port", len(r.sourcePort), maxConditionItems},
+		{"protocol", len(r.protocol), 20},
+		{"network", len(r.network), 20},
+		{"rule_set", len(r.ruleSet), 100},
+	}
+	for _, c := range checks {
+		if c.len > c.max {
+			return fmt.Errorf("%s has too many items: %d (max %d)", c.name, c.len, c.max)
+		}
+	}
+
+	// --- 2. Domain string length validation ---
+	for i, v := range r.domain {
+		if len(v) > maxDomainLen {
+			return fmt.Errorf("domain[%d] too long: %d characters (max %d)", i, len(v), maxDomainLen)
+		}
+	}
+	for i, v := range r.domainSuffix {
+		if len(v) > maxDomainLen {
+			return fmt.Errorf("domain_suffix[%d] too long: %d characters (max %d)", i, len(v), maxDomainLen)
+		}
+	}
+	for i, v := range r.domainKeyword {
+		if len(v) > maxDomainLen {
+			return fmt.Errorf("domain_keyword[%d] too long: %d characters (max %d)", i, len(v), maxDomainLen)
+		}
+	}
+
+	// --- 3. Domain regex length and validity ---
+	for i, pattern := range r.domainRegex {
+		if len(pattern) > maxRegexLen {
+			return fmt.Errorf("domain_regex[%d] too long: %d characters (max %d)", i, len(pattern), maxRegexLen)
+		}
+		if _, err := regexp.Compile(pattern); err != nil {
+			return fmt.Errorf("domain_regex[%d] is invalid regex: %w", i, err)
+		}
+	}
+
+	// --- 4. CIDR format validation ---
+	for i, cidr := range r.ipCIDR {
+		if _, _, err := net.ParseCIDR(cidr); err != nil {
+			return fmt.Errorf("ip_cidr[%d] is invalid CIDR: %w", i, err)
+		}
+	}
+	for i, cidr := range r.sourceIPCIDR {
+		if _, _, err := net.ParseCIDR(cidr); err != nil {
+			return fmt.Errorf("source_ip_cidr[%d] is invalid CIDR: %w", i, err)
+		}
+	}
+
 	return nil
 }
 

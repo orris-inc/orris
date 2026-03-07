@@ -8,6 +8,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/node"
 	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
+	"github.com/orris-inc/orris/internal/domain/shared/routing"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 	"github.com/orris-inc/orris/internal/shared/id"
 )
@@ -193,13 +194,13 @@ func (m *NodeMapperImpl) ToEntity(model *models.NodeModel, encryptionConfig vo.E
 	}
 
 	// Parse routeConfig from JSON
-	var routeConfig *vo.RouteConfig
+	var routeConfig *routing.RouteConfig
 	if len(model.RouteConfig) > 0 {
 		var routeJSON RouteConfigJSON
 		if err := json.Unmarshal(model.RouteConfig, &routeJSON); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal route_config: %w", err)
 		}
-		routeConfig = routeConfigFromJSON(&routeJSON)
+		routeConfig = RouteConfigFromJSON(&routeJSON)
 	}
 
 	// Parse dnsConfig from JSON
@@ -299,7 +300,7 @@ func (m *NodeMapperImpl) ToModel(entity *node.Node) (*models.NodeModel, error) {
 	// Prepare routeConfig JSON
 	var routeConfigJSON datatypes.JSON
 	if entity.RouteConfig() != nil {
-		routeJSON := routeConfigToJSON(entity.RouteConfig())
+		routeJSON := RouteConfigToJSON(entity.RouteConfig())
 		routeBytes, err := json.Marshal(routeJSON)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal route_config: %w", err)
@@ -435,8 +436,8 @@ func (m *NodeMapperImpl) ToModels(entities []*node.Node) ([]*models.NodeModel, e
 	return models, nil
 }
 
-// routeConfigToJSON converts domain RouteConfig to JSON structure
-func routeConfigToJSON(rc *vo.RouteConfig) *RouteConfigJSON {
+// RouteConfigToJSON converts domain RouteConfig to JSON structure
+func RouteConfigToJSON(rc *routing.RouteConfig) *RouteConfigJSON {
 	if rc == nil {
 		return nil
 	}
@@ -500,25 +501,25 @@ func routeConfigToJSON(rc *vo.RouteConfig) *RouteConfigJSON {
 	return rcJSON
 }
 
-// routeConfigFromJSON converts JSON structure to domain RouteConfig
-func routeConfigFromJSON(rcJSON *RouteConfigJSON) *vo.RouteConfig {
+// RouteConfigFromJSON converts JSON structure to domain RouteConfig
+func RouteConfigFromJSON(rcJSON *RouteConfigJSON) *routing.RouteConfig {
 	if rcJSON == nil {
 		return nil
 	}
 
-	finalAction := vo.OutboundType(rcJSON.FinalAction)
+	finalAction := routing.OutboundType(rcJSON.FinalAction)
 	if !finalAction.IsValid() {
-		finalAction = vo.OutboundDirect // default fallback to direct
+		finalAction = routing.OutboundDirect // default fallback to direct
 	}
 
-	rules := make([]vo.RouteRule, 0, len(rcJSON.Rules))
+	rules := make([]routing.RouteRule, 0, len(rcJSON.Rules))
 	for _, ruleJSON := range rcJSON.Rules {
-		outbound := vo.OutboundType(ruleJSON.Outbound)
+		outbound := routing.OutboundType(ruleJSON.Outbound)
 		if !outbound.IsValid() {
-			outbound = vo.OutboundDirect // default fallback to direct
+			outbound = routing.OutboundDirect // default fallback to direct
 		}
 
-		rule := vo.ReconstructRouteRule(
+		rule := routing.ReconstructRouteRule(
 			ruleJSON.Domain,
 			ruleJSON.DomainSuffix,
 			ruleJSON.DomainKeyword,
@@ -539,26 +540,26 @@ func routeConfigFromJSON(rcJSON *RouteConfigJSON) *vo.RouteConfig {
 	}
 
 	// Deserialize custom outbounds
-	var customOutbounds []vo.CustomOutbound
+	var customOutbounds []routing.CustomOutbound
 	if len(rcJSON.CustomOutbounds) > 0 {
-		customOutbounds = make([]vo.CustomOutbound, 0, len(rcJSON.CustomOutbounds))
+		customOutbounds = make([]routing.CustomOutbound, 0, len(rcJSON.CustomOutbounds))
 		for _, coJSON := range rcJSON.CustomOutbounds {
-			co := vo.ReconstructCustomOutbound(coJSON.Tag, coJSON.Type, coJSON.Server, coJSON.Port, coJSON.Settings)
+			co := routing.ReconstructCustomOutbound(coJSON.Tag, coJSON.Type, coJSON.Server, coJSON.Port, coJSON.Settings)
 			customOutbounds = append(customOutbounds, *co)
 		}
 	}
 
 	// Deserialize rule-set entries
-	var ruleSetEntries []vo.RuleSetEntry
+	var ruleSetEntries []routing.RuleSetEntry
 	if len(rcJSON.RuleSetEntries) > 0 {
-		ruleSetEntries = make([]vo.RuleSetEntry, 0, len(rcJSON.RuleSetEntries))
+		ruleSetEntries = make([]routing.RuleSetEntry, 0, len(rcJSON.RuleSetEntries))
 		for _, eJSON := range rcJSON.RuleSetEntries {
-			e := vo.ReconstructRuleSetEntry(eJSON.Tag, eJSON.URL, vo.RuleSetFormat(eJSON.Format), eJSON.DownloadDetour, eJSON.UpdateInterval)
+			e := routing.ReconstructRuleSetEntry(eJSON.Tag, eJSON.URL, routing.RuleSetFormat(eJSON.Format), eJSON.DownloadDetour, eJSON.UpdateInterval)
 			ruleSetEntries = append(ruleSetEntries, *e)
 		}
 	}
 
-	return vo.ReconstructRouteConfig(rules, finalAction, customOutbounds, ruleSetEntries)
+	return routing.ReconstructRouteConfig(rules, finalAction, customOutbounds, ruleSetEntries)
 }
 
 // dnsConfigToJSON converts domain DnsConfig to JSON structure

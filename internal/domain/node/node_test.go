@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
+	"github.com/orris-inc/orris/internal/domain/shared/routing"
 )
 
 // --- Test helpers ---
@@ -1465,7 +1466,7 @@ func TestNode_RouteConfig(t *testing.T) {
 		n := newShadowsocksNode(t)
 		initialVersion := n.Version()
 
-		rc, err := vo.NewRouteConfig(vo.OutboundProxy)
+		rc, err := routing.NewRouteConfig(routing.OutboundProxy)
 		require.NoError(t, err)
 
 		err = n.UpdateRouteConfig(rc)
@@ -1476,7 +1477,7 @@ func TestNode_RouteConfig(t *testing.T) {
 
 	t.Run("clear route config", func(t *testing.T) {
 		n := newShadowsocksNode(t)
-		rc, err := vo.NewRouteConfig(vo.OutboundProxy)
+		rc, err := routing.NewRouteConfig(routing.OutboundProxy)
 		require.NoError(t, err)
 		err = n.UpdateRouteConfig(rc)
 		require.NoError(t, err)
