@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/orris-inc/orris/internal/application/subscription/dto"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/domain/user"
@@ -24,13 +26,15 @@ type ListUserSubscriptionsQuery struct {
 	PageSize      int
 	SortBy        string
 	SortDesc      *bool // nil means default (true = DESC)
+	IncludeCounts bool  // When true, also return subscription status counts
 }
 
 type ListUserSubscriptionsResult struct {
-	Subscriptions []*dto.SubscriptionDTO `json:"subscriptions"`
-	Total         int64                  `json:"total"`
-	Page          int                    `json:"page"`
-	PageSize      int                    `json:"page_size"`
+	Subscriptions []*dto.SubscriptionDTO      `json:"subscriptions"`
+	Total         int64                       `json:"total"`
+	Page          int                         `json:"page"`
+	PageSize      int                         `json:"page_size"`
+	StatusCounts  *dto.SubscriptionStatusCounts `json:"status_counts,omitempty"` // Present when IncludeCounts is true
 }
 
 type ListUserSubscriptionsUseCase struct {
@@ -189,6 +193,60 @@ func (uc *ListUserSubscriptionsUseCase) Execute(ctx context.Context, query ListU
 		dtos = append(dtos, result)
 	}
 
+	// Query status counts if requested
+	var statusCounts *dto.SubscriptionStatusCounts
+	if query.IncludeCounts {
+		statusCounts = &dto.SubscriptionStatusCounts{}
+		g, gctx := errgroup.WithContext(ctx)
+
+		g.Go(func() error {
+			count, err := uc.subscriptionRepo.CountByStatus(gctx, "active")
+			if err != nil {
+				return fmt.Errorf("count active: %w", err)
+			}
+			statusCounts.Active = count
+			return nil
+		})
+		g.Go(func() error {
+			count, err := uc.subscriptionRepo.CountByStatus(gctx, "expired")
+			if err != nil {
+				return fmt.Errorf("count expired: %w", err)
+			}
+			statusCounts.Expired = count
+			return nil
+		})
+		g.Go(func() error {
+			count, err := uc.subscriptionRepo.CountByStatus(gctx, "suspended")
+			if err != nil {
+				return fmt.Errorf("count suspended: %w", err)
+			}
+			statusCounts.Suspended = count
+			return nil
+		})
+		g.Go(func() error {
+			count, err := uc.subscriptionRepo.CountByStatus(gctx, "pending_payment")
+			if err != nil {
+				return fmt.Errorf("count pending_payment: %w", err)
+			}
+			statusCounts.PendingPayment = count
+			return nil
+		})
+		g.Go(func() error {
+			subs, err := uc.subscriptionRepo.FindExpiringSubscriptions(gctx, 7)
+			if err != nil {
+				return fmt.Errorf("find expiring subscriptions: %w", err)
+			}
+			statusCounts.ExpiringIn7Days = int64(len(subs))
+			return nil
+		})
+
+		if err := g.Wait(); err != nil {
+			uc.logger.Warnw("failed to get subscription status counts", "error", err)
+			// Non-fatal: return list without counts
+			statusCounts = nil
+		}
+	}
+
 	uc.logger.Debugw("subscriptions listed successfully",
 		"user_id", query.UserID,
 		"total", total,
@@ -201,5 +259,6 @@ func (uc *ListUserSubscriptionsUseCase) Execute(ctx context.Context, query ListU
 		Total:         total,
 		Page:          query.Page,
 		PageSize:      query.PageSize,
+		StatusCounts:  statusCounts,
 	}, nil
 }

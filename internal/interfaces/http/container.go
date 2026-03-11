@@ -22,6 +22,7 @@ import (
 	"github.com/orris-inc/orris/internal/infrastructure/email"
 	infraPayment "github.com/orris-inc/orris/internal/infrastructure/payment"
 	"github.com/orris-inc/orris/internal/infrastructure/pubsub"
+	"github.com/orris-inc/orris/internal/infrastructure/repository"
 	"github.com/orris-inc/orris/internal/infrastructure/scheduler"
 	"github.com/orris-inc/orris/internal/infrastructure/services"
 	telegramInfra "github.com/orris-inc/orris/internal/infrastructure/telegram"
@@ -100,8 +101,8 @@ type Container struct {
 	adminNotificationServiceDDD *telegramAdminApp.ServiceDDD
 
 	// Cross-cutting adapters and services (created in one section, used in another)
-	nodeRepoAdapter                *adapters.NodeRepositoryAdapter
-	tokenValidator                 *adapters.SubscriptionTokenValidatorAdapter
+	nodeRepoAdapter                *repository.NodeSubscriptionRepository
+	tokenValidator                 *repository.SubscriptionTokenValidator
 	templateLoader                 *template.SubscriptionTemplateLoader
 	nodeStatusQuerier              *adapters.NodeSystemStatusQuerierAdapter
 	forwardAgentReleaseService     *services.GitHubReleaseService

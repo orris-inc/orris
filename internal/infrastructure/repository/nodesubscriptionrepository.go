@@ -1,4 +1,4 @@
-package adapters
+package repository
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"github.com/orris-inc/orris/internal/domain/node"
 	nodevo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
-	"github.com/orris-inc/orris/internal/interfaces/adapters/nodeutil"
+	"github.com/orris-inc/orris/internal/infrastructure/persistence/nodeutil"
 	"github.com/orris-inc/orris/internal/infrastructure/persistence/models"
 	"github.com/orris-inc/orris/internal/shared/logger"
 	"github.com/orris-inc/orris/internal/shared/utils/jsonutil"
@@ -18,21 +18,19 @@ import (
 	"github.com/orris-inc/orris/internal/shared/utils/setutil"
 )
 
-// NodeRepository defines the interface for node persistence operations
-type NodeRepository interface {
-	GetByToken(ctx context.Context, tokenHash string) (*node.Node, error)
-}
-
-type NodeRepositoryAdapter struct {
-	nodeRepo        NodeRepository
+// NodeSubscriptionRepository implements usecases.NodeRepository by querying
+// subscriptions, plans, resource groups, and nodes to build subscription node lists.
+type NodeSubscriptionRepository struct {
+	nodeRepo        node.NodeRepository
 	forwardRuleRepo forward.Repository
 	db              *gorm.DB
 	logger          logger.Interface
 	configLoader    *nodeutil.ConfigLoader
 }
 
-func NewNodeRepositoryAdapter(nodeRepo NodeRepository, forwardRuleRepo forward.Repository, db *gorm.DB, logger logger.Interface) *NodeRepositoryAdapter {
-	return &NodeRepositoryAdapter{
+// NewNodeSubscriptionRepository creates a new NodeSubscriptionRepository.
+func NewNodeSubscriptionRepository(nodeRepo node.NodeRepository, forwardRuleRepo forward.Repository, db *gorm.DB, logger logger.Interface) *NodeSubscriptionRepository {
+	return &NodeSubscriptionRepository{
 		nodeRepo:        nodeRepo,
 		forwardRuleRepo: forwardRuleRepo,
 		db:              db,
@@ -41,7 +39,7 @@ func NewNodeRepositoryAdapter(nodeRepo NodeRepository, forwardRuleRepo forward.R
 	}
 }
 
-func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, linkToken string, mode string) ([]*usecases.Node, error) {
+func (r *NodeSubscriptionRepository) GetBySubscriptionToken(ctx context.Context, linkToken string, mode string) ([]*usecases.Node, error) {
 	var subscriptionModel models.SubscriptionModel
 
 	// Query subscription by link_token
@@ -148,7 +146,7 @@ func (r *NodeRepositoryAdapter) GetBySubscriptionToken(ctx context.Context, link
 	}
 }
 
-func (r *NodeRepositoryAdapter) GetByTokenHash(ctx context.Context, tokenHash string) (usecases.NodeData, error) {
+func (r *NodeSubscriptionRepository) GetByTokenHash(ctx context.Context, tokenHash string) (usecases.NodeData, error) {
 	nodeEntity, err := r.nodeRepo.GetByToken(ctx, tokenHash)
 	if err != nil {
 		r.logger.Warnw("failed to get node by token hash",
@@ -172,7 +170,7 @@ func (r *NodeRepositoryAdapter) GetByTokenHash(ctx context.Context, tokenHash st
 // Rules are selected based on resource group membership, regardless of whether their
 // target nodes are in the same resource groups.
 // Uses Repository method to ensure proper scope isolation (system rules only).
-func (r *NodeRepositoryAdapter) getForwardedNodes(ctx context.Context, groupIDs []uint, originNodeMap map[uint]*usecases.Node) []*usecases.Node {
+func (r *NodeSubscriptionRepository) getForwardedNodes(ctx context.Context, groupIDs []uint, originNodeMap map[uint]*usecases.Node) []*usecases.Node {
 	if len(groupIDs) == 0 {
 		return nil
 	}
@@ -238,7 +236,7 @@ func (r *NodeRepositoryAdapter) getForwardedNodes(ctx context.Context, groupIDs 
 // For forward plans, users see their own forward rules as subscription nodes
 // Forward plans have no "origin" nodes - all nodes are forwarded by nature
 // Uses Repository method to ensure proper scope isolation (user's own rules only).
-func (r *NodeRepositoryAdapter) getForwardPlanNodes(ctx context.Context, subscriptionID uint, userID uint, mode string) ([]*usecases.Node, error) {
+func (r *NodeSubscriptionRepository) getForwardPlanNodes(ctx context.Context, subscriptionID uint, userID uint, mode string) ([]*usecases.Node, error) {
 	// Forward plans have no origin nodes, return empty for origin mode
 	if mode == usecases.NodeModeOrigin {
 		r.logger.Debugw("forward plan has no origin nodes", "user_id", userID, "mode", mode)
@@ -262,7 +260,7 @@ func (r *NodeRepositoryAdapter) getForwardPlanNodes(ctx context.Context, subscri
 
 // getHybridPlanNodes returns nodes for hybrid plan subscriptions
 // For hybrid plans, users see both resource group nodes AND their own forward rules
-func (r *NodeRepositoryAdapter) getHybridPlanNodes(ctx context.Context, subscriptionID uint, userID uint, planID uint, mode string) ([]*usecases.Node, error) {
+func (r *NodeSubscriptionRepository) getHybridPlanNodes(ctx context.Context, subscriptionID uint, userID uint, planID uint, mode string) ([]*usecases.Node, error) {
 	// Step 1: Get resource group nodes (same as node plan logic)
 	// Query resource group IDs for this plan
 	var groupIDs []uint
@@ -349,7 +347,7 @@ func (r *NodeRepositoryAdapter) getHybridPlanNodes(ctx context.Context, subscrip
 }
 
 // buildNodesWithConfigs builds use case nodes from node models with protocol configs loaded
-func (r *NodeRepositoryAdapter) buildNodesWithConfigs(ctx context.Context, nodeModels []models.NodeModel) []*usecases.Node {
+func (r *NodeSubscriptionRepository) buildNodesWithConfigs(ctx context.Context, nodeModels []models.NodeModel) []*usecases.Node {
 	configs := r.configLoader.LoadProtocolConfigs(ctx, nodeModels)
 
 	nodes := make([]*usecases.Node, 0, len(nodeModels))
@@ -365,7 +363,7 @@ func (r *NodeRepositoryAdapter) buildNodesWithConfigs(ctx context.Context, nodeM
 // getUserForwardNodes retrieves user's forward rules with target nodes as subscription nodes
 // Only returns forward rules where target_node_id is NOT NULL
 // Uses Repository method to ensure proper scope isolation (user's own rules only).
-func (r *NodeRepositoryAdapter) getUserForwardNodes(ctx context.Context, userID uint) ([]*usecases.Node, error) {
+func (r *NodeSubscriptionRepository) getUserForwardNodes(ctx context.Context, userID uint) ([]*usecases.Node, error) {
 	forwardRules, err := r.forwardRuleRepo.ListUserRulesForDelivery(ctx, userID)
 	if err != nil {
 		r.logger.Errorw("failed to query user forward rules", "user_id", userID, "error", err)
@@ -395,7 +393,7 @@ func (r *NodeRepositoryAdapter) getUserForwardNodes(ctx context.Context, userID 
 }
 
 // collectIDsFromRules extracts node IDs and agent IDs from forward rules
-func (r *NodeRepositoryAdapter) collectIDsFromRules(rules []*forward.ForwardRule) (nodeIDs, agentIDs []uint) {
+func (r *NodeSubscriptionRepository) collectIDsFromRules(rules []*forward.ForwardRule) (nodeIDs, agentIDs []uint) {
 	nodeIDSet := setutil.NewUintSet()
 	agentIDSet := setutil.NewUintSet()
 
@@ -412,7 +410,7 @@ func (r *NodeRepositoryAdapter) collectIDsFromRules(rules []*forward.ForwardRule
 }
 
 // collectAgentIDsFromRules extracts agent IDs from forward rules (skipping external rules).
-func (r *NodeRepositoryAdapter) collectAgentIDsFromRules(rules []*forward.ForwardRule) []uint {
+func (r *NodeSubscriptionRepository) collectAgentIDsFromRules(rules []*forward.ForwardRule) []uint {
 	agentIDSet := setutil.NewUintSet()
 	for _, rule := range rules {
 		if rule.AgentID() > 0 {
@@ -423,7 +421,7 @@ func (r *NodeRepositoryAdapter) collectAgentIDsFromRules(rules []*forward.Forwar
 }
 
 // queryActiveNodes queries active nodes by IDs and returns both slice and map
-func (r *NodeRepositoryAdapter) queryActiveNodes(ctx context.Context, nodeIDs []uint) ([]models.NodeModel, map[uint]*models.NodeModel, error) {
+func (r *NodeSubscriptionRepository) queryActiveNodes(ctx context.Context, nodeIDs []uint) ([]models.NodeModel, map[uint]*models.NodeModel, error) {
 	nodeMap := make(map[uint]*models.NodeModel)
 	if len(nodeIDs) == 0 {
 		return nil, nodeMap, nil
@@ -447,7 +445,7 @@ func (r *NodeRepositoryAdapter) queryActiveNodes(ctx context.Context, nodeIDs []
 }
 
 // loadForwardAgents loads forward agents by IDs and returns a map
-func (r *NodeRepositoryAdapter) loadForwardAgents(ctx context.Context, agentIDs []uint) map[uint]*models.ForwardAgentModel {
+func (r *NodeSubscriptionRepository) loadForwardAgents(ctx context.Context, agentIDs []uint) map[uint]*models.ForwardAgentModel {
 	agentMap := make(map[uint]*models.ForwardAgentModel)
 	if len(agentIDs) == 0 {
 		return agentMap

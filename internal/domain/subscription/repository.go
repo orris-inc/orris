@@ -34,6 +34,7 @@ type SubscriptionFilter struct {
 	UserID        *uint
 	PlanID        *uint
 	Status        *string
+	Statuses      []string   // Multiple status filter (IN clause), takes precedence over Status
 	BillingCycle  *string
 	CreatedFrom   *time.Time
 	CreatedTo     *time.Time

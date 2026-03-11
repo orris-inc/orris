@@ -311,8 +311,8 @@ func (c *Container) initNode() {
 	hdlrs := c.hdlrs
 
 	// Initialize adapters
-	c.nodeRepoAdapter = adapters.NewNodeRepositoryAdapter(repos.nodeRepoImpl, repos.forwardRuleRepo, db, log)
-	c.tokenValidator = adapters.NewSubscriptionTokenValidatorAdapter(db, log)
+	c.nodeRepoAdapter = repository.NewNodeSubscriptionRepository(repos.nodeRepoImpl, repos.forwardRuleRepo, db, log)
+	c.tokenValidator = repository.NewSubscriptionTokenValidator(db, log)
 	c.nodeStatusQuerier = adapters.NewNodeSystemStatusQuerierAdapter(c.redis, log)
 
 	// Initialize GitHub release services for version checking
@@ -1359,6 +1359,9 @@ func (c *Container) initCallbacksAndNotifiers() {
 
 	// Set plan change notifier to propagate plan feature changes (e.g. device_limit) to nodes
 	ucs.updatePlanUC.SetPlanChangeNotifier(c.subscriptionSyncService)
+	ucs.updatePlanUC.SetSubscriptionRepo(repos.subscriptionRepo)
+	ucs.updatePlanUC.SetQuotaCacheManager(c.quotaCacheSyncService)
+	ucs.updatePlanUC.SetSubscriptionNotifier(c.subscriptionSyncService)
 }
 
 // ============================================================

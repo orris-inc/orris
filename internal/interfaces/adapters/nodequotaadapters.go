@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
+	nodeUsecases "github.com/orris-inc/orris/internal/application/node/usecases"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/infrastructure/cache"
-	nodeHandlers "github.com/orris-inc/orris/internal/interfaces/http/handlers/node"
 	"github.com/orris-inc/orris/internal/shared/biztime"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -29,7 +29,7 @@ func NewNodeSubscriptionQuotaCacheAdapter(
 }
 
 // GetQuota retrieves subscription quota from cache
-func (a *NodeSubscriptionQuotaCacheAdapter) GetQuota(ctx context.Context, subscriptionID uint) (*nodeHandlers.CachedQuotaInfo, error) {
+func (a *NodeSubscriptionQuotaCacheAdapter) GetQuota(ctx context.Context, subscriptionID uint) (*nodeUsecases.CachedQuotaInfo, error) {
 	cached, err := a.cache.GetQuota(ctx, subscriptionID)
 	if err != nil {
 		return nil, err
@@ -38,7 +38,7 @@ func (a *NodeSubscriptionQuotaCacheAdapter) GetQuota(ctx context.Context, subscr
 		return nil, nil
 	}
 
-	return &nodeHandlers.CachedQuotaInfo{
+	return &nodeUsecases.CachedQuotaInfo{
 		Limit:       cached.Limit,
 		PeriodStart: cached.PeriodStart,
 		PeriodEnd:   cached.PeriodEnd,
@@ -79,7 +79,7 @@ func NewNodeSubscriptionQuotaLoaderAdapter(
 // LoadQuotaByID loads subscription quota from database and caches it.
 // When subscription is not found or inactive, a null marker is cached to prevent
 // repeated DB lookups (cache penetration protection).
-func (a *NodeSubscriptionQuotaLoaderAdapter) LoadQuotaByID(ctx context.Context, subscriptionID uint) (*nodeHandlers.CachedQuotaInfo, error) {
+func (a *NodeSubscriptionQuotaLoaderAdapter) LoadQuotaByID(ctx context.Context, subscriptionID uint) (*nodeUsecases.CachedQuotaInfo, error) {
 	// Get subscription from database
 	sub, err := a.subscriptionRepo.GetByID(ctx, subscriptionID)
 	if err != nil {
@@ -134,7 +134,7 @@ func (a *NodeSubscriptionQuotaLoaderAdapter) LoadQuotaByID(ctx context.Context, 
 		)
 	}
 
-	return &nodeHandlers.CachedQuotaInfo{
+	return &nodeUsecases.CachedQuotaInfo{
 		Limit:       cachedQuota.Limit,
 		PeriodStart: cachedQuota.PeriodStart,
 		PeriodEnd:   cachedQuota.PeriodEnd,
@@ -186,10 +186,15 @@ func (a *NodeSubscriptionUsageReaderAdapter) GetCurrentPeriodUsage(
 
 	var total int64
 
-	// Get recent traffic from Redis (yesterday + today, filter by node type)
+	// Get recent traffic from Redis (yesterday + today, filter by node type).
+	// Use max(recentBoundary, periodStart) so traffic before periodStart (e.g. after reset) is excluded.
 	resourceType := subscription.ResourceTypeNode.String()
+	redisFrom := recentBoundary
+	if periodStart.After(redisFrom) {
+		redisFrom = periodStart
+	}
 	recentTraffic, err := a.hourlyTrafficCache.GetTotalTrafficBySubscriptionIDs(
-		ctx, []uint{subscriptionID}, resourceType, recentBoundary, now,
+		ctx, []uint{subscriptionID}, resourceType, redisFrom, now,
 	)
 	if err != nil {
 		a.logger.Warnw("failed to get recent traffic from Redis",

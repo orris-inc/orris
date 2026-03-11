@@ -44,6 +44,9 @@ func GetTrafficResetMode(plan *Plan) TrafficResetMode {
 // For calendar_month: uses business timezone month boundaries (backward compatible default).
 // For billing_cycle: uses the subscription's CurrentPeriodStart/CurrentPeriodEnd.
 // Falls back to calendar_month if sub is nil.
+//
+// In both modes, if the subscription's CurrentPeriodStart is after the resolved period start
+// (e.g. after a manual usage reset), it is used as a floor to exclude pre-reset traffic.
 func ResolveTrafficPeriod(plan *Plan, sub *Subscription) TrafficPeriod {
 	mode := GetTrafficResetMode(plan)
 
@@ -56,8 +59,16 @@ func ResolveTrafficPeriod(plan *Plan, sub *Subscription) TrafficPeriod {
 
 	// Fallback: calendar month (default, or billing_cycle with nil sub)
 	bizNow := biztime.ToBizTimezone(biztime.NowUTC())
-	return TrafficPeriod{
+	period := TrafficPeriod{
 		Start: biztime.StartOfMonthUTC(bizNow.Year(), bizNow.Month()),
 		End:   biztime.EndOfMonthUTC(bizNow.Year(), bizNow.Month()),
 	}
+
+	// If subscription's period start is after the calendar month start (e.g. after manual
+	// usage reset), use it as the floor so pre-reset traffic is excluded.
+	if sub != nil && sub.CurrentPeriodStart().After(period.Start) {
+		period.Start = sub.CurrentPeriodStart()
+	}
+
+	return period
 }

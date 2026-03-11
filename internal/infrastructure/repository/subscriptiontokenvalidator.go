@@ -1,4 +1,4 @@
-package adapters
+package repository
 
 import (
 	"context"
@@ -13,13 +13,15 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
-type SubscriptionTokenValidatorAdapter struct {
+// SubscriptionTokenValidator validates subscription tokens by querying the database directly.
+type SubscriptionTokenValidator struct {
 	db     *gorm.DB
 	logger logger.Interface
 }
 
-func NewSubscriptionTokenValidatorAdapter(db *gorm.DB, logger logger.Interface) *SubscriptionTokenValidatorAdapter {
-	return &SubscriptionTokenValidatorAdapter{
+// NewSubscriptionTokenValidator creates a new SubscriptionTokenValidator.
+func NewSubscriptionTokenValidator(db *gorm.DB, logger logger.Interface) *SubscriptionTokenValidator {
+	return &SubscriptionTokenValidator{
 		db:     db,
 		logger: logger,
 	}
@@ -54,7 +56,7 @@ func subscriptionStatusError(status string) error {
 	}
 }
 
-func (v *SubscriptionTokenValidatorAdapter) Validate(ctx context.Context, linkToken string) error {
+func (v *SubscriptionTokenValidator) Validate(ctx context.Context, linkToken string) error {
 	var subscriptionModel models.SubscriptionModel
 	if err := v.db.WithContext(ctx).
 		Where("link_token = ?", linkToken).
@@ -82,7 +84,7 @@ func (v *SubscriptionTokenValidatorAdapter) Validate(ctx context.Context, linkTo
 	return nil
 }
 
-func (v *SubscriptionTokenValidatorAdapter) ValidateAndGetSubscription(ctx context.Context, linkToken string) (*nodeusecases.SubscriptionValidationResult, error) {
+func (v *SubscriptionTokenValidator) ValidateAndGetSubscription(ctx context.Context, linkToken string) (*nodeusecases.SubscriptionValidationResult, error) {
 	var subscriptionModel models.SubscriptionModel
 	if err := v.db.WithContext(ctx).
 		Where("link_token = ?", linkToken).

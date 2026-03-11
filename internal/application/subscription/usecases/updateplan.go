@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 	"fmt"
+	"math"
 
 	"github.com/orris-inc/orris/internal/application/subscription/dto"
 	"github.com/orris-inc/orris/internal/domain/subscription"
@@ -26,15 +27,33 @@ type PlanChangeNotifier interface {
 }
 
 type UpdatePlanUseCase struct {
-	planRepo           subscription.PlanRepository
-	pricingRepo        subscription.PlanPricingRepository
-	planChangeNotifier PlanChangeNotifier
-	logger             logger.Interface
+	planRepo             subscription.PlanRepository
+	pricingRepo          subscription.PlanPricingRepository
+	subscriptionRepo     subscription.SubscriptionRepository
+	planChangeNotifier   PlanChangeNotifier
+	quotaCacheManager    QuotaCacheManager
+	subscriptionNotifier SubscriptionChangeNotifier
+	logger               logger.Interface
 }
 
 // SetPlanChangeNotifier sets the notifier for plan feature changes.
 func (uc *UpdatePlanUseCase) SetPlanChangeNotifier(notifier PlanChangeNotifier) {
 	uc.planChangeNotifier = notifier
+}
+
+// SetSubscriptionRepo sets the subscription repository for cascading plan changes.
+func (uc *UpdatePlanUseCase) SetSubscriptionRepo(repo subscription.SubscriptionRepository) {
+	uc.subscriptionRepo = repo
+}
+
+// SetQuotaCacheManager sets the quota cache manager for invalidating cached quotas.
+func (uc *UpdatePlanUseCase) SetQuotaCacheManager(manager QuotaCacheManager) {
+	uc.quotaCacheManager = manager
+}
+
+// SetSubscriptionNotifier sets the notifier for subscription changes.
+func (uc *UpdatePlanUseCase) SetSubscriptionNotifier(notifier SubscriptionChangeNotifier) {
+	uc.subscriptionNotifier = notifier
 }
 
 func NewUpdatePlanUseCase(
@@ -108,6 +127,11 @@ func (uc *UpdatePlanUseCase) Execute(
 		}
 	}
 
+	// Invalidate quota cache for all active subscriptions when limits change
+	if cmd.Limits != nil {
+		uc.invalidateQuotaCacheForPlan(ctx, planID)
+	}
+
 	// Sync pricing options if provided (delete old, create new)
 	if cmd.Pricings != nil {
 		uc.logger.Infow("syncing pricing options", "plan_id", planID, "count", len(*cmd.Pricings))
@@ -160,6 +184,9 @@ func (uc *UpdatePlanUseCase) Execute(
 		uc.logger.Infow("pricing options synced successfully",
 			"plan_id", planID,
 			"count", len(*cmd.Pricings))
+
+		// Migrate orphaned subscriptions whose billing cycle is no longer available
+		uc.migrateOrphanedBillingCycles(ctx, planID, *cmd.Pricings)
 	}
 
 	// Reload the plan from database to get the accurate state after update
@@ -182,4 +209,164 @@ func (uc *UpdatePlanUseCase) Execute(
 	}
 
 	return dto.ToPlanDTOWithPricings(updatedPlan, pricings), nil
+}
+
+// invalidateQuotaCacheForPlan invalidates Redis quota cache for all active
+// subscriptions on the given plan so enforcement uses updated limits.
+func (uc *UpdatePlanUseCase) invalidateQuotaCacheForPlan(ctx context.Context, planID uint) {
+	if uc.subscriptionRepo == nil || uc.quotaCacheManager == nil {
+		return
+	}
+
+	subs, _, err := uc.subscriptionRepo.List(ctx, subscription.SubscriptionFilter{
+		PlanID:   &planID,
+		Statuses: []string{string(vo.StatusActive), string(vo.StatusTrialing)},
+		Page:     1,
+		PageSize: 10000,
+	})
+	if err != nil {
+		uc.logger.Warnw("failed to list subscriptions for quota cache invalidation",
+			"plan_id", planID, "error", err)
+		return
+	}
+
+	for _, sub := range subs {
+		if err := uc.quotaCacheManager.InvalidateQuota(ctx, sub.ID()); err != nil {
+			uc.logger.Warnw("failed to invalidate quota cache",
+				"subscription_id", sub.ID(), "error", err)
+		}
+	}
+
+	if len(subs) > 0 {
+		uc.logger.Infow("quota cache invalidated for plan subscriptions",
+			"plan_id", planID, "count", len(subs))
+	}
+}
+
+// migrateOrphanedBillingCycles migrates subscriptions whose billing cycle
+// is no longer available in the new pricing options.
+// e.g., plan changed from monthly to lifetime -> existing monthly subscriptions
+// are migrated to lifetime with recalculated end_date.
+func (uc *UpdatePlanUseCase) migrateOrphanedBillingCycles(
+	ctx context.Context, planID uint, newPricings []dto.PricingOptionInput,
+) {
+	if uc.subscriptionRepo == nil {
+		return
+	}
+
+	// Build set of active billing cycles from new pricings
+	availableCycles := make(map[string]bool)
+	for _, p := range newPricings {
+		if p.IsActive {
+			availableCycles[p.BillingCycle] = true
+		}
+	}
+	if len(availableCycles) == 0 {
+		return
+	}
+
+	// Query affected subscriptions
+	subs, _, err := uc.subscriptionRepo.List(ctx, subscription.SubscriptionFilter{
+		PlanID:   &planID,
+		Statuses: []string{string(vo.StatusActive), string(vo.StatusTrialing), string(vo.StatusSuspended)},
+		Page:     1,
+		PageSize: 10000,
+	})
+	if err != nil {
+		uc.logger.Warnw("failed to list subscriptions for billing cycle migration",
+			"plan_id", planID, "error", err)
+		return
+	}
+
+	// Find orphaned subscriptions
+	migratedCount := 0
+	for _, sub := range subs {
+		if sub.BillingCycle() == nil {
+			continue
+		}
+		if availableCycles[sub.BillingCycle().String()] {
+			continue // billing cycle still available
+		}
+
+		oldCycle := sub.BillingCycle().String()
+		targetCycle := findClosestBillingCycle(sub.BillingCycle(), availableCycles)
+		newEndDate := CalculateEndDate(sub.CurrentPeriodStart(), targetCycle)
+
+		if err := sub.ChangeBillingCycle(targetCycle, newEndDate); err != nil {
+			uc.logger.Warnw("failed to change billing cycle",
+				"subscription_id", sub.ID(), "old_cycle", oldCycle, "error", err)
+			continue
+		}
+
+		if err := uc.subscriptionRepo.Update(ctx, sub); err != nil {
+			uc.logger.Warnw("failed to persist subscription after billing cycle migration",
+				"subscription_id", sub.ID(), "error", err)
+			continue
+		}
+
+		// Invalidate quota cache for migrated subscription
+		if uc.quotaCacheManager != nil {
+			_ = uc.quotaCacheManager.InvalidateQuota(ctx, sub.ID())
+		}
+
+		// Notify nodes of subscription update
+		if uc.subscriptionNotifier != nil {
+			_ = uc.subscriptionNotifier.NotifySubscriptionUpdate(ctx, sub)
+		}
+
+		uc.logger.Infow("subscription billing cycle migrated",
+			"subscription_id", sub.ID(),
+			"subscription_sid", sub.SID(),
+			"old_cycle", oldCycle,
+			"new_cycle", targetCycle.String(),
+			"new_end_date", newEndDate,
+		)
+		migratedCount++
+	}
+
+	if migratedCount > 0 {
+		uc.logger.Infow("billing cycle migration completed",
+			"plan_id", planID, "migrated_count", migratedCount)
+	}
+}
+
+// findClosestBillingCycle finds the billing cycle from availableCycles
+// that is closest in duration to the given oldCycle.
+// On tie, prefers the longer duration to minimize disruption.
+func findClosestBillingCycle(oldCycle *vo.BillingCycle, availableCycles map[string]bool) vo.BillingCycle {
+	oldDays := 0
+	if oldCycle != nil {
+		oldDays = oldCycle.Days()
+		if oldCycle.IsLifetime() {
+			oldDays = math.MaxInt32
+		}
+	}
+
+	var bestCycle vo.BillingCycle
+	bestDiff := math.MaxInt32
+	bestDays := 0
+
+	for c := range availableCycles {
+		parsed, err := vo.ParseBillingCycle(c)
+		if err != nil {
+			continue
+		}
+		days := parsed.Days()
+		if parsed.IsLifetime() {
+			days = math.MaxInt32
+		}
+
+		diff := oldDays - days
+		if diff < 0 {
+			diff = -diff
+		}
+		// Prefer closer; on tie prefer longer duration
+		if diff < bestDiff || (diff == bestDiff && days > bestDays) {
+			bestDiff = diff
+			bestCycle = parsed
+			bestDays = days
+		}
+	}
+
+	return bestCycle
 }

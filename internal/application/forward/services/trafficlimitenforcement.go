@@ -74,7 +74,7 @@ func (s *TrafficLimitEnforcementService) CheckAndEnforceLimit(ctx context.Contex
 
 	// Find the highest traffic limit across all Forward-type subscriptions
 	// and collect their subscription IDs for traffic query
-	trafficLimit, hasLimit, forwardSubscriptionIDs, err := s.getHighestTrafficLimitAndIDs(ctx, activeSubscriptions)
+	trafficLimit, hasLimit, forwardSubscriptionIDs, periodStart, err := s.getHighestTrafficLimitAndIDs(ctx, activeSubscriptions)
 	if err != nil {
 		s.logger.Errorw("failed to determine traffic limit",
 			"user_id", userID,
@@ -99,8 +99,8 @@ func (s *TrafficLimitEnforcementService) CheckAndEnforceLimit(ctx context.Contex
 		return nil
 	}
 
-	// Get user's total forward traffic by combining Redis (recent 24h) and MySQL (historical)
-	usedTraffic, err := s.getTotalTrafficForSubscriptions(ctx, forwardSubscriptionIDs)
+	// Get user's total forward traffic within the resolved traffic period
+	usedTraffic, err := s.getTotalTrafficForSubscriptions(ctx, forwardSubscriptionIDs, periodStart)
 	if err != nil {
 		s.logger.Errorw("failed to get total traffic for user",
 			"user_id", userID,
@@ -262,12 +262,14 @@ func (s *TrafficLimitEnforcementService) OnTrafficUpdate(ctx context.Context, ru
 
 // getHighestTrafficLimitAndIDs returns the highest traffic limit across all Forward-type subscriptions
 // and collects their subscription IDs for traffic query.
-// Returns (limit, hasLimit, subscriptionIDs, error) where hasLimit is false if any subscription has unlimited traffic.
+// Returns (limit, hasLimit, subscriptionIDs, periodStart, error) where hasLimit is false if any subscription has unlimited traffic.
+// periodStart is the latest traffic period start across all forward subscriptions (respects manual resets).
 // Only considers subscriptions with PlanType = "forward".
-func (s *TrafficLimitEnforcementService) getHighestTrafficLimitAndIDs(ctx context.Context, subscriptions []*subscription.Subscription) (uint64, bool, []uint, error) {
+func (s *TrafficLimitEnforcementService) getHighestTrafficLimitAndIDs(ctx context.Context, subscriptions []*subscription.Subscription) (uint64, bool, []uint, time.Time, error) {
 	var highestLimit uint64
 	hasLimit := false
 	var forwardSubscriptionIDs []uint
+	var latestPeriodStart time.Time
 
 	// Collect plan IDs for batch query
 	planIDs := make([]uint, 0, len(subscriptions))
@@ -279,7 +281,7 @@ func (s *TrafficLimitEnforcementService) getHighestTrafficLimitAndIDs(ctx contex
 	plansList, err := s.planRepo.GetByIDs(ctx, planIDs)
 	if err != nil {
 		s.logger.Errorw("failed to batch fetch plans", "error", err)
-		return 0, false, nil, err
+		return 0, false, nil, time.Time{}, err
 	}
 
 	// Convert to map for quick lookup
@@ -312,6 +314,13 @@ func (s *TrafficLimitEnforcementService) getHighestTrafficLimitAndIDs(ctx contex
 		// Collect Forward-type subscription ID
 		forwardSubscriptionIDs = append(forwardSubscriptionIDs, sub.ID())
 
+		// Resolve traffic period and track the latest period start across all forward subscriptions.
+		// This ensures manual usage resets are respected: traffic before the reset is excluded.
+		period := subscription.ResolveTrafficPeriod(plan, sub)
+		if latestPeriodStart.IsZero() || period.Start.After(latestPeriodStart) {
+			latestPeriodStart = period.Start
+		}
+
 		// Determine traffic limit: subscription override takes priority over plan
 		var limit uint64
 		if sub.TrafficLimitOverride() != nil {
@@ -323,7 +332,7 @@ func (s *TrafficLimitEnforcementService) getHighestTrafficLimitAndIDs(ctx contex
 					"subscription_id", sub.ID(),
 					"plan_id", sub.PlanID(),
 				)
-				return 0, false, forwardSubscriptionIDs, nil // Unlimited traffic - don't enforce
+				return 0, false, forwardSubscriptionIDs, latestPeriodStart, nil
 			}
 
 			var err error
@@ -344,7 +353,7 @@ func (s *TrafficLimitEnforcementService) getHighestTrafficLimitAndIDs(ctx contex
 				"subscription_id", sub.ID(),
 				"plan_id", sub.PlanID(),
 			)
-			return 0, false, forwardSubscriptionIDs, nil
+			return 0, false, forwardSubscriptionIDs, latestPeriodStart, nil
 		}
 
 		// Track the highest limit
@@ -354,7 +363,7 @@ func (s *TrafficLimitEnforcementService) getHighestTrafficLimitAndIDs(ctx contex
 		}
 	}
 
-	return highestLimit, hasLimit, forwardSubscriptionIDs, nil
+	return highestLimit, hasLimit, forwardSubscriptionIDs, latestPeriodStart, nil
 }
 
 // getForwardTrafficLimit extracts the traffic limit from a plan.
@@ -370,10 +379,10 @@ func (s *TrafficLimitEnforcementService) getForwardTrafficLimit(plan *subscripti
 }
 
 // getTotalTrafficForSubscriptions calculates total traffic for given subscription IDs
-// by combining data from two sources:
-// - Last 24 hours: from Redis HourlyTrafficCache
-// - Before 24 hours: from MySQL subscription_usage_stats table
-func (s *TrafficLimitEnforcementService) getTotalTrafficForSubscriptions(ctx context.Context, subscriptionIDs []uint) (uint64, error) {
+// within the given traffic period by combining data from two sources:
+// - Recent window: from Redis HourlyTrafficCache
+// - Historical window: from MySQL subscription_usage_stats table
+func (s *TrafficLimitEnforcementService) getTotalTrafficForSubscriptions(ctx context.Context, subscriptionIDs []uint, periodStart time.Time) (uint64, error) {
 	if len(subscriptionIDs) == 0 {
 		return 0, nil
 	}
@@ -386,10 +395,15 @@ func (s *TrafficLimitEnforcementService) getTotalTrafficForSubscriptions(ctx con
 
 	var total uint64
 
-	// Get recent traffic from Redis (yesterday + today, filter by forward_rule type)
+	// Determine Redis query range: max(recentBoundary, periodStart) to now
+	// This ensures traffic before periodStart (e.g. after manual reset) is excluded.
 	resourceType := subscription.ResourceTypeForwardRule.String()
+	redisFrom := recentBoundary
+	if periodStart.After(redisFrom) {
+		redisFrom = periodStart
+	}
 	recentTraffic, err := s.hourlyTrafficCache.GetTotalTrafficBySubscriptionIDs(
-		ctx, subscriptionIDs, resourceType, recentBoundary, now,
+		ctx, subscriptionIDs, resourceType, redisFrom, now,
 	)
 	if err != nil {
 		// Log warning but don't fail - Redis unavailability shouldn't block limit checks
@@ -403,16 +417,21 @@ func (s *TrafficLimitEnforcementService) getTotalTrafficForSubscriptions(ctx con
 		for _, traffic := range recentTraffic {
 			total += traffic.Total
 		}
-		s.logger.Debugw("got recent 24h traffic from Redis",
+		s.logger.Debugw("got recent traffic from Redis",
 			"subscription_ids_count", len(subscriptionIDs),
 			"recent_total", total,
 		)
 	}
 
-	// Get historical traffic from MySQL subscription_usage_stats (complete days before yesterday)
-	// Use daily granularity for historical aggregation, filter by forward_rule type
+	// Get historical traffic from MySQL subscription_usage_stats (within period, before recentBoundary)
+	historicalEnd := recentBoundary.Add(-time.Second)
+	if historicalEnd.Before(periodStart) {
+		// Period started after recentBoundary, no historical data needed
+		return total, nil
+	}
+
 	historicalTraffic, err := s.usageStatsRepo.GetTotalBySubscriptionIDs(
-		ctx, subscriptionIDs, &resourceType, subscription.GranularityDaily, time.Time{}, recentBoundary.Add(-time.Second),
+		ctx, subscriptionIDs, &resourceType, subscription.GranularityDaily, periodStart, historicalEnd,
 	)
 	if err != nil {
 		s.logger.Warnw("failed to get historical traffic from stats, using Redis data only",

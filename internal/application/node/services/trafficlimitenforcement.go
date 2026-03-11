@@ -146,8 +146,11 @@ func (s *NodeTrafficLimitEnforcementService) CheckAndEnforceLimitForNode(ctx con
 		return nil
 	}
 
-	// Get total traffic for this subscription
-	usedTraffic, err := s.getTotalTrafficForSubscription(ctx, subscriptionID)
+	// Resolve traffic period so we only count traffic within the current period
+	period := subscription.ResolveTrafficPeriod(plan, sub)
+
+	// Get total traffic for this subscription within the resolved period
+	usedTraffic, err := s.getTotalTrafficForSubscription(ctx, subscriptionID, period.Start)
 	if err != nil {
 		s.logger.Errorw("failed to get total traffic",
 			"subscription_id", subscriptionID,
@@ -234,10 +237,10 @@ func (s *NodeTrafficLimitEnforcementService) CheckAndEnforceLimitForNode(ctx con
 }
 
 // getTotalTrafficForSubscription calculates total traffic for a subscription
-// by combining data from two sources:
-// - Last 24 hours: from Redis HourlyTrafficCache
-// - Before 24 hours: from MySQL subscription_usage_stats table
-func (s *NodeTrafficLimitEnforcementService) getTotalTrafficForSubscription(ctx context.Context, subscriptionID uint) (uint64, error) {
+// within the given traffic period by combining data from two sources:
+// - Recent window: from Redis HourlyTrafficCache
+// - Historical window: from MySQL subscription_usage_stats table
+func (s *NodeTrafficLimitEnforcementService) getTotalTrafficForSubscription(ctx context.Context, subscriptionID uint, periodStart time.Time) (uint64, error) {
 	now := biztime.NowUTC()
 
 	// Use start of yesterday's business day as batch/speed boundary (Lambda architecture)
@@ -246,10 +249,15 @@ func (s *NodeTrafficLimitEnforcementService) getTotalTrafficForSubscription(ctx 
 
 	var total uint64
 
-	// Get recent traffic from Redis (yesterday + today, filter by node type)
+	// Determine Redis query range: max(recentBoundary, periodStart) to now
+	// This ensures traffic before periodStart (e.g. after manual reset) is excluded.
 	resourceType := subscription.ResourceTypeNode.String()
+	redisFrom := recentBoundary
+	if periodStart.After(redisFrom) {
+		redisFrom = periodStart
+	}
 	recentTraffic, err := s.hourlyTrafficCache.GetTotalTrafficBySubscriptionIDs(
-		ctx, []uint{subscriptionID}, resourceType, recentBoundary, now,
+		ctx, []uint{subscriptionID}, resourceType, redisFrom, now,
 	)
 	if err != nil {
 		// Log warning but don't fail - Redis unavailability shouldn't block limit checks
@@ -263,16 +271,21 @@ func (s *NodeTrafficLimitEnforcementService) getTotalTrafficForSubscription(ctx 
 		for _, traffic := range recentTraffic {
 			total += traffic.Total
 		}
-		s.logger.Debugw("got recent 24h traffic from Redis",
+		s.logger.Debugw("got recent traffic from Redis",
 			"subscription_id", subscriptionID,
 			"recent_total", total,
 		)
 	}
 
-	// Get historical traffic from MySQL subscription_usage_stats (complete days before yesterday)
-	// Use daily granularity for historical aggregation, filter by node type
+	// Get historical traffic from MySQL subscription_usage_stats (within period, before recentBoundary)
+	historicalEnd := recentBoundary.Add(-time.Second)
+	if historicalEnd.Before(periodStart) {
+		// Period started after recentBoundary, no historical data needed
+		return total, nil
+	}
+
 	historicalTraffic, err := s.usageStatsRepo.GetTotalBySubscriptionIDs(
-		ctx, []uint{subscriptionID}, &resourceType, subscription.GranularityDaily, time.Time{}, recentBoundary.Add(-time.Second),
+		ctx, []uint{subscriptionID}, &resourceType, subscription.GranularityDaily, periodStart, historicalEnd,
 	)
 	if err != nil {
 		s.logger.Warnw("failed to get historical traffic from stats, using Redis data only",

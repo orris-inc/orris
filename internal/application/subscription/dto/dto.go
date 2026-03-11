@@ -89,6 +89,16 @@ type SubscriptionTokenDTO struct {
 	CreatedAt       time.Time  `json:"created_at"`
 }
 
+// SubscriptionStatusCounts represents subscription status aggregation counts.
+// Used by admin subscription list to return status counts alongside the list response.
+type SubscriptionStatusCounts struct {
+	Active          int64 `json:"active"`
+	Expired         int64 `json:"expired"`
+	Suspended       int64 `json:"suspended"`
+	PendingPayment  int64 `json:"pending_payment"`
+	ExpiringIn7Days int64 `json:"expiring_in_7_days"`
+}
+
 var (
 	// SubscriptionMapper is a generic mapper for basic conversions.
 	// WARNING: Does not populate OnlineDeviceCount, DeviceLimit, DataUsedBytes, or DataLimitBytes.

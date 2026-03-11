@@ -270,6 +270,9 @@ func (h *Handler) List(c *gin.Context) {
 		sortDesc = &desc
 	}
 
+	// Parse include_counts parameter
+	includeCounts := c.Query("include_counts") == "true"
+
 	query := usecases.ListUserSubscriptionsQuery{
 		UserID:        userID,
 		PlanID:        planID,
@@ -282,12 +285,27 @@ func (h *Handler) List(c *gin.Context) {
 		PageSize:      p.PageSize,
 		SortBy:        sortBy,
 		SortDesc:      sortDesc,
+		IncludeCounts: includeCounts,
 	}
 
 	result, err := h.listUseCase.Execute(c.Request.Context(), query)
 	if err != nil {
 		h.logger.Errorw("failed to list subscriptions", "error", err)
 		utils.ErrorResponseWithError(c, err)
+		return
+	}
+
+	// Build response with optional status_counts
+	if result.StatusCounts != nil {
+		response := map[string]any{
+			"items":         result.Subscriptions,
+			"total":         result.Total,
+			"page":          result.Page,
+			"page_size":     result.PageSize,
+			"total_pages":   utils.TotalPages(result.Total, result.PageSize),
+			"status_counts": result.StatusCounts,
+		}
+		utils.SuccessResponse(c, http.StatusOK, "", response)
 		return
 	}
 

@@ -570,6 +570,23 @@ func (s *Subscription) ChangePlan(newPlanID uint) error {
 	return nil
 }
 
+// ChangeBillingCycle updates the billing cycle and end date.
+// Used when plan pricing changes make the current billing cycle unavailable.
+func (s *Subscription) ChangeBillingCycle(newCycle vo.BillingCycle, newEndDate time.Time) error {
+	if !newCycle.IsValid() {
+		return fmt.Errorf("invalid billing cycle: %s", newCycle)
+	}
+	if newEndDate.Before(s.startDate) {
+		return fmt.Errorf("new end date must be after start date")
+	}
+	s.billingCycle = &newCycle
+	s.endDate = newEndDate
+	s.currentPeriodEnd = newEndDate
+	s.updatedAt = biztime.NowUTC()
+	s.version++
+	return nil
+}
+
 // IsExpired checks if subscription is expired
 func (s *Subscription) IsExpired() bool {
 	return biztime.NowUTC().After(s.endDate)

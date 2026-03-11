@@ -460,7 +460,9 @@ func (r *SubscriptionRepositoryImpl) List(ctx context.Context, filter subscripti
 	if filter.PlanID != nil {
 		query = query.Where("plan_id = ?", *filter.PlanID)
 	}
-	if filter.Status != nil {
+	if len(filter.Statuses) > 0 {
+		query = query.Where("status IN ?", filter.Statuses)
+	} else if filter.Status != nil {
 		query = query.Where("status = ?", *filter.Status)
 	}
 	if filter.BillingCycle != nil {
