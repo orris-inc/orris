@@ -138,6 +138,13 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 	ipVersion := vo.IPVersion(model.IPVersion)
 	tunnelType := vo.TunnelType(model.TunnelType)
 	loadBalanceStrategy := vo.ParseLoadBalanceStrategy(model.LoadBalanceStrategy)
+	addressPreference := vo.AddressPreference(model.AddressPreference)
+	if addressPreference == "" {
+		addressPreference = vo.AddressPreferenceAuto
+	}
+	if !addressPreference.IsValid() {
+		return nil, fmt.Errorf("invalid address preference: %s", model.AddressPreference)
+	}
 
 	// Handle external rule fields
 	var serverAddress string
@@ -183,6 +190,7 @@ func (m *ForwardRuleMapperImpl) ToEntity(model *models.ForwardRuleModel) (*forwa
 		model.SortOrder,
 		groupIDs,
 		routeConfig,
+		addressPreference,
 		serverAddress,
 		externalSource,
 		externalRuleID,
@@ -335,6 +343,7 @@ func (m *ForwardRuleMapperImpl) ToModel(entity *forward.ForwardRule) (*models.Fo
 		SortOrder:           entity.SortOrder(),
 		GroupIDs:            groupIDsJSON,
 		RouteConfig:         routeConfigJSON,
+		AddressPreference:   entity.AddressPreference().String(),
 		ServerAddress:       serverAddress,
 		ExternalSource:      externalSource,
 		ExternalRuleID:      externalRuleID,

@@ -36,7 +36,8 @@ type CreateSubscriptionForwardRuleCommand struct {
 	TrafficMultiplier  *float64
 	SortOrder          *int
 	Remark             string
-	RuleLimit          int // rule limit for the subscription (0 = unlimited, used for race condition check)
+	AddressPreference  string // optional: auto (default), public, tunnel
+	RuleLimit          int    // rule limit for the subscription (0 = unlimited, used for race condition check)
 }
 
 // CreateSubscriptionForwardRuleResult represents the output of creating a subscription-bound forward rule.
@@ -343,6 +344,7 @@ func (uc *CreateSubscriptionForwardRuleUseCase) createRuleWithRetry(
 			cmd.Remark,
 			cmd.TrafficMultiplier,
 			derefIntOrDefault(cmd.SortOrder, 0),
+			vo.AddressPreference(cmd.AddressPreference),
 			id.NewForwardRuleID,
 		)
 		if err != nil {

@@ -42,7 +42,8 @@ type ForwardRule struct {
 	trafficMultiplier   *float64 // traffic multiplier for display. nil means auto-calculate based on node count
 	sortOrder           int
 	groupIDs            []uint               // resource group IDs for access control
-	routeConfig         *routing.RouteConfig // per-rule routing configuration (sing-box route rules)
+	routeConfig         *routing.RouteConfig  // per-rule routing configuration (sing-box route rules)
+	addressPreference   vo.AddressPreference  // which address to use for next hop: auto, public, tunnel
 	// External rule fields (used when ruleType = external)
 	serverAddress  string // server address for external rules (replaces agent's public address)
 	externalSource string // external source identifier (required for external rules)
@@ -86,6 +87,7 @@ func NewForwardRule(
 	remark string,
 	trafficMultiplier *float64,
 	sortOrder int,
+	addressPreference vo.AddressPreference,
 	shortIDGenerator func() (string, error),
 ) (*ForwardRule, error) {
 	// Pre-construction check: reject external type early (use NewExternalForwardRule instead)
@@ -99,6 +101,9 @@ func NewForwardRule(
 	}
 	if loadBalanceStrategy == "" {
 		loadBalanceStrategy = vo.DefaultLoadBalanceStrategy
+	}
+	if addressPreference == "" {
+		addressPreference = vo.AddressPreferenceAuto
 	}
 
 	// Generate SID for external API use
@@ -135,6 +140,7 @@ func NewForwardRule(
 		downloadBytes:       0,
 		trafficMultiplier:   trafficMultiplier,
 		sortOrder:           sortOrder,
+		addressPreference:   addressPreference,
 		createdAt:           now,
 		updatedAt:           now,
 	}
@@ -211,11 +217,12 @@ func NewExternalForwardRule(
 		remark:         remark,
 		sortOrder:      sortOrder,
 		groupIDs:       groupIDs,
-		serverAddress:  serverAddress,
-		externalSource: externalSource,
-		externalRuleID: externalRuleID,
-		createdAt:      now,
-		updatedAt:      now,
+		addressPreference: vo.AddressPreferenceAuto,
+		serverAddress:     serverAddress,
+		externalSource:    externalSource,
+		externalRuleID:    externalRuleID,
+		createdAt:         now,
+		updatedAt:         now,
 	}, nil
 }
 
@@ -251,6 +258,7 @@ func ReconstructForwardRule(
 	sortOrder int,
 	groupIDs []uint,
 	routeConfig *routing.RouteConfig,
+	addressPreference vo.AddressPreference,
 	serverAddress string,
 	externalSource string,
 	externalRuleID string,
@@ -309,6 +317,11 @@ func ReconstructForwardRule(
 		loadBalanceStrategy = vo.DefaultLoadBalanceStrategy
 	}
 
+	// Default addressPreference to auto if not set
+	if addressPreference == "" {
+		addressPreference = vo.AddressPreferenceAuto
+	}
+
 	rule := &ForwardRule{
 		id:                  id,
 		sid:                 sid,
@@ -339,6 +352,7 @@ func ReconstructForwardRule(
 		sortOrder:           sortOrder,
 		groupIDs:            groupIDs,
 		routeConfig:         routeConfig,
+		addressPreference:   addressPreference,
 		serverAddress:       serverAddress,
 		externalSource:      externalSource,
 		externalRuleID:      externalRuleID,
@@ -506,6 +520,11 @@ func (r *ForwardRule) GroupIDs() []uint {
 // RouteConfig returns the per-rule routing configuration.
 func (r *ForwardRule) RouteConfig() *routing.RouteConfig {
 	return r.routeConfig
+}
+
+// AddressPreference returns the address preference for next hop connections.
+func (r *ForwardRule) AddressPreference() vo.AddressPreference {
+	return r.addressPreference
 }
 
 // ServerAddress returns the server address for external rules.

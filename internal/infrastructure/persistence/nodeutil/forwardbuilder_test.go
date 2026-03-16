@@ -572,6 +572,7 @@ func mustCreateDirectRule(t *testing.T, agentID uint, name string, listenPort ui
 		0,                             // sortOrder
 		nil,                           // groupIDs
 		nil,                           // routeConfig
+		vo.AddressPreferenceAuto,      // addressPreference
 		"",                            // serverAddress
 		"",                            // externalSource
 		"",                            // externalRuleID
@@ -616,6 +617,7 @@ func mustCreateDirectRuleWithTargetNode(t *testing.T, agentID uint, name string,
 		0,                             // sortOrder
 		nil,                           // groupIDs
 		nil,                           // routeConfig
+		vo.AddressPreferenceAuto,      // addressPreference
 		"",                            // serverAddress
 		"",                            // externalSource
 		"",                            // externalRuleID
@@ -660,6 +662,7 @@ func mustCreateExternalRule(t *testing.T, serverAddr string, listenPort uint16, 
 		0,                             // sortOrder
 		nil,                           // groupIDs
 		nil,                           // routeConfig
+		vo.AddressPreferenceAuto,      // addressPreference
 		serverAddr,                    // serverAddress
 		externalSource,                // externalSource
 		"",                            // externalRuleID

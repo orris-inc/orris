@@ -48,6 +48,7 @@ type CreateForwardRuleCommand struct {
 	Remark              string
 	GroupSIDs           []string                // optional resource group SIDs (admin only)
 	Route               *nodedto.RouteConfigDTO // optional per-rule routing configuration
+	AddressPreference   string                  // optional: auto (default), public, tunnel
 	// External rule fields (only for rule_type=external)
 	ServerAddress  string // required for external type - server address for subscription delivery
 	ExternalSource string // required for external type - source identifier
@@ -397,6 +398,7 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		cmd.Remark,
 		cmd.TrafficMultiplier,
 		derefIntOrDefault(cmd.SortOrder, 0),
+		vo.AddressPreference(cmd.AddressPreference),
 		id.NewForwardRuleID,
 	)
 	if err != nil {

@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"github.com/orris-inc/orris/internal/domain/forward"
+	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
@@ -231,16 +232,17 @@ func (c *AgentRuleConverter) resolveNodeAddress(targetNode *node.Node, ipVersion
 // populateRoleSpecificInfo populates role-specific information based on rule type.
 func (c *AgentRuleConverter) populateRoleSpecificInfo(ctx context.Context, rule *forward.ForwardRule, ruleDTO *ForwardRuleDTO, agentID uint) {
 	ruleType := rule.RuleType().String()
+	addrPref := rule.AddressPreference()
 
 	switch ruleType {
 	case "direct":
 		c.populateDirectRuleInfo(ruleDTO)
 	case "entry":
-		c.populateEntryRuleInfo(ctx, rule, ruleDTO, agentID)
+		c.populateEntryRuleInfo(ctx, rule, ruleDTO, agentID, addrPref)
 	case "chain":
-		c.populateChainRuleInfo(ctx, rule, ruleDTO, agentID)
+		c.populateChainRuleInfo(ctx, rule, ruleDTO, agentID, addrPref)
 	case "direct_chain":
-		c.populateDirectChainRuleInfo(ctx, rule, ruleDTO, agentID)
+		c.populateDirectChainRuleInfo(ctx, rule, ruleDTO, agentID, addrPref)
 	}
 
 	// Only send bindIP to the agent that connects to the final target.
@@ -257,11 +259,11 @@ func (c *AgentRuleConverter) populateDirectRuleInfo(ruleDTO *ForwardRuleDTO) {
 }
 
 // populateEntryRuleInfo populates info for entry rules.
-func (c *AgentRuleConverter) populateEntryRuleInfo(ctx context.Context, rule *forward.ForwardRule, ruleDTO *ForwardRuleDTO, agentID uint) {
+func (c *AgentRuleConverter) populateEntryRuleInfo(ctx context.Context, rule *forward.ForwardRule, ruleDTO *ForwardRuleDTO, agentID uint, addrPref vo.AddressPreference) {
 	if rule.AgentID() == agentID {
 		// This agent is the entry point
 		ruleDTO.Role = "entry"
-		c.populateEntryNextHopInfo(ctx, rule, ruleDTO)
+		c.populateEntryNextHopInfo(ctx, rule, ruleDTO, addrPref)
 	} else if c.isExitAgent(rule, agentID) {
 		// This agent is one of the exit points - clear exit_agent_id and exit_agents (minimum info principle)
 		ruleDTO.Role = "exit"
@@ -287,7 +289,7 @@ func (c *AgentRuleConverter) isExitAgent(rule *forward.ForwardRule, agentID uint
 }
 
 // populateEntryNextHopInfo populates next hop info for entry agent.
-func (c *AgentRuleConverter) populateEntryNextHopInfo(ctx context.Context, rule *forward.ForwardRule, ruleDTO *ForwardRuleDTO) {
+func (c *AgentRuleConverter) populateEntryNextHopInfo(ctx context.Context, rule *forward.ForwardRule, ruleDTO *ForwardRuleDTO, addrPref vo.AddressPreference) {
 	exitAgentID := rule.ExitAgentID()
 	if exitAgentID == 0 {
 		return
@@ -307,7 +309,7 @@ func (c *AgentRuleConverter) populateEntryNextHopInfo(ctx context.Context, rule 
 	}
 
 	ruleDTO.NextHopAgentID = exitAgent.SID()
-	ruleDTO.NextHopAddress = exitAgent.GetEffectiveTunnelAddress()
+	ruleDTO.NextHopAddress = exitAgent.GetAddressForPreference(addrPref)
 
 	// Get tunnel ports from cached agent status
 	exitStatus, err := c.statusQuerier.GetStatus(ctx, exitAgentID)
@@ -336,7 +338,7 @@ func (c *AgentRuleConverter) populateEntryNextHopInfo(ctx context.Context, rule 
 }
 
 // populateChainRuleInfo populates info for chain rules.
-func (c *AgentRuleConverter) populateChainRuleInfo(ctx context.Context, rule *forward.ForwardRule, ruleDTO *ForwardRuleDTO, agentID uint) {
+func (c *AgentRuleConverter) populateChainRuleInfo(ctx context.Context, rule *forward.ForwardRule, ruleDTO *ForwardRuleDTO, agentID uint, addrPref vo.AddressPreference) {
 	chainPosition := rule.GetChainPosition(agentID)
 	isLast := rule.IsLastInChain(agentID)
 
@@ -375,7 +377,7 @@ func (c *AgentRuleConverter) populateChainRuleInfo(ctx context.Context, rule *fo
 
 	// For non-exit agents, populate next hop info
 	if !isLast {
-		c.populateChainNextHopInfo(ctx, rule, ruleDTO, agentID, hopMode)
+		c.populateChainNextHopInfo(ctx, rule, ruleDTO, agentID, hopMode, addrPref)
 		// Clear target info for non-exit agents (minimum info principle)
 		ruleDTO.TargetAddress = ""
 		ruleDTO.TargetPort = 0
@@ -389,7 +391,7 @@ func (c *AgentRuleConverter) populateChainRuleInfo(ctx context.Context, rule *fo
 }
 
 // populateChainNextHopInfo populates next hop info for chain agents.
-func (c *AgentRuleConverter) populateChainNextHopInfo(ctx context.Context, rule *forward.ForwardRule, ruleDTO *ForwardRuleDTO, agentID uint, hopMode string) {
+func (c *AgentRuleConverter) populateChainNextHopInfo(ctx context.Context, rule *forward.ForwardRule, ruleDTO *ForwardRuleDTO, agentID uint, hopMode string, addrPref vo.AddressPreference) {
 	nextHopAgentID := rule.GetNextHopAgentID(agentID)
 	if nextHopAgentID == 0 {
 		return
@@ -409,7 +411,7 @@ func (c *AgentRuleConverter) populateChainNextHopInfo(ctx context.Context, rule 
 	}
 
 	ruleDTO.NextHopAgentID = nextAgent.SID()
-	ruleDTO.NextHopAddress = nextAgent.GetEffectiveTunnelAddress()
+	ruleDTO.NextHopAddress = nextAgent.GetAddressForPreference(addrPref)
 
 	// Check if outbound uses tunnel or direct based on hop mode
 	outboundNeedsTunnel := hopMode == "tunnel" || (hopMode == "boundary" && ruleDTO.OutboundMode == "tunnel")
@@ -451,7 +453,7 @@ func (c *AgentRuleConverter) populateChainNextHopInfo(ctx context.Context, rule 
 }
 
 // populateDirectChainRuleInfo populates info for direct_chain rules.
-func (c *AgentRuleConverter) populateDirectChainRuleInfo(ctx context.Context, rule *forward.ForwardRule, ruleDTO *ForwardRuleDTO, agentID uint) {
+func (c *AgentRuleConverter) populateDirectChainRuleInfo(ctx context.Context, rule *forward.ForwardRule, ruleDTO *ForwardRuleDTO, agentID uint, addrPref vo.AddressPreference) {
 	chainPosition := rule.GetChainPosition(agentID)
 	isLast := rule.IsLastInChain(agentID)
 
@@ -483,7 +485,7 @@ func (c *AgentRuleConverter) populateDirectChainRuleInfo(ctx context.Context, ru
 
 	// For non-exit agents, populate next hop info
 	if !isLast {
-		c.populateDirectChainNextHopInfo(ctx, rule, ruleDTO, agentID)
+		c.populateDirectChainNextHopInfo(ctx, rule, ruleDTO, agentID, addrPref)
 		// Clear target info for non-exit agents (minimum info principle)
 		ruleDTO.TargetAddress = ""
 		ruleDTO.TargetPort = 0
@@ -496,7 +498,7 @@ func (c *AgentRuleConverter) populateDirectChainRuleInfo(ctx context.Context, ru
 }
 
 // populateDirectChainNextHopInfo populates next hop info for direct_chain agents.
-func (c *AgentRuleConverter) populateDirectChainNextHopInfo(ctx context.Context, rule *forward.ForwardRule, ruleDTO *ForwardRuleDTO, agentID uint) {
+func (c *AgentRuleConverter) populateDirectChainNextHopInfo(ctx context.Context, rule *forward.ForwardRule, ruleDTO *ForwardRuleDTO, agentID uint, addrPref vo.AddressPreference) {
 	nextHopAgentID, nextHopPort, err := rule.GetNextHopForDirectChainSafe(agentID)
 	if err != nil {
 		c.logger.Errorw("failed to get next hop for direct_chain rule",
@@ -525,7 +527,7 @@ func (c *AgentRuleConverter) populateDirectChainNextHopInfo(ctx context.Context,
 	}
 
 	ruleDTO.NextHopAgentID = nextAgent.SID()
-	ruleDTO.NextHopAddress = nextAgent.GetEffectiveTunnelAddress()
+	ruleDTO.NextHopAddress = nextAgent.GetAddressForPreference(addrPref)
 	ruleDTO.NextHopPort = nextHopPort
 
 	// Generate connection token for next hop authentication

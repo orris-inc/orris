@@ -88,7 +88,8 @@ type CreateForwardRuleRequest struct {
 	SortOrder           *int               `json:"sort_order,omitempty" binding:"omitempty,gte=0" example:"100"`
 	Remark              string             `json:"remark,omitempty" example:"Forward to internal MySQL server"`
 	GroupSIDs           []string                `json:"group_sids,omitempty" example:"[\"rg_xxx\",\"rg_yyy\"]"`
-	Route               *nodedto.RouteConfigDTO `json:"route,omitempty"` // per-rule routing configuration
+	Route               *nodedto.RouteConfigDTO `json:"route,omitempty"`                                                                                 // per-rule routing configuration
+	AddressPreference   string                  `json:"address_preference,omitempty" binding:"omitempty,oneof=auto public tunnel" example:"auto"` // address preference: auto, public, tunnel
 	// External rule fields (only for rule_type=external)
 	ServerAddress  string `json:"server_address,omitempty" example:"example.com"`
 	ExternalSource string `json:"external_source,omitempty" example:"third-party-provider"`
@@ -117,8 +118,9 @@ type UpdateForwardRuleRequest struct {
 	SortOrder           *int               `json:"sort_order,omitempty" example:"100"`
 	Remark              *string            `json:"remark,omitempty" example:"Updated remark"`
 	GroupSIDs           *[]string               `json:"group_sids,omitempty" example:"[\"rg_xxx\",\"rg_yyy\"]"`
-	Route               *nodedto.RouteConfigDTO `json:"route,omitempty"` // per-rule routing configuration
-	ClearRoute          *bool                   `json:"clear_route,omitempty"` // true to clear route config
+	Route               *nodedto.RouteConfigDTO `json:"route,omitempty"`                                                                                 // per-rule routing configuration
+	ClearRoute          *bool                   `json:"clear_route,omitempty"`                                                                           // true to clear route config
+	AddressPreference   *string                 `json:"address_preference,omitempty" binding:"omitempty,oneof=auto public tunnel" example:"auto"` // address preference: auto, public, tunnel
 }
 
 // UpdateStatusRequest represents a request to update forward rule status.

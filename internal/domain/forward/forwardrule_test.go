@@ -219,7 +219,8 @@ func newTestForwardRule(params ruleParams) (*ForwardRule, error) {
 		params.Protocol,
 		params.Remark,
 		params.TrafficMultiplier,
-		0, // sortOrder: default to 0 for test rules
+		0,                        // sortOrder: default to 0 for test rules
+		vo.AddressPreferenceAuto, // addressPreference: default to auto for test rules
 		generator,
 	)
 }
@@ -1731,8 +1732,9 @@ func TestForwardRule_Validate_RejectsInvalidRuleType(t *testing.T) {
 		"", 0, 0, nil,
 		0,          // sortOrder
 		nil,        // groupIDs
-		nil,        // routeConfig
-		"", "", "", // serverAddress, externalSource, externalRuleID
+		nil,                          // routeConfig
+		vo.AddressPreferenceAuto,     // addressPreference
+		"", "", "",                   // serverAddress, externalSource, externalRuleID
 		time.Now(), time.Now(),
 	)
 
@@ -2074,7 +2076,8 @@ func TestGetEffectiveMultiplier(t *testing.T) {
 				tt.params.Protocol,
 				tt.params.Remark,
 				tt.multiplier,
-				0, // sortOrder
+				0,                        // sortOrder
+				vo.AddressPreferenceAuto, // addressPreference
 				generator,
 			)
 			if err != nil {
@@ -2170,7 +2173,8 @@ func TestTrafficBytesWithMultiplier(t *testing.T) {
 				tt.params.Protocol,
 				tt.params.Remark,
 				tt.multiplier,
-				0, // sortOrder
+				0,                        // sortOrder
+				vo.AddressPreferenceAuto, // addressPreference
 				generator,
 			)
 			if err != nil {
@@ -2256,7 +2260,8 @@ func TestTrafficMultiplierValidation(t *testing.T) {
 				params.Protocol,
 				params.Remark,
 				tt.multiplier,
-				0, // sortOrder
+				0,                        // sortOrder
+				vo.AddressPreferenceAuto, // addressPreference
 				generator,
 			)
 
@@ -2308,7 +2313,8 @@ func TestGetRawBytes(t *testing.T) {
 		params.Protocol,
 		params.Remark,
 		multiplier,
-		0, // sortOrder
+		0,                        // sortOrder
+		vo.AddressPreferenceAuto, // addressPreference
 		generator,
 	)
 	if err != nil {

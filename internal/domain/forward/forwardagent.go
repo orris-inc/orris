@@ -243,6 +243,27 @@ func (a *ForwardAgent) GetEffectiveTunnelAddress() string {
 	return a.publicAddress
 }
 
+// GetAddressForPreference returns the address based on the specified preference.
+// - auto: tunnelAddress > publicAddress (same as GetEffectiveTunnelAddress)
+// - public: publicAddress (falls back to tunnelAddress if empty)
+// - tunnel: tunnelAddress (falls back to publicAddress if empty)
+func (a *ForwardAgent) GetAddressForPreference(pref vo.AddressPreference) string {
+	switch pref {
+	case vo.AddressPreferencePublic:
+		if a.publicAddress != "" {
+			return a.publicAddress
+		}
+		return a.tunnelAddress
+	case vo.AddressPreferenceTunnel:
+		if a.tunnelAddress != "" {
+			return a.tunnelAddress
+		}
+		return a.publicAddress
+	default: // auto
+		return a.GetEffectiveTunnelAddress()
+	}
+}
+
 // GroupIDs returns the resource group IDs
 func (a *ForwardAgent) GroupIDs() []uint {
 	return a.groupIDs

@@ -38,8 +38,9 @@ type ForwardRuleModel struct {
 	DownloadBytes     int64          `gorm:"not null;default:0"`
 	TrafficMultiplier *float64       `gorm:"column:traffic_multiplier;type:decimal(10,4)"`
 	SortOrder         int            `gorm:"not null;default:0"`
-	GroupIDs    datatypes.JSON `gorm:"column:group_ids"`    // resource group IDs (JSON array)
-	RouteConfig datatypes.JSON `gorm:"column:route_config"` // per-rule routing configuration (JSON)
+	GroupIDs          datatypes.JSON `gorm:"column:group_ids"`                                         // resource group IDs (JSON array)
+	RouteConfig       datatypes.JSON `gorm:"column:route_config"`                                       // per-rule routing configuration (JSON)
+	AddressPreference string         `gorm:"column:address_preference;not null;default:auto;size:10"` // address preference: auto, public, tunnel
 	// External rule fields (used when RuleType = 'external')
 	ServerAddress  *string `gorm:"column:server_address;size:255;uniqueIndex:idx_listen_port_agent_server"` // server address for external rules
 	ExternalSource *string `gorm:"column:external_source;size:50"`                                          // external source identifier
@@ -70,6 +71,9 @@ func (m *ForwardRuleModel) BeforeCreate(tx *gorm.DB) error {
 	}
 	if m.LoadBalanceStrategy == "" {
 		m.LoadBalanceStrategy = "failover"
+	}
+	if m.AddressPreference == "" {
+		m.AddressPreference = "auto"
 	}
 	return nil
 }

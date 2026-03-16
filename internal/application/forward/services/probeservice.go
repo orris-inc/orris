@@ -424,8 +424,8 @@ func (s *ProbeService) probeExitAgent(
 		}
 	}
 
-	// Get tunnel address
-	tunnelAddr := exitAgent.GetEffectiveTunnelAddress()
+	// Get tunnel address based on rule's address preference
+	tunnelAddr := exitAgent.GetAddressForPreference(rule.AddressPreference())
 	if tunnelAddr == "" {
 		result.Error = "exit agent has no tunnel address"
 		return result
@@ -638,7 +638,7 @@ func (s *ProbeService) probeChainRule(ctx context.Context, rule *forward.Forward
 					allSuccess = false
 					continue
 				}
-				probeAddr = nextAgent.GetEffectiveTunnelAddress()
+				probeAddr = nextAgent.GetAddressForPreference(rule.AddressPreference())
 				if probeAddr == "" {
 					hopLatency.Success = false
 					hopLatency.Error = "next agent has no address"
@@ -679,7 +679,7 @@ func (s *ProbeService) probeChainRule(ctx context.Context, rule *forward.Forward
 					}
 				}
 
-				probeAddr = nextAgent.GetEffectiveTunnelAddress()
+				probeAddr = nextAgent.GetAddressForPreference(rule.AddressPreference())
 				if probeAddr == "" {
 					hopLatency.Success = false
 					hopLatency.Error = "next agent has no tunnel address"
@@ -870,8 +870,8 @@ func (s *ProbeService) probeDirectChainRule(ctx context.Context, rule *forward.F
 				continue
 			}
 
-			// Use GetEffectiveTunnelAddress for direct chain connections
-			targetAddr := nextAgent.GetEffectiveTunnelAddress()
+			// Use address based on rule's preference for direct chain connections
+			targetAddr := nextAgent.GetAddressForPreference(rule.AddressPreference())
 			if targetAddr == "" {
 				hopLatency.Success = false
 				hopLatency.Error = "next agent has no tunnel address"

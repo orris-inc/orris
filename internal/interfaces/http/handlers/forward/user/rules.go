@@ -103,6 +103,7 @@ func (h *Handler) CreateRule(c *gin.Context) {
 		TrafficMultiplier:  req.TrafficMultiplier,
 		SortOrder:          req.SortOrder,
 		Remark:             req.Remark,
+		AddressPreference:  req.AddressPreference,
 	}
 
 	result, err := h.createRuleUC.Execute(c.Request.Context(), cmd)
@@ -286,6 +287,7 @@ func (h *Handler) UpdateRule(c *gin.Context) {
 		TrafficMultiplier:  req.TrafficMultiplier,
 		SortOrder:          req.SortOrder,
 		Remark:             req.Remark,
+		AddressPreference:  req.AddressPreference,
 	}
 
 	if err := h.updateRuleUC.Execute(c.Request.Context(), cmd); err != nil {

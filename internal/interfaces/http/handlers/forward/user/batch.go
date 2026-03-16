@@ -170,6 +170,7 @@ func (h *Handler) BatchCreateRules(c *gin.Context) {
 			TrafficMultiplier:  r.TrafficMultiplier,
 			SortOrder:          r.SortOrder,
 			Remark:             r.Remark,
+			AddressPreference:  r.AddressPreference,
 		})
 		cmdIndices = append(cmdIndices, i)
 	}

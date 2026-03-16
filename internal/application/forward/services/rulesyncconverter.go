@@ -7,6 +7,7 @@ import (
 	"github.com/orris-inc/orris/internal/application/forward/dto"
 	"github.com/orris-inc/orris/internal/application/forward/usecases"
 	"github.com/orris-inc/orris/internal/domain/forward"
+	vo "github.com/orris-inc/orris/internal/domain/forward/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/infrastructure/auth"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -84,23 +85,25 @@ func (c *RuleSyncConverter) Convert(ctx context.Context, rule *forward.ForwardRu
 		}
 	}
 
+	addrPref := rule.AddressPreference()
+
 	// Determine role and populate fields based on rule type
 	switch rule.RuleType().String() {
 	case "direct":
 		c.convertDirectRule(syncData, targetAddress, targetPort)
 
 	case "entry":
-		if err := c.convertEntryRule(ctx, rule, agentID, syncData, targetAddress, targetPort); err != nil {
+		if err := c.convertEntryRule(ctx, rule, agentID, syncData, targetAddress, targetPort, addrPref); err != nil {
 			return nil, err
 		}
 
 	case "chain":
-		if err := c.convertChainRule(ctx, rule, agentID, syncData, targetAddress, targetPort); err != nil {
+		if err := c.convertChainRule(ctx, rule, agentID, syncData, targetAddress, targetPort, addrPref); err != nil {
 			return nil, err
 		}
 
 	case "direct_chain":
-		if err := c.convertDirectChainRule(ctx, rule, agentID, syncData, targetAddress, targetPort); err != nil {
+		if err := c.convertDirectChainRule(ctx, rule, agentID, syncData, targetAddress, targetPort, addrPref); err != nil {
 			return nil, err
 		}
 	}
@@ -130,6 +133,7 @@ func (c *RuleSyncConverter) convertEntryRule(
 	data *dto.RuleSyncData,
 	targetAddress string,
 	targetPort uint16,
+	addrPref vo.AddressPreference,
 ) error {
 	if rule.AgentID() == agentID {
 		// This agent is the entry point
@@ -138,7 +142,7 @@ func (c *RuleSyncConverter) convertEntryRule(
 		// Check if multiple exit agents are configured for load balancing
 		if rule.HasMultipleExitAgents() {
 			// Populate exit agents with connection info
-			if err := c.populateExitAgentsInfo(ctx, rule, data); err != nil {
+			if err := c.populateExitAgentsInfo(ctx, rule, data, addrPref); err != nil {
 				c.logger.Warnw("failed to populate exit agents info for entry rule",
 					"rule_id", rule.ID(),
 					"error", err,
@@ -148,7 +152,7 @@ func (c *RuleSyncConverter) convertEntryRule(
 			// Single exit agent mode (backward compatible)
 			exitAgentID := rule.ExitAgentID()
 			if exitAgentID != 0 {
-				if err := c.populateNextHopInfo(ctx, data, exitAgentID, "tunnel", rule); err != nil {
+				if err := c.populateNextHopInfo(ctx, data, exitAgentID, "tunnel", rule, addrPref); err != nil {
 					c.logger.Warnw("failed to populate next hop info for entry rule",
 						"rule_id", rule.ID(),
 						"exit_agent_id", exitAgentID,
@@ -209,6 +213,7 @@ func (c *RuleSyncConverter) populateExitAgentsInfo(
 	ctx context.Context,
 	rule *forward.ForwardRule,
 	data *dto.RuleSyncData,
+	addrPref vo.AddressPreference,
 ) error {
 	exitAgents := rule.ExitAgents()
 	if len(exitAgents) == 0 {
@@ -243,7 +248,7 @@ func (c *RuleSyncConverter) populateExitAgentsInfo(
 		exitAgentData := dto.ExitAgentSyncData{
 			AgentID: agent.SID(),
 			Weight:  aw.Weight(),
-			Address: agent.GetEffectiveTunnelAddress(),
+			Address: agent.GetAddressForPreference(addrPref),
 			Online:  c.hub.IsAgentOnline(aw.AgentID()),
 		}
 
@@ -287,6 +292,7 @@ func (c *RuleSyncConverter) convertChainRule(
 	data *dto.RuleSyncData,
 	targetAddress string,
 	targetPort uint16,
+	addrPref vo.AddressPreference,
 ) error {
 	// Calculate chain position and last-in-chain flag for this agent
 	chainPosition := rule.GetChainPosition(agentID)
@@ -325,7 +331,7 @@ func (c *RuleSyncConverter) convertChainRule(
 
 	// For non-exit agents in chain, populate next hop information
 	if !isLast {
-		c.populateChainNextHop(ctx, rule, agentID, data, hopMode)
+		c.populateChainNextHop(ctx, rule, agentID, data, hopMode, addrPref)
 	} else {
 		// For exit agents, include target info
 		data.TargetAddress = targetAddress
@@ -346,6 +352,7 @@ func (c *RuleSyncConverter) convertDirectChainRule(
 	data *dto.RuleSyncData,
 	targetAddress string,
 	targetPort uint16,
+	addrPref vo.AddressPreference,
 ) error {
 	// Calculate chain position and last-in-chain flag for this agent
 	chainPosition := rule.GetChainPosition(agentID)
@@ -396,7 +403,7 @@ func (c *RuleSyncConverter) convertDirectChainRule(
 
 	// For non-exit agents in chain, populate next hop information
 	if !isLast {
-		if err := c.populateDirectChainNextHop(ctx, rule, agentID, data); err != nil {
+		if err := c.populateDirectChainNextHop(ctx, rule, agentID, data, addrPref); err != nil {
 			return err
 		}
 	} else {
@@ -416,6 +423,7 @@ func (c *RuleSyncConverter) populateNextHopInfo(
 	nextAgentID uint,
 	hopMode string,
 	rule *forward.ForwardRule,
+	addrPref vo.AddressPreference,
 ) error {
 	nextAgent, err := c.agentRepo.GetByID(ctx, nextAgentID)
 	if err != nil {
@@ -426,7 +434,7 @@ func (c *RuleSyncConverter) populateNextHopInfo(
 	}
 
 	data.NextHopAgentID = nextAgent.SID()
-	data.NextHopAddress = nextAgent.GetEffectiveTunnelAddress()
+	data.NextHopAddress = nextAgent.GetAddressForPreference(addrPref)
 
 	// Check if outbound uses tunnel or direct based on hop mode
 	outboundNeedsTunnel := hopMode == "tunnel" || (hopMode == "boundary" && data.OutboundMode == "tunnel")
@@ -506,13 +514,14 @@ func (c *RuleSyncConverter) populateChainNextHop(
 	agentID uint,
 	data *dto.RuleSyncData,
 	hopMode string,
+	addrPref vo.AddressPreference,
 ) {
 	nextHopAgentID := rule.GetNextHopAgentID(agentID)
 	if nextHopAgentID == 0 {
 		return
 	}
 
-	if err := c.populateNextHopInfo(ctx, data, nextHopAgentID, hopMode, rule); err != nil {
+	if err := c.populateNextHopInfo(ctx, data, nextHopAgentID, hopMode, rule, addrPref); err != nil {
 		c.logger.Warnw("failed to populate next hop info for chain rule",
 			"rule_id", rule.ID(),
 			"next_hop_agent_id", nextHopAgentID,
@@ -527,6 +536,7 @@ func (c *RuleSyncConverter) populateDirectChainNextHop(
 	rule *forward.ForwardRule,
 	agentID uint,
 	data *dto.RuleSyncData,
+	addrPref vo.AddressPreference,
 ) error {
 	nextHopAgentID, nextHopPort, err := rule.GetNextHopForDirectChainSafe(agentID)
 	if err != nil {
@@ -563,7 +573,7 @@ func (c *RuleSyncConverter) populateDirectChainNextHop(
 	}
 
 	data.NextHopAgentID = nextAgent.SID()
-	data.NextHopAddress = nextAgent.GetEffectiveTunnelAddress()
+	data.NextHopAddress = nextAgent.GetAddressForPreference(addrPref)
 	data.NextHopPort = nextHopPort
 
 	// Generate connection token for next hop authentication

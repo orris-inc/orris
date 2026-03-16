@@ -35,6 +35,7 @@ type CreateUserForwardRuleCommand struct {
 	TrafficMultiplier  *float64 // optional traffic multiplier (nil for auto-calculation, 0-1000000)
 	SortOrder          *int     // optional sort order (nil defaults to 0)
 	Remark             string
+	AddressPreference  string // optional: auto (default), public, tunnel
 }
 
 // CreateUserForwardRuleResult represents the output of creating a user forward rule.
@@ -260,6 +261,7 @@ func (uc *CreateUserForwardRuleUseCase) Execute(ctx context.Context, cmd CreateU
 		cmd.Remark,
 		cmd.TrafficMultiplier,
 		derefIntOrDefault(cmd.SortOrder, 0),
+		vo.AddressPreference(cmd.AddressPreference),
 		id.NewForwardRuleID,
 	)
 	if err != nil {

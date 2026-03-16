@@ -577,6 +577,22 @@ func (r *ForwardRule) UpdateRouteConfig(rc *routing.RouteConfig) error {
 	return nil
 }
 
+// UpdateAddressPreference updates the address preference for next hop connections.
+func (r *ForwardRule) UpdateAddressPreference(pref vo.AddressPreference) error {
+	if pref == "" {
+		pref = vo.AddressPreferenceAuto
+	}
+	if !pref.IsValid() {
+		return fmt.Errorf("invalid address preference: %s", pref)
+	}
+	if r.addressPreference == pref {
+		return nil
+	}
+	r.addressPreference = pref
+	r.updatedAt = biztime.NowUTC()
+	return nil
+}
+
 // SetGroupIDs sets the resource group IDs.
 func (r *ForwardRule) SetGroupIDs(groupIDs []uint) {
 	r.groupIDs = groupIDs

@@ -73,6 +73,7 @@ type CreateForwardRuleRequest struct {
 	TrafficMultiplier *float64          `json:"traffic_multiplier,omitempty" binding:"omitempty,gte=0,lte=1000000" example:"1.5"`
 	SortOrder         *int              `json:"sort_order,omitempty" binding:"omitempty,gte=0" example:"100"`
 	Remark            string            `json:"remark,omitempty" example:"Forward to internal MySQL server"`
+	AddressPreference string            `json:"address_preference,omitempty" binding:"omitempty,oneof=auto public tunnel" example:"auto"`
 }
 
 // UpdateForwardRuleRequest represents a request to update a forward rule.
@@ -94,6 +95,7 @@ type UpdateForwardRuleRequest struct {
 	TrafficMultiplier *float64          `json:"traffic_multiplier,omitempty" binding:"omitempty,gte=0,lte=1000000" example:"1.5"`
 	SortOrder         *int              `json:"sort_order,omitempty" example:"100"`
 	Remark            *string           `json:"remark,omitempty" example:"Updated remark"`
+	AddressPreference *string           `json:"address_preference,omitempty" binding:"omitempty,oneof=auto public tunnel" example:"auto"`
 }
 
 // ReorderForwardRulesRequest represents a request to reorder forward rules.
@@ -213,6 +215,7 @@ func (h *Handler) CreateRule(c *gin.Context) {
 		TrafficMultiplier:  req.TrafficMultiplier,
 		SortOrder:          req.SortOrder,
 		Remark:             req.Remark,
+		AddressPreference:  req.AddressPreference,
 		RuleLimit:          ruleLimit,
 	}
 
@@ -397,6 +400,7 @@ func (h *Handler) UpdateRule(c *gin.Context) {
 		TrafficMultiplier:  req.TrafficMultiplier,
 		SortOrder:          req.SortOrder,
 		Remark:             req.Remark,
+		AddressPreference:  req.AddressPreference,
 	}
 
 	if err := h.updateRuleUC.Execute(c.Request.Context(), cmd); err != nil {

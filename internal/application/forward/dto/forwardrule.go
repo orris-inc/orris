@@ -93,6 +93,9 @@ type ForwardRuleDTO struct {
 	NextHopPort            uint16 `json:"next_hop_port,omitempty"`             // next agent's listen port (for direct_chain type)
 	NextHopConnectionToken string `json:"next_hop_connection_token,omitempty"` // short-term JWT for next hop authentication
 
+	// Address preference for next hop connections
+	AddressPreference string `json:"address_preference,omitempty"` // auto, public, tunnel
+
 	// Per-rule routing configuration
 	Route *nodedto.RouteConfigDTO `json:"route,omitempty"` // per-rule routing configuration
 
@@ -105,7 +108,8 @@ type ForwardRuleDTO struct {
 	ExternalRuleID string `json:"external_rule_id,omitempty"` // external rule reference ID
 
 	// Internal fields for mapping (not exposed in JSON)
-	internalAgentID         uint             `json:"-"`
+	internalAddressPreference vo.AddressPreference `json:"-"` // address preference for next hop resolution
+	internalAgentID           uint                 `json:"-"`
 	internalExitAgentID     uint             `json:"-"`
 	internalExitAgents      []vo.AgentWeight `json:"-"` // internal exit agents for lookup
 	internalChainAgents     []uint           `json:"-"` // internal chain agent IDs for lookup
@@ -170,10 +174,12 @@ func ToForwardRuleDTO(rule *forward.ForwardRule) *ForwardRuleDTO {
 		SortOrder:                  rule.SortOrder(),
 		TunnelType:                 tunnelType,
 		TunnelHops:                 rule.TunnelHops(),
+		AddressPreference:          rule.AddressPreference().String(),
 		Route:                      nodedto.ToRouteConfigDTO(rule.RouteConfig()),
 		ServerAddress:              rule.ServerAddress(),
 		ExternalSource:             rule.ExternalSource(),
 		ExternalRuleID:             rule.ExternalRuleID(),
+		internalAddressPreference:  rule.AddressPreference(),
 		internalAgentID:            rule.AgentID(),
 		internalExitAgentID:        rule.ExitAgentID(),
 		internalExitAgents:         rule.ExitAgents(),
@@ -426,6 +432,11 @@ func (d *ForwardRuleDTO) PopulateGroupSIDs(groupMap GroupSIDMap) {
 			d.GroupSIDs = append(d.GroupSIDs, sid)
 		}
 	}
+}
+
+// InternalAddressPreference returns the address preference for next hop resolution.
+func (d *ForwardRuleDTO) InternalAddressPreference() vo.AddressPreference {
+	return d.internalAddressPreference
 }
 
 // InternalGroupIDs returns the internal resource group IDs for repository lookups.

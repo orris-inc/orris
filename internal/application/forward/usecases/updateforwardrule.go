@@ -42,6 +42,7 @@ type UpdateForwardRuleCommand struct {
 	GroupSIDs           *[]string                // nil means no update, empty slice means clear, non-nil means set
 	Route               *nodedto.RouteConfigDTO  // nil means no update, non-nil means set
 	ClearRoute          *bool                    // true means clear route config
+	AddressPreference   *string                  // nil means no update; auto, public, tunnel
 }
 
 // UpdateForwardRuleUseCase handles forward rule updates.
@@ -495,6 +496,13 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 			return errors.NewValidationError(fmt.Sprintf("invalid route config: %s", err.Error()))
 		}
 		if err := rule.UpdateRouteConfig(rc); err != nil {
+			return errors.NewValidationError(err.Error())
+		}
+	}
+
+	// Update address preference if provided
+	if cmd.AddressPreference != nil {
+		if err := rule.UpdateAddressPreference(vo.AddressPreference(*cmd.AddressPreference)); err != nil {
 			return errors.NewValidationError(err.Error())
 		}
 	}

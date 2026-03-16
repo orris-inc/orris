@@ -52,6 +52,11 @@ func (r *ForwardRule) Validate() error {
 		return fmt.Errorf("invalid load balance strategy: %s", r.loadBalanceStrategy)
 	}
 
+	// Validate address preference
+	if r.addressPreference != "" && !r.addressPreference.IsValid() {
+		return fmt.Errorf("invalid address preference: %s", r.addressPreference)
+	}
+
 	// Validate route config if present
 	if r.routeConfig != nil {
 		if err := r.routeConfig.Validate(); err != nil {

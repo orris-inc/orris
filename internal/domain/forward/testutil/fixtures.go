@@ -255,7 +255,8 @@ func NewTestForwardRule(params RuleParams) (*forward.ForwardRule, error) {
 		params.Protocol,
 		params.Remark,
 		params.TrafficMultiplier,
-		0, // sortOrder: default to 0 for test rules
+		0,                          // sortOrder: default to 0 for test rules
+		vo.AddressPreferenceAuto,   // addressPreference: default to auto for test rules
 		generator,
 	)
 }
