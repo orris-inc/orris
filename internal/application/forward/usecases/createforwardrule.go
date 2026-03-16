@@ -80,7 +80,14 @@ type CreateForwardRuleUseCase struct {
 	resourceGroupRepo resource.Repository
 	planRepo          subscription.PlanRepository
 	configSyncSvc     ConfigSyncNotifier
+	syncer            NodeSubscriptionSyncer
 	logger            logger.Interface
+}
+
+// SetNodeSubscriptionSyncer sets the subscription syncer for pushing updates to node agents.
+// Uses setter injection because the sync service is initialized after the use case.
+func (uc *CreateForwardRuleUseCase) SetNodeSubscriptionSyncer(syncer NodeSubscriptionSyncer) {
+	uc.syncer = syncer
 }
 
 // NewCreateForwardRuleUseCase creates a new CreateForwardRuleUseCase.
@@ -479,7 +486,33 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		}
 	}
 
+	// Sync subscriptions to affected nodes so they pick up the new rule immediately
+	uc.syncAffectedNodes(ctx, rule)
+
 	return result, nil
+}
+
+// syncAffectedNodes triggers subscription sync for nodes affected by the rule.
+// This includes nodes in the rule's resource groups and the target node.
+// Runs asynchronously to avoid adding latency to the HTTP response.
+func (uc *CreateForwardRuleUseCase) syncAffectedNodes(ctx context.Context, rule *forward.ForwardRule) {
+	if uc.syncer == nil {
+		return
+	}
+
+	nodeIDs := collectAffectedNodeIDs(ctx, rule, uc.nodeRepo, uc.logger)
+	for _, nid := range nodeIDs {
+		nodeID := nid
+		goroutine.SafeGo(uc.logger, "create-rule-sync-node", func() {
+			if err := uc.syncer.SyncSubscriptionsToNode(context.Background(), nodeID); err != nil {
+				uc.logger.Warnw("failed to sync subscriptions to node after rule creation",
+					"rule_sid", rule.SID(),
+					"node_id", nodeID,
+					"error", err,
+				)
+			}
+		})
+	}
 }
 
 func (uc *CreateForwardRuleUseCase) validateCommand(_ context.Context, cmd CreateForwardRuleCommand, targetNodeID *uint, chainAgentIDs []uint, chainPortConfig map[uint]uint16) error {
@@ -799,5 +832,8 @@ func (uc *CreateForwardRuleUseCase) executeExternalRule(ctx context.Context, cmd
 	uc.logger.Infow("external forward rule created successfully", "id", result.ID, "name", cmd.Name)
 
 	// External rules don't need config sync notification (no agents)
+	// but still need to sync subscriptions to affected nodes
+	uc.syncAffectedNodes(ctx, rule)
+
 	return result, nil
 }

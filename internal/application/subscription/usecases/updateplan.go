@@ -166,8 +166,8 @@ func (uc *UpdatePlanUseCase) Execute(
 				return nil, err
 			}
 
-			// Set active status if explicitly set to false
-			if !pricingInput.IsActive {
+			// Deactivate only when explicitly set to false (nil = active by default)
+			if pricingInput.IsActive != nil && !*pricingInput.IsActive {
 				pricing.Deactivate()
 			}
 
@@ -257,7 +257,7 @@ func (uc *UpdatePlanUseCase) migrateOrphanedBillingCycles(
 	// Build set of active billing cycles from new pricings
 	availableCycles := make(map[string]bool)
 	for _, p := range newPricings {
-		if p.IsActive {
+		if p.IsActive == nil || *p.IsActive {
 			availableCycles[p.BillingCycle] = true
 		}
 	}

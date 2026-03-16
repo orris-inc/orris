@@ -969,13 +969,13 @@ func (c *Container) initForward() {
 		repos.forwardRuleRepo, repos.forwardAgentRepo, repos.nodeRepoImpl,
 		repos.resourceGroupRepo, repos.subscriptionPlanRepo, repos.subscriptionRepo, c.configSyncService, log,
 	)
-	ucs.deleteForwardRuleUC = forwardUsecases.NewDeleteForwardRuleUseCase(repos.forwardRuleRepo, c.forwardTrafficCache, c.configSyncService, log)
+	ucs.deleteForwardRuleUC = forwardUsecases.NewDeleteForwardRuleUseCase(repos.forwardRuleRepo, c.forwardTrafficCache, c.configSyncService, repos.nodeRepoImpl, log)
 	ucs.listForwardRulesUC = forwardUsecases.NewListForwardRulesUseCase(
 		repos.forwardRuleRepo, repos.forwardAgentRepo, repos.nodeRepoImpl,
 		repos.resourceGroupRepo, ruleSyncStatusAdapter, log,
 	)
-	ucs.enableForwardRuleUC = forwardUsecases.NewEnableForwardRuleUseCase(repos.forwardRuleRepo, c.configSyncService, log)
-	ucs.disableForwardRuleUC = forwardUsecases.NewDisableForwardRuleUseCase(repos.forwardRuleRepo, c.configSyncService, log)
+	ucs.enableForwardRuleUC = forwardUsecases.NewEnableForwardRuleUseCase(repos.forwardRuleRepo, c.configSyncService, repos.nodeRepoImpl, log)
+	ucs.disableForwardRuleUC = forwardUsecases.NewDisableForwardRuleUseCase(repos.forwardRuleRepo, c.configSyncService, repos.nodeRepoImpl, log)
 	ucs.resetForwardTrafficUC = forwardUsecases.NewResetForwardRuleTrafficUseCase(repos.forwardRuleRepo, log)
 
 	txMgr := shareddb.NewTransactionManager(db)
@@ -1076,6 +1076,14 @@ func (c *Container) initForward() {
 	ucs.manageRulesUC.SetNodeSubscriptionSyncer(c.subscriptionSyncService)
 	ucs.deleteResourceGroupUC.SetNodeSubscriptionSyncer(c.subscriptionSyncService)
 	ucs.updateResourceGroupStatusUC.SetNodeSubscriptionSyncer(c.subscriptionSyncService)
+
+	// Set subscription syncer on forward rule use cases so rule changes immediately
+	// push updated subscriptions to affected nodes
+	ucs.createForwardRuleUC.SetNodeSubscriptionSyncer(c.subscriptionSyncService)
+	ucs.updateForwardRuleUC.SetNodeSubscriptionSyncer(c.subscriptionSyncService)
+	ucs.enableForwardRuleUC.SetNodeSubscriptionSyncer(c.subscriptionSyncService)
+	ucs.disableForwardRuleUC.SetNodeSubscriptionSyncer(c.subscriptionSyncService)
+	ucs.deleteForwardRuleUC.SetNodeSubscriptionSyncer(c.subscriptionSyncService)
 
 	// Set deactivation notifier on node traffic limit enforcement service
 	c.nodeTrafficLimitEnforcementSvc.SetDeactivationNotifier(c.subscriptionSyncService)

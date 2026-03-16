@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/goroutine"
 	"github.com/orris-inc/orris/internal/shared/logger"
@@ -19,6 +20,8 @@ type DisableForwardRuleCommand struct {
 type DisableForwardRuleUseCase struct {
 	repo          forward.Repository
 	configSyncSvc ConfigSyncNotifier
+	nodeRepo      node.NodeRepository
+	syncer        NodeSubscriptionSyncer
 	logger        logger.Interface
 }
 
@@ -26,13 +29,21 @@ type DisableForwardRuleUseCase struct {
 func NewDisableForwardRuleUseCase(
 	repo forward.Repository,
 	configSyncSvc ConfigSyncNotifier,
+	nodeRepo node.NodeRepository,
 	logger logger.Interface,
 ) *DisableForwardRuleUseCase {
 	return &DisableForwardRuleUseCase{
 		repo:          repo,
 		configSyncSvc: configSyncSvc,
+		nodeRepo:      nodeRepo,
 		logger:        logger,
 	}
+}
+
+// SetNodeSubscriptionSyncer sets the subscription syncer for pushing updates to node agents.
+// Uses setter injection because the sync service is initialized after the use case.
+func (uc *DisableForwardRuleUseCase) SetNodeSubscriptionSyncer(syncer NodeSubscriptionSyncer) {
+	uc.syncer = syncer
 }
 
 // Execute disables a forward rule.
@@ -93,6 +104,23 @@ func (uc *DisableForwardRuleUseCase) Execute(ctx context.Context, cmd DisableFor
 					}
 				})
 			}
+		}
+	}
+
+	// Sync subscriptions to affected nodes asynchronously
+	if uc.syncer != nil {
+		nodeIDs := collectAffectedNodeIDs(ctx, rule, uc.nodeRepo, uc.logger)
+		for _, nid := range nodeIDs {
+			nodeID := nid
+			goroutine.SafeGo(uc.logger, "disable-rule-sync-node", func() {
+				if err := uc.syncer.SyncSubscriptionsToNode(context.Background(), nodeID); err != nil {
+					uc.logger.Warnw("failed to sync subscriptions to node after rule disabled",
+						"rule_sid", cmd.ShortID,
+						"node_id", nodeID,
+						"error", err,
+					)
+				}
+			})
 		}
 	}
 

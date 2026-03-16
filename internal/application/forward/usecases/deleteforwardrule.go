@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/orris-inc/orris/internal/domain/forward"
+	"github.com/orris-inc/orris/internal/domain/node"
 	"github.com/orris-inc/orris/internal/infrastructure/cache"
 	"github.com/orris-inc/orris/internal/shared/errors"
 	"github.com/orris-inc/orris/internal/shared/goroutine"
@@ -21,6 +22,8 @@ type DeleteForwardRuleUseCase struct {
 	repo          forward.Repository
 	trafficCache  cache.ForwardTrafficCache
 	configSyncSvc ConfigSyncNotifier
+	nodeRepo      node.NodeRepository
+	syncer        NodeSubscriptionSyncer
 	logger        logger.Interface
 }
 
@@ -29,14 +32,22 @@ func NewDeleteForwardRuleUseCase(
 	repo forward.Repository,
 	trafficCache cache.ForwardTrafficCache,
 	configSyncSvc ConfigSyncNotifier,
+	nodeRepo node.NodeRepository,
 	logger logger.Interface,
 ) *DeleteForwardRuleUseCase {
 	return &DeleteForwardRuleUseCase{
 		repo:          repo,
 		trafficCache:  trafficCache,
 		configSyncSvc: configSyncSvc,
+		nodeRepo:      nodeRepo,
 		logger:        logger,
 	}
+}
+
+// SetNodeSubscriptionSyncer sets the subscription syncer for pushing updates to node agents.
+// Uses setter injection because the sync service is initialized after the use case.
+func (uc *DeleteForwardRuleUseCase) SetNodeSubscriptionSyncer(syncer NodeSubscriptionSyncer) {
+	uc.syncer = syncer
 }
 
 // Execute deletes a forward rule.
@@ -62,6 +73,12 @@ func (uc *DeleteForwardRuleUseCase) Execute(ctx context.Context, cmd DeleteForwa
 	ruleType := rule.RuleType().String()
 	exitAgentIDs := rule.GetAllExitAgentIDs() // Get all exit agents (single or multiple)
 	chainAgentIDs := rule.ChainAgentIDs()
+
+	// Collect affected node IDs before deletion (needed for subscription sync)
+	var affectedNodeIDs []uint
+	if uc.syncer != nil {
+		affectedNodeIDs = collectAffectedNodeIDs(ctx, rule, uc.nodeRepo, uc.logger)
+	}
 
 	// Store rule ID for cache cleanup
 	ruleID := rule.ID()
@@ -130,6 +147,22 @@ func (uc *DeleteForwardRuleUseCase) Execute(ctx context.Context, cmd DeleteForwa
 					}
 				})
 			}
+		}
+	}
+
+	// Sync subscriptions to affected nodes asynchronously
+	if uc.syncer != nil {
+		for _, nid := range affectedNodeIDs {
+			nodeID := nid
+			goroutine.SafeGo(uc.logger, "delete-rule-sync-node", func() {
+				if err := uc.syncer.SyncSubscriptionsToNode(context.Background(), nodeID); err != nil {
+					uc.logger.Warnw("failed to sync subscriptions to node after rule deletion",
+						"rule_sid", ruleShortID,
+						"node_id", nodeID,
+						"error", err,
+					)
+				}
+			})
 		}
 	}
 

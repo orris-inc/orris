@@ -54,7 +54,14 @@ type UpdateForwardRuleUseCase struct {
 	planRepo          subscription.PlanRepository
 	subscriptionRepo  subscription.SubscriptionRepository
 	configSyncSvc     ConfigSyncNotifier
+	syncer            NodeSubscriptionSyncer
 	logger            logger.Interface
+}
+
+// SetNodeSubscriptionSyncer sets the subscription syncer for pushing updates to node agents.
+// Uses setter injection because the sync service is initialized after the use case.
+func (uc *UpdateForwardRuleUseCase) SetNodeSubscriptionSyncer(syncer NodeSubscriptionSyncer) {
+	uc.syncer = syncer
 }
 
 // NewUpdateForwardRuleUseCase creates a new UpdateForwardRuleUseCase.
@@ -100,6 +107,13 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 	originalAgentID := rule.AgentID()
 	originalExitAgentIDs := rule.GetAllExitAgentIDs() // Includes both single and multiple exit agents
 	originalChainAgentIDs := rule.ChainAgentIDs()
+
+	// Capture affected node IDs before mutation so we can also sync old nodes
+	// when groups or target_node changes
+	var originalNodeIDs []uint
+	if uc.syncer != nil {
+		originalNodeIDs = collectAffectedNodeIDs(ctx, rule, uc.nodeRepo, uc.logger)
+	}
 
 	// Collect all agent SIDs that need to be fetched (to avoid N+1 queries)
 	allAgentSIDs := make([]string, 0)
@@ -647,6 +661,25 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 				}
 			}
 		})
+	}
+
+	// Sync subscriptions to affected nodes so they pick up the rule changes immediately.
+	// Merge original and new affected nodes: when groups or target_node changes,
+	// both old nodes (stale data) and new nodes (missing data) need re-sync.
+	if uc.syncer != nil {
+		newNodeIDs := collectAffectedNodeIDs(ctx, rule, uc.nodeRepo, uc.logger)
+		mergedNodeIDs := mergeUniqueUints(originalNodeIDs, newNodeIDs)
+		for _, nodeID := range mergedNodeIDs {
+			goroutine.SafeGo(uc.logger, "update-rule-sync-node", func() {
+				if err := uc.syncer.SyncSubscriptionsToNode(context.Background(), nodeID); err != nil {
+					uc.logger.Warnw("failed to sync subscriptions to node after rule update",
+						"rule_sid", cmd.ShortID,
+						"node_id", nodeID,
+						"error", err,
+					)
+				}
+			})
+		}
 	}
 
 	return nil

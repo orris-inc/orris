@@ -36,3 +36,10 @@ type AgentConfigChangeNotifier interface {
 	// This triggers a full sync to deliver the updated configuration.
 	NotifyAgentBlockedProtocolsChange(ctx context.Context, agentID uint) error
 }
+
+// NodeSubscriptionSyncer syncs subscriptions to a specific node agent.
+// This is used to push subscription updates when forward rule changes affect
+// which subscriptions/rules a node should serve.
+type NodeSubscriptionSyncer interface {
+	SyncSubscriptionsToNode(ctx context.Context, nodeID uint) error
+}

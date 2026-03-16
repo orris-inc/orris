@@ -173,6 +173,10 @@ func (m *mockUserRepo) GetByPasswordResetToken(ctx context.Context, token string
 	return m.user, m.err
 }
 
+func (m *mockUserRepo) GetAllActiveUserIDs(ctx context.Context) ([]uint, error) {
+	return nil, m.err
+}
+
 // =====================================================================
 // Mock email checker
 // =====================================================================

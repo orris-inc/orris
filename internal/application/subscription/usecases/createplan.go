@@ -127,8 +127,8 @@ func (uc *CreatePlanUseCase) Execute(
 			return nil, err
 		}
 
-		// Set active status if explicitly set to false
-		if !pricingInput.IsActive {
+		// Deactivate only when explicitly set to false (nil = active by default)
+		if pricingInput.IsActive != nil && !*pricingInput.IsActive {
 			pricing.Deactivate()
 		}
 

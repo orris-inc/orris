@@ -16,6 +16,16 @@ type ExpiringNodeInfo struct {
 	CostLabel *string
 }
 
+// OfflineNodeInfo holds lightweight node info for offline detection.
+// This avoids loading full node entities with protocol configs.
+type OfflineNodeInfo struct {
+	ID               uint
+	SID              string
+	Name             string
+	LastSeenAt       time.Time
+	MuteNotification bool
+}
+
 // NodeMetadata holds lightweight node metadata for SSE broadcasting.
 // This avoids loading full node entities with protocol configs.
 type NodeMetadata struct {
@@ -90,6 +100,14 @@ type NodeRepository interface {
 	// GetIDsByGroupID returns all node IDs that belong to the specified resource group.
 	// Unlike List, this method has no pagination limit and returns only IDs for efficiency.
 	GetIDsByGroupID(ctx context.Context, groupID uint) ([]uint, error)
+
+	// FindOfflineNodes returns nodes whose last_seen_at is before the given cutoff time.
+	// Only returns nodes that have reported at least once (last_seen_at IS NOT NULL).
+	// This is a lightweight query that avoids loading protocol configs.
+	FindOfflineNodes(ctx context.Context, cutoff time.Time) ([]*OfflineNodeInfo, error)
+
+	// CountAll returns the total number of nodes.
+	CountAll(ctx context.Context) (int64, error)
 }
 
 type NodeFilter struct {

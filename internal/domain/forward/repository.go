@@ -193,6 +193,16 @@ type ListFilter struct {
 	GroupIDs         []uint // Filter by resource group IDs (uses JSON_OVERLAPS on group_ids column)
 }
 
+// OfflineAgentInfo holds lightweight agent info for offline detection.
+// This avoids loading full agent entities.
+type OfflineAgentInfo struct {
+	ID               uint
+	SID              string
+	Name             string
+	LastSeenAt       time.Time
+	MuteNotification bool
+}
+
 // AgentMetadata holds lightweight agent metadata for SSE broadcasting.
 // This avoids loading full agent entities.
 type AgentMetadata struct {
@@ -267,6 +277,14 @@ type AgentRepository interface {
 	// agentGroupIDs is a map of agent ID to new group IDs slice.
 	// Returns the number of agents updated and any error.
 	BatchUpdateGroupIDs(ctx context.Context, agentGroupIDs map[uint][]uint) (int, error)
+
+	// FindOfflineAgents returns enabled agents whose last_seen_at is before the given cutoff time.
+	// Only returns agents that have reported at least once (last_seen_at IS NOT NULL).
+	// This is a lightweight query that avoids full entity mapping.
+	FindOfflineAgents(ctx context.Context, cutoff time.Time) ([]*OfflineAgentInfo, error)
+
+	// CountAll returns the total number of agents (all statuses).
+	CountAll(ctx context.Context) (int64, error)
 }
 
 // AgentListFilter defines the filtering options for listing forward agents.

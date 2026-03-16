@@ -9,7 +9,6 @@ import (
 	"github.com/orris-inc/orris/internal/domain/notification"
 	vo "github.com/orris-inc/orris/internal/domain/notification/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/user"
-	uservo "github.com/orris-inc/orris/internal/domain/user/valueobjects"
 	"github.com/orris-inc/orris/internal/shared/id"
 )
 
@@ -197,47 +196,20 @@ func (a *NotificationRepositoryAdapter) FindByUserID(ctx context.Context, userID
 }
 
 func (a *NotificationRepositoryAdapter) FindUnreadByUserID(ctx context.Context, userID uint, limit, offset int) ([]usecases.Notification, int64, error) {
-	allNotifications, _, err := a.repo.ListByUserID(ctx, userID, 10000, 0)
+	notifications, total, err := a.repo.ListUnreadByUserID(ctx, userID, limit, offset)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	unread := make([]*notification.Notification, 0)
-	for _, n := range allNotifications {
-		if n.ReadStatus().String() == "unread" {
-			unread = append(unread, n)
-		}
-	}
-
-	start := offset
-	end := offset + limit
-	if start > len(unread) {
-		start = len(unread)
-	}
-	if end > len(unread) {
-		end = len(unread)
-	}
-
-	result := make([]usecases.Notification, end-start)
-	for i, n := range unread[start:end] {
+	result := make([]usecases.Notification, len(notifications))
+	for i, n := range notifications {
 		result[i] = &notificationAdapter{n}
 	}
-	return result, int64(len(unread)), nil
+	return result, total, nil
 }
 
 func (a *NotificationRepositoryAdapter) CountUnreadByUserID(ctx context.Context, userID uint) (int64, error) {
-	allNotifications, _, err := a.repo.ListByUserID(ctx, userID, 10000, 0)
-	if err != nil {
-		return 0, err
-	}
-
-	count := int64(0)
-	for _, n := range allNotifications {
-		if n.ReadStatus().String() == "unread" {
-			count++
-		}
-	}
-	return count, nil
+	return a.repo.CountUnread(ctx, userID)
 }
 
 func (a *NotificationRepositoryAdapter) Update(ctx context.Context, notif usecases.Notification) error {
@@ -249,22 +221,7 @@ func (a *NotificationRepositoryAdapter) Update(ctx context.Context, notif usecas
 }
 
 func (a *NotificationRepositoryAdapter) MarkAllAsReadByUserID(ctx context.Context, userID uint) error {
-	allNotifications, _, err := a.repo.ListByUserID(ctx, userID, 10000, 0)
-	if err != nil {
-		return err
-	}
-
-	for _, n := range allNotifications {
-		if n.ReadStatus().String() == "unread" {
-			if err := n.MarkAsRead(); err != nil {
-				return err
-			}
-			if err := a.repo.Update(ctx, n); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+	return a.repo.MarkAllAsReadByUserID(ctx, userID)
 }
 
 func (a *NotificationRepositoryAdapter) Delete(ctx context.Context, id uint) error {
@@ -342,22 +299,7 @@ func NewUserRepositoryAdapter(repo user.Repository) usecases.UserRepository {
 }
 
 func (a *UserRepositoryAdapter) FindAllActiveUserIDs(ctx context.Context) ([]uint, error) {
-	// List all users with a large page size to get all active users
-	filter := user.ListFilter{
-		Page:     1,
-		PageSize: 10000,
-		Status:   string(uservo.StatusActive), // Only get active users
-	}
-	users, _, err := a.repo.List(ctx, filter)
-	if err != nil {
-		return nil, err
-	}
-
-	userIDs := make([]uint, 0, len(users))
-	for _, u := range users {
-		userIDs = append(userIDs, u.ID())
-	}
-	return userIDs, nil
+	return a.repo.GetAllActiveUserIDs(ctx)
 }
 
 type AnnouncementFactoryAdapter struct{}

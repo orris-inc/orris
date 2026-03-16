@@ -33,6 +33,10 @@ type NotificationRepository interface {
 	MarkAsRead(ctx context.Context, id uint) error
 	BulkCreate(ctx context.Context, notifications []*Notification) error
 	FindBySpecification(ctx context.Context, spec Specification, limit, offset int) ([]*Notification, int64, error)
+	// ListUnreadByUserID returns unread notifications for a user with pagination.
+	ListUnreadByUserID(ctx context.Context, userID uint, limit, offset int) ([]*Notification, int64, error)
+	// MarkAllAsReadByUserID marks all unread notifications as read for a user in a single query.
+	MarkAllAsReadByUserID(ctx context.Context, userID uint) error
 }
 
 type NotificationTemplateRepository interface {

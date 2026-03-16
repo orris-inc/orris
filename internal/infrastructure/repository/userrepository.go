@@ -379,6 +379,19 @@ func (r *UserRepository) GetByPasswordResetToken(ctx context.Context, token stri
 	return entity, nil
 }
 
+// GetAllActiveUserIDs returns all active user IDs without loading full user entities.
+func (r *UserRepository) GetAllActiveUserIDs(ctx context.Context) ([]uint, error) {
+	var ids []uint
+	if err := r.db.WithContext(ctx).
+		Model(&models.UserModel{}).
+		Where("status = ?", "active").
+		Pluck("id", &ids).Error; err != nil {
+		r.logger.Errorw("failed to get all active user IDs", "error", err)
+		return nil, fmt.Errorf("failed to get all active user IDs: %w", err)
+	}
+	return ids, nil
+}
+
 // hashToken computes SHA256 hash of the token for database lookup
 func hashToken(token string) string {
 	hash := sha256.Sum256([]byte(token))

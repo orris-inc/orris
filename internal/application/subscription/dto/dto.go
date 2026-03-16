@@ -72,7 +72,7 @@ type PricingOptionInput struct {
 	BillingCycle string `json:"billing_cycle" binding:"required"`
 	Price        uint64 `json:"price" binding:"required"`
 	Currency     string `json:"currency" binding:"required"`
-	IsActive     bool   `json:"is_active"`
+	IsActive     *bool  `json:"is_active"` // nil or true = active, explicit false = inactive
 }
 
 type SubscriptionTokenDTO struct {

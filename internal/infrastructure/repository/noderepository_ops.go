@@ -567,3 +567,49 @@ func (r *NodeRepositoryImpl) FindExpiringNodes(ctx context.Context, withinDays i
 
 	return nodes, nil
 }
+
+// CountAll returns the total number of nodes.
+func (r *NodeRepositoryImpl) CountAll(ctx context.Context) (int64, error) {
+	var count int64
+	if err := r.db.WithContext(ctx).Model(&models.NodeModel{}).Count(&count).Error; err != nil {
+		r.logger.Errorw("failed to count all nodes", "error", err)
+		return 0, fmt.Errorf("failed to count all nodes: %w", err)
+	}
+	return count, nil
+}
+
+// FindOfflineNodes returns nodes whose last_seen_at is before the given cutoff time.
+// Only returns nodes that have reported at least once (last_seen_at IS NOT NULL).
+// This is a lightweight query that avoids loading protocol configs.
+func (r *NodeRepositoryImpl) FindOfflineNodes(ctx context.Context, cutoff time.Time) ([]*node.OfflineNodeInfo, error) {
+	var results []struct {
+		ID               uint      `gorm:"column:id"`
+		SID              string    `gorm:"column:sid"`
+		Name             string    `gorm:"column:name"`
+		LastSeenAt       time.Time `gorm:"column:last_seen_at"`
+		MuteNotification bool      `gorm:"column:mute_notification"`
+	}
+
+	if err := r.db.WithContext(ctx).
+		Model(&models.NodeModel{}).
+		Select("id, sid, name, last_seen_at, mute_notification").
+		Where("last_seen_at IS NOT NULL").
+		Where("last_seen_at < ?", cutoff).
+		Find(&results).Error; err != nil {
+		r.logger.Errorw("failed to find offline nodes", "cutoff", cutoff, "error", err)
+		return nil, fmt.Errorf("failed to find offline nodes: %w", err)
+	}
+
+	nodes := make([]*node.OfflineNodeInfo, 0, len(results))
+	for _, res := range results {
+		nodes = append(nodes, &node.OfflineNodeInfo{
+			ID:               res.ID,
+			SID:              res.SID,
+			Name:             res.Name,
+			LastSeenAt:       res.LastSeenAt.UTC(),
+			MuteNotification: res.MuteNotification,
+		})
+	}
+
+	return nodes, nil
+}

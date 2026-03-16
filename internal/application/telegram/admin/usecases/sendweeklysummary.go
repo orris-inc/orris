@@ -8,6 +8,7 @@ import (
 	"github.com/orris-inc/orris/internal/application/telegram/admin/dto"
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
+	"github.com/orris-inc/orris/internal/domain/shared"
 	"github.com/orris-inc/orris/internal/domain/subscription"
 	"github.com/orris-inc/orris/internal/domain/telegram/admin"
 	"github.com/orris-inc/orris/internal/domain/user"
@@ -257,26 +258,21 @@ func (uc *SendWeeklySummaryUseCase) gatherWeeklyStats(ctx context.Context, lastS
 	summary.UserChangePercent = CalculateChangePercent(summary.NewUsers, summary.PrevNewUsers)
 	summary.SubChangePercent = CalculateChangePercent(summary.NewSubscriptions, summary.PrevNewSubscriptions)
 
-	// Get node status
-	nodes, total, err := uc.nodeRepo.List(ctx, node.NodeFilter{})
-	if err == nil {
-		summary.TotalNodes = total
-		for _, n := range nodes {
-			if n.IsOnline() {
-				summary.OnlineNodes++
-			}
+	// Get node status using lightweight count queries (avoids loading protocol configs)
+	onlineThreshold := biztime.NowUTC().Add(-shared.DefaultOnlineTimeout)
+	if totalNodes, err := uc.nodeRepo.CountAll(ctx); err == nil {
+		summary.TotalNodes = totalNodes
+		if onlineNodes, err := uc.nodeRepo.CountByLastSeenAfter(ctx, onlineThreshold); err == nil {
+			summary.OnlineNodes = onlineNodes
 		}
 		summary.OfflineNodes = summary.TotalNodes - summary.OnlineNodes
 	}
 
-	// Get agent status
-	agents, agentTotal, err := uc.agentRepo.List(ctx, forward.AgentListFilter{})
-	if err == nil {
-		summary.TotalAgents = agentTotal
-		for _, a := range agents {
-			if a.IsOnline() {
-				summary.OnlineAgents++
-			}
+	// Get agent status using lightweight count queries
+	if totalAgents, err := uc.agentRepo.CountAll(ctx); err == nil {
+		summary.TotalAgents = totalAgents
+		if onlineAgents, err := uc.agentRepo.CountByLastSeenAfter(ctx, onlineThreshold); err == nil {
+			summary.OnlineAgents = onlineAgents
 		}
 		summary.OfflineAgents = summary.TotalAgents - summary.OnlineAgents
 	}

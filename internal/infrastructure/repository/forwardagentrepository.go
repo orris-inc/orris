@@ -604,3 +604,50 @@ func (r *ForwardAgentRepositoryImpl) BatchUpdateGroupIDs(ctx context.Context, ag
 	r.logger.Infow("batch updated group IDs for agents", "updated_count", updated, "total_count", len(agentGroupIDs))
 	return updated, nil
 }
+
+// CountAll returns the total number of agents (all statuses).
+func (r *ForwardAgentRepositoryImpl) CountAll(ctx context.Context) (int64, error) {
+	var count int64
+	if err := r.db.WithContext(ctx).Model(&models.ForwardAgentModel{}).Count(&count).Error; err != nil {
+		r.logger.Errorw("failed to count all agents", "error", err)
+		return 0, fmt.Errorf("failed to count all agents: %w", err)
+	}
+	return count, nil
+}
+
+// FindOfflineAgents returns enabled agents whose last_seen_at is before the given cutoff time.
+// Only returns agents that have reported at least once (last_seen_at IS NOT NULL).
+// This is a lightweight query that avoids full entity mapping.
+func (r *ForwardAgentRepositoryImpl) FindOfflineAgents(ctx context.Context, cutoff time.Time) ([]*forward.OfflineAgentInfo, error) {
+	var results []struct {
+		ID               uint      `gorm:"column:id"`
+		SID              string    `gorm:"column:sid"`
+		Name             string    `gorm:"column:name"`
+		LastSeenAt       time.Time `gorm:"column:last_seen_at"`
+		MuteNotification bool      `gorm:"column:mute_notification"`
+	}
+
+	if err := r.db.WithContext(ctx).
+		Model(&models.ForwardAgentModel{}).
+		Select("id, sid, name, last_seen_at, mute_notification").
+		Where("status = ?", "enabled").
+		Where("last_seen_at IS NOT NULL").
+		Where("last_seen_at < ?", cutoff).
+		Find(&results).Error; err != nil {
+		r.logger.Errorw("failed to find offline agents", "cutoff", cutoff, "error", err)
+		return nil, fmt.Errorf("failed to find offline agents: %w", err)
+	}
+
+	agents := make([]*forward.OfflineAgentInfo, 0, len(results))
+	for _, res := range results {
+		agents = append(agents, &forward.OfflineAgentInfo{
+			ID:               res.ID,
+			SID:              res.SID,
+			Name:             res.Name,
+			LastSeenAt:       res.LastSeenAt.UTC(),
+			MuteNotification: res.MuteNotification,
+		})
+	}
+
+	return agents, nil
+}

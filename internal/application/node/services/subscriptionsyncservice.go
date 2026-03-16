@@ -91,19 +91,23 @@ func (s *SubscriptionSyncService) NotifyPlanFeaturesChanged(ctx context.Context,
 		return nil
 	}
 
-	// Get nodes in those resource groups
-	nodes, _, err := s.nodeRepo.List(ctx, node.NodeFilter{
-		GroupIDs: groupIDs,
-	})
-	if err != nil {
-		s.logger.Errorw("failed to get nodes for plan features change",
-			"group_ids", groupIDs,
-			"error", err,
-		)
-		return err
+	// Get node IDs in those resource groups (lightweight, no protocol config loading)
+	nodeIDSet := make(map[uint]struct{})
+	for _, gid := range groupIDs {
+		ids, err := s.nodeRepo.GetIDsByGroupID(ctx, gid)
+		if err != nil {
+			s.logger.Errorw("failed to get node IDs for plan features change",
+				"group_id", gid,
+				"error", err,
+			)
+			return err
+		}
+		for _, id := range ids {
+			nodeIDSet[id] = struct{}{}
+		}
 	}
 
-	if len(nodes) == 0 {
+	if len(nodeIDSet) == 0 {
 		s.logger.Debugw("no nodes found for plan features change",
 			"group_ids", groupIDs,
 		)
@@ -112,15 +116,14 @@ func (s *SubscriptionSyncService) NotifyPlanFeaturesChanged(ctx context.Context,
 
 	// Re-sync subscriptions on each online node to propagate updated plan features
 	syncedCount := 0
-	for _, n := range nodes {
-		if !s.hub.IsNodeOnline(n.ID()) {
+	for nodeID := range nodeIDSet {
+		if !s.hub.IsNodeOnline(nodeID) {
 			continue
 		}
 
-		if err := s.SyncSubscriptionsOnNodeConnect(ctx, n.ID()); err != nil {
+		if err := s.SyncSubscriptionsOnNodeConnect(ctx, nodeID); err != nil {
 			s.logger.Warnw("failed to re-sync subscriptions for plan features change",
-				"node_id", n.ID(),
-				"node_sid", n.SID(),
+				"node_id", nodeID,
 				"plan_id", planID,
 				"error", err,
 			)
@@ -132,7 +135,7 @@ func (s *SubscriptionSyncService) NotifyPlanFeaturesChanged(ctx context.Context,
 
 	s.logger.Infow("plan features change notification completed",
 		"plan_id", planID,
-		"total_nodes", len(nodes),
+		"total_nodes", len(nodeIDSet),
 		"synced_nodes", syncedCount,
 	)
 
@@ -189,10 +192,10 @@ func (s *SubscriptionSyncService) NotifySubscriptionChange(
 		return nil
 	}
 
-	// Get nodes in these resource groups
-	nodes, _, err := s.nodeRepo.List(ctx, node.NodeFilter{
-		GroupIDs: groupIDs,
-	})
+	// Get nodes in these resource groups (need full entity for protocol config)
+	nf := node.NodeFilter{GroupIDs: groupIDs}
+	nf.PageSize = 10000
+	nodes, _, err := s.nodeRepo.List(ctx, nf)
 	if err != nil {
 		s.logger.Errorw("failed to get nodes for resource groups",
 			"group_ids", groupIDs,

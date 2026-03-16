@@ -208,3 +208,49 @@ func (r *NotificationRepositoryImpl) FindBySpecification(
 
 	return filtered, int64(len(filtered)), nil
 }
+
+// ListUnreadByUserID returns unread notifications for a user with pagination.
+func (r *NotificationRepositoryImpl) ListUnreadByUserID(ctx context.Context, userID uint, limit, offset int) ([]*notification.Notification, int64, error) {
+	var total int64
+	query := r.db.WithContext(ctx).Model(&models.NotificationModel{}).
+		Where("user_id = ? AND read_status = ?", userID, "unread")
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to count unread notifications: %w", err)
+	}
+
+	var modelList []*models.NotificationModel
+	query = query.Order("created_at DESC")
+
+	if limit > 0 {
+		query = query.Limit(limit)
+	}
+	if offset > 0 {
+		query = query.Offset(offset)
+	}
+
+	if err := query.Find(&modelList).Error; err != nil {
+		return nil, 0, fmt.Errorf("failed to list unread notifications: %w", err)
+	}
+
+	entities, err := r.mapper.ToEntities(modelList)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to map notification models to entities: %w", err)
+	}
+
+	return entities, total, nil
+}
+
+// MarkAllAsReadByUserID marks all unread notifications as read for a user in a single query.
+func (r *NotificationRepositoryImpl) MarkAllAsReadByUserID(ctx context.Context, userID uint) error {
+	result := r.db.WithContext(ctx).
+		Model(&models.NotificationModel{}).
+		Where("user_id = ? AND read_status = ?", userID, "unread").
+		Update("read_status", "read")
+
+	if result.Error != nil {
+		return fmt.Errorf("failed to mark all notifications as read: %w", result.Error)
+	}
+
+	return nil
+}

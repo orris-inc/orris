@@ -365,32 +365,23 @@ func (uc *CheckOfflineUseCase) findOfflineNodes(ctx context.Context, threshold t
 	now := biztime.NowUTC()
 	cutoff := now.Add(-threshold)
 
-	// List all active nodes
-	nodes, _, err := uc.nodeRepo.List(ctx, node.NodeFilter{})
+	// Use lightweight query to find offline nodes (avoids loading protocol configs)
+	nodes, err := uc.nodeRepo.FindOfflineNodes(ctx, cutoff)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list nodes: %w", err)
+		return nil, fmt.Errorf("failed to find offline nodes: %w", err)
 	}
 
-	var offlineNodes []dto.OfflineNodeInfo
+	offlineNodes := make([]dto.OfflineNodeInfo, 0, len(nodes))
 	for _, n := range nodes {
-		// Only check nodes that have reported at least once
-		lastSeen := n.LastSeenAt()
-		if lastSeen == nil {
-			continue
-		}
-
-		// Check if last seen is before cutoff
-		if lastSeen.Before(cutoff) {
-			offlineMinutes := int64(now.Sub(*lastSeen).Minutes())
-			offlineNodes = append(offlineNodes, dto.OfflineNodeInfo{
-				ID:               n.ID(),
-				SID:              n.SID(),
-				Name:             n.Name(),
-				LastSeenAt:       lastSeen,
-				OfflineMinutes:   offlineMinutes,
-				MuteNotification: n.MuteNotification(),
-			})
-		}
+		offlineMinutes := int64(now.Sub(n.LastSeenAt).Minutes())
+		offlineNodes = append(offlineNodes, dto.OfflineNodeInfo{
+			ID:               n.ID,
+			SID:              n.SID,
+			Name:             n.Name,
+			LastSeenAt:       &n.LastSeenAt,
+			OfflineMinutes:   offlineMinutes,
+			MuteNotification: n.MuteNotification,
+		})
 	}
 
 	return offlineNodes, nil
@@ -400,37 +391,23 @@ func (uc *CheckOfflineUseCase) findOfflineAgents(ctx context.Context, threshold 
 	now := biztime.NowUTC()
 	cutoff := now.Add(-threshold)
 
-	// List all enabled agents
-	agents, _, err := uc.agentRepo.List(ctx, forward.AgentListFilter{})
+	// Use lightweight query to find offline agents (avoids full entity mapping)
+	agents, err := uc.agentRepo.FindOfflineAgents(ctx, cutoff)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list agents: %w", err)
+		return nil, fmt.Errorf("failed to find offline agents: %w", err)
 	}
 
-	var offlineAgents []dto.OfflineAgentInfo
+	offlineAgents := make([]dto.OfflineAgentInfo, 0, len(agents))
 	for _, a := range agents {
-		// Only check enabled agents
-		if !a.IsEnabled() {
-			continue
-		}
-
-		// Only check agents that have reported at least once
-		lastSeen := a.LastSeenAt()
-		if lastSeen == nil {
-			continue
-		}
-
-		// Check if last seen is before cutoff
-		if lastSeen.Before(cutoff) {
-			offlineMinutes := int64(now.Sub(*lastSeen).Minutes())
-			offlineAgents = append(offlineAgents, dto.OfflineAgentInfo{
-				ID:               a.ID(),
-				SID:              a.SID(),
-				Name:             a.Name(),
-				LastSeenAt:       lastSeen,
-				OfflineMinutes:   offlineMinutes,
-				MuteNotification: a.MuteNotification(),
-			})
-		}
+		offlineMinutes := int64(now.Sub(a.LastSeenAt).Minutes())
+		offlineAgents = append(offlineAgents, dto.OfflineAgentInfo{
+			ID:               a.ID,
+			SID:              a.SID,
+			Name:             a.Name,
+			LastSeenAt:       &a.LastSeenAt,
+			OfflineMinutes:   offlineMinutes,
+			MuteNotification: a.MuteNotification,
+		})
 	}
 
 	return offlineAgents, nil

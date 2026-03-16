@@ -45,6 +45,9 @@ type Repository interface {
 
 	// GetByPasswordResetToken retrieves a user by password reset token
 	GetByPasswordResetToken(ctx context.Context, token string) (*User, error)
+
+	// GetAllActiveUserIDs returns all active user IDs without loading full user entities.
+	GetAllActiveUserIDs(ctx context.Context) ([]uint, error)
 }
 
 // ListFilter represents filtering and pagination options for user list
