@@ -81,6 +81,9 @@ func (uc *UpdatePlanUseCase) Execute(
 		return nil, fmt.Errorf("plan not found: %s", cmd.PlanSID)
 	}
 
+	// Capture old traffic reset mode before updating features
+	oldTrafficResetMode := subscription.GetTrafficResetMode(plan)
+
 	if cmd.Description != nil {
 		plan.UpdateDescription(*cmd.Description)
 	}
@@ -130,6 +133,14 @@ func (uc *UpdatePlanUseCase) Execute(
 	// Invalidate quota cache for all active subscriptions when limits change
 	if cmd.Limits != nil {
 		uc.invalidateQuotaCacheForPlan(ctx, planID)
+	}
+
+	// Reset subscription usage when traffic reset mode changes
+	if cmd.Limits != nil {
+		newTrafficResetMode := subscription.GetTrafficResetMode(plan)
+		if oldTrafficResetMode != newTrafficResetMode {
+			uc.resetSubscriptionUsageForPlan(ctx, planID, oldTrafficResetMode, newTrafficResetMode)
+		}
 	}
 
 	// Sync pricing options if provided (delete old, create new)
@@ -240,6 +251,68 @@ func (uc *UpdatePlanUseCase) invalidateQuotaCacheForPlan(ctx context.Context, pl
 	if len(subs) > 0 {
 		uc.logger.Infow("quota cache invalidated for plan subscriptions",
 			"plan_id", planID, "count", len(subs))
+	}
+}
+
+// resetSubscriptionUsageForPlan resets traffic usage for all active/trialing/suspended
+// subscriptions on the given plan when the traffic reset mode changes.
+// This ensures a clean start under the new mode and avoids unfair traffic accumulation
+// (e.g. switching from calendar_month to billing_cycle on a lifetime plan would otherwise
+// count all historical traffic since the subscription started).
+func (uc *UpdatePlanUseCase) resetSubscriptionUsageForPlan(
+	ctx context.Context, planID uint,
+	oldMode, newMode subscription.TrafficResetMode,
+) {
+	if uc.subscriptionRepo == nil {
+		return
+	}
+
+	subs, _, err := uc.subscriptionRepo.List(ctx, subscription.SubscriptionFilter{
+		PlanID:   &planID,
+		Statuses: []string{string(vo.StatusActive), string(vo.StatusTrialing), string(vo.StatusSuspended)},
+		Page:     1,
+		PageSize: 10000,
+	})
+	if err != nil {
+		uc.logger.Warnw("failed to list subscriptions for traffic reset mode migration",
+			"plan_id", planID, "error", err)
+		return
+	}
+
+	resetCount := 0
+	for _, sub := range subs {
+		if err := sub.ResetUsage(); err != nil {
+			uc.logger.Warnw("failed to reset subscription usage after traffic reset mode change",
+				"subscription_id", sub.ID(), "error", err)
+			continue
+		}
+
+		if err := uc.subscriptionRepo.Update(ctx, sub); err != nil {
+			uc.logger.Warnw("failed to persist subscription after traffic reset mode change",
+				"subscription_id", sub.ID(), "error", err)
+			continue
+		}
+
+		// Invalidate quota cache
+		if uc.quotaCacheManager != nil {
+			_ = uc.quotaCacheManager.InvalidateQuota(ctx, sub.ID())
+		}
+
+		// Notify nodes of subscription update
+		if uc.subscriptionNotifier != nil {
+			_ = uc.subscriptionNotifier.NotifySubscriptionUpdate(ctx, sub)
+		}
+
+		resetCount++
+	}
+
+	if resetCount > 0 {
+		uc.logger.Infow("subscription usage reset after traffic reset mode change",
+			"plan_id", planID,
+			"old_mode", string(oldMode),
+			"new_mode", string(newMode),
+			"reset_count", resetCount,
+		)
 	}
 }
 
