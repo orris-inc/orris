@@ -86,6 +86,7 @@ func (c *RuleSyncConverter) Convert(ctx context.Context, rule *forward.ForwardRu
 	}
 
 	addrPref := rule.AddressPreference()
+	syncData.AddressPreference = addrPref.String()
 
 	// Determine role and populate fields based on rule type
 	switch rule.RuleType().String() {
