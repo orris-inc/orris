@@ -238,8 +238,12 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 				}
 			}
 
-			// Weight of 0 means backup agent, create directly
-			aw, err := vo.NewAgentWeight(exitAgent.ID(), input.Weight)
+			// Use provided weight or default (nil=default 50, 0=backup)
+			weight := vo.DefaultAgentWeight
+			if input.Weight != nil {
+				weight = *input.Weight
+			}
+			aw, err := vo.NewAgentWeight(exitAgent.ID(), weight)
 			if err != nil {
 				return errors.NewValidationError(fmt.Sprintf("invalid exit agent weight: %s", err.Error()))
 			}

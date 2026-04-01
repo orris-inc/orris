@@ -19,8 +19,8 @@ import (
 
 // ExitAgentInput represents input for exit agent with weight.
 type ExitAgentInput struct {
-	AgentSID string // Stripe-style ID (e.g., "fa_xK9mP2vL3nQ")
-	Weight   uint16 // Load balancing weight (1-100)
+	AgentSID string  // Stripe-style ID (e.g., "fa_xK9mP2vL3nQ")
+	Weight   *uint16 // Load balancing weight (nil=default 50, 0=backup, 1-100=normal)
 }
 
 // CreateForwardRuleCommand represents the input for creating a forward rule.
@@ -201,10 +201,10 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 			if !ok || exitAgent == nil {
 				return nil, errors.NewNotFoundError("exit forward agent", input.AgentSID)
 			}
-			// Use provided weight or default
-			weight := input.Weight
-			if weight == 0 {
-				weight = vo.DefaultAgentWeight
+			// Use provided weight or default (nil=default 50, 0=backup)
+			weight := vo.DefaultAgentWeight
+			if input.Weight != nil {
+				weight = *input.Weight
 			}
 			aw, err := vo.NewAgentWeight(exitAgent.ID(), weight)
 			if err != nil {

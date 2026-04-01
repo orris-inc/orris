@@ -170,6 +170,10 @@ func validNodeSID() string {
 	return "node_xK9mP2vL3nQ7"
 }
 
+func ptrUint16(v uint16) *uint16 {
+	return &v
+}
+
 // =====================================================================
 // TestHandler_CreateRule
 // =====================================================================
@@ -369,7 +373,7 @@ func TestHandler_CreateRule_MutuallyExclusiveExitAgents(t *testing.T) {
 		ListenPort:  8080,
 		Protocol:    "tcp",
 		ExitAgentID: validAgentSID(),
-		ExitAgents:  []ExitAgentRequest{{AgentID: validAgentSID(), Weight: 50}},
+		ExitAgents:  []ExitAgentRequest{{AgentID: validAgentSID(), Weight: ptrUint16(50)}},
 	}
 	c, w := testutil.NewTestContext(http.MethodPost, "/forward-rules", reqBody)
 

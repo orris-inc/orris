@@ -55,8 +55,8 @@ func NewHandler(
 
 // ExitAgentRequest represents an exit agent with weight for load balancing.
 type ExitAgentRequest struct {
-	AgentID string `json:"agent_id" binding:"required" example:"fa_yL8nQ3wM4oR"`
-	Weight  uint16 `json:"weight,omitempty" binding:"omitempty,min=0,max=100" example:"50"` // 0=backup, 1-100=normal
+	AgentID string  `json:"agent_id" binding:"required" example:"fa_yL8nQ3wM4oR"`
+	Weight  *uint16 `json:"weight,omitempty" binding:"omitempty,min=0,max=100" example:"50"` // nil=default(50), 0=backup, 1-100=normal
 }
 
 // CreateForwardRuleRequest represents a request to create a forward rule.
