@@ -81,6 +81,7 @@ type CreateForwardRuleUseCase struct {
 	planRepo          subscription.PlanRepository
 	configSyncSvc     ConfigSyncNotifier
 	syncer            NodeSubscriptionSyncer
+	nodeConfigSyncer  NodeConfigChangeNotifier
 	logger            logger.Interface
 }
 
@@ -88,6 +89,12 @@ type CreateForwardRuleUseCase struct {
 // Uses setter injection because the sync service is initialized after the use case.
 func (uc *CreateForwardRuleUseCase) SetNodeSubscriptionSyncer(syncer NodeSubscriptionSyncer) {
 	uc.syncer = syncer
+}
+
+// SetNodeConfigSyncer sets the node config syncer for pushing route config changes to nodes.
+// Uses setter injection because the sync service is initialized after the use case.
+func (uc *CreateForwardRuleUseCase) SetNodeConfigSyncer(syncer NodeConfigChangeNotifier) {
+	uc.nodeConfigSyncer = syncer
 }
 
 // NewCreateForwardRuleUseCase creates a new CreateForwardRuleUseCase.
@@ -489,6 +496,11 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 	// Sync subscriptions to affected nodes so they pick up the new rule immediately
 	uc.syncAffectedNodes(ctx, rule)
 
+	// Notify target node to reload config if the rule has per-rule routing
+	if rule.IsEnabled() && rule.RouteConfig() != nil && rule.TargetNodeID() != nil {
+		uc.notifyTargetNodeConfigChange(rule)
+	}
+
 	return result, nil
 }
 
@@ -513,6 +525,23 @@ func (uc *CreateForwardRuleUseCase) syncAffectedNodes(ctx context.Context, rule 
 			}
 		})
 	}
+}
+
+// notifyTargetNodeConfigChange asynchronously notifies the target node to reload config.
+func (uc *CreateForwardRuleUseCase) notifyTargetNodeConfigChange(rule *forward.ForwardRule) {
+	if uc.nodeConfigSyncer == nil || rule.TargetNodeID() == nil {
+		return
+	}
+	nodeID := *rule.TargetNodeID()
+	goroutine.SafeGo(uc.logger, "create-rule-notify-node-config", func() {
+		if err := uc.nodeConfigSyncer.NotifyConfigChange(context.Background(), nodeID); err != nil {
+			uc.logger.Warnw("failed to notify node of forward rule route config change",
+				"rule_sid", rule.SID(),
+				"node_id", nodeID,
+				"error", err,
+			)
+		}
+	})
 }
 
 func (uc *CreateForwardRuleUseCase) validateCommand(_ context.Context, cmd CreateForwardRuleCommand, targetNodeID *uint, chainAgentIDs []uint, chainPortConfig map[uint]uint16) error {

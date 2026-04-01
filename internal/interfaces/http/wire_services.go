@@ -1062,7 +1062,7 @@ func (c *Container) initForward() {
 	c.agentHub.RegisterNodeStatusHandler(c.nodeStatusHandler)
 
 	// Initialize node config sync service
-	c.nodeConfigSyncService = nodeServices.NewNodeConfigSyncService(repos.nodeRepoImpl, c.agentHub, log)
+	c.nodeConfigSyncService = nodeServices.NewNodeConfigSyncService(repos.nodeRepoImpl, repos.forwardRuleRepo, c.agentHub, log)
 
 	// Initialize subscription sync service
 	c.subscriptionSyncService = nodeServices.NewSubscriptionSyncService(repos.nodeRepoImpl, repos.subscriptionRepo, repos.subscriptionPlanRepo, repos.resourceGroupRepo, c.agentHub, log)
@@ -1084,6 +1084,14 @@ func (c *Container) initForward() {
 	ucs.enableForwardRuleUC.SetNodeSubscriptionSyncer(c.subscriptionSyncService)
 	ucs.disableForwardRuleUC.SetNodeSubscriptionSyncer(c.subscriptionSyncService)
 	ucs.deleteForwardRuleUC.SetNodeSubscriptionSyncer(c.subscriptionSyncService)
+
+	// Set node config syncer on forward rule use cases so route config changes
+	// immediately push updated routing configuration to target nodes
+	ucs.createForwardRuleUC.SetNodeConfigSyncer(c.nodeConfigSyncService)
+	ucs.updateForwardRuleUC.SetNodeConfigSyncer(c.nodeConfigSyncService)
+	ucs.enableForwardRuleUC.SetNodeConfigSyncer(c.nodeConfigSyncService)
+	ucs.disableForwardRuleUC.SetNodeConfigSyncer(c.nodeConfigSyncService)
+	ucs.deleteForwardRuleUC.SetNodeConfigSyncer(c.nodeConfigSyncService)
 
 	// Set deactivation notifier on node traffic limit enforcement service
 	c.nodeTrafficLimitEnforcementSvc.SetDeactivationNotifier(c.subscriptionSyncService)

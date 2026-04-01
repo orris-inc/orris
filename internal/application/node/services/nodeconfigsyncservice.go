@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 
 	"github.com/orris-inc/orris/internal/application/node/dto"
+	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
 	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
 	"github.com/orris-inc/orris/internal/shared/biztime"
@@ -21,12 +22,19 @@ type NodeSyncHub interface {
 	SendMessageToNode(nodeID uint, msg []byte) error
 }
 
+// ForwardRuleQuerier defines a narrow interface for querying forward rules
+// that target a specific node. Used to merge per-forward-rule routing into node config.
+type ForwardRuleQuerier interface {
+	ListEnabledByTargetNodeID(ctx context.Context, nodeID uint) ([]*forward.ForwardRule, error)
+}
+
 // NodeConfigSyncService handles configuration synchronization for node agents.
 // It pushes config changes to node agents when they come online or when their config changes.
 type NodeConfigSyncService struct {
-	nodeRepo node.NodeRepository
-	hub      NodeSyncHub
-	logger   logger.Interface
+	nodeRepo        node.NodeRepository
+	forwardRuleRepo ForwardRuleQuerier
+	hub             NodeSyncHub
+	logger          logger.Interface
 
 	// Version management
 	globalVersion uint64
@@ -36,13 +44,15 @@ type NodeConfigSyncService struct {
 // NewNodeConfigSyncService creates a new NodeConfigSyncService.
 func NewNodeConfigSyncService(
 	nodeRepo node.NodeRepository,
+	forwardRuleRepo ForwardRuleQuerier,
 	hub NodeSyncHub,
 	log logger.Interface,
 ) *NodeConfigSyncService {
 	return &NodeConfigSyncService{
-		nodeRepo: nodeRepo,
-		hub:      hub,
-		logger:   log,
+		nodeRepo:        nodeRepo,
+		forwardRuleRepo: forwardRuleRepo,
+		hub:             hub,
+		logger:          log,
 	}
 }
 
@@ -99,47 +109,14 @@ func (s *NodeConfigSyncService) FullSyncToNode(ctx context.Context, nodeID uint)
 		return errors.NewNotFoundError("node not found")
 	}
 
-	// Collect all referenced node SIDs from route and DNS configs
-	var referencedNodes []*node.Node
-	var allReferencedSIDs []string
-	if n.RouteConfig() != nil && n.RouteConfig().HasNodeReferences() {
-		allReferencedSIDs = append(allReferencedSIDs, n.RouteConfig().GetReferencedNodeSIDs()...)
-	}
-	if n.DnsConfig() != nil && n.DnsConfig().HasNodeReferences() {
-		allReferencedSIDs = append(allReferencedSIDs, n.DnsConfig().GetReferencedNodeSIDs()...)
-	}
-	if len(allReferencedSIDs) > 0 {
-		// Deduplicate SIDs
-		allReferencedSIDs = uniqueStrings(allReferencedSIDs)
-		referencedNodes, err = s.nodeRepo.GetBySIDs(ctx, allReferencedSIDs)
-		if err != nil {
-			s.logger.Warnw("failed to fetch referenced nodes for config sync",
-				"node_id", nodeID,
-				"referenced_sids", allReferencedSIDs,
-				"error", err,
-			)
-			// Continue without referenced nodes rather than failing
-		}
-	}
+	// Query forward rules targeting this node (for per-rule routing)
+	forwardRules := s.queryForwardRulesWithRouteConfig(ctx, nodeID)
 
-	// Server key function for referenced nodes
-	serverKeyFunc := func(refNode *node.Node) string {
-		if refNode.Protocol().IsShadowsocks() {
-			return vo.GenerateShadowsocksServerPassword(refNode.TokenHash(), refNode.EncryptionConfig().Method())
-		}
-		// For Trojan, generate password from token hash for node-to-node forwarding
-		if refNode.Protocol().IsTrojan() {
-			return vo.GenerateTrojanServerPassword(refNode.TokenHash())
-		}
-		// For AnyTLS, generate password from token hash for node-to-node forwarding
-		if refNode.Protocol().IsAnyTLS() {
-			return vo.GenerateAnyTLSServerPassword(refNode.TokenHash())
-		}
-		return ""
-	}
+	// Collect all referenced node SIDs from route, DNS, and forward rule route configs
+	referencedNodes, serverKeyFunc := s.resolveReferencedNodes(ctx, n, forwardRules)
 
 	// Convert to NodeConfigData
-	configData := dto.ToNodeConfigData(n, referencedNodes, serverKeyFunc)
+	configData := dto.ToNodeConfigData(n, referencedNodes, serverKeyFunc, forwardRules)
 
 	// Build full sync data
 	version := s.IncrementVersion()
@@ -183,6 +160,7 @@ func (s *NodeConfigSyncService) FullSyncToNode(ctx context.Context, nodeID uint)
 		"version", version,
 		"has_route", configData.Route != nil,
 		"has_dns", configData.DNS != nil,
+		"forward_rule_routes", len(configData.ForwardRuleRoutes),
 	)
 
 	return nil
@@ -219,46 +197,14 @@ func (s *NodeConfigSyncService) NotifyConfigChange(ctx context.Context, nodeID u
 		return errors.NewNotFoundError("node not found")
 	}
 
-	// Collect all referenced node SIDs from route and DNS configs
-	var referencedNodes []*node.Node
-	var allReferencedSIDs []string
-	if n.RouteConfig() != nil && n.RouteConfig().HasNodeReferences() {
-		allReferencedSIDs = append(allReferencedSIDs, n.RouteConfig().GetReferencedNodeSIDs()...)
-	}
-	if n.DnsConfig() != nil && n.DnsConfig().HasNodeReferences() {
-		allReferencedSIDs = append(allReferencedSIDs, n.DnsConfig().GetReferencedNodeSIDs()...)
-	}
-	if len(allReferencedSIDs) > 0 {
-		// Deduplicate SIDs
-		allReferencedSIDs = uniqueStrings(allReferencedSIDs)
-		referencedNodes, err = s.nodeRepo.GetBySIDs(ctx, allReferencedSIDs)
-		if err != nil {
-			s.logger.Warnw("failed to fetch referenced nodes for config change",
-				"node_id", nodeID,
-				"referenced_sids", allReferencedSIDs,
-				"error", err,
-			)
-		}
-	}
+	// Query forward rules targeting this node (for per-rule routing)
+	forwardRules := s.queryForwardRulesWithRouteConfig(ctx, nodeID)
 
-	// Server key function for referenced nodes
-	serverKeyFunc := func(refNode *node.Node) string {
-		if refNode.Protocol().IsShadowsocks() {
-			return vo.GenerateShadowsocksServerPassword(refNode.TokenHash(), refNode.EncryptionConfig().Method())
-		}
-		// For Trojan, generate password from token hash for node-to-node forwarding
-		if refNode.Protocol().IsTrojan() {
-			return vo.GenerateTrojanServerPassword(refNode.TokenHash())
-		}
-		// For AnyTLS, generate password from token hash for node-to-node forwarding
-		if refNode.Protocol().IsAnyTLS() {
-			return vo.GenerateAnyTLSServerPassword(refNode.TokenHash())
-		}
-		return ""
-	}
+	// Collect all referenced node SIDs from route, DNS, and forward rule route configs
+	referencedNodes, serverKeyFunc := s.resolveReferencedNodes(ctx, n, forwardRules)
 
 	// Convert to NodeConfigData
-	configData := dto.ToNodeConfigData(n, referencedNodes, serverKeyFunc)
+	configData := dto.ToNodeConfigData(n, referencedNodes, serverKeyFunc, forwardRules)
 
 	// Build sync data (incremental update)
 	version := s.IncrementVersion()
@@ -302,9 +248,85 @@ func (s *NodeConfigSyncService) NotifyConfigChange(ctx context.Context, nodeID u
 		"version", version,
 		"has_route", configData.Route != nil,
 		"has_dns", configData.DNS != nil,
+		"forward_rule_routes", len(configData.ForwardRuleRoutes),
 	)
 
 	return nil
+}
+
+// queryForwardRulesWithRouteConfig queries enabled forward rules targeting the node
+// and filters to only those with RouteConfig configured.
+func (s *NodeConfigSyncService) queryForwardRulesWithRouteConfig(ctx context.Context, nodeID uint) []*forward.ForwardRule {
+	if s.forwardRuleRepo == nil {
+		return nil
+	}
+
+	frs, err := s.forwardRuleRepo.ListEnabledByTargetNodeID(ctx, nodeID)
+	if err != nil {
+		s.logger.Warnw("failed to fetch forward rules for node config sync",
+			"node_id", nodeID,
+			"error", err,
+		)
+		return nil
+	}
+
+	var result []*forward.ForwardRule
+	for _, fr := range frs {
+		if fr.RouteConfig() != nil {
+			result = append(result, fr)
+		}
+	}
+	return result
+}
+
+// resolveReferencedNodes collects all referenced node SIDs from route, DNS, and
+// per-forward-rule route configs, then fetches the corresponding nodes.
+func (s *NodeConfigSyncService) resolveReferencedNodes(
+	ctx context.Context,
+	n *node.Node,
+	forwardRules []*forward.ForwardRule,
+) ([]*node.Node, func(*node.Node) string) {
+	var allReferencedSIDs []string
+	if n.RouteConfig() != nil && n.RouteConfig().HasNodeReferences() {
+		allReferencedSIDs = append(allReferencedSIDs, n.RouteConfig().GetReferencedNodeSIDs()...)
+	}
+	if n.DnsConfig() != nil && n.DnsConfig().HasNodeReferences() {
+		allReferencedSIDs = append(allReferencedSIDs, n.DnsConfig().GetReferencedNodeSIDs()...)
+	}
+	for _, fr := range forwardRules {
+		if fr.RouteConfig().HasNodeReferences() {
+			allReferencedSIDs = append(allReferencedSIDs, fr.RouteConfig().GetReferencedNodeSIDs()...)
+		}
+	}
+
+	var referencedNodes []*node.Node
+	if len(allReferencedSIDs) > 0 {
+		allReferencedSIDs = uniqueStrings(allReferencedSIDs)
+		var err error
+		referencedNodes, err = s.nodeRepo.GetBySIDs(ctx, allReferencedSIDs)
+		if err != nil {
+			s.logger.Warnw("failed to fetch referenced nodes for config sync",
+				"node_id", n.ID(),
+				"referenced_sids", allReferencedSIDs,
+				"error", err,
+			)
+		}
+	}
+
+	serverKeyFunc := func(refNode *node.Node) string {
+		if refNode.Protocol().IsShadowsocks() {
+			return vo.GenerateShadowsocksServerPassword(refNode.TokenHash(), refNode.EncryptionConfig().Method())
+		}
+		if refNode.Protocol().IsTrojan() {
+			return vo.GenerateTrojanServerPassword(refNode.TokenHash())
+		}
+		if refNode.Protocol().IsAnyTLS() {
+			return vo.GenerateAnyTLSServerPassword(refNode.TokenHash())
+		}
+		return ""
+	}
+
+	return referencedNodes, serverKeyFunc
 }
 
 // uniqueStrings returns a deduplicated copy of the input slice, preserving order.

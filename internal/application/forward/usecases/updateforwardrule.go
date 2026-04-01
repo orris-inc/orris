@@ -55,6 +55,7 @@ type UpdateForwardRuleUseCase struct {
 	subscriptionRepo  subscription.SubscriptionRepository
 	configSyncSvc     ConfigSyncNotifier
 	syncer            NodeSubscriptionSyncer
+	nodeConfigSyncer  NodeConfigChangeNotifier
 	logger            logger.Interface
 }
 
@@ -62,6 +63,12 @@ type UpdateForwardRuleUseCase struct {
 // Uses setter injection because the sync service is initialized after the use case.
 func (uc *UpdateForwardRuleUseCase) SetNodeSubscriptionSyncer(syncer NodeSubscriptionSyncer) {
 	uc.syncer = syncer
+}
+
+// SetNodeConfigSyncer sets the node config syncer for pushing route config changes to nodes.
+// Uses setter injection because the sync service is initialized after the use case.
+func (uc *UpdateForwardRuleUseCase) SetNodeConfigSyncer(syncer NodeConfigChangeNotifier) {
+	uc.nodeConfigSyncer = syncer
 }
 
 // NewUpdateForwardRuleUseCase creates a new UpdateForwardRuleUseCase.
@@ -107,6 +114,8 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 	originalAgentID := rule.AgentID()
 	originalExitAgentIDs := rule.GetAllExitAgentIDs() // Includes both single and multiple exit agents
 	originalChainAgentIDs := rule.ChainAgentIDs()
+	originalHadRouteConfig := rule.RouteConfig() != nil
+	originalTargetNodeID := rule.TargetNodeID()
 
 	// Capture affected node IDs before mutation so we can also sync old nodes
 	// when groups or target_node changes
@@ -683,6 +692,44 @@ func (uc *UpdateForwardRuleUseCase) Execute(ctx context.Context, cmd UpdateForwa
 					)
 				}
 			})
+		}
+	}
+
+	// Notify target node(s) to reload config when route config changes affect them.
+	// This covers: route added/updated/cleared, or target_node changed.
+	if rule.IsEnabled() && uc.nodeConfigSyncer != nil {
+		routeConfigChanged := cmd.Route != nil || (cmd.ClearRoute != nil && *cmd.ClearRoute)
+		targetNodeChanged := cmd.TargetNodeSID != nil
+
+		if routeConfigChanged || targetNodeChanged {
+			// Notify new target node
+			if rule.TargetNodeID() != nil {
+				nodeID := *rule.TargetNodeID()
+				goroutine.SafeGo(uc.logger, "update-rule-notify-node-config", func() {
+					if err := uc.nodeConfigSyncer.NotifyConfigChange(context.Background(), nodeID); err != nil {
+						uc.logger.Warnw("failed to notify node of forward rule route config change",
+							"rule_sid", cmd.ShortID,
+							"node_id", nodeID,
+							"error", err,
+						)
+					}
+				})
+			}
+			// Notify old target node if it changed and had route config
+			if originalTargetNodeID != nil && originalHadRouteConfig {
+				oldNodeID := *originalTargetNodeID
+				if rule.TargetNodeID() == nil || oldNodeID != *rule.TargetNodeID() {
+					goroutine.SafeGo(uc.logger, "update-rule-notify-old-node-config", func() {
+						if err := uc.nodeConfigSyncer.NotifyConfigChange(context.Background(), oldNodeID); err != nil {
+							uc.logger.Warnw("failed to notify old target node of forward rule route config change",
+								"rule_sid", cmd.ShortID,
+								"node_id", oldNodeID,
+								"error", err,
+							)
+						}
+					})
+				}
+			}
 		}
 	}
 

@@ -2,6 +2,7 @@
 package dto
 
 import (
+	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/domain/node"
 	vo "github.com/orris-inc/orris/internal/domain/node/valueobjects"
 	nodehub "github.com/orris-inc/orris/internal/shared/hubprotocol/node"
@@ -73,9 +74,10 @@ type NodeConfigData struct {
 	ServiceName       string          `json:"service_name,omitempty"`
 	SNI               string          `json:"sni,omitempty"`
 	AllowInsecure     bool            `json:"allow_insecure"`
-	Route             *RouteConfigDTO `json:"route,omitempty"`     // Routing configuration for traffic splitting
-	DNS               *DnsConfigDTO   `json:"dns,omitempty"`       // DNS configuration for DNS-based unlocking
-	Outbounds         []OutboundDTO   `json:"outbounds,omitempty"` // Outbound configs for nodes referenced in route rules
+	Route             *RouteConfigDTO       `json:"route,omitempty"`               // Routing configuration for traffic splitting
+	DNS               *DnsConfigDTO         `json:"dns,omitempty"`                 // DNS configuration for DNS-based unlocking
+	Outbounds         []OutboundDTO         `json:"outbounds,omitempty"`           // Outbound configs for nodes referenced in route rules
+	ForwardRuleRoutes []ForwardRuleRouteDTO `json:"forward_rule_routes,omitempty"` // Per-forward-rule routing configurations
 
 	// VLESS specific fields
 	Flow        string `json:"flow,omitempty"`         // VLESS flow control (xtls-rprx-vision)
@@ -114,7 +116,8 @@ type NodeConfigData struct {
 // This is used for WebSocket config sync messages to node agents.
 // referencedNodes: nodes referenced by route rules (outbound: "node_xxx"), can be nil.
 // serverKeyFunc: generates server key for each referenced node, can be nil.
-func ToNodeConfigData(n *node.Node, referencedNodes []*node.Node, serverKeyFunc func(*node.Node) string) *NodeConfigData {
+// forwardRules: forward rules targeting this node that have RouteConfig, can be nil.
+func ToNodeConfigData(n *node.Node, referencedNodes []*node.Node, serverKeyFunc func(*node.Node) string, forwardRules []*forward.ForwardRule) *NodeConfigData {
 	if n == nil {
 		return nil
 	}
@@ -296,6 +299,11 @@ func ToNodeConfigData(n *node.Node, referencedNodes []*node.Node, serverKeyFunc 
 	// Convert referenced nodes to outbounds
 	if len(referencedNodes) > 0 {
 		config.Outbounds = append(config.Outbounds, ToOutboundDTOs(referencedNodes, serverKeyFunc)...)
+	}
+
+	// Merge per-forward-rule routing configurations
+	if len(forwardRules) > 0 {
+		mergeForwardRuleRoutesCore(&config.Route, &config.Outbounds, &config.ForwardRuleRoutes, forwardRules)
 	}
 
 	return config

@@ -18,11 +18,12 @@ type EnableForwardRuleCommand struct {
 
 // EnableForwardRuleUseCase handles enabling a forward rule.
 type EnableForwardRuleUseCase struct {
-	repo          forward.Repository
-	configSyncSvc ConfigSyncNotifier
-	nodeRepo      node.NodeRepository
-	syncer        NodeSubscriptionSyncer
-	logger        logger.Interface
+	repo             forward.Repository
+	configSyncSvc    ConfigSyncNotifier
+	nodeRepo         node.NodeRepository
+	syncer           NodeSubscriptionSyncer
+	nodeConfigSyncer NodeConfigChangeNotifier
+	logger           logger.Interface
 }
 
 // NewEnableForwardRuleUseCase creates a new EnableForwardRuleUseCase.
@@ -44,6 +45,12 @@ func NewEnableForwardRuleUseCase(
 // Uses setter injection because the sync service is initialized after the use case.
 func (uc *EnableForwardRuleUseCase) SetNodeSubscriptionSyncer(syncer NodeSubscriptionSyncer) {
 	uc.syncer = syncer
+}
+
+// SetNodeConfigSyncer sets the node config syncer for pushing route config changes to nodes.
+// Uses setter injection because the sync service is initialized after the use case.
+func (uc *EnableForwardRuleUseCase) SetNodeConfigSyncer(syncer NodeConfigChangeNotifier) {
+	uc.nodeConfigSyncer = syncer
 }
 
 // Execute enables a forward rule.
@@ -122,6 +129,20 @@ func (uc *EnableForwardRuleUseCase) Execute(ctx context.Context, cmd EnableForwa
 				}
 			})
 		}
+	}
+
+	// Notify target node to reload config if the rule has per-rule routing
+	if rule.RouteConfig() != nil && rule.TargetNodeID() != nil && uc.nodeConfigSyncer != nil {
+		nodeID := *rule.TargetNodeID()
+		goroutine.SafeGo(uc.logger, "enable-rule-notify-node-config", func() {
+			if err := uc.nodeConfigSyncer.NotifyConfigChange(context.Background(), nodeID); err != nil {
+				uc.logger.Warnw("failed to notify node of forward rule route config change",
+					"rule_sid", cmd.ShortID,
+					"node_id", nodeID,
+					"error", err,
+				)
+			}
+		})
 	}
 
 	return nil

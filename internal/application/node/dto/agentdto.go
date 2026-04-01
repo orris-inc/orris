@@ -527,21 +527,27 @@ func ToNodeConfigResponse(n *node.Node, referencedNodes []*node.Node, serverKeyF
 }
 
 // mergeForwardRuleRoutes merges per-forward-rule RouteConfig into the NodeConfigResponse.
+func mergeForwardRuleRoutes(config *NodeConfigResponse, forwardRules []*forward.ForwardRule) {
+	mergeForwardRuleRoutesCore(&config.Route, &config.Outbounds, &config.ForwardRuleRoutes, forwardRules)
+}
+
+// mergeForwardRuleRoutesCore is the shared merge logic used by both NodeConfigResponse
+// and NodeConfigData. It merges per-forward-rule RouteConfig into the given route/outbounds.
 // For each forward rule with a RouteConfig:
 // 1. Route rules get inbound: [rule.SID()] for per-inbound matching
 // 2. Custom outbound tags are namespaced: {rule_sid}:custom_xxx
 // 3. Per-rule final action becomes a catch-all rule with inbound filter
 // 4. Per-rule routes are prepended before node default routes
 // 5. Custom outbounds and rule_set_entries are merged
-func mergeForwardRuleRoutes(config *NodeConfigResponse, forwardRules []*forward.ForwardRule) {
+func mergeForwardRuleRoutesCore(route **RouteConfigDTO, outbounds *[]OutboundDTO, forwardRuleRoutes *[]ForwardRuleRouteDTO, forwardRules []*forward.ForwardRule) {
 	var perRuleRouteRules []RouteRuleDTO
 	var perRuleOutbounds []OutboundDTO
-	var forwardRuleRoutes []ForwardRuleRouteDTO
+	var frRoutes []ForwardRuleRouteDTO
 	ruleSetURLs := make(map[string]string)
 
 	// Track existing rule_set entries from node config
-	if config.Route != nil {
-		for _, e := range config.Route.RuleSetEntries {
+	if *route != nil {
+		for _, e := range (*route).RuleSetEntries {
 			ruleSetURLs[e.Tag] = e.URL
 		}
 	}
@@ -557,7 +563,7 @@ func mergeForwardRuleRoutes(config *NodeConfigResponse, forwardRules []*forward.
 
 		// Convert RouteConfig to DTO for the informational field
 		routeDTO := ToRouteConfigDTO(rc)
-		forwardRuleRoutes = append(forwardRuleRoutes, ForwardRuleRouteDTO{
+		frRoutes = append(frRoutes, ForwardRuleRouteDTO{
 			RuleSID: ruleSID,
 			Route:   routeDTO,
 		})
@@ -616,10 +622,10 @@ func mergeForwardRuleRoutes(config *NodeConfigResponse, forwardRules []*forward.
 						DownloadDetour: e.DownloadDetour(),
 						UpdateInterval: e.UpdateInterval(),
 					}
-					if config.Route == nil {
-						config.Route = &RouteConfigDTO{Final: "direct"}
+					if *route == nil {
+						*route = &RouteConfigDTO{Final: "direct"}
 					}
-					config.Route.RuleSetEntries = append(config.Route.RuleSetEntries, entry)
+					(*route).RuleSetEntries = append((*route).RuleSetEntries, entry)
 				}
 			}
 		}
@@ -627,20 +633,20 @@ func mergeForwardRuleRoutes(config *NodeConfigResponse, forwardRules []*forward.
 
 	// Prepend per-rule routes before node default routes
 	if len(perRuleRouteRules) > 0 {
-		if config.Route == nil {
-			config.Route = &RouteConfigDTO{Final: "direct"}
+		if *route == nil {
+			*route = &RouteConfigDTO{Final: "direct"}
 		}
-		config.Route.Rules = append(perRuleRouteRules, config.Route.Rules...)
+		(*route).Rules = append(perRuleRouteRules, (*route).Rules...)
 	}
 
 	// Merge custom outbounds
 	if len(perRuleOutbounds) > 0 {
-		config.Outbounds = append(config.Outbounds, perRuleOutbounds...)
+		*outbounds = append(*outbounds, perRuleOutbounds...)
 	}
 
 	// Set informational field
-	if len(forwardRuleRoutes) > 0 {
-		config.ForwardRuleRoutes = forwardRuleRoutes
+	if len(frRoutes) > 0 {
+		*forwardRuleRoutes = frRoutes
 	}
 }
 

@@ -19,12 +19,13 @@ type DeleteForwardRuleCommand struct {
 
 // DeleteForwardRuleUseCase handles forward rule deletion.
 type DeleteForwardRuleUseCase struct {
-	repo          forward.Repository
-	trafficCache  cache.ForwardTrafficCache
-	configSyncSvc ConfigSyncNotifier
-	nodeRepo      node.NodeRepository
-	syncer        NodeSubscriptionSyncer
-	logger        logger.Interface
+	repo             forward.Repository
+	trafficCache     cache.ForwardTrafficCache
+	configSyncSvc    ConfigSyncNotifier
+	nodeRepo         node.NodeRepository
+	syncer           NodeSubscriptionSyncer
+	nodeConfigSyncer NodeConfigChangeNotifier
+	logger           logger.Interface
 }
 
 // NewDeleteForwardRuleUseCase creates a new DeleteForwardRuleUseCase.
@@ -50,6 +51,12 @@ func (uc *DeleteForwardRuleUseCase) SetNodeSubscriptionSyncer(syncer NodeSubscri
 	uc.syncer = syncer
 }
 
+// SetNodeConfigSyncer sets the node config syncer for pushing route config changes to nodes.
+// Uses setter injection because the sync service is initialized after the use case.
+func (uc *DeleteForwardRuleUseCase) SetNodeConfigSyncer(syncer NodeConfigChangeNotifier) {
+	uc.nodeConfigSyncer = syncer
+}
+
 // Execute deletes a forward rule.
 func (uc *DeleteForwardRuleUseCase) Execute(ctx context.Context, cmd DeleteForwardRuleCommand) error {
 	if cmd.ShortID == "" {
@@ -73,6 +80,8 @@ func (uc *DeleteForwardRuleUseCase) Execute(ctx context.Context, cmd DeleteForwa
 	ruleType := rule.RuleType().String()
 	exitAgentIDs := rule.GetAllExitAgentIDs() // Get all exit agents (single or multiple)
 	chainAgentIDs := rule.ChainAgentIDs()
+	hadRouteConfig := rule.RouteConfig() != nil
+	targetNodeID := rule.TargetNodeID()
 
 	// Collect affected node IDs before deletion (needed for subscription sync)
 	var affectedNodeIDs []uint
@@ -164,6 +173,20 @@ func (uc *DeleteForwardRuleUseCase) Execute(ctx context.Context, cmd DeleteForwa
 				}
 			})
 		}
+	}
+
+	// Notify target node to reload config if the rule had per-rule routing
+	if wasEnabled && hadRouteConfig && targetNodeID != nil && uc.nodeConfigSyncer != nil {
+		nid := *targetNodeID
+		goroutine.SafeGo(uc.logger, "delete-rule-notify-node-config", func() {
+			if err := uc.nodeConfigSyncer.NotifyConfigChange(context.Background(), nid); err != nil {
+				uc.logger.Warnw("failed to notify node of forward rule route config removal",
+					"rule_sid", ruleShortID,
+					"node_id", nid,
+					"error", err,
+				)
+			}
+		})
 	}
 
 	return nil

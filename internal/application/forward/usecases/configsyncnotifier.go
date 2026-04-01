@@ -43,3 +43,10 @@ type AgentConfigChangeNotifier interface {
 type NodeSubscriptionSyncer interface {
 	SyncSubscriptionsToNode(ctx context.Context, nodeID uint) error
 }
+
+// NodeConfigChangeNotifier defines the interface for notifying node agents
+// about configuration changes. This is used when forward rule route configs
+// change, so the node agent can reload its routing configuration.
+type NodeConfigChangeNotifier interface {
+	NotifyConfigChange(ctx context.Context, nodeID uint) error
+}
