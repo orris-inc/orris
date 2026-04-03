@@ -281,6 +281,15 @@ func (uc *UpdatePlanUseCase) resetSubscriptionUsageForPlan(
 
 	resetCount := 0
 	for _, sub := range subs {
+		// Lifetime subscriptions are exempt from automatic resets triggered by plan mode changes.
+		// Their traffic period always spans the full subscription lifetime and is never
+		// subject to calendar-month boundaries, so resetting here would cause unintended data loss.
+		if sub.BillingCycle() != nil && sub.BillingCycle().IsLifetime() {
+			uc.logger.Infow("skipping lifetime subscription during traffic reset mode migration",
+				"subscription_id", sub.ID())
+			continue
+		}
+
 		if err := sub.ResetUsage(); err != nil {
 			uc.logger.Warnw("failed to reset subscription usage after traffic reset mode change",
 				"subscription_id", sub.ID(), "error", err)

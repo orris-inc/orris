@@ -45,10 +45,23 @@ func GetTrafficResetMode(plan *Plan) TrafficResetMode {
 // For billing_cycle: uses the subscription's CurrentPeriodStart/CurrentPeriodEnd.
 // Falls back to calendar_month if sub is nil.
 //
+// Special case: lifetime subscriptions always use billing_cycle behavior regardless of the
+// plan's reset mode, because their billing period spans their entire subscription lifetime
+// and should never be automatically reset by calendar boundaries.
+//
 // In both modes, if the subscription's CurrentPeriodStart is after the resolved period start
 // (e.g. after a manual usage reset), it is used as a floor to exclude pre-reset traffic.
 func ResolveTrafficPeriod(plan *Plan, sub *Subscription) TrafficPeriod {
 	mode := GetTrafficResetMode(plan)
+
+	// Lifetime subscriptions always accumulate traffic from their start date.
+	// They must not be subject to calendar-month resets regardless of the plan's reset mode.
+	if sub != nil && sub.BillingCycle() != nil && sub.BillingCycle().IsLifetime() {
+		return TrafficPeriod{
+			Start: sub.CurrentPeriodStart(),
+			End:   sub.CurrentPeriodEnd(),
+		}
+	}
 
 	if mode == TrafficResetBillingCycle && sub != nil {
 		return TrafficPeriod{
