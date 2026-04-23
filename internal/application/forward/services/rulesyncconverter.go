@@ -209,6 +209,25 @@ const (
 	defaultHealthyThreshold   uint32 = 1 // Number of successes before marking healthy
 )
 
+// resolveAgentAddress returns the agent's configured address for the given
+// preference, falling back to the transport-layer observed address recorded
+// by the hub when no address is configured. Returns empty string only when
+// both the configured and observed addresses are unavailable.
+func (c *RuleSyncConverter) resolveAgentAddress(agent *forward.ForwardAgent, pref vo.AddressPreference) string {
+	if addr := agent.GetAddressForPreference(pref); addr != "" {
+		return addr
+	}
+	observed := c.hub.GetAgentObservedAddress(agent.ID())
+	if observed != "" {
+		c.logger.Warnw("forward agent has no configured public/tunnel address; falling back to observed connection address",
+			"agent_id", agent.ID(),
+			"agent_sid", agent.SID(),
+			"observed_address", observed,
+		)
+	}
+	return observed
+}
+
 // populateExitAgentsInfo populates multiple exit agents with connection info for load balancing.
 func (c *RuleSyncConverter) populateExitAgentsInfo(
 	ctx context.Context,
@@ -249,7 +268,7 @@ func (c *RuleSyncConverter) populateExitAgentsInfo(
 		exitAgentData := dto.ExitAgentSyncData{
 			AgentID: agent.SID(),
 			Weight:  aw.Weight(),
-			Address: agent.GetAddressForPreference(addrPref),
+			Address: c.resolveAgentAddress(agent, addrPref),
 			Online:  c.hub.IsAgentOnline(aw.AgentID()),
 		}
 
@@ -435,7 +454,7 @@ func (c *RuleSyncConverter) populateNextHopInfo(
 	}
 
 	data.NextHopAgentID = nextAgent.SID()
-	data.NextHopAddress = nextAgent.GetAddressForPreference(addrPref)
+	data.NextHopAddress = c.resolveAgentAddress(nextAgent, addrPref)
 
 	// Check if outbound uses tunnel or direct based on hop mode
 	outboundNeedsTunnel := hopMode == "tunnel" || (hopMode == "boundary" && data.OutboundMode == "tunnel")
@@ -574,7 +593,7 @@ func (c *RuleSyncConverter) populateDirectChainNextHop(
 	}
 
 	data.NextHopAgentID = nextAgent.SID()
-	data.NextHopAddress = nextAgent.GetAddressForPreference(addrPref)
+	data.NextHopAddress = c.resolveAgentAddress(nextAgent, addrPref)
 	data.NextHopPort = nextHopPort
 
 	// Generate connection token for next hop authentication

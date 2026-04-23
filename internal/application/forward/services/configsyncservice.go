@@ -28,6 +28,11 @@ type ConfigSyncService struct {
 type SyncHub interface {
 	IsAgentOnline(agentID uint) bool
 	SendMessageToAgent(agentID uint, msg *dto.HubMessage) error
+	// GetAgentObservedAddress returns the transport-layer remote address
+	// recorded when the agent connected, or empty string if not connected.
+	// Used as a fallback for next-hop address when the agent has no configured
+	// public/tunnel address.
+	GetAgentObservedAddress(agentID uint) string
 }
 
 // NewConfigSyncService creates a new ConfigSyncService.

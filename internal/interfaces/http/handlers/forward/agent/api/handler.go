@@ -41,6 +41,7 @@ func NewHandler(
 	statusQuerier usecases.AgentStatusQuerier,
 	tokenSigningSecret string,
 	trafficRecorder adapters.ForwardTrafficRecorder,
+	addressResolver dto.AgentAddressResolver,
 	logger logger.Interface,
 ) *Handler {
 	agentTokenService := auth.NewAgentTokenService(tokenSigningSecret)
@@ -51,6 +52,7 @@ func NewHandler(
 		nodeRepo,
 		statusQuerier,
 		agentTokenService,
+		addressResolver,
 		logger,
 	)
 

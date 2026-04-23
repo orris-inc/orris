@@ -75,12 +75,17 @@ type AgentHub struct {
 
 // AgentHubConn represents a forward agent WebSocket connection.
 type AgentHubConn struct {
-	AgentID     uint
-	Conn        *websocket.Conn
-	Send        chan *dto.HubMessage
-	LastSeen    time.Time
-	ConnectedAt time.Time
-	closed      atomic.Bool // Indicates if the connection has been closed
+	AgentID uint
+	Conn    *websocket.Conn
+	Send    chan *dto.HubMessage
+	// ObservedAddress is the remote address observed when the agent connected
+	// (respects proxy headers via gin.Context.ClientIP()). Used as a best-effort
+	// fallback for next-hop address resolution when the agent has no configured
+	// public/tunnel address.
+	ObservedAddress string
+	LastSeen        time.Time
+	ConnectedAt     time.Time
+	closed          atomic.Bool // Indicates if the connection has been closed
 }
 
 // TrySend attempts to send a message to the agent.
@@ -328,7 +333,9 @@ func (h *AgentHub) SetOnAgentOffline(fn func(agentID uint)) {
 }
 
 // RegisterAgent registers a forward agent WebSocket connection.
-func (h *AgentHub) RegisterAgent(agentID uint, conn *websocket.Conn) *AgentHubConn {
+// observedAddress is the remote IP seen at the transport layer (respecting
+// trusted proxy headers) and is used as a fallback for next-hop resolution.
+func (h *AgentHub) RegisterAgent(agentID uint, conn *websocket.Conn, observedAddress string) *AgentHubConn {
 	h.agentsMu.Lock()
 	defer h.agentsMu.Unlock()
 
@@ -339,11 +346,12 @@ func (h *AgentHub) RegisterAgent(agentID uint, conn *websocket.Conn) *AgentHubCo
 	}
 
 	agentConn := &AgentHubConn{
-		AgentID:     agentID,
-		Conn:        conn,
-		Send:        make(chan *dto.HubMessage, 256),
-		LastSeen:    biztime.NowUTC(),
-		ConnectedAt: biztime.NowUTC(),
+		AgentID:         agentID,
+		Conn:            conn,
+		Send:            make(chan *dto.HubMessage, 256),
+		ObservedAddress: observedAddress,
+		LastSeen:        biztime.NowUTC(),
+		ConnectedAt:     biztime.NowUTC(),
 	}
 	h.agents[agentID] = agentConn
 
@@ -439,6 +447,19 @@ func (h *AgentHub) IsAgentOnline(agentID uint) bool {
 	defer h.agentsMu.RUnlock()
 	_, ok := h.agents[agentID]
 	return ok
+}
+
+// GetAgentObservedAddress returns the remote address recorded when the agent
+// connected via WebSocket. Returns empty string if the agent is not currently
+// connected. Intended as a fallback for next-hop address resolution when the
+// agent has no configured public/tunnel address.
+func (h *AgentHub) GetAgentObservedAddress(agentID uint) string {
+	h.agentsMu.RLock()
+	defer h.agentsMu.RUnlock()
+	if conn, ok := h.agents[agentID]; ok {
+		return conn.ObservedAddress
+	}
+	return ""
 }
 
 // GetOnlineAgents returns list of online agent IDs.

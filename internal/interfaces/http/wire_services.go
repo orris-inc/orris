@@ -848,20 +848,22 @@ func (c *Container) initForward() {
 	// Initialize forward traffic recorder adapter
 	forwardTrafficRecorder := adapters.NewForwardTrafficRecorderAdapter(c.hourlyTrafficCache, log)
 
+	// Initialize forward agent token middleware
+	c.forwardAgentTokenMiddleware = middleware.NewForwardAgentTokenMiddleware(ucs.validateForwardAgentTokenUC, log)
+
+	// Initialize agent hub for forward agent WebSocket connections.
+	// Constructed before forwardAgentAPIHandler so the handler can use the hub
+	// as an AgentAddressResolver for next-hop fallback resolution.
+	c.agentHub = services.NewAgentHub(log, &services.AgentHubConfig{
+		NodeStatusTimeoutMs: 5000,
+	})
+
 	// Initialize forward agent API handler
 	hdlrs.forwardAgentAPIHandler = forwardAgentAPIHandlers.NewHandler(
 		repos.forwardRuleRepo, repos.forwardAgentRepo, repos.nodeRepoImpl,
 		ucs.reportAgentStatusUC, ucs.reportRuleSyncStatusUC, forwardAgentStatusAdapter,
-		cfg.Forward.TokenSigningSecret, forwardTrafficRecorder, log,
+		cfg.Forward.TokenSigningSecret, forwardTrafficRecorder, c.agentHub, log,
 	)
-
-	// Initialize forward agent token middleware
-	c.forwardAgentTokenMiddleware = middleware.NewForwardAgentTokenMiddleware(ucs.validateForwardAgentTokenUC, log)
-
-	// Initialize agent hub for forward agent WebSocket connections
-	c.agentHub = services.NewAgentHub(log, &services.AgentHubConfig{
-		NodeStatusTimeoutMs: 5000,
-	})
 
 	// Initialize Hub Event Bus for cross-instance command relay
 	c.hubEventBus = pubsub.NewRedisHubEventBus(c.redis, log)

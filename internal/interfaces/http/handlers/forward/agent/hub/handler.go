@@ -80,7 +80,7 @@ func (h *Handler) ForwardAgentWS(c *gin.Context) {
 		return
 	}
 
-	agentConn := h.hub.RegisterAgent(agentID, conn)
+	agentConn := h.hub.RegisterAgent(agentID, conn, c.ClientIP())
 
 	h.logger.Infow("forward agent hub websocket connected",
 		"agent_id", agentID,

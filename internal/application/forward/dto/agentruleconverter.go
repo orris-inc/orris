@@ -44,17 +44,27 @@ type TokenGenerator interface {
 	Generate(shortID string) (plainToken string, tokenHash string)
 }
 
+// AgentAddressResolver resolves the transport-layer remote address observed
+// by the hub when the agent connected. Used as a fallback for next-hop
+// address resolution when the agent has no configured public/tunnel address.
+// Implementations must return empty string if the agent is not currently
+// connected or the observed address is unknown.
+type AgentAddressResolver interface {
+	GetAgentObservedAddress(agentID uint) string
+}
+
 // AgentRuleConverter converts forward rules to DTOs for agent API responses.
 // It handles role-specific information population including:
 // - Node address resolution based on IP version preference
 // - Next hop information for chain rules
 // - Agent status (WS/TLS ports) for tunnel connections
 type AgentRuleConverter struct {
-	agentRepo     AgentInfoProvider
-	nodeRepo      NodeInfoProvider
-	statusQuerier AgentStatusProvider
-	tokenService  TokenGenerator
-	logger        logger.Interface
+	agentRepo       AgentInfoProvider
+	nodeRepo        NodeInfoProvider
+	statusQuerier   AgentStatusProvider
+	tokenService    TokenGenerator
+	addressResolver AgentAddressResolver
+	logger          logger.Interface
 }
 
 // SetNodeRepo sets the node repository for circular dependency handling.
@@ -69,15 +79,38 @@ func NewAgentRuleConverter(
 	nodeRepo NodeInfoProvider,
 	statusQuerier AgentStatusProvider,
 	tokenService TokenGenerator,
+	addressResolver AgentAddressResolver,
 	logger logger.Interface,
 ) *AgentRuleConverter {
 	return &AgentRuleConverter{
-		agentRepo:     agentRepo,
-		nodeRepo:      nodeRepo,
-		statusQuerier: statusQuerier,
-		tokenService:  tokenService,
-		logger:        logger,
+		agentRepo:       agentRepo,
+		nodeRepo:        nodeRepo,
+		statusQuerier:   statusQuerier,
+		tokenService:    tokenService,
+		addressResolver: addressResolver,
+		logger:          logger,
 	}
+}
+
+// resolveAgentAddress returns the agent's configured address for the given
+// preference, falling back to the hub-observed connection address when no
+// address is configured. Returns empty string only when both are unavailable.
+func (c *AgentRuleConverter) resolveAgentAddress(agent *forward.ForwardAgent, pref vo.AddressPreference) string {
+	if addr := agent.GetAddressForPreference(pref); addr != "" {
+		return addr
+	}
+	if c.addressResolver == nil {
+		return ""
+	}
+	observed := c.addressResolver.GetAgentObservedAddress(agent.ID())
+	if observed != "" {
+		c.logger.Warnw("forward agent has no configured public/tunnel address; falling back to observed connection address",
+			"agent_id", agent.ID(),
+			"agent_sid", agent.SID(),
+			"observed_address", observed,
+		)
+	}
+	return observed
 }
 
 // ConvertBatch converts multiple rules for the same agent.
@@ -309,7 +342,7 @@ func (c *AgentRuleConverter) populateEntryNextHopInfo(ctx context.Context, rule 
 	}
 
 	ruleDTO.NextHopAgentID = exitAgent.SID()
-	ruleDTO.NextHopAddress = exitAgent.GetAddressForPreference(addrPref)
+	ruleDTO.NextHopAddress = c.resolveAgentAddress(exitAgent, addrPref)
 
 	// Get tunnel ports from cached agent status
 	exitStatus, err := c.statusQuerier.GetStatus(ctx, exitAgentID)
@@ -411,7 +444,7 @@ func (c *AgentRuleConverter) populateChainNextHopInfo(ctx context.Context, rule 
 	}
 
 	ruleDTO.NextHopAgentID = nextAgent.SID()
-	ruleDTO.NextHopAddress = nextAgent.GetAddressForPreference(addrPref)
+	ruleDTO.NextHopAddress = c.resolveAgentAddress(nextAgent, addrPref)
 
 	// Check if outbound uses tunnel or direct based on hop mode
 	outboundNeedsTunnel := hopMode == "tunnel" || (hopMode == "boundary" && ruleDTO.OutboundMode == "tunnel")
@@ -527,7 +560,7 @@ func (c *AgentRuleConverter) populateDirectChainNextHopInfo(ctx context.Context,
 	}
 
 	ruleDTO.NextHopAgentID = nextAgent.SID()
-	ruleDTO.NextHopAddress = nextAgent.GetAddressForPreference(addrPref)
+	ruleDTO.NextHopAddress = c.resolveAgentAddress(nextAgent, addrPref)
 	ruleDTO.NextHopPort = nextHopPort
 
 	// Generate connection token for next hop authentication
