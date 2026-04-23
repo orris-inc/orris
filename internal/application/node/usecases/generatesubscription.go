@@ -11,6 +11,7 @@ import (
 
 	"github.com/orris-inc/orris/internal/domain/node/valueobjects"
 	"github.com/orris-inc/orris/internal/domain/subscription"
+	subvo "github.com/orris-inc/orris/internal/domain/subscription/valueobjects"
 	"github.com/orris-inc/orris/internal/infrastructure/cache"
 	"github.com/orris-inc/orris/internal/infrastructure/config"
 	"github.com/orris-inc/orris/internal/infrastructure/template"
@@ -47,8 +48,16 @@ type SubscriptionValidationResult struct {
 	EndDate               time.Time
 	CurrentPeriodStart    time.Time
 	CurrentPeriodEnd      time.Time
+	BillingCycle          *string // Subscription's selected billing cycle (nil for legacy rows)
 	TrafficLimitOverride  *uint64 // Override plan traffic limit (nil = use plan default, 0 = unlimited)
 	TrafficUsedAdjustment int64   // Adjustment to actual traffic usage
+}
+
+// IsLifetime reports whether the subscription uses the lifetime billing cycle.
+// Lifetime subscriptions always accumulate traffic from their start date and must
+// not be subject to calendar-month resets regardless of the plan's reset mode.
+func (r *SubscriptionValidationResult) IsLifetime() bool {
+	return r != nil && r.BillingCycle != nil && *r.BillingCycle == string(subvo.BillingCycleLifetime)
 }
 
 type SubscriptionTokenValidator interface {
@@ -379,16 +388,19 @@ func (uc *GenerateSubscriptionUseCase) buildUserInfo(ctx context.Context, valida
 
 // calculatePeriodTraffic calculates upload and download traffic for the current traffic period.
 // Uses the plan's traffic_reset_mode to determine period boundaries:
-// - calendar_month: business timezone month boundaries (default, backward compatible)
+// - lifetime subscriptions: always the full subscription period, regardless of plan mode
 // - billing_cycle: subscription's CurrentPeriodStart/CurrentPeriodEnd
+// - calendar_month: business timezone month boundaries (default, backward compatible)
+// Mirrors the domain's subscription.ResolveTrafficPeriod so the
+// Subscription-Userinfo header stays consistent with quota/dashboard views.
 // Uses Redis for recent data (last 24h) and MySQL stats for historical data.
 func (uc *GenerateSubscriptionUseCase) calculatePeriodTraffic(ctx context.Context, validation *SubscriptionValidationResult, plan *subscription.Plan) (upload, download uint64) {
 	now := biztime.NowUTC()
 
-	// Determine period based on plan's traffic reset mode
+	// Determine period based on billing cycle and plan's traffic reset mode.
 	var periodStart, periodEnd time.Time
 	mode := subscription.GetTrafficResetMode(plan)
-	if mode == subscription.TrafficResetBillingCycle {
+	if validation.IsLifetime() || mode == subscription.TrafficResetBillingCycle {
 		periodStart = validation.CurrentPeriodStart
 		periodEnd = validation.CurrentPeriodEnd
 	} else {

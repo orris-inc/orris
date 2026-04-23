@@ -116,6 +116,7 @@ func (v *SubscriptionTokenValidator) ValidateAndGetSubscription(ctx context.Cont
 		EndDate:               subscriptionModel.EndDate,
 		CurrentPeriodStart:    subscriptionModel.CurrentPeriodStart,
 		CurrentPeriodEnd:      subscriptionModel.CurrentPeriodEnd,
+		BillingCycle:          subscriptionModel.BillingCycle,
 		TrafficLimitOverride:  subscriptionModel.TrafficLimitOverride,
 		TrafficUsedAdjustment: subscriptionModel.TrafficUsedAdjustment,
 	}, nil
