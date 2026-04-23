@@ -186,8 +186,9 @@ func (uc *UpdateNodeUseCase) Execute(ctx context.Context, cmd UpdateNodeCommand)
 	if cmd.AgentPort != nil {
 		newPort = int(*cmd.AgentPort)
 	}
-	// Only check if address or port actually changed
-	if newAddress != existingNode.ServerAddress().Value() || newPort != int(existingNode.AgentPort()) {
+	// Only check when address is non-empty and address or port actually changed.
+	// An empty address is treated as a placeholder and must not participate in (address, port) uniqueness.
+	if newAddress != "" && (newAddress != existingNode.ServerAddress().Value() || newPort != int(existingNode.AgentPort())) {
 		exists, err := uc.nodeRepo.ExistsByAddressExcluding(ctx, newAddress, newPort, existingNode.ID())
 		if err != nil {
 			uc.logger.Errorw("failed to check address uniqueness", "error", err, "address", newAddress, "port", newPort)
