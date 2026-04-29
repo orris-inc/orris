@@ -84,7 +84,7 @@ func (m *BotServiceManager) Start(ctx context.Context) error {
 	m.logger.Infow("starting telegram bot in webhook mode",
 		"webhook_url", config.WebhookURL,
 	)
-	return m.startWebhookMode()
+	return m.startWebhookMode(ctx)
 }
 
 // startPollingMode starts the bot in polling mode
@@ -109,10 +109,24 @@ func (m *BotServiceManager) startPollingMode(ctx context.Context) error {
 	return nil
 }
 
-// startWebhookMode sets up webhook for the bot
-func (m *BotServiceManager) startWebhookMode() error {
-	if err := m.botService.SetWebhook(m.currentConfig.WebhookURL); err != nil {
-		m.logger.Errorw("failed to set webhook", "error", err)
+// startWebhookMode registers the webhook with Telegram and verifies the
+// registration stuck. If registration or verification fails, inbound updates
+// would otherwise be silently lost (Telegram has no webhook to push to, and
+// polling is not running), so we fall back to polling when an update handler
+// is available.
+func (m *BotServiceManager) startWebhookMode(ctx context.Context) error {
+	if err := m.registerAndVerifyWebhook(); err != nil {
+		if m.updateHandler != nil {
+			m.logger.Errorw("webhook setup failed; falling back to polling mode so inbound updates are not lost",
+				"webhook_url", m.currentConfig.WebhookURL,
+				"error", err,
+			)
+			return m.startPollingMode(ctx)
+		}
+		m.logger.Errorw("webhook setup failed and no update handler is configured; bot cannot receive updates until the webhook URL is corrected",
+			"webhook_url", m.currentConfig.WebhookURL,
+			"error", err,
+		)
 		return err
 	}
 
@@ -123,6 +137,24 @@ func (m *BotServiceManager) startWebhookMode() error {
 	m.logger.Infow("telegram bot webhook configured successfully",
 		"webhook_url", m.currentConfig.WebhookURL,
 	)
+	return nil
+}
+
+// registerAndVerifyWebhook calls setWebhook and then reads back getWebhookInfo
+// to confirm Telegram actually accepted and stored the URL. A successful
+// setWebhook response alone is not sufficient: the URL can end up unset if a
+// later DeleteWebhook races in, or if an intermediary rewrites the request.
+func (m *BotServiceManager) registerAndVerifyWebhook() error {
+	if err := m.botService.SetWebhook(m.currentConfig.WebhookURL); err != nil {
+		return fmt.Errorf("set webhook: %w", err)
+	}
+	registered, err := m.botService.GetWebhookInfo()
+	if err != nil {
+		return fmt.Errorf("verify webhook registration: %w", err)
+	}
+	if registered != m.currentConfig.WebhookURL {
+		return fmt.Errorf("webhook URL mismatch after setWebhook: registered=%q expected=%q", registered, m.currentConfig.WebhookURL)
+	}
 	return nil
 }
 

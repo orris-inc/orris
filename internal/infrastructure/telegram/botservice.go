@@ -543,6 +543,46 @@ func (s *BotService) GetBotUsername() string {
 	return s.botUsername
 }
 
+// getWebhookInfoResponse represents the response from getWebhookInfo API.
+// We only extract the URL field; the full response has more diagnostic fields
+// (pending_update_count, last_error_message, etc.) that we do not currently need.
+type getWebhookInfoResponse struct {
+	OK     bool `json:"ok"`
+	Result struct {
+		URL string `json:"url"`
+	} `json:"result"`
+	Description string `json:"description,omitempty"`
+}
+
+// GetWebhookInfo returns the webhook URL that Telegram currently has registered
+// for this bot, or empty string if no webhook is set. Used to verify that a
+// SetWebhook call took effect and to detect drift between our config and
+// Telegram's view.
+func (s *BotService) GetWebhookInfo() (string, error) {
+	apiURL := fmt.Sprintf("%s/getWebhookInfo", s.baseURL)
+	req, err := http.NewRequest(http.MethodGet, apiURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var result getWebhookInfoResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	if !result.OK {
+		return "", fmt.Errorf("telegram API error: %s", result.Description)
+	}
+
+	return result.Result.URL, nil
+}
+
 // GetBotLink returns the Telegram bot link (https://t.me/username)
 func (s *BotService) GetBotLink() string {
 	if s.botUsername == "" {
