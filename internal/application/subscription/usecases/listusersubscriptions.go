@@ -30,10 +30,10 @@ type ListUserSubscriptionsQuery struct {
 }
 
 type ListUserSubscriptionsResult struct {
-	Subscriptions []*dto.SubscriptionDTO      `json:"subscriptions"`
-	Total         int64                       `json:"total"`
-	Page          int                         `json:"page"`
-	PageSize      int                         `json:"page_size"`
+	Subscriptions []*dto.SubscriptionDTO        `json:"subscriptions"`
+	Total         int64                         `json:"total"`
+	Page          int                           `json:"page"`
+	PageSize      int                           `json:"page_size"`
 	StatusCounts  *dto.SubscriptionStatusCounts `json:"status_counts,omitempty"` // Present when IncludeCounts is true
 }
 
@@ -179,13 +179,18 @@ func (uc *ListUserSubscriptionsUseCase) Execute(ctx context.Context, query ListU
 		if count, ok := onlineCounts[sub.ID()]; ok {
 			opts = append(opts, dto.WithOnlineDeviceCount(count))
 		}
-		// Set data usage from QuotaService
+		// Set data usage and traffic cycle window from QuotaService so the
+		// frontend doesn't need a separate traffic-stats request and can
+		// label figures with the cycle window that was actually aggregated.
 		if uc.quotaService != nil && plan != nil {
 			quota, err := uc.quotaService.GetSubscriptionQuotaPreloaded(ctx, sub, plan)
 			if err != nil {
 				uc.logger.Warnw("failed to get subscription quota", "error", err, "subscription_id", sub.ID())
 			} else if quota != nil {
-				opts = append(opts, dto.WithDataUsage(quota.UsedBytes, quota.LimitBytes))
+				opts = append(opts,
+					dto.WithDataUsageBreakdown(quota.UsedBytes, quota.UploadBytes, quota.DownloadBytes, quota.LimitBytes),
+					dto.WithTrafficCycle(quota.PeriodStart, quota.PeriodEnd),
+				)
 			}
 		}
 

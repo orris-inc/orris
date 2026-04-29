@@ -14,14 +14,22 @@ import (
 )
 
 // QuotaCheckResult represents the quota usage status for a subscription.
+//
+// PeriodStart/PeriodEnd describe the *traffic cycle* the usage is aggregated
+// over (resolved via subscription.ResolveTrafficPeriod). For calendar_month
+// reset mode this is the business-timezone calendar month, NOT the subscription's
+// billing period; callers must use these dates when displaying or persisting
+// the matching usage figures, not sub.CurrentPeriodStart/End.
 type QuotaCheckResult struct {
 	SubscriptionID  uint      // Internal subscription ID
 	SubscriptionSID string    // Stripe-style subscription ID
 	PlanType        string    // Plan type (node, forward, hybrid)
-	UsedBytes       uint64    // Total traffic used in current period
+	UsedBytes       uint64    // Total traffic used in current period (= UploadBytes + DownloadBytes after adjustment)
+	UploadBytes     uint64    // Upload traffic in current period (raw, no adjustment)
+	DownloadBytes   uint64    // Download traffic in current period (raw, no adjustment)
 	LimitBytes      uint64    // Traffic limit (0 = unlimited)
-	PeriodStart     time.Time // Current billing period start
-	PeriodEnd       time.Time // Current billing period end
+	PeriodStart     time.Time // Current traffic cycle start (calendar_month or billing_cycle)
+	PeriodEnd       time.Time // Current traffic cycle end
 	IsExceeded      bool      // Whether quota is exceeded
 	RemainingBytes  uint64    // Remaining traffic (0 if exceeded or unlimited)
 }
@@ -284,8 +292,8 @@ func (s *QuotaServiceImpl) buildQuotaResult(
 	// - Hybrid plan: count all resource types (node + forward_rule)
 	resourceType := s.getResourceTypeForPlan(plan.PlanType())
 
-	// Calculate period usage
-	usedBytes, err := s.calculatePeriodUsage(
+	// Calculate period usage (with upload/download breakdown)
+	totalBytes, uploadBytes, downloadBytes, err := s.calculatePeriodUsage(
 		ctx,
 		[]uint{sub.ID()},
 		resourceType,
@@ -302,7 +310,9 @@ func (s *QuotaServiceImpl) buildQuotaResult(
 		return nil, err
 	}
 
-	// Apply traffic used adjustment
+	// Apply traffic used adjustment to the aggregate total only;
+	// upload/download breakdown remains the raw observed split.
+	usedBytes := totalBytes
 	if adj := sub.TrafficUsedAdjustment(); adj != 0 {
 		adjusted := int64(usedBytes) + adj
 		if adjusted < 0 {
@@ -331,6 +341,8 @@ func (s *QuotaServiceImpl) buildQuotaResult(
 		SubscriptionSID: sub.SID(),
 		PlanType:        plan.PlanType().String(),
 		UsedBytes:       usedBytes,
+		UploadBytes:     uploadBytes,
+		DownloadBytes:   downloadBytes,
 		LimitBytes:      limitBytes,
 		PeriodStart:     periodStart,
 		PeriodEnd:       periodEnd,
@@ -369,7 +381,7 @@ func (s *QuotaServiceImpl) GetCurrentPeriodUsage(
 	periodEnd time.Time,
 ) (int64, error) {
 	// Aggregate all resource types (nil = no filter)
-	usage, err := s.calculatePeriodUsage(ctx, []uint{subscriptionID}, nil, periodStart, periodEnd)
+	usage, _, _, err := s.calculatePeriodUsage(ctx, []uint{subscriptionID}, nil, periodStart, periodEnd)
 	if err != nil {
 		return 0, err
 	}
@@ -380,22 +392,27 @@ func (s *QuotaServiceImpl) GetCurrentPeriodUsage(
 	return int64(usage), nil
 }
 
-// calculatePeriodUsage calculates total usage for subscriptions within a billing period.
+// calculatePeriodUsage calculates total/upload/download usage for subscriptions
+// within a traffic cycle.
 // Uses Redis HourlyTrafficCache for recent data (last 24h) and MySQL subscription_usage_stats
 // for historical data. This approach provides real-time accuracy for recent traffic while
 // efficiently querying pre-aggregated data for historical periods.
 //
 // resourceType: nil = aggregate all resource types (for Hybrid plans),
 // non-nil = filter by specific resource type (for Node/Forward plans).
+//
+// Returns (total, upload, download, err). total == upload + download under
+// normal conditions; if either data source partially fails the returned values
+// reflect what was successfully fetched.
 func (s *QuotaServiceImpl) calculatePeriodUsage(
 	ctx context.Context,
 	subscriptionIDs []uint,
 	resourceType *string,
 	periodStart time.Time,
 	periodEnd time.Time,
-) (uint64, error) {
+) (uint64, uint64, uint64, error) {
 	if len(subscriptionIDs) == 0 {
-		return 0, nil
+		return 0, 0, 0, nil
 	}
 
 	now := biztime.NowUTC()
@@ -409,7 +426,7 @@ func (s *QuotaServiceImpl) calculatePeriodUsage(
 	// MySQL: complete days before yesterday; Redis: yesterday + today (within 48h TTL)
 	recentBoundary := biztime.StartOfDayUTC(now.AddDate(0, 0, -1))
 
-	var total uint64
+	var total, upload, download uint64
 	var redisErr, mysqlErr error
 
 	// Determine time boundaries for recent data (yesterday + today from Redis)
@@ -448,6 +465,8 @@ func (s *QuotaServiceImpl) calculatePeriodUsage(
 		} else {
 			for _, t := range recentTraffic {
 				total += t.Total
+				upload += t.Upload
+				download += t.Download
 			}
 		}
 	}
@@ -475,13 +494,15 @@ func (s *QuotaServiceImpl) calculatePeriodUsage(
 			// Continue with Redis data even if MySQL stats fail
 		} else if historicalTraffic != nil {
 			total += historicalTraffic.Total
+			upload += historicalTraffic.Upload
+			download += historicalTraffic.Download
 		}
 	}
 
 	// If both data sources failed, return error to prevent false zero-usage
 	if redisErr != nil && mysqlErr != nil {
-		return 0, fmt.Errorf("both traffic data sources failed: redis=%w, mysql=%v", redisErr, mysqlErr)
+		return 0, 0, 0, fmt.Errorf("both traffic data sources failed: redis=%w, mysql=%v", redisErr, mysqlErr)
 	}
 
-	return total, nil
+	return total, upload, download, nil
 }

@@ -63,11 +63,14 @@ func (s *QuotaCacheSyncService) SyncQuotaFromSubscription(ctx context.Context, s
 		}
 	}
 
-	// Build cached quota object
+	// Cache the *traffic cycle* (not the billing period) so consumers like the
+	// node hub real-time enforcer query usage over the correct window. For
+	// calendar_month plans the traffic cycle differs from the billing period.
+	cycle := subscription.ResolveTrafficPeriod(plan, sub)
 	quota := &cache.CachedQuota{
 		Limit:       int64(trafficLimit),
-		PeriodStart: sub.CurrentPeriodStart(),
-		PeriodEnd:   sub.CurrentPeriodEnd(),
+		PeriodStart: cycle.Start,
+		PeriodEnd:   cycle.End,
 		PlanType:    plan.PlanType().String(),
 		Suspended:   false, // Only set to false when syncing (active subscription)
 	}
@@ -130,11 +133,12 @@ func (s *QuotaCacheSyncService) LoadQuotaByID(ctx context.Context, subscriptionI
 		}
 	}
 
-	// Build cached quota object
+	// Cache the *traffic cycle* (see SyncQuotaFromSubscription for rationale).
+	cycle := subscription.ResolveTrafficPeriod(plan, sub)
 	quota := &cache.CachedQuota{
 		Limit:       int64(trafficLimit),
-		PeriodStart: sub.CurrentPeriodStart(),
-		PeriodEnd:   sub.CurrentPeriodEnd(),
+		PeriodStart: cycle.Start,
+		PeriodEnd:   cycle.End,
 		PlanType:    plan.PlanType().String(),
 		Suspended:   false,
 	}

@@ -15,13 +15,13 @@ type GetSubscriptionQuery struct {
 }
 
 type GetSubscriptionUseCase struct {
-	subscriptionRepo     subscription.SubscriptionRepository
-	planRepo             subscription.PlanRepository
-	userRepo             user.Repository
-	onlineDeviceCounter  OnlineDeviceCounter // optional, nil-safe
-	quotaService         QuotaService        // optional, nil-safe
-	logger               logger.Interface
-	baseURL              string
+	subscriptionRepo    subscription.SubscriptionRepository
+	planRepo            subscription.PlanRepository
+	userRepo            user.Repository
+	onlineDeviceCounter OnlineDeviceCounter // optional, nil-safe
+	quotaService        QuotaService        // optional, nil-safe
+	logger              logger.Interface
+	baseURL             string
 }
 
 func NewGetSubscriptionUseCase(
@@ -140,13 +140,19 @@ func (uc *GetSubscriptionUseCase) buildDTOOptions(ctx context.Context, subID uin
 		}
 	}
 
-	// Query data usage from QuotaService
+	// Query data usage from QuotaService — provides usage figures AND the
+	// traffic cycle window they were aggregated over (calendar_month or
+	// billing_cycle, depending on plan). Both must be exposed together so the
+	// frontend can label the figures with the correct window.
 	if uc.quotaService != nil {
 		quota, err := uc.quotaService.GetSubscriptionQuota(ctx, subID)
 		if err != nil {
 			uc.logger.Warnw("failed to get subscription quota", "error", err, "subscription_id", subID)
 		} else if quota != nil {
-			opts = append(opts, dto.WithDataUsage(quota.UsedBytes, quota.LimitBytes))
+			opts = append(opts,
+				dto.WithDataUsageBreakdown(quota.UsedBytes, quota.UploadBytes, quota.DownloadBytes, quota.LimitBytes),
+				dto.WithTrafficCycle(quota.PeriodStart, quota.PeriodEnd),
+			)
 		}
 	}
 

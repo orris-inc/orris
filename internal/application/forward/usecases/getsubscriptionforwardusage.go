@@ -134,10 +134,13 @@ func (uc *GetSubscriptionForwardUsageUseCase) Execute(ctx context.Context, query
 		return nil, fmt.Errorf("failed to get rule count: %w", err)
 	}
 
-	// Query traffic usage from Redis (recent) and MySQL stats (historical)
+	// Query traffic usage from Redis (recent) and MySQL stats (historical).
+	// Use the resolved *traffic cycle* (calendar_month or billing_cycle) so
+	// the displayed traffic_used matches what quota enforcement counts.
 	var trafficUsed uint64
-	periodStart := sub.CurrentPeriodStart()
-	periodEnd := biztime.EndOfDayUTC(sub.CurrentPeriodEnd())
+	cycle := subscription.ResolveTrafficPeriod(plan, sub)
+	periodStart := cycle.Start
+	periodEnd := biztime.EndOfDayUTC(cycle.End)
 	now := biztime.NowUTC()
 
 	// Use start of yesterday's business day as batch/speed boundary (Lambda architecture)

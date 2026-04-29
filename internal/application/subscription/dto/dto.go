@@ -17,30 +17,38 @@ type SubscriptionUserDTO struct {
 }
 
 type SubscriptionDTO struct {
-	SID                string               `json:"id"`             // Stripe-style ID: sub_xxx
-	UserSID            string               `json:"user_id"`        // User's Stripe-style ID (kept for backward compatibility)
-	User               *SubscriptionUserDTO `json:"user,omitempty"` // Embedded user information
-	UUID               string               `json:"uuid"`           // UUID for internal use (kept for backward compatibility)
-	LinkToken          string               `json:"link_token"`
-	SubscribeURL       string               `json:"subscribe_url"`
-	Plan               *PlanDTO             `json:"plan,omitempty"`
-	Status             string               `json:"status"`
-	BillingCycle       *string              `json:"billing_cycle,omitempty"` // Billing cycle: weekly, monthly, quarterly, semi_annual, yearly, lifetime
-	StartDate          time.Time            `json:"start_date"`
-	EndDate            time.Time            `json:"end_date"`
-	AutoRenew          bool                 `json:"auto_renew"`
-	CurrentPeriodStart time.Time            `json:"current_period_start"`
-	CurrentPeriodEnd   time.Time            `json:"current_period_end"`
-	IsExpired          bool                 `json:"is_expired"`
-	IsActive           bool                 `json:"is_active"`
-	DataUsedBytes      uint64               `json:"data_used_bytes"`               // Current traffic used in bytes
-	DataLimitBytes     uint64               `json:"data_limit_bytes"`              // Traffic limit in bytes (0=unlimited)
-	OnlineDeviceCount  int                  `json:"online_device_count"`           // Current online device count
-	DeviceLimit        int                  `json:"device_limit"`                  // Max concurrent devices (0=unlimited)
-	CancelledAt        *time.Time           `json:"cancelled_at,omitempty"`
-	CancelReason       *string              `json:"cancel_reason,omitempty"`
-	CreatedAt          time.Time            `json:"created_at"`
-	UpdatedAt          time.Time            `json:"updated_at"`
+	SID          string               `json:"id"`             // Stripe-style ID: sub_xxx
+	UserSID      string               `json:"user_id"`        // User's Stripe-style ID (kept for backward compatibility)
+	User         *SubscriptionUserDTO `json:"user,omitempty"` // Embedded user information
+	UUID         string               `json:"uuid"`           // UUID for internal use (kept for backward compatibility)
+	LinkToken    string               `json:"link_token"`
+	SubscribeURL string               `json:"subscribe_url"`
+	Plan         *PlanDTO             `json:"plan,omitempty"`
+	Status       string               `json:"status"`
+	BillingCycle *string              `json:"billing_cycle,omitempty"` // Billing cycle: weekly, monthly, quarterly, semi_annual, yearly, lifetime
+	StartDate    time.Time            `json:"start_date"`
+	EndDate      time.Time            `json:"end_date"`
+	AutoRenew    bool                 `json:"auto_renew"`
+	// Subscription billing period (used by billing/renewal flows).
+	CurrentPeriodStart time.Time `json:"current_period_start"`
+	CurrentPeriodEnd   time.Time `json:"current_period_end"`
+	// Current traffic cycle window (matches DataUsedBytes / CurrentCycle*Bytes).
+	// For calendar_month reset mode this is the business-timezone calendar month
+	// and differs from CurrentPeriodStart/End. For billing_cycle mode it matches.
+	CurrentTrafficCycleStart  time.Time  `json:"current_traffic_cycle_start"`
+	CurrentTrafficCycleEnd    time.Time  `json:"current_traffic_cycle_end"`
+	IsExpired                 bool       `json:"is_expired"`
+	IsActive                  bool       `json:"is_active"`
+	DataUsedBytes             uint64     `json:"data_used_bytes"`              // Total traffic used in current cycle (= upload + download, plus admin adjustment)
+	DataLimitBytes            uint64     `json:"data_limit_bytes"`             // Traffic limit in bytes (0=unlimited)
+	CurrentCycleUploadBytes   uint64     `json:"current_cycle_upload_bytes"`   // Upload traffic in current cycle (raw, no adjustment)
+	CurrentCycleDownloadBytes uint64     `json:"current_cycle_download_bytes"` // Download traffic in current cycle (raw, no adjustment)
+	OnlineDeviceCount         int        `json:"online_device_count"`          // Current online device count
+	DeviceLimit               int        `json:"device_limit"`                 // Max concurrent devices (0=unlimited)
+	CancelledAt               *time.Time `json:"cancelled_at,omitempty"`
+	CancelReason              *string    `json:"cancel_reason,omitempty"`
+	CreatedAt                 time.Time  `json:"created_at"`
+	UpdatedAt                 time.Time  `json:"updated_at"`
 }
 
 type PlanDTO struct {
@@ -169,6 +177,29 @@ func WithDataUsage(used, limit uint64) SubscriptionDTOOption {
 	return func(d *SubscriptionDTO) {
 		d.DataUsedBytes = used
 		d.DataLimitBytes = limit
+	}
+}
+
+// WithDataUsageBreakdown sets the upload/download breakdown along with the
+// adjusted total used and the limit. Use this in preference to WithDataUsage
+// whenever upload/download figures are available so the frontend doesn't need
+// a separate traffic-stats request.
+func WithDataUsageBreakdown(used, upload, download, limit uint64) SubscriptionDTOOption {
+	return func(d *SubscriptionDTO) {
+		d.DataUsedBytes = used
+		d.DataLimitBytes = limit
+		d.CurrentCycleUploadBytes = upload
+		d.CurrentCycleDownloadBytes = download
+	}
+}
+
+// WithTrafficCycle sets the current traffic cycle window (resolved via
+// subscription.ResolveTrafficPeriod). This window matches DataUsedBytes and
+// the upload/download breakdown — it is NOT the subscription billing period.
+func WithTrafficCycle(start, end time.Time) SubscriptionDTOOption {
+	return func(d *SubscriptionDTO) {
+		d.CurrentTrafficCycleStart = start
+		d.CurrentTrafficCycleEnd = end
 	}
 }
 

@@ -117,14 +117,21 @@ func (uc *GetDashboardUseCase) Execute(
 		response.TotalUsage.Download += subUsage.Download
 		response.TotalUsage.Total += subUsage.Total
 
+		// Resolve traffic cycle so the DTO carries both the billing period and
+		// the actual window Usage was aggregated over (they differ for
+		// calendar_month plans).
+		cycle := subscription.ResolveTrafficPeriod(planMap[sub.PlanID()], sub)
+
 		// Build subscription DTO
 		subDTO := &dto.DashboardSubscriptionDTO{
-			SID:                sub.SID(),
-			Status:             sub.EffectiveStatus().String(),
-			CurrentPeriodStart: sub.CurrentPeriodStart(),
-			CurrentPeriodEnd:   sub.CurrentPeriodEnd(),
-			IsActive:           sub.IsActive(),
-			Usage:              subUsage,
+			SID:                      sub.SID(),
+			Status:                   sub.EffectiveStatus().String(),
+			CurrentPeriodStart:       sub.CurrentPeriodStart(),
+			CurrentPeriodEnd:         sub.CurrentPeriodEnd(),
+			CurrentTrafficCycleStart: cycle.Start,
+			CurrentTrafficCycleEnd:   cycle.End,
+			IsActive:                 sub.IsActive(),
+			Usage:                    subUsage,
 		}
 
 		// Add plan info if available

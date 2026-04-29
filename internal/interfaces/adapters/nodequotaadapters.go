@@ -117,11 +117,14 @@ func (a *NodeSubscriptionQuotaLoaderAdapter) LoadQuotaByID(ctx context.Context, 
 		}
 	}
 
-	// Build cached quota object
+	// Cache the *traffic cycle* (resolved via ResolveTrafficPeriod) rather than
+	// the billing period so the real-time node enforcer queries usage over the
+	// correct window for calendar_month plans.
+	cycle := subscription.ResolveTrafficPeriod(plan, sub)
 	cachedQuota := &cache.CachedQuota{
 		Limit:       int64(trafficLimit),
-		PeriodStart: sub.CurrentPeriodStart(),
-		PeriodEnd:   sub.CurrentPeriodEnd(),
+		PeriodStart: cycle.Start,
+		PeriodEnd:   cycle.End,
 		PlanType:    plan.PlanType().String(),
 		Suspended:   false,
 	}

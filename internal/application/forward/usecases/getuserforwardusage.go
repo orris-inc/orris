@@ -124,10 +124,14 @@ func (uc *GetUserForwardUsageUseCase) Execute(ctx context.Context, query GetUser
 			continue
 		}
 
-		// Collect forward subscription ID and period range
+		// Collect forward subscription ID and traffic cycle range.
+		// Use ResolveTrafficPeriod so the aggregated traffic_used matches the
+		// cycle that quota enforcement actually counts (calendar_month or
+		// billing_cycle), not the subscription billing period.
 		forwardSubscriptionIDs = append(forwardSubscriptionIDs, sub.ID())
-		periodStart := sub.CurrentPeriodStart()
-		periodEnd := sub.CurrentPeriodEnd()
+		cycle := subscription.ResolveTrafficPeriod(plan, sub)
+		periodStart := cycle.Start
+		periodEnd := cycle.End
 		if firstSub || periodStart.Before(earliestFrom) {
 			earliestFrom = periodStart
 		}

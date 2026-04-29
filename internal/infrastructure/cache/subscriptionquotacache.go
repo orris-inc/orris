@@ -12,11 +12,18 @@ import (
 	"github.com/orris-inc/orris/internal/shared/logger"
 )
 
-// CachedQuota represents cached subscription quota information
+// CachedQuota represents cached subscription quota information.
+//
+// PeriodStart/PeriodEnd describe the *traffic cycle* (resolved via
+// subscription.ResolveTrafficPeriod), NOT the subscription billing period.
+// For calendar_month reset mode they describe the business-timezone calendar
+// month; for billing_cycle mode they match the subscription's current period.
+// Producers must populate them via ResolveTrafficPeriod and consumers must
+// treat them as the authoritative window for usage aggregation.
 type CachedQuota struct {
 	Limit       int64     // Traffic limit in bytes
-	PeriodStart time.Time // Billing period start
-	PeriodEnd   time.Time // Billing period end
+	PeriodStart time.Time // Traffic cycle start
+	PeriodEnd   time.Time // Traffic cycle end
 	PlanType    string    // Plan type: node/forward/hybrid
 	Suspended   bool      // Whether the subscription is suspended
 	NotFound    bool      // Null marker: subscription confirmed not found/inactive in DB
@@ -34,11 +41,11 @@ type SubscriptionQuotaCache interface {
 }
 
 const (
-	quotaKeyPrefix  = "subscription:quota:"
-	baseQuotaTTL    = 60 * time.Minute
-	quotaTTLJitter  = 20 * time.Minute // TTL range: 60-80 min (anti-stampede)
-	nullMarkerTTL   = 2 * time.Minute  // Short TTL for not-found markers (anti-penetration)
-	fieldLimit      = "limit"
+	quotaKeyPrefix   = "subscription:quota:"
+	baseQuotaTTL     = 60 * time.Minute
+	quotaTTLJitter   = 20 * time.Minute // TTL range: 60-80 min (anti-stampede)
+	nullMarkerTTL    = 2 * time.Minute  // Short TTL for not-found markers (anti-penetration)
+	fieldLimit       = "limit"
 	fieldPeriodStart = "period_start"
 	fieldPeriodEnd   = "period_end"
 	fieldPlanType    = "plan_type"
