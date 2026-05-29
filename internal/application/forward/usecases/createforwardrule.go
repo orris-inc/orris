@@ -431,7 +431,14 @@ func (uc *CreateForwardRuleUseCase) Execute(ctx context.Context, cmd CreateForwa
 		if err != nil {
 			return nil, errors.NewValidationError(fmt.Sprintf("invalid route config: %s", err.Error()))
 		}
-		rule.SetRouteConfig(rc)
+		// Use UpdateRouteConfig (not SetRouteConfig) so the full RouteConfig
+		// validation runs, including cross-reference checks that custom outbound
+		// references resolve to defined outbounds. This keeps create consistent
+		// with the update path and prevents persisting routes that reference
+		// undefined custom outbounds.
+		if err := rule.UpdateRouteConfig(rc); err != nil {
+			return nil, errors.NewValidationError(fmt.Sprintf("invalid route config: %s", err.Error()))
+		}
 	}
 
 	// Persist
@@ -676,7 +683,7 @@ func (uc *CreateForwardRuleUseCase) assignAvailablePort(ctx context.Context, age
 	portRange := agent.AllowedPortRange()
 	agentID := agent.ID()
 
-	for i := 0; i < maxPortAssignAttempts; i++ {
+	for range maxPortAssignAttempts {
 		var port uint16
 		if portRange != nil && !portRange.IsEmpty() {
 			// Use agent's allowed port range

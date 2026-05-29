@@ -568,6 +568,48 @@ func mergeForwardRuleRoutesCore(route **RouteConfigDTO, outbounds *[]OutboundDTO
 			Route:   routeDTO,
 		})
 
+		// Merge rule_set entries before converting route rules so that rules can
+		// be rewritten to reference the final tags. Identical (tag, url) entries
+		// are shared across rules to avoid downloading the same rule-set twice. A
+		// tag that collides with a different url is namespaced per forward rule
+		// ({rule_sid}:tag) to keep per-rule routing isolated, mirroring how custom
+		// outbounds are namespaced.
+		ruleSetRename := make(map[string]string)
+		if rc.HasRuleSetEntries() {
+			for _, e := range rc.RuleSetEntries() {
+				tag := e.Tag()
+				if existingURL, exists := ruleSetURLs[tag]; exists {
+					if existingURL == e.URL() {
+						// Same tag and url: reuse the shared entry, no rename.
+						continue
+					}
+					// Tag conflict with a different url: namespace this rule's entry
+					// and remember the rename so its route rules can be rewritten.
+					tag = ruleSID + ":" + e.Tag()
+					ruleSetRename[e.Tag()] = tag
+					slog.Warn("rule_set entry tag conflict: same tag with different URL, namespacing per forward rule",
+						"tag", e.Tag(),
+						"existing_url", existingURL,
+						"conflict_url", e.URL(),
+						"namespaced_tag", tag,
+						"forward_rule_sid", ruleSID,
+					)
+				}
+				ruleSetURLs[tag] = e.URL()
+				entry := RuleSetEntryDTO{
+					Tag:            tag,
+					URL:            e.URL(),
+					Format:         e.Format().String(),
+					DownloadDetour: e.DownloadDetour(),
+					UpdateInterval: e.UpdateInterval(),
+				}
+				if *route == nil {
+					*route = &RouteConfigDTO{Final: "direct"}
+				}
+				(*route).RuleSetEntries = append((*route).RuleSetEntries, entry)
+			}
+		}
+
 		// Convert route rules with inbound filter
 		for _, rule := range rc.Rules() {
 			ruleDTO := ToRouteRuleDTO(&rule)
@@ -577,6 +619,19 @@ func mergeForwardRuleRoutesCore(route **RouteConfigDTO, outbounds *[]OutboundDTO
 			outbound := rule.Outbound().String()
 			if isCustomOutbound(outbound) {
 				ruleDTO.Outbound = ruleSID + ":" + outbound
+			}
+
+			// Rewrite rule_set references that were namespaced due to tag conflicts
+			if len(ruleSetRename) > 0 && len(ruleDTO.RuleSet) > 0 {
+				renamed := make([]string, len(ruleDTO.RuleSet))
+				for i, t := range ruleDTO.RuleSet {
+					if nt, ok := ruleSetRename[t]; ok {
+						renamed[i] = nt
+					} else {
+						renamed[i] = t
+					}
+				}
+				ruleDTO.RuleSet = renamed
 			}
 
 			perRuleRouteRules = append(perRuleRouteRules, ruleDTO)
@@ -599,35 +654,6 @@ func mergeForwardRuleRoutesCore(route **RouteConfigDTO, outbounds *[]OutboundDTO
 				customDTOs[i].Tag = ruleSID + ":" + customDTOs[i].Tag
 			}
 			perRuleOutbounds = append(perRuleOutbounds, customDTOs...)
-		}
-
-		// Merge rule_set entries (deduplicate by tag, warn on URL conflict)
-		if rc.HasRuleSetEntries() {
-			for _, e := range rc.RuleSetEntries() {
-				if existingURL, exists := ruleSetURLs[e.Tag()]; exists {
-					if existingURL != e.URL() {
-						slog.Warn("rule_set entry tag conflict: same tag with different URL, keeping first",
-							"tag", e.Tag(),
-							"existing_url", existingURL,
-							"conflict_url", e.URL(),
-							"forward_rule_sid", ruleSID,
-						)
-					}
-				} else {
-					ruleSetURLs[e.Tag()] = e.URL()
-					entry := RuleSetEntryDTO{
-						Tag:            e.Tag(),
-						URL:            e.URL(),
-						Format:         e.Format().String(),
-						DownloadDetour: e.DownloadDetour(),
-						UpdateInterval: e.UpdateInterval(),
-					}
-					if *route == nil {
-						*route = &RouteConfigDTO{Final: "direct"}
-					}
-					(*route).RuleSetEntries = append((*route).RuleSetEntries, entry)
-				}
-			}
 		}
 	}
 
