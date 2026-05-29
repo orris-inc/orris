@@ -3,6 +3,7 @@ package usecases
 import (
 	"context"
 	"fmt"
+	"regexp"
 
 	"github.com/orris-inc/orris/internal/domain/forward"
 	"github.com/orris-inc/orris/internal/shared/errors"
@@ -15,11 +16,16 @@ const (
 	InstallScriptURL = "https://raw.githubusercontent.com/orris-inc/orris-client/main/scripts/install.sh"
 )
 
+// instanceNamePattern restricts instance names to characters safe for
+// systemd unit names, directory paths, and command-line flags.
+var instanceNamePattern = regexp.MustCompile(`^[a-zA-Z0-9._-]{1,64}$`)
+
 // GenerateInstallScriptQuery represents the input for generating install script.
 type GenerateInstallScriptQuery struct {
 	ShortID   string // External API identifier
 	ServerURL string // WebSocket server URL (e.g., wss://example.com)
 	Token     string // Optional: API token for the agent. If not provided, uses agent's current token
+	Name      string // Optional: instance name for multi-instance install. Empty means default instance.
 }
 
 // GenerateInstallScriptResult represents the output of generating install script.
@@ -61,7 +67,11 @@ func (uc *GenerateInstallScriptUseCase) Execute(ctx context.Context, query Gener
 		return nil, err
 	}
 
-	uc.logger.Infow("executing generate install script use case", "short_id", query.ShortID)
+	if query.Name != "" && !instanceNamePattern.MatchString(query.Name) {
+		return nil, errors.NewValidationError("name must be 1-64 chars of [A-Za-z0-9._-]")
+	}
+
+	uc.logger.Infow("executing generate install script use case", "short_id", query.ShortID, "name", query.Name)
 
 	agent, err := uc.repo.GetBySID(ctx, query.ShortID)
 	if err != nil {
@@ -81,9 +91,15 @@ func (uc *GenerateInstallScriptUseCase) Execute(ctx context.Context, query Gener
 		}
 	}
 
-	// Generate install and uninstall commands
-	installCmd := fmt.Sprintf("curl -fsSL %s | sudo bash -s -- --server %s --token %s", InstallScriptURL, utils.ShellQuote(query.ServerURL), utils.ShellQuote(token))
+	// Generate install and uninstall commands.
+	// Default (no name): single-instance default install/uninstall.
+	// Named: multi-instance install with -n NAME -W 0 -T 0 (disables extra ports), uninstall targets that instance.
+	installCmd := fmt.Sprintf("curl -fsSL %s | sudo bash -s -- -s %s -t %s", InstallScriptURL, utils.ShellQuote(query.ServerURL), utils.ShellQuote(token))
 	uninstallCmd := fmt.Sprintf("curl -fsSL %s | sudo bash -s -- uninstall", InstallScriptURL)
+	if query.Name != "" {
+		installCmd = fmt.Sprintf("%s -n %s -W 0 -T 0", installCmd, utils.ShellQuote(query.Name))
+		uninstallCmd = fmt.Sprintf("%s -n %s", uninstallCmd, utils.ShellQuote(query.Name))
+	}
 
 	result := &GenerateInstallScriptResult{
 		InstallCommand:   installCmd,
