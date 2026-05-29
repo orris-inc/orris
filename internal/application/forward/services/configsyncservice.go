@@ -114,88 +114,93 @@ func (s *ConfigSyncService) NotifyRuleChange(ctx context.Context, agentID uint, 
 		return nil
 	}
 
-	// Increment global version
-	version := s.notifier.IncrementVersion()
+	// Serialize version allocation, snapshot read, and enqueue for this agent so
+	// the version order matches the FIFO delivery order (prevents the agent's
+	// monotonic version gate from dropping a late lower-version update).
+	return s.notifier.WithAgentLock(agentID, func() error {
+		// Increment global version
+		version := s.notifier.IncrementVersion()
 
-	// Build sync data based on change type
-	syncData := &dto.ConfigSyncData{
-		Version:  version,
-		FullSync: false,
-	}
+		// Build sync data based on change type
+		syncData := &dto.ConfigSyncData{
+			Version:  version,
+			FullSync: false,
+		}
 
-	switch changeType {
-	case "added", "updated":
-		// Fetch the rule to include in sync
-		rule, err := s.repo.GetBySID(ctx, ruleShortID)
-		if err != nil {
-			s.logger.Errorw("failed to get rule for sync",
-				"rule_short_id", ruleShortID,
-				"error", err,
+		switch changeType {
+		case "added", "updated":
+			// Fetch the rule to include in sync
+			rule, err := s.repo.GetBySID(ctx, ruleShortID)
+			if err != nil {
+				s.logger.Errorw("failed to get rule for sync",
+					"rule_short_id", ruleShortID,
+					"error", err,
+				)
+				return err
+			}
+			if rule == nil {
+				s.logger.Debugw("rule not found for sync",
+					"rule_short_id", ruleShortID,
+				)
+				return forward.ErrRuleNotFound
+			}
+
+			// Convert to sync data
+			ruleSyncData, err := s.converter.Convert(ctx, rule, agentID)
+			if err != nil {
+				s.logger.Errorw("failed to convert rule to sync data",
+					"rule_short_id", ruleShortID,
+					"error", err,
+				)
+				return err
+			}
+
+			if changeType == "added" {
+				syncData.Added = []dto.RuleSyncData{*ruleSyncData}
+			} else {
+				syncData.Updated = []dto.RuleSyncData{*ruleSyncData}
+			}
+
+		case "removed":
+			syncData.Removed = []string{ruleShortID}
+
+		default:
+			s.logger.Debugw("unknown change type for rule sync",
+				"change_type", changeType,
 			)
+			return nil
+		}
+
+		// Send sync message to agent
+		if err := s.notifier.SendToAgent(ctx, agentID, syncData); err != nil {
 			return err
 		}
-		if rule == nil {
-			s.logger.Debugw("rule not found for sync",
-				"rule_short_id", ruleShortID,
+
+		// Aggregate log for sync details (debug level for individual rules)
+		if len(syncData.Added) > 0 {
+			s.logger.Debugw("config sync rules added",
+				"count", len(syncData.Added),
+				"first_rule_id", syncData.Added[0].ShortID,
+				"first_rule_type", syncData.Added[0].RuleType,
 			)
-			return forward.ErrRuleNotFound
 		}
-
-		// Convert to sync data
-		ruleSyncData, err := s.converter.Convert(ctx, rule, agentID)
-		if err != nil {
-			s.logger.Errorw("failed to convert rule to sync data",
-				"rule_short_id", ruleShortID,
-				"error", err,
+		if len(syncData.Updated) > 0 {
+			s.logger.Debugw("config sync rules updated",
+				"count", len(syncData.Updated),
+				"first_rule_id", syncData.Updated[0].ShortID,
+				"first_rule_type", syncData.Updated[0].RuleType,
 			)
-			return err
 		}
 
-		if changeType == "added" {
-			syncData.Added = []dto.RuleSyncData{*ruleSyncData}
-		} else {
-			syncData.Updated = []dto.RuleSyncData{*ruleSyncData}
-		}
-
-	case "removed":
-		syncData.Removed = []string{ruleShortID}
-
-	default:
-		s.logger.Debugw("unknown change type for rule sync",
+		s.logger.Debugw("config sync notification sent",
+			"agent_id", agentID,
+			"version", version,
 			"change_type", changeType,
+			"rule_short_id", ruleShortID,
 		)
+
 		return nil
-	}
-
-	// Send sync message to agent
-	if err := s.notifier.SendToAgent(ctx, agentID, syncData); err != nil {
-		return err
-	}
-
-	// Aggregate log for sync details (debug level for individual rules)
-	if len(syncData.Added) > 0 {
-		s.logger.Debugw("config sync rules added",
-			"count", len(syncData.Added),
-			"first_rule_id", syncData.Added[0].ShortID,
-			"first_rule_type", syncData.Added[0].RuleType,
-		)
-	}
-	if len(syncData.Updated) > 0 {
-		s.logger.Debugw("config sync rules updated",
-			"count", len(syncData.Updated),
-			"first_rule_id", syncData.Updated[0].ShortID,
-			"first_rule_type", syncData.Updated[0].RuleType,
-		)
-	}
-
-	s.logger.Debugw("config sync notification sent",
-		"agent_id", agentID,
-		"version", version,
-		"change_type", changeType,
-		"rule_short_id", ruleShortID,
-	)
-
-	return nil
+	})
 }
 
 // FullSyncToAgent performs a full configuration sync to an agent (typically on reconnection).
@@ -212,86 +217,90 @@ func (s *ConfigSyncService) FullSyncToAgent(ctx context.Context, agentID uint) e
 		return nil
 	}
 
-	// Increment global version
-	version := s.notifier.IncrementVersion()
+	// Serialize against incremental notifications for this agent so the full
+	// sync and any concurrent incremental updates are delivered in version order.
+	return s.notifier.WithAgentLock(agentID, func() error {
+		// Increment global version
+		version := s.notifier.IncrementVersion()
 
-	// Retrieve all enabled rules for this agent
-	rules, err := s.getEnabledRulesForAgent(ctx, agentID)
-	if err != nil {
-		s.logger.Errorw("failed to get enabled rules for full sync",
-			"agent_id", agentID,
-			"error", err,
-		)
-		return err
-	}
-
-	s.logger.Debugw("fetched enabled rules for full sync",
-		"agent_id", agentID,
-		"rule_count", len(rules),
-	)
-
-	// Convert all rules to sync data
-	ruleSyncDataList := make([]dto.RuleSyncData, 0, len(rules))
-	for _, rule := range rules {
-		ruleSyncData, err := s.converter.Convert(ctx, rule, agentID)
+		// Retrieve all enabled rules for this agent
+		rules, err := s.getEnabledRulesForAgent(ctx, agentID)
 		if err != nil {
-			s.logger.Warnw("failed to convert rule to sync data, skipping",
-				"rule_id", rule.ID(),
+			s.logger.Errorw("failed to get enabled rules for full sync",
+				"agent_id", agentID,
 				"error", err,
 			)
-			continue
+			return err
 		}
-		ruleSyncDataList = append(ruleSyncDataList, *ruleSyncData)
-	}
 
-	// Get agent short ID and generate client token
-	agent, err := s.agentRepo.GetByID(ctx, agentID)
-	if err != nil {
-		s.logger.Errorw("failed to get agent for full config sync",
+		s.logger.Debugw("fetched enabled rules for full sync",
 			"agent_id", agentID,
-			"error", err,
+			"rule_count", len(rules),
 		)
-		return err
-	}
-	if agent == nil {
-		s.logger.Warnw("agent not found for full config sync",
+
+		// Convert all rules to sync data
+		ruleSyncDataList := make([]dto.RuleSyncData, 0, len(rules))
+		for _, rule := range rules {
+			ruleSyncData, err := s.converter.Convert(ctx, rule, agentID)
+			if err != nil {
+				s.logger.Warnw("failed to convert rule to sync data, skipping",
+					"rule_id", rule.ID(),
+					"error", err,
+				)
+				continue
+			}
+			ruleSyncDataList = append(ruleSyncDataList, *ruleSyncData)
+		}
+
+		// Get agent short ID and generate client token
+		agent, err := s.agentRepo.GetByID(ctx, agentID)
+		if err != nil {
+			s.logger.Errorw("failed to get agent for full config sync",
+				"agent_id", agentID,
+				"error", err,
+			)
+			return err
+		}
+		if agent == nil {
+			s.logger.Warnw("agent not found for full config sync",
+				"agent_id", agentID,
+			)
+			return forward.ErrAgentNotFound
+		}
+
+		// Generate client token for this agent
+		clientToken := s.converter.GenerateClientToken(agent.SID())
+
+		s.logger.Debugw("generated client token for full sync",
 			"agent_id", agentID,
+			"short_id", agent.SID(),
 		)
-		return forward.ErrAgentNotFound
-	}
 
-	// Generate client token for this agent
-	clientToken := s.converter.GenerateClientToken(agent.SID())
+		// Build full sync data
+		// Note: token_signing_secret is no longer included for security reasons.
+		// Agents should use the server for token verification.
+		syncData := &dto.ConfigSyncData{
+			Version:          version,
+			FullSync:         true,
+			Added:            ruleSyncDataList,
+			ClientToken:      clientToken,
+			BlockedProtocols: agent.BlockedProtocols().ToStringSlice(),
+		}
 
-	s.logger.Debugw("generated client token for full sync",
-		"agent_id", agentID,
-		"short_id", agent.SID(),
-	)
+		// Send sync message to agent
+		if err := s.notifier.SendToAgent(ctx, agentID, syncData); err != nil {
+			return err
+		}
 
-	// Build full sync data
-	// Note: token_signing_secret is no longer included for security reasons.
-	// Agents should use the server for token verification.
-	syncData := &dto.ConfigSyncData{
-		Version:          version,
-		FullSync:         true,
-		Added:            ruleSyncDataList,
-		ClientToken:      clientToken,
-		BlockedProtocols: agent.BlockedProtocols().ToStringSlice(),
-	}
+		s.logger.Infow("full config sync completed",
+			"agent_id", agentID,
+			"version", version,
+			"rule_count", len(ruleSyncDataList),
+			"blocked_protocols", agent.BlockedProtocols().ToStringSlice(),
+		)
 
-	// Send sync message to agent
-	if err := s.notifier.SendToAgent(ctx, agentID, syncData); err != nil {
-		return err
-	}
-
-	s.logger.Infow("full config sync completed",
-		"agent_id", agentID,
-		"version", version,
-		"rule_count", len(ruleSyncDataList),
-		"blocked_protocols", agent.BlockedProtocols().ToStringSlice(),
-	)
-
-	return nil
+		return nil
+	})
 }
 
 // getEnabledRulesForAgent retrieves all enabled rules for a specific agent.
@@ -419,67 +428,73 @@ func (s *ConfigSyncService) NotifyExitPortChange(ctx context.Context, exitAgentI
 			continue
 		}
 
-		// Get rules for this entry agent that point to the exit agent
-		agentRules, err := s.finder.GetEntryRulesForExitAgent(ctx, entryAgentID, exitAgentID)
-		if err != nil {
-			s.logger.Warnw("failed to get rules for entry agent",
-				"entry_agent_id", entryAgentID,
-				"exit_agent_id", exitAgentID,
-				"error", err,
-			)
-			lastErr = err
-			continue
-		}
-
-		if len(agentRules) == 0 {
-			continue
-		}
-
-		// Convert rules to sync data
-		ruleSyncDataList := make([]dto.RuleSyncData, 0, len(agentRules))
-		for _, rule := range agentRules {
-			syncData, err := s.converter.Convert(ctx, rule, entryAgentID)
+		// Serialize the snapshot read, version allocation, and enqueue for this
+		// entry agent so concurrent notifications stay in version order.
+		err := s.notifier.WithAgentLock(entryAgentID, func() error {
+			// Get rules for this entry agent that point to the exit agent
+			agentRules, err := s.finder.GetEntryRulesForExitAgent(ctx, entryAgentID, exitAgentID)
 			if err != nil {
-				s.logger.Warnw("failed to convert rule to sync data",
-					"rule_id", rule.ID(),
+				s.logger.Warnw("failed to get rules for entry agent",
+					"entry_agent_id", entryAgentID,
+					"exit_agent_id", exitAgentID,
 					"error", err,
 				)
-				continue
+				return err
 			}
-			ruleSyncDataList = append(ruleSyncDataList, *syncData)
-		}
 
-		if len(ruleSyncDataList) == 0 {
-			continue
-		}
+			if len(agentRules) == 0 {
+				return nil
+			}
 
-		// Increment global version
-		version := s.notifier.IncrementVersion()
+			// Convert rules to sync data
+			ruleSyncDataList := make([]dto.RuleSyncData, 0, len(agentRules))
+			for _, rule := range agentRules {
+				syncData, err := s.converter.Convert(ctx, rule, entryAgentID)
+				if err != nil {
+					s.logger.Warnw("failed to convert rule to sync data",
+						"rule_id", rule.ID(),
+						"error", err,
+					)
+					continue
+				}
+				ruleSyncDataList = append(ruleSyncDataList, *syncData)
+			}
 
-		// Build sync data (as updated rules)
-		syncData := &dto.ConfigSyncData{
-			Version:  version,
-			FullSync: false,
-			Updated:  ruleSyncDataList,
-		}
+			if len(ruleSyncDataList) == 0 {
+				return nil
+			}
 
-		// Send sync message to agent
-		if err := s.notifier.SendToAgent(ctx, entryAgentID, syncData); err != nil {
-			s.logger.Infow("port change notification skipped",
+			// Increment global version
+			version := s.notifier.IncrementVersion()
+
+			// Build sync data (as updated rules)
+			syncData := &dto.ConfigSyncData{
+				Version:  version,
+				FullSync: false,
+				Updated:  ruleSyncDataList,
+			}
+
+			// Send sync message to agent
+			if err := s.notifier.SendToAgent(ctx, entryAgentID, syncData); err != nil {
+				s.logger.Infow("port change notification skipped",
+					"entry_agent_id", entryAgentID,
+					"exit_agent_id", exitAgentID,
+					"reason", err.Error(),
+				)
+				return err
+			}
+
+			s.logger.Infow("port change notification sent to entry agent",
 				"entry_agent_id", entryAgentID,
 				"exit_agent_id", exitAgentID,
-				"reason", err.Error(),
+				"version", version,
+				"rule_count", len(ruleSyncDataList),
 			)
+			return nil
+		})
+		if err != nil {
 			lastErr = err
-			continue
 		}
-
-		s.logger.Infow("port change notification sent to entry agent",
-			"entry_agent_id", entryAgentID,
-			"exit_agent_id", exitAgentID,
-			"version", version,
-			"rule_count", len(ruleSyncDataList),
-		)
 	}
 
 	return lastErr
@@ -535,57 +550,64 @@ func (s *ConfigSyncService) NotifyNodeAddressChange(ctx context.Context, nodeID 
 			continue
 		}
 
-		// Deduplicate rules by ID
-		ruleMap := make(map[uint]*forward.ForwardRule)
-		for _, rule := range agentRules {
-			ruleMap[rule.ID()] = rule
-		}
-
-		// Convert rules to sync data
-		ruleSyncDataList := make([]dto.RuleSyncData, 0, len(ruleMap))
-		for _, rule := range ruleMap {
-			syncData, err := s.converter.Convert(ctx, rule, agentID)
-			if err != nil {
-				s.logger.Warnw("failed to convert rule to sync data",
-					"rule_id", rule.ID(),
-					"error", err,
-				)
-				continue
+		// Serialize version allocation and enqueue for this agent so concurrent
+		// notifications are delivered in version order.
+		err := s.notifier.WithAgentLock(agentID, func() error {
+			// Deduplicate rules by ID
+			ruleMap := make(map[uint]*forward.ForwardRule)
+			for _, rule := range agentRules {
+				ruleMap[rule.ID()] = rule
 			}
-			ruleSyncDataList = append(ruleSyncDataList, *syncData)
-		}
 
-		if len(ruleSyncDataList) == 0 {
-			continue
-		}
+			// Convert rules to sync data
+			ruleSyncDataList := make([]dto.RuleSyncData, 0, len(ruleMap))
+			for _, rule := range ruleMap {
+				syncData, err := s.converter.Convert(ctx, rule, agentID)
+				if err != nil {
+					s.logger.Warnw("failed to convert rule to sync data",
+						"rule_id", rule.ID(),
+						"error", err,
+					)
+					continue
+				}
+				ruleSyncDataList = append(ruleSyncDataList, *syncData)
+			}
 
-		// Increment global version
-		version := s.notifier.IncrementVersion()
+			if len(ruleSyncDataList) == 0 {
+				return nil
+			}
 
-		// Build sync data (as updated rules)
-		syncData := &dto.ConfigSyncData{
-			Version:  version,
-			FullSync: false,
-			Updated:  ruleSyncDataList,
-		}
+			// Increment global version
+			version := s.notifier.IncrementVersion()
 
-		// Send sync message to agent
-		if err := s.notifier.SendToAgent(ctx, agentID, syncData); err != nil {
-			s.logger.Infow("node address change notification skipped",
+			// Build sync data (as updated rules)
+			syncData := &dto.ConfigSyncData{
+				Version:  version,
+				FullSync: false,
+				Updated:  ruleSyncDataList,
+			}
+
+			// Send sync message to agent
+			if err := s.notifier.SendToAgent(ctx, agentID, syncData); err != nil {
+				s.logger.Infow("node address change notification skipped",
+					"agent_id", agentID,
+					"node_id", nodeID,
+					"reason", err.Error(),
+				)
+				return err
+			}
+
+			s.logger.Infow("node address change notification sent to agent",
 				"agent_id", agentID,
 				"node_id", nodeID,
-				"reason", err.Error(),
+				"version", version,
+				"rule_count", len(ruleSyncDataList),
 			)
+			return nil
+		})
+		if err != nil {
 			lastErr = err
-			continue
 		}
-
-		s.logger.Infow("node address change notification sent to agent",
-			"agent_id", agentID,
-			"node_id", nodeID,
-			"version", version,
-			"rule_count", len(ruleSyncDataList),
-		)
 	}
 
 	return lastErr
@@ -606,42 +628,46 @@ func (s *ConfigSyncService) NotifyAgentBlockedProtocolsChange(ctx context.Contex
 		return nil
 	}
 
-	// Get agent to retrieve current blocked protocols
-	agent, err := s.agentRepo.GetByID(ctx, agentID)
-	if err != nil {
-		s.logger.Errorw("failed to get agent for blocked protocols sync",
+	// Serialize version allocation and enqueue for this agent so this update is
+	// delivered in version order relative to concurrent rule notifications.
+	return s.notifier.WithAgentLock(agentID, func() error {
+		// Get agent to retrieve current blocked protocols
+		agent, err := s.agentRepo.GetByID(ctx, agentID)
+		if err != nil {
+			s.logger.Errorw("failed to get agent for blocked protocols sync",
+				"agent_id", agentID,
+				"error", err,
+			)
+			return err
+		}
+		if agent == nil {
+			s.logger.Warnw("agent not found for blocked protocols sync",
+				"agent_id", agentID,
+			)
+			return forward.ErrAgentNotFound
+		}
+
+		// Increment global version
+		version := s.notifier.IncrementVersion()
+
+		// Build incremental sync data with only blocked protocols
+		syncData := &dto.ConfigSyncData{
+			Version:          version,
+			FullSync:         false,
+			BlockedProtocols: agent.BlockedProtocols().ToStringSlice(),
+		}
+
+		// Send sync message to agent
+		if err := s.notifier.SendToAgent(ctx, agentID, syncData); err != nil {
+			return err
+		}
+
+		s.logger.Infow("blocked protocols sync notification sent",
 			"agent_id", agentID,
-			"error", err,
+			"version", version,
+			"blocked_protocols", agent.BlockedProtocols().ToStringSlice(),
 		)
-		return err
-	}
-	if agent == nil {
-		s.logger.Warnw("agent not found for blocked protocols sync",
-			"agent_id", agentID,
-		)
-		return forward.ErrAgentNotFound
-	}
 
-	// Increment global version
-	version := s.notifier.IncrementVersion()
-
-	// Build incremental sync data with only blocked protocols
-	syncData := &dto.ConfigSyncData{
-		Version:          version,
-		FullSync:         false,
-		BlockedProtocols: agent.BlockedProtocols().ToStringSlice(),
-	}
-
-	// Send sync message to agent
-	if err := s.notifier.SendToAgent(ctx, agentID, syncData); err != nil {
-		return err
-	}
-
-	s.logger.Infow("blocked protocols sync notification sent",
-		"agent_id", agentID,
-		"version", version,
-		"blocked_protocols", agent.BlockedProtocols().ToStringSlice(),
-	)
-
-	return nil
+		return nil
+	})
 }

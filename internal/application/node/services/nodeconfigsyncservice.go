@@ -39,6 +39,24 @@ type NodeConfigSyncService struct {
 	// Version management
 	globalVersion uint64
 	nodeVersions  sync.Map // map[uint]uint64 - node ID to acknowledged version
+
+	// nodeSendLocks holds a per-node mutex (map[uint]*sync.Mutex) used to
+	// serialize the whole "read snapshot -> allocate version -> send" path for a
+	// single node. The node client applies config last-write-wins without a
+	// version gate, so serializing delivery here guarantees the latest snapshot
+	// is the one that lands last and prevents a stale snapshot from overwriting
+	// a newer one.
+	nodeSendLocks sync.Map
+}
+
+// withNodeLock serializes config delivery to a single node by holding a
+// per-node mutex while fn runs. Locks for different nodes are independent.
+func (s *NodeConfigSyncService) withNodeLock(nodeID uint, fn func() error) error {
+	actual, _ := s.nodeSendLocks.LoadOrStore(nodeID, &sync.Mutex{})
+	mu := actual.(*sync.Mutex)
+	mu.Lock()
+	defer mu.Unlock()
+	return fn()
 }
 
 // NewNodeConfigSyncService creates a new NodeConfigSyncService.
@@ -93,77 +111,81 @@ func (s *NodeConfigSyncService) FullSyncToNode(ctx context.Context, nodeID uint)
 		return nil
 	}
 
-	// Get node from repository
-	n, err := s.nodeRepo.GetByID(ctx, nodeID)
-	if err != nil {
-		s.logger.Errorw("failed to get node for config sync",
+	// Serialize the snapshot read, version allocation, and send for this node so
+	// the latest snapshot lands last (the node client applies last-write-wins).
+	return s.withNodeLock(nodeID, func() error {
+		// Get node from repository
+		n, err := s.nodeRepo.GetByID(ctx, nodeID)
+		if err != nil {
+			s.logger.Errorw("failed to get node for config sync",
+				"node_id", nodeID,
+				"error", err,
+			)
+			return err
+		}
+		if n == nil {
+			s.logger.Warnw("node not found for config sync",
+				"node_id", nodeID,
+			)
+			return errors.NewNotFoundError("node not found")
+		}
+
+		// Query forward rules targeting this node (for per-rule routing)
+		forwardRules := s.queryForwardRulesWithRouteConfig(ctx, nodeID)
+
+		// Collect all referenced node SIDs from route, DNS, and forward rule route configs
+		referencedNodes, serverKeyFunc := s.resolveReferencedNodes(ctx, n, forwardRules)
+
+		// Convert to NodeConfigData
+		configData := dto.ToNodeConfigData(n, referencedNodes, serverKeyFunc, forwardRules)
+
+		// Build full sync data
+		version := s.IncrementVersion()
+		syncData := &dto.NodeConfigSyncData{
+			Version:   version,
+			FullSync:  true,
+			Config:    configData,
+			Timestamp: biztime.NowUTC().Unix(),
+		}
+
+		// Build hub message
+		msg := &dto.NodeHubMessage{
+			Type:      dto.NodeMsgTypeConfigSync,
+			NodeID:    n.SID(),
+			Timestamp: biztime.NowUTC().Unix(),
+			Data:      syncData,
+		}
+
+		// Serialize message
+		msgBytes, err := json.Marshal(msg)
+		if err != nil {
+			s.logger.Errorw("failed to marshal config sync message",
+				"node_id", nodeID,
+				"error", err,
+			)
+			return err
+		}
+
+		// Send to node
+		if err := s.hub.SendMessageToNode(nodeID, msgBytes); err != nil {
+			s.logger.Warnw("failed to send config sync to node",
+				"node_id", nodeID,
+				"error", err,
+			)
+			return err
+		}
+
+		s.logger.Infow("full config sync sent to node",
 			"node_id", nodeID,
-			"error", err,
+			"node_sid", n.SID(),
+			"version", version,
+			"has_route", configData.Route != nil,
+			"has_dns", configData.DNS != nil,
+			"forward_rule_routes", len(configData.ForwardRuleRoutes),
 		)
-		return err
-	}
-	if n == nil {
-		s.logger.Warnw("node not found for config sync",
-			"node_id", nodeID,
-		)
-		return errors.NewNotFoundError("node not found")
-	}
 
-	// Query forward rules targeting this node (for per-rule routing)
-	forwardRules := s.queryForwardRulesWithRouteConfig(ctx, nodeID)
-
-	// Collect all referenced node SIDs from route, DNS, and forward rule route configs
-	referencedNodes, serverKeyFunc := s.resolveReferencedNodes(ctx, n, forwardRules)
-
-	// Convert to NodeConfigData
-	configData := dto.ToNodeConfigData(n, referencedNodes, serverKeyFunc, forwardRules)
-
-	// Build full sync data
-	version := s.IncrementVersion()
-	syncData := &dto.NodeConfigSyncData{
-		Version:   version,
-		FullSync:  true,
-		Config:    configData,
-		Timestamp: biztime.NowUTC().Unix(),
-	}
-
-	// Build hub message
-	msg := &dto.NodeHubMessage{
-		Type:      dto.NodeMsgTypeConfigSync,
-		NodeID:    n.SID(),
-		Timestamp: biztime.NowUTC().Unix(),
-		Data:      syncData,
-	}
-
-	// Serialize message
-	msgBytes, err := json.Marshal(msg)
-	if err != nil {
-		s.logger.Errorw("failed to marshal config sync message",
-			"node_id", nodeID,
-			"error", err,
-		)
-		return err
-	}
-
-	// Send to node
-	if err := s.hub.SendMessageToNode(nodeID, msgBytes); err != nil {
-		s.logger.Warnw("failed to send config sync to node",
-			"node_id", nodeID,
-			"error", err,
-		)
-		return err
-	}
-
-	s.logger.Infow("full config sync sent to node",
-		"node_id", nodeID,
-		"node_sid", n.SID(),
-		"version", version,
-		"has_route", configData.Route != nil,
-		"has_dns", configData.DNS != nil,
-		"forward_rule_routes", len(configData.ForwardRuleRoutes),
-	)
-
-	return nil
+		return nil
+	})
 }
 
 // NotifyConfigChange notifies a node about a configuration change.
@@ -181,77 +203,81 @@ func (s *NodeConfigSyncService) NotifyConfigChange(ctx context.Context, nodeID u
 		return nil
 	}
 
-	// Get updated node from repository
-	n, err := s.nodeRepo.GetByID(ctx, nodeID)
-	if err != nil {
-		s.logger.Errorw("failed to get node for config change notification",
+	// Serialize against full sync and other change notifications for this node so
+	// the latest snapshot lands last (the node client applies last-write-wins).
+	return s.withNodeLock(nodeID, func() error {
+		// Get updated node from repository
+		n, err := s.nodeRepo.GetByID(ctx, nodeID)
+		if err != nil {
+			s.logger.Errorw("failed to get node for config change notification",
+				"node_id", nodeID,
+				"error", err,
+			)
+			return err
+		}
+		if n == nil {
+			s.logger.Warnw("node not found for config change notification",
+				"node_id", nodeID,
+			)
+			return errors.NewNotFoundError("node not found")
+		}
+
+		// Query forward rules targeting this node (for per-rule routing)
+		forwardRules := s.queryForwardRulesWithRouteConfig(ctx, nodeID)
+
+		// Collect all referenced node SIDs from route, DNS, and forward rule route configs
+		referencedNodes, serverKeyFunc := s.resolveReferencedNodes(ctx, n, forwardRules)
+
+		// Convert to NodeConfigData
+		configData := dto.ToNodeConfigData(n, referencedNodes, serverKeyFunc, forwardRules)
+
+		// Build sync data (incremental update)
+		version := s.IncrementVersion()
+		syncData := &dto.NodeConfigSyncData{
+			Version:   version,
+			FullSync:  false, // Incremental update
+			Config:    configData,
+			Timestamp: biztime.NowUTC().Unix(),
+		}
+
+		// Build hub message
+		msg := &dto.NodeHubMessage{
+			Type:      dto.NodeMsgTypeConfigSync,
+			NodeID:    n.SID(),
+			Timestamp: biztime.NowUTC().Unix(),
+			Data:      syncData,
+		}
+
+		// Serialize message
+		msgBytes, err := json.Marshal(msg)
+		if err != nil {
+			s.logger.Errorw("failed to marshal config change message",
+				"node_id", nodeID,
+				"error", err,
+			)
+			return err
+		}
+
+		// Send to node
+		if err := s.hub.SendMessageToNode(nodeID, msgBytes); err != nil {
+			s.logger.Warnw("failed to send config change to node",
+				"node_id", nodeID,
+				"error", err,
+			)
+			return err
+		}
+
+		s.logger.Infow("config change notification sent to node",
 			"node_id", nodeID,
-			"error", err,
+			"node_sid", n.SID(),
+			"version", version,
+			"has_route", configData.Route != nil,
+			"has_dns", configData.DNS != nil,
+			"forward_rule_routes", len(configData.ForwardRuleRoutes),
 		)
-		return err
-	}
-	if n == nil {
-		s.logger.Warnw("node not found for config change notification",
-			"node_id", nodeID,
-		)
-		return errors.NewNotFoundError("node not found")
-	}
 
-	// Query forward rules targeting this node (for per-rule routing)
-	forwardRules := s.queryForwardRulesWithRouteConfig(ctx, nodeID)
-
-	// Collect all referenced node SIDs from route, DNS, and forward rule route configs
-	referencedNodes, serverKeyFunc := s.resolveReferencedNodes(ctx, n, forwardRules)
-
-	// Convert to NodeConfigData
-	configData := dto.ToNodeConfigData(n, referencedNodes, serverKeyFunc, forwardRules)
-
-	// Build sync data (incremental update)
-	version := s.IncrementVersion()
-	syncData := &dto.NodeConfigSyncData{
-		Version:   version,
-		FullSync:  false, // Incremental update
-		Config:    configData,
-		Timestamp: biztime.NowUTC().Unix(),
-	}
-
-	// Build hub message
-	msg := &dto.NodeHubMessage{
-		Type:      dto.NodeMsgTypeConfigSync,
-		NodeID:    n.SID(),
-		Timestamp: biztime.NowUTC().Unix(),
-		Data:      syncData,
-	}
-
-	// Serialize message
-	msgBytes, err := json.Marshal(msg)
-	if err != nil {
-		s.logger.Errorw("failed to marshal config change message",
-			"node_id", nodeID,
-			"error", err,
-		)
-		return err
-	}
-
-	// Send to node
-	if err := s.hub.SendMessageToNode(nodeID, msgBytes); err != nil {
-		s.logger.Warnw("failed to send config change to node",
-			"node_id", nodeID,
-			"error", err,
-		)
-		return err
-	}
-
-	s.logger.Infow("config change notification sent to node",
-		"node_id", nodeID,
-		"node_sid", n.SID(),
-		"version", version,
-		"has_route", configData.Route != nil,
-		"has_dns", configData.DNS != nil,
-		"forward_rule_routes", len(configData.ForwardRuleRoutes),
-	)
-
-	return nil
+		return nil
+	})
 }
 
 // queryForwardRulesWithRouteConfig queries enabled forward rules targeting the node

@@ -19,7 +19,14 @@ type SyncNotifier struct {
 	agentRepo     forward.AgentRepository
 	agentVersions sync.Map
 	globalVersion atomic.Uint64
-	logger        logger.Interface
+	// agentSendLocks holds a per-agent mutex (map[uint]*sync.Mutex) used to
+	// serialize the whole "read snapshot -> allocate version -> enqueue" path
+	// for a single agent. Because the per-connection send channel is FIFO,
+	// serializing version allocation with enqueue guarantees that the version
+	// order equals the delivery order, preventing a late lower-version sync
+	// from being dropped by the agent's monotonic version gate.
+	agentSendLocks sync.Map
+	logger         logger.Interface
 }
 
 // NewSyncNotifier creates a new SyncNotifier instance.
@@ -93,6 +100,20 @@ func (n *SyncNotifier) SendToAgent(ctx context.Context, agentID uint, syncData *
 // IncrementVersion atomically increments and returns the new global version.
 func (n *SyncNotifier) IncrementVersion() uint64 {
 	return n.globalVersion.Add(1)
+}
+
+// WithAgentLock serializes config delivery to a single agent by holding a
+// per-agent mutex while fn runs. Callers must perform version allocation and
+// message enqueue inside fn so that, combined with the FIFO send channel, the
+// version order delivered to the agent matches the order versions were issued.
+// Locks for different agents are independent, so cross-agent delivery stays
+// concurrent.
+func (n *SyncNotifier) WithAgentLock(agentID uint, fn func() error) error {
+	actual, _ := n.agentSendLocks.LoadOrStore(agentID, &sync.Mutex{})
+	mu := actual.(*sync.Mutex)
+	mu.Lock()
+	defer mu.Unlock()
+	return fn()
 }
 
 // GetAgentVersion returns the last synced version for an agent.
