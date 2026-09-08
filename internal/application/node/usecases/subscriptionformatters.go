@@ -161,6 +161,7 @@ type clashProxy struct {
 	UUID        string            `yaml:"uuid,omitempty"`
 	Flow        string            `yaml:"flow,omitempty"`
 	TLS         bool              `yaml:"tls,omitempty"`
+	ServerName  string            `yaml:"servername,omitempty"` // VLESS/VMess use servername instead of sni
 	Fingerprint string            `yaml:"client-fingerprint,omitempty"`
 	AlterID     int               `yaml:"alterId,omitempty"`
 	RealityOpts *clashRealityOpts `yaml:"reality-opts,omitempty"`
@@ -330,7 +331,7 @@ func (f *ClashFormatter) buildVLESSProxy(node *Node, uuid string) clashProxy {
 	case vo.VLESSSecurityTLS:
 		proxy.TLS = true
 		if cfg.SNI() != "" {
-			proxy.SNI = cfg.SNI()
+			proxy.ServerName = cfg.SNI()
 		}
 		if cfg.Fingerprint() != "" {
 			proxy.Fingerprint = cfg.Fingerprint()
@@ -338,7 +339,7 @@ func (f *ClashFormatter) buildVLESSProxy(node *Node, uuid string) clashProxy {
 	case vo.VLESSSecurityReality:
 		proxy.TLS = true
 		if cfg.SNI() != "" {
-			proxy.SNI = cfg.SNI()
+			proxy.ServerName = cfg.SNI()
 		}
 		if cfg.Fingerprint() != "" {
 			proxy.Fingerprint = cfg.Fingerprint()
@@ -393,8 +394,14 @@ func (f *ClashFormatter) buildVMessProxy(node *Node, uuid string) clashProxy {
 		SkipCertVerify: cfg.AllowInsecure(),
 	}
 
+	// Domain "http" transport is HTTP/2 (sing-box "http"); mihomo calls it "h2"
+	// and reserves "http" for HTTP header obfuscation over TCP.
+	if cfg.TransportType() == vo.VMessTransportHTTP {
+		proxy.Network = "h2"
+	}
+
 	if cfg.SNI() != "" {
-		proxy.SNI = cfg.SNI()
+		proxy.ServerName = cfg.SNI()
 	}
 
 	// Set transport-specific options
@@ -461,9 +468,8 @@ func (f *ClashFormatter) buildHysteria2Proxy(node *Node, password string) clashP
 		proxy.Down = fmt.Sprintf("%d Mbps", *cfg.DownMbps())
 	}
 
-	if cfg.Fingerprint() != "" {
-		proxy.Fingerprint = cfg.Fingerprint()
-	}
+	// client-fingerprint is intentionally omitted: mihomo hysteria2 runs over
+	// QUIC and does not support uTLS fingerprints.
 
 	return proxy
 }
@@ -710,6 +716,11 @@ func (f *SurgeFormatter) FormatWithPassword(nodes []*Node, password string) (str
 
 		switch vo.Protocol(node.Protocol) {
 		case vo.ProtocolTrojan:
+			// Surge doesn't support gRPC transport for Trojan, skip
+			if node.TransportProtocol == "grpc" {
+				continue
+			}
+
 			// Surge Trojan format
 			line = fmt.Sprintf("%s = trojan, %s, %d, password=%s",
 				nodeName,
@@ -807,8 +818,16 @@ func stripControlChars(s string) string {
 }
 
 // buildVMessLine builds a Surge 5 VMess proxy line
+// Returns an empty string for transports Surge cannot handle (grpc/http/quic).
 func (f *SurgeFormatter) buildVMessLine(node *Node, uuid string) string {
 	cfg := node.VMessConfig
+
+	switch cfg.TransportType() {
+	case vo.VMessTransportTCP, vo.VMessTransportWS:
+	default:
+		// Surge only supports tcp and ws for VMess
+		return ""
+	}
 
 	// Surge VMess format: name = vmess, server, port, username=uuid, encrypt-method=auto
 	line := fmt.Sprintf("%s = vmess, %s, %d, username=%s, encrypt-method=%s",
@@ -817,6 +836,11 @@ func (f *SurgeFormatter) buildVMessLine(node *Node, uuid string) string {
 		node.SubscriptionPort,
 		uuid,
 		cfg.Security())
+
+	// alterId=0 servers only accept AEAD authentication
+	if cfg.AlterID() == 0 {
+		line += ", vmess-aead=true"
+	}
 
 	// Add TLS settings
 	if cfg.TLS() {
@@ -877,27 +901,28 @@ func (f *SurgeFormatter) buildHysteria2Line(node *Node, password string) string 
 	return line
 }
 
-// buildTUICLine builds a Surge 5 TUIC proxy line
-// password is the subscription-derived credential (used as both token/uuid and password)
+// buildTUICLine builds a Surge 5 TUIC v5 proxy line
+// password is the subscription-derived credential (used as both uuid and password)
 func (f *SurgeFormatter) buildTUICLine(node *Node, password string) string {
 	cfg := node.TUICConfig
-	// Use subscription-derived password as both token and password,
+	// Use subscription-derived password as both uuid and password,
 	// fallback to config values if empty
-	token := password
-	if token == "" {
-		token = cfg.UUID()
+	uuid := password
+	if uuid == "" {
+		uuid = cfg.UUID()
 	}
 	pwd := password
 	if pwd == "" {
 		pwd = cfg.Password()
 	}
 
-	// Surge TUIC format: name = tuic, server, port, token=uuid, password=xxx
-	line := fmt.Sprintf("%s = tuic, %s, %d, token=%s",
+	// Surge TUIC v5 format: name = tuic-v5, server, port, uuid=xxx, password=xxx
+	// ("tuic" without suffix is TUIC v4 with token auth, which the server does not speak)
+	line := fmt.Sprintf("%s = tuic-v5, %s, %d, uuid=%s",
 		node.Name,
 		node.ServerAddress,
 		node.SubscriptionPort,
-		token)
+		uuid)
 
 	if pwd != "" {
 		line += fmt.Sprintf(", password=%s", pwd)
