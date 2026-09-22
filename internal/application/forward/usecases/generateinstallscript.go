@@ -82,13 +82,19 @@ func (uc *GenerateInstallScriptUseCase) Execute(ctx context.Context, query Gener
 		return nil, errors.NewNotFoundError("forward agent", query.ShortID)
 	}
 
-	// Use provided token or fall back to agent's stored token
+	// Use provided token or fall back to agent's stored token.
+	// A caller-supplied token must belong to this agent: handing out a command
+	// built with another agent's token would make the target machine
+	// authenticate as that agent and take it offline.
 	token := query.Token
 	if token == "" {
 		token = agent.GetAPIToken()
 		if token == "" {
 			return nil, errors.NewValidationError("agent has no token, please call regenerate-token endpoint first")
 		}
+	} else if !agent.VerifyAPIToken(token) {
+		uc.logger.Warnw("install script requested with a token that does not belong to the agent", "short_id", query.ShortID)
+		return nil, errors.NewValidationError("token does not belong to this forward agent")
 	}
 
 	// Generate install and uninstall commands.

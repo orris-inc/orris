@@ -121,12 +121,16 @@ func (c *AgentHubConn) Close() {
 
 // NodeHubConn represents a node agent WebSocket connection.
 type NodeHubConn struct {
-	NodeID      uint
-	Conn        *websocket.Conn
-	Send        chan []byte // Generic byte channel for node messages
-	LastSeen    time.Time
-	ConnectedAt time.Time
-	closed      atomic.Bool
+	NodeID uint
+	Conn   *websocket.Conn
+	Send   chan []byte // Generic byte channel for node messages
+	// ObservedAddress is the remote address observed when the node connected
+	// (respects proxy headers via gin.Context.ClientIP()). Used to detect a
+	// second machine connecting with the same node identity.
+	ObservedAddress string
+	LastSeen        time.Time
+	ConnectedAt     time.Time
+	closed          atomic.Bool
 }
 
 // TrySend attempts to send a message to the node.
@@ -156,6 +160,26 @@ func (c *NodeHubConn) Close() {
 	if c.closed.CompareAndSwap(false, true) {
 		close(c.Send)
 	}
+}
+
+// duplicateIdentityGrace is how long an existing connection is protected from
+// being taken over by a connection from a different remote address. It is kept
+// above the WebSocket pong timeout so that a genuinely dead connection is always
+// reaped before the grace period expires.
+const duplicateIdentityGrace = 90 * time.Second
+
+// canReplaceConn reports whether a new connection from observedAddress may take
+// over an existing connection opened from existingAddress.
+//
+// A reconnect from the same address (or when either address is unknown) is a
+// normal takeover. A connection from a different address is only accepted once
+// the existing connection has gone stale, so that a machine installed with a
+// token that belongs to another agent cannot kick a healthy agent offline.
+func canReplaceConn(existingAddress, observedAddress string, existingLastSeen time.Time) bool {
+	if existingAddress == "" || observedAddress == "" || existingAddress == observedAddress {
+		return true
+	}
+	return biztime.NowUTC().Sub(existingLastSeen) > duplicateIdentityGrace
 }
 
 // NewAgentHub creates a new AgentHub instance.
@@ -335,12 +359,31 @@ func (h *AgentHub) SetOnAgentOffline(fn func(agentID uint)) {
 // RegisterAgent registers a forward agent WebSocket connection.
 // observedAddress is the remote IP seen at the transport layer (respecting
 // trusted proxy headers) and is used as a fallback for next-hop resolution.
-func (h *AgentHub) RegisterAgent(agentID uint, conn *websocket.Conn, observedAddress string) *AgentHubConn {
+// Returns ErrDuplicateIdentity when a healthy connection for the same agent is
+// already established from a different remote address, which means two machines
+// were installed with the same agent token.
+func (h *AgentHub) RegisterAgent(agentID uint, conn *websocket.Conn, observedAddress string) (*AgentHubConn, error) {
 	h.agentsMu.Lock()
 	defer h.agentsMu.Unlock()
 
 	// Close existing connection if any
 	if existing, ok := h.agents[agentID]; ok {
+		if !canReplaceConn(existing.ObservedAddress, observedAddress, existing.LastSeen) {
+			h.logger.Warnw("rejected forward agent connection: identity already connected from a different address",
+				"agent_id", agentID,
+				"existing_address", existing.ObservedAddress,
+				"new_address", observedAddress,
+				"existing_connected_at", existing.ConnectedAt,
+			)
+			return nil, ErrDuplicateIdentity
+		}
+		if existing.ObservedAddress != observedAddress {
+			h.logger.Warnw("forward agent connection taken over by a different address",
+				"agent_id", agentID,
+				"existing_address", existing.ObservedAddress,
+				"new_address", observedAddress,
+			)
+		}
 		existing.Close() // Use Close() to safely close the channel
 		existing.Conn.Close()
 	}
@@ -365,13 +408,23 @@ func (h *AgentHub) RegisterAgent(agentID uint, conn *websocket.Conn, observedAdd
 		})
 	}
 
-	return agentConn
+	return agentConn, nil
 }
 
 // UnregisterAgent removes an agent connection.
-func (h *AgentHub) UnregisterAgent(agentID uint) {
+// agentConn identifies the connection being torn down: when it has already been
+// replaced by a newer connection the registry is left untouched, so a dying
+// connection cannot drop the agent that took its place.
+func (h *AgentHub) UnregisterAgent(agentID uint, agentConn *AgentHubConn) {
 	h.agentsMu.Lock()
 	defer h.agentsMu.Unlock()
+
+	if current, ok := h.agents[agentID]; ok && agentConn != nil && current != agentConn {
+		h.logger.Debugw("skipped unregistering superseded forward agent connection",
+			"agent_id", agentID,
+		)
+		return
+	}
 
 	if conn, ok := h.agents[agentID]; ok {
 		conn.Close() // Use Close() to safely close the channel
@@ -524,22 +577,45 @@ func (h *AgentHub) SetOnNodeOffline(fn func(nodeID uint)) {
 }
 
 // RegisterNodeAgent registers a node agent WebSocket connection.
-func (h *AgentHub) RegisterNodeAgent(nodeID uint, conn *websocket.Conn) *NodeHubConn {
+// observedAddress is the remote IP seen at the transport layer (respecting
+// trusted proxy headers).
+//
+// Returns ErrDuplicateIdentity when a healthy connection for the same node is
+// already established from a different remote address, which means two machines
+// were installed with the same node token.
+func (h *AgentHub) RegisterNodeAgent(nodeID uint, conn *websocket.Conn, observedAddress string) (*NodeHubConn, error) {
 	h.nodesMu.Lock()
 	defer h.nodesMu.Unlock()
 
 	// Close existing connection if any
 	if existing, ok := h.nodes[nodeID]; ok {
+		if !canReplaceConn(existing.ObservedAddress, observedAddress, existing.LastSeen) {
+			h.logger.Warnw("rejected node agent connection: identity already connected from a different address",
+				"node_id", nodeID,
+				"existing_address", existing.ObservedAddress,
+				"new_address", observedAddress,
+				"existing_connected_at", existing.ConnectedAt,
+			)
+			return nil, ErrDuplicateIdentity
+		}
+		if existing.ObservedAddress != observedAddress {
+			h.logger.Warnw("node agent connection taken over by a different address",
+				"node_id", nodeID,
+				"existing_address", existing.ObservedAddress,
+				"new_address", observedAddress,
+			)
+		}
 		existing.Close()
 		existing.Conn.Close()
 	}
 
 	nodeConn := &NodeHubConn{
-		NodeID:      nodeID,
-		Conn:        conn,
-		Send:        make(chan []byte, 256),
-		LastSeen:    biztime.NowUTC(),
-		ConnectedAt: biztime.NowUTC(),
+		NodeID:          nodeID,
+		Conn:            conn,
+		Send:            make(chan []byte, 256),
+		ObservedAddress: observedAddress,
+		LastSeen:        biztime.NowUTC(),
+		ConnectedAt:     biztime.NowUTC(),
 	}
 	h.nodes[nodeID] = nodeConn
 
@@ -553,13 +629,23 @@ func (h *AgentHub) RegisterNodeAgent(nodeID uint, conn *websocket.Conn) *NodeHub
 		})
 	}
 
-	return nodeConn
+	return nodeConn, nil
 }
 
 // UnregisterNodeAgent removes a node agent connection.
-func (h *AgentHub) UnregisterNodeAgent(nodeID uint) {
+// nodeConn identifies the connection being torn down: when it has already been
+// replaced by a newer connection the registry is left untouched, so a dying
+// connection cannot drop the node that took its place.
+func (h *AgentHub) UnregisterNodeAgent(nodeID uint, nodeConn *NodeHubConn) {
 	h.nodesMu.Lock()
 	defer h.nodesMu.Unlock()
+
+	if current, ok := h.nodes[nodeID]; ok && nodeConn != nil && current != nodeConn {
+		h.logger.Debugw("skipped unregistering superseded node agent connection",
+			"node_id", nodeID,
+		)
+		return
+	}
 
 	if conn, ok := h.nodes[nodeID]; ok {
 		conn.Close()
@@ -902,6 +988,9 @@ var (
 	ErrAgentNotConnected = &HubError{Code: "AGENT_NOT_CONNECTED", Message: "agent not connected"}
 	ErrNodeNotConnected  = &HubError{Code: "NODE_NOT_CONNECTED", Message: "node not connected"}
 	ErrSendChannelFull   = &HubError{Code: "SEND_CHANNEL_FULL", Message: "send channel full"}
+	// ErrDuplicateIdentity is returned when another machine is already connected
+	// with the same agent or node identity from a different remote address.
+	ErrDuplicateIdentity = &HubError{Code: "DUPLICATE_IDENTITY", Message: "identity already connected from a different address"}
 )
 
 // HubError represents an agent hub error.

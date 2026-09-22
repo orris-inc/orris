@@ -200,19 +200,34 @@ func (h *NodeHubHandler) NodeAgentWS(c *gin.Context) {
 		return
 	}
 
+	clientIP := c.ClientIP()
+
 	conn, err := nodeUpgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		h.logger.Errorw("failed to upgrade to websocket",
 			"error", err,
 			"node_id", nodeID,
-			"ip", c.ClientIP(),
+			"ip", clientIP,
 		)
 		return
 	}
 
-	nodeConn := h.hub.RegisterNodeAgent(nodeID, conn)
+	nodeConn, err := h.hub.RegisterNodeAgent(nodeID, conn, clientIP)
+	if err != nil {
+		// Another machine is already connected with this node token. Keep the
+		// established connection and refuse this one instead of kicking a
+		// healthy node offline.
+		h.logger.Warnw("node agent hub websocket rejected",
+			"error", err,
+			"node_id", nodeID,
+			"ip", clientIP,
+		)
+		closeMsg := websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "node identity already connected from another address")
+		_ = conn.WriteControl(websocket.CloseMessage, closeMsg, time.Now().Add(nodeWriteWait))
+		conn.Close()
+		return
+	}
 
-	clientIP := c.ClientIP()
 	h.logger.Infow("node agent hub websocket connected",
 		"node_id", nodeID,
 		"ip", clientIP,
@@ -228,7 +243,7 @@ func (h *NodeHubHandler) NodeAgentWS(c *gin.Context) {
 	goroutine.SafeGo(h.logger, "node-agent-write-pump", func() {
 		h.writePump(nodeID, conn, nodeConn.Send)
 	})
-	h.readPump(nodeID, conn)
+	h.readPump(nodeID, conn, nodeConn)
 }
 
 // checkAndNotifyIPChange checks if the node's public IP has changed,
@@ -328,9 +343,9 @@ func (h *NodeHubHandler) syncSubscriptionsOnConnect(nodeID uint) {
 }
 
 // readPump reads messages from node agent WebSocket.
-func (h *NodeHubHandler) readPump(nodeID uint, conn *websocket.Conn) {
+func (h *NodeHubHandler) readPump(nodeID uint, conn *websocket.Conn, nodeConn *services.NodeHubConn) {
 	defer func() {
-		h.hub.UnregisterNodeAgent(nodeID)
+		h.hub.UnregisterNodeAgent(nodeID, nodeConn)
 		conn.Close()
 	}()
 

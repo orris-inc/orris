@@ -70,21 +70,37 @@ func (h *Handler) ForwardAgentWS(c *gin.Context) {
 		return
 	}
 
+	clientIP := c.ClientIP()
+
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		h.logger.Errorw("failed to upgrade to websocket",
 			"error", err,
 			"agent_id", agentID,
-			"ip", c.ClientIP(),
+			"ip", clientIP,
 		)
 		return
 	}
 
-	agentConn := h.hub.RegisterAgent(agentID, conn, c.ClientIP())
+	agentConn, err := h.hub.RegisterAgent(agentID, conn, clientIP)
+	if err != nil {
+		// Another machine is already connected with this agent token. Keep the
+		// established connection and refuse this one instead of kicking a
+		// healthy agent offline.
+		h.logger.Warnw("forward agent hub websocket rejected",
+			"error", err,
+			"agent_id", agentID,
+			"ip", clientIP,
+		)
+		closeMsg := websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "agent identity already connected from another address")
+		_ = conn.WriteControl(websocket.CloseMessage, closeMsg, time.Now().Add(writeWait))
+		conn.Close()
+		return
+	}
 
 	h.logger.Infow("forward agent hub websocket connected",
 		"agent_id", agentID,
-		"ip", c.ClientIP(),
+		"ip", clientIP,
 	)
 
 	// Note: Full config sync is handled by OnAgentOnline callback in router.go
@@ -94,13 +110,13 @@ func (h *Handler) ForwardAgentWS(c *gin.Context) {
 	goroutine.SafeGo(h.logger, "forward-agent-write-pump", func() {
 		h.writePump(agentID, conn, agentConn.Send)
 	})
-	h.readPump(agentID, conn)
+	h.readPump(agentID, conn, agentConn)
 }
 
 // readPump reads messages from agent WebSocket.
-func (h *Handler) readPump(agentID uint, conn *websocket.Conn) {
+func (h *Handler) readPump(agentID uint, conn *websocket.Conn, agentConn *services.AgentHubConn) {
 	defer func() {
-		h.hub.UnregisterAgent(agentID)
+		h.hub.UnregisterAgent(agentID, agentConn)
 		conn.Close()
 	}()
 

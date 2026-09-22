@@ -74,13 +74,19 @@ func (uc *GenerateNodeInstallScriptUseCase) Execute(ctx context.Context, query G
 		return nil, errors.NewNotFoundError("node", query.SID)
 	}
 
-	// Use provided token or fall back to node's stored token
+	// Use provided token or fall back to node's stored token.
+	// A caller-supplied token must belong to this node: handing out a command
+	// built with another node's token would make the target machine
+	// authenticate as that node and take it offline.
 	token := query.Token
 	if token == "" {
 		token = n.GetAPIToken()
 		if token == "" {
 			return nil, errors.NewValidationError("node has no token, please call generate token endpoint first")
 		}
+	} else if !n.VerifyAPIToken(token) {
+		uc.logger.Warnw("install script requested with a token that does not belong to the node", "sid", query.SID)
+		return nil, errors.NewValidationError("token does not belong to this node")
 	}
 
 	nodeSID := n.SID()
