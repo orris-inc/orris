@@ -133,18 +133,11 @@ func (uc *GetNodeConfigUseCase) Execute(ctx context.Context, cmd GetNodeConfigCo
 
 	// Server key function for referenced nodes
 	serverKeyFunc := func(refNode *node.Node) string {
+		method := ""
 		if refNode.Protocol().IsShadowsocks() {
-			return vo.GenerateShadowsocksServerPassword(refNode.TokenHash(), refNode.EncryptionConfig().Method())
+			method = refNode.EncryptionConfig().Method()
 		}
-		// For Trojan, generate password from token hash for node-to-node forwarding
-		if refNode.Protocol().IsTrojan() {
-			return vo.GenerateTrojanServerPassword(refNode.TokenHash())
-		}
-		// For AnyTLS, generate password from token hash for node-to-node forwarding
-		if refNode.Protocol().IsAnyTLS() {
-			return vo.GenerateAnyTLSServerPassword(refNode.TokenHash())
-		}
-		return ""
+		return vo.GenerateNodeForwardCredential(refNode.Protocol(), refNode.TokenHash(), method)
 	}
 
 	// Convert domain node to agent config response

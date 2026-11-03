@@ -244,7 +244,7 @@ func (s *SubscriptionSyncService) NotifySubscriptionChange(
 		}
 
 		// Build subscription info for this node
-		subscriptionInfo := s.buildSubscriptionInfo(sub, hmacSecret, encryptionMethod, deviceLimit)
+		subscriptionInfo := s.buildSubscriptionInfo(sub, hmacSecret, n.Protocol(), encryptionMethod, deviceLimit)
 
 		if err := s.sendSubscriptionSync(n, changeType, []dto.NodeSubscriptionInfo{subscriptionInfo}); err != nil {
 			s.logger.Warnw("failed to send subscription sync to node",
@@ -351,11 +351,12 @@ func (s *SubscriptionSyncService) NotifySubscriptionUpdate(
 func (s *SubscriptionSyncService) buildSubscriptionInfo(
 	sub *subscription.Subscription,
 	hmacSecret string,
+	protocol vo.Protocol,
 	encryptionMethod string,
 	deviceLimit int,
 ) dto.NodeSubscriptionInfo {
 	// Use the same password generation logic as GetNodeSubscriptions
-	password := s.generatePassword(sub, hmacSecret, encryptionMethod)
+	password := s.generatePassword(sub, hmacSecret, protocol, encryptionMethod)
 
 	return dto.NodeSubscriptionInfo{
 		SubscriptionSID: sub.SID(),
@@ -371,6 +372,7 @@ func (s *SubscriptionSyncService) buildSubscriptionInfo(
 func (s *SubscriptionSyncService) generatePassword(
 	sub *subscription.Subscription,
 	secret string,
+	protocol vo.Protocol,
 	method string,
 ) string {
 	if sub == nil || sub.UUID() == "" {
@@ -379,7 +381,7 @@ func (s *SubscriptionSyncService) generatePassword(
 
 	// Delegate to the shared password generation logic
 	subs := []*subscription.Subscription{sub}
-	response := dto.ToNodeSubscriptionsResponse(subs, secret, method, nil)
+	response := dto.ToNodeSubscriptionsResponse(subs, secret, protocol, method, nil)
 	if len(response.Subscriptions) > 0 {
 		return response.Subscriptions[0].Password
 	}
@@ -391,7 +393,7 @@ func (s *SubscriptionSyncService) generateSubscriptionName(sub *subscription.Sub
 	if sub == nil {
 		return ""
 	}
-	response := dto.ToNodeSubscriptionsResponse([]*subscription.Subscription{sub}, "", "", nil)
+	response := dto.ToNodeSubscriptionsResponse([]*subscription.Subscription{sub}, "", "", "", nil)
 	if len(response.Subscriptions) > 0 {
 		return response.Subscriptions[0].Name
 	}
@@ -495,19 +497,12 @@ func (s *SubscriptionSyncService) FullSyncSubscriptionsToNode(
 				deviceLimit = limit
 			}
 		}
-		info := s.buildSubscriptionInfo(sub, hmacSecret, encryptionMethod, deviceLimit)
+		info := s.buildSubscriptionInfo(sub, hmacSecret, n.Protocol(), encryptionMethod, deviceLimit)
 		subscriptionInfos = append(subscriptionInfos, info)
 	}
 
 	// Add node-to-node forwarding user
-	var nodeForwardingPassword string
-	if n.Protocol().IsTrojan() {
-		nodeForwardingPassword = vo.GenerateTrojanServerPassword(n.TokenHash())
-	} else if n.Protocol().IsShadowsocks() {
-		nodeForwardingPassword = vo.GenerateShadowsocksServerPassword(n.TokenHash(), encryptionMethod)
-	} else if n.Protocol().IsAnyTLS() {
-		nodeForwardingPassword = vo.GenerateAnyTLSServerPassword(n.TokenHash())
-	}
+	nodeForwardingPassword := vo.GenerateNodeForwardCredential(n.Protocol(), n.TokenHash(), encryptionMethod)
 
 	if nodeForwardingPassword != "" {
 		forwardingUser := dto.NodeSubscriptionInfo{

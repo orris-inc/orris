@@ -84,18 +84,11 @@ func (uc *GetNodeSubscriptionsUseCase) Execute(ctx context.Context, cmd GetNodeS
 	hmacSecret := config.Get().Auth.JWT.Secret
 
 	// Convert subscriptions to agent subscriptions response
-	subscriptionInfos := dto.ToNodeSubscriptionsResponse(subscriptions, hmacSecret, encryptionMethod, planDeviceLimits)
+	subscriptionInfos := dto.ToNodeSubscriptionsResponse(subscriptions, hmacSecret, nodeEntity.Protocol(), encryptionMethod, planDeviceLimits)
 
 	// Add a special node-to-node forwarding user
 	// This allows other nodes to forward traffic to this node using a derived password
-	var nodeForwardingPassword string
-	if nodeEntity.Protocol().IsTrojan() {
-		nodeForwardingPassword = vo.GenerateTrojanServerPassword(nodeEntity.TokenHash())
-	} else if nodeEntity.Protocol().IsShadowsocks() {
-		nodeForwardingPassword = vo.GenerateShadowsocksServerPassword(nodeEntity.TokenHash(), encryptionMethod)
-	} else if nodeEntity.Protocol().IsAnyTLS() {
-		nodeForwardingPassword = vo.GenerateAnyTLSServerPassword(nodeEntity.TokenHash())
-	}
+	nodeForwardingPassword := vo.GenerateNodeForwardCredential(nodeEntity.Protocol(), nodeEntity.TokenHash(), encryptionMethod)
 
 	if nodeForwardingPassword != "" {
 		forwardingUser := dto.NodeSubscriptionInfo{

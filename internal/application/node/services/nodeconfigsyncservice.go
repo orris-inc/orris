@@ -340,16 +340,11 @@ func (s *NodeConfigSyncService) resolveReferencedNodes(
 	}
 
 	serverKeyFunc := func(refNode *node.Node) string {
+		method := ""
 		if refNode.Protocol().IsShadowsocks() {
-			return vo.GenerateShadowsocksServerPassword(refNode.TokenHash(), refNode.EncryptionConfig().Method())
+			method = refNode.EncryptionConfig().Method()
 		}
-		if refNode.Protocol().IsTrojan() {
-			return vo.GenerateTrojanServerPassword(refNode.TokenHash())
-		}
-		if refNode.Protocol().IsAnyTLS() {
-			return vo.GenerateAnyTLSServerPassword(refNode.TokenHash())
-		}
-		return ""
+		return vo.GenerateNodeForwardCredential(refNode.Protocol(), refNode.TokenHash(), method)
 	}
 
 	return referencedNodes, serverKeyFunc

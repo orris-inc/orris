@@ -72,13 +72,11 @@ func (f *Base64Formatter) FormatWithPassword(nodes []*Node, password string) (st
 			link = node.ToTrojanURI(password)
 		case vo.ProtocolVLESS:
 			if node.VLESSConfig != nil {
-				// Use password as UUID for VLESS
-				link = node.VLESSConfig.ToURI(password, node.ServerAddress, node.SubscriptionPort, node.Name)
+				link = node.VLESSConfig.ToURI(vo.DeriveUUIDFromCredential(password), node.ServerAddress, node.SubscriptionPort, node.Name)
 			}
 		case vo.ProtocolVMess:
 			if node.VMessConfig != nil {
-				// Use password as UUID for VMess
-				uri, err := node.VMessConfig.ToURI(node.ServerAddress, node.SubscriptionPort, password, node.Name)
+				uri, err := node.VMessConfig.ToURI(node.ServerAddress, node.SubscriptionPort, vo.DeriveUUIDFromCredential(password), node.Name)
 				if err == nil {
 					link = uri
 				}
@@ -90,8 +88,9 @@ func (f *Base64Formatter) FormatWithPassword(nodes []*Node, password string) (st
 			}
 		case vo.ProtocolTUIC:
 			if node.TUICConfig != nil {
-				// For TUIC, use password as both uuid and password (derived from subscription)
-				link = node.TUICConfig.ToURI(node.ServerAddress, node.SubscriptionPort, node.Name, password, password)
+				// TUIC uses the derived UUID as both uuid and password (matches agent inbound)
+				tuicID := vo.DeriveUUIDFromCredential(password)
+				link = node.TUICConfig.ToURI(node.ServerAddress, node.SubscriptionPort, node.Name, tuicID, tuicID)
 			}
 		case vo.ProtocolAnyTLS:
 			if node.AnyTLSConfig != nil {
@@ -250,12 +249,12 @@ func (f *ClashFormatter) FormatWithPassword(nodes []*Node, password string) (str
 
 		case vo.ProtocolVLESS:
 			if node.VLESSConfig != nil {
-				proxy = f.buildVLESSProxy(node, password)
+				proxy = f.buildVLESSProxy(node, vo.DeriveUUIDFromCredential(password))
 			}
 
 		case vo.ProtocolVMess:
 			if node.VMessConfig != nil {
-				proxy = f.buildVMessProxy(node, password)
+				proxy = f.buildVMessProxy(node, vo.DeriveUUIDFromCredential(password))
 			}
 
 		case vo.ProtocolHysteria2:
@@ -265,7 +264,7 @@ func (f *ClashFormatter) FormatWithPassword(nodes []*Node, password string) (str
 
 		case vo.ProtocolTUIC:
 			if node.TUICConfig != nil {
-				proxy = f.buildTUICProxy(node, password)
+				proxy = f.buildTUICProxy(node, vo.DeriveUUIDFromCredential(password))
 			}
 
 		case vo.ProtocolAnyTLS:
@@ -753,7 +752,7 @@ func (f *SurgeFormatter) FormatWithPassword(nodes []*Node, password string) (str
 
 		case vo.ProtocolVMess:
 			if node.VMessConfig != nil {
-				line = f.buildVMessLine(node, password)
+				line = f.buildVMessLine(node, vo.DeriveUUIDFromCredential(password))
 			}
 
 		case vo.ProtocolHysteria2:
@@ -763,7 +762,7 @@ func (f *SurgeFormatter) FormatWithPassword(nodes []*Node, password string) (str
 
 		case vo.ProtocolTUIC:
 			if node.TUICConfig != nil {
-				line = f.buildTUICLine(node, password)
+				line = f.buildTUICLine(node, vo.DeriveUUIDFromCredential(password))
 			}
 
 		case vo.ProtocolAnyTLS:

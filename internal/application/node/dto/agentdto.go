@@ -956,8 +956,8 @@ func ToOutboundDTO(n *node.Node, serverKey string) *OutboundDTO {
 		if n.TUICConfig() != nil {
 			tc := n.TUICConfig()
 
-			// TUIC password (separate from UUID)
-			dto.Password = tc.Password()
+			// Agent TUIC inbound uses the same credential as both uuid and password
+			dto.Password = serverKey
 
 			// TUIC specific fields
 			dto.TUICCongestionControl = tc.CongestionControl()
@@ -1026,8 +1026,9 @@ func ToOutboundDTOs(nodes []*node.Node, serverKeyFunc func(n *node.Node) string)
 // ToNodeSubscriptionsResponse converts subscription list to agent subscriptions response.
 // The hmacSecret is used to generate HMAC-signed passwords from subscription UUIDs.
 // The encryptionMethod parameter determines the password encoding format (hex for traditional SS, base64 for SS2022).
+// The protocol parameter selects UUID-form credentials for VLESS/VMess/TUIC nodes.
 // planDeviceLimits maps planID -> device limit count (0 = unlimited). Can be nil to use 0 for all.
-func ToNodeSubscriptionsResponse(subscriptions []*subscription.Subscription, hmacSecret string, encryptionMethod string, planDeviceLimits map[uint]int) *NodeSubscriptionsResponse {
+func ToNodeSubscriptionsResponse(subscriptions []*subscription.Subscription, hmacSecret string, protocol vo.Protocol, encryptionMethod string, planDeviceLimits map[uint]int) *NodeSubscriptionsResponse {
 	if subscriptions == nil {
 		return &NodeSubscriptionsResponse{
 			Subscriptions: []NodeSubscriptionInfo{},
@@ -1055,7 +1056,7 @@ func ToNodeSubscriptionsResponse(subscriptions []*subscription.Subscription, hma
 
 		subscriptionInfo := NodeSubscriptionInfo{
 			SubscriptionSID: sub.SID(), // Using subscription SID for traffic tracking
-			Password:        generatePasswordForEncryptionMethod(sub, hmacSecret, encryptionMethod),
+			Password:        generateSubscriptionCredential(sub, hmacSecret, protocol, encryptionMethod),
 			Name:            generateSubscriptionName(sub),
 			SpeedLimit:      0, // 0 = unlimited, can be set from subscription plan limits
 			DeviceLimit:     deviceLimit,
@@ -1568,10 +1569,12 @@ func getBoolFromSettings(m map[string]any, key string) bool {
 	return false
 }
 
-// generatePasswordForEncryptionMethod generates password based on encryption method type
-// SS2022 methods use base64-encoded fixed-length keys
-// Traditional SS methods use hex-encoded keys (backward compatible)
-func generatePasswordForEncryptionMethod(sub *subscription.Subscription, secret string, method string) string {
+// generateSubscriptionCredential generates the per-subscription credential sent to a node agent.
+// UUID-based protocols (VLESS/VMess/TUIC) get a canonical UUID derived from the hex key,
+// matching the value emitted in subscription links.
+// SS2022 methods use base64-encoded fixed-length keys.
+// Other protocols use hex-encoded keys (backward compatible).
+func generateSubscriptionCredential(sub *subscription.Subscription, secret string, protocol vo.Protocol, method string) string {
 	if sub == nil || sub.UUID() == "" {
 		return ""
 	}
@@ -1589,6 +1592,11 @@ func generatePasswordForEncryptionMethod(sub *subscription.Subscription, secret 
 		}
 	}
 
-	// Traditional SS: hex-encoded (backward compatible)
-	return hex.EncodeToString(keyMaterial)
+	hexKey := hex.EncodeToString(keyMaterial)
+	if protocol.UsesUUIDCredential() {
+		return vo.DeriveUUIDFromCredential(hexKey)
+	}
+
+	// Traditional SS and other protocols: hex-encoded (backward compatible)
+	return hexKey
 }
